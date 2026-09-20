@@ -455,10 +455,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - The first measure takes bars and the rest lines. Which measure gets which mark is a decision a saved chart should eventually carry — Metabase keeps it per series in `series_settings.<key>.display` — but no criterion asks for it, and inventing a setting nothing sets would be guessing at a requirement.
   - **A test retired and was replaced by its opposite.** "The editor says so for a type it cannot draw yet" was true while renderers were landing and stopped being true here. In its place: every type in the vocabulary is selected in the editor and none reports itself undrawable — which is AC-037's end-to-end demonstration rather than a narrower one. The guard itself is still covered by the unit test.
   - The unit block named "a type nothing can draw yet" is now "a type ECharts does not draw", and asserts it is exactly KPI, pivot and table. Leaving the old name would have implied a gap that no longer exists.
-- [ ] T045 (AC-038) Show a legend for two or more series and none for one
-  - Files: `packages/charts/src/legend.ts`, `packages/charts/src/legend.test.ts`
+- [x] T045 (AC-038) Show a legend for two or more series and none for one
+  - Files: `packages/charts/src/legend.ts`, `packages/charts/src/legend.test.ts`, `packages/charts/src/optionFor.ts`
   - Failing test: `legend.test.ts`: a two-series chart renders a legend and a single-series chart renders no legend box (AC-038).
   - Depends on: T036
+  - Done 2026-09-20. **AC-038 ticked.**
+  - **Decided once, in `optionFor`, not per renderer.** AC-038 is a rule about charts, not about bar charts, and a renderer that forgot it would be a chart type quietly exempt from the criterion.
+  - **"Series" is not the number of ECharts series.** It is the count of distinctly coloured things: a pie is one series and several coloured slices, and it is the slices a legend names. A heatmap counts zero because its colour is a *scale* rather than a set — naming its values would mean naming every cell. KPI, table, pivot and trellis count zero too, having no marks for a legend to name.
+  - Both halves of the criterion are tested, and the second is the one usually got wrong: a legend naming the one thing the axis and title already name is clutter, and on a small tile it costs the chart its height. Relaxing the threshold from two to one fails two tests.
+  - Legend clicks do nothing yet. Toggling series visibility belongs to the interaction modes of AC-070 and AC-071, not to drawing.
 - [ ] T046 (AC-039) Give a member the same colour in every tile, and keep it when filters change the visible set
   - Files: `packages/charts/src/colorAssignment.ts`, `packages/charts/src/colorAssignment.test.ts`
   - Failing test: `colorAssignment.test.ts`: a member keeps one colour across two tiles, and keeps it after a filter removes other members (AC-039).

@@ -14,6 +14,7 @@ import type { ChartType, RenderSpec } from '@wechart/core';
 
 import { barOption, isBarType } from './series/bar';
 import { isTrellisType, trellisOption } from './layout/trellis';
+import { legendFor } from './legend';
 import { comboOption, isComboType } from './series/combo';
 import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { lineOption, isLineType } from './series/line';
@@ -49,14 +50,28 @@ export function isDrawable(chartType: string): boolean {
 }
 
 export function optionFor(spec: RenderSpec): EChartsOption {
-  if (isBarType(spec.chartType)) return barOption(spec);
-  if (isLineType(spec.chartType)) return lineOption(spec);
-  if (isScatterType(spec.chartType)) return scatterOption(spec);
-  if (isPieType(spec.chartType)) return pieOption(spec);
-  if (isTreemapType(spec.chartType)) return treemapOption(spec);
-  if (isHeatmapType(spec.chartType)) return heatmapOption(spec);
+  // The legend is decided once, here, rather than in each renderer. AC-038 is
+  // a rule about charts, not about bar charts, and a renderer that forgot it
+  // would be a chart type quietly exempt from it.
+  const base = legendFor(spec);
+  const drawn = (option: EChartsOption): EChartsOption => ({
+    ...option,
+    ...base,
+    // The renderer's own grid wins on everything it sets; the legend only
+    // needs room at the top.
+    ...(base['grid'] === undefined || option['grid'] === undefined
+      ? {}
+      : { grid: { ...(option['grid'] as object), ...(base['grid'] as object) } }),
+  });
+
+  if (isBarType(spec.chartType)) return drawn(barOption(spec));
+  if (isLineType(spec.chartType)) return drawn(lineOption(spec));
+  if (isScatterType(spec.chartType)) return drawn(scatterOption(spec));
+  if (isPieType(spec.chartType)) return drawn(pieOption(spec));
+  if (isTreemapType(spec.chartType)) return drawn(treemapOption(spec));
+  if (isHeatmapType(spec.chartType)) return drawn(heatmapOption(spec));
   if (isTrellisType(spec.chartType)) return trellisOption(spec);
-  if (isComboType(spec.chartType)) return comboOption(spec);
+  if (isComboType(spec.chartType)) return drawn(comboOption(spec));
 
   // Reached only by the DOM-rendered types — KPI, table and pivot — which
   // `ChartTile` routes before this is called, and which ECharts genuinely

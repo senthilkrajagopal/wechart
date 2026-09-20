@@ -135,7 +135,7 @@ Traces to: `[docs/inputs §2]`, direction.md §6, rules 4–7, 18–19.
 
 - [x] AC-037 THE SYSTEM SHALL render bar, horizontal bar, grouped and stacked bar, line, multi-series line, area, stacked area, scatter, pie, donut, treemap, heatmap, KPI, table, pivot table, trellis (small multiples) and combo charts from a chart spec.
       Fails when: a listed type cannot be produced from a valid spec.
-- [ ] AC-038 WHEN a chart has two or more series, THE SYSTEM SHALL show a legend; with one series it SHALL show none (direction.md rule 4).
+- [x] AC-038 WHEN a chart has two or more series, THE SYSTEM SHALL show a legend; with one series it SHALL show none (direction.md rule 4).
       Fails when: a single-series chart shows a legend box, or a multi-series chart omits it.
 - [ ] AC-039 THE SYSTEM SHALL give a member the same colour in every tile of a dashboard, and keep that colour when filters change the set of visible members (direction.md rule 7).
       Fails when: a member's colour changes between tiles or after filtering.
