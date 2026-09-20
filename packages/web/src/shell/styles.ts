@@ -163,6 +163,10 @@ main { padding: 16px; }
 .folder-contents__empty,
 .query-log__empty { color: var(--wc-text-secondary); }
 
+/* The selected row is marked by more than the focus ring, so the selection is
+   still visible when focus moves into a control inside the row. */
+.folder-contents tbody tr[aria-selected='true'] { background: var(--wc-bg-subtle); }
+
 .palette-backdrop {
   position: fixed;
   inset: 0;

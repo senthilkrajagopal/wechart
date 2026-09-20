@@ -93,3 +93,85 @@ describe('folder contents (AC-017)', () => {
     expect(screen.getByText(/empty/i)).toBeTruthy();
   });
 });
+
+/**
+ * AC-024: WHEN the user navigates the Explore contents with the keyboard, THE
+ * SYSTEM SHALL move the selection with the arrow keys and open the selected
+ * item with Enter.
+ * Fails when: arrow keys do not move the selection, or Enter does not open the
+ * selected item.
+ */
+describe('keyboard navigation (AC-024)', () => {
+  const rowFor = (id: string) => screen.getByTestId(`item-${id}`);
+
+  it('reaches the list in one tab stop, not one per row', async () => {
+    render(<FolderContents items={items} />);
+
+    await userEvent.tab();
+
+    // A roving tabindex: with thirty dashboards, one stop per row would make
+    // tabbing past the list its own accessibility failure.
+    expect(document.activeElement).toBe(rowFor('d1'));
+  });
+
+  it('moves the selection down and up with the arrow keys', async () => {
+    render(<FolderContents items={items} />);
+    await userEvent.tab();
+
+    await userEvent.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(rowFor('c1'));
+    expect(rowFor('c1').getAttribute('aria-selected')).toBe('true');
+
+    await userEvent.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(rowFor('d1'));
+  });
+
+  it('stops at the ends rather than wrapping', async () => {
+    render(<FolderContents items={items} />);
+    await userEvent.tab();
+
+    await userEvent.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(rowFor('d1'));
+
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
+    expect(document.activeElement).toBe(rowFor('f1'));
+  });
+
+  it('jumps to the first and last rows with Home and End', async () => {
+    render(<FolderContents items={items} />);
+    await userEvent.tab();
+
+    await userEvent.keyboard('{End}');
+    expect(document.activeElement).toBe(rowFor('f1'));
+
+    await userEvent.keyboard('{Home}');
+    expect(document.activeElement).toBe(rowFor('d1'));
+  });
+
+  it('opens the selected item with Enter', async () => {
+    const onOpen = vi.fn();
+    render(<FolderContents items={items} onOpen={onOpen} />);
+    await userEvent.tab();
+
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'c1' }));
+  });
+
+  it('opens the row that is selected, not always the first', async () => {
+    const onOpen = vi.fn();
+    render(<FolderContents items={items} onOpen={onOpen} />);
+    await userEvent.tab();
+
+    await userEvent.keyboard('{End}{Enter}');
+
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'f1' }));
+  });
+
+  it('leaves the empty folder message alone', () => {
+    render(<FolderContents items={[]} />);
+
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.getByText(/empty/i)).toBeTruthy();
+  });
+});

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 /**
  * The contents of the selected folder (AC-017): sub-folders, dashboards and
@@ -50,6 +50,50 @@ export function FolderContents({
 }: FolderContentsProps) {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [selected, setSelected] = useState(0);
+  const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
+
+  /**
+   * AC-024: arrow keys move the selection, Enter opens it.
+   *
+   * A roving tabindex, so the list is one stop in the page's tab order rather
+   * than one stop per row — with thirty dashboards, tabbing through every one
+   * to reach what follows is its own accessibility failure.
+   */
+  const focusRow = (index: number) => {
+    const clamped = Math.max(0, Math.min(index, items.length - 1));
+    setSelected(clamped);
+    rowRefs.current[clamped]?.focus();
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent, index: number) => {
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        focusRow(index + 1);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        focusRow(index - 1);
+        break;
+      case 'Home':
+        event.preventDefault();
+        focusRow(0);
+        break;
+      case 'End':
+        event.preventDefault();
+        focusRow(items.length - 1);
+        break;
+      case 'Enter': {
+        event.preventDefault();
+        const item = items[index];
+        if (item) onOpen?.(item);
+        break;
+      }
+      default:
+        break;
+    }
+  };
 
   if (items.length === 0) {
     return <p className="folder-contents__empty">This folder is empty.</p>;
@@ -68,8 +112,18 @@ export function FolderContents({
         </tr>
       </thead>
       <tbody>
-        {items.map((item) => (
-          <tr key={`${item.kind}:${item.id}`} data-testid={`item-${item.id}`}>
+        {items.map((item, index) => (
+          <tr
+            key={`${item.kind}:${item.id}`}
+            data-testid={`item-${item.id}`}
+            ref={(element) => {
+              rowRefs.current[index] = element;
+            }}
+            tabIndex={index === selected ? 0 : -1}
+            aria-selected={index === selected}
+            onKeyDown={(event) => onKeyDown(event, index)}
+            onFocus={() => setSelected(index)}
+          >
             <th scope="row">
               {renaming === item.id ? (
                 <form

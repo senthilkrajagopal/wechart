@@ -181,10 +181,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Done 2026-09-19. AC-023 ticked. **The check is on the server, not only in the dialog.** An unconfirmed delete is refused with the list of dashboards, so the naming cannot be skipped by calling the API directly — there is a test that sends exactly the request a script would. A guard that lives only in the UI is decoration.
   - The dialog lists what the **server** returned rather than a list the browser assembled, so what the user confirms is what the server checked.
   - Dashboards are **named, not counted**: "2 dashboards use this chart" tells the user nothing about whether they care. `409` rather than `400` — nothing about the request is malformed, it conflicts with the current state.
-- [ ] T022 (AC-024) Navigate the Explore contents with the arrow keys and open with Enter
-  - Files: `packages/web/src/workspaces/explore/FolderContents.tsx`, `packages/web/src/workspaces/explore/keyboard.test.tsx`
-  - Failing test: `keyboard.test.tsx`: arrow keys move the selection through the listed items and Enter opens the selected one (AC-024).
+- [x] T022 (AC-024) Navigate the Explore contents with the arrow keys and open with Enter
+  - Files: `packages/web/src/workspaces/explore/FolderContents.tsx`, `packages/web/src/workspaces/explore/FolderContents.test.tsx`, `packages/web/src/shell/styles.ts`, `e2e/explore-keyboard.spec.ts`
+  - Failing test: `FolderContents.test.tsx` and `e2e/explore-keyboard.spec.ts`: arrow keys move the selection through the listed items and Enter opens the selected one (AC-024).
   - Depends on: T016
+  - Done 2026-09-19. AC-024 ticked. A **roving tabindex**, so the list is one stop in the page's tab order rather than one per row — with thirty dashboards, tabbing through every one to reach what follows is its own accessibility failure, and a test asserts exactly one row is tabbable at a time.
+  - Selection is marked with `aria-selected` and a background, not the focus ring alone, so it stays visible when focus moves into a control inside the row. Arrow keys stop at the ends rather than wrapping.
+  - A test asserts Enter opens **the selected row, not always the first** — the bug an implementation that ignores the index would have.
 - [ ] T023 (AC-018) Open a dashboard from Explore in view mode with its saved tabs, tiles and settings
   - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/DashboardView.test.tsx`
   - Failing test: `DashboardView.test.tsx`: a saved dashboard opens in view mode with every saved page tab, tile and setting present, and not in edit mode (AC-018).
