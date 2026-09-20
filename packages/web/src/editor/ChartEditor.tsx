@@ -4,6 +4,7 @@ import {
   isEmpty,
   removeFromWell,
   toCubeQuery,
+  toUnderlyingQuery,
   type ChartSpec,
 } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
@@ -19,6 +20,7 @@ import {
 } from '@wechart/recommender';
 
 import { loadTile } from '../query/loadTile';
+import { ResultsDrawer, type DrawerView } from './ResultsDrawer';
 import { WhyThisChart } from './WhyThisChart';
 import {
   FOLLOWING_RECOMMENDATION,
@@ -95,6 +97,25 @@ export function ChartEditor() {
   );
 
   const query = useMemo(() => toCubeQuery(spec), [spec]);
+
+  /**
+   * The rows beneath the aggregate (AC-036): the chart's own query, ungrouped.
+   * Derived from the same spec as `query`, so the two cannot name different
+   * members — showing "data from a different query than the chart rendered" is
+   * the criterion's own failing state.
+   */
+  const underlyingQuery = useMemo(() => toUnderlyingQuery(spec), [spec]);
+
+  /**
+   * Which drawer view is open. Not part of the history — opening a drawer is
+   * not a change to the chart — and not inside the drawer either, because the
+   * drawer unmounts whenever the chart has no fields; state held there would
+   * be lost every time the user emptied a well or switched cube.
+   */
+  const [drawer, setDrawer] = useState<{ open: boolean; view: DrawerView }>({
+    open: false,
+    view: 'result',
+  });
 
   /**
    * Keyed by the query, so adding a field re-runs it: the key changes, the
@@ -304,6 +325,25 @@ export function ChartEditor() {
             <p data-testid="result-row-count">{rows.length} rows</p>
             <pre data-testid="result-first-row">{JSON.stringify(rows[0] ?? null)}</pre>
           </>
+        )}
+
+        {/*
+          Outside the loading and error branches on purpose: rendered inside
+          them, the drawer unmounts whenever the query re-runs and reopens
+          closed, so changing a field would shut a drawer the user had opened.
+          It shows the rows the chart rendered, passed in rather than
+          re-fetched, so the two cannot disagree (AC-036).
+        */}
+        {isEmpty(spec) ? null : (
+          <ResultsDrawer
+            rows={rows}
+            query={query}
+            underlyingQuery={underlyingQuery}
+            open={drawer.open}
+            view={drawer.view}
+            onOpenChange={(open) => setDrawer((current) => ({ ...current, open }))}
+            onViewChange={(view) => setDrawer((current) => ({ ...current, view }))}
+          />
         )}
       </section>
     </div>

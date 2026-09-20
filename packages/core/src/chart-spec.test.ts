@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { addToWell, emptySpec, isEmpty, removeFromWell, toCubeQuery, wellFor } from './chart-spec';
+import {
+  UNDERLYING_ROW_LIMIT,
+  addToWell,
+  emptySpec,
+  isEmpty,
+  removeFromWell,
+  toCubeQuery,
+  toUnderlyingQuery,
+  wellFor,
+} from './chart-spec';
 
 /**
  * AC-026: WHEN the user drags a field onto a well, or adds it with the well's
@@ -96,5 +105,59 @@ describe('the Cube query a spec asks for', () => {
     // AC-105 depends on this: the same request must be byte-identical so the
     // result can be served from cache.
     expect(JSON.stringify(toCubeQuery(a))).toBe(JSON.stringify(toCubeQuery(b)));
+  });
+});
+
+/**
+ * AC-036: the results drawer's "underlying rows" view. The criterion fails
+ * when a view "shows data from a different query than the chart rendered", so
+ * what matters here is that the ungrouped query is derived from the same spec
+ * and names the same members.
+ */
+describe('toUnderlyingQuery', () => {
+  const chart = () => {
+    let spec = addToWell(emptySpec('orders'), 'measures', 'orders.total_amount');
+    spec = addToWell(spec, 'dimensions', 'orders.status');
+    return addToWell(spec, 'timeDimensions', 'orders.ordered_at');
+  };
+
+  it('asks Cube for rows rather than groups', () => {
+    expect(toUnderlyingQuery(chart())['ungrouped']).toBe(true);
+  });
+
+  it('keeps the measures the chart aggregated, so the drawer shows what was summed', () => {
+    expect(toUnderlyingQuery(chart())['measures']).toEqual(['orders.total_amount']);
+  });
+
+  it('selects the time member as a raw column instead of a bucket', () => {
+    const query = toUnderlyingQuery(chart());
+
+    // Verified against Cube 1.7.42: a `timeDimensions` entry with no
+    // granularity filters without grouping and selects no column, so an
+    // ungrouped query that left the time member there would silently drop it.
+    expect(query['dimensions']).toEqual(['orders.ordered_at', 'orders.status']);
+    expect(query).not.toHaveProperty('timeDimensions');
+  });
+
+  it('names exactly the members the chart’s own query names', () => {
+    const spec = chart();
+    const grouped = toCubeQuery(spec);
+    const underlying = toUnderlyingQuery(spec);
+
+    const membersOf = (query: Record<string, unknown>) =>
+      [
+        ...(query['measures'] as string[]),
+        ...(query['dimensions'] as string[]),
+        ...((query['timeDimensions'] as { dimension: string }[] | undefined) ?? []).map(
+          (entry) => entry.dimension,
+        ),
+      ].sort();
+
+    expect(membersOf(underlying)).toEqual(membersOf(grouped));
+  });
+
+  it('caps the rows it asks for', () => {
+    expect(toUnderlyingQuery(chart())['limit']).toBe(UNDERLYING_ROW_LIMIT);
+    expect(toUnderlyingQuery(chart(), 5)['limit']).toBe(5);
   });
 });

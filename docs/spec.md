@@ -123,7 +123,7 @@ Traces to: `[docs/inputs §2, §3]`, `[R2]`, direction.md §6, rules 8–10, 29�
       Fails when: the preview ignores the tile's width and height, or the dashboard tile does not reflect the applied changes.
 - [x] AC-035 WHEN the user changes the chart in the editor, THE SYSTEM SHALL support undo and redo of every change made since the editor opened, and a "Discard changes" that restores the chart as it was.
       Fails when: any change cannot be undone, or Discard leaves a change applied.
-- [ ] AC-036 WHEN the user opens the results drawer, THE SYSTEM SHALL show the result rows, the underlying rows, and the Cube query JSON for the current chart.
+- [x] AC-036 WHEN the user opens the results drawer, THE SYSTEM SHALL show the result rows, the underlying rows, and the Cube query JSON for the current chart.
       Fails when: any of the three views is missing, or shows data from a different query than the chart rendered.
 
 ## F5. Chart rendering

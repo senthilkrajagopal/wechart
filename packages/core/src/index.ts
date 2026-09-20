@@ -5,11 +5,13 @@
 export const PACKAGE_NAME = '@wechart/core';
 
 export {
+  UNDERLYING_ROW_LIMIT,
   addToWell,
   emptySpec,
   isEmpty,
   removeFromWell,
   toCubeQuery,
+  toUnderlyingQuery,
   wellFor,
   type ChartSpec,
   type WellName,

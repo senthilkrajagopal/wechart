@@ -79,3 +79,45 @@ export function toCubeQuery(spec: ChartSpec): Record<string, unknown> {
 
   return query;
 }
+
+/**
+ * How many underlying rows the drawer asks for. A product decision, not a
+ * figure from any source: direction.md §7a says the rows-behind drawer is "a
+ * Cube `ungrouped` query, capped", without naming the cap.
+ */
+export const UNDERLYING_ROW_LIMIT = 100;
+
+/**
+ * The rows underneath a chart's aggregate: the same query with no `GROUP BY`
+ * (AC-036).
+ *
+ * Built from the same spec as `toCubeQuery`, so the two cannot name different
+ * members — the drawer showing "data from a different query than the chart
+ * rendered" is the criterion's own failing state.
+ *
+ * Two details are verified against Cube 1.7.42 rather than assumed:
+ *
+ * - `ungrouped` needs every cube's primary key *unless*
+ *   `allow_ungrouped_without_primary_key`, which at 1.7.42 inherits
+ *   `CUBESQL_SQL_PUSH_DOWN` and so defaults to on
+ *   (research/cube/markings-query-support.md §"Corrections"). Confirmed
+ *   against the running server: `customers`, whose primary key is not public,
+ *   returns ungrouped rows.
+ * - A time member travels in `dimensions` here, not in `timeDimensions`.
+ *   Without a granularity Cube "filters without grouping"
+ *   (research/cube/data-apis.md §"Time dimensions"), so a bare
+ *   `timeDimensions` entry selects no column at all — confirmed: the same
+ *   query returns `orders.ordered_at` from `dimensions` and omits it from
+ *   `timeDimensions`. Ungrouped rows want the raw timestamp, not a bucket.
+ */
+export function toUnderlyingQuery(
+  spec: ChartSpec,
+  limit: number = UNDERLYING_ROW_LIMIT,
+): Record<string, unknown> {
+  return {
+    measures: [...spec.measures].sort(),
+    dimensions: [...spec.dimensions, ...spec.timeDimensions].sort(),
+    ungrouped: true,
+    limit,
+  };
+}

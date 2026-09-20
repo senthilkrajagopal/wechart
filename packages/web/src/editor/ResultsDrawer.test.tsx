@@ -1,0 +1,204 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { ResultsDrawer, type DrawerView } from './ResultsDrawer';
+
+/**
+ * AC-036: WHEN the user opens the results drawer, THE SYSTEM SHALL show the
+ * result rows, the underlying rows, and the Cube query JSON for the current
+ * chart.
+ * Fails when: any of the three views is missing, or shows data from a
+ * different query than the chart rendered.
+ *
+ * The editor's end-to-end test covers the three views against a live Cube.
+ * This file covers what that test cannot reach cheaply: the failure branches,
+ * and the truncation notice that keeps a capped table from reading as
+ * disagreement with the chart.
+ */
+const RESULT_ROWS = [
+  { 'orders.status': 'completed', 'orders.count': '80' },
+  { 'orders.status': 'processing', 'orders.count': '80' },
+];
+
+const QUERY = { measures: ['orders.count'], dimensions: ['orders.status'] };
+const UNDERLYING_QUERY = {
+  measures: ['orders.count'],
+  dimensions: ['orders.status'],
+  ungrouped: true,
+  limit: 100,
+};
+
+const fetchMock = vi.fn();
+vi.stubGlobal('fetch', fetchMock);
+
+afterEach(() => {
+  fetchMock.mockReset();
+});
+
+/** A row of underlying data, numbered so a capped page is recognisable. */
+const underlyingRows = (count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    'orders.status': 'completed',
+    'orders.count': String(index),
+  }));
+
+function respondWith(rows: readonly Record<string, unknown>[]) {
+  fetchMock.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ data: rows }),
+  } as unknown as Response);
+}
+
+function drawer({
+  rows = RESULT_ROWS,
+  view = 'result' as DrawerView,
+  open = true,
+}: { rows?: readonly Record<string, unknown>[]; view?: DrawerView; open?: boolean } = {}) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+
+  return render(
+    <QueryClientProvider client={client}>
+      <ResultsDrawer
+        rows={rows}
+        query={QUERY}
+        underlyingQuery={UNDERLYING_QUERY}
+        open={open}
+        view={view}
+        onOpenChange={vi.fn()}
+        onViewChange={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+}
+
+describe('the three views', () => {
+  it('offers all three, and none of them before the drawer is opened', () => {
+    drawer({ open: false });
+
+    expect(screen.queryByTestId('results-drawer')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Results' }).getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+  });
+
+  it('shows the rows it was given, rather than fetching its own', () => {
+    drawer();
+
+    expect(screen.getByTestId('drawer-result-rows')).toBeTruthy();
+    expect(screen.getByText('completed')).toBeTruthy();
+    // The result view must never issue a query: a second fetch is how the
+    // drawer and the chart come to disagree.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('shows the chart’s own query as JSON', () => {
+    drawer({ view: 'query' });
+
+    expect(JSON.parse(screen.getByTestId('drawer-query').textContent ?? '')).toEqual(QUERY);
+  });
+
+  it('asks for the underlying rows only once that view is open', async () => {
+    respondWith(underlyingRows(3));
+    drawer({ view: 'result' });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    drawer({ view: 'underlying' });
+    expect(await screen.findByTestId('drawer-underlying-rows')).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalled();
+  });
+});
+
+describe('when the underlying rows cannot be shown', () => {
+  it('says so instead of showing an empty table', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: "'orders.id' not found" }),
+    } as unknown as Response);
+
+    drawer({ view: 'underlying' });
+
+    expect((await screen.findByRole('alert')).textContent).toContain("'orders.id' not found");
+    expect(screen.queryByTestId('drawer-underlying-rows')).toBeNull();
+  });
+
+  it('reports a query that matched nothing', async () => {
+    respondWith([]);
+    drawer({ view: 'underlying' });
+
+    expect((await screen.findByTestId('drawer-underlying-rows-empty')).textContent).toContain(
+      'No rows.',
+    );
+  });
+});
+
+/**
+ * A table that stops at 100 rows while the chart reports 240 reads as the two
+ * disagreeing. Both tables are capped, so both have to say so.
+ */
+describe('truncation', () => {
+  it('says how many of the result rows it is showing', () => {
+    drawer({ rows: underlyingRows(240) });
+
+    expect(screen.getByTestId('drawer-result-rows-truncated').textContent).toContain(
+      'Showing the first 100 of 240 rows.',
+    );
+    expect(screen.getAllByRole('row')).toHaveLength(101); // 100 rows plus the header
+  });
+
+  it('stays quiet when nothing was cut', () => {
+    drawer({ rows: underlyingRows(12) });
+
+    expect(screen.queryByTestId('drawer-result-rows-truncated')).toBeNull();
+  });
+
+  it('warns that a full page of underlying rows may not be all of them', async () => {
+    respondWith(underlyingRows(100));
+    drawer({ view: 'underlying' });
+
+    expect((await screen.findByTestId('drawer-underlying-rows-truncated')).textContent).toContain(
+      'There may be more.',
+    );
+  });
+
+  it('does not warn when the underlying query came back short of the cap', async () => {
+    respondWith(underlyingRows(99));
+    drawer({ view: 'underlying' });
+
+    await screen.findByTestId('drawer-underlying-rows');
+    expect(screen.queryByTestId('drawer-underlying-rows-truncated')).toBeNull();
+  });
+});
+
+describe('opening and closing', () => {
+  it('reports the open state to the editor rather than keeping it', async () => {
+    const onOpenChange = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={client}>
+        <ResultsDrawer
+          rows={RESULT_ROWS}
+          query={QUERY}
+          underlyingQuery={UNDERLYING_QUERY}
+          open={false}
+          view="result"
+          onOpenChange={onOpenChange}
+          onViewChange={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Results' }));
+
+    // Held by the editor, so emptying a well cannot shut a drawer the user
+    // opened.
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+  });
+});

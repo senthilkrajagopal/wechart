@@ -271,10 +271,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - A drag in progress is deliberately **outside** the history: it is a pointer position, not a change to the chart, and undo should not step back through one.
   - **Discard is itself undoable.** It lands on the opening state with everything before it still in the past, so discarding by mistake is recoverable. The criterion asks that Discard restores the original, not that it destroys the history.
   - The browser test walks back through all four kinds of change — chart type, dimension, measure, and the choice of cube — until Undo is disabled, rather than testing one step.
-- [ ] T034 (AC-036) Show the results drawer: result rows, underlying rows and the query JSON
-  - Files: `packages/web/src/editor/ResultsDrawer.tsx`, `packages/web/src/editor/ResultsDrawer.test.tsx`
-  - Failing test: `ResultsDrawer.test.tsx`: all three views are present and each reflects the query the chart actually rendered (AC-036).
+- [x] T034 (AC-036) Show the results drawer: result rows, underlying rows and the query JSON
+  - Files: `packages/core/src/chart-spec.ts`, `packages/web/src/editor/ResultsDrawer.tsx`, `packages/web/src/editor/ChartEditor.tsx`, `packages/web/src/editor/ResultsDrawer.test.tsx`, `e2e/chart-editor.spec.ts`
+  - Failing test: `ResultsDrawer.test.tsx`: all three views are present, and a capped table says so (AC-036); `e2e/chart-editor.spec.ts`: each view reflects the query the chart actually rendered, on a cube with and without a published primary key (AC-036).
   - Depends on: T025
+  - Done 2026-09-20. AC-036 ticked. The result rows are **the same data the chart rendered**, passed in rather than re-fetched — re-fetching would let the drawer and the chart disagree, which is exactly the failure the criterion names. A test changes the query and asserts both move together.
+  - Underlying rows come from the chart's own query with `ungrouped: true` and a cap, which is what direction.md §7a already decided. Derived from the same spec as the chart's query, so the two cannot name different members, and the measures come back unaggregated — the drawer shows the amounts that were summed, not just the keys.
+  - They are fetched only while that view is open. The rows beneath an aggregate can be a large query and nobody has asked for it yet.
+  - **Rejected at cold review, then rebuilt.** The first attempt selected the cube's primary key alongside the dimensions, and claimed a cube without a public primary key "gives no way to ask". Both were wrong. Cube hides primary keys by default (`research/cube/data-modeling.md`), so the view was inert on `customers` and `products` — two of the three sample cubes — which is AC-036's own "any of the three views is missing". And the repo's research names `ungrouped` and `drill_members` as other routes, so the claim contradicted its own sources.
+  - Verified against the running Cube 1.7.42 rather than reasoned about: `customers`, whose primary key is not public, returns ungrouped rows, because `CUBEJS_ALLOW_UNGROUPED_WITHOUT_PRIMARY_KEY` inherits `CUBESQL_SQL_PUSH_DOWN` and defaults on (`research/cube/markings-query-support.md`). A time member is selected in `dimensions`, not `timeDimensions`: without a granularity Cube filters without grouping, so the bare `timeDimensions` form returned no time column at all.
+  - **Truncation is disclosed.** Both tables cap at 100 rows and say so. A table that silently stops at 100 while the chart reports 240 reads as the two disagreeing, which is the thing the criterion exists to prevent.
+  - **A real bug the test caught:** the drawer was rendered inside the result's success branch, so any re-query unmounted it and it reopened closed — changing a field would silently shut a drawer the user had opened. The fix is twofold: it sits outside the loading and error branches, **and** its open/view state lives in the editor, because the drawer is still unmounted when the chart has no fields and state held inside it would be lost when a well is emptied or the cube changed.
 
 ## F5. Chart rendering
 

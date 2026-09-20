@@ -297,6 +297,99 @@ test('nothing to undo or discard when the editor opens', async ({ page }) => {
   await expect(page.getByTestId('discard')).toBeDisabled();
 });
 
+/**
+ * AC-036: WHEN the user opens the results drawer, THE SYSTEM SHALL show the
+ * result rows, the underlying rows, and the Cube query JSON for the current
+ * chart.
+ * Fails when: any of the three views is missing, or shows data from a different
+ * query than the chart rendered.
+ */
+test('the drawer shows result rows, underlying rows and the query', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
+
+  await page.getByRole('button', { name: 'Results', exact: true }).click();
+
+  // The result rows: the three the chart rendered, not some other query's.
+  await expect(page.getByTestId('drawer-result-rows')).toBeVisible();
+  await expect(page.getByTestId('drawer-result-rows').locator('tbody tr')).toHaveCount(3);
+
+  // The query JSON, matching what produced them.
+  await page.getByTestId('drawer-tab-query').click();
+  const shown = await page.getByTestId('drawer-query').textContent();
+  const query = JSON.parse(shown ?? '{}') as { measures: string[]; dimensions: string[] };
+  expect(query.measures).toEqual(['orders.count']);
+  expect(query.dimensions).toEqual(['orders.status']);
+
+  // The rows beneath the aggregate: one per order, not one per status.
+  await page.getByTestId('drawer-tab-underlying').click();
+  await expect(page.getByTestId('drawer-underlying-rows')).toBeVisible();
+  const underlying = page.getByTestId('drawer-underlying-rows');
+  await expect(underlying.locator('tbody tr').first()).toBeVisible();
+
+  // A row count alone would pass for the wrong query — a different cube, or
+  // the chart's members dropped — so tie the rows to the chart's own query.
+  // Same columns as the chart asked for:
+  expect(await underlying.locator('thead th').allTextContents()).toEqual([
+    'orders.status',
+    'orders.count',
+  ]);
+
+  // ...ungrouped, so each row carries a single order rather than a total...
+  const counts = await underlying.locator('tbody tr td:nth-child(2)').allTextContents();
+  expect(new Set(counts)).toEqual(new Set(['1']));
+
+  // ...and every status is one the chart itself showed.
+  await page.getByTestId('drawer-tab-result').click();
+  const charted = await page
+    .getByTestId('drawer-result-rows')
+    .locator('tbody tr td:nth-child(1)')
+    .allTextContents();
+  await page.getByTestId('drawer-tab-underlying').click();
+  const beneath = await underlying.locator('tbody tr td:nth-child(1)').allTextContents();
+  expect(new Set(beneath)).toEqual(new Set(charted));
+});
+
+/**
+ * The underlying view is built on an `ungrouped` query rather than on the
+ * cube's primary key, which Cube hides by default. `customers` publishes no
+ * primary key, so on the earlier primary-key route this view showed a "no
+ * primary key" message where AC-036 requires rows.
+ */
+test('the underlying rows work on a cube that publishes no primary key', async ({ page }) => {
+  await page.goto('/explore/charts/new/edit');
+  await page.getByLabel('Cube or view').selectOption({ label: 'Customers' });
+  await expect(page.getByTestId('member-customers.count')).toBeVisible();
+  await page.getByTestId('add-measures').selectOption('customers.count');
+  await page.getByTestId('add-dimensions').selectOption('customers.country');
+
+  await page.getByRole('button', { name: 'Results', exact: true }).click();
+  await page.getByTestId('drawer-tab-underlying').click();
+
+  const underlying = page.getByTestId('drawer-underlying-rows');
+  await expect(underlying).toBeVisible();
+  expect(await underlying.locator('thead th').allTextContents()).toEqual([
+    'customers.country',
+    'customers.count',
+  ]);
+  await expect(underlying.locator('tbody tr')).toHaveCount(4);
+});
+
+test('the drawer agrees with the chart after the query changes', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByRole('button', { name: 'Results', exact: true }).click();
+  await expect(page.getByTestId('drawer-result-rows').locator('tbody tr')).toHaveCount(1);
+
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+
+  // Both the chart and the drawer move together, because they are the same data.
+  await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
+  await expect(page.getByTestId('drawer-result-rows').locator('tbody tr')).toHaveCount(3);
+});
+
 test('a time dimension goes to its own well and groups by day', async ({ page }) => {
   await openEditorOnOrders(page);
 
