@@ -63,9 +63,9 @@ Traces to: `[R5]`, `[R4]`, `[research/cube/data-apis.md]`, `[research/cube/acces
       Fails when: the tile shows an error, or the result never renders although Cube completed the query.
 - [x] AC-011 WHEN a query is superseded, because its filters, marks or dashboard changed, THE SYSTEM SHALL cancel the earlier query against Cube before rendering the newer result.
       Fails when: no cancellation is issued for the superseded request, or the older result replaces the newer one.
-- [ ] AC-012 IF Cube returns an error for a query, THEN THE SYSTEM SHALL show the tile in an error state with Cube's message and a control that reveals the query JSON.
+- [x] AC-012 IF Cube returns an error for a query, THEN THE SYSTEM SHALL show the tile in an error state with Cube's message and a control that reveals the query JSON.
       Fails when: the tile shows an empty chart, or the message and query JSON are not reachable from the tile.
-- [ ] AC-013 WHEN a result is served from a pre-aggregation, THE SYSTEM SHALL mark the tile as accelerated and show the age of the data; otherwise it SHALL mark the tile as live.
+- [x] AC-013 WHEN a result is served from a pre-aggregation, THE SYSTEM SHALL mark the tile as accelerated and show the age of the data; otherwise it SHALL mark the tile as live.
       Fails when: a result with `usedPreAggregations` shows no accelerated indicator, or a source-database result is labelled accelerated.
 - [x] AC-014 WHEN a dashboard, chart, folder, bookmark or setting is saved, THE SYSTEM SHALL store it so that it is present and unchanged after the wechart service restarts.
       Fails when: any saved object is missing or altered after a restart.

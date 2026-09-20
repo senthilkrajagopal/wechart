@@ -112,14 +112,18 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Done 2026-09-19. AC-011 ticked. **Dropping the response is not cancelling** — the criterion says "against Cube". An abandoned query keeps running and holds one of the queue's two default slots until its orphan timeout, so a user dragging a filter slider can starve their own dashboard. The abort listener fires `DELETE /api/running-query/{id}`, which the service forwards to Cube.
   - A test asserts the cancellation names the id the load actually used: one naming a fresh id stops nothing, and would pass a weaker assertion.
   - The route always answers 204, including when Cube says the query is unknown. The tile that issued it is already gone and a failed cancellation is not something anyone can act on; the warning goes to the log.
-- [ ] T013 (AC-012) Show a tile error state carrying Cube's message and the query JSON
+- [x] T013 (AC-012) Show a tile error state carrying Cube's message and the query JSON
   - Files: `packages/web/src/tiles/TileError.tsx`, `packages/web/src/tiles/TileError.test.tsx`
   - Failing test: `TileError.test.tsx`: a Cube error renders the message and a control that reveals the exact query JSON sent, instead of an empty chart (AC-012).
   - Depends on: T011
-- [ ] T014 (AC-013) Mark a tile accelerated with a data age, or live
+  - Done 2026-09-19. AC-012 ticked. Cube's message is shown **verbatim** rather than translated into something friendlier: "Can't find join path between Orders and Suppliers" tells an author what to change, where "Something went wrong" tells them to file a ticket. A test asserts the original message survives.
+  - The query JSON is one control away — the other half of diagnosing a failure, but noise while the message is enough. The state pairs an icon with a label, never colour alone.
+- [x] T014 (AC-013) Mark a tile accelerated with a data age, or live
   - Files: `packages/web/src/tiles/AccelerationBadge.tsx`, `packages/web/src/tiles/AccelerationBadge.test.tsx`
   - Failing test: `AccelerationBadge.test.tsx`: a response with `usedPreAggregations` renders the accelerated badge and the data age; a source-database response renders the live badge (AC-013).
   - Depends on: T011
+  - Done 2026-09-19. AC-013 ticked. Both directions are asserted, because both mislead: labelling everything "live" hides that a number is an hour old, and labelling everything "accelerated" claims a freshness guarantee that is not there (requirements §4 — volumes vary widely, so the UI has to say which queries are accelerated).
+  - Cube sends `usedPreAggregations` **with no entries** for a source-database query, so its presence proves nothing; only a non-empty set means accelerated. A test pins that case, since checking for the key alone would label every tile accelerated.
 - [ ] T015 (AC-016) Record every query wechart issues and list the records in the Jobs workspace
   - Files: `packages/api/src/repos/query-log.ts`, `packages/api/src/routes/jobs.ts`, `packages/web/src/workspaces/jobs/QueryLog.tsx`, `packages/api/src/repos/query-log.test.ts`
   - Failing test: `query-log.test.ts`: rendering a chart produces one record holding the Cube request, the duration and the acceleration flag, and the Jobs endpoint returns it (AC-016).
