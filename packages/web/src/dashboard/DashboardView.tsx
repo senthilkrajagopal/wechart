@@ -11,6 +11,7 @@ import { ROW_UNIT_PX } from './grid/geometry';
 import {
   isSection,
   isTabGroup,
+  resizeTile,
   type DashboardDocument,
   type Element_,
   type Tile,
@@ -98,10 +99,12 @@ function Elements({
   items,
   editing,
   charts,
+  onResize,
 }: {
   items: readonly Element_[];
   editing: boolean;
   charts: TileCharts;
+  onResize?: ((id: string, size: { w: number; h: number }) => void) | undefined;
 }) {
   const blocks: ReactNode[] = [];
   let run: Tile[] = [];
@@ -111,7 +114,7 @@ function Elements({
     const tiles = run;
     run = [];
     blocks.push(
-      <Canvas key={key} tiles={tiles} editing={editing}>
+      <Canvas key={key} tiles={tiles} editing={editing} onResize={onResize}>
         {(tile) => {
           const chartId = (tile as Tile).chartId ?? '';
           return (
@@ -133,13 +136,19 @@ function Elements({
       blocks.push(
         <section key={element.id} className="dashboard-section" data-section={element.id}>
           <h2>{element.title}</h2>
-          <Elements items={element.items} editing={editing} charts={charts} />
+          <Elements items={element.items} editing={editing} charts={charts} onResize={onResize} />
         </section>,
       );
     } else if (isTabGroup(element)) {
       flush(`run-before-${element.id}`);
       blocks.push(
-        <TabGroupView key={element.id} group={element} editing={editing} charts={charts} />,
+        <TabGroupView
+          key={element.id}
+          group={element}
+          editing={editing}
+          charts={charts}
+          onResize={onResize}
+        />,
       );
     } else {
       run.push(element);
@@ -154,10 +163,12 @@ function TabGroupView({
   group,
   editing,
   charts,
+  onResize,
 }: {
   group: Extract<Element_, { kind: 'tabs' }>;
   editing: boolean;
   charts: TileCharts;
+  onResize?: ((id: string, size: { w: number; h: number }) => void) | undefined;
 }) {
   const [open, setOpen] = useState(group.tabs[0]?.id ?? '');
   const showing = group.tabs.find((tab) => tab.id === open) ?? group.tabs[0];
@@ -177,7 +188,9 @@ function TabGroupView({
           </button>
         ))}
       </div>
-      {showing ? <Elements items={showing.items} editing={editing} charts={charts} /> : null}
+      {showing ? (
+        <Elements items={showing.items} editing={editing} charts={charts} onResize={onResize} />
+      ) : null}
     </div>
   );
 }
@@ -237,7 +250,25 @@ function DashboardPages({
         className="dashboard-page"
         data-width={document.settings.width}
       >
-        {showing ? <Elements items={showing.items} editing={editing} charts={charts} /> : null}
+        {showing ? (
+          <Elements
+            items={showing.items}
+            editing={editing}
+            charts={charts}
+            /**
+             * A resize is a change to the dashboard, so it goes through the
+             * session rather than into local state — which is what makes it
+             * undoable and what Discard reverts (AC-060, AC-066).
+             */
+            onResize={
+              editing
+                ? (id, size) => {
+                    session.change(resizeTile(document, id, size));
+                  }
+                : undefined
+            }
+          />
+        ) : null}
       </div>
     </>
   );

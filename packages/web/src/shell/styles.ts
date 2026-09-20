@@ -254,13 +254,64 @@ main { padding: 16px; }
     transparent 1px calc((100% + ${String(GUTTER_PX)}px) / ${String(COLUMNS)})
   );
 }
+
+/* direction.md section 2: "a faint 12-column grid while editing, and a
+   stronger one during a drag or resize" — the columns are what a resize is
+   aiming at, so they step forward while one is happening. */
+.grid-canvas[data-gridlines='true'][data-resizing='true'] {
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--wc-border-strong) 0 1px,
+    transparent 1px calc((100% + ${String(GUTTER_PX)}px) / ${String(COLUMNS)})
+  );
+}
 .grid-tile {
+  position: relative;
   min-width: 0;
   padding: 16px;
   border: 1px solid var(--wc-border-subtle);
   border-radius: 6px;
   background: var(--wc-bg-surface);
   overflow: hidden;
+}
+
+/* Resize handles (AC-055, direction.md rule 36). Right edge, bottom edge and
+   corner — the three direction.md names. They are invisible until the tile is
+   hovered, because a dashboard being edited is still a dashboard being read. */
+.grid-tile__handle { position: absolute; opacity: 0; touch-action: none; }
+.grid-tile:hover .grid-tile__handle,
+.grid-tile__handle:active { opacity: 1; }
+/* Where there is no hover there is no reveal, so a handle would be invisible
+   and still hittable. On touch they are simply shown. */
+@media (hover: none) {
+  .grid-tile__handle { opacity: 1; }
+}
+.grid-tile__handle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background: var(--wc-accent);
+  border-radius: 2px;
+}
+.grid-tile__handle--e { top: 0; right: 0; width: 8px; height: 100%; cursor: ew-resize; }
+.grid-tile__handle--e::after { width: 2px; height: 24px; }
+.grid-tile__handle--s { bottom: 0; left: 0; height: 8px; width: 100%; cursor: ns-resize; }
+.grid-tile__handle--s::after { height: 2px; width: 24px; }
+.grid-tile__handle--se { bottom: 0; right: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+.grid-tile__handle--se::after { width: 8px; height: 8px; }
+
+/* The live readout follows the pointer, so it is fixed to the viewport rather
+   than to the canvas, which scrolls under it. */
+.resize-readout {
+  position: fixed;
+  z-index: 10;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--wc-text-primary);
+  color: var(--wc-bg-surface);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 
 .chart-editor {

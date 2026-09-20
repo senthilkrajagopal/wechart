@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import { Canvas, EMPTY_CANVAS_ROWS, type GridTile } from './Canvas';
 import { COLUMNS, GUTTER_PX, ROW_UNIT_PX } from './geometry';
@@ -91,6 +91,108 @@ describe('every tile lands on the grid', () => {
     // grid the user sees stops matching the grid the tiles sit on — silently,
     // because every other assertion here is about spans.
     expect(canvas.style.gap).toBe(`${String(GUTTER_PX)}px`);
+  });
+});
+
+describe('reporting a resize (AC-055)', () => {
+  const dragHandle = (testId: string, by: { x?: number; y?: number }) => {
+    const handle = screen.getByTestId(testId);
+    // jsdom has no layout, so the canvas measures zero and the column pitch
+    // with it. The vertical axis is pure arithmetic on the 8px row unit, so
+    // that is what these assert; the horizontal drag is covered in the
+    // browser, where there is a real canvas to measure.
+    fireEvent.pointerDown(handle, { clientX: 100, clientY: 100, pointerId: 1 });
+    if (by.x !== undefined || by.y !== undefined) {
+      fireEvent.pointerMove(handle, {
+        clientX: 100 + (by.x ?? 0),
+        clientY: 100 + (by.y ?? 0),
+        pointerId: 1,
+      });
+    }
+    return handle;
+  };
+
+  it('reports the new size when the drag ends', () => {
+    const onResize = vi.fn();
+    render(
+      <Canvas tiles={[{ id: 'a', w: 6, h: 40 }]} editing onResize={onResize}>
+        {() => null}
+      </Canvas>,
+    );
+
+    const handle = dragHandle('resize-a-s', { y: ROW_UNIT_PX * 5 });
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+
+    expect(onResize).toHaveBeenCalledWith('a', { w: 6, h: 45 });
+  });
+
+  it('reports nothing for a press and release that did not move', () => {
+    const onResize = vi.fn();
+    render(
+      <Canvas tiles={[{ id: 'a', w: 6, h: 40 }]} editing onResize={onResize}>
+        {() => null}
+      </Canvas>,
+    );
+
+    const handle = dragHandle('resize-a-s', {});
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+
+    // Otherwise a click on a handle puts a change on the edit history that
+    // changed nothing, and Undo lights up for it.
+    expect(onResize).not.toHaveBeenCalled();
+  });
+
+  it('abandons an interrupted gesture rather than committing it', () => {
+    const onResize = vi.fn();
+    render(
+      <Canvas tiles={[{ id: 'a', w: 6, h: 40 }]} editing onResize={onResize}>
+        {() => null}
+      </Canvas>,
+    );
+
+    const handle = dragHandle('resize-a-s', { y: ROW_UNIT_PX * 5 });
+    fireEvent.pointerCancel(handle, { pointerId: 1 });
+
+    // The browser took the pointer away — a touch became a scroll, say. The
+    // size under it at that moment is not a size anyone chose.
+    expect(onResize).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('resize-readout')).toBeNull();
+  });
+
+  it('shows the readout while dragging and takes it away afterwards', () => {
+    render(
+      <Canvas tiles={[{ id: 'a', w: 6, h: 40 }]} editing onResize={vi.fn()}>
+        {() => null}
+      </Canvas>,
+    );
+
+    const handle = dragHandle('resize-a-s', { y: ROW_UNIT_PX * 5 });
+    expect(screen.getByTestId('resize-readout').textContent).toBe('6 / 12 cols · 50% · 360 px');
+
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(screen.queryByTestId('resize-readout')).toBeNull();
+  });
+
+  it('offers no handles at all without somewhere to report to', () => {
+    render(
+      <Canvas tiles={[{ id: 'a', w: 6, h: 40 }]} editing>
+        {() => null}
+      </Canvas>,
+    );
+
+    // A gesture that goes nowhere is worse than no gesture: the tile would
+    // appear resizable and silently forget.
+    expect(screen.queryByTestId('resize-a-s')).toBeNull();
+  });
+
+  it('offers no handles in view mode', () => {
+    render(
+      <Canvas tiles={[{ id: 'a', w: 6, h: 40 }]} editing={false} onResize={vi.fn()}>
+        {() => null}
+      </Canvas>,
+    );
+
+    expect(screen.queryByTestId('resize-a-s')).toBeNull();
   });
 });
 

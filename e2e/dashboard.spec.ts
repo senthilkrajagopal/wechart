@@ -102,6 +102,58 @@ test('the canvas is actually painted with a 12-column grid while editing', async
   expect(Math.abs(found - expected)).toBeLessThan(0.5);
 });
 
+test('dragging a tile edge resizes it and shows the live readout', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  const tile = page.getByTestId('grid-tile').first();
+  const before = (await tile.boundingBox())?.width ?? 0;
+  expect(before).toBeGreaterThan(0);
+
+  const handle = page.getByTestId('resize-tile-status-e');
+  const box = await handle.boundingBox();
+  expect(box).not.toBeNull();
+
+  const canvas = page.getByTestId('grid-canvas').first();
+  const faint = await canvas.evaluate((node) => getComputedStyle(node).backgroundImage);
+
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  // Moved in steps, so the readout is live rather than something drawn once
+  // at the end — and far enough to cross at least one column pitch.
+  await page.mouse.move(box!.x + 120, box!.y, { steps: 8 });
+
+  // direction.md asks for a stronger grid during a resize, not merely a
+  // different attribute.
+  const strong = await canvas.evaluate((node) => getComputedStyle(node).backgroundImage);
+  expect(strong).not.toBe(faint);
+  expect(strong).toContain('repeating-linear-gradient');
+
+  const readout = page.getByTestId('resize-readout');
+  await expect(readout).toBeVisible();
+
+  // All three parts rule 36 names, in the shape direction.md writes them.
+  await expect(readout).toHaveText(/^\d+ \/ 12 cols · \d+% · \d+ px$/);
+  const during = await readout.textContent();
+
+  await page.mouse.up();
+  await expect(readout).toBeHidden();
+
+  // And the tile actually changed, which is the other half of the criterion.
+  const after = (await tile.boundingBox())?.width ?? 0;
+  expect(after).toBeGreaterThan(before);
+
+  /**
+   * The readout said how many columns, and the tile ended up spanning exactly
+   * that many. Compared against the grid span rather than against a column
+   * count recomputed from pixels: sub-pixel widths round differently between
+   * engines, so pixel arithmetic here fails on Firefox for reasons that have
+   * nothing to do with the criterion.
+   */
+  const span = await tile.evaluate((node) => (node as HTMLElement).style.gridColumn);
+  expect(during).toContain(`${span.replace('span ', '')} / 12 cols`);
+});
+
 test('a member keeps one colour across two tiles', async ({ page }) => {
   await open(page);
 

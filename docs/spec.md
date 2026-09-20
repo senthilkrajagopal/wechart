@@ -181,7 +181,7 @@ Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
       Fails when: any of those controls is missing in edit mode.
 - [x] AC-054 WHILE editing, THE SYSTEM SHALL show a 12-column grid on the canvas and snap every tile to whole columns and to 8-pixel row units (direction.md rule 15).
       Fails when: a tile's width is not a whole number of columns, or its height is not a multiple of 8 pixels.
-- [ ] AC-055 WHEN the user drags a tile's edge or corner, THE SYSTEM SHALL resize it and show a live readout of columns, percentage and pixels, and THE SYSTEM SHALL offer no numeric width or height field anywhere in the editor (direction.md rule 36).
+- [x] AC-055 WHEN the user drags a tile's edge or corner, THE SYSTEM SHALL resize it and show a live readout of columns, percentage and pixels, and THE SYSTEM SHALL offer no numeric width or height field anywhere in the editor (direction.md rule 36).
       Fails when: resizing shows no readout, or a width or height input exists in the editor.
 - [ ] AC-056 WHEN the user drags a tile by its grip, THE SYSTEM SHALL show a drop marker and move the tile to the marked position, including onto a page tab or a tab-group label, which moves it into that tab.
       Fails when: no drop marker appears, or a drop on a tab label leaves the tile in its original container.

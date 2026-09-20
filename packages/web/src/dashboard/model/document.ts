@@ -122,5 +122,69 @@ export function tilesOf(
   });
 }
 
+/**
+ * A dashboard with one element a different size (AC-055).
+ *
+ * Rebuilds only the branch down to that element, and hands every other branch
+ * back by identity — including the document itself when nothing matched.
+ *
+ * The edit session keeps past states and tells them apart with `Object.is`, so
+ * a version that rebuilt every page and every section on the way past would
+ * make all of them look changed, and "what did this edit touch?" could only be
+ * answered by walking the whole tree to discover it was one tile.
+ */
+export function resizeTile(
+  document: DashboardDocument,
+  tileId: string,
+  size: { readonly w: number; readonly h: number },
+): DashboardDocument {
+  /** The same array back when nothing beneath it changed. */
+  const inItems = (items: readonly Element_[]): readonly Element_[] => {
+    let touched = false;
+
+    const next = items.map((element) => {
+      // A tab group carries a width of its own, so it can be the target. A
+      // section cannot: it is a container, sized by what it holds.
+      if (isTabGroup(element) && element.id === tileId) {
+        touched = true;
+        return { ...element, w: size.w };
+      }
+      if (isSection(element)) {
+        const inside = inItems(element.items);
+        if (inside === element.items) return element;
+        touched = true;
+        return { ...element, items: inside };
+      }
+      if (isTabGroup(element)) {
+        let inAnyTab = false;
+        const tabs = element.tabs.map((tab) => {
+          const inside = inItems(tab.items);
+          if (inside === tab.items) return tab;
+          inAnyTab = true;
+          return { ...tab, items: inside };
+        });
+        if (!inAnyTab) return element;
+        touched = true;
+        return { ...element, tabs };
+      }
+      if (element.id !== tileId) return element;
+      touched = true;
+      return { ...element, w: size.w, h: size.h };
+    });
+
+    return touched ? next : items;
+  };
+
+  let touched = false;
+  const pages = document.pages.map((page) => {
+    const items = inItems(page.items);
+    if (items === page.items) return page;
+    touched = true;
+    return { ...page, items };
+  });
+
+  return touched ? { ...document, pages } : document;
+}
+
 /** The first tab of a group: what a dashboard shows before anyone clicks. */
 export const firstTab = (group: TabGroup): Tab | undefined => group.tabs[0];
