@@ -1,0 +1,22 @@
+cubes:
+  - name: customers
+    sql_table: public.customers
+
+    dimensions:
+      - name: id
+        sql: id
+        type: number
+        primary_key: true
+      - name: name
+        sql: name
+        type: string
+      - name: country
+        sql: country
+        type: string
+      - name: signed_up_at
+        sql: signed_up_at
+        type: time
+
+    measures:
+      - name: count
+        type: count

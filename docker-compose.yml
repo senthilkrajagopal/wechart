@@ -1,13 +1,9 @@
-# Local development and test dependencies.
+# Local development and test dependencies: wechart's own metadata database, a
+# seeded sample warehouse, Cube Store, and the Cube API (CLAUDE.md).
 #
-# Only wechart's own metadata database is here so far. The Cube API, Cube Store
-# and the seeded sample Postgres arrive with the tasks that need them
-# (CLAUDE.md lists all four for local dev).
-#
-# The metadata database is what `pnpm test` runs against: packages/api's Vitest
-# global setup brings this service up and applies the migrations, so the tests
-# exercise a real Postgres rather than a fake. Port 55432 is deliberately not
-# 5432, so an existing local Postgres is never touched.
+# `pnpm test` runs the api package against the metadata database, and `pnpm e2e`
+# runs the whole stack. Ports are deliberately not the defaults, so an existing
+# local Postgres or Cube is never touched.
 
 services:
   wechart-meta:
@@ -32,5 +28,72 @@ services:
       retries: 30
       start_period: 5s
 
+  # The warehouse Cube reads. Seeded once from infra/sample-db/init.sql.
+  sample-db:
+    image: postgres:18-alpine
+    container_name: wechart-sample-db
+    environment:
+      POSTGRES_USER: sample
+      POSTGRES_PASSWORD: sample
+      POSTGRES_DB: sample
+    ports:
+      - '55433:5432'
+    volumes:
+      - wechart-sample-data:/var/lib/postgresql
+      - ./infra/sample-db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U sample -d sample']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  # Cube Store backs the query queue and cache; the cache driver defaults to
+  # cubestore in production mode (research/cube/configuration-deployment.md).
+  #
+  # The image is per-architecture: cubejs/cubestore:v1.7.42 is amd64 only, and
+  # Apple Silicon needs the -arm64v8 tag. CI sets CUBESTORE_IMAGE.
+  cubestore:
+    image: ${CUBESTORE_IMAGE:-cubejs/cubestore:v1.7.42-arm64v8}
+    container_name: wechart-cubestore
+    environment:
+      CUBESTORE_SERVER_NAME: cubestore:9999
+    volumes:
+      - wechart-cubestore-data:/cube/data
+
+  cube:
+    image: cubejs/cube:v1.7.42
+    container_name: wechart-cube
+    depends_on:
+      sample-db:
+        condition: service_healthy
+      cubestore:
+        condition: service_started
+    environment:
+      CUBEJS_DB_TYPE: postgres
+      CUBEJS_DB_HOST: sample-db
+      CUBEJS_DB_PORT: '5432'
+      CUBEJS_DB_NAME: sample
+      CUBEJS_DB_USER: sample
+      CUBEJS_DB_PASS: sample
+      # wechart signs every request with this and is the only holder of it
+      # (AC-007, AC-008).
+      CUBEJS_API_SECRET: ${CUBE_API_SECRET:-dev-secret}
+      CUBEJS_CUBESTORE_HOST: cubestore
+      # 3030 is Cube Store's HTTP port, which is what Cube speaks to. 3306 is
+      # its MySQL interface, and pointing Cube at it fails with
+      # "Parse Error: Expected HTTP/" (research/cube/configuration-deployment.md).
+      CUBEJS_CUBESTORE_PORT: '3030'
+      # Production mode: no Playground, authentication enforced, so local
+      # development stays faithful to how it is deployed.
+      CUBEJS_DEV_MODE: 'false'
+      NODE_ENV: production
+    ports:
+      - '54000:4000'
+    volumes:
+      - ./infra/cube/model:/cube/conf/model:ro
+
 volumes:
   wechart-meta-data:
+  wechart-sample-data:
+  wechart-cubestore-data:

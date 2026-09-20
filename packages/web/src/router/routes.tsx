@@ -7,6 +7,7 @@ import {
   useParams,
 } from '@tanstack/react-router';
 
+import { FieldList } from '../editor/FieldList';
 import { AppShell } from '../shell/AppShell';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
@@ -86,6 +87,24 @@ function ChartSurface() {
   );
 }
 
+/** The chart editor (AC-025 onwards). */
+function ChartEditorSurface() {
+  const params = useParams({ strict: false }) as { objectId?: string };
+  return (
+    <AppShell workspace="explore">
+      <h1>Chart editor</h1>
+      <p data-testid="selected-object">{decodeURIComponent(params.objectId ?? '')}</p>
+      <FieldList />
+    </AppShell>
+  );
+}
+
+const chartEditorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/explore/charts/$objectId/edit',
+  component: ChartEditorSurface,
+});
+
 const chartRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/explore/charts/$objectId',
@@ -102,6 +121,8 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   ...workspaceRoutes,
   dashboardRoute,
+  // Before chartRoute: the editor path is more specific than /charts/$objectId.
+  chartEditorRoute,
   chartRoute,
   modelFileRoute,
 ]);

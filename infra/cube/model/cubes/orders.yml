@@ -1,0 +1,36 @@
+cubes:
+  - name: orders
+    sql_table: public.orders
+    description: One row per order line in the sample warehouse.
+
+    joins:
+      - name: customers
+        sql: '{CUBE}.customer_id = {customers}.id'
+        relationship: many_to_one
+      - name: products
+        sql: '{CUBE}.product_id = {products}.id'
+        relationship: many_to_one
+
+    dimensions:
+      - name: id
+        sql: id
+        type: number
+        primary_key: true
+      - name: status
+        sql: status
+        type: string
+      - name: ordered_at
+        sql: ordered_at
+        type: time
+
+    measures:
+      - name: count
+        type: count
+      - name: total_amount
+        sql: amount
+        type: sum
+        format: currency
+      - name: average_amount
+        sql: amount
+        type: avg
+        format: currency

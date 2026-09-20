@@ -20,6 +20,15 @@ const edgeProject = {
 
 export default defineConfig({
   testDir: './e2e',
+  /**
+   * 60s rather than Playwright's 30s. On a cold run the machine is building the
+   * API, starting Cube and launching several real browsers at once, and
+   * browser *context setup* alone can exceed 30s — which fails as a timeout on
+   * whichever test happened to be first, with nothing wrong in the app. A
+   * passing test here takes about a second, so this still catches a genuine
+   * hang.
+   */
+  timeout: 60_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -44,7 +53,10 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       env: {
-        CUBE_API_SECRET: 'e2e-secret',
+        // Must match CUBEJS_API_SECRET for the compose stack, since wechart
+        // signs every Cube request with it (AC-008).
+        CUBE_API_SECRET: 'dev-secret',
+        CUBE_API_URL: 'http://localhost:54000/cubejs-api',
         WECHART_SEED: '1',
         // These tests create objects, so each run starts from the seed rather
         // than from whatever the last run left behind.

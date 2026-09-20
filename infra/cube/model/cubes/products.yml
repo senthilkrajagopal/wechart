@@ -1,0 +1,19 @@
+cubes:
+  - name: products
+    sql_table: public.products
+
+    dimensions:
+      - name: id
+        sql: id
+        type: number
+        primary_key: true
+      - name: name
+        sql: name
+        type: string
+      - name: category
+        sql: category
+        type: string
+
+    measures:
+      - name: count
+        type: count

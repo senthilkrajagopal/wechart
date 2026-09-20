@@ -195,11 +195,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F4. Chart builder and recommendation
 
-- [ ] T024 (AC-025) List cubes, views and their members grouped by type
-  - Files: `packages/web/src/editor/FieldList.tsx`, `packages/api/src/routes/meta.ts`, `packages/web/src/editor/FieldList.test.tsx`
+- [x] T024 (AC-025, AC-007) List cubes, views and their members grouped by type
+  - Files: `docker-compose.yml`, `infra/sample-db/init.sql`, `infra/cube/model/cubes/*.yml`, `packages/web/src/editor/{fields.ts,fields.test.ts,FieldList.tsx}`, `packages/web/src/router/routes.tsx`, `playwright.config.ts`, `e2e/field-list.spec.ts`
   - Failing test: `FieldList.test.tsx`: every measure, dimension, segment and time dimension in the metadata appears under its group, and members marked hidden do not (AC-025).
   - Depends on: T010
-  - Also ticks **AC-007**, carried from T004: this is the first task where the browser needs metadata, so `e2e/no-direct-cube.spec.ts` can assert that the page issues at least one metadata request, that none targets the Cube API host, and that no response body carries the Cube secret. Asserting that before the app fetched anything would have passed vacuously.
+  - Done 2026-09-20. **AC-025 and AC-007 both ticked.** AC-007 waited from T004 until the browser genuinely needed metadata: the test asserts the page *did* fetch `/api/meta`, then that nothing went to the Cube host and no response carried the secret. Without the first assertion the other two pass on a page that fetches nothing.
+  - The real stack is now in `docker-compose.yml`: a seeded sample warehouse, Cube Store, and Cube 1.7.42 in **production mode** (no Playground, authentication enforced), so local development matches how it is deployed. The JWT the `CubeClient` mints authenticates against real Cube, which is AC-008 confirmed against the thing rather than a stub.
+  - Two findings. **Cube talks to Cube Store on HTTP 3030, not the MySQL port 3306** — pointing it at 3306 fails with "Parse Error: Expected HTTP/" and a permanently unhealthy deployment. And Cube Store's image is per-architecture: `v1.7.42` is amd64-only, Apple Silicon needs `-arm64v8`, so the tag is an env var CI overrides.
+  - **Time dimensions are not a separate array** in Cube's metadata — they are dimensions whose `type` is `time`. Listing them with the rest would bury the field most charts are built around, so they are their own group.
+  - Also fixed here: the intermittent browser-suite failures seen since T017 were **browser context launch exceeding the 30s test timeout** on cold runs, not assertion failures — the app was never at fault. The per-test timeout is now 60s, verified over a forced cold run and a warm one.
 - [ ] T025 (AC-026) Add a field to a well by drag or by the well's "+" picker and re-run the query
   - Files: `packages/web/src/editor/{Well,FieldPicker}.tsx`, `packages/web/src/editor/Well.test.tsx`
   - Failing test: `Well.test.tsx`: both routes add the field to the well and the chart re-queries, replacing the previous result (AC-026).

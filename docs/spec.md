@@ -53,7 +53,7 @@ Traces to: `[R2]`, `[docs/inputs §8]`, direction.md §2.
 Purpose: one server that owns Cube credentials, queries, and everything wechart saves.
 Traces to: `[R5]`, `[R4]`, `[research/cube/data-apis.md]`, `[research/cube/access-control.md]`.
 
-- [ ] AC-007 WHEN the browser needs data or metadata, THE SYSTEM SHALL obtain it through the wechart API, and the browser SHALL make no request to the Cube API host.
+- [x] AC-007 WHEN the browser needs data or metadata, THE SYSTEM SHALL obtain it through the wechart API, and the browser SHALL make no request to the Cube API host.
       Fails when: a network request from the browser targets the Cube API host, or any response to the browser contains the Cube API secret.
 - [x] AC-008 WHEN wechart queries Cube, THE SYSTEM SHALL attach the configured phase-1 security context to every request.
       Fails when: a request reaches Cube without the configured security context.
@@ -101,7 +101,7 @@ Traces to: `[docs/inputs §8]`, direction.md §2.
 Purpose: build a chart from Cube members without SQL, with a recommended chart type that can be overridden.
 Traces to: `[docs/inputs §2, §3]`, `[R2]`, direction.md §6, rules 8–10, 29–30.
 
-- [ ] AC-025 WHEN the user opens the chart editor, THE SYSTEM SHALL list the cubes and views available from `/v1/meta` and, once one is chosen, its measures, dimensions, segments and time dimensions grouped by type.
+- [x] AC-025 WHEN the user opens the chart editor, THE SYSTEM SHALL list the cubes and views available from `/v1/meta` and, once one is chosen, its measures, dimensions, segments and time dimensions grouped by type.
       Fails when: a member present in the metadata is missing from the field list, or a hidden member is shown.
 - [ ] AC-026 WHEN the user drags a field onto a well, or adds it with the well's "+" picker, THE SYSTEM SHALL add it to that well and re-run the chart's query.
       Fails when: the field is not added by either route, or the chart still shows the previous result.
