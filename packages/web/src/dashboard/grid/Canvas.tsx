@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { COLUMNS, GUTTER_PX, ROW_UNIT_PX, heightOf } from './geometry';
+import { COLUMNS, GUTTER_PX, ROW_UNIT_PX, heightOf, type GridTile } from './geometry';
 
 /**
  * The dashboard canvas (AC-054): a 12-column grid that every tile lands on.
@@ -11,13 +11,7 @@ import { COLUMNS, GUTTER_PX, ROW_UNIT_PX, heightOf } from './geometry';
  * AC-059's nested tree (page tabs → sections → tab groups → tiles) is flow,
  * and a library that owns absolute positions cannot nest that way.
  */
-export interface GridTile {
-  readonly id: string;
-  /** Width in columns. */
-  readonly w: number;
-  /** Height in 8-pixel row units. */
-  readonly h: number;
-}
+export type { GridTile };
 
 export interface CanvasProps {
   readonly tiles: readonly GridTile[];

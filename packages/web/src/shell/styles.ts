@@ -191,6 +191,13 @@ main { padding: 16px; }
 }
 
 .dashboard__body { display: flex; align-items: flex-start; gap: 16px; }
+
+/* direction.md section 2: "fixed-width and centred (max 1440px), with a toggle
+   for full width". This is the saved setting AC-018 asks to come back, so it
+   has to change the page and not just an attribute. */
+.dashboard-page { width: 100%; }
+.dashboard-page[data-width='fixed'] { max-width: 1440px; margin-inline: auto; }
+.dashboard-page[data-width='full'] { max-width: none; }
 .dashboard__canvas { flex: 1; min-width: 0; }
 
 .edit-bar { display: flex; gap: 8px; }

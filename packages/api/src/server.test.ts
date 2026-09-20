@@ -110,6 +110,49 @@ describe('creating catalog objects (AC-020)', () => {
     }
   });
 
+  it('reads back a saved dashboard, body and all (AC-018)', async () => {
+    const saved = {
+      title: 'Revenue',
+      pages: [{ id: 'p1', title: 'Overview', items: [{ id: 't1', kind: 'chart', w: 6, h: 40 }] }],
+      settings: { width: 'full' },
+    };
+    const documents = {
+      ...recordingDocuments(),
+      get: async () => ({ id: 'd1', body: saved }),
+    };
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await app.inject({ method: 'GET', url: '/api/documents/dashboard/d1' });
+
+    expect(response.statusCode).toBe(200);
+    // The pages and the settings have to survive the round trip, because the
+    // criterion fails when "a saved tile or setting is missing".
+    expect(response.json().body).toEqual(saved);
+    await app.close();
+  });
+
+  it('says not found rather than returning an empty dashboard', async () => {
+    const documents = { ...recordingDocuments(), get: async () => null };
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await app.inject({ method: 'GET', url: '/api/documents/dashboard/missing' });
+
+    // A 200 with nothing in it would render as an empty dashboard, which looks
+    // like a dashboard whose tiles were all deleted.
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('refuses a kind it does not know', async () => {
+    const documents = { ...recordingDocuments(), get: async () => null };
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await app.inject({ method: 'GET', url: '/api/documents/secret/d1' });
+
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
   it('mints the id itself, so a client cannot claim an existing one', async () => {
     const documents = recordingDocuments();
     const app = buildServer({ config, documents, cube: stubCube(() => ({})) });

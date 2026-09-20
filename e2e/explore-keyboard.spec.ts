@@ -54,7 +54,9 @@ test('arrow keys move the selection and Enter opens it', async ({ page, request 
   await page.keyboard.press('Enter');
 
   await expect(page).toHaveURL(/\/explore\/dashboards\//);
-  await expect(page.getByTestId('selected-object')).not.toBeEmpty();
+  // The *selected* row's dashboard, not merely some dashboard: Enter opening
+  // the first row regardless of the selection is the bug this guards.
+  await expect(page.getByRole('heading', { name: `Dashboard 2 ${unique}` })).toBeVisible();
 });
 
 test('the list is a single tab stop, not one per row', async ({ page }) => {

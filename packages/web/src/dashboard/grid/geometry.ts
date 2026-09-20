@@ -19,6 +19,19 @@ export const ROW_UNIT_PX = 8;
 export const GUTTER_PX = 16;
 
 /**
+ * Anything the canvas can lay out. The dashboard document's tiles extend this
+ * rather than restating it, so there is one definition of "how big is it" and
+ * the two cannot drift apart.
+ */
+export interface GridTile {
+  readonly id: string;
+  /** Width in columns. */
+  readonly w: number;
+  /** Height in 8-pixel row units. */
+  readonly h: number;
+}
+
+/**
  * The width of one column at this canvas width. Twelve tracks and the eleven
  * gutters between them fill the canvas exactly.
  */

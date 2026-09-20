@@ -43,7 +43,6 @@ test('navigating the switcher changes the URL', async ({ page }) => {
 
 test.describe('a selected object survives a reload', () => {
   const cases = [
-    { what: 'dashboard', path: '/explore/dashboards/dash-42', id: 'dash-42' },
     { what: 'chart', path: '/explore/charts/chart-7', id: 'chart-7' },
     { what: 'model file', path: '/model/files/cubes%2Forders.yml', id: 'cubes/orders.yml' },
   ];
@@ -61,12 +60,27 @@ test.describe('a selected object survives a reload', () => {
     });
   }
 
-  test('a different id in the URL selects a different object', async ({ page }) => {
-    await page.goto('/explore/dashboards/dash-42');
-    await expect(page.getByTestId('selected-object')).toHaveText('dash-42');
+  /**
+   * The dashboard is asserted through the surface itself — the dashboard's own
+   * title — rather than through a marker put in the page for the test. Since
+   * T023 the route renders a real dashboard, so there is something honest to
+   * look at, and a test-only element would now be the only reason it existed.
+   */
+  test('dashboard seed-root-dashboard-1', async ({ page }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await expect(page.getByRole('heading', { name: 'Company dashboard 01' })).toBeVisible();
 
-    await page.goto('/explore/dashboards/dash-99');
-    await expect(page.getByTestId('selected-object')).toHaveText('dash-99');
+    await page.reload();
+
+    await expect(page.getByRole('heading', { name: 'Company dashboard 01' })).toBeVisible();
+  });
+
+  test('a different id in the URL selects a different object', async ({ page }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await expect(page.getByRole('heading', { name: 'Company dashboard 01' })).toBeVisible();
+
+    await page.goto('/explore/dashboards/seed-root-dashboard-2');
+    await expect(page.getByRole('heading', { name: 'Company dashboard 02' })).toBeVisible();
   });
 });
 

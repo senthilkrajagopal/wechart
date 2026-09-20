@@ -83,7 +83,7 @@ Traces to: `[docs/inputs §8]`, direction.md §2.
 
 - [x] AC-017 WHEN the user opens Explore, THE SYSTEM SHALL show a folder tree and the contents of the selected folder, listing dashboards and library charts with their type, owner and last-updated time.
       Fails when: the list omits an item in the folder, or a column is blank for an item that has that value.
-- [ ] AC-018 WHEN the user opens a dashboard from Explore, THE SYSTEM SHALL open it in view mode with its saved page tabs, tiles and settings.
+- [x] AC-018 WHEN the user opens a dashboard from Explore, THE SYSTEM SHALL open it in view mode with its saved page tabs, tiles and settings.
       Fails when: the dashboard opens in edit mode, or a saved tile or setting is missing.
 - [x] AC-019 WHEN the user types in the Explore search box, THE SYSTEM SHALL list every dashboard and library chart whose title contains the text, and no dashboard-local chart.
       Fails when: a matching library item is missing, or a dashboard-local chart appears in the results.
@@ -137,7 +137,7 @@ Traces to: `[docs/inputs §2]`, direction.md §6, rules 4–7, 18–19.
       Fails when: a listed type cannot be produced from a valid spec.
 - [x] AC-038 WHEN a chart has two or more series, THE SYSTEM SHALL show a legend; with one series it SHALL show none (direction.md rule 4).
       Fails when: a single-series chart shows a legend box, or a multi-series chart omits it.
-- [ ] AC-039 THE SYSTEM SHALL give a member the same colour in every tile of a dashboard, and keep that colour when filters change the set of visible members (direction.md rule 7).
+- [x] AC-039 THE SYSTEM SHALL give a member the same colour in every tile of a dashboard, and keep that colour when filters change the set of visible members (direction.md rule 7).
       Fails when: a member's colour changes between tiles or after filtering.
 - [x] AC-040 WHEN the user edits an axis, THE SYSTEM SHALL apply minimum, maximum, logarithmic scale, gridlines, tick rotation, number format and axis title to the rendered chart.
       Fails when: any of those settings has no effect on the rendered axis.
@@ -177,9 +177,9 @@ Traces to: `[R7]`, `[R2]`, `[research/cube/data-modeling.md]`.
 Purpose: build dashboards on a 12-column grid, in place, with the keyboard or the mouse.
 Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
 
-- [ ] AC-053 WHEN the user activates Edit on a dashboard, THE SYSTEM SHALL show the edit bar with Undo, Redo, Discard and Save, and the edit sidebar with Add, Outline and Properties.
+- [x] AC-053 WHEN the user activates Edit on a dashboard, THE SYSTEM SHALL show the edit bar with Undo, Redo, Discard and Save, and the edit sidebar with Add, Outline and Properties.
       Fails when: any of those controls is missing in edit mode.
-- [ ] AC-054 WHILE editing, THE SYSTEM SHALL show a 12-column grid on the canvas and snap every tile to whole columns and to 8-pixel row units (direction.md rule 15).
+- [x] AC-054 WHILE editing, THE SYSTEM SHALL show a 12-column grid on the canvas and snap every tile to whole columns and to 8-pixel row units (direction.md rule 15).
       Fails when: a tile's width is not a whole number of columns, or its height is not a multiple of 8 pixels.
 - [ ] AC-055 WHEN the user drags a tile's edge or corner, THE SYSTEM SHALL resize it and show a live readout of columns, percentage and pixels, and THE SYSTEM SHALL offer no numeric width or height field anywhere in the editor (direction.md rule 36).
       Fails when: resizing shows no readout, or a width or height input exists in the editor.

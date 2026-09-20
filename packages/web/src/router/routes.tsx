@@ -7,6 +7,7 @@ import {
   useParams,
 } from '@tanstack/react-router';
 
+import { DashboardPage } from '../dashboard/DashboardPage';
 import { ChartEditor } from '../editor/ChartEditor';
 import { AppShell } from '../shell/AppShell';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
@@ -72,10 +73,22 @@ function SelectedObject({ workspace, label }: { workspace: WorkspaceId; label: s
   );
 }
 
+/** The dashboard, in view mode with its saved pages, tiles and settings (AC-018). */
+function DashboardSurface() {
+  const params = useParams({ strict: false }) as { objectId?: string };
+  const dashboardId = decodeURIComponent(params.objectId ?? '');
+
+  return (
+    <AppShell workspace="explore">
+      <DashboardPage dashboardId={dashboardId} />
+    </AppShell>
+  );
+}
+
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/explore/dashboards/$objectId',
-  component: () => <SelectedObject workspace="explore" label="Dashboard" />,
+  component: DashboardSurface,
 });
 
 function ChartSurface() {

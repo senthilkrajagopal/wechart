@@ -29,9 +29,11 @@ test('creates a dashboard in the selected folder and opens it', async ({ page })
   const title = `Created dashboard ${String(Date.now())}`;
   await createIn(page, 'dashboard', title);
 
-  // Opened: the URL names the new object and the surface shows it.
+  // Opened: the URL names the new object and the surface shows it. Asserted
+  // through the dashboard's own title, which is what a reader sees — since
+  // T023 the route renders a real dashboard rather than a placeholder.
   await expect(page).toHaveURL(/\/explore\/dashboards\//);
-  await expect(page.getByTestId('selected-object')).not.toBeEmpty();
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
 
   // Landed in Finance, not at the root.
   await page.goto('/explore');

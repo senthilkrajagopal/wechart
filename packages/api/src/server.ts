@@ -37,6 +37,10 @@ export interface DocumentWriter {
   }): Promise<unknown>;
   attachChart?(dashboardId: string, chartId: string): Promise<unknown>;
   remove?(kind: 'folder' | 'dashboard' | 'chart', id: string): Promise<boolean>;
+  get?(
+    kind: 'folder' | 'dashboard' | 'chart',
+    id: string,
+  ): Promise<{ id: string; body: Record<string, unknown> } | null>;
 }
 
 /** The slice of the catalog repository the server exposes. */
@@ -183,6 +187,24 @@ export function buildServer({
    * reference to the object keeps working: a dashboard points at a chart's id,
    * never at its title or its folder.
    */
+  /**
+   * One saved document (AC-018). The body is returned as stored, having been
+   * through the repository's migration on read, so the browser never sees an
+   * older format.
+   */
+  app.get('/api/documents/:kind/:id', async (request, reply) => {
+    const { kind, id } = request.params as { kind: string; id: string };
+
+    if (kind !== 'folder' && kind !== 'dashboard' && kind !== 'chart') {
+      throw new BadRequest('kind must be one of folder, dashboard or chart');
+    }
+    if (!docs?.get) throw new BadRequest('Persistence is not configured');
+
+    const found = await docs.get(kind, id);
+    if (found === null) return reply.code(404).send({ message: 'No such document' });
+    return found;
+  });
+
   app.patch('/api/documents/:kind/:id', async (request) => {
     const { kind, id } = request.params as { kind: string; id: string };
     const body = request.body as { title?: string; folderId?: string } | undefined;

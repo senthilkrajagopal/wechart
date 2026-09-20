@@ -80,6 +80,106 @@ export async function seedDevData(db: Kysely<Database>): Promise<void> {
         title: `Company dashboard ${String(n).padStart(2, '0')}`,
         folderId: ROOT_FOLDER_ID,
         owner: 'admin',
+        // The first one carries a real structure, so there is a dashboard to
+        // open (AC-018) with more than one page tab, a nested section and two
+        // charts that share a member — which is what AC-039 is about. The
+        // others stay title-only: the folder list is what they are for.
+        ...(n === 1
+          ? {
+              schemaVersion: 1,
+              settings: { width: 'fixed' },
+              pages: [
+                {
+                  id: 'overview',
+                  title: 'Overview',
+                  items: [
+                    { id: 'tile-status', kind: 'chart', w: 6, h: 40, chartId: 'seed-chart-status' },
+                    {
+                      id: 'tile-notes',
+                      kind: 'markdown',
+                      w: 6,
+                      h: 40,
+                      text: 'Orders by status, this quarter.',
+                    },
+                    {
+                      id: 'section-detail',
+                      kind: 'section',
+                      title: 'Detail',
+                      items: [
+                        {
+                          id: 'tile-region',
+                          kind: 'chart',
+                          w: 12,
+                          h: 40,
+                          chartId: 'seed-chart-region',
+                        },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  id: 'appendix',
+                  title: 'Appendix',
+                  items: [{ id: 'tile-heading', kind: 'header', w: 12, h: 8, text: 'Definitions' }],
+                },
+              ],
+            }
+          : {}),
+      },
+    });
+  }
+
+  // The two charts the seeded dashboard shows. Both split by status, so the
+  // same members appear in both tiles and a reader can see that a member keeps
+  // one colour across them (AC-039).
+  /**
+   * Both split by `orders.status`, so the same members are drawn in both and
+   * AC-039 has something to be true about. They deliberately reach those
+   * members in a **different order**: the first is grouped by category, the
+   * second runs over time, and the sample orders cycle through the statuses
+   * day by day, so the earliest dates put them in a different sequence.
+   *
+   * That difference is the whole point. Colour follows first appearance when
+   * a tile is left to choose for itself, so two charts that happened to list
+   * their members in the same order would paint identically whether or not
+   * the dashboard's assignment reached them — and a test on such a pair would
+   * pass without proving anything.
+   */
+  const charts = [
+    {
+      id: 'seed-chart-status',
+      title: 'Orders by category and status',
+      wells: {
+        measures: ['orders.count'],
+        dimensions: ['products.category', 'orders.status'],
+        timeDimensions: [],
+      },
+    },
+    {
+      id: 'seed-chart-region',
+      title: 'Orders over time by status',
+      wells: {
+        measures: ['orders.count'],
+        dimensions: ['orders.status'],
+        timeDimensions: ['orders.ordered_at'],
+      },
+    },
+  ] as const;
+
+  for (const chart of charts) {
+    await repo.create({
+      kind: 'chart',
+      id: chart.id,
+      body: {
+        schemaVersion: 1,
+        title: chart.title,
+        localToDashboardId: 'seed-root-dashboard-1',
+        owner: 'admin',
+        chart: {
+          source: { cube: 'orders' },
+          wells: chart.wells,
+          chartType: 'bar',
+        },
       },
     });
   }
