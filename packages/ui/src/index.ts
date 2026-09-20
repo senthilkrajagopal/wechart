@@ -4,6 +4,8 @@
  */
 export const PACKAGE_NAME = '@wechart/ui';
 
+export { themeCss } from './css';
+
 export {
   AUDIT_TYPE_TOKEN,
   COLORS,

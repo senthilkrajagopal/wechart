@@ -278,6 +278,9 @@ importers:
       '@tanstack/react-router':
         specifier: 1.170.38
         version: 1.170.38(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@wechart/ui':
+        specifier: workspace:*
+        version: link:../ui
       react:
         specifier: 19.3.0
         version: 19.3.0

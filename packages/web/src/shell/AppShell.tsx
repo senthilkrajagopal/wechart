@@ -1,3 +1,4 @@
+import { ThemeToggle } from './ThemeToggle';
 import { WorkspaceSwitcher, type WorkspaceId } from './WorkspaceSwitcher';
 
 /**
@@ -18,6 +19,7 @@ export function AppShell({ workspace, children }: AppShellProps) {
       <header className="app-bar">
         <span className="app-bar__product">wechart</span>
         <WorkspaceSwitcher current={workspace} />
+        <ThemeToggle />
       </header>
       <main>{children}</main>
     </div>

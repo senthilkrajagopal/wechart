@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@tanstack/react-router": "1.170.38",
+    "@wechart/ui": "workspace:*",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

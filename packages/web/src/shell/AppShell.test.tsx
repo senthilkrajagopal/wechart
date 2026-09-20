@@ -2,6 +2,11 @@ import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { AppShell } from './AppShell';
+import { ThemeProvider } from './ThemeProvider';
+
+/** The shell carries a theme control, so it renders inside the provider. */
+const renderShell = (ui: React.ReactElement) =>
+  render(<ThemeProvider initial="light">{ui}</ThemeProvider>);
 
 /**
  * AC-001: WHEN the application loads, THE SYSTEM SHALL show a top bar whose
@@ -10,7 +15,7 @@ import { AppShell } from './AppShell';
  */
 describe('app shell (AC-001)', () => {
   it('shows a top bar carrying the workspace switcher', () => {
-    render(<AppShell workspace="explore" />);
+    renderShell(<AppShell workspace="explore" />);
 
     const bar = screen.getByRole('banner');
     const switcher = within(bar).getByRole('navigation', { name: /workspace/i });
@@ -19,7 +24,7 @@ describe('app shell (AC-001)', () => {
   });
 
   it('renders the workspace content in a main landmark', () => {
-    render(
+    renderShell(
       <AppShell workspace="model">
         <p>model workspace</p>
       </AppShell>,

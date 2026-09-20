@@ -67,10 +67,12 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Done 2026-09-19. AC-002 ticked: 12 cases, each of which navigates, **reloads**, and asserts the surface and selected object came back — reload is the criterion, so none asserts only that a link works. Workspace routes are generated from `WORKSPACES`, so a workspace cannot exist in the switcher and not the router.
   - The object routes render a placeholder naming the selected object. The URL↔selection contract is what this task settles; the surfaces themselves arrive at T023 (dashboard), T032 (chart editor) and T137 (model file), and each re-runs the reload assertion against real content.
   - The switcher still uses plain `<a href>` rather than client-side navigation, so a workspace change is a full page load. No AC covers that yet; revisit if a task needs state to survive a workspace switch.
-- [ ] T007 (AC-003) Switch theme without changing the route or losing scroll position
-  - Files: `packages/web/src/shell/ThemeProvider.tsx`, `packages/ui/src/tokens.ts`, `e2e/theme.spec.ts`
+- [x] T007 (AC-003) Switch theme without changing the route or losing scroll position
+  - Files: `packages/web/src/shell/{ThemeProvider,ThemeToggle,styles}.tsx|ts`, `packages/web/src/shell/ThemeToggle.test.tsx`, `packages/ui/src/css.ts`, `packages/ui/src/css.test.ts`, `packages/web/src/main.tsx`, `e2e/theme.spec.ts`
   - Failing test: `e2e/theme.spec.ts`: after a theme switch the route and scroll offset are unchanged and no element retains the previous theme's background colour (AC-003).
   - Depends on: T002, T006
+  - Done 2026-09-19. **AC-003 stays unchecked**: the route half and the repaint half are demonstrated (computed `background-color` on `body` and `.app-bar`, in both directions, and across a reload), but the criterion also says "without losing scroll position" and no surface is long enough to scroll yet. Asserting that against a page that cannot scroll would prove nothing. T016 builds the Explore contents list and ticks AC-003 with the scroll assertion added.
+  - Both palettes ship in one stylesheet and the switch is a `data-theme` attribute on the document element, so nothing remounts and no navigation happens — which is *why* the route and scroll survive, rather than something that needs defending per surface. The stylesheet is generated from the tokens by `@wechart/ui`'s `themeCss()`, so what the browser paints and what the contrast audit checks are the same values.
 - [ ] T008 (AC-004, AC-005) Apply the tokens across the shell and run the audit over rendered surfaces
   - Files: `packages/web/src/shell/*.css.ts`, `e2e/a11y-tokens.spec.ts`
   - Failing test: `e2e/a11y-tokens.spec.ts`: on the rendered shell in both themes, every text node computes to at least 12 px and meets its contrast threshold (AC-004, AC-005).
@@ -113,6 +115,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/workspaces/explore/{FolderTree,FolderContents}.tsx`, `packages/api/src/routes/folders.ts`, `packages/web/src/workspaces/explore/FolderContents.test.tsx`
   - Failing test: `FolderContents.test.tsx`: every dashboard and library chart in the folder is listed with its type, owner and last-updated time, and no column is blank for an item that has that value (AC-017).
   - Depends on: T003, T005
+  - Also ticks **AC-003**, carried from T007: this is the first surface long enough to scroll, so `e2e/theme.spec.ts` can add the half of that criterion T007 could not demonstrate — scroll the contents list, switch theme, assert the offset is unchanged.
 - [ ] T017 (AC-019) Search dashboards and library charts by title, excluding dashboard-local charts
   - Files: `packages/web/src/workspaces/explore/Search.tsx`, `packages/api/src/routes/search.ts`, `packages/api/src/routes/search.test.ts`
   - Failing test: `search.test.ts`: a substring match returns every library item whose title contains it and never a dashboard-local chart (AC-019).
@@ -854,7 +857,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 | ------ | ---------- | ------ | ---- | ------ | ---- | ------ | ---------- |
 | AC-001 | T005       | AC-046 | T052 | AC-091 | T097 | AC-136 | T142       |
 | AC-002 | T006       | AC-047 | T053 | AC-092 | T098 | AC-137 | T143       |
-| AC-003 | T007       | AC-048 | T055 | AC-093 | T099 | AC-138 | T144       |
+| AC-003 | T007, T016 | AC-048 | T055 | AC-093 | T099 | AC-138 | T144       |
 | AC-004 | T002, T008 | AC-049 | T054 | AC-094 | T100 | AC-139 | T145       |
 | AC-005 | T002, T008 | AC-050 | T056 | AC-095 | T101 | AC-140 | T146       |
 | AC-006 | T009       | AC-051 | T057 | AC-096 | T102 | AC-141 | T147       |
