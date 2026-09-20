@@ -511,7 +511,7 @@ Traces to: `[R3]`, `[R7]`, direction.md rules 1–5, 39, 52.
       Fails when: an action can be performed only with a pointer, or focus is invisible on any control.
 - [ ] AC-177 THE SYSTEM SHALL pair every status, validation and job state with an icon and a text label (direction.md rule 3).
       Fails when: any state is conveyed by colour alone.
-- [ ] AC-178 THE SYSTEM SHALL provide a table view of every chart's data, reachable from the tile (direction.md rule 5).
+- [x] AC-178 THE SYSTEM SHALL provide a table view of every chart's data, reachable from the tile (direction.md rule 5).
       Fails when: a chart type offers no table view.
 - [ ] AC-179 THE SYSTEM SHALL render dashboards, the chart editor and the model editor without horizontal scrolling at a viewport width of 1,280 pixels.
       Fails when: any of those surfaces scrolls horizontally at that width.

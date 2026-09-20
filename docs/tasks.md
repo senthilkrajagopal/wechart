@@ -352,10 +352,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **A KPI is one number, so the work is all in its absence.** No rows, a row that does not carry the measure, a value that will not parse and no measure bound at all each say so rather than printing `0` — an empty result is not a measurement of zero.
   - New: `ChartTile` is the single place that knows which types are DOM and which go to ECharts, so nothing upstream has to. `ChartCanvas` lost its own not-drawable branch to it rather than keeping two copies.
   - Values are grouped (`9,876,543`) rather than printed as a wall of digits, and the string Cube sends over JSON is converted rather than trusted. Per-member formats — currency, percentages — are AC-046's business at T052.
-- [ ] T041 (AC-037, AC-178) Render the table, and offer a table view of every chart's data from the tile
-  - Files: `packages/charts/src/dom/DataTable.tsx`, `packages/web/src/tiles/TableView.tsx`, `packages/charts/src/dom/DataTable.test.tsx`, `e2e/table-view.spec.ts`
+- [x] T041 (AC-037, AC-178) Render the table, and offer a table view of every chart's data from the tile
+  - Files: `packages/web/src/tiles/DataTable.tsx`, `packages/web/src/tiles/DataTable.test.tsx`, `packages/web/src/tiles/ChartTile.tsx`, `e2e/table-view.spec.ts`
   - Failing test: `DataTable.test.tsx`: a table spec renders with real `<table>` semantics and virtualised rows (AC-037); `e2e/table-view.spec.ts`: every chart type offers a table view reachable from its tile (AC-178).
-  - Depends on: T035
+  - Depends on: T035, T189
+  - Done 2026-09-20. **AC-178 ticked. AC-037 stays unchecked** — 15 of its 18 types now render.
+  - In `packages/web` rather than `packages/charts`, for the reason recorded at T040: charts stays framework-free.
+  - **Two requirements pull against each other.** Real `<table>` semantics are what a screen reader needs, and virtualisation is what stops ten thousand rows being ten thousand DOM nodes — and the usual way to virtualise is absolute positioning, which destroys table layout. TanStack's own guide suggests `display: grid`, "breaking semantic HTML". `research/table.md` settles it the other way: fixed row heights plus **spacer rows** standing in for what is not drawn, so the native layout survives, and `aria-rowcount`/`aria-rowindex`, which the APG table pattern requires exactly when rows "are hidden or not present in the DOM".
+  - **Only `@tanstack/react-virtual` is used so far.** `@tanstack/react-table` is the decided library and is installed, but a flat table of result rows needs none of its row model; v9's feature-registration surface is significant to adopt for nothing. It earns its place at the pivot (T042) and sorting (T051).
+  - The virtualiser's rect is supplied rather than observed. The tile decides the height, so there is nothing to discover by measuring — and measuring is what fails without a layout engine: the default watcher reports a zero-height rect, the window comes out empty and nothing is drawn.
+  - **AC-178 is tested against the vocabulary, not a sample.** All eighteen types are exercised, and the fixture fills every well so none is left unable to draw. Skipping the ones that fell short would have been the easy green and would have excused exactly the types most likely to lack a view — the test-integrity hook blocked a `test.skip` that would have done it.
+  - Known, accepted: React Compiler declines to memoise `DataTable` because TanStack Virtual returns functions it cannot memoise safely (`react-hooks/incompatible-library`). It is a warning about optimisation, not correctness.
 - [ ] T042 (AC-037) Render the pivot table with row subtotals and grand totals
   - Files: `packages/charts/src/dom/PivotTable.tsx`, `packages/core/src/pivot.ts`, `packages/charts/src/dom/PivotTable.test.tsx`
   - Failing test: `PivotTable.test.tsx`: a pivot spec renders nested column headers from Cube's `tableColumns`, with row subtotals and grand totals (AC-037).

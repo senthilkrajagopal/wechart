@@ -12,5 +12,8 @@
     "@playwright/test": "1.63.0",
     "@types/node": "26.0.0",
     "typescript": "6.0.3"
+  },
+  "dependencies": {
+    "@wechart/core": "workspace:*"
   }
 }
