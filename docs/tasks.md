@@ -167,10 +167,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - The rendered "missing-chart state" in the criterion's `Fails when:` is re-verified once dashboards render library charts (T023 with F5); the reference layer is what exists to test today.
   - Browser tests here **create their own objects** rather than renaming seeded ones. Mutating shared fixtures made other spec files fail depending on the order they ran in — a real isolation bug in the tests, not in the product.
   - Two more WebKit-only type-size findings from the rendered audit, and they did not have the same answer: `<button>` and `<select>` were fixed with `font: inherit`; `<option>` **cannot be** — WebKit draws the popup with the system font and ignores author `font-size`. Recorded as a platform exception in direction.md §3, with the consequence that a dropdown whose list must meet the floor has to be a custom listbox.
-- [ ] T020 (AC-022) List the dashboards that use a library chart, and offer to add it to another
-  - Files: `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, `packages/api/src/routes/charts.ts`, `packages/web/src/workspaces/explore/LibraryChartPage.test.tsx`
-  - Failing test: `LibraryChartPage.test.tsx`: every dashboard containing the chart appears in the list and an "Add to dashboard" action is offered (AC-022).
+- [x] T020 (AC-022) List the dashboards that use a library chart, and offer to add it to another
+  - Files: `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, `packages/web/src/router/routes.tsx`, `packages/api/src/repos/{documents,catalog}.ts`, `packages/api/src/repos/catalog.test.ts`, `packages/api/src/server.ts`, `e2e/library-chart.spec.ts`
+  - Failing test: `catalog.test.ts` and `e2e/library-chart.spec.ts`: every dashboard containing the chart appears in the list and an "Add to dashboard" action is offered (AC-022).
   - Depends on: T019
+  - Done 2026-09-19. AC-022 ticked. **"Every" is the word under test**, so the fixture has three dashboards using the chart and one that does not — a page that listed only the first would satisfy a laxer assertion, and so would one that listed every dashboard regardless.
+  - Adding a chart twice leaves one reference, not two: a double click must not produce two copies of the same tile reference.
+  - The reverse lookup is a jsonb containment query on `body -> 'charts'`, which is the same index-friendly shape AC-023 (delete confirmation) and AC-128 (shared-chart warning) both need.
 - [ ] T021 (AC-023) Name the dependent dashboards and require confirmation before deleting a library chart
   - Files: `packages/web/src/workspaces/explore/DeleteChartDialog.tsx`, `packages/api/src/routes/charts.ts`, `packages/web/src/workspaces/explore/DeleteChartDialog.test.tsx`
   - Failing test: `DeleteChartDialog.test.tsx`: deletion is blocked until confirmation, and the dialog names each dashboard that uses the chart (AC-023).

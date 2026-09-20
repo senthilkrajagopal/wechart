@@ -201,6 +201,105 @@ describe('references survive a rename or move (AC-021)', () => {
   });
 });
 
+describe('a library chart’s dashboards (AC-022)', () => {
+  /**
+   * AC-022: WHEN the user opens a library chart's page, THE SYSTEM SHALL list
+   * every dashboard that uses it and offer to add it to another dashboard.
+   * Fails when: a dashboard that contains the chart is missing from the list.
+   */
+  it('lists every dashboard that uses the chart, not just one', async () => {
+    const here = await folder('Reused chart');
+    const chartId = randomUUID();
+    await repo().create({
+      kind: 'chart',
+      id: chartId,
+      body: { title: 'Reused', folderId: here },
+    });
+
+    const dashboards = [randomUUID(), randomUUID(), randomUUID()];
+    for (const [index, id] of dashboards.entries()) {
+      await repo().create({
+        kind: 'dashboard',
+        id,
+        body: { title: `Uses it ${String(index)}`, folderId: here, charts: [chartId] },
+      });
+    }
+
+    const using = await cat().dashboardsUsing(chartId);
+
+    expect(using.map((item) => item.id).sort()).toEqual([...dashboards].sort());
+  });
+
+  it('does not list a dashboard that does not use the chart', async () => {
+    const here = await folder('Unrelated');
+    const chartId = randomUUID();
+    await repo().create({ kind: 'chart', id: chartId, body: { title: 'Lonely', folderId: here } });
+    await repo().create({
+      kind: 'dashboard',
+      id: randomUUID(),
+      body: { title: 'Uses something else', folderId: here, charts: [randomUUID()] },
+    });
+
+    expect(await cat().dashboardsUsing(chartId)).toEqual([]);
+  });
+
+  it('lists the dashboard once the chart is added to it', async () => {
+    const here = await folder('Attach target');
+    const chartId = randomUUID();
+    const dashboardId = randomUUID();
+    await repo().create({ kind: 'chart', id: chartId, body: { title: 'Added', folderId: here } });
+    await repo().create({
+      kind: 'dashboard',
+      id: dashboardId,
+      body: { title: 'Gains a chart', folderId: here },
+    });
+
+    expect(await cat().dashboardsUsing(chartId)).toEqual([]);
+
+    await repo().attachChart(dashboardId, chartId);
+
+    expect((await cat().dashboardsUsing(chartId)).map((item) => item.id)).toEqual([dashboardId]);
+  });
+
+  it('adding the same chart twice leaves one reference, not two', async () => {
+    const here = await folder('Idempotent');
+    const chartId = randomUUID();
+    const dashboardId = randomUUID();
+    await repo().create({ kind: 'chart', id: chartId, body: { title: 'Once', folderId: here } });
+    await repo().create({
+      kind: 'dashboard',
+      id: dashboardId,
+      body: { title: 'Double click', folderId: here },
+    });
+
+    await repo().attachChart(dashboardId, chartId);
+    await repo().attachChart(dashboardId, chartId);
+
+    const dashboard = await repo().get('dashboard', dashboardId);
+    expect(dashboard?.body['charts']).toEqual([chartId]);
+  });
+
+  it('keeps the charts a dashboard already had', async () => {
+    const here = await folder('Additive');
+    const existing = randomUUID();
+    const added = randomUUID();
+    const dashboardId = randomUUID();
+    await repo().create({
+      kind: 'dashboard',
+      id: dashboardId,
+      body: { title: 'Has one already', folderId: here, charts: [existing] },
+    });
+
+    await repo().attachChart(dashboardId, added);
+
+    expect(
+      await repo()
+        .get('dashboard', dashboardId)
+        .then((d) => d?.body['charts']),
+    ).toEqual([existing, added]);
+  });
+});
+
 describe('search (AC-019)', () => {
   it('finds every dashboard and library chart whose title contains the text', async () => {
     const here = await folder('Search me');

@@ -35,6 +35,7 @@ export interface DocumentWriter {
     title?: string;
     folderId?: string;
   }): Promise<unknown>;
+  attachChart?(dashboardId: string, chartId: string): Promise<unknown>;
 }
 
 /** The slice of the catalog repository the server exposes. */
@@ -205,6 +206,18 @@ export function buildServer({
   app.get('/api/charts/:chartId/dashboards', async (request) => {
     const { chartId } = request.params as { chartId: string };
     return cat?.dashboardsUsing ? cat.dashboardsUsing(chartId) : [];
+  });
+
+  /** Add a library chart to another dashboard (AC-022). */
+  app.post('/api/dashboards/:dashboardId/charts', async (request, reply) => {
+    const { dashboardId } = request.params as { dashboardId: string };
+    const body = request.body as { chartId?: string } | undefined;
+
+    if (!body?.chartId) throw new BadRequest('A chartId is required');
+    if (!docs?.attachChart) throw new BadRequest('Persistence is not configured');
+
+    await docs.attachChart(dashboardId, body.chartId);
+    return reply.status(204).send();
   });
 
   // Title search over dashboards and library charts (AC-019).

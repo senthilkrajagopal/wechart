@@ -112,6 +112,43 @@ export function documents(db: Kysely<Database>) {
     },
 
     /**
+     * Add a library chart to a dashboard (AC-022). Idempotent: adding a chart
+     * a dashboard already uses changes nothing, so a double click does not
+     * produce two copies of the same tile reference.
+     */
+    async attachChart(dashboardId: string, chartId: string): Promise<StoredDocument> {
+      const current = await db
+        .selectFrom('documents')
+        .selectAll()
+        .where('kind', '=', 'dashboard')
+        .where('id', '=', dashboardId)
+        .executeTakeFirst();
+
+      if (!current) throw new DocumentNotFoundError('dashboard', dashboardId);
+
+      const currentBody = current.body as Record<string, unknown>;
+      const charts = Array.isArray(currentBody['charts'])
+        ? (currentBody['charts'] as unknown[]).filter((id): id is string => typeof id === 'string')
+        : [];
+
+      const body = {
+        ...currentBody,
+        charts: charts.includes(chartId) ? charts : [...charts, chartId],
+      };
+
+      const updated = await db
+        .updateTable('documents')
+        .set({ body: JSON.stringify(body), version: current.version + 1, updated_at: new Date() })
+        .where('kind', '=', 'dashboard')
+        .where('id', '=', dashboardId)
+        .where('version', '=', current.version)
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      return toDocument(updated);
+    },
+
+    /**
      * Rename or move, merging into the existing body (AC-021).
      *
      * The id never changes, which is what keeps references working: everything

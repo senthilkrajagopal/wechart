@@ -9,6 +9,7 @@ import {
 
 import { AppShell } from '../shell/AppShell';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
+import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
 import { WORKSPACES, type WorkspaceId } from '../shell/WorkspaceSwitcher';
 
 /**
@@ -76,10 +77,19 @@ const dashboardRoute = createRoute({
   component: () => <SelectedObject workspace="explore" label="Dashboard" />,
 });
 
+function ChartSurface() {
+  const params = useParams({ strict: false }) as { objectId?: string };
+  return (
+    <AppShell workspace="explore">
+      <LibraryChartPage chartId={decodeURIComponent(params.objectId ?? '')} />
+    </AppShell>
+  );
+}
+
 const chartRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/explore/charts/$objectId',
-  component: () => <SelectedObject workspace="explore" label="Chart" />,
+  component: ChartSurface,
 });
 
 const modelFileRoute = createRoute({
