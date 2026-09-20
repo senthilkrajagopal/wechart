@@ -45,7 +45,7 @@ Traces to: `[R2]`, `[docs/inputs §8]`, direction.md §2.
       Fails when: any rendered text node has a computed font-size below 12 px.
 - [x] AC-005 THE SYSTEM SHALL meet WCAG AA contrast for text in both themes: at least 4.5:1, or 3:1 for text of at least 18.66 px bold or 24 px (direction.md rule 2).
       Fails when: any text node's contrast ratio against its own background is below its threshold.
-- [ ] AC-006 WHEN the user presses ⌘K or Ctrl+K anywhere in the application, THE SYSTEM SHALL open the search palette with keyboard focus in its input.
+- [x] AC-006 WHEN the user presses ⌘K or Ctrl+K anywhere in the application, THE SYSTEM SHALL open the search palette with keyboard focus in its input.
       Fails when: after the shortcut, focus is not inside the palette input, or the palette does not open.
 
 ## F2. wechart service: Cube access, metadata and persistence

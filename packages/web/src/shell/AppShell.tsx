@@ -1,3 +1,4 @@
+import { SearchPalette } from './SearchPalette';
 import { ThemeToggle } from './ThemeToggle';
 import { WorkspaceSwitcher, type WorkspaceId } from './WorkspaceSwitcher';
 
@@ -22,6 +23,7 @@ export function AppShell({ workspace, children }: AppShellProps) {
         <ThemeToggle />
       </header>
       <main>{children}</main>
+      <SearchPalette />
     </div>
   );
 }

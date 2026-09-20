@@ -71,6 +71,56 @@ body {
 
 main { padding: 16px; }
 
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.palette {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  width: min(560px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  background: var(--wc-bg-raised);
+}
+
+.palette__input {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font: inherit;
+}
+
+.palette__close {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.palette__hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+}
+
 :focus-visible {
   outline: 2px solid var(--wc-accent);
   outline-offset: 2px;

@@ -80,10 +80,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Done 2026-09-19. **AC-004 and AC-005 ticked**, from the rendered page rather than the token table — axe-core for contrast and a computed-style sweep over every visible text node, across four surfaces in both themes. This is what T002 deliberately left open: a component hard-coding a colour or an 11 px size passes every unit test and fails here.
   - Two of the eighteen cases exist to prove the audits can fail: each injects a violation (an 11 px paragraph, and `#bbbbbb` on white) and asserts it is caught. Without them, "no offenders" could equally mean the sweep found no text at all.
   - Re-run on every surface a later task adds. The audit is only as broad as `SURFACES`.
-- [ ] T009 (AC-006) Open the search palette on ⌘K / Ctrl+K with focus in its input
-  - Files: `packages/web/src/shell/SearchPalette.tsx`, `packages/web/src/shell/SearchPalette.test.tsx`
+- [x] T009 (AC-006) Open the search palette on ⌘K / Ctrl+K with focus in its input
+  - Files: `packages/web/src/shell/SearchPalette.tsx`, `packages/web/src/shell/SearchPalette.test.tsx`, `packages/web/src/shell/{AppShell,styles}.tsx|ts`, `e2e/search-palette.spec.ts`
   - Failing test: `SearchPalette.test.tsx`: the shortcut opens the palette from any workspace and `document.activeElement` is the palette input (AC-006).
   - Depends on: T005
+  - Done 2026-09-19. AC-006 ticked. The shortcut is bound on the document, not a container, because "anywhere in the application" includes while focus sits in another input — where a container-scoped handler never sees the event, and which is the case both the component test and the e2e assert.
+  - Escape returns focus to wherever it came from. A shortcut that strands the keyboard somewhere else is worse than no shortcut (AC-176).
+  - The palette has no click-to-dismiss backdrop: the a11y lint rejected a clickable `div`, correctly, so the ways out are Escape and a real Close button, which every input method can reach.
+  - What the palette *searches* arrives with Explore search at T017; this task is the shortcut, the surface and the focus contract.
 
 ## F2. wechart service: Cube access, metadata and persistence
 
