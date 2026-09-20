@@ -17,8 +17,12 @@ test('the app shell renders in this browser', async ({ page }) => {
 
   await page.goto('/');
 
-  // Rendered by packages/web/src/App.tsx, not present in index.html.
-  await expect(page.getByRole('main')).toHaveText('wechart');
+  // Rendered by React, not present in index.html: the shell's top bar and its
+  // workspace switcher (AC-001). A browser that served the page but ran no
+  // script fails here.
+  const switcher = page.getByRole('navigation', { name: /workspace/i });
+  await expect(switcher).toBeVisible();
+  await expect(switcher.getByRole('link')).toHaveCount(6);
   await expect(page).toHaveTitle('wechart');
 
   expect(pageErrors.map((e) => e.message)).toEqual([]);

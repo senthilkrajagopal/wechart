@@ -55,10 +55,11 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F1. Application shell and navigation
 
-- [ ] T005 (AC-001) Render the top bar with a workspace switcher of exactly six entries
-  - Files: `packages/web/src/shell/{AppShell,WorkspaceSwitcher}.tsx`, `packages/web/src/shell/WorkspaceSwitcher.test.tsx`
+- [x] T005 (AC-001) Render the top bar with a workspace switcher of exactly six entries
+  - Files: `packages/web/src/shell/{AppShell,WorkspaceSwitcher}.tsx`, `packages/web/src/shell/{AppShell,WorkspaceSwitcher}.test.tsx`, `packages/web/src/test-setup.ts`, `e2e/smoke.spec.ts`
   - Failing test: `WorkspaceSwitcher.test.tsx`: the switcher lists exactly Explore, Model, Data sources, Jobs, Schedules and Security, and contains no "Dashboards" entry (AC-001).
   - Depends on: T001
+  - Done 2026-09-19. AC-001 ticked. The tests assert the **whole list** rather than the presence of each name, because "exactly" is the criterion — a seventh entry has to fail. `WORKSPACES` is the one list both the switcher and the router (T006) read, so they cannot drift apart. `e2e/smoke.spec.ts` now asserts the rendered switcher rather than a string in `main`, which keeps the AC-180 harness tied to something React produces.
 - [ ] T006 (AC-002) Route every surface so a reload restores it
   - Files: `packages/web/src/router/{routes,router}.tsx`, `e2e/routing.spec.ts`
   - Failing test: `e2e/routing.spec.ts`: opening a workspace, a dashboard, a chart and a model file each changes the URL, and reloading each URL restores the same surface and the same selected object (AC-002).
