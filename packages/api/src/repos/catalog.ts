@@ -67,7 +67,39 @@ export function catalog(db: Kysely<Database>) {
 
       return rows.map(toItem);
     },
+
+    /**
+     * Search by title (AC-019). Dashboards and library charts only: folders are
+     * not what someone is looking for here, and a chart local to a dashboard is
+     * not a catalog object at all — it belongs to its dashboard and must never
+     * surface in search (AC-126).
+     */
+    async search(text: string, limit = 50): Promise<CatalogItem[]> {
+      const needle = text.trim();
+      if (needle === '') return [];
+
+      const rows = await selectItems()
+        .where('kind', 'in', ['dashboard', 'chart'])
+        .where('local_to_dashboard_id', 'is', null)
+        .where((eb) =>
+          eb(eb.fn('lower', ['title']), 'like', `%${escapeLike(needle.toLowerCase())}%`),
+        )
+        .orderBy('title', 'asc')
+        .limit(limit)
+        .execute();
+
+      return rows.map(toItem);
+    },
   };
+}
+
+/**
+ * `%` and `_` are LIKE wildcards, so a title search for "50%" would otherwise
+ * match everything containing "50". Postgres' default LIKE escape is a
+ * backslash, which must therefore be escaped first.
+ */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
 }
 
 interface Row {

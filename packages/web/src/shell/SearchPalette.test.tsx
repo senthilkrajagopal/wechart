@@ -1,8 +1,15 @@
-import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render as rtlRender, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
 import { SearchPalette } from './SearchPalette';
+
+/** The palette queries the search API, so it renders inside a query client. */
+function render(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 /**
  * AC-006: WHEN the user presses ⌘K or Ctrl+K anywhere in the application, THE

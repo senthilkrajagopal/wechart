@@ -23,6 +23,7 @@ export interface BuildOptions {
 export interface CatalogReader {
   folders(): Promise<unknown[]>;
   contents(folderId: string): Promise<unknown[]>;
+  search(text: string): Promise<unknown[]>;
 }
 
 /** The slice of the query-log repository the server uses. */
@@ -122,6 +123,12 @@ export function buildServer({
   app.get('/api/folders/:folderId/contents', async (request) => {
     const { folderId } = request.params as { folderId: string };
     return cat ? cat.contents(folderId) : [];
+  });
+
+  // Title search over dashboards and library charts (AC-019).
+  app.get('/api/search', async (request) => {
+    const { q } = request.query as { q?: string };
+    return cat ? cat.search(q ?? '') : [];
   });
 
   app.get('/api/jobs/queries', async (request) => {

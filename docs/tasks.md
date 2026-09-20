@@ -143,10 +143,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **AC-003 genuinely failed the first time.** Not because the theme switch lost the scroll — nothing unmounted, the document height and row count were identical — but because the top bar scrolled away, so clicking the theme control made the browser scroll it back into view. The fix is a sticky bar, which a workbench wants regardless: the switcher, search and theme stay reachable however far a surface has scrolled.
   - Columns for the listing are **generated** from `body` in Postgres rather than written beside it, so a rename cannot leave the listing stale; a test covers exactly that.
   - Two infrastructure changes this task forced: the API now builds with Vite and runs as its own process in `playwright.config.ts` (Node's `--experimental-strip-types` does no module resolution, so it wants an explicit `.ts` on every relative import); and **the tests now use their own database**. Sharing one with development let test fixtures into the catalog the app listed, and the dev seed then saw folders nobody had created and skipped itself.
-- [ ] T017 (AC-019) Search dashboards and library charts by title, excluding dashboard-local charts
-  - Files: `packages/web/src/workspaces/explore/Search.tsx`, `packages/api/src/routes/search.ts`, `packages/api/src/routes/search.test.ts`
-  - Failing test: `search.test.ts`: a substring match returns every library item whose title contains it and never a dashboard-local chart (AC-019).
+- [x] T017 (AC-019) Search dashboards and library charts by title, excluding dashboard-local charts
+  - Files: `packages/api/src/repos/catalog.ts`, `packages/api/src/repos/catalog.test.ts`, `packages/api/src/server.ts`, `packages/api/src/seed.ts`, `packages/web/src/shell/SearchPalette.tsx`, `e2e/search.spec.ts`
+  - Failing test: `catalog.test.ts`: a substring match returns every library item whose title contains it and never a dashboard-local chart (AC-019).
   - Depends on: T016
+  - Done 2026-09-19. AC-019 ticked. Search lives in the ⌘K palette T009 built, rather than a second search box.
+  - **A test caught a real injection-shaped bug:** `%` and `_` are LIKE wildcards, so a search for "50%" matched everything containing "50". User input is now escaped, backslash first.
+  - The seed contains a chart local to a dashboard, titled so it matches the same search as the library items — without it, the second half of this criterion could not fail. One e2e asserts it is excluded, and another asserts a similarly named *library* chart is found, so the exclusion is not just an empty result.
+  - Note: one a11y-tokens case failed once during a cold run where the API was still building, and has passed in three consecutive full runs since. Not reproduced; worth watching rather than chasing.
 - [ ] T018 (AC-020) Create a folder, dashboard or chart into the selected folder and open it
   - Files: `packages/web/src/workspaces/explore/CreateMenu.tsx`, `packages/api/src/routes/folders.ts`, `e2e/explore-create.spec.ts`
   - Failing test: `e2e/explore-create.spec.ts`: each new object lands in the selected folder and the app navigates to it (AC-020).

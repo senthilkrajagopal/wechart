@@ -1,4 +1,11 @@
+import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+export interface SearchHit {
+  readonly kind: 'dashboard' | 'chart';
+  readonly id: string;
+  readonly title: string;
+}
 
 /**
  * The application-wide search palette (AC-006).
@@ -12,8 +19,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  */
 export function SearchPalette() {
   const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const openerRef = useRef<Element | null>(null);
+
+  /**
+   * AC-019: dashboards and library charts whose title contains the text, and
+   * never a dashboard-local chart — the API enforces that, because a chart that
+   * belongs to a dashboard is not a catalog object.
+   */
+  const results = useQuery({
+    queryKey: ['search', text],
+    queryFn: async (): Promise<SearchHit[]> => {
+      const response = await fetch(`/api/search?q=${encodeURIComponent(text)}`);
+      if (!response.ok) throw new Error(`Search failed: ${String(response.status)}`);
+      return (await response.json()) as SearchHit[];
+    },
+    enabled: open && text.trim() !== '',
+  });
 
   const close = useCallback(() => {
     setOpen(false);
@@ -59,10 +82,32 @@ export function SearchPalette() {
           className="palette__input"
           placeholder="Search dashboards and charts"
           aria-label="Search dashboards and charts"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
         />
         <button type="button" className="palette__close" onClick={close}>
           Close
         </button>
+        <div className="palette__results">
+          {results.isSuccess ? (
+            results.data.length === 0 ? (
+              <p>Nothing matches “{text}”.</p>
+            ) : (
+              <ul aria-label="Search results">
+                {results.data.map((hit) => (
+                  <li key={`${hit.kind}:${hit.id}`}>
+                    <a href={`/explore/${hit.kind}s/${encodeURIComponent(hit.id)}`}>
+                      {hit.title}
+                      {/* Type as a word, so a dashboard and a chart of the same
+                          name are told apart without relying on an icon. */}
+                      <span className="palette__kind"> · {hit.kind}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : null}
+        </div>
         <p className="palette__hint">Press Escape to close.</p>
       </div>
     </div>

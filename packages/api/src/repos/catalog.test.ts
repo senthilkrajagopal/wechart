@@ -116,6 +116,94 @@ describe('folder contents (AC-017)', () => {
   });
 });
 
+describe('search (AC-019)', () => {
+  it('finds every dashboard and library chart whose title contains the text', async () => {
+    const here = await folder('Search me');
+    const unique = `zeta${randomUUID().slice(0, 8)}`;
+    await repo().create({
+      kind: 'dashboard',
+      id: randomUUID(),
+      body: { title: `Quarterly ${unique} review`, folderId: here },
+    });
+    await repo().create({
+      kind: 'chart',
+      id: randomUUID(),
+      body: { title: `${unique} by region`, folderId: here },
+    });
+
+    const found = await cat().search(unique);
+
+    expect(found).toHaveLength(2);
+    expect(found.map((item) => item.kind).sort()).toEqual(['chart', 'dashboard']);
+  });
+
+  it('matches anywhere in the title, not only at the start', async () => {
+    const unique = `mid${randomUUID().slice(0, 8)}`;
+    await repo().create({
+      kind: 'dashboard',
+      id: randomUUID(),
+      body: { title: `Revenue ${unique} detail`, folderId: ROOT_FOLDER_ID },
+    });
+
+    expect(await cat().search(unique)).toHaveLength(1);
+  });
+
+  it('ignores case', async () => {
+    const unique = `Case${randomUUID().slice(0, 8)}`;
+    await repo().create({
+      kind: 'dashboard',
+      id: randomUUID(),
+      body: { title: unique, folderId: ROOT_FOLDER_ID },
+    });
+
+    expect(await cat().search(unique.toUpperCase())).toHaveLength(1);
+    expect(await cat().search(unique.toLowerCase())).toHaveLength(1);
+  });
+
+  it('never returns a dashboard-local chart', async () => {
+    const unique = `local${randomUUID().slice(0, 8)}`;
+    await repo().create({
+      kind: 'chart',
+      id: randomUUID(),
+      body: { title: `${unique} local chart`, localToDashboardId: 'dash-9' },
+    });
+    await repo().create({
+      kind: 'chart',
+      id: randomUUID(),
+      body: { title: `${unique} library chart`, folderId: ROOT_FOLDER_ID },
+    });
+
+    const found = await cat().search(unique);
+
+    expect(found).toHaveLength(1);
+    expect(found[0]?.title).toContain('library');
+  });
+
+  it('does not return folders, which are not what search is for', async () => {
+    const unique = `fold${randomUUID().slice(0, 8)}`;
+    await folder(`${unique} folder`);
+
+    expect(await cat().search(unique)).toHaveLength(0);
+  });
+
+  it('returns nothing for an empty query rather than everything', async () => {
+    expect(await cat().search('')).toEqual([]);
+    expect(await cat().search('   ')).toEqual([]);
+  });
+
+  it('treats a wildcard character as text, not as a pattern', async () => {
+    const unique = `pct${randomUUID().slice(0, 8)}`;
+    await repo().create({
+      kind: 'dashboard',
+      id: randomUUID(),
+      body: { title: `${unique} margin`, folderId: ROOT_FOLDER_ID },
+    });
+
+    // '%' must not match everything.
+    expect(await cat().search(`${unique}%margin`)).toHaveLength(0);
+  });
+});
+
 describe('folder tree (AC-017)', () => {
   it('reports each folder with its parent, so a tree can be built', async () => {
     const parent = await folder('Tree parent');

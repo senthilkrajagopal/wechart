@@ -1,12 +1,22 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { AppShell } from './AppShell';
 import { ThemeProvider } from './ThemeProvider';
 
-/** The shell carries a theme control, so it renders inside the provider. */
-const renderShell = (ui: React.ReactElement) =>
-  render(<ThemeProvider initial="light">{ui}</ThemeProvider>);
+/**
+ * The shell carries a theme control and a search palette, so it renders inside
+ * both providers — the same pair main.tsx wraps the app in.
+ */
+const renderShell = (ui: React.ReactElement) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <ThemeProvider initial="light">{ui}</ThemeProvider>
+    </QueryClientProvider>,
+  );
+};
 
 /**
  * AC-001: WHEN the application loads, THE SYSTEM SHALL show a top bar whose

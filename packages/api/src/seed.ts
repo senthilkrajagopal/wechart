@@ -48,6 +48,19 @@ export async function seedDevData(db: Kysely<Database>): Promise<void> {
     }
   }
 
+  // A chart that belongs to a dashboard rather than to a folder: it must never
+  // appear in a folder listing or in search (AC-019, AC-126), and the browser
+  // tests need one to prove that.
+  await repo.create({
+    kind: 'chart',
+    id: 'seed-local-chart',
+    body: {
+      title: 'Seeded local chart',
+      localToDashboardId: 'seed-root-dashboard-1',
+      owner: 'admin',
+    },
+  });
+
   // Enough rows at the root that the contents list scrolls.
   for (let n = 1; n <= 30; n += 1) {
     await repo.create({
