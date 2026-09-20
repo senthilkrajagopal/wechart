@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+
+# Playwright and Vite build output
+test-results/
+playwright-report/
+.vite/
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Claude Code: per-user settings and harness runtime state
+.claude/settings.local.json
+.claude/state/
