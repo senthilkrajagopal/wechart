@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import { CubeClient, CubeError } from './cube/client';
+import { MetaCache } from './cube/meta-cache';
 import type { Config } from './config';
 
 /**
@@ -10,10 +11,16 @@ import type { Config } from './config';
 export interface BuildOptions {
   readonly config: Config;
   readonly cube?: CubeClient;
+  readonly metaCache?: MetaCache;
   readonly logger?: boolean;
 }
 
-export function buildServer({ config, cube, logger = false }: BuildOptions): FastifyInstance {
+export function buildServer({
+  config,
+  cube,
+  metaCache,
+  logger = false,
+}: BuildOptions): FastifyInstance {
   const app = Fastify({ logger });
   const client =
     cube ??
@@ -23,9 +30,13 @@ export function buildServer({ config, cube, logger = false }: BuildOptions): Fas
       securityContext: config.securityContext,
     });
 
+  // Metadata is cached with a 60-second freshness bound (AC-009), so a
+  // dashboard opening many tiles issues one /v1/meta request, not one per tile.
+  const meta = metaCache ?? new MetaCache({ fetchMeta: () => client.meta() });
+
   app.get('/api/health', () => ({ status: 'ok' }));
 
-  app.get('/api/meta', async () => client.meta());
+  app.get('/api/meta', async () => meta.meta());
 
   app.post('/api/load', async (request) => {
     const body = request.body as { query?: Record<string, unknown> } | undefined;

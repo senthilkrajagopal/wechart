@@ -7,6 +7,7 @@ export const PACKAGE_NAME = '@wechart/api';
 export { buildServer, type BuildOptions } from './server';
 export { loadConfig, ConfigError, type Config } from './config';
 export { CubeClient, CubeError, type CubeClientOptions } from './cube/client';
+export { MetaCache, MAX_META_STALENESS_MS, type MetaCacheOptions } from './cube/meta-cache';
 export { closeDb, getDb, databaseUrl, DEFAULT_DB_URL } from './db/client';
 export { migrateToLatest } from './db/migrate';
 export {

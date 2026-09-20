@@ -1,0 +1,131 @@
+import { describe, expect, it } from 'vitest';
+
+import { MAX_META_STALENESS_MS, MetaCache } from './meta-cache';
+
+/**
+ * AC-009: WHEN Cube reports a new `schemaVersion`, THE SYSTEM SHALL serve
+ * metadata from the new model within 60 seconds without a restart.
+ * Fails when: 60 seconds after the change, a metadata request still returns
+ * members from the previous model.
+ *
+ * `schemaVersion` is a Cube *config* hook — `fn(ctx) => string`, called per
+ * request, recompiling the model when the string changes
+ * (docs/research/cube/configuration-deployment.md §3). Cube does not push a
+ * notification, so the 60-second bound is wechart's own: metadata is cached
+ * for at most that long. Publishing from the model editor (T142/T143) does not
+ * wait for it and invalidates directly.
+ *
+ * Time is injected rather than faked globally: these assertions are about a
+ * deadline, and a clock the test controls exactly is the point.
+ */
+function fixture(initial = 'old-model') {
+  let model = initial;
+  let calls = 0;
+  let now = 0;
+
+  const cache = new MetaCache({
+    fetchMeta: async () => {
+      calls += 1;
+      return { cubes: [{ name: model }] };
+    },
+    now: () => now,
+  });
+
+  return {
+    cache,
+    get calls() {
+      return calls;
+    },
+    publish: (next: string) => (model = next),
+    advance: (ms: number) => (now += ms),
+  };
+}
+
+const nameIn = (meta: unknown) => (meta as { cubes: { name: string }[] }).cubes[0]?.name;
+
+describe('metadata freshness (AC-009)', () => {
+  it('serves the new model within 60 seconds of a change', async () => {
+    const f = fixture();
+    expect(nameIn(await f.cache.meta())).toBe('old-model');
+
+    f.publish('new-model');
+    f.advance(MAX_META_STALENESS_MS);
+
+    expect(nameIn(await f.cache.meta())).toBe('new-model');
+  });
+
+  it('holds the staleness bound at 60 seconds, which is what the criterion says', () => {
+    expect(MAX_META_STALENESS_MS).toBeLessThanOrEqual(60_000);
+  });
+
+  it('needs no restart: the same instance serves both models', async () => {
+    const f = fixture();
+    const before = await f.cache.meta();
+
+    f.publish('new-model');
+    f.advance(MAX_META_STALENESS_MS);
+    const after = await f.cache.meta();
+
+    expect(nameIn(before)).toBe('old-model');
+    expect(nameIn(after)).toBe('new-model');
+  });
+
+  it('serves from cache while it is fresh, so metadata is not refetched per request', async () => {
+    const f = fixture();
+    await f.cache.meta();
+    await f.cache.meta();
+    f.advance(MAX_META_STALENESS_MS - 1);
+    await f.cache.meta();
+
+    expect(f.calls).toBe(1);
+  });
+
+  it('refetches once the entry is stale', async () => {
+    const f = fixture();
+    await f.cache.meta();
+    f.advance(MAX_META_STALENESS_MS);
+    await f.cache.meta();
+
+    expect(f.calls).toBe(2);
+  });
+
+  it('publishes immediately on invalidate, without waiting out the bound', async () => {
+    const f = fixture();
+    expect(nameIn(await f.cache.meta())).toBe('old-model');
+
+    f.publish('new-model');
+    f.cache.invalidate();
+
+    // No clock advance: a model the user just published must not appear stale.
+    expect(nameIn(await f.cache.meta())).toBe('new-model');
+    expect(f.calls).toBe(2);
+  });
+
+  it('shares one in-flight fetch between concurrent callers', async () => {
+    const f = fixture();
+
+    const [a, b, c] = await Promise.all([f.cache.meta(), f.cache.meta(), f.cache.meta()]);
+
+    // A dashboard opening ten tiles at once must not become ten metadata
+    // requests against Cube's queue.
+    expect(f.calls).toBe(1);
+    expect(nameIn(a)).toBe('old-model');
+    expect(nameIn(b)).toBe('old-model');
+    expect(nameIn(c)).toBe('old-model');
+  });
+
+  it('does not cache a failure', async () => {
+    let attempt = 0;
+    const cache = new MetaCache({
+      fetchMeta: async () => {
+        attempt += 1;
+        if (attempt === 1) throw new Error('Cube is down');
+        return { cubes: [{ name: 'recovered' }] };
+      },
+      now: () => 0,
+    });
+
+    await expect(cache.meta()).rejects.toThrow('Cube is down');
+    expect(nameIn(await cache.meta())).toBe('recovered');
+  });
+});

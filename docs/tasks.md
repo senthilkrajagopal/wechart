@@ -91,10 +91,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F2. wechart service: Cube access, metadata and persistence
 
-- [ ] T010 (AC-009) Serve metadata from the new model within 60 seconds of a `schemaVersion` change
-  - Files: `packages/api/src/cube/meta-cache.ts`, `packages/api/src/cube/meta-cache.test.ts`
+- [x] T010 (AC-009) Serve metadata from the new model within 60 seconds of a `schemaVersion` change
+  - Files: `packages/api/src/cube/meta-cache.ts`, `packages/api/src/cube/meta-cache.test.ts`, `packages/api/src/server.ts`
   - Failing test: `meta-cache.test.ts`: with a fake clock, a changed `schemaVersion` causes the next metadata request after at most 60 s to return the new model's members, with no process restart (AC-009).
   - Depends on: T004
+  - Done 2026-09-19. AC-009 ticked. Research correction: `schemaVersion` is a Cube **config hook** (`fn(ctx) => string`, called per request, recompiling when the string changes — `research/cube/configuration-deployment.md` §3), not something Cube pushes to clients. So the 60-second bound is wechart's own: a cached entry older than that is refetched before being served.
+  - Caching is what makes the bound necessary. Without it metadata is never stale, but a ten-tile dashboard becomes ten `/v1/meta` requests against a queue whose default concurrency is 2. Concurrent callers share one in-flight fetch for the same reason.
+  - `invalidate()` skips the bound for wechart's own publishes (T142/T143): waiting out 60 seconds is the wrong answer to "did my change take effect?". Failures are never cached.
 - [ ] T011 (AC-010) Hold the request open while Cube replies "Continue wait"
   - Files: `packages/api/src/routes/load.ts`, `packages/web/src/query/loadTile.ts`, `packages/web/src/query/loadTile.test.ts`
   - Failing test: `loadTile.test.ts`: two "Continue wait" responses followed by a result leave the tile in its loading state throughout and then render the result, with no error state (AC-010).
