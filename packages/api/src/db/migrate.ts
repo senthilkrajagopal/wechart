@@ -1,10 +1,29 @@
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { runner as migrationRunner } from 'node-pg-migrate';
 
 import { databaseUrl } from './client';
 
-const MIGRATIONS_DIR = fileURLToPath(new URL('./migrations', import.meta.url));
+/**
+ * Migrations are `.cjs` files loaded from disk at runtime, not modules the
+ * bundler can see, so the path is resolved from the package root rather than
+ * from this file: under `vitest` this module runs from `src/`, and in the
+ * built service from `dist/`, and only the package root is the same in both.
+ */
+function migrationsDir(): string {
+  const fromEnv = process.env['WECHART_MIGRATIONS_DIR'];
+  if (fromEnv) return fromEnv;
+
+  let dir = dirname(fileURLToPath(import.meta.url));
+  while (!existsSync(join(dir, 'package.json'))) {
+    const parent = dirname(dir);
+    if (parent === dir) throw new Error('Could not locate the api package root for migrations');
+    dir = parent;
+  }
+  return join(dir, 'src', 'db', 'migrations');
+}
 
 /**
  * Apply every pending migration. In production this runs as its own step before
@@ -15,7 +34,7 @@ const MIGRATIONS_DIR = fileURLToPath(new URL('./migrations', import.meta.url));
 export async function migrateToLatest(): Promise<void> {
   await migrationRunner({
     databaseUrl: databaseUrl(),
-    dir: MIGRATIONS_DIR,
+    dir: migrationsDir(),
     direction: 'up',
     migrationsTable: 'pgmigrations',
     log: () => {},

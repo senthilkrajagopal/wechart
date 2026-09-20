@@ -15,7 +15,14 @@ export interface BuildOptions {
   readonly metaCache?: MetaCache;
   /** Omitted only in tests that are not about the log itself. */
   readonly queryLog?: QueryLogWriter;
+  readonly catalog?: CatalogReader;
   readonly logger?: boolean;
+}
+
+/** The slice of the catalog repository the server exposes. */
+export interface CatalogReader {
+  folders(): Promise<unknown[]>;
+  contents(folderId: string): Promise<unknown[]>;
 }
 
 /** The slice of the query-log repository the server uses. */
@@ -29,6 +36,7 @@ export function buildServer({
   cube,
   metaCache,
   queryLog: log,
+  catalog: cat,
   logger = false,
 }: BuildOptions): FastifyInstance {
   const app = Fastify({ logger });
@@ -106,6 +114,14 @@ export function buildServer({
       });
       throw error;
     }
+  });
+
+  // Explore's folder tree and contents (AC-017).
+  app.get('/api/folders', async () => (cat ? cat.folders() : []));
+
+  app.get('/api/folders/:folderId/contents', async (request) => {
+    const { folderId } = request.params as { folderId: string };
+    return cat ? cat.contents(folderId) : [];
   });
 
   app.get('/api/jobs/queries', async (request) => {

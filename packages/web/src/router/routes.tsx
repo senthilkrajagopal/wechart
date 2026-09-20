@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-router';
 
 import { AppShell } from '../shell/AppShell';
+import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { WORKSPACES, type WorkspaceId } from '../shell/WorkspaceSwitcher';
 
 /**
@@ -42,11 +43,19 @@ const indexRoute = createRoute({
   },
 });
 
+const WORKSPACE_CONTENT: Partial<Record<string, () => React.ReactNode>> = {
+  explore: () => <ExplorePage />,
+};
+
 const workspaceRoutes = WORKSPACES.map((workspace) =>
   createRoute({
     getParentRoute: () => rootRoute,
     path: workspace.path,
-    component: () => <AppShell workspace={workspace.id as WorkspaceId} />,
+    component: () => (
+      <AppShell workspace={workspace.id as WorkspaceId}>
+        {WORKSPACE_CONTENT[workspace.id]?.()}
+      </AppShell>
+    ),
   }),
 );
 

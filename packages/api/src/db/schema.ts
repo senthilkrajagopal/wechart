@@ -18,6 +18,14 @@ export interface DocumentTable {
   version: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
+  /**
+   * Generated from `body` by the database, so they are readable and indexable
+   * but never written directly — see the 1758240002000 migration.
+   */
+  title: Generated<string | null>;
+  folder_id: Generated<string | null>;
+  owner: Generated<string | null>;
+  local_to_dashboard_id: Generated<string | null>;
 }
 
 /**

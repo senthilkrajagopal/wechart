@@ -39,7 +39,7 @@ Traces to: `[R2]`, `[docs/inputs §8]`, direction.md §2.
       Fails when: the switcher shows a "Dashboards" entry, or any of the six entries is absent.
 - [x] AC-002 WHEN the user opens a workspace, a dashboard, a chart or a model file, THE SYSTEM SHALL change the URL so that reloading it restores the same surface and the same selected object.
       Fails when: after reload the application shows a different workspace, dashboard, chart or file than the URL names.
-- [ ] AC-003 WHEN the user switches the theme, THE SYSTEM SHALL re-render the current surface in the other theme without changing the route or losing scroll position.
+- [x] AC-003 WHEN the user switches the theme, THE SYSTEM SHALL re-render the current surface in the other theme without changing the route or losing scroll position.
       Fails when: the route changes, the scroll position resets, or any element keeps the previous theme's background colour after the switch.
 - [x] AC-004 THE SYSTEM SHALL render every text node at a computed font size of at least 12 px (direction.md rule 1).
       Fails when: any rendered text node has a computed font-size below 12 px.
@@ -79,7 +79,7 @@ Traces to: `[R5]`, `[R4]`, `[research/cube/data-apis.md]`, `[research/cube/acces
 Purpose: find, open and organise dashboards and charts.
 Traces to: `[docs/inputs §8]`, direction.md §2.
 
-- [ ] AC-017 WHEN the user opens Explore, THE SYSTEM SHALL show a folder tree and the contents of the selected folder, listing dashboards and library charts with their type, owner and last-updated time.
+- [x] AC-017 WHEN the user opens Explore, THE SYSTEM SHALL show a folder tree and the contents of the selected folder, listing dashboards and library charts with their type, owner and last-updated time.
       Fails when: the list omits an item in the folder, or a column is blank for an item that has that value.
 - [ ] AC-018 WHEN the user opens a dashboard from Explore, THE SYSTEM SHALL open it in view mode with its saved page tabs, tiles and settings.
       Fails when: the dashboard opens in edit mode, or a saved tile or setting is missing.

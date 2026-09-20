@@ -34,10 +34,25 @@ export default defineConfig({
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
     { name: 'safari', use: { ...devices['Desktop Safari'] } },
   ],
-  webServer: {
-    command: `pnpm --filter @wechart/web dev --port ${PORT} --strictPort`,
-    url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  // The API is a separate process holding the Cube credentials and the
+  // metadata database; the web server proxies /api to it, so the browser only
+  // ever talks to one origin (AC-007).
+  webServer: [
+    {
+      command: 'pnpm --filter @wechart/api dev',
+      url: 'http://localhost:4100/api/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: {
+        CUBE_API_SECRET: 'e2e-secret',
+        WECHART_SEED: '1',
+      },
+    },
+    {
+      command: `pnpm --filter @wechart/web dev --port ${PORT} --strictPort`,
+      url: baseURL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+  ],
 });

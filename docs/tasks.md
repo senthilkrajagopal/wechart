@@ -135,11 +135,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F3. Explore: folders, catalog and search
 
-- [ ] T016 (AC-017) Show the folder tree and the selected folder's contents
+- [x] T016 (AC-017) Show the folder tree and the selected folder's contents
   - Files: `packages/web/src/workspaces/explore/{FolderTree,FolderContents}.tsx`, `packages/api/src/routes/folders.ts`, `packages/web/src/workspaces/explore/FolderContents.test.tsx`
   - Failing test: `FolderContents.test.tsx`: every dashboard and library chart in the folder is listed with its type, owner and last-updated time, and no column is blank for an item that has that value (AC-017).
   - Depends on: T003, T005
-  - Also ticks **AC-003**, carried from T007: this is the first surface long enough to scroll, so `e2e/theme.spec.ts` can add the half of that criterion T007 could not demonstrate — scroll the contents list, switch theme, assert the offset is unchanged.
+  - Done 2026-09-19. **AC-017 and AC-003 both ticked.** The scroll half of AC-003, deferred from T007, is now in `e2e/explore.spec.ts` against a seeded list of 34 items; it asserts the page really scrolled before asserting the offset survives, so it cannot pass on a page that never moved.
+  - **AC-003 genuinely failed the first time.** Not because the theme switch lost the scroll — nothing unmounted, the document height and row count were identical — but because the top bar scrolled away, so clicking the theme control made the browser scroll it back into view. The fix is a sticky bar, which a workbench wants regardless: the switcher, search and theme stay reachable however far a surface has scrolled.
+  - Columns for the listing are **generated** from `body` in Postgres rather than written beside it, so a rename cannot leave the listing stale; a test covers exactly that.
+  - Two infrastructure changes this task forced: the API now builds with Vite and runs as its own process in `playwright.config.ts` (Node's `--experimental-strip-types` does no module resolution, so it wants an explicit `.ts` on every relative import); and **the tests now use their own database**. Sharing one with development let test fixtures into the catalog the app listed, and the dev seed then saw folders nobody had created and skipped itself.
 - [ ] T017 (AC-019) Search dashboards and library charts by title, excluding dashboard-local charts
   - Files: `packages/web/src/workspaces/explore/Search.tsx`, `packages/api/src/routes/search.ts`, `packages/api/src/routes/search.test.ts`
   - Failing test: `search.test.ts`: a substring match returns every library item whose title contains it and never a dashboard-local chart (AC-019).

@@ -1,0 +1,95 @@
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
+
+import { FolderContents, type CatalogItem } from './FolderContents';
+
+/**
+ * AC-017: WHEN the user opens Explore, THE SYSTEM SHALL show a folder tree and
+ * the contents of the selected folder, listing dashboards and library charts
+ * with their type, owner and last-updated time.
+ * Fails when: the list omits an item in the folder, or a column is blank for an
+ * item that has that value.
+ *
+ * "No column is blank for an item that has that value" is the part worth
+ * testing hardest — a table that renders names and leaves the other three
+ * columns empty would satisfy a laxer reading.
+ */
+const items: CatalogItem[] = [
+  {
+    kind: 'dashboard',
+    id: 'd1',
+    title: 'Revenue',
+    owner: 'admin',
+    updatedAt: '2026-09-19T12:00:00.000Z',
+  },
+  {
+    kind: 'chart',
+    id: 'c1',
+    title: 'Revenue by region',
+    owner: 'analyst',
+    updatedAt: '2026-09-18T09:30:00.000Z',
+  },
+  {
+    kind: 'folder',
+    id: 'f1',
+    title: 'Archive',
+    owner: null,
+    updatedAt: '2026-09-01T08:00:00.000Z',
+  },
+];
+
+describe('folder contents (AC-017)', () => {
+  it('lists every item', () => {
+    render(<FolderContents items={items} />);
+
+    // Header row plus one per item.
+    expect(screen.getAllByRole('row')).toHaveLength(items.length + 1);
+  });
+
+  it('fills the type, owner and last-updated columns for every item that has them', () => {
+    render(<FolderContents items={items} />);
+
+    const dashboard = within(screen.getByTestId('item-d1')).getAllByRole('cell');
+    expect(dashboard[0]?.textContent).toContain('Dashboard');
+    expect(dashboard[1]?.textContent).toBe('admin');
+    expect(dashboard[2]?.textContent?.trim()).not.toBe('');
+  });
+
+  it('distinguishes dashboards from charts by label, not only by icon', () => {
+    render(<FolderContents items={items} />);
+
+    expect(within(screen.getByTestId('item-d1')).getByText('Dashboard')).toBeTruthy();
+    expect(within(screen.getByTestId('item-c1')).getByText('Chart')).toBeTruthy();
+  });
+
+  it('shows a placeholder rather than a blank cell for an item with no owner', () => {
+    render(<FolderContents items={items} />);
+
+    const folder = within(screen.getByTestId('item-f1')).getAllByRole('cell');
+    expect(folder[1]?.textContent?.trim()).not.toBe('');
+  });
+
+  it('carries a machine-readable timestamp alongside the shown one', () => {
+    render(<FolderContents items={items} />);
+
+    const time = within(screen.getByTestId('item-d1')).getByText(/2026|9\/19/);
+    expect(time.closest('time')?.getAttribute('datetime')).toBe('2026-09-19T12:00:00.000Z');
+  });
+
+  it('opens an item when its name is activated', async () => {
+    const onOpen = vi.fn();
+    render(<FolderContents items={items} onOpen={onOpen} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Revenue' }));
+
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'd1' }));
+  });
+
+  it('says the folder is empty rather than rendering a headers-only table', () => {
+    render(<FolderContents items={[]} />);
+
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.getByText(/empty/i)).toBeTruthy();
+  });
+});

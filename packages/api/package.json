@@ -8,6 +8,9 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "vite build -c vite.build.config.ts",
+    "dev": "pnpm build && node dist/main.js",
+    "start": "node dist/main.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "migrate": "node-pg-migrate -m src/db/migrations"
@@ -23,6 +26,7 @@
     "@types/pg": "8.23.1",
     "node-pg-migrate": "9.0.0",
     "typescript": "6.0.3",
+    "vite": "8.3.0",
     "vitest": "5.0.1"
   }
 }
