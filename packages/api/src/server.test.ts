@@ -153,6 +153,81 @@ describe('creating catalog objects (AC-020)', () => {
     await app.close();
   });
 
+  it('saves the whole body as given, keeping parts it knows nothing about (AC-065)', async () => {
+    const saved: Record<string, unknown>[] = [];
+    const documents = {
+      ...recordingDocuments(),
+      update: async (input: { body: Record<string, unknown> }) => {
+        saved.push(input.body);
+        return { id: 'd1', body: input.body, version: 2 };
+      },
+    };
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    /**
+     * `markings` is the case this is really about: AC-065 says a save
+     * persists marking definitions, and markings arrive at F9 — long after
+     * this route. Saving field by field would mean the server had to know
+     * every document's shape, and anything the browser learned to store
+     * before the server did would vanish on the next save.
+     */
+    const body = {
+      title: 'Revenue',
+      pages: [{ id: 'p1', title: 'Overview', items: [{ id: 't1', kind: 'chart', w: 6, h: 40 }] }],
+      settings: { width: 'full' },
+      markings: [{ id: 'm1', name: 'Selection', colour: '#2a78d6' }],
+      somethingNotInventedYet: { deep: ['value'] },
+    };
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/documents/dashboard/d1',
+      payload: { body, version: 1 },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(saved[0]).toEqual(body);
+    await app.close();
+  });
+
+  it('refuses a save whose version has moved, rather than overwriting', async () => {
+    const stale = Object.assign(new Error('Document has moved on'), {
+      name: 'StaleDocumentError',
+    });
+    const documents = {
+      ...recordingDocuments(),
+      update: async () => {
+        throw stale;
+      },
+    };
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/documents/dashboard/d1',
+      payload: { body: { title: 'Mine' }, version: 1 },
+    });
+
+    // 409, not 500: the browser has to reload and decide what to do, and it
+    // cannot tell a lost race from a broken server if both are 500.
+    expect(response.statusCode).toBe(409);
+    await app.close();
+  });
+
+  it('insists on a version, so a save cannot silently clobber', async () => {
+    const documents = { ...recordingDocuments(), update: async () => ({}) };
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/documents/dashboard/d1',
+      payload: { body: { title: 'Mine' } },
+    });
+
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
   it('mints the id itself, so a client cannot claim an existing one', async () => {
     const documents = recordingDocuments();
     const app = buildServer({ config, documents, cube: stubCube(() => ({})) });

@@ -119,7 +119,18 @@ export function EditChrome<T>({
             onUndo={() => setHistory(undo)}
             onRedo={() => setHistory(redo)}
             onDiscard={() => setHistory(discard)}
-            onSave={() => onSave(current)}
+            onSave={() => {
+              /**
+               * Saving leaves edit mode, which is the second half of AC-065.
+               * The session is re-seeded from what was saved, so the change
+               * count starts again at nothing — otherwise "Discard (4
+               * changes)" would still be offering to undo work that is now
+               * safely stored.
+               */
+              onSave(current);
+              setHistory(historyOf<Snapshot<T>>({ document: current, changes: 0 }));
+              setEditing(false);
+            }}
           />
         ) : (
           <button type="button" onClick={start}>

@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import {
   compile,
   readChartDocument,
@@ -9,6 +10,7 @@ import {
 
 import { loadTile } from '../query/loadTile';
 import { DashboardView } from './DashboardView';
+import { saveDashboard } from './edit/save';
 import { DEFAULT_SETTINGS, type DashboardDocument } from './model/document';
 
 /**
@@ -29,6 +31,23 @@ async function getJson<T>(url: string): Promise<T> {
 interface StoredDocument {
   readonly id: string;
   readonly body: Record<string, unknown>;
+  readonly version?: number;
+}
+
+/**
+ * A stored body is *checked*, not cast.
+ *
+ * A chart body has gone through strict `readChartDocument` since T023 while a
+ * dashboard body was taken on trust — so a `pages` that was an object rather
+ * than an array threw inside render, with no error boundary, and the whole
+ * app went blank. A dashboard that cannot be read should fail like a chart
+ * that cannot: as one surface reporting a problem.
+ */
+export class DashboardDocumentError extends Error {
+  constructor(what: string) {
+    super(`This dashboard cannot be opened: ${what}.`);
+    this.name = 'DashboardDocumentError';
+  }
 }
 
 /**
@@ -38,6 +57,19 @@ interface StoredDocument {
  */
 function dashboardOf(stored: StoredDocument): DashboardDocument {
   const body = stored.body as Partial<DashboardDocument>;
+
+  // A dashboard saved before there were pages — every seeded one but the
+  // first — opens as an empty dashboard rather than an error, because "no
+  // tiles yet" is what it is. A `pages` that is present and *wrong* is not.
+  if (body.pages !== undefined && !Array.isArray(body.pages)) {
+    throw new DashboardDocumentError('its pages are not a list');
+  }
+  for (const page of body.pages ?? []) {
+    if (!Array.isArray(page.items)) {
+      throw new DashboardDocumentError(`page “${page.title ?? page.id}” has no list of items`);
+    }
+  }
+
   return {
     schemaVersion: body.schemaVersion ?? 1,
     title: typeof body.title === 'string' ? body.title : 'Dashboard',
@@ -53,11 +85,18 @@ export interface DashboardPageProps {
 export function DashboardPage({ dashboardId }: DashboardPageProps) {
   const saved = useQuery({
     queryKey: ['dashboard', dashboardId],
-    queryFn: () =>
-      getJson<StoredDocument>(`/api/documents/dashboard/${encodeURIComponent(dashboardId)}`),
+    // Parsed here rather than during render: a body that cannot be read
+    // becomes a query error this page already knows how to show, instead of
+    // an exception thrown inside render with no boundary above it.
+    queryFn: async () => {
+      const stored = await getJson<StoredDocument>(
+        `/api/documents/dashboard/${encodeURIComponent(dashboardId)}`,
+      );
+      return { document: dashboardOf(stored), version: stored.version ?? 1 };
+    },
   });
 
-  const document = saved.data === undefined ? undefined : dashboardOf(saved.data);
+  const document = saved.data?.document;
 
   if (saved.isPending) return <p data-testid="dashboard-loading">Loading…</p>;
   if (saved.isError)
@@ -68,7 +107,13 @@ export function DashboardPage({ dashboardId }: DashboardPageProps) {
     );
   if (document === undefined) return null;
 
-  return <LoadedDashboard document={document} dashboardId={dashboardId} />;
+  return (
+    <LoadedDashboard
+      document={document}
+      dashboardId={dashboardId}
+      version={saved.data?.version ?? 1}
+    />
+  );
 }
 
 /**
@@ -79,10 +124,32 @@ export function DashboardPage({ dashboardId }: DashboardPageProps) {
 function LoadedDashboard({
   document,
   dashboardId,
+  version,
 }: {
   document: DashboardDocument;
   dashboardId: string;
+  version: number;
 }) {
+  const queryClient = useQueryClient();
+  const [saveFailed, setSaveFailed] = useState('');
+
+  /**
+   * Saving (AC-065). The version the session started from travels with it, so
+   * a dashboard changed somewhere else is refused rather than overwritten —
+   * and on success the cached copy is refreshed, or the next Edit would begin
+   * from the document as it was before this save.
+   */
+  const save = useMutation({
+    mutationFn: (next: DashboardDocument) =>
+      saveDashboard({ dashboardId, document: next, version }),
+    onSuccess: async () => {
+      setSaveFailed('');
+      await queryClient.invalidateQueries({ queryKey: ['dashboard', dashboardId] });
+    },
+    onError: (failure: Error) => {
+      setSaveFailed(failure.message);
+    },
+  });
   const charts = useQuery({
     queryKey: ['dashboard-charts', dashboardId],
     queryFn: async () => {
@@ -104,31 +171,39 @@ function LoadedDashboard({
   });
 
   return (
-    <DashboardView
-      /**
-       * Keyed by the dashboard, so moving from one to another starts a new
-       * edit session rather than carrying the previous dashboard's history
-       * into it — the session is seeded when Edit is pressed and would
-       * otherwise be editing a document that is no longer on screen.
-       */
-      key={dashboardId}
-      document={document}
-      specs={charts.data?.specs ?? {}}
-      errors={charts.data?.errors ?? {}}
-      loading={charts.isPending}
-      /**
-       * Where E on a focused tile leads (AC-057). Navigating is the route's
-       * business; what the editor then shows — a preview at the tile's own
-       * size, and the way back — is AC-034's.
-       */
-      onEditChart={(chartId) => {
-        globalThis.location.assign(`/explore/charts/${encodeURIComponent(chartId)}/edit`);
-      }}
-      onSave={() => {
-        // Saving is AC-065 (T071). Until then the dashboard is read-only and
-        // an edit session is discarded when the page is left.
-      }}
-    />
+    <>
+      {saveFailed === '' ? null : (
+        // A save that failed in silence is the worst outcome of all: the
+        // editor has left edit mode believing the work is stored.
+        <p role="alert" data-testid="save-failed">
+          {saveFailed}
+        </p>
+      )}
+      <DashboardView
+        /**
+         * Keyed by the dashboard, so moving from one to another starts a new
+         * edit session rather than carrying the previous dashboard's history
+         * into it — the session is seeded when Edit is pressed and would
+         * otherwise be editing a document that is no longer on screen.
+         */
+        key={dashboardId}
+        document={document}
+        specs={charts.data?.specs ?? {}}
+        errors={charts.data?.errors ?? {}}
+        loading={charts.isPending}
+        /**
+         * Where E on a focused tile leads (AC-057). Navigating is the route's
+         * business; what the editor then shows — a preview at the tile's own
+         * size, and the way back — is AC-034's.
+         */
+        onEditChart={(chartId) => {
+          globalThis.location.assign(`/explore/charts/${encodeURIComponent(chartId)}/edit`);
+        }}
+        onSave={(next) => {
+          save.mutate(next);
+        }}
+      />
+    </>
   );
 }
 

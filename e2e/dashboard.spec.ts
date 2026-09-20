@@ -437,6 +437,82 @@ test('deleting a section asks, and "keep" loses nothing', async ({ page }) => {
   expect(after).toHaveLength(before.length - 1);
 });
 
+test('a saved dashboard comes back the way it was left', async ({ page, request }) => {
+  /**
+   * Its own dashboard, not the seeded one.
+   *
+   * This is the only test here that *writes*, and the suite shares one
+   * database across three browsers running in parallel. Saving over the
+   * seeded dashboard changed it for everybody else — four other specs began
+   * failing on a tile that was suddenly wider and a heading that was
+   * suddenly there.
+   */
+  const unique = `save-${String(Date.now())}`;
+  const created = await request.post('http://localhost:4100/api/documents', {
+    data: { kind: 'dashboard', title: `Saveable ${unique}`, folderId: 'root' },
+  });
+  const { id } = (await created.json()) as { id: string };
+
+  await request.put(`http://localhost:4100/api/documents/dashboard/${id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: `Saveable ${unique}`,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [{ id: 'tile-status', kind: 'chart', w: 6, h: 40 }],
+          },
+        ],
+      },
+    },
+  });
+
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: `Saveable ${unique}` })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  const idsOn = () =>
+    page
+      .getByTestId('grid-item')
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-tile')));
+
+  // A change to the layout, and one to a tile's size — two of the four
+  // things AC-065 names.
+  await page
+    .getByRole('complementary', { name: 'Edit sidebar' })
+    .getByRole('tab', { name: 'Add' })
+    .click();
+  await page.getByTestId('add-header').click();
+
+  const tile = page.locator('[data-tile="tile-status"]');
+  await tile.focus();
+  await page.keyboard.press('Shift+ArrowRight');
+  const widened = await tile.evaluate((node) => (node as HTMLElement).style.gridColumn);
+
+  const before = await idsOn();
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  // Leaving edit mode is the criterion's other half.
+  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
+
+  // And the real test: reopen it from scratch. "Fails when: any of those is
+  // missing after reopening the dashboard" — so this reloads rather than
+  // trusting what is already on screen.
+  await page.reload();
+  await expect(page.getByRole('heading', { name: `Saveable ${unique}` })).toBeVisible();
+
+  expect(await idsOn()).toEqual(before);
+  await expect(page.getByRole('heading', { name: 'New heading' })).toBeVisible();
+  expect(await tile.evaluate((node) => (node as HTMLElement).style.gridColumn)).toBe(widened);
+});
+
 test('a member keeps one colour across two tiles', async ({ page }) => {
   await open(page);
 

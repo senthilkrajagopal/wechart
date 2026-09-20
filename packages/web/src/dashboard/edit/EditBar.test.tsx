@@ -153,6 +153,22 @@ describe('what the bar reports', () => {
     expect(onSave).toHaveBeenCalledWith(loaded);
   });
 
+  it('leaves edit mode once it is saved, with nothing left to discard', async () => {
+    render(<Harness />);
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add a tile' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    // AC-065's second half. And the session re-seeds from what was saved, or
+    // "Discard (1 change)" would still be offering to undo work that is now
+    // safely stored.
+    expect(screen.queryByRole('toolbar', { name: 'Dashboard editing' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByRole('button', { name: 'Discard' }).textContent).toBe('Discard');
+  });
+
   it('hands the current document to Save', async () => {
     const onSave = vi.fn();
     render(<Harness onSave={onSave} />);

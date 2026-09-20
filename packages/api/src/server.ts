@@ -41,6 +41,12 @@ export interface DocumentWriter {
     kind: 'folder' | 'dashboard' | 'chart',
     id: string,
   ): Promise<{ id: string; body: Record<string, unknown> } | null>;
+  update?(input: {
+    kind: 'folder' | 'dashboard' | 'chart';
+    id: string;
+    body: Record<string, unknown>;
+    expectedVersion: number;
+  }): Promise<unknown>;
 }
 
 /** The slice of the catalog repository the server exposes. */
@@ -203,6 +209,47 @@ export function buildServer({
     const found = await docs.get(kind, id);
     if (found === null) return reply.code(404).send({ message: 'No such document' });
     return found;
+  });
+
+  /**
+   * Save a document's body (AC-065).
+   *
+   * The whole body, replaced as given. Saving field by field would mean the
+   * server had to know the shape of every document kind, and anything the
+   * browser learned to store before the server learned about it would be
+   * dropped on the next save — a dashboard's markings being exactly that
+   * case, since they arrive later than this route.
+   *
+   * `version` is required and carried through to the repository, which
+   * refuses a write against a version that has moved. Two people editing one
+   * dashboard would otherwise have the last save win silently.
+   */
+  app.put('/api/documents/:kind/:id', async (request, reply) => {
+    const { kind, id } = request.params as { kind: string; id: string };
+    const body = request.body as { body?: Record<string, unknown>; version?: number } | undefined;
+
+    if (kind !== 'folder' && kind !== 'dashboard' && kind !== 'chart') {
+      throw new BadRequest('kind must be one of folder, dashboard or chart');
+    }
+    if (!docs?.update) throw new BadRequest('Persistence is not configured');
+    if (body?.body === undefined) throw new BadRequest('A body is required');
+    if (typeof body.version !== 'number') {
+      throw new BadRequest('A version is required, so a stale save can be refused');
+    }
+
+    try {
+      return await docs.update({ kind, id, body: body.body, expectedVersion: body.version });
+    } catch (failure) {
+      // A save that lost a race is not a server fault; the browser has to
+      // reload and decide what to do, which it cannot if this is a 500.
+      if (failure instanceof Error && failure.name === 'StaleDocumentError') {
+        return reply.code(409).send({ message: failure.message });
+      }
+      if (failure instanceof Error && failure.name === 'DocumentNotFoundError') {
+        return reply.code(404).send({ message: failure.message });
+      }
+      throw failure;
+    }
   });
 
   app.patch('/api/documents/:kind/:id', async (request) => {
