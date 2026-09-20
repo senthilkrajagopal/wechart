@@ -80,6 +80,97 @@ describe('the API answers for Cube (AC-007)', () => {
   });
 });
 
+describe('recording every query (AC-016)', () => {
+  function recordingLog() {
+    const entries: { durationMs: number; accelerated: boolean; error?: string | null }[] = [];
+    return {
+      entries,
+      record: async (entry: (typeof entries)[number]) => void entries.push(entry),
+      recent: async () => entries,
+    };
+  }
+
+  it('records a successful query with its duration and acceleration', async () => {
+    const queryLog = recordingLog();
+    const app = buildServer({
+      config,
+      queryLog,
+      cube: stubCube(() => ({
+        data: [],
+        usedPreAggregations: { 'orders.main': {} },
+      })),
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/load',
+      headers: { 'x-request-id': 'req-1' },
+      payload: { query: { measures: ['Orders.count'] } },
+    });
+
+    expect(queryLog.entries).toHaveLength(1);
+    expect(queryLog.entries[0]?.accelerated).toBe(true);
+    expect(typeof queryLog.entries[0]?.durationMs).toBe('number');
+    await app.close();
+  });
+
+  it('records a query that failed, so the log is what happened and not what worked', async () => {
+    const queryLog = recordingLog();
+    const app = buildServer({
+      config,
+      queryLog,
+      cube: stubCube(() => {
+        throw new CubeError('Boom', 400);
+      }),
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/load',
+      headers: { 'x-request-id': 'req-2' },
+      payload: { query: {} },
+    });
+
+    expect(queryLog.entries).toHaveLength(1);
+    expect(queryLog.entries[0]?.error).toBe('Boom');
+    await app.close();
+  });
+
+  it('does not fail a chart that loaded because recording failed', async () => {
+    const app = buildServer({
+      config,
+      cube: stubCube(() => ({ data: [] })),
+      queryLog: {
+        record: async () => {
+          throw new Error('log is down');
+        },
+        recent: async () => [],
+      },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/load',
+      payload: { query: {} },
+    });
+
+    expect(response.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('exposes the records for the Jobs workspace', async () => {
+    const queryLog = recordingLog();
+    const app = buildServer({ config, queryLog, cube: stubCube(() => ({ data: [] })) });
+
+    await app.inject({ method: 'POST', url: '/api/load', payload: { query: {} } });
+    const response = await app.inject({ method: 'GET', url: '/api/jobs/queries' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toHaveLength(1);
+    await app.close();
+  });
+});
+
 describe('cancelling a running query (AC-011)', () => {
   it('asks Cube to stop the named query', async () => {
     const cancelled: string[] = [];

@@ -20,6 +20,22 @@ export interface DocumentTable {
   updated_at: Generated<Date>;
 }
 
+/**
+ * A log, not a versioned object: rows are appended and read by recency, never
+ * updated (AC-016).
+ */
+export interface QueryLogTable {
+  id: Generated<number>;
+  request_id: string;
+  query: JSONColumnType<Record<string, unknown>>;
+  duration_ms: number;
+  accelerated: boolean;
+  pre_aggregation: string | null;
+  error: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   documents: DocumentTable;
+  query_log: QueryLogTable;
 }

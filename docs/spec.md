@@ -71,7 +71,7 @@ Traces to: `[R5]`, `[R4]`, `[research/cube/data-apis.md]`, `[research/cube/acces
       Fails when: any saved object is missing or altered after a restart.
 - [x] AC-015 WHEN two browser sessions edit the same dashboard and the second saves over a newer version, THE SYSTEM SHALL refuse the save and tell the user the dashboard changed.
       Fails when: the second save silently overwrites the newer version.
-- [ ] AC-016 THE SYSTEM SHALL record, for every query it issues, the Cube request, the duration and whether it was accelerated, and expose those records in the Jobs workspace.
+- [x] AC-016 THE SYSTEM SHALL record, for every query it issues, the Cube request, the duration and whether it was accelerated, and expose those records in the Jobs workspace.
       Fails when: a rendered chart produces no query record, or the record lacks duration or acceleration.
 
 ## F3. Explore: folders, catalog and search

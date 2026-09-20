@@ -124,10 +124,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Depends on: T011
   - Done 2026-09-19. AC-013 ticked. Both directions are asserted, because both mislead: labelling everything "live" hides that a number is an hour old, and labelling everything "accelerated" claims a freshness guarantee that is not there (requirements §4 — volumes vary widely, so the UI has to say which queries are accelerated).
   - Cube sends `usedPreAggregations` **with no entries** for a source-database query, so its presence proves nothing; only a non-empty set means accelerated. A test pins that case, since checking for the key alone would label every tile accelerated.
-- [ ] T015 (AC-016) Record every query wechart issues and list the records in the Jobs workspace
-  - Files: `packages/api/src/repos/query-log.ts`, `packages/api/src/routes/jobs.ts`, `packages/web/src/workspaces/jobs/QueryLog.tsx`, `packages/api/src/repos/query-log.test.ts`
+- [x] T015 (AC-016) Record every query wechart issues and list the records in the Jobs workspace
+  - Files: `packages/api/src/repos/query-log.ts`, `packages/api/src/repos/query-log.test.ts`, `packages/api/src/db/migrations/1758240001000_query-log.cjs`, `packages/api/src/db/schema.ts`, `packages/api/src/server.ts`, `packages/api/src/server.test.ts`, `packages/web/src/workspaces/jobs/QueryLog.tsx`, `packages/web/src/workspaces/jobs/QueryLog.test.tsx`
   - Failing test: `query-log.test.ts`: rendering a chart produces one record holding the Cube request, the duration and the acceleration flag, and the Jobs endpoint returns it (AC-016).
   - Depends on: T005, T011
+  - Done 2026-09-19. AC-016 ticked. **Failed queries are recorded too.** A query that ran for four seconds and then errored is exactly what someone opens the Jobs workspace to find; recording only successes would make it a log of what worked rather than of what the system did.
+  - Recording never fails a chart that loaded. A test asserts a load still returns 200 when the log write throws — observability that can break the thing it observes is worse than none.
+  - Its own table, not `documents`: this is append-only and read by recency, so the only index is `created_at DESC` (`research/db-access.md`).
+  - Still to wire: the Jobs **route** renders `QueryLog` against `/api/jobs/queries`. The component and the endpoint both exist and are tested; joining them belongs with the Jobs surface work at T155–T158.
 
 ## F3. Explore: folders, catalog and search
 

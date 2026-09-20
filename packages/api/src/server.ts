@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { CubeClient, CubeError } from './cube/client';
 import { MetaCache } from './cube/meta-cache';
 import type { Config } from './config';
+import type { QueryLogEntry } from './repos/query-log';
 
 /**
  * The wechart API. The browser talks only to this, and this is the only thing
@@ -12,13 +13,22 @@ export interface BuildOptions {
   readonly config: Config;
   readonly cube?: CubeClient;
   readonly metaCache?: MetaCache;
+  /** Omitted only in tests that are not about the log itself. */
+  readonly queryLog?: QueryLogWriter;
   readonly logger?: boolean;
+}
+
+/** The slice of the query-log repository the server uses. */
+export interface QueryLogWriter {
+  record(entry: QueryLogEntry): Promise<unknown>;
+  recent(limit?: number): Promise<unknown[]>;
 }
 
 export function buildServer({
   config,
   cube,
   metaCache,
+  queryLog: log,
   logger = false,
 }: BuildOptions): FastifyInstance {
   const app = Fastify({ logger });
@@ -33,6 +43,15 @@ export function buildServer({
   // Metadata is cached with a 60-second freshness bound (AC-009), so a
   // dashboard opening many tiles issues one /v1/meta request, not one per tile.
   const meta = metaCache ?? new MetaCache({ fetchMeta: () => client.meta() });
+
+  /** Recording must never be what breaks a chart that loaded fine. */
+  const record = async (entry: QueryLogEntry) => {
+    try {
+      await log?.record(entry);
+    } catch (error) {
+      app.log.warn({ err: error }, 'could not record query');
+    }
+  };
 
   app.get('/api/health', () => ({ status: 'ok' }));
 
@@ -53,10 +72,45 @@ export function buildServer({
     return reply.status(204).send();
   });
 
+  /**
+   * AC-016: every query is recorded — the request, the duration and whether it
+   * was accelerated — including the ones that fail, since a query that ran for
+   * four seconds and then errored is exactly what someone opens the Jobs
+   * workspace to find.
+   */
   app.post('/api/load', async (request) => {
     const body = request.body as { query?: Record<string, unknown> } | undefined;
     if (!body?.query) throw new BadRequest();
-    return client.load(body.query);
+
+    const requestId = String(request.headers['x-request-id'] ?? 'unknown');
+    const startedAt = performance.now();
+
+    try {
+      const result = await client.load(body.query);
+      const { accelerated, preAggregation } = accelerationOf(result);
+      await record({
+        requestId,
+        query: body.query,
+        durationMs: performance.now() - startedAt,
+        accelerated,
+        preAggregation,
+      });
+      return result;
+    } catch (error) {
+      await record({
+        requestId,
+        query: body.query,
+        durationMs: performance.now() - startedAt,
+        accelerated: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  });
+
+  app.get('/api/jobs/queries', async (request) => {
+    const { limit } = request.query as { limit?: string };
+    return log ? log.recent(Number(limit) || 100) : [];
   });
 
   /**
@@ -81,6 +135,24 @@ export function buildServer({
   });
 
   return app;
+}
+
+/**
+ * Cube reports `usedPreAggregations` with no entries for a source-database
+ * query, so its presence proves nothing: only a non-empty set means the result
+ * was accelerated (AC-013, AC-016).
+ */
+function accelerationOf(result: unknown): {
+  accelerated: boolean;
+  preAggregation: string | null;
+} {
+  const used =
+    typeof result === 'object' && result !== null && 'usedPreAggregations' in result
+      ? ((result as { usedPreAggregations?: Record<string, unknown> }).usedPreAggregations ?? {})
+      : {};
+
+  const name = Object.keys(used)[0];
+  return { accelerated: name !== undefined, preAggregation: name ?? null };
 }
 
 class BadRequest extends Error {
