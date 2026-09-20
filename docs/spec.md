@@ -59,7 +59,7 @@ Traces to: `[R5]`, `[R4]`, `[research/cube/data-apis.md]`, `[research/cube/acces
       Fails when: a request reaches Cube without the configured security context.
 - [x] AC-009 WHEN Cube reports a new `schemaVersion`, THE SYSTEM SHALL serve metadata from the new model within 60 seconds without a restart.
       Fails when: 60 seconds after the change, a metadata request still returns members from the previous model.
-- [ ] AC-010 WHILE Cube replies "Continue wait" for a query, THE SYSTEM SHALL keep the request open, show the tile in a loading state, and deliver the result when it arrives.
+- [x] AC-010 WHILE Cube replies "Continue wait" for a query, THE SYSTEM SHALL keep the request open, show the tile in a loading state, and deliver the result when it arrives.
       Fails when: the tile shows an error, or the result never renders although Cube completed the query.
 - [ ] AC-011 WHEN a query is superseded, because its filters, marks or dashboard changed, THE SYSTEM SHALL cancel the earlier query against Cube before rendering the newer result.
       Fails when: no cancellation is issued for the superseded request, or the older result replaces the newer one.

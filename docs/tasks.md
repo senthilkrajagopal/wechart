@@ -98,10 +98,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Done 2026-09-19. AC-009 ticked. Research correction: `schemaVersion` is a Cube **config hook** (`fn(ctx) => string`, called per request, recompiling when the string changes — `research/cube/configuration-deployment.md` §3), not something Cube pushes to clients. So the 60-second bound is wechart's own: a cached entry older than that is refetched before being served.
   - Caching is what makes the bound necessary. Without it metadata is never stale, but a ten-tile dashboard becomes ten `/v1/meta` requests against a queue whose default concurrency is 2. Concurrent callers share one in-flight fetch for the same reason.
   - `invalidate()` skips the bound for wechart's own publishes (T142/T143): waiting out 60 seconds is the wrong answer to "did my change take effect?". Failures are never cached.
-- [ ] T011 (AC-010) Hold the request open while Cube replies "Continue wait"
-  - Files: `packages/api/src/routes/load.ts`, `packages/web/src/query/loadTile.ts`, `packages/web/src/query/loadTile.test.ts`
+- [x] T011 (AC-010) Hold the request open while Cube replies "Continue wait"
+  - Files: `packages/web/src/query/{loadTile,useTileData}.ts`, `packages/web/src/query/{loadTile,useTileData}.test.ts|tsx`
   - Failing test: `loadTile.test.ts`: two "Continue wait" responses followed by a result leave the tile in its loading state throughout and then render the result, with no error state (AC-010).
   - Depends on: T004
+  - Done 2026-09-19. AC-010 ticked. Cube answers a still-running query with HTTP **200** and a body of `{"error":"Continue wait"}` — an error-shaped body that is not an error. Trusting the status code renders an empty tile; trusting the word "error" shows a red tile for a query that is merely slow. Both are the failure this criterion names, so the sentinel is matched explicitly and a test asserts the tile never passes through an error state on the way.
+  - The request id is minted once and carried across the whole poll, so Cube sees one query rather than a series — and so T012 has something to name when it cancels.
+  - The poll is bounded (`maxPolls`), because a tile that hangs forever is its own failure. Retries are off in the hook: a Cube error is something the tile shows (AC-012), and backoff would hide it and spend AC-175's budget.
 - [ ] T012 (AC-011) Cancel a superseded query against Cube before rendering the newer result
   - Files: `packages/web/src/query/{client,loadTile}.ts`, `packages/api/src/routes/running-query.ts`, `packages/web/src/query/cancel.test.ts`
   - Failing test: `cancel.test.ts`: changing a tile's filters aborts the in-flight fetch and issues `DELETE /v1/running-query/{requestId}` for it, and the older result never replaces the newer one (AC-011).
