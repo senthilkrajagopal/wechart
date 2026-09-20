@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { CreateMenu, type CreatableKind } from './CreateMenu';
 import { FolderContents, type CatalogItem } from './FolderContents';
 import { FolderTree, type FolderNode } from './FolderTree';
 
@@ -18,8 +19,40 @@ async function getJson<T>(url: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+interface CreatedObject {
+  readonly kind: CreatableKind;
+  readonly id: string;
+}
+
 export function ExplorePage() {
   const [folderId, setFolderId] = useState(ROOT);
+  const queryClient = useQueryClient();
+
+  /**
+   * AC-020: the new object lands in the selected folder and is opened.
+   * A folder "opens" by becoming the selection, since it has no page of its
+   * own; a dashboard or chart opens at its own route.
+   */
+  const create = useMutation({
+    mutationFn: async ({ kind, title }: { kind: CreatableKind; title: string }) => {
+      const response = await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind, title, folderId }),
+      });
+      if (!response.ok) throw new Error(`Could not create: ${String(response.status)}`);
+      return (await response.json()) as CreatedObject;
+    },
+    onSuccess: async (created) => {
+      await queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+      if (created.kind === 'folder') {
+        await queryClient.invalidateQueries({ queryKey: ['folders'] });
+        setFolderId(created.id);
+        return;
+      }
+      globalThis.location.assign(`/explore/${created.kind}s/${encodeURIComponent(created.id)}`);
+    },
+  });
 
   const folders = useQuery({
     queryKey: ['folders'],
@@ -42,6 +75,12 @@ export function ExplorePage() {
         />
       </aside>
       <section className="explore__contents" data-testid="explore-contents">
+        <CreateMenu
+          folderId={folderId}
+          busy={create.isPending}
+          onCreate={(kind, title) => create.mutateAsync({ kind, title }).then(() => undefined)}
+        />
+        {create.isError ? <p role="alert">{(create.error as Error).message}</p> : null}
         {contents.isPending ? <p>Loading…</p> : null}
         {contents.isError ? (
           <p role="alert">Could not load this folder: {(contents.error as Error).message}</p>

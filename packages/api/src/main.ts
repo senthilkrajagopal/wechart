@@ -4,6 +4,7 @@ import { loadConfig } from './config';
 import { closeDb, getDb } from './db/client';
 import { migrateToLatest } from './db/migrate';
 import { catalog } from './repos/catalog';
+import { documents } from './repos/documents';
 import { queryLog } from './repos/query-log';
 import { seedDevData } from './seed';
 import { buildServer } from './server';
@@ -24,6 +25,7 @@ async function main(): Promise<void> {
     config,
     queryLog: queryLog(db),
     catalog: catalog(db),
+    documents: documents(db),
     logger: true,
   });
 

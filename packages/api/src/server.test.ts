@@ -80,6 +80,96 @@ describe('the API answers for Cube (AC-007)', () => {
   });
 });
 
+describe('creating catalog objects (AC-020)', () => {
+  function recordingDocuments() {
+    const created: { kind: string; id: string; body: Record<string, unknown> }[] = [];
+    return {
+      created,
+      create: async (input: (typeof created)[number]) => {
+        created.push(input);
+        return { id: input.id };
+      },
+    };
+  }
+
+  it('creates each kind in the folder it was asked for', async () => {
+    for (const kind of ['folder', 'dashboard', 'chart'] as const) {
+      const documents = recordingDocuments();
+      const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/documents',
+        payload: { kind, title: `New ${kind}`, folderId: 'finance' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toMatchObject({ kind, folderId: 'finance', title: `New ${kind}` });
+      expect(documents.created[0]?.body).toMatchObject({ folderId: 'finance' });
+      await app.close();
+    }
+  });
+
+  it('mints the id itself, so a client cannot claim an existing one', async () => {
+    const documents = recordingDocuments();
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind: 'dashboard', title: 'Mine', id: 'seed-root-dashboard-1' },
+    });
+
+    expect(response.json().id).not.toBe('seed-root-dashboard-1');
+    expect(documents.created[0]?.id).not.toBe('seed-root-dashboard-1');
+    await app.close();
+  });
+
+  it('defaults to the root folder when none is given', async () => {
+    const documents = recordingDocuments();
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind: 'dashboard', title: 'Top level' },
+    });
+
+    expect(documents.created[0]?.body).toMatchObject({ folderId: 'root' });
+    await app.close();
+  });
+
+  it('refuses a kind that is not a catalog object', async () => {
+    const documents = recordingDocuments();
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind: 'setting', title: 'Nope' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(documents.created).toHaveLength(0);
+    await app.close();
+  });
+
+  it('refuses a blank title rather than creating an untitled object', async () => {
+    const documents = recordingDocuments();
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind: 'dashboard', title: '   ' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(documents.created).toHaveLength(0);
+    await app.close();
+  });
+});
+
 describe('recording every query (AC-016)', () => {
   function recordingLog() {
     const entries: { durationMs: number; accelerated: boolean; error?: string | null }[] = [];

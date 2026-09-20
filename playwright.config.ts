@@ -46,6 +46,9 @@ export default defineConfig({
       env: {
         CUBE_API_SECRET: 'e2e-secret',
         WECHART_SEED: '1',
+        // These tests create objects, so each run starts from the seed rather
+        // than from whatever the last run left behind.
+        WECHART_RESET_DATA: '1',
       },
     },
     {

@@ -151,10 +151,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **A test caught a real injection-shaped bug:** `%` and `_` are LIKE wildcards, so a search for "50%" matched everything containing "50". User input is now escaped, backslash first.
   - The seed contains a chart local to a dashboard, titled so it matches the same search as the library items — without it, the second half of this criterion could not fail. One e2e asserts it is excluded, and another asserts a similarly named *library* chart is found, so the exclusion is not just an empty result.
   - Note: one a11y-tokens case failed once during a cold run where the API was still building, and has passed in three consecutive full runs since. Not reproduced; worth watching rather than chasing.
-- [ ] T018 (AC-020) Create a folder, dashboard or chart into the selected folder and open it
-  - Files: `packages/web/src/workspaces/explore/CreateMenu.tsx`, `packages/api/src/routes/folders.ts`, `e2e/explore-create.spec.ts`
+- [x] T018 (AC-020) Create a folder, dashboard or chart into the selected folder and open it
+  - Files: `packages/web/src/workspaces/explore/{CreateMenu,ExplorePage}.tsx`, `packages/api/src/server.ts`, `packages/api/src/server.test.ts`, `packages/api/src/{main,seed}.ts`, `packages/web/src/shell/styles.ts`, `playwright.config.ts`, `e2e/explore-create.spec.ts`
   - Failing test: `e2e/explore-create.spec.ts`: each new object lands in the selected folder and the app navigates to it (AC-020).
   - Depends on: T016
+  - Done 2026-09-19. AC-020 ticked. Both halves are asserted every time — where the object landed *and* that the app went there. A folder "opens" by becoming the selection, since it has no page of its own.
+  - The id is minted by the service, never accepted from the browser, so a client cannot overwrite an existing object by claiming its id. A test asserts a supplied id is ignored.
+  - **The rendered audit earned its keep:** Safari renders an unstyled `<button>` at 11 px, below AC-004's floor. Only WebKit, only visible in a real browser, and it appeared the moment this task added buttons. Fixed with `font: inherit` on form controls.
+  - Two test-infrastructure fixes: browser runs now reset the catalog to the seed (`WECHART_RESET_DATA`), because these tests create objects and later runs began matching leftovers; and the a11y audit waits for the app to mount and the network to settle, since under parallel load axe was auditing a frame rendered before the token stylesheet applied.
 - [ ] T019 (AC-021) Keep every reference working when a folder, dashboard or chart is renamed or moved
   - Files: `packages/api/src/repos/{folders,charts}.ts`, `packages/api/src/repos/references.test.ts`
   - Failing test: `references.test.ts`: after moving a library chart, a dashboard that uses it still resolves it and renders no missing-chart state (AC-021).

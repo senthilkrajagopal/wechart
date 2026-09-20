@@ -52,6 +52,12 @@ async function openInTheme(page: Page, path: string, theme: (typeof THEMES)[numb
   );
   await page.goto(path);
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+  // Wait for the app to be mounted and its data settled before auditing.
+  // Under parallel load axe otherwise runs mid-render and reports colours from
+  // a frame where the token stylesheet or the content is not yet in place —
+  // a failure about timing rather than about contrast.
+  await expect(page.getByRole('banner')).toBeVisible();
+  await page.waitForLoadState('networkidle');
 }
 
 for (const theme of THEMES) {

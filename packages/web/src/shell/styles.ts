@@ -9,6 +9,16 @@ import { themeCss } from '@wechart/ui';
 const SHELL_CSS = `
 * { box-sizing: border-box; }
 
+/* Form controls do not inherit type by default, and Safari's default button
+   font-size is 11px -- below the 12px floor (AC-004). The rendered audit in
+   e2e/a11y-tokens.spec.ts caught this in WebKit only. */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
 body {
   margin: 0;
   background: var(--wc-bg-page);

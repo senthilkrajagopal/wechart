@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import { CubeClient, CubeError } from './cube/client';
@@ -16,7 +18,17 @@ export interface BuildOptions {
   /** Omitted only in tests that are not about the log itself. */
   readonly queryLog?: QueryLogWriter;
   readonly catalog?: CatalogReader;
+  readonly documents?: DocumentWriter;
   readonly logger?: boolean;
+}
+
+/** The slice of the document repository the server writes through. */
+export interface DocumentWriter {
+  create(input: {
+    kind: 'folder' | 'dashboard' | 'chart';
+    id: string;
+    body: Record<string, unknown>;
+  }): Promise<{ id: string }>;
 }
 
 /** The slice of the catalog repository the server exposes. */
@@ -38,6 +50,7 @@ export function buildServer({
   metaCache,
   queryLog: log,
   catalog: cat,
+  documents: docs,
   logger = false,
 }: BuildOptions): FastifyInstance {
   const app = Fastify({ logger });
@@ -125,6 +138,37 @@ export function buildServer({
     return cat ? cat.contents(folderId) : [];
   });
 
+  /**
+   * Create a folder, dashboard or chart in a folder (AC-020). The id is minted
+   * here rather than accepted from the browser, so a client cannot choose to
+   * overwrite an existing object by claiming its id.
+   */
+  app.post('/api/documents', async (request, reply) => {
+    const body = request.body as { kind?: string; title?: string; folderId?: string } | undefined;
+
+    const kind = body?.kind;
+    const title = body?.title?.trim();
+
+    if (kind !== 'folder' && kind !== 'dashboard' && kind !== 'chart') {
+      throw new BadRequest('kind must be one of folder, dashboard or chart');
+    }
+    if (!title) throw new BadRequest('A title is required');
+    if (!docs) throw new BadRequest('Persistence is not configured');
+
+    const created = await docs.create({
+      kind,
+      id: randomUUID(),
+      body: { title, folderId: body?.folderId ?? 'root', owner: 'admin' },
+    });
+
+    return reply.status(201).send({
+      kind,
+      id: created.id,
+      title,
+      folderId: body?.folderId ?? 'root',
+    });
+  });
+
   // Title search over dashboards and library charts (AC-019).
   app.get('/api/search', async (request) => {
     const { q } = request.query as { q?: string };
@@ -184,3 +228,5 @@ class BadRequest extends Error {
     this.name = 'BadRequest';
   }
 }
+
+export { BadRequest };

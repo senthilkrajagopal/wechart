@@ -16,6 +16,16 @@ import { documents } from './repos/documents';
 const FOLDERS = ['Finance', 'Operations', 'Marketing', 'Archive'];
 
 export async function seedDevData(db: Kysely<Database>): Promise<void> {
+  /**
+   * The browser tests create objects, so without a reset each run starts from
+   * whatever the last one left behind — and assertions that were precise on a
+   * clean catalog start matching leftovers. Only ever set for those runs.
+   */
+  if (process.env['WECHART_RESET_DATA'] === '1') {
+    await db.deleteFrom('documents').execute();
+    await db.deleteFrom('query_log').execute();
+  }
+
   const existing = await db
     .selectFrom('documents')
     .select('id')

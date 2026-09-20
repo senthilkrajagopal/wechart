@@ -85,7 +85,7 @@ Traces to: `[docs/inputs §8]`, direction.md §2.
       Fails when: the dashboard opens in edit mode, or a saved tile or setting is missing.
 - [x] AC-019 WHEN the user types in the Explore search box, THE SYSTEM SHALL list every dashboard and library chart whose title contains the text, and no dashboard-local chart.
       Fails when: a matching library item is missing, or a dashboard-local chart appears in the results.
-- [ ] AC-020 WHEN the user creates a folder, dashboard or chart from Explore, THE SYSTEM SHALL place it in the selected folder and open it.
+- [x] AC-020 WHEN the user creates a folder, dashboard or chart from Explore, THE SYSTEM SHALL place it in the selected folder and open it.
       Fails when: the new object lands in a different folder, or is not opened.
 - [ ] AC-021 WHEN the user renames or moves a folder, dashboard or chart, THE SYSTEM SHALL keep every reference to it working, including dashboards that use a moved library chart.
       Fails when: a dashboard that used the object shows a missing-chart state after the move.
