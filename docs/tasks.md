@@ -322,10 +322,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - A separate test pairs each point with its own row: left to right the points go low, high, middle, so a renderer that sorted rows by either measure produces a monotonic run and fails.
   - `pointsOf` is a third way of finding marks. A scatter point is the same scaled unit circle a line marker is, but filled with the series colour and carrying no stroke, so the stroke-keyed `markersOf` cannot see it. The position lives in the transform matrix, not in the path data.
   - A row missing either measure is dropped rather than drawn. There is no baseline to fall back to as a bar has, and a point at zero would assert a measurement that was never made.
-- [ ] T038 (AC-037) Render pie and donut
-  - Files: `packages/charts/src/series/pie.ts`, `packages/charts/src/series/pie.test.ts`
+- [x] T038 (AC-037) Render pie and donut
+  - Files: `packages/charts/src/series/pie.ts`, `packages/charts/src/series/pie.test.ts`, `packages/charts/src/testing/renderToSvg.ts`
   - Failing test: `pie.test.ts`: pie and donut each render from a valid spec (AC-037).
-  - Depends on: T035
+  - Depends on: T035, T188
+  - Done 2026-09-20. **AC-037 stays unchecked** — 11 of its 18 types now render.
+  - **Counting slices does not test a pie.** Its whole claim is that each slice's *angle* is its share of the total, and a renderer that gave every category an equal slice would pass a count. The angles are read back out of the drawn geometry: with 50/25/25 the slices must be 180°, 90° and 90°, where an even split would be three 120° slices and fail all three.
+  - **The hole is read from the geometry, not from the option that asked for it.** ECharts writes a pie slice with its edge running to the centre and a donut's stopping at the inner radius, so "is a ring" is a fact about the path. Setting the donut's inner radius to zero fails the test.
+  - A category with no measurement is left out rather than drawn as a zero-width sliver. A sliver in the legend invites the reader to look for a slice that is not there.
+  - Slices carry the same surface-coloured gap as the bar family, so a pie's slices and a stacked bar's segments read the same way across a dashboard.
 - [ ] T039 (AC-037) Render treemap and heatmap
   - Files: `packages/charts/src/series/{treemap,heatmap}.ts`, `packages/charts/src/series/heatmap.test.ts`
   - Failing test: `heatmap.test.ts`: treemap and heatmap each render from a valid spec (AC-037).

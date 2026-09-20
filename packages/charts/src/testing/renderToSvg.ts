@@ -11,7 +11,7 @@
  * Test support, not a product surface: nothing outside tests imports it.
  */
 import * as echarts from 'echarts/core';
-import { BarChart, LineChart, ScatterChart } from 'echarts/charts';
+import { BarChart, LineChart, PieChart, ScatterChart } from 'echarts/charts';
 import { GridComponent, LegendComponent, TitleComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 
@@ -19,6 +19,7 @@ echarts.use([
   BarChart,
   LineChart,
   ScatterChart,
+  PieChart,
   GridComponent,
   LegendComponent,
   TitleComponent,
@@ -179,6 +180,55 @@ export function markersOf(svg: string, colours: readonly string[]): Marker[] {
   }
 
   return markers;
+}
+
+export interface Sector {
+  readonly fill: string;
+  /** Degrees swept, clockwise from the slice's start edge. */
+  readonly sweepDeg: number;
+  /** True when the slice runs all the way to the middle, i.e. it is not a ring. */
+  readonly touchesCentre: boolean;
+}
+
+/**
+ * Every pie or donut slice of the given colours.
+ *
+ * ECharts writes a slice as an outer arc plus the edges back: a pie's edge
+ * runs to the centre (`… L200 200 Z`), a donut's stops at the inner radius and
+ * arcs back. So "has a hole" is readable from the geometry rather than from
+ * the option that asked for it.
+ *
+ * The centre is the middle of the canvas, which is where ECharts puts a pie
+ * unless told otherwise, and the angles are taken from the outer arc's two
+ * endpoints about it.
+ */
+export function sectorsOf(svg: string, fills: readonly string[]): Sector[] {
+  const centreX = RENDER_SIZE.width / 2;
+  const centreY = RENDER_SIZE.height / 2;
+  const sectors: Sector[] = [];
+
+  for (const match of svg.matchAll(/<path d="([^"]*)"[^>]*\bfill="([^"]*)"/g)) {
+    const [, path = '', fill = ''] = match;
+    if (!fills.includes(fill)) continue;
+
+    const { points } = outline(path);
+    const [start, end] = points;
+    if (start === undefined || end === undefined) continue;
+
+    const angle = ([x, y]: [number, number]) =>
+      (Math.atan2(y - centreY, x - centreX) * 180) / Math.PI;
+    const sweep = (((angle(end) - angle(start)) % 360) + 360) % 360;
+
+    sectors.push({
+      fill,
+      sweepDeg: sweep,
+      touchesCentre: points.some(
+        ([x, y]) => Math.abs(x - centreX) < 1 && Math.abs(y - centreY) < 1,
+      ),
+    });
+  }
+
+  return sectors;
 }
 
 export interface Point {

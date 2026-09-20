@@ -365,6 +365,12 @@ test('the underlying rows work on a cube that publishes no primary key', async (
   await page.getByTestId('add-measures').selectOption('customers.count');
   await page.getByTestId('add-dimensions').selectOption('customers.country');
 
+  // Wait for the query to settle before opening the drawer, as the sibling
+  // test above does. Without it the click can interleave with the re-render
+  // the second field triggers, and the drawer never opens — which shows up as
+  // a timeout on the tab, under load only.
+  await expect(page.getByTestId('result-row-count')).toBeVisible();
+
   await page.getByRole('button', { name: 'Results', exact: true }).click();
   await page.getByTestId('drawer-tab-underlying').click();
 
