@@ -151,6 +151,17 @@ Family: **Inter**, falling back to `system-ui, -apple-system, "Segoe UI", sans-s
 
 **UI roles.** Contrast ratios below are WCAG ratios computed on 2026-09-19.
 
+**Re-derived 2026-09-19 at T002.** The ratios first published here were computed against `bg-surface` (white / `#1c1c1b`) alone. Text also sits on `bg-page`, `bg-raised` and `bg-subtle`, and five tokens fell below 4.5:1 on the darker of those: light `text-muted` (4.06 on `#f0efec`) and `role-measure` (4.17), and dark `text-muted` (4.28 on `#2a2a28`), `status-success` (4.29) and `status-error` (4.45). Those five are corrected below; every other published value held its threshold.
+
+**Every ratio in this table is now the worst case across all four surfaces**, recomputed — so the unchanged tokens read lower than before too (light `text-primary` 16.5 → 14.35, `accent` 5.7 → 4.97, and so on). `packages/ui/src/tokens.test.ts` fails if any text token drops below its threshold on any surface, in either theme (AC-005).
+
+Two further changes made at the same time, neither of them a contrast failure:
+
+- **`text-on-accent` is new.** Text on a filled `accent` control was never specified. White works in light (5.71:1) but is **2.41:1 on dark `accent`** — an AA failure waiting to be written; dark uses `#1f1f1e` (6.84:1). The same gap exists for `crossfilter` and `mk1`–`mk4` chips and is picked up at T105/T125.
+- **Dark `status-error` now names its icon colour explicitly** (`#e66767`, unchanged from the single value published before). Only the *text* moved to `#eb7070`. Icons are non-text and answer to WCAG 1.4.11's 3:1, which `#e66767` meets at 4.45:1 on `bg-subtle`.
+
+**On headroom.** The corrected values clear 4.5:1 by 0.06–0.35 rather than landing exactly on it, so a rounding difference between our audit and axe-core cannot flip a token. That margin is a deliberate choice, not a computation artefact; the values were picked as the smallest shift from the published colour that reaches it.
+
 | Role                          | Light                                     | Dark                    | Notes                                                                                                             |
 | ----------------------------- | ----------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `bg-page` (canvas wallpaper)  | `#f4f4f2`                                 | `#121211`               |                                                                                                                   |
@@ -159,15 +170,21 @@ Family: **Inter**, falling back to `system-ui, -apple-system, "Segoe UI", sans-s
 | `bg-subtle` (hover, wells)    | `#f0efec`                                 | `#2a2a28`               |                                                                                                                   |
 | `border-subtle`               | `#e3e2de`                                 | `rgba(255,255,255,.10)` |                                                                                                                   |
 | `border-strong`               | `#c9c7c1`                                 | `rgba(255,255,255,.20)` |                                                                                                                   |
-| `text-primary`                | `#1f1f1e` (16.5:1)                        | `#f2f2f0` (15.2:1)      |                                                                                                                   |
-| `text-secondary`              | `#5c5b57` (6.8:1)                         | `#b4b3ab` (8.1:1)       |                                                                                                                   |
-| `text-muted`                  | `#76746f` (4.7:1)                         | `#8e8c86` (5.1:1)       |                                                                                                                   |
-| `accent`                      | `#1f6f86` (5.7:1; white text on it 5.7:1) | `#4fb3d1` (7.1:1)       | Superset's teal lineage, darkened for AA                                                                          |
-| `crossfilter`                 | `#7a3fb0` (6.6:1)                         | `#b58be0`               | Cross-filter mode only. Kept distinct from `accent` and from standard filters (Looker).                           |
+| `text-primary`                | `#1f1f1e` (14.35:1)                       | `#f2f2f0` (12.83:1)     |                                                                                                                   |
+| `text-secondary`              | `#5c5b57` (5.91:1)                        | `#b4b3ab` (6.83:1)      |                                                                                                                   |
+| `text-muted`                  | `#6e6c67` (4.56:1)                        | `#97958e` (4.80:1)      | Both moved at T002 to hold on `bg-subtle`                                                                         |
+| `accent`                      | `#1f6f86` (4.97:1)                        | `#4fb3d1` (5.96:1)      | Superset's teal lineage, darkened for AA. Text **on** it is `text-on-accent`, below                               |
+| `text-on-accent`              | `#ffffff` (5.71:1 on `accent`)            | `#1f1f1e` (6.84:1)      | New at T002. White on dark `accent` would be 2.41:1, an AA failure                                                |
+| `crossfilter`                 | `#7a3fb0` (5.77:1)                        | `#b58be0` (5.30:1)      | Cross-filter mode only. Kept distinct from `accent` and from standard filters (Looker).                           |
 | `mk1` ("Marking", default)    | `#151107`                                 | `#f2f2f2`               | Marking colours sit outside the categorical lightness band: an "ink" in each theme, like Spotfire's dark outline. |
 | `mk2`                         | `#2d025e`                                 | `#b6bcd8`               |                                                                                                                   |
 | `mk3`                         | `#5b3106`                                 | `#fab72a`               |                                                                                                                   |
 | `mk4`                         | `#225c60`                                 | `#81fbbe`               |                                                                                                                   |
+| `role-dimension`              | `#2d6ab4` (4.77:1)                        | `#7fb0ea` (6.37:1)      | Always shown with a type icon: Aa, #, clock, ⊙ (geo), ◐ (boolean)                                                  |
+| `role-measure`                | `#a85400` (4.64:1)                        | `#f0a35c` (6.92:1)      | Always shown with the Σ icon (Looker's blue/orange convention). Light darkened at T002                            |
+| `status-success`              | `#1d7a3f` text (4.67:1), `#0ca30c` icon   | `#17aa17` text (4.66:1), `#0ca30c` icon | Always paired with an icon and a label. Dark text lightened at T002; the icon keeps its hue, since an icon is non-text |
+| `status-warning`              | `#8a5a00` text (5.15:1), `#fab219` icon   | `#fab219` text (7.84:1), `#fab219` icon | |
+| `status-error`                | `#c2362f` text (4.73:1), `#d03b3b` icon   | `#eb7070` text (4.85:1), `#e66767` icon | Dark text lightened at T002; the dark icon keeps the previously published `#e66767` (4.45:1, above 1.4.11's 3:1)   |
 
 **Marking colours.**
 
@@ -177,11 +194,6 @@ Family: **Inter**, falling back to `system-ui, -apple-system, "Segoe UI", sans-s
 - The earlier single `crossfilter`/marking token, `#7a3fb0`, failed against categorical violet `#4a3aa7` (ΔE 9.0), so it is no longer used for markings.
 - Four slots exist. How many markings analyses need at once is still open (`references-markings.md`, open question 7).
 - **Unmarked fade:** opacity 0.28. **Marked outline:** 1.5 px in the marking colour. Spotfire publishes neither value; both are derived here.
-  | `role-dimension` | `#2d6ab4` (5.5:1) | `#7fb0ea` | Always shown with a type icon: Aa, #, clock, ⊙ (geo), ◐ (boolean) |
-  | `role-measure` | `#b35a00` (4.8:1) | `#f0a35c` | Always shown with the Σ icon (Looker's blue/orange convention) |
-  | `status-success` | `#1d7a3f` text, `#0ca30c` icon | `#0ca30c` | Always paired with an icon and a label |
-  | `status-warning` | `#8a5a00` text, `#fab219` icon | `#fab219` | |
-  | `status-error` | `#c2362f` text, `#d03b3b` icon | `#e66767` | |
 
 **Data-viz palettes.** These are validated with `dataviz/scripts/validate_palette.js`.
 

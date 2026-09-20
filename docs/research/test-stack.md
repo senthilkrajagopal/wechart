@@ -114,3 +114,16 @@ Reject Jest+Cypress: Jest's ESM support is explicitly experimental against a Vit
 - Cypress's official current browser-support and WebKit-experimental-status page returned 404 at the URL tried; only `trade-offs` and `cross-browser-testing` pages were available, so Cypress's exact WebKit/Safari caveat text is unverified.
 - `@axe-core/playwright` and `cypress-axe` SPDX license identifiers were not directly returned by the registry fetch (Deque-authored, MIT-family assumed but not confirmed).
 - No official Playwright "performance testing" guide page was found (`test-timeouts` and `evaluating` pages don't cover it); the `CDPSession`/`Performance.getMetrics` approach is inferred from the general CDPSession API reference, not a dedicated performance-testing guide, and is Chromium-only.
+
+---
+
+## Addendum: the bold threshold for WCAG large text (added at T002, 2026-09-19)
+
+Not part of the original research; added because `packages/ui/src/audit/contrast.ts` needed a numeric weight for "bold" and CLAUDE.md requires a source for third-party behaviour.
+
+WCAG 2.2 defines "large scale" text as 18 pt, or **14 pt bold**, without defining a weight for "bold" ([Understanding 1.4.3](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)). Two facts settle it for us:
+
+- CSS maps the `bold` keyword to numeric weight **700** ([CSS Fonts 4, `font-weight`](https://www.w3.org/TR/css-fonts-4/#font-weight-prop)).
+- **axe-core 4.13.0 uses `boldValue: 700`**, and converts px to pt as `Math.ceil(fontSize * 72) / 96`, comparing against `largeTextPt: 18` and `boldTextPt: 14` — so 18.66 px is exactly 14 pt. Verified in the installed package at `node_modules/.pnpm/axe-core@4.13.0/node_modules/axe-core/axe.js` (`boldValue` at :33686 and :32618, applied at :27206; the pt conversion at :27207-27208).
+
+This matters because T008 runs axe against the rendered page while `contrast.ts` audits the tokens. Our type scale's heavy weight is **600**, so a threshold of 600 would grant `text-lg` (20 px / 600) the 3:1 allowance that axe then refuses. `contrast.ts` therefore uses 700 — the stricter of the two — and `text-lg` clears 4.5:1 on every surface regardless.
