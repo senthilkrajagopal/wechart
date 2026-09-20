@@ -170,6 +170,105 @@ describe('creating catalog objects (AC-020)', () => {
   });
 });
 
+describe('deleting a library chart (AC-023)', () => {
+  /**
+   * AC-023: WHEN the user deletes a library chart that dashboards use, THE
+   * SYSTEM SHALL name those dashboards and require confirmation before
+   * deleting.
+   * Fails when: the chart is deleted without naming the dashboards that use it.
+   */
+  function fixture(dashboards: { id: string; title: string }[]) {
+    const removed: string[] = [];
+    return {
+      removed,
+      documents: {
+        create: async (input: { id: string }) => ({ id: input.id }),
+        remove: async (_kind: string, id: string) => {
+          removed.push(id);
+          return true;
+        },
+      },
+      catalog: {
+        folders: async () => [],
+        contents: async () => [],
+        search: async () => [],
+        dashboardsUsing: async () => dashboards,
+      },
+    };
+  }
+
+  it('refuses an unconfirmed delete and names the dashboards', async () => {
+    const f = fixture([
+      { id: 'd1', title: 'Weekly revenue' },
+      { id: 'd2', title: 'Board pack' },
+    ]);
+    const app = buildServer({ config, ...f, cube: stubCube(() => ({})) });
+
+    const response = await app.inject({ method: 'DELETE', url: '/api/documents/chart/c1' });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().dashboards.map((d: { title: string }) => d.title)).toEqual([
+      'Weekly revenue',
+      'Board pack',
+    ]);
+    // Nothing was deleted.
+    expect(f.removed).toEqual([]);
+    await app.close();
+  });
+
+  it('deletes once confirmed', async () => {
+    const f = fixture([{ id: 'd1', title: 'Weekly revenue' }]);
+    const app = buildServer({ config, ...f, cube: stubCube(() => ({})) });
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/documents/chart/c1?confirm=true',
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(f.removed).toEqual(['c1']);
+    await app.close();
+  });
+
+  it('deletes an unused chart without demanding confirmation', async () => {
+    const f = fixture([]);
+    const app = buildServer({ config, ...f, cube: stubCube(() => ({})) });
+
+    const response = await app.inject({ method: 'DELETE', url: '/api/documents/chart/c1' });
+
+    expect(response.statusCode).toBe(204);
+    expect(f.removed).toEqual(['c1']);
+    await app.close();
+  });
+
+  it('enforces the check on the server, not only in the dialog', async () => {
+    // The same unconfirmed request a script would send.
+    const f = fixture([{ id: 'd1', title: 'Weekly revenue' }]);
+    const app = buildServer({ config, ...f, cube: stubCube(() => ({})) });
+
+    await app.inject({ method: 'DELETE', url: '/api/documents/chart/c1' });
+
+    expect(f.removed).toEqual([]);
+    await app.close();
+  });
+
+  it('reports 404 for a chart that is not there', async () => {
+    const app = buildServer({
+      config,
+      cube: stubCube(() => ({})),
+      documents: {
+        create: async (input: { id: string }) => ({ id: input.id }),
+        remove: async () => false,
+      },
+    });
+
+    const response = await app.inject({ method: 'DELETE', url: '/api/documents/chart/gone' });
+
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
 describe('recording every query (AC-016)', () => {
   function recordingLog() {
     const entries: { durationMs: number; accelerated: boolean; error?: string | null }[] = [];

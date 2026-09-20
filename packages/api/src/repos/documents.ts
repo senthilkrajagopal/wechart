@@ -111,6 +111,17 @@ export function documents(db: Kysely<Database>) {
       throw new StaleDocumentError(kind, id, expectedVersion, current.version);
     },
 
+    /** Remove an object. Returns false when there was nothing to remove. */
+    async remove(kind: DocumentKind, id: string): Promise<boolean> {
+      const result = await db
+        .deleteFrom('documents')
+        .where('kind', '=', kind)
+        .where('id', '=', id)
+        .executeTakeFirst();
+
+      return (result.numDeletedRows ?? 0n) > 0n;
+    },
+
     /**
      * Add a library chart to a dashboard (AC-022). Idempotent: adding a chart
      * a dashboard already uses changes nothing, so a double click does not

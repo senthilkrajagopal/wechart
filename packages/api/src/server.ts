@@ -36,6 +36,7 @@ export interface DocumentWriter {
     folderId?: string;
   }): Promise<unknown>;
   attachChart?(dashboardId: string, chartId: string): Promise<unknown>;
+  remove?(kind: 'folder' | 'dashboard' | 'chart', id: string): Promise<boolean>;
 }
 
 /** The slice of the catalog repository the server exposes. */
@@ -206,6 +207,40 @@ export function buildServer({
   app.get('/api/charts/:chartId/dashboards', async (request) => {
     const { chartId } = request.params as { chartId: string };
     return cat?.dashboardsUsing ? cat.dashboardsUsing(chartId) : [];
+  });
+
+  /**
+   * AC-023: deleting a library chart that dashboards use names them and
+   * requires confirmation.
+   *
+   * The check is on the server, not only in the dialog: a delete that arrives
+   * without confirmation is refused with the list of dashboards, so the naming
+   * cannot be skipped by calling the API directly. `409` rather than `400` —
+   * nothing about the request is malformed, it conflicts with the current
+   * state.
+   */
+  app.delete('/api/documents/:kind/:id', async (request, reply) => {
+    const { kind, id } = request.params as { kind: string; id: string };
+    const { confirm } = request.query as { confirm?: string };
+
+    if (kind !== 'folder' && kind !== 'dashboard' && kind !== 'chart') {
+      throw new BadRequest('kind must be one of folder, dashboard or chart');
+    }
+    if (!docs?.remove) throw new BadRequest('Persistence is not configured');
+
+    if (kind === 'chart' && confirm !== 'true' && cat?.dashboardsUsing) {
+      const dashboards = await cat.dashboardsUsing(id);
+      if (dashboards.length > 0) {
+        return reply.status(409).send({
+          error: 'This chart is used by dashboards. Confirm to delete it.',
+          requiresConfirmation: true,
+          dashboards,
+        });
+      }
+    }
+
+    const removed = await docs.remove(kind, id);
+    return reply.status(removed ? 204 : 404).send();
   });
 
   /** Add a library chart to another dashboard (AC-022). */

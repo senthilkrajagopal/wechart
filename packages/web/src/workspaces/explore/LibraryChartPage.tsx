@@ -56,6 +56,34 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
 
   const dashboards = (candidates.data ?? []).filter((item) => item.kind === 'dashboard');
 
+  /**
+   * AC-023: a delete that would affect dashboards is refused by the service
+   * until confirmed, and the refusal carries their names. The dialog shows
+   * what the server said rather than a list the browser assembled, so what the
+   * user confirms is what the server checked.
+   */
+  const [blockedBy, setBlockedBy] = useState<UsingDashboard[] | null>(null);
+
+  const remove = useMutation({
+    mutationFn: async (confirmed: boolean) => {
+      const response = await fetch(
+        `/api/documents/chart/${encodeURIComponent(chartId)}${confirmed ? '?confirm=true' : ''}`,
+        { method: 'DELETE' },
+      );
+
+      if (response.status === 409) {
+        const conflict = (await response.json()) as { dashboards: UsingDashboard[] };
+        setBlockedBy(conflict.dashboards);
+        return 'blocked' as const;
+      }
+      if (!response.ok) throw new Error(`Could not delete: ${String(response.status)}`);
+      return 'deleted' as const;
+    },
+    onSuccess: (outcome) => {
+      if (outcome === 'deleted') globalThis.location.assign('/explore');
+    },
+  });
+
   return (
     <section className="chart-page">
       <h1>Chart</h1>
@@ -103,6 +131,36 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
       {addToDashboard.isError ? (
         <p role="alert">{(addToDashboard.error as Error).message}</p>
       ) : null}
+
+      <h2>Delete</h2>
+      <button type="button" onClick={() => remove.mutate(false)} disabled={remove.isPending}>
+        Delete chart
+      </button>
+
+      {blockedBy ? (
+        <div role="alertdialog" aria-labelledby="delete-heading" className="confirm">
+          <h3 id="delete-heading">Delete this chart?</h3>
+          <p>
+            {blockedBy.length === 1
+              ? 'One dashboard uses this chart:'
+              : `${String(blockedBy.length)} dashboards use this chart:`}
+          </p>
+          <ul aria-label="Dashboards that use this chart">
+            {blockedBy.map((dashboard) => (
+              <li key={dashboard.id}>{dashboard.title}</li>
+            ))}
+          </ul>
+          <p>Deleting it will leave them without this chart.</p>
+          <button type="button" onClick={() => remove.mutate(true)}>
+            Delete anyway
+          </button>
+          <button type="button" onClick={() => setBlockedBy(null)}>
+            Keep the chart
+          </button>
+        </div>
+      ) : null}
+
+      {remove.isError ? <p role="alert">{(remove.error as Error).message}</p> : null}
     </section>
   );
 }

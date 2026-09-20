@@ -91,7 +91,7 @@ Traces to: `[docs/inputs §8]`, direction.md §2.
       Fails when: a dashboard that used the object shows a missing-chart state after the move.
 - [x] AC-022 WHEN the user opens a library chart's page, THE SYSTEM SHALL list every dashboard that uses it and offer to add it to another dashboard.
       Fails when: a dashboard that contains the chart is missing from the list.
-- [ ] AC-023 WHEN the user deletes a library chart that dashboards use, THE SYSTEM SHALL name those dashboards and require confirmation before deleting.
+- [x] AC-023 WHEN the user deletes a library chart that dashboards use, THE SYSTEM SHALL name those dashboards and require confirmation before deleting.
       Fails when: the chart is deleted without naming the dashboards that use it.
 - [ ] AC-024 WHEN the user navigates the Explore contents with the keyboard, THE SYSTEM SHALL move the selection with the arrow keys and open the selected item with Enter.
       Fails when: arrow keys do not move the selection, or Enter does not open the selected item.

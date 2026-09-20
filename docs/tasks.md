@@ -174,10 +174,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Done 2026-09-19. AC-022 ticked. **"Every" is the word under test**, so the fixture has three dashboards using the chart and one that does not — a page that listed only the first would satisfy a laxer assertion, and so would one that listed every dashboard regardless.
   - Adding a chart twice leaves one reference, not two: a double click must not produce two copies of the same tile reference.
   - The reverse lookup is a jsonb containment query on `body -> 'charts'`, which is the same index-friendly shape AC-023 (delete confirmation) and AC-128 (shared-chart warning) both need.
-- [ ] T021 (AC-023) Name the dependent dashboards and require confirmation before deleting a library chart
-  - Files: `packages/web/src/workspaces/explore/DeleteChartDialog.tsx`, `packages/api/src/routes/charts.ts`, `packages/web/src/workspaces/explore/DeleteChartDialog.test.tsx`
-  - Failing test: `DeleteChartDialog.test.tsx`: deletion is blocked until confirmation, and the dialog names each dashboard that uses the chart (AC-023).
+- [x] T021 (AC-023) Name the dependent dashboards and require confirmation before deleting a library chart
+  - Files: `packages/api/src/repos/documents.ts`, `packages/api/src/server.ts`, `packages/api/src/server.test.ts`, `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, `e2e/chart-delete.spec.ts`
+  - Failing test: `server.test.ts` and `e2e/chart-delete.spec.ts`: deletion is blocked until confirmation, and the dialog names each dashboard that uses the chart (AC-023).
   - Depends on: T020
+  - Done 2026-09-19. AC-023 ticked. **The check is on the server, not only in the dialog.** An unconfirmed delete is refused with the list of dashboards, so the naming cannot be skipped by calling the API directly — there is a test that sends exactly the request a script would. A guard that lives only in the UI is decoration.
+  - The dialog lists what the **server** returned rather than a list the browser assembled, so what the user confirms is what the server checked.
+  - Dashboards are **named, not counted**: "2 dashboards use this chart" tells the user nothing about whether they care. `409` rather than `400` — nothing about the request is malformed, it conflicts with the current state.
 - [ ] T022 (AC-024) Navigate the Explore contents with the arrow keys and open with Enter
   - Files: `packages/web/src/workspaces/explore/FolderContents.tsx`, `packages/web/src/workspaces/explore/keyboard.test.tsx`
   - Failing test: `keyboard.test.tsx`: arrow keys move the selection through the listed items and Enter opens the selected one (AC-024).
