@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+pnpm-lock.yaml
+test-results
+playwright-report
+.claude
+
+# docs/ is source material, not code. Research docs are saved verbatim from the
+# researchers that produced them, and the hooks parse exact shapes out of
+# spec.md, tasks.md and research frontmatter. Reformatting them is not safe.
+docs
