@@ -1,7 +1,9 @@
 import { useRef, useState, type ReactNode } from 'react';
 
 import { COLUMNS, GUTTER_PX, ROW_UNIT_PX, heightOf, type GridTile } from './geometry';
+import { DRAG_INSTRUCTIONS_ID } from './drag';
 import {
+  MIN_ROWS,
   readoutFor,
   resizeTo,
   type ResizeDirection,
@@ -24,6 +26,28 @@ export interface CanvasProps {
   readonly tiles: readonly GridTile[];
   readonly editing: boolean;
   /**
+   * What the document calls this container — `page:<id>`, `sec:<id>` or
+   * `tabs:<group>:<tab>`. A drag reads it off the DOM to say where a tile
+   * would land (AC-056).
+   */
+  readonly containerKey?: string | undefined;
+  /** Dragging a tile by its grip. Without it, tiles have no grip. */
+  readonly drag?:
+    | {
+        readonly onGripPointerDown: (event: React.PointerEvent, tileId: string) => void;
+        readonly draggingId: string | null;
+        /**
+         * Which items may be picked up. AC-056 is about dragging a *tile*;
+         * a section or a tab group is a container, and giving one a grip
+         * created a gesture no criterion describes — one that could drop a
+         * container inside itself.
+         */
+        readonly canDrag?: ((id: string) => boolean) | undefined;
+        /** A readable name for a tile, for the grip's accessible name. */
+        readonly nameOf?: ((id: string) => string) | undefined;
+      }
+    | undefined;
+  /**
    * Called once, when a resize drag ends (AC-055). Without it the tiles have
    * no handles: a canvas in view mode, or one whose owner cannot accept a
    * change, must not offer a gesture that goes nowhere.
@@ -40,8 +64,12 @@ const clamp = (value: number, low: number, high: number) => Math.min(high, Math.
  * resize that rounded the wrong way, and the criterion is about where the tile
  * ends up — so the grid is the last word, not the document.
  */
-function onGrid(tile: GridTile): { columns: number; height: number } {
+function onGrid(tile: GridTile): { columns: number; height: number | null } {
   const columns = clamp(Math.round(tile.w) || 1, 1, COLUMNS);
+  // No height of its own means as tall as its contents: a section or a tab
+  // group. Forcing a row count on those would cut off whatever they hold.
+  if (tile.h === undefined) return { columns, height: null };
+
   const rows = Math.max(1, Math.round(tile.h) || 1);
   return { columns, height: heightOf(rows) };
 }
@@ -72,7 +100,7 @@ interface Dragging {
  */
 const HANDLES: readonly ResizeDirection[] = ['e', 's', 'se'];
 
-export function Canvas({ tiles, editing, onResize, children }: CanvasProps) {
+export function Canvas({ tiles, editing, containerKey, drag, onResize, children }: CanvasProps) {
   const canvas = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<Dragging | null>(null);
 
@@ -98,10 +126,12 @@ export function Canvas({ tiles, editing, onResize, children }: CanvasProps) {
         pointerX: event.clientX,
         pointerY: event.clientY,
         w: tile.w,
-        h: tile.h,
+        // Only an item with a height of its own gets resize handles, so this
+        // is never the content-sized case.
+        h: tile.h ?? MIN_ROWS,
         canvasWidth: width,
       },
-      size: { w: tile.w, h: tile.h },
+      size: { w: tile.w, h: tile.h ?? MIN_ROWS },
       pointer: { x: event.clientX, y: event.clientY },
     });
   };
@@ -141,6 +171,8 @@ export function Canvas({ tiles, editing, onResize, children }: CanvasProps) {
       ref={canvas}
       data-testid="grid-canvas"
       className="grid-canvas"
+      /** What the document calls this container, so a drop can name it. */
+      data-container={containerKey}
       data-gridlines={editing ? 'true' : undefined}
       data-resizing={dragging === null ? undefined : 'true'}
       style={{
@@ -162,13 +194,42 @@ export function Canvas({ tiles, editing, onResize, children }: CanvasProps) {
         return (
           <div
             key={tile.id}
-            data-testid="grid-tile"
+            data-testid="grid-item"
             data-tile={tile.id}
             className="grid-tile"
-            style={{ gridColumn: `span ${String(columns)}`, height: `${String(height)}px` }}
+            data-dragging={drag?.draggingId === tile.id ? 'true' : undefined}
+            style={{
+              gridColumn: `span ${String(columns)}`,
+              ...(height === null ? {} : { height: `${String(height)}px` }),
+            }}
           >
+            {drag === undefined || drag.canDrag?.(tile.id) === false ? null : (
+              <button
+                type="button"
+                className="grid-tile__grip"
+                data-testid={`grip-${tile.id}`}
+                /**
+                 * A real button with a name, not a bare handle: it is what a
+                 * screen reader announces as the thing that moves this tile,
+                 * and where T063's keyboard move will hang. Pressing it does
+                 * nothing on its own — the ⋯ menu is the non-drag route.
+                 *
+                 * The role description and the instructions are the baseline
+                 * `docs/research/dashboard-grid.md` makes a condition of
+                 * building this drag ourselves instead of taking dnd-kit.
+                 */
+                aria-label={`Move ${drag.nameOf?.(tile.id) ?? tile.id}`}
+                aria-roledescription="draggable tile"
+                aria-describedby={DRAG_INSTRUCTIONS_ID}
+                onPointerDown={(event) => {
+                  drag.onGripPointerDown(event, tile.id);
+                }}
+              >
+                <span aria-hidden="true">⠿</span>
+              </button>
+            )}
             {children(tile)}
-            {resizable
+            {resizable && tile.h !== undefined
               ? HANDLES.map((direction) => (
                   <div
                     key={direction}

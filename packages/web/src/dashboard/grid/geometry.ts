@@ -27,8 +27,12 @@ export interface GridTile {
   readonly id: string;
   /** Width in columns. */
   readonly w: number;
-  /** Height in 8-pixel row units. */
-  readonly h: number;
+  /**
+   * Height in 8-pixel row units, or absent for an item that is as tall as
+   * what it holds — a section or a tab group, which are sized by their
+   * contents rather than dragged to a height of their own.
+   */
+  readonly h?: number | undefined;
 }
 
 /**

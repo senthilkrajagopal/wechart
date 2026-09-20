@@ -35,7 +35,9 @@ test('opens in view mode with its saved pages, tiles and settings', async ({ pag
   await expect(pages.getByRole('tab')).toHaveText(['Overview', 'Appendix']);
 
   // Every saved tile on the open page, the one inside the section included.
-  await expect(page.getByTestId('grid-tile')).toHaveCount(3);
+  // The section is a grid item too, taking a position on the page's grid the
+  // way a tile does, so it is counted here.
+  await expect(page.getByTestId('grid-item')).toHaveCount(4);
   await expect(page.getByText('Orders by status, this quarter.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Detail' })).toBeVisible();
 
@@ -51,7 +53,9 @@ test('opens the other saved page tab', async ({ page }) => {
   await page.getByRole('tablist', { name: 'Pages' }).getByRole('tab', { name: 'Appendix' }).click();
 
   await expect(page.getByRole('heading', { name: 'Definitions' })).toBeVisible();
-  await expect(page.getByTestId('grid-tile')).toHaveCount(1);
+  // The heading, the section holding the tab group, the group itself, and the
+  // one tile in its open tab.
+  await expect(page.getByTestId('grid-item')).toHaveCount(4);
 });
 
 test('activating Edit reveals the edit bar and the sidebar', async ({ page }) => {
@@ -106,7 +110,7 @@ test('dragging a tile edge resizes it and shows the live readout', async ({ page
   await open(page);
   await page.getByRole('button', { name: 'Edit' }).click();
 
-  const tile = page.getByTestId('grid-tile').first();
+  const tile = page.locator('[data-tile="tile-status"]');
   const before = (await tile.boundingBox())?.width ?? 0;
   expect(before).toBeGreaterThan(0);
 
@@ -154,15 +158,111 @@ test('dragging a tile edge resizes it and shows the live readout', async ({ page
   expect(during).toContain(`${span.replace('span ', '')} / 12 cols`);
 });
 
+test('dragging a tile by its grip shows a drop marker and moves it', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  const page1 = page.locator('[data-container="page:overview"]');
+  const idsOnPage = () =>
+    page1.evaluate((node) =>
+      [...node.children]
+        .filter((child) => child.hasAttribute('data-tile'))
+        .map((child) => child.getAttribute('data-tile')),
+    );
+
+  expect(await idsOnPage()).toEqual(['tile-status', 'tile-notes', 'section-detail']);
+
+  const grip = page.getByTestId('grip-tile-status');
+  const from = await grip.boundingBox();
+  const onto = await page.locator('[data-tile="tile-notes"]').boundingBox();
+
+  await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2);
+  await page.mouse.down();
+  // Past the far half of the neighbouring tile, so the insertion point is
+  // after it rather than before.
+  await page.mouse.move(onto!.x + onto!.width * 0.8, onto!.y + onto!.height / 2, { steps: 10 });
+
+  // "Fails when: no drop marker appears" — so it has to be on screen, and
+  // somewhere, not a zero-sized element that technically exists.
+  const marker = page.getByTestId('drop-marker');
+  await expect(marker).toBeVisible();
+  const markerBox = await marker.boundingBox();
+  expect(markerBox!.height).toBeGreaterThan(0);
+
+  await page.mouse.up();
+  await expect(marker).toBeHidden();
+
+  expect(await idsOnPage()).toEqual(['tile-notes', 'tile-status', 'section-detail']);
+});
+
+test('dropping a tile on a page tab moves it to that page', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  const grip = page.getByTestId('grip-tile-notes');
+  const from = await grip.boundingBox();
+  const tab = page.getByRole('tablist', { name: 'Pages' }).getByRole('tab', { name: 'Appendix' });
+  const onto = await tab.boundingBox();
+
+  await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(onto!.x + onto!.width / 2, onto!.y + onto!.height / 2, { steps: 10 });
+
+  await expect(page.getByTestId('drop-marker')).toBeVisible();
+  await page.mouse.up();
+
+  // The criterion's own failing state: "a drop on a tab label leaves the tile
+  // in its original container".
+  await expect(page.locator('[data-tile="tile-notes"]')).toHaveCount(0);
+
+  await tab.click();
+  await expect(page.locator('[data-tile="tile-notes"]')).toHaveCount(1);
+});
+
+test('dropping a tile on a tab-group label moves it into that tab', async ({ page }) => {
+  // The criterion names two kinds of label — a page tab and a tab-group label
+  // — and they are different code paths reaching different containers. The
+  // page tab is covered above; this is the other one.
+  await open(page);
+  await page.getByRole('tablist', { name: 'Pages' }).getByRole('tab', { name: 'Appendix' }).click();
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  const group = page.getByRole('tablist', { name: /Tabs in/ });
+  const dimensions = group.getByRole('tab', { name: 'Dimensions' });
+  await expect(dimensions).toBeVisible();
+
+  const grip = page.getByTestId('grip-tile-heading');
+  const from = await grip.boundingBox();
+  const onto = await dimensions.boundingBox();
+
+  await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(onto!.x + onto!.width / 2, onto!.y + onto!.height / 2, { steps: 10 });
+
+  await expect(page.getByTestId('drop-marker')).toBeVisible();
+  await page.mouse.up();
+
+  // The tile has left the page's own items...
+  await expect(page.locator('[data-tile="tile-heading"]')).toHaveCount(0);
+
+  // ...and is in the Dimensions tab, which was empty before.
+  await dimensions.click();
+  await expect(page.locator('[data-tile="tile-heading"]')).toHaveCount(1);
+});
+
 test('a member keeps one colour across two tiles', async ({ page }) => {
   await open(page);
 
   // Both seeded charts split by orders.status, so the same members are drawn
   // in both tiles. Colour by rank would give them different colours, because
   // the two charts return their statuses in a different order.
-  const tiles = page.getByTestId('grid-tile');
-  await expect(tiles.nth(0).locator('svg')).toBeVisible();
-  await expect(tiles.nth(2).locator('svg')).toBeVisible();
+  // Named rather than counted: the two charts sit at different depths — one
+  // on the page, one inside a section — so a positional index says nothing
+  // about which chart is which.
+  const byStatus = page.locator('[data-tile="tile-status"]');
+  const byCountry = page.locator('[data-tile="tile-region"]');
+  await expect(byStatus.locator('svg')).toBeVisible();
+  await expect(byCountry.locator('svg')).toBeVisible();
 
   /**
    * Which colour each member was drawn in, read off the legend, so the
@@ -175,8 +275,8 @@ test('a member keeps one colour across two tiles', async ({ page }) => {
    * A legend marker is the nearest filled shape immediately left of its label
    * on the same line.
    */
-  const legendOf = (index: number) =>
-    tiles.nth(index).evaluate((tile) => {
+  const legendOf = (tileLocator: typeof byStatus) =>
+    tileLocator.evaluate((tile) => {
       const marks = [...tile.querySelectorAll('svg path[fill]')]
         .filter((path) => {
           const fill = path.getAttribute('fill');
@@ -214,13 +314,13 @@ test('a member keeps one colour across two tiles', async ({ page }) => {
 
   // The legend is drawn after the SVG appears, so wait for it rather than
   // reading an empty one and concluding the two tiles agree about nothing.
-  for (const index of [0, 2]) {
+  for (const tileLocator of [byStatus, byCountry]) {
     await expect
-      .poll(async () => Object.keys(await legendOf(index)).length, { timeout: 10_000 })
+      .poll(async () => Object.keys(await legendOf(tileLocator)).length, { timeout: 10_000 })
       .toBeGreaterThan(1);
   }
 
-  const [first, third] = [await legendOf(0), await legendOf(2)];
+  const [first, third] = [await legendOf(byStatus), await legendOf(byCountry)];
   const shared = Object.keys(first).filter((member) => member in third);
 
   // Both charts split by orders.status, so they share members to disagree

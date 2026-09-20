@@ -183,7 +183,7 @@ Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
       Fails when: a tile's width is not a whole number of columns, or its height is not a multiple of 8 pixels.
 - [x] AC-055 WHEN the user drags a tile's edge or corner, THE SYSTEM SHALL resize it and show a live readout of columns, percentage and pixels, and THE SYSTEM SHALL offer no numeric width or height field anywhere in the editor (direction.md rule 36).
       Fails when: resizing shows no readout, or a width or height input exists in the editor.
-- [ ] AC-056 WHEN the user drags a tile by its grip, THE SYSTEM SHALL show a drop marker and move the tile to the marked position, including onto a page tab or a tab-group label, which moves it into that tab.
+- [x] AC-056 WHEN the user drags a tile by its grip, THE SYSTEM SHALL show a drop marker and move the tile to the marked position, including onto a page tab or a tab-group label, which moves it into that tab.
       Fails when: no drop marker appears, or a drop on a tab label leaves the tile in its original container.
 - [ ] AC-057 WHEN a tile has keyboard focus in edit mode, THE SYSTEM SHALL move it with the arrow keys, resize it with Shift and the arrow keys, open its chart editor with E, and delete it with Delete (direction.md rule 39).
       Fails when: any of those keys has no effect on the focused tile.

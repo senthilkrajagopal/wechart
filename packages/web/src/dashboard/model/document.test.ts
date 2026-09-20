@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { resizeTile, type DashboardDocument } from './document';
+import {
+  containersOf,
+  moveTile,
+  pageKey,
+  resizeTile,
+  sectionKey,
+  tabKey,
+  type DashboardDocument,
+  type Element_,
+} from './document';
 
 /**
  * T061 / AC-055, the document half: a resize has to *change the dashboard*,
@@ -119,5 +128,118 @@ describe('resizing a tile in the document', () => {
     // Not merely equal: an edit that matched nothing must not register as a
     // change at all, or Undo would offer to undo it.
     expect(after).toBe(DOC);
+  });
+});
+
+/**
+ * T062 / AC-056, the document half. `dropTarget.ts` decides where a drop would
+ * land and the canvas paints it; this is what the drop leaves behind.
+ */
+describe('moving a tile to another container', () => {
+  const idsIn = (document: DashboardDocument, key: string): string[] => {
+    const found: string[] = [];
+    const collect = (items: readonly Element_[]) => {
+      for (const element of items) found.push(element.id);
+    };
+
+    for (const page of document.pages) {
+      if (key === pageKey(page.id)) collect(page.items);
+      const walk = (items: readonly Element_[]) => {
+        for (const element of items) {
+          if (element.kind === 'section') {
+            if (key === sectionKey(element.id)) collect(element.items);
+            walk(element.items);
+          } else if (element.kind === 'tabs') {
+            for (const tab of element.tabs) {
+              if (key === tabKey(element.id, tab.id)) collect(tab.items);
+              walk(tab.items);
+            }
+          }
+        }
+      };
+      walk(page.items);
+    }
+    return found;
+  };
+
+  it('puts the tile where the marker said, and takes it out of where it was', () => {
+    const after = moveTile(DOC, 'a', { key: sectionKey('s1'), index: 0 });
+
+    expect(idsIn(after, sectionKey('s1'))).toEqual(['a', 'b', 'tg']);
+    expect(idsIn(after, pageKey('p1'))).toEqual(['s1']);
+  });
+
+  it('appends when the target is a tab label, which has no position to aim at', () => {
+    const after = moveTile(DOC, 'a', { key: tabKey('tg', 't'), index: null });
+
+    // The criterion singles this out: a drop on a tab label must move the tile
+    // into that tab, not leave it where it was.
+    expect(idsIn(after, tabKey('tg', 't'))).toEqual(['c', 'a']);
+    expect(idsIn(after, pageKey('p1'))).toEqual(['s1']);
+  });
+
+  it('reorders within one container without losing or duplicating the tile', () => {
+    const two = moveTile(DOC, 'a', { key: sectionKey('s1'), index: 0 });
+    expect(idsIn(two, sectionKey('s1'))).toEqual(['a', 'b', 'tg']);
+
+    /**
+     * The index counts positions in the container **without** the tile being
+     * moved, which is what `dropTargetAt` produces: it skips the tile in hand
+     * when working out what the pointer is between. Both ends of the move have
+     * to agree on that or every same-container reorder is out by one — so the
+     * convention is pinned here from both sides.
+     */
+    expect(
+      idsIn(moveTile(two, 'a', { key: sectionKey('s1'), index: 1 }), sectionKey('s1')),
+    ).toEqual(['b', 'a', 'tg']);
+    expect(
+      idsIn(moveTile(two, 'a', { key: sectionKey('s1'), index: 2 }), sectionKey('s1')),
+    ).toEqual(['b', 'tg', 'a']);
+  });
+
+  it('clamps a position past the end rather than leaving a hole', () => {
+    const after = moveTile(DOC, 'a', { key: sectionKey('s1'), index: 99 });
+
+    expect(idsIn(after, sectionKey('s1'))).toEqual(['b', 'tg', 'a']);
+  });
+
+  it('changes nothing when the tile does not exist', () => {
+    expect(moveTile(DOC, 'nobody', { key: pageKey('p1'), index: 0 })).toBe(DOC);
+  });
+
+  it('refuses to move a container into itself, which would delete it', () => {
+    // The section is a grid item, so it can be picked up; its own body is a
+    // drop container. Moving it inside itself rebuilds the subtree and then
+    // discards the very branch that was rebuilt, so the section and
+    // everything in it disappear from the document. Silent loss from a
+    // plausible gesture, and Undo is the only way back.
+    const after = moveTile(DOC, 's1', { key: sectionKey('s1'), index: 0 });
+
+    expect(idsIn(after, pageKey('p1'))).toEqual(['a', 's1']);
+    expect(idsIn(after, sectionKey('s1'))).toEqual(['b', 'tg']);
+  });
+
+  it('refuses to move a container into something nested inside it', () => {
+    // The same loss, one level deeper: the tab group lives inside the section.
+    const after = moveTile(DOC, 's1', { key: tabKey('tg', 't'), index: 0 });
+
+    expect(idsIn(after, pageKey('p1'))).toEqual(['a', 's1']);
+    expect(idsIn(after, tabKey('tg', 't'))).toEqual(['c']);
+  });
+
+  it('lists every container a tile could be moved to, named for a menu', () => {
+    const containers = containersOf(DOC).map((container) => container.key);
+
+    // The ⋯ "Move to" menu is the single-pointer alternative WCAG SC 2.5.7
+    // requires, and `docs/research/dashboard-grid.md` makes it a condition of
+    // building the drag ourselves. It can only offer what this lists.
+    expect(containers).toEqual([pageKey('p1'), sectionKey('s1'), tabKey('tg', 't')]);
+    // Named by the path to them, so one "T" tab is distinguishable from
+    // another in a menu that lists every container on the dashboard.
+    expect(containersOf(DOC).map((container) => container.title)).toEqual([
+      'Overview',
+      'Overview › Detail',
+      'Overview › Detail › T',
+    ]);
   });
 });

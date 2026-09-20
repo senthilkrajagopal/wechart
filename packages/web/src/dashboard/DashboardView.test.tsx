@@ -151,10 +151,14 @@ describe('opening a saved dashboard (AC-018)', () => {
   it('shows every tile on the open page, including the ones inside a section', () => {
     view();
 
-    const tiles = screen.getAllByTestId('grid-tile').map((tile) => tile.dataset['tile']);
+    const items = screen.getAllByTestId('grid-item').map((item) => item.dataset['tile']);
     // A view that rendered only the page's top-level items would drop t3 and
     // still look right, which is why the fixture nests one.
-    expect(tiles).toEqual(['t1', 't2', 't3']);
+    //
+    // The section is itself a grid item: it takes a position on the page's
+    // grid exactly as a tile does, which is what lets a tile be dropped before
+    // or after it (AC-056).
+    expect(items).toEqual(['t1', 't2', 's1', 't3']);
   });
 
   it('renders each tile as the kind it was saved as', () => {
@@ -168,7 +172,7 @@ describe('opening a saved dashboard (AC-018)', () => {
     view();
     await userEvent.click(screen.getByRole('tab', { name: 'Appendix' }));
 
-    expect(screen.getAllByTestId('grid-tile').map((tile) => tile.dataset['tile'])).toEqual(['t4']);
+    expect(screen.getAllByTestId('grid-item').map((tile) => tile.dataset['tile'])).toEqual(['t4']);
   });
 
   it('applies the saved width setting', () => {
@@ -242,10 +246,20 @@ describe('opening a saved dashboard (AC-018)', () => {
         .getAllByRole('tab')
         .map((tab) => tab.textContent),
     ).toEqual(['A', 'B']);
-    expect(screen.getAllByTestId('grid-tile').map((tile) => tile.dataset['tile'])).toEqual(['ta']);
+    // The section and the tab group take positions on the grid too; only the
+    // open tab's own tiles are drawn beneath them.
+    expect(screen.getAllByTestId('grid-item').map((item) => item.dataset['tile'])).toEqual([
+      's2',
+      'tg1',
+      'ta',
+    ]);
 
     await userEvent.click(within(group).getByRole('tab', { name: 'B' }));
-    expect(screen.getAllByTestId('grid-tile').map((tile) => tile.dataset['tile'])).toEqual(['tb']);
+    expect(screen.getAllByTestId('grid-item').map((item) => item.dataset['tile'])).toEqual([
+      's2',
+      'tg1',
+      'tb',
+    ]);
   });
 
   it('keeps the page tabs distinct from a tab group inside the page', () => {
@@ -258,6 +272,97 @@ describe('opening a saved dashboard (AC-018)', () => {
         .getAllByRole('tab')
         .map((tab) => tab.textContent),
     ).toEqual(['Overview', 'Appendix']);
+  });
+});
+
+describe('moving a tile without dragging it (AC-056)', () => {
+  const edit = async (document: DashboardDocument = DOC) => {
+    render(<DashboardView document={document} specs={SPECS} onSave={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+  };
+
+  it('gives a grip the baseline a screen reader needs to use it', async () => {
+    await edit();
+    const grip = screen.getByTestId('grip-t2');
+
+    /**
+     * docs/research/dashboard-grid.md makes this a condition of writing the
+     * drag ourselves instead of taking dnd-kit: a role description on the
+     * grip, persistent instructions it points at, and a polite live region.
+     * Without them a drag is a silent change to the document.
+     */
+    expect(grip.getAttribute('aria-roledescription')).toBe('draggable tile');
+    const describedBy = grip.getAttribute('aria-describedby') ?? '';
+    expect(document.getElementById(describedBy)?.textContent).toContain('without dragging');
+
+    const region = screen.getByTestId('drag-announcement');
+    expect(region.getAttribute('aria-live')).toBe('polite');
+
+    // And it is named for what it is, not for its id.
+    expect(grip.getAttribute('aria-label')).toBe('Move markdown: Notes for the quarter');
+  });
+
+  it('gives no grip to a section, which is a container rather than a tile', async () => {
+    await edit();
+
+    // A grip on a container was a gesture no criterion describes, and it let
+    // a section be dropped inside itself.
+    expect(screen.queryByTestId('grip-s1')).toBeNull();
+    expect(screen.getByTestId('grip-t1').getAttribute('aria-roledescription')).toBe(
+      'draggable tile',
+    );
+  });
+
+  it('offers no tile menu in view mode', () => {
+    view();
+
+    expect(screen.queryByTestId('tile-menu-t1')).toBeNull();
+  });
+
+  it('offers a way to move a tile that does not require a drag', async () => {
+    await edit();
+    await userEvent.click(screen.getByTestId('tile-menu-t1'));
+
+    // WCAG SC 2.5.7 forbids a path that can only be travelled by dragging,
+    // and docs/research/dashboard-grid.md makes this menu a condition of
+    // building the drag ourselves instead of taking a library.
+    expect(screen.getByTestId('move-t1-to-sec:s1').textContent).toBe('Overview › Detail');
+  });
+
+  it('does not offer to move a tile where it already is', async () => {
+    await edit();
+    await userEvent.click(screen.getByTestId('tile-menu-t1'));
+
+    // t1 is on page p1, so that is not somewhere to move it to.
+    expect(screen.queryByTestId('move-t1-to-page:p1')).toBeNull();
+  });
+
+  it('closes on Escape and gives focus back, rather than trapping it', async () => {
+    await edit();
+    const trigger = screen.getByTestId('tile-menu-t1');
+    await userEvent.click(trigger);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+
+    await userEvent.keyboard('{Escape}');
+
+    // A menu that exists to satisfy an accessibility rule and then strands a
+    // keyboard user inside it would be its own failure.
+    expect(screen.queryByTestId('move-t1-to-sec:s1')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('moves the tile when a destination is chosen', async () => {
+    await edit();
+    await userEvent.click(screen.getByTestId('tile-menu-t1'));
+    await userEvent.click(screen.getByTestId('move-t1-to-sec:s1'));
+
+    // Out of the page's own items and into the section's, which is exactly
+    // what a drop on that container does.
+    const section = screen.getByTestId('dashboard-page').querySelector('[data-section="s1"]');
+    const inside = [...(section?.querySelectorAll('[data-tile]') ?? [])].map((node) =>
+      node.getAttribute('data-tile'),
+    );
+    expect(inside).toEqual(['t3', 't1']);
   });
 });
 

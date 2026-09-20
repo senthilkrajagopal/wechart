@@ -301,6 +301,93 @@ main { padding: 16px; }
 .grid-tile__handle--se { bottom: 0; right: 0; width: 14px; height: 14px; cursor: nwse-resize; }
 .grid-tile__handle--se::after { width: 8px; height: 8px; }
 
+/* The grip (AC-056). Top-left of the tile, revealed with the handles. */
+.grid-tile__grip {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--wc-text-secondary);
+  cursor: grab;
+  opacity: 0;
+  touch-action: none;
+}
+.grid-tile:hover .grid-tile__grip,
+.grid-tile__grip:focus-visible { opacity: 1; }
+@media (hover: none) {
+  .grid-tile__grip { opacity: 1; }
+}
+/* The tile in hand recedes, so the marker is what the eye follows. */
+.grid-tile[data-dragging='true'] { opacity: 0.4; }
+
+/* The tile's ⋯ menu (AC-056's non-drag path). The tile clips its contents, so
+   an open menu would be cut off by it — and on a short tile most of the
+   destination list would simply be invisible. An inner overflow of auto
+   cannot scroll what the parent has already clipped, so the tile stops
+   clipping while its menu is open. */
+.grid-tile:has(.tile-menu__list) { overflow: visible; }
+.tile-menu { position: absolute; top: 4px; right: 4px; z-index: 3; }
+.tile-menu > button {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--wc-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+}
+.grid-tile:hover .tile-menu > button,
+.tile-menu > button:focus-visible,
+.tile-menu > button[aria-expanded='true'] { opacity: 1; }
+@media (hover: none) {
+  .tile-menu > button { opacity: 1; }
+}
+.tile-menu__list {
+  position: absolute;
+  top: 24px;
+  right: 0;
+  z-index: 3;
+  min-width: 180px;
+  max-height: 200px;
+  margin: 0;
+  padding: 4px;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+.tile-menu__list button {
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  background: none;
+  color: var(--wc-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.tile-menu__list button:hover { background: var(--wc-bg-subtle); }
+.tile-menu__empty { padding: 4px 8px; color: var(--wc-text-secondary); }
+
+/* Where the tile would land. Fixed to the viewport because the rectangle is
+   measured from the viewport, and painted in the accent so it reads as the
+   answer to the question the drag is asking. */
+.drop-marker {
+  position: fixed;
+  z-index: 9;
+  background: var(--wc-accent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
 /* The live readout follows the pointer, so it is fixed to the viewport rather
    than to the canvas, which scrolls under it. */
 .resize-readout {

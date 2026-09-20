@@ -41,7 +41,7 @@ describe('every tile lands on the grid', () => {
   it('spans a whole number of columns, inside the twelve', () => {
     render_(true);
 
-    const tiles = screen.getAllByTestId('grid-tile');
+    const tiles = screen.getAllByTestId('grid-item');
     expect(tiles).toHaveLength(OFF_GRID.length);
 
     for (const tile of tiles) {
@@ -55,7 +55,7 @@ describe('every tile lands on the grid', () => {
   it('is a whole number of 8-pixel row units tall', () => {
     render_(true);
 
-    for (const tile of screen.getAllByTestId('grid-tile')) {
+    for (const tile of screen.getAllByTestId('grid-item')) {
       const height = heightOf(tile);
       expect(height % ROW_UNIT_PX).toBe(0);
       expect(height).toBeGreaterThan(0);
@@ -64,7 +64,7 @@ describe('every tile lands on the grid', () => {
 
   it('snaps rather than truncates, so a tile keeps the size it was dragged to', () => {
     render_(true);
-    const [a] = screen.getAllByTestId('grid-tile');
+    const [a] = screen.getAllByTestId('grid-item');
 
     // 4.7 columns is a tile being pulled towards 5, and 12.4 row units towards
     // 12 — which is 96px, not 99.2px and not 96.0000001.
@@ -74,7 +74,7 @@ describe('every tile lands on the grid', () => {
 
   it('holds a tile inside the grid however wide the document claims it is', () => {
     render_(true);
-    const tiles = screen.getAllByTestId('grid-tile');
+    const tiles = screen.getAllByTestId('grid-item');
 
     expect(spanOf(tiles[1] as HTMLElement)).toBe(1); // w: 0
     expect(spanOf(tiles[2] as HTMLElement)).toBe(COLUMNS); // w: 99
@@ -227,7 +227,7 @@ describe('the gridlines', () => {
   it('snaps the tiles in view mode too, because the grid is the layout either way', () => {
     render_(false);
 
-    for (const tile of screen.getAllByTestId('grid-tile')) {
+    for (const tile of screen.getAllByTestId('grid-item')) {
       expect(Number.isInteger(spanOf(tile))).toBe(true);
       expect(heightOf(tile) % ROW_UNIT_PX).toBe(0);
     }

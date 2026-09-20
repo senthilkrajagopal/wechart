@@ -120,7 +120,41 @@ export async function seedDevData(db: Kysely<Database>): Promise<void> {
                 {
                   id: 'appendix',
                   title: 'Appendix',
-                  items: [{ id: 'tile-heading', kind: 'header', w: 12, h: 8, text: 'Definitions' }],
+                  items: [
+                    { id: 'tile-heading', kind: 'header', w: 12, h: 8, text: 'Definitions' },
+                    // A tab group, so the case AC-056 singles out — a drop on
+                    // a *tab-group* label, as distinct from a page tab — has
+                    // somewhere real to be tried. Inside a section, because
+                    // direction.md rule 37 allows it nowhere else.
+                    {
+                      id: 'section-terms',
+                      kind: 'section',
+                      title: 'Terms',
+                      items: [
+                        {
+                          id: 'group-terms',
+                          kind: 'tabs',
+                          w: 12,
+                          tabs: [
+                            {
+                              id: 'measures',
+                              title: 'Measures',
+                              items: [
+                                {
+                                  id: 'tile-measures',
+                                  kind: 'markdown',
+                                  w: 6,
+                                  h: 16,
+                                  text: 'Count is the number of orders.',
+                                },
+                              ],
+                            },
+                            { id: 'dimensions', title: 'Dimensions', items: [] },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
                 },
               ],
             }

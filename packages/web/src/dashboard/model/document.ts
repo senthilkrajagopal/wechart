@@ -30,6 +30,11 @@ export type TileKind = (typeof TILE_KINDS)[number];
 
 export interface Tile extends GridTile {
   readonly kind: TileKind;
+  /**
+   * Required here though optional on the grid: a tile is dragged to a height
+   * of its own, where a section or a tab group is as tall as what it holds.
+   */
+  readonly h: number;
   /** For a chart tile: the chart document this tile shows. */
   readonly chartId?: string;
   /** For markdown, header and link tiles. */
@@ -184,6 +189,183 @@ export function resizeTile(
   });
 
   return touched ? { ...document, pages } : document;
+}
+
+/**
+ * Where a container lives, as a key a drop target can name: `page:<id>` for a
+ * page tab, `sec:<id>` for a section, `tabs:<group>:<tab>` for one tab of a
+ * tab group. The same vocabulary the prototype uses.
+ */
+export type ContainerKey = string;
+
+export const pageKey = (pageId: string): ContainerKey => `page:${pageId}`;
+export const sectionKey = (sectionId: string): ContainerKey => `sec:${sectionId}`;
+export const tabKey = (groupId: string, tabId: string): ContainerKey => `tabs:${groupId}:${tabId}`;
+
+/** Every container a tile could be moved into, with a name to show for it. */
+export function containersOf(document: DashboardDocument): { key: ContainerKey; title: string }[] {
+  const found: { key: ContainerKey; title: string }[] = [];
+
+  const walk = (items: readonly Element_[], within: string) => {
+    for (const element of items) {
+      if (isSection(element)) {
+        found.push({ key: sectionKey(element.id), title: `${within} › ${element.title}` });
+        walk(element.items, `${within} › ${element.title}`);
+      } else if (isTabGroup(element)) {
+        for (const tab of element.tabs) {
+          found.push({ key: tabKey(element.id, tab.id), title: `${within} › ${tab.title}` });
+          walk(tab.items, `${within} › ${tab.title}`);
+        }
+      }
+    }
+  };
+
+  for (const page of document.pages) {
+    found.push({ key: pageKey(page.id), title: page.title });
+    walk(page.items, page.title);
+  }
+  return found;
+}
+
+/**
+ * Move a tile into a container, at a position or at the end (AC-056).
+ *
+ * The index counts positions in the target container **without** this tile,
+ * which is exactly what `dropTargetAt` produces: it skips the tile in hand
+ * when working out what the pointer is between. Both ends have to agree on
+ * that convention or every same-container reorder is out by one — the classic
+ * off-by-one of every drag reorder — so the tile is taken out and put back in
+ * one pass rather than removed by one step and inserted by another.
+ */
+export function moveTile(
+  document: DashboardDocument,
+  tileId: string,
+  to: { readonly key: ContainerKey; readonly index: number | null },
+): DashboardDocument {
+  const moving = tileAt(document, tileId);
+  if (moving === null) return document;
+
+  /**
+   * Nothing may be moved inside itself.
+   *
+   * A section is a grid item, so it can be picked up, and its own body is a
+   * drop container — and the move is one pass that inserts where the key
+   * matches and removes where it does not. Dropping a section into itself
+   * therefore rebuilds the subtree and then discards the very branch that was
+   * rebuilt: the section and everything in it vanish from the document. Silent
+   * loss from a plausible gesture, with Undo the only way back.
+   */
+  if (containersWithin(moving).includes(to.key)) return document;
+
+  const withoutIt = (items: readonly Element_[]): readonly Element_[] => {
+    const kept = items.filter((element) => element.id !== tileId);
+    return kept.length === items.length ? items : kept;
+  };
+
+  const place = (items: readonly Element_[]): readonly Element_[] => {
+    const without = withoutIt(items);
+    // A drop on a tab label has no position to aim at, so the tile goes to the
+    // end — which is what direction.md says a label drop does.
+    const at = to.index === null ? without.length : Math.min(to.index, without.length);
+    return [...without.slice(0, at), moving, ...without.slice(at)];
+  };
+
+  return mapContainers(document, (key, items) =>
+    key === to.key ? place(items) : withoutIt(items),
+  );
+}
+
+/**
+ * Every container key at or inside this element — the places it must not be
+ * moved into, itself included.
+ */
+function containersWithin(element: Element_): ContainerKey[] {
+  if (isSection(element))
+    return [sectionKey(element.id), ...element.items.flatMap(containersWithin)];
+
+  if (isTabGroup(element))
+    return element.tabs.flatMap((tab) => [
+      tabKey(element.id, tab.id),
+      ...tab.items.flatMap(containersWithin),
+    ]);
+
+  return [];
+}
+
+/**
+ * A readable name for an element, for an accessible name or an announcement.
+ *
+ * A tile has no title of its own yet — direction.md gives one to a header and
+ * a markdown tile through their text, and a chart tile through the chart it
+ * shows. Until the Properties inspector can set one (AC-058 onwards), the
+ * kind plus a short piece of the text is the most honest thing to say, and it
+ * is still better to hear "markdown tile" than "t2".
+ */
+export function nameOfTile(document: DashboardDocument, id: string): string {
+  const found = tileAt(document, id);
+  if (found === null) return id;
+  if (isSection(found)) return found.title;
+  if (isTabGroup(found)) return 'tab group';
+
+  const text = found.text?.trim();
+  return text === undefined || text === ''
+    ? `${found.kind} tile`
+    : `${found.kind}: ${text.slice(0, 40)}`;
+}
+
+/** Whether this id belongs to a tile rather than to a section or tab group. */
+export function isTileId(document: DashboardDocument, id: string): boolean {
+  const found = tileAt(document, id);
+  return found !== null && isTile(found);
+}
+
+/** The element with this id, wherever it is. */
+function tileAt(document: DashboardDocument, tileId: string): Element_ | null {
+  let found: Element_ | null = null;
+  const walk = (items: readonly Element_[]) => {
+    for (const element of items) {
+      if (element.id === tileId) found = element;
+      else if (isSection(element)) walk(element.items);
+      else if (isTabGroup(element)) for (const tab of element.tabs) walk(tab.items);
+    }
+  };
+  for (const page of document.pages) walk(page.items);
+  return found;
+}
+
+/**
+ * Rebuild the document, giving each container's items to `change`.
+ *
+ * Every container is visited exactly once and named by the same key the drop
+ * target uses, so "move out of here" and "move into there" are the same walk
+ * rather than two that could disagree about what a container is.
+ */
+function mapContainers(
+  document: DashboardDocument,
+  change: (key: ContainerKey, items: readonly Element_[]) => readonly Element_[],
+): DashboardDocument {
+  const inItems = (items: readonly Element_[]): readonly Element_[] =>
+    items.map((element) => {
+      if (isSection(element))
+        return { ...element, items: change(sectionKey(element.id), inItems(element.items)) };
+      if (isTabGroup(element))
+        return {
+          ...element,
+          tabs: element.tabs.map((tab) => ({
+            ...tab,
+            items: change(tabKey(element.id, tab.id), inItems(tab.items)),
+          })),
+        };
+      return element;
+    });
+
+  return {
+    ...document,
+    pages: document.pages.map((page) => ({
+      ...page,
+      items: change(pageKey(page.id), inItems(page.items)),
+    })),
+  };
 }
 
 /** The first tab of a group: what a dashboard shows before anyone clicks. */
