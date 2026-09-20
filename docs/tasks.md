@@ -252,10 +252,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Done 2026-09-20. AC-032 ticked. The rule is one-directional and stated as such: **a field change never clears a manual choice**, only "Back to recommended" does. Re-recommending over someone's explicit decision each time they add a field is the behaviour this criterion exists to forbid — it reads as the application arguing with them.
   - `afterFieldChange` is written as an identity function rather than left implicit, so the intent is visible and testable, and a test runs four field changes in a row: an implementation that survives one might not survive the next.
   - The browser test picks a type the recommender *did not* choose and then changes fields so the recommendation moves — otherwise "kept" and "recommended again" look identical.
-- [ ] T031 (AC-033) Say what is missing when the fields cannot produce the chosen type
-  - Files: `packages/web/src/editor/MissingFields.tsx`, `packages/web/src/editor/MissingFields.test.tsx`
-  - Failing test: `MissingFields.test.tsx`: the message names the well and the member type needed, instead of rendering empty axes (AC-033).
+- [x] T031 (AC-033) Say what is missing when the fields cannot produce the chosen type
+  - Files: `packages/recommender/src/requirements.ts`, `packages/recommender/src/requirements.test.ts`, `packages/web/src/editor/ChartEditor.tsx`, `e2e/chart-editor.spec.ts`
+  - Failing test: `requirements.test.ts` and `e2e/chart-editor.spec.ts`: the message names the well and the member type needed, instead of rendering empty axes (AC-033).
   - Depends on: T030
+  - Done 2026-09-20. AC-033 ticked. The message names **the well and the member type**, because "not enough fields" leaves someone staring at three wells wondering which one wants what — and it counts how many more are needed. Every unmet requirement gets its own sentence, so a chart short of two different things says both.
+  - **The type picker now offers every chart type, not just the recommended ones.** It previously listed only the top pick and runners-up, which are all drawable by construction — so this criterion could never have fired. An override limited to the runners-up is barely an override, and a type the fields cannot yet produce is answered by the message rather than by hiding the option.
+  - A test asserts every chart type the recommender can offer has a requirements entry: one added without it would silently claim it can always be drawn.
 - [ ] T032 (AC-034) Preview at the tile's own size and filling the editor, and return with the tile updated
   - Files: `packages/web/src/editor/PreviewFrame.tsx`, `e2e/editor-preview.spec.ts`
   - Failing test: `e2e/editor-preview.spec.ts`: opened from a tile, the tile-size preview matches the tile's width and height, and returning applies the changes to that tile (AC-034).

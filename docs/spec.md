@@ -117,7 +117,7 @@ Traces to: `[docs/inputs §2, §3]`, `[R2]`, direction.md §6, rules 8–10, 29�
       Fails when: a candidate over any cap is offered as the top pick or a runner-up.
 - [x] AC-032 WHEN the user picks a chart type manually, THE SYSTEM SHALL keep that type through later field changes until the user chooses "Back to recommended" (direction.md rule 10).
       Fails when: the type reverts to the recommendation after a field change.
-- [ ] AC-033 WHEN the chart's fields cannot produce the chosen type, THE SYSTEM SHALL show what is missing, naming the well and the member type needed.
+- [x] AC-033 WHEN the chart's fields cannot produce the chosen type, THE SYSTEM SHALL show what is missing, naming the well and the member type needed.
       Fails when: the chart renders empty axes with no message, or the message does not name what is missing.
 - [ ] AC-034 WHEN the editor is opened from a dashboard tile, THE SYSTEM SHALL offer a preview at the tile's own size and a preview that fills the editor, and SHALL return to the dashboard with the tile updated.
       Fails when: the preview ignores the tile's width and height, or the dashboard tile does not reflect the applied changes.

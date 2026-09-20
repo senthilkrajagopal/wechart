@@ -2,7 +2,14 @@ import { addToWell, emptySpec, isEmpty, removeFromWell, toCubeQuery } from '@wec
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
-import { explain, recommend, type Signature } from '@wechart/recommender';
+import {
+  REQUIREMENTS,
+  describeMissing,
+  explain,
+  recommend,
+  type ChartType,
+  type Signature,
+} from '@wechart/recommender';
 
 import { loadTile } from '../query/loadTile';
 import { WhyThisChart } from './WhyThisChart';
@@ -24,6 +31,9 @@ import { membersOf, type Member } from './fields';
  * row count and a preview until the renderer lands (F5); what the criterion
  * asks for is that the result changes, not yet how it is drawn.
  */
+/** Every type the recommender knows about, so the override is a real one. */
+const ALL_CHART_TYPES = Object.keys(REQUIREMENTS).sort() as ChartType[];
+
 export function ChartEditor() {
   const [cubeName, setCubeName] = useState('');
   const [spec, setSpec] = useState(emptySpec());
@@ -107,6 +117,19 @@ export function ChartEditor() {
     ...recommendation.runnersUp,
   ];
 
+  /**
+   * AC-033: when the chosen type cannot be drawn from these fields, say what is
+   * missing and where — rather than rendering empty axes and leaving the user
+   * to work out which of three wells wants what.
+   */
+  const missing = shownType
+    ? describeMissing(shownType, {
+        measures: spec.measures.length,
+        dimensions: spec.dimensions.length,
+        timeDimensions: spec.timeDimensions.length,
+      })
+    : [];
+
   return (
     <div className="chart-editor">
       <div className="chart-editor__fields">
@@ -152,6 +175,22 @@ export function ChartEditor() {
               ))}
             </ul>
 
+            {missing.length > 0 ? (
+              <div role="status" data-testid="missing-fields">
+                <p>
+                  <span data-icon="incomplete" aria-hidden="true">
+                    ⚠
+                  </span>{' '}
+                  This chart cannot be drawn yet.
+                </p>
+                <ul>
+                  {missing.map((sentence) => (
+                    <li key={sentence}>{sentence}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             <label htmlFor="chart-type-picker">Chart type</label>
             <select
               id="chart-type-picker"
@@ -160,9 +199,16 @@ export function ChartEditor() {
                 setChartTypeState(chooseType(event.target.value as typeof shownType & string))
               }
             >
-              {alternatives.map((option) => (
-                <option key={option.candidate.chartType} value={option.candidate.chartType}>
-                  {option.candidate.chartType}
+              {/* Every type, not only the recommended ones: an override
+                  limited to the runners-up is barely an override, and a type
+                  the fields cannot yet produce is answered by the message
+                  above rather than by hiding it (AC-033). */}
+              {ALL_CHART_TYPES.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                  {alternatives.some((alternative) => alternative.candidate.chartType === option)
+                    ? ' (suggested)'
+                    : ''}
                 </option>
               ))}
             </select>

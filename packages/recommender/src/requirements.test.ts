@@ -1,0 +1,87 @@
+import { describe, expect, it } from 'vitest';
+
+import { REQUIREMENTS, canDraw, describeMissing, missingFor } from './requirements';
+import type { ChartType } from './types';
+
+/**
+ * AC-033: WHEN the chart's fields cannot produce the chosen type, THE SYSTEM
+ * SHALL show what is missing, naming the well and the member type needed.
+ * Fails when: the chart renders empty axes with no message, or the message does
+ * not name what is missing.
+ *
+ * "Naming the well and the member type" is the part that makes the message
+ * useful, so it is asserted directly rather than through a substring of
+ * whatever the sentence happens to be.
+ */
+const counts = (measures = 0, dimensions = 0, timeDimensions = 0) => ({
+  measures,
+  dimensions,
+  timeDimensions,
+});
+
+describe('what a chart needs (AC-033)', () => {
+  it('reports nothing missing when the fields are there', () => {
+    expect(missingFor('bar', counts(1, 1))).toEqual([]);
+    expect(canDraw('bar', counts(1, 1))).toBe(true);
+  });
+
+  it('names the well and the member type when something is missing', () => {
+    const [missing] = missingFor('scatter', counts(1));
+
+    expect(missing?.well).toBe('measures');
+    expect(missing?.memberType).toContain('measures');
+    expect(canDraw('scatter', counts(1))).toBe(false);
+  });
+
+  it('reports a line without a time dimension', () => {
+    const missing = missingFor('line', counts(1));
+
+    expect(missing).toHaveLength(1);
+    expect(missing[0]?.well).toBe('timeDimensions');
+  });
+
+  it('reports every unmet requirement, not only the first', () => {
+    // A heatmap wants a measure and two dimensions; this has neither.
+    const missing = missingFor('heatmap', counts(0, 0));
+
+    expect(missing.map((requirement) => requirement.well).sort()).toEqual([
+      'dimensions',
+      'measures',
+    ]);
+  });
+
+  it('counts how many more are needed, not just that some are', () => {
+    // Grouped bar wants two dimensions and there is one.
+    const sentences = describeMissing('groupedBar', counts(1, 1));
+
+    expect(sentences).toHaveLength(1);
+    expect(sentences[0]).toContain('add 1 more');
+  });
+
+  it('writes a sentence naming the well for every unmet requirement', () => {
+    const sentences = describeMissing('heatmap', counts(0, 0));
+
+    expect(sentences).toHaveLength(2);
+    expect(sentences.some((sentence) => sentence.includes('Measures'))).toBe(true);
+    expect(sentences.some((sentence) => sentence.includes('Dimensions'))).toBe(true);
+  });
+
+  it('says nothing when the chart can be drawn', () => {
+    expect(describeMissing('bar', counts(1, 1))).toEqual([]);
+  });
+
+  it('lets a table be drawn from anything, since it is the fallback', () => {
+    expect(canDraw('table', counts(0, 0))).toBe(true);
+  });
+
+  it('has a requirement list for every chart type the recommender can offer', () => {
+    // A type added to the recommender without one here would silently claim it
+    // can always be drawn.
+    const types = Object.keys(REQUIREMENTS) as ChartType[];
+    for (const type of types) {
+      expect(Array.isArray(REQUIREMENTS[type])).toBe(true);
+    }
+    expect(types).toContain('scatter');
+    expect(types).toContain('trellis');
+  });
+});

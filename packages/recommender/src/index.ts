@@ -17,4 +17,12 @@ export {
   type Recommendations,
 } from './recommend';
 export { explain, type CandidateTrace, type Explanation, type FieldTrace } from './explain';
+export {
+  REQUIREMENTS,
+  canDraw,
+  describeMissing,
+  missingFor,
+  type FieldCounts,
+  type Requirement,
+} from './requirements';
 export type { Candidate, ChartType, Field, FieldKind, RuleOutcome, Signature } from './types';

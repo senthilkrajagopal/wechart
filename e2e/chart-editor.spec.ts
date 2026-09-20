@@ -192,6 +192,48 @@ test('the option to go back appears only after a manual choice', async ({ page }
   await expect(page.getByTestId('back-to-recommended')).toBeVisible();
 });
 
+/**
+ * AC-033: WHEN the chart's fields cannot produce the chosen type, THE SYSTEM
+ * SHALL show what is missing, naming the well and the member type needed.
+ * Fails when: the chart renders empty axes with no message, or the message does
+ * not name what is missing.
+ */
+test('says what is missing, naming the well and the member type', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+
+  // A scatter needs two measures and there is one.
+  await page.getByLabel('Chart type').selectOption('scatter');
+
+  const message = page.getByTestId('missing-fields');
+  await expect(message).toBeVisible();
+  await expect(message).toContainText('Measures');
+  await expect(message).toContainText('measures');
+  await expect(message).toContainText('add 1 more');
+});
+
+test('the message goes away once the field is added', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByLabel('Chart type').selectOption('scatter');
+  await expect(page.getByTestId('missing-fields')).toBeVisible();
+
+  await page.getByTestId('add-measures').selectOption('orders.total_amount');
+
+  await expect(page.getByTestId('missing-fields')).toBeHidden();
+});
+
+test('names every missing requirement, not only the first', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+
+  // A heatmap wants a measure and two dimensions; there are no dimensions.
+  await page.getByLabel('Chart type').selectOption('heatmap');
+
+  await expect(page.getByTestId('missing-fields')).toContainText('Dimensions');
+});
+
 test('a time dimension goes to its own well and groups by day', async ({ page }) => {
   await openEditorOnOrders(page);
 
