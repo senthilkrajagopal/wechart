@@ -18,6 +18,19 @@ export {
 } from './chart-spec';
 
 export {
+  CHANNELS,
+  CHART_DOCUMENT_VERSION,
+  ChartDocumentError,
+  chartDocumentOf,
+  readChartDocument,
+  toChartSpec,
+  type Channel,
+  type ChartDefinition,
+  type ChartDocument,
+  type EncodingOverrides,
+} from './chart-document';
+
+export {
   distinctValues,
   seriesOf,
   type ChartType,
