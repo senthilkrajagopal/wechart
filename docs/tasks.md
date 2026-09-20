@@ -312,10 +312,16 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **A gap breaks the line.** `connectNulls` stays at ECharts' default of false, and the test asserts one break for a null month and none without. A missing month is not a month with no orders; joining across it would draw a trend through data that was never measured. This is the rendered consequence of `seriesOf` emitting `null` rather than `0`.
   - direction.md §6 is demonstrated: lines at 2 px, and a marker per point of at least 8 px. Marker size is read from the transform matrix, because ECharts scales a unit circle — the drawn diameter is nowhere in the path data.
   - Carries T035's review lessons: the test palette is not the default ramp, so the palette hand-in is falsifiable here too.
-- [ ] T037 (AC-037) Render scatter
-  - Files: `packages/charts/src/series/scatter.ts`, `packages/charts/src/series/scatter.test.ts`
+- [x] T037 (AC-037) Render scatter
+  - Files: `packages/charts/src/series/scatter.ts`, `packages/charts/src/series/scatter.test.ts`, `packages/charts/src/testing/renderToSvg.ts`
   - Failing test: `scatter.test.ts`: a scatter spec renders its points with both value axes bound (AC-037).
-  - Depends on: T035
+  - Depends on: T035, T188
+  - Done 2026-09-20. **AC-037 stays unchecked** — 9 of its 18 types now render.
+  - **The first type whose x axis is a measure**, which is why it does not go through `seriesOf`: that shapes rows into categories and series, and a scatter has neither. Each row is one point. It is also the type the old `{category, series, values}` encoding could not express at all, and the reason the channel model landed first.
+  - **"Both value axes bound" is tested as spacing, not as axis type.** A chart that draws points against two axes could still have one on a categorical scale, and nothing about the points' existence would show it. With x values 10, 20 and 40, a value axis puts the second gap at twice the first and a category axis spaces all three evenly. Mutating `xAxis` to `category` moves the ratio from 2.0 to 1.0 and fails the test.
+  - A separate test pairs each point with its own row: left to right the points go low, high, middle, so a renderer that sorted rows by either measure produces a monotonic run and fails.
+  - `pointsOf` is a third way of finding marks. A scatter point is the same scaled unit circle a line marker is, but filled with the series colour and carrying no stroke, so the stroke-keyed `markersOf` cannot see it. The position lives in the transform matrix, not in the path data.
+  - A row missing either measure is dropped rather than drawn. There is no baseline to fall back to as a bar has, and a point at zero would assert a measurement that was never made.
 - [ ] T038 (AC-037) Render pie and donut
   - Files: `packages/charts/src/series/pie.ts`, `packages/charts/src/series/pie.test.ts`
   - Failing test: `pie.test.ts`: pie and donut each render from a valid spec (AC-037).

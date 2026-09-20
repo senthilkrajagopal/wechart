@@ -11,11 +11,19 @@
  * Test support, not a product surface: nothing outside tests imports it.
  */
 import * as echarts from 'echarts/core';
-import { BarChart, LineChart } from 'echarts/charts';
+import { BarChart, LineChart, ScatterChart } from 'echarts/charts';
 import { GridComponent, LegendComponent, TitleComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 
-echarts.use([BarChart, LineChart, GridComponent, LegendComponent, TitleComponent, SVGRenderer]);
+echarts.use([
+  BarChart,
+  LineChart,
+  ScatterChart,
+  GridComponent,
+  LegendComponent,
+  TitleComponent,
+  SVGRenderer,
+]);
 
 export const RENDER_SIZE = { width: 640, height: 400 } as const;
 
@@ -171,6 +179,36 @@ export function markersOf(svg: string, colours: readonly string[]): Marker[] {
   }
 
   return markers;
+}
+
+export interface Point {
+  readonly fill: string;
+  readonly x: number;
+  readonly y: number;
+  readonly diameterPx: number;
+}
+
+/**
+ * Every plotted point of the given colours, with where it landed.
+ *
+ * A scatter point is the same scaled unit circle a line marker is, but filled
+ * with the series colour and carrying no stroke — so `markersOf`, which keys
+ * on the stroke, cannot see one. The transform is what matters here: the
+ * matrix holds the scale and then the position, so a point's coordinates are
+ * nowhere in the path data.
+ */
+export function pointsOf(svg: string, fills: readonly string[]): Point[] {
+  const points: Point[] = [];
+
+  for (const match of svg.matchAll(
+    /<path d="M1 0A[^"]*"[^>]*\btransform="matrix\(([-\d.]+),[-\d.,]*?([-\d.]+),([-\d.]+)\)"[^>]*\bfill="([^"]*)"/g,
+  )) {
+    const [, scale = '0', x = '0', y = '0', fill = ''] = match;
+    if (!fills.includes(fill)) continue;
+    points.push({ fill, x: Number(x), y: Number(y), diameterPx: Number(scale) * 2 });
+  }
+
+  return points;
 }
 
 /** Every point an ECharts outline passes through, and every corner it rounds. */
