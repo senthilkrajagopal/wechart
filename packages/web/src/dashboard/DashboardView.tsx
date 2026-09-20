@@ -5,8 +5,11 @@ import { ChartTile } from '../tiles/ChartTile';
 import { TileError } from '../tiles/TileError';
 import { TileSkeleton } from '../tiles/TileSkeleton';
 import { useDashboardColours } from './colours';
+import { AddPanel } from './edit/AddPanel';
 import { EditChrome, type EditSession } from './edit/EditChrome';
 import { MoveToMenu } from './edit/MoveToMenu';
+import { placeInGrammar } from './model/grammar';
+import { insertElement, insertionPoint, newElement } from './model/insert';
 import { Canvas, type CanvasProps } from './grid/Canvas';
 import { DRAG_INSTRUCTIONS, DRAG_INSTRUCTIONS_ID, useTileDrag } from './grid/drag';
 import { COLUMNS, ROW_UNIT_PX } from './grid/geometry';
@@ -26,7 +29,9 @@ function sayPlace(document: DashboardDocument, tileId: string): string {
 import {
   chartIdOf,
   containersOf,
+  elementAt,
   isSection,
+  isSized,
   isTabGroup,
   isTileId,
   moveBy,
@@ -98,7 +103,10 @@ function TileBody({
       return spec === undefined ? (
         <p data-testid="tile-missing-chart">This chart is no longer available.</p>
       ) : (
-        <ChartTile spec={spec} height={tile.h * ROW_UNIT_PX} />
+        <ChartTile
+          spec={spec}
+          {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
+        />
       );
     case 'markdown':
       return <p>{tile.text}</p>;
@@ -135,6 +143,8 @@ interface Affordances {
   /** What a key does to the focused tile (AC-057). */
   readonly onTileKeyDown?: CanvasProps['onTileKeyDown'];
   readonly describeItem?: CanvasProps['describeItem'];
+  readonly selection?: CanvasProps['selection'];
+  readonly addHere?: CanvasProps['addHere'];
   /**
    * Moving a tile without dragging it. WCAG SC 2.5.7 forbids a drag-only
    * path, and `docs/research/dashboard-grid.md` makes this a condition of
@@ -182,6 +192,8 @@ function Elements({
       onResize={onResize}
       onTileKeyDown={affordances.onTileKeyDown}
       describeItem={affordances.describeItem}
+      selection={affordances.selection}
+      addHere={affordances.addHere}
     >
       {(item) => {
         const element = items.find((candidate) => candidate.id === item.id);
@@ -271,6 +283,73 @@ function TabGroupView({
   );
 }
 
+/**
+ * The Add panel, bound to the session (AC-058).
+ *
+ * Where a new element lands is said in words before it is clicked, because
+ * "after the selection or into the chosen slot" is a rule the user cannot see
+ * — and an insert that lands somewhere unexpected is this criterion's own
+ * failing state.
+ */
+function AddSlot({
+  session,
+  where,
+}: {
+  session: EditSession<DashboardDocument>;
+  where: {
+    pageId: string;
+    selected: string | null;
+    addTarget: string | null;
+    onAdded: (id: string) => void;
+  };
+}) {
+  const { document } = session;
+  /** What the last insert did that was not asked for (AC-059). */
+  const [said, setSaid] = useState('');
+  const at = insertionPoint(document, {
+    pageId: where.pageId,
+    ...(where.selected === null ? {} : { selected: where.selected }),
+    ...(where.addTarget === null ? {} : { addTarget: where.addTarget }),
+  });
+
+  const container =
+    containersOf(document).find((entry) => entry.key === at.key)?.title ?? 'this page';
+
+  return (
+    <AddPanel
+      /**
+       * Naming the container alone cannot tell "after this tile" from "the end
+       * of the page", which is the distinction the criterion draws — so the
+       * position is said too.
+       */
+      destination={
+        at.index === null
+          ? `the end of ${container}`
+          : `${container}, after ${nameOfTile(document, where.selected ?? '')}`
+      }
+      message={said}
+      onAdd={(id) => {
+        const mint = () => `el-${String(Date.now())}-${String(counter++)}`;
+        /**
+         * Through the grammar, not straight into the document: a tab group
+         * added anywhere but a section arrives inside one, and the message
+         * says so (AC-059, direction.md rule 37).
+         */
+        const placed = placeInGrammar(document, newElement(id, mint), at, mint);
+
+        session.change(insertElement(document, placed.element, placed.at));
+        setSaid(placed.message ?? '');
+        // Aim at what was just added, so a second insert follows the first
+        // rather than stacking in front of it.
+        where.onAdded(placed.element.id);
+      }}
+    />
+  );
+}
+
+/** Ids only have to be unique within a document; Date.now alone collides. */
+let counter = 0;
+
 export function DashboardView({
   document,
   specs,
@@ -284,10 +363,57 @@ export function DashboardView({
   const coloured = useDashboardColours(document, specs);
   const charts: TileCharts = { specs: coloured, errors: errors ?? {}, loading };
 
+  /**
+   * Where the next insert goes (AC-058): after the selection, or into the
+   * chosen "+ Add" slot. Above `EditChrome`, because the Add panel lives
+   * inside the sidebar and the canvas is its sibling — they have to agree.
+   *
+   * Not part of the history: choosing what to add next is not a change to the
+   * dashboard, so Undo must not step back through it.
+   */
+  const [selected, setSelected] = useState<string | null>(null);
+  const [addTarget, setAddTarget] = useState<string | null>(null);
+
+  /**
+   * Which page tab is open, here rather than in `DashboardPages`, because the
+   * Add panel is its sibling inside the chrome. Left below, an element added
+   * with nothing selected went to the *first* page — so on the second page it
+   * landed off-screen, and "Discard (1 change)" was the only sign anything
+   * had happened at all.
+   */
+  const [openPage, setOpenPage] = useState<string | null>(null);
+  const pageId = openPage ?? document.pages[0]?.id ?? '';
+  const where = {
+    selected,
+    addTarget,
+    pageId,
+    onAdded: (id: string) => {
+      setSelected(id);
+      setAddTarget(null);
+    },
+  };
+
   return (
-    <EditChrome document={document} title={document.title} onSave={onSave}>
+    <EditChrome
+      document={document}
+      title={document.title}
+      onSave={onSave}
+      panels={(session) => ({
+        add: <AddSlot session={session} where={where} />,
+      })}
+    >
       {(session: EditSession<DashboardDocument>) => (
-        <DashboardPages session={session} charts={charts} onEditChart={onEditChart} />
+        <DashboardPages
+          session={session}
+          charts={charts}
+          onEditChart={onEditChart}
+          where={where}
+          onAim={(next) => {
+            setSelected(next.selected);
+            setAddTarget(next.addTarget);
+          }}
+          onOpenPage={setOpenPage}
+        />
       )}
     </EditChrome>
   );
@@ -297,13 +423,22 @@ function DashboardPages({
   session,
   charts,
   onEditChart,
+  where,
+  onAim,
+  onOpenPage,
 }: {
   session: EditSession<DashboardDocument>;
   charts: TileCharts;
   onEditChart?: ((tileId: string) => void) | undefined;
+  /** Where the next insert is aimed, owned above so the sidebar agrees. */
+  where: { selected: string | null; addTarget: string | null; pageId: string };
+  onAim: (next: { selected: string | null; addTarget: string | null }) => void;
+  onOpenPage: (pageId: string) => void;
 }) {
   const { document, editing } = session;
-  const [open, setOpen] = useState(document.pages[0]?.id ?? '');
+  // Which page is open is owned above, so the Add panel adds to the page the
+  // user is actually looking at.
+  const open = where.pageId;
   const showing = document.pages.find((page) => page.id === open) ?? document.pages[0];
 
   /**
@@ -361,7 +496,12 @@ function DashboardPages({
            */
           if (!isTileId(document, tile.id)) return;
 
-          const action = actionFor(event, { w: tile.w, h: tile.h ?? MIN_ROWS });
+          const element = elementAt(document, tile.id);
+          const action = actionFor(
+            event,
+            { w: tile.w, h: tile.h ?? MIN_ROWS },
+            element !== null && isSized(element),
+          );
           if (action === null) return;
 
           // Only once it is ours: otherwise an arrow key that scrolls the
@@ -405,6 +545,31 @@ function DashboardPages({
           );
         }
       : undefined,
+    selection: editing
+      ? {
+          id: where.selected,
+          // Choosing somewhere new retires the slot: with two aims at once
+          // the user cannot tell which the next insert will follow.
+          onSelect: (id) => {
+            onAim({ selected: id, addTarget: null });
+          },
+          // Passing through on the way to the sidebar is not a choice.
+          onFocusSelect: (id) => {
+            onAim({ selected: id, addTarget: where.addTarget });
+          },
+        }
+      : undefined,
+    addHere: editing
+      ? {
+          activeKey: where.addTarget,
+          onChoose: (key) => {
+            onAim({ selected: null, addTarget: key });
+          },
+          nameOf: (key) =>
+            containersOf(document).find((container) => container.key === key)?.title ??
+            'this container',
+        }
+      : undefined,
     describeItem: editing
       ? (id) => {
           // A container answers none of the keys; a tile with no chart has
@@ -441,7 +606,9 @@ function DashboardPages({
               aria-selected={page.id === showing?.id}
               // A tile dropped on a page tab moves to that page (AC-056).
               data-droptab={pageKey(page.id)}
-              onClick={() => setOpen(page.id)}
+              onClick={() => {
+                onOpenPage(page.id);
+              }}
             >
               {page.title}
             </button>

@@ -54,7 +54,7 @@ const find = (document: DashboardDocument, id: string): { w: number; h: number }
     for (const element of items) {
       if (element.kind === 'section') walk(element.items);
       else if (element.kind === 'tabs') for (const tab of element.tabs) walk(tab.items);
-      else if (element.id === id) found.push({ w: element.w, h: element.h });
+      else if (element.id === id) found.push({ w: element.w, h: element.h ?? -1 });
     }
   };
   for (const page of document.pages) walk(page.items);

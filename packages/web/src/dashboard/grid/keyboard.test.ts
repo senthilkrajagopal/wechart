@@ -89,6 +89,29 @@ describe('resizing with Shift and the arrow keys', () => {
   });
 });
 
+describe('an element with no size of its own', () => {
+  it('is moved by Shift and an arrow key, not resized', () => {
+    // A header, a divider and a filter are as tall as their content. The
+    // pointer already refuses them a resize handle; a rule enforced on one of
+    // the two paths is worse than no rule, because two keystrokes would then
+    // put a header into a state the model says cannot exist. The prototype
+    // falls through to a move, and so does this.
+    expect(actionFor(press('ArrowDown', { shiftKey: true }), TILE, false)).toEqual({
+      kind: 'move',
+      by: 1,
+    });
+    expect(actionFor(press('ArrowLeft', { shiftKey: true }), TILE, false)).toEqual({
+      kind: 'move',
+      by: -1,
+    });
+  });
+
+  it('still answers the other keys', () => {
+    expect(actionFor(press('Delete'), TILE, false)).toEqual({ kind: 'delete' });
+    expect(actionFor(press('ArrowRight'), TILE, false)).toEqual({ kind: 'move', by: 1 });
+  });
+});
+
 describe('the other two keys the criterion names', () => {
   it('opens the chart editor with E, in either case', () => {
     expect(actionFor(press('e'), TILE)).toEqual({ kind: 'edit' });

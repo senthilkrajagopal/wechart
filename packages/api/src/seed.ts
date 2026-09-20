@@ -121,7 +121,9 @@ export async function seedDevData(db: Kysely<Database>): Promise<void> {
                   id: 'appendix',
                   title: 'Appendix',
                   items: [
-                    { id: 'tile-heading', kind: 'header', w: 12, h: 8, text: 'Definitions' },
+                    // No height: a header is as tall as its own text, which
+                    // is what `SIZED_KINDS` says of it.
+                    { id: 'tile-heading', kind: 'header', w: 12, text: 'Definitions' },
                     // A tab group, so the case AC-056 singles out — a drop on
                     // a *tab-group* label, as distinct from a page tab — has
                     // somewhere real to be tried. Inside a section, because

@@ -45,7 +45,12 @@ export interface EditChromeProps<T> {
   readonly document: T;
   readonly title: string;
   readonly onSave: (document: T) => void;
-  readonly panels?: SidebarContent;
+  /**
+   * What the sidebar's three panels hold. A function of the session, because
+   * the Add panel needs to know what is selected and to make a change
+   * (AC-058) — and the session is created here.
+   */
+  readonly panels?: ((session: EditSession<T>) => SidebarContent) | undefined;
   readonly children: (session: EditSession<T>) => ReactNode;
 }
 
@@ -114,7 +119,7 @@ export function EditChrome<T>({
 
       <div className="dashboard__body">
         <div className="dashboard__canvas">{children(session)}</div>
-        {editing ? <EditSidebar panels={panels} /> : null}
+        {editing ? <EditSidebar panels={panels?.(session)} /> : null}
       </div>
     </div>
   );

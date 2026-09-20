@@ -187,9 +187,9 @@ Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
       Fails when: no drop marker appears, or a drop on a tab label leaves the tile in its original container.
 - [x] AC-057 WHEN a tile has keyboard focus in edit mode, THE SYSTEM SHALL move it with the arrow keys, resize it with Shift and the arrow keys, open its chart editor with E, and delete it with Delete (direction.md rule 39).
       Fails when: any of those keys has no effect on the focused tile.
-- [ ] AC-058 WHEN the user adds an element from the sidebar, THE SYSTEM SHALL offer chart, chart from folders, section, tab group, markdown, header, divider, image, link and filter, and insert the chosen one after the selection or into the chosen "+ Add" slot.
+- [x] AC-058 WHEN the user adds an element from the sidebar, THE SYSTEM SHALL offer chart, chart from folders, section, tab group, markdown, header, divider, image, link and filter, and insert the chosen one after the selection or into the chosen "+ Add" slot.
       Fails when: an element type is missing, or an insert lands somewhere other than the stated position.
-- [ ] AC-059 WHEN a tab group would be added outside a section, THE SYSTEM SHALL wrap it in a new section and say so (direction.md rule 37).
+- [x] AC-059 WHEN a tab group would be added outside a section, THE SYSTEM SHALL wrap it in a new section and say so (direction.md rule 37).
       Fails when: a tab group is created directly on a page tab, or no message explains the wrapping.
 - [ ] AC-060 WHEN the user deletes a tile, section, page tab or tab, THE SYSTEM SHALL offer an undo in a toast and through Undo, restoring the element and its contents (direction.md rule 38).
       Fails when: an undo restores the element without its contents, or no undo is offered.

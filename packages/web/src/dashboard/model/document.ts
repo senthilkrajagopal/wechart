@@ -28,13 +28,19 @@ export const TILE_KINDS = [
 
 export type TileKind = (typeof TILE_KINDS)[number];
 
+/**
+ * The kinds that carry a size of their own and can be dragged or Shift-arrowed
+ * to a new one. A header, a divider and a filter are as tall as their content,
+ * exactly as a section is — taken from the prototype's `SIZED` list in
+ * `docs/design/prototype/dashboard.js`, which is where this was decided.
+ */
+export const SIZED_KINDS: readonly TileKind[] = ['chart', 'markdown', 'image', 'link'];
+
+export const isSized = (element: Element_): boolean =>
+  isTile(element) && SIZED_KINDS.includes(element.kind);
+
 export interface Tile extends GridTile {
   readonly kind: TileKind;
-  /**
-   * Required here though optional on the grid: a tile is dragged to a height
-   * of its own, where a section or a tab group is as tall as what it holds.
-   */
-  readonly h: number;
   /** For a chart tile: the chart document this tile shows. */
   readonly chartId?: string;
   /** For markdown, header and link tiles. */
@@ -412,6 +418,10 @@ export function isTileId(document: DashboardDocument, id: string): boolean {
 }
 
 /** The element with this id, wherever it is. */
+export function elementAt(document: DashboardDocument, id: string): Element_ | null {
+  return tileAt(document, id);
+}
+
 function tileAt(document: DashboardDocument, tileId: string): Element_ | null {
   let found: Element_ | null = null;
   const walk = (items: readonly Element_[]) => {

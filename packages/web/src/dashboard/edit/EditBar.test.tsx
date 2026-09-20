@@ -238,7 +238,7 @@ describe('the sidebar panels', () => {
         document={DOC}
         title="Revenue"
         onSave={vi.fn()}
-        panels={{ outline: <p>Page 1</p> }}
+        panels={() => ({ outline: <p>Page 1</p> })}
       >
         {() => null}
       </EditChrome>,

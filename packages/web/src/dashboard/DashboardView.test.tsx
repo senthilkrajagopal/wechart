@@ -80,7 +80,8 @@ const DOC: DashboardDocument = {
     {
       id: 'p2',
       title: 'Appendix',
-      items: [{ id: 't4', kind: 'header', w: 12, h: 8, text: 'More' }],
+      // No height: a header is as tall as its text (`SIZED_KINDS`).
+      items: [{ id: 't4', kind: 'header', w: 12, text: 'More' }],
     },
   ],
 };
@@ -418,6 +419,100 @@ describe('moving a tile without dragging it (AC-056)', () => {
       node.getAttribute('data-tile'),
     );
     expect(inside).toEqual(['t3', 't1']);
+  });
+});
+
+describe('adding an element from the sidebar (AC-058)', () => {
+  const edit = async () => {
+    render(<DashboardView document={DOC} specs={SPECS} onSave={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+  };
+
+  it('offers every element type the criterion names', async () => {
+    await edit();
+
+    // Reachable, not merely defined: the palette lives in the Add panel, and
+    // the Add panel had no content at all until now.
+    const list = screen.getByRole('list', { name: 'Elements to add' });
+    expect(
+      within(list)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toHaveLength(10);
+    expect(screen.getByTestId('add-markdown')).toBeTruthy();
+  });
+
+  it('says where the element will land before it is clicked', async () => {
+    await edit();
+
+    // "After the selection or into the chosen slot" is a rule the user cannot
+    // see, and an insert that lands somewhere unexpected is the criterion's
+    // own failing state.
+    expect(screen.getByTestId('add-destination').textContent).toBe('Adds to the end of Overview.');
+  });
+
+  it('inserts after the selection once a tile is chosen', async () => {
+    await edit();
+    const first = screen.getAllByTestId('grid-item')[0] as HTMLElement;
+    await userEvent.click(first);
+
+    // Naming the container alone could not tell this from "the end of the
+    // page", which is exactly the distinction the criterion draws.
+    expect(screen.getByTestId('add-destination').textContent).toBe(
+      'Adds to Overview, after chart tile.',
+    );
+    await userEvent.click(screen.getByTestId('add-divider'));
+
+    // Straight after t1, not at the end of the page — which is the whole
+    // difference between "after the selection" and "somewhere else", and the
+    // criterion's own failing state.
+    const ids = screen.getAllByTestId('grid-item').map((item) => item.dataset['tile']);
+    expect(ids.indexOf('t2')).toBe(ids.indexOf('t1') + 2);
+  });
+
+  it('inserts into the chosen "+ Add" slot, which wins over the selection', async () => {
+    await edit();
+    await userEvent.click(screen.getAllByTestId('grid-item')[0] as HTMLElement);
+    await userEvent.click(screen.getByTestId('add-here-sec:s1'));
+
+    expect(screen.getByTestId('add-destination').textContent).toBe(
+      'Adds to the end of Overview › Detail.',
+    );
+    await userEvent.click(screen.getByTestId('add-divider'));
+
+    // Into the section, at its end — not after the tile that is still
+    // selected on the page above it.
+    const section = screen.getByTestId('dashboard-page').querySelector('[data-section="s1"]');
+    const inside = [...(section?.querySelectorAll('[data-tile]') ?? [])].map((node) =>
+      node.getAttribute('data-tile'),
+    );
+    expect(inside).toHaveLength(2);
+    expect(inside[0]).toBe('t3');
+  });
+
+  it('wraps a tab group added to a page in a section, and says so (AC-059)', async () => {
+    await edit();
+    await userEvent.click(screen.getByTestId('add-tabs'));
+
+    // direction.md rule 37: a tab group can exist only inside a section. The
+    // criterion's failing state is one created directly on a page tab...
+    const sections = screen.getByTestId('dashboard-page').querySelectorAll('.dashboard-section');
+    expect(sections.length).toBe(2);
+
+    // ...and the other half is that nothing explains it. A section nobody
+    // asked for, appearing silently, is its own kind of surprise.
+    expect(screen.getByTestId('add-message').textContent).toMatch(/section/i);
+  });
+
+  it('inserts the chosen element onto the dashboard', async () => {
+    await edit();
+    const before = screen.getAllByTestId('grid-item').length;
+
+    await userEvent.click(screen.getByTestId('add-divider'));
+
+    expect(screen.getAllByTestId('grid-item').length).toBe(before + 1);
+    // And it is an undoable change like any other.
+    expect(screen.getByRole('button', { name: /^Discard/ }).textContent).toBe('Discard (1 change)');
   });
 });
 

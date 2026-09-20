@@ -38,7 +38,18 @@ const STEP: Readonly<Record<string, { readonly columns: number; readonly rows: n
   ArrowUp: { columns: 0, rows: -1 },
 };
 
-export function actionFor(event: KeyPress, tile: TileSize): TileKeyAction {
+export function actionFor(
+  event: KeyPress,
+  tile: TileSize,
+  /**
+   * Whether this element carries a size of its own. A header, a divider and a
+   * filter are as tall as their content, so Shift and an arrow key moves them
+   * instead of resizing — the prototype's own fallthrough. A rule enforced on
+   * the pointer and not here would be worse than no rule: two keystrokes
+   * would put a header into a state the model says cannot exist.
+   */
+  sized = true,
+): TileKeyAction {
   // A modifier other than Shift belongs to the browser or the operating
   // system. Claiming ⌘E or Ctrl+E would break find-again, and worse, a screen
   // reader's own shortcuts.
@@ -50,7 +61,7 @@ export function actionFor(event: KeyPress, tile: TileSize): TileKeyAction {
   const step = STEP[event.key];
   if (step === undefined) return null;
 
-  if (!event.shiftKey) {
+  if (!event.shiftKey || !sized) {
     // Left and Up go earlier in the container, Right and Down later. On a
     // wrapping grid "later" is the next position in document order, which is
     // what the drag produces too.

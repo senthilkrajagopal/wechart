@@ -44,6 +44,25 @@ export interface CanvasProps {
    */
   readonly describeItem?:
     ((id: string) => { readonly role: string; readonly keys: string }) | undefined;
+  /** Selecting an item, so the next insert can land after it (AC-058). */
+  readonly selection?:
+    | {
+        readonly id: string | null;
+        /** A deliberate choice, which retires any chosen "+ Add" slot. */
+        readonly onSelect: (id: string) => void;
+        /** Merely arriving by Tab, which leaves a chosen slot alone. */
+        readonly onFocusSelect: (id: string) => void;
+      }
+    | undefined;
+  /** Aiming the next insert at the end of *this* container — the "+ Add" slot. */
+  readonly addHere?:
+    | {
+        readonly activeKey: string | null;
+        readonly onChoose: (key: string) => void;
+        /** A readable name for the container, for the slot's own name. */
+        readonly nameOf?: ((key: string) => string) | undefined;
+      }
+    | undefined;
   /** Dragging a tile by its grip. Without it, tiles have no grip. */
   readonly drag?:
     | {
@@ -121,6 +140,8 @@ export function Canvas({
   onResize,
   onTileKeyDown,
   describeItem,
+  selection,
+  addHere,
   children,
 }: CanvasProps) {
   const canvas = useRef<HTMLDivElement>(null);
@@ -220,6 +241,38 @@ export function Canvas({
             data-tile={tile.id}
             className="grid-tile"
             data-dragging={drag?.draggingId === tile.id ? 'true' : undefined}
+            data-selected={selection?.id === tile.id ? 'true' : undefined}
+            onFocus={
+              selection === undefined
+                ? undefined
+                : (event) => {
+                    /**
+                     * Focus is selection: reaching a tile by Tab and reaching
+                     * it by clicking should leave the next insert in the same
+                     * place, or the keyboard and the pointer would disagree
+                     * about where "after the selection" is.
+                     *
+                     * But merely tabbing past a tile must not retire a chosen
+                     * "+ Add" slot. The sidebar follows the canvas in the tab
+                     * order, so reaching the Add panel from a slot passes over
+                     * every remaining tile — and each one would have discarded
+                     * the aim before the user arrived.
+                     */
+                    if (event.target === event.currentTarget) selection.onFocusSelect(tile.id);
+                  }
+            }
+            onClick={
+              selection === undefined
+                ? undefined
+                : (event) => {
+                    // The innermost wins. A tile inside a section sits inside
+                    // that section's own element, so without this the click
+                    // would select the tile and then immediately re-select
+                    // the section on the way up.
+                    event.stopPropagation();
+                    selection.onSelect(tile.id);
+                  }
+            }
             /**
              * One tab stop per tile in edit mode, so every tile can be reached
              * and then moved, resized, edited or deleted from the keyboard
@@ -324,6 +377,37 @@ export function Canvas({
           </div>
         );
       })}
+
+      {/**
+       * The "+ Add" slot (AC-058): a deliberate aim at the end of *this*
+       * container, which the next insert goes into instead of following the
+       * selection. Every container gets one, which is how an empty section
+       * can be filled at all — it has no tile to select and follow.
+       */}
+      {addHere === undefined || containerKey === undefined ? null : (
+        <button
+          type="button"
+          className="grid-canvas__add"
+          data-testid={`add-here-${containerKey}`}
+          aria-pressed={addHere.activeKey === containerKey}
+          /**
+           * Named for the container it fills. Every slot reading "Add here"
+           * is the same name repeated down the page, with nothing for a
+           * screen reader to tell them apart.
+           */
+          aria-label={`Add to ${addHere.nameOf?.(containerKey) ?? 'this container'}`}
+          style={{ gridColumn: `span ${String(tiles.length === 0 ? COLUMNS : 3)}` }}
+          onClick={(event) => {
+            // The slot is inside whatever element holds this canvas, and that
+            // element selects itself when clicked — which would retire the
+            // slot the moment it was chosen.
+            event.stopPropagation();
+            addHere.onChoose(containerKey);
+          }}
+        >
+          ＋ Add here
+        </button>
+      )}
 
       {dragging === null ? null : (
         <output

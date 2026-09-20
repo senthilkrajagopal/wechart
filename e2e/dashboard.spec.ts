@@ -315,6 +315,64 @@ test('E on a focused tile opens its chart editor', async ({ page }) => {
   await expect(page.getByLabel('Cube or view')).toBeVisible();
 });
 
+test('the Add panel offers every element type and inserts one', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  await sidebar.getByRole('tab', { name: 'Add' }).click();
+
+  // All ten the criterion lists, by the names a user reads, in order. The
+  // labels alone: the hints beside them are explanatory copy, and pinning
+  // their wording here would make this fail for a reworded sentence rather
+  // than for a missing element type.
+  const palette = sidebar.getByRole('list', { name: 'Elements to add' });
+  await expect(palette.locator('.add-panel__label')).toHaveText([
+    'Chart',
+    'Chart from folders',
+    'Section',
+    'Tabs',
+    'Markdown',
+    'Header',
+    'Divider',
+    'Image',
+    'Link / button',
+    'Filter',
+  ]);
+
+  const before = await page.getByTestId('grid-item').count();
+  await page.getByTestId('add-header').click();
+
+  await expect(page.getByTestId('grid-item')).toHaveCount(before + 1);
+  await expect(page.getByRole('heading', { name: 'New heading' })).toBeVisible();
+
+  // And the panel now aims at what was just added, so a second insert follows
+  // the first rather than stacking in front of it.
+  await expect(page.getByTestId('add-destination')).toHaveText(
+    'Adds to Overview, after header: New heading.',
+  );
+});
+
+test('a tab group added to a page is wrapped in a section, and says so', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await page
+    .getByRole('complementary', { name: 'Edit sidebar' })
+    .getByRole('tab', { name: 'Add' })
+    .click();
+
+  const sectionsBefore = await page.locator('.dashboard-section').count();
+  await page.getByTestId('add-tabs').click();
+
+  // direction.md rule 37: a tab group can exist only inside a section. The
+  // criterion's failing state is one created directly on a page tab.
+  await expect(page.locator('.dashboard-section')).toHaveCount(sectionsBefore + 1);
+  await expect(page.getByRole('tablist', { name: /Tabs in/ })).toHaveCount(1);
+
+  // And the other half: nothing explaining it.
+  await expect(page.getByTestId('add-message')).toContainText(/section/i);
+});
+
 test('a member keeps one colour across two tiles', async ({ page }) => {
   await open(page);
 

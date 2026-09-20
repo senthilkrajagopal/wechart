@@ -230,6 +230,53 @@ main { padding: 16px; }
 }
 .edit-sidebar__panel { padding: 16px; }
 
+/* The Add palette (AC-058). Every entry carries its hint, because the
+   difference between "Chart" and "Chart from folders" is the whole of
+   direction.md's chart-ownership model and a bare name would not convey it. */
+.add-panel__destination { margin: 0 0 8px; color: var(--wc-text-secondary); }
+.add-panel ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.add-panel button {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.add-panel button:hover { background: var(--wc-bg-subtle); }
+.add-panel__label { font-weight: 600; }
+.add-panel__hint { color: var(--wc-text-secondary); }
+/* AC-059's explanation. Marked out, because it reports something the user did
+   not ask for rather than describing what they are about to do. */
+.add-panel__message {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--wc-accent);
+  background: var(--wc-bg-subtle);
+}
+
+/* The "+ Add" slot at the end of each container, and the selected element it
+   competes with — both are aims at where the next insert lands (AC-058), so
+   both have to be visible at a glance. */
+.grid-canvas__add {
+  min-height: 32px;
+  border: 1px dashed var(--wc-border-strong);
+  border-radius: 6px;
+  background: none;
+  color: var(--wc-text-secondary);
+  cursor: pointer;
+}
+.grid-canvas__add[aria-pressed='true'] {
+  border-style: solid;
+  border-color: var(--wc-accent);
+  color: var(--wc-text-primary);
+}
+.grid-tile[data-selected='true'] { outline: 2px solid var(--wc-accent); outline-offset: -1px; }
+
 /* The canvas grid (AC-054). The track count and the tile spans are set as
    inline style by Canvas.tsx, because they are layout the component computes;
    what lives here is the painting. The gridlines are a repeating background
