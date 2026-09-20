@@ -61,6 +61,45 @@ test('removing a field re-runs the query too', async ({ page }) => {
   await expect(page.getByTestId('result-row-count')).toHaveText('1 rows');
 });
 
+/**
+ * AC-027: WHILE a field is being dragged, THE SYSTEM SHALL mark each well as
+ * legal or illegal for it and give a reason for every illegal well.
+ * Fails when: an illegal well accepts the drop, or gives no reason.
+ *
+ * The drag is driven by hand rather than with dragTo, because the marking only
+ * exists *while* the drag is in progress — dragTo completes it and there is
+ * nothing left to look at.
+ */
+test('marks wells legal or illegal mid-drag, with a reason', async ({ page }) => {
+  await openEditorOnOrders(page);
+
+  const field = page.getByTestId('member-orders.count');
+  const box = (await field.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  // Two moves: the first starts the drag, the second is inside the well.
+  const target = (await page.getByTestId('well-dimensions').boundingBox())!;
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 8 });
+
+  await expect(page.getByTestId('well-measures')).toHaveAttribute('data-drop', 'legal');
+  await expect(page.getByTestId('well-dimensions')).toHaveAttribute('data-drop', 'illegal');
+  await expect(page.getByTestId('reason-dimensions')).toBeVisible();
+  await expect(page.getByTestId('reason-dimensions')).toContainText(/measure/i);
+
+  await page.mouse.up();
+});
+
+test('an illegal well refuses the drop', async ({ page }) => {
+  await openEditorOnOrders(page);
+
+  // A measure dropped on the dimensions well.
+  await page.getByTestId('member-orders.count').dragTo(page.getByTestId('well-dimensions'));
+
+  await expect(page.getByTestId('in-dimensions-orders.count')).toBeHidden();
+  // And it did not silently land somewhere else either.
+  await expect(page.getByTestId('result-empty')).toBeVisible();
+});
+
 test('a time dimension goes to its own well and groups by day', async ({ page }) => {
   await openEditorOnOrders(page);
 

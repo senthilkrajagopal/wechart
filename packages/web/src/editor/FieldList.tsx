@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { GROUP_LABELS, cubesFrom, groupMembers, membersOf } from './fields';
+import { GROUP_LABELS, cubesFrom, groupMembers, membersOf, type Member } from './fields';
 
 /**
  * The chart editor's field list (AC-025): the cubes and views the model
@@ -21,9 +21,19 @@ export interface FieldListProps {
   /** Lifted so the editor can build a query from the chosen cube's members. */
   readonly cubeName?: string;
   readonly onCubeChange?: (cubeName: string) => void;
+  /**
+   * Reports which field is being dragged, so the wells can mark themselves
+   * legal or illegal for it (AC-027). The drag payload itself is not readable
+   * during `dragover`, so the editor keeps it rather than reading it back.
+   */
+  readonly onDragStateChange?: (member: Member | null) => void;
 }
 
-export function FieldList({ cubeName: controlled, onCubeChange }: FieldListProps = {}) {
+export function FieldList({
+  cubeName: controlled,
+  onCubeChange,
+  onDragStateChange,
+}: FieldListProps = {}) {
   const [own, setOwn] = useState('');
   const cubeName = controlled ?? own;
   const setCubeName = (next: string) => {
@@ -82,7 +92,9 @@ export function FieldList({ cubeName: controlled, onCubeChange }: FieldListProps
                   onDragStart={(event) => {
                     event.dataTransfer.setData('text/plain', member.name);
                     event.dataTransfer.effectAllowed = 'copy';
+                    onDragStateChange?.(member);
                   }}
+                  onDragEnd={() => onDragStateChange?.(null)}
                 >
                   {/* Type shown as an icon and a group heading, never colour
                       alone (direction.md rule 3). */}

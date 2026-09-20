@@ -167,6 +167,34 @@ main { padding: 16px; }
    still visible when focus moves into a control inside the row. */
 .folder-contents tbody tr[aria-selected='true'] { background: var(--wc-bg-subtle); }
 
+.chart-editor { display: grid; grid-template-columns: 280px 1fr 280px; gap: 16px; }
+
+.chart-editor > *,
+.well {
+  padding: 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+
+.wells { display: grid; gap: 8px; }
+.wells ul { margin: 0; padding: 0; list-style: none; }
+
+/* Legality is an outline plus a written reason, never colour alone
+   (direction.md rule 3, AC-027). */
+.well[data-drop='legal'] { outline: 2px solid var(--wc-accent); }
+.well[data-drop='illegal'] { outline: 2px dashed var(--wc-border-strong); }
+
+.well__reason {
+  margin: 4px 0;
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+}
+
+.field-list ul { margin: 0; padding: 0; list-style: none; }
+.field-list li { padding: 2px 4px; cursor: grab; }
+
 .palette-backdrop {
   position: fixed;
   inset: 0;

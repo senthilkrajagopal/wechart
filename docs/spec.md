@@ -105,7 +105,7 @@ Traces to: `[docs/inputs §2, §3]`, `[R2]`, direction.md §6, rules 8–10, 29�
       Fails when: a member present in the metadata is missing from the field list, or a hidden member is shown.
 - [x] AC-026 WHEN the user drags a field onto a well, or adds it with the well's "+" picker, THE SYSTEM SHALL add it to that well and re-run the chart's query.
       Fails when: the field is not added by either route, or the chart still shows the previous result.
-- [ ] AC-027 WHILE a field is being dragged, THE SYSTEM SHALL mark each well as legal or illegal for it and give a reason for every illegal well (direction.md rule 12).
+- [x] AC-027 WHILE a field is being dragged, THE SYSTEM SHALL mark each well as legal or illegal for it and give a reason for every illegal well (direction.md rule 12).
       Fails when: an illegal well accepts the drop, or gives no reason.
 - [ ] AC-028 WHEN the chart's fields change, THE SYSTEM SHALL recommend a chart type from the field signature and cardinalities, and show at least one runner-up, each with a reason of at most 80 characters (direction.md rule 9).
       Fails when: no runner-up is shown, or a reason exceeds 80 characters.

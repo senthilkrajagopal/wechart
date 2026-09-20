@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { loadTile } from '../query/loadTile';
 import { FieldList } from './FieldList';
 import { Wells } from './Wells';
-import { membersOf } from './fields';
+import { membersOf, type Member } from './fields';
 
 /**
  * The chart editor (AC-025, AC-026).
@@ -17,6 +17,8 @@ import { membersOf } from './fields';
 export function ChartEditor() {
   const [cubeName, setCubeName] = useState('');
   const [spec, setSpec] = useState(emptySpec());
+  /** The field under the pointer during a drag, so wells can judge it (AC-027). */
+  const [dragging, setDragging] = useState<Member | null>(null);
 
   const meta = useQuery({
     queryKey: ['meta'],
@@ -55,6 +57,7 @@ export function ChartEditor() {
       <div className="chart-editor__fields">
         <FieldList
           cubeName={cubeName}
+          onDragStateChange={setDragging}
           onCubeChange={(next) => {
             setCubeName(next);
             // Members belong to a cube; keeping them across a change would
@@ -68,6 +71,7 @@ export function ChartEditor() {
         <Wells
           spec={spec}
           available={available}
+          dragging={dragging}
           onAdd={(well, member) => setSpec((current) => addToWell(current, well, member))}
           onRemove={(well, member) => setSpec((current) => removeFromWell(current, well, member))}
         />

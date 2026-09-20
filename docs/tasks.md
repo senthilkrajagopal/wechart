@@ -212,10 +212,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - The picker is not a fallback for the drag. It is the only route a keyboard or screen reader has, and a drag-only well would fail AC-176 outright.
   - The chart spec lives in `@wechart/core` and is engine-neutral (CLAUDE.md): nothing in it mentions ECharts. `toCubeQuery` sorts members so the same spec always produces byte-identical JSON, which is what AC-105 will need for a result to come from cache.
   - Changing cube clears the wells: members belong to a cube, and keeping them would build a query naming fields the new cube does not have.
-- [ ] T026 (AC-027) Mark each well legal or illegal during a drag, with a reason for every illegal well
-  - Files: `packages/web/src/editor/wellRules.ts`, `packages/web/src/editor/wellRules.test.ts`
-  - Failing test: `wellRules.test.ts`: dragging a dimension over a measure-only well marks it illegal with a reason, and dropping on it is refused (AC-027).
+- [x] T026 (AC-027) Mark each well legal or illegal during a drag, with a reason for every illegal well
+  - Files: `packages/web/src/editor/{Wells,ChartEditor,FieldList}.tsx`, `packages/web/src/editor/Wells.test.tsx`, `packages/web/src/shell/styles.ts`, `e2e/chart-editor.spec.ts`
+  - Failing test: `Wells.test.tsx`: dragging a dimension over a measure-only well marks it illegal with a reason, and dropping on it is refused (AC-027).
   - Depends on: T025
+  - Done 2026-09-20. AC-027 ticked. Both halves are load-bearing and both are tested: a well that shows a reason **and still takes the drop** fails, and so does one that refuses silently. Refusing is implemented by *not* calling `preventDefault` on `dragover`, which is what makes a target decline in HTML drag and drop.
+  - The reason names **both sides** — what the well takes and what the field is — because "not allowed here" leaves the user to guess which of the two is wrong.
+  - Legality is an outline plus written text, never colour alone (direction.md rule 3), and the illegal well points at its reason with `aria-describedby`.
+  - The drag payload is not readable during `dragover` (browsers withhold it until drop), so the editor holds the dragged member in state rather than reading it back. The browser test drives the drag by hand rather than with `dragTo`, because the marking only exists *while* the drag is in progress.
 - [ ] T027 (AC-030, AC-031) Implement the recommender's legality rules: no second value axis, and the channel-capacity caps
   - Files: `packages/recommender/src/rules/{legality,capacity}.ts`, `packages/recommender/src/rules/legality.test.ts`
   - Failing test: `legality.test.ts`: a two-value-axis candidate is rejected (AC-030), and candidates over 8 colour categories, 20 trellis panels, 6 pie slices or 200 heatmap cells are rejected (AC-031). Rule names are ported from `docs/research/recommender-algorithms.md` §2; the four caps are recorded there as product decisions.
