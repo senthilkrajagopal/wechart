@@ -10,13 +10,30 @@ import { MoveToMenu } from './edit/MoveToMenu';
 import { Canvas, type CanvasProps } from './grid/Canvas';
 import { DRAG_INSTRUCTIONS, DRAG_INSTRUCTIONS_ID, useTileDrag } from './grid/drag';
 import { COLUMNS, ROW_UNIT_PX } from './grid/geometry';
+import { actionFor } from './grid/keyboard';
+import { MIN_ROWS, readoutFor } from './grid/resize';
+
+/**
+ * Where a tile has ended up, for the live region. `placeOf` already knows
+ * both numbers; saying "third of five" is what tells a reader the move landed
+ * and whether there is anywhere further to go.
+ */
+function sayPlace(document: DashboardDocument, tileId: string): string {
+  const place = placeOf(document, tileId);
+  if (place === null) return '';
+  return `${nameOfTile(document, tileId)}: position ${String(place.index + 1)} of ${String(place.of)}.`;
+}
 import {
+  chartIdOf,
   containersOf,
   isSection,
   isTabGroup,
   isTileId,
+  moveBy,
   moveTile,
   nameOfTile,
+  placeOf,
+  removeElement,
   pageKey,
   resizeTile,
   sectionKey,
@@ -47,6 +64,12 @@ export interface DashboardViewProps {
   readonly errors?: Readonly<Record<string, unknown>>;
   /** The charts are still on their way, so tiles show a skeleton (AC-042). */
   readonly loading?: boolean;
+  /**
+   * Open a tile's chart editor — what E does to the focused tile (AC-057) and
+   * where the pencil will lead. The route supplies it, because navigating is
+   * the route's business; AC-034 settles what the editor then shows.
+   */
+  readonly onEditChart?: ((tileId: string) => void) | undefined;
   readonly onSave: (document: DashboardDocument) => void;
 }
 
@@ -109,6 +132,9 @@ interface Affordances {
   readonly charts: TileCharts;
   readonly onResize?: ((id: string, size: { w: number; h: number }) => void) | undefined;
   readonly drag?: CanvasProps['drag'];
+  /** What a key does to the focused tile (AC-057). */
+  readonly onTileKeyDown?: CanvasProps['onTileKeyDown'];
+  readonly describeItem?: CanvasProps['describeItem'];
   /**
    * Moving a tile without dragging it. WCAG SC 2.5.7 forbids a drag-only
    * path, and `docs/research/dashboard-grid.md` makes this a condition of
@@ -154,6 +180,8 @@ function Elements({
       containerKey={containerKey}
       drag={drag}
       onResize={onResize}
+      onTileKeyDown={affordances.onTileKeyDown}
+      describeItem={affordances.describeItem}
     >
       {(item) => {
         const element = items.find((candidate) => candidate.id === item.id);
@@ -248,6 +276,7 @@ export function DashboardView({
   specs,
   errors,
   loading = false,
+  onEditChart,
   onSave,
 }: DashboardViewProps) {
   // The assignment is held across renders, so a filter that hides a member
@@ -258,7 +287,7 @@ export function DashboardView({
   return (
     <EditChrome document={document} title={document.title} onSave={onSave}>
       {(session: EditSession<DashboardDocument>) => (
-        <DashboardPages session={session} charts={charts} />
+        <DashboardPages session={session} charts={charts} onEditChart={onEditChart} />
       )}
     </EditChrome>
   );
@@ -267,9 +296,11 @@ export function DashboardView({
 function DashboardPages({
   session,
   charts,
+  onEditChart,
 }: {
   session: EditSession<DashboardDocument>;
   charts: TileCharts;
+  onEditChart?: ((tileId: string) => void) | undefined;
 }) {
   const { document, editing } = session;
   const [open, setOpen] = useState(document.pages[0]?.id ?? '');
@@ -312,6 +343,79 @@ function DashboardPages({
           ...drag,
           canDrag: (id) => isTileId(document, id),
           nameOf: (id) => nameOfTile(document, id),
+        }
+      : undefined,
+    /**
+     * The keyboard route to everything the pointer can do (AC-057), which is
+     * what makes direction.md rule 39 true of this surface — moving and
+     * resizing were pointer-only until now.
+     */
+    onTileKeyDown: editing
+      ? (event, tile) => {
+          /**
+           * Only a tile, exactly as the drag refuses containers. AC-057 says
+           * "a tile", and Delete is the most destructive of the four keys —
+           * letting it take a section and everything in it, with no prompt,
+           * would also pre-empt AC-061's "ask whether to delete its contents
+           * or keep them" in the more destructive direction.
+           */
+          if (!isTileId(document, tile.id)) return;
+
+          const action = actionFor(event, { w: tile.w, h: tile.h ?? MIN_ROWS });
+          if (action === null) return;
+
+          // Only once it is ours: otherwise an arrow key that scrolls the
+          // page, or Delete meant for something else, would be swallowed.
+          event.preventDefault();
+          event.stopPropagation();
+
+          if (action.kind === 'edit') {
+            // The chart id comes from the session's document, not the route's
+            // saved copy: they are the same today and will not be once a tile
+            // can be added (AC-058) or duplicated (AC-062).
+            const chartId = chartIdOf(document, tile.id);
+            if (chartId !== undefined) onEditChart?.(chartId);
+            return;
+          }
+
+          const next =
+            action.kind === 'move'
+              ? moveBy(document, tile.id, action.by)
+              : action.kind === 'resize'
+                ? resizeTile(document, tile.id, action.size)
+                : removeElement(document, tile.id);
+
+          /**
+           * Nothing changed, nothing to record. `moveBy` hands back the same
+           * document at either end of a container and `resizeTile` does at
+           * the size limits, so holding an arrow key against the edge would
+           * otherwise pile up undo entries that each undo nothing — the very
+           * failure the pointer path already guards against for a click on a
+           * resize handle.
+           */
+          if (next === document) return;
+
+          session.change(next);
+          drag.say(
+            action.kind === 'delete'
+              ? `Deleted ${nameOfTile(document, tile.id)}.`
+              : action.kind === 'resize'
+                ? `${nameOfTile(document, tile.id)}: ${readoutFor(action.size.w, action.size.h)}.`
+                : sayPlace(next, tile.id),
+          );
+        }
+      : undefined,
+    describeItem: editing
+      ? (id) => {
+          // A container answers none of the keys; a tile with no chart has
+          // nothing for E to open.
+          if (!isTileId(document, id)) return { role: 'dashboard section', keys: '' };
+
+          const editable = chartIdOf(document, id) !== undefined ? ' E edits.' : '';
+          return {
+            role: 'dashboard tile',
+            keys: `Arrow keys move. Shift and arrow keys resize.${editable} Delete removes.`,
+          };
         }
       : undefined,
     moveTo: editing

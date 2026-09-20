@@ -185,7 +185,7 @@ Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
       Fails when: resizing shows no readout, or a width or height input exists in the editor.
 - [x] AC-056 WHEN the user drags a tile by its grip, THE SYSTEM SHALL show a drop marker and move the tile to the marked position, including onto a page tab or a tab-group label, which moves it into that tab.
       Fails when: no drop marker appears, or a drop on a tab label leaves the tile in its original container.
-- [ ] AC-057 WHEN a tile has keyboard focus in edit mode, THE SYSTEM SHALL move it with the arrow keys, resize it with Shift and the arrow keys, open its chart editor with E, and delete it with Delete (direction.md rule 39).
+- [x] AC-057 WHEN a tile has keyboard focus in edit mode, THE SYSTEM SHALL move it with the arrow keys, resize it with Shift and the arrow keys, open its chart editor with E, and delete it with Delete (direction.md rule 39).
       Fails when: any of those keys has no effect on the focused tile.
 - [ ] AC-058 WHEN the user adds an element from the sidebar, THE SYSTEM SHALL offer chart, chart from folders, section, tab group, markdown, header, divider, image, link and filter, and insert the chosen one after the selection or into the chosen "+ Add" slot.
       Fails when: an element type is missing, or an insert lands somewhere other than the stated position.

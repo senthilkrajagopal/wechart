@@ -250,6 +250,71 @@ test('dropping a tile on a tab-group label moves it into that tab', async ({ pag
   await expect(page.locator('[data-tile="tile-heading"]')).toHaveCount(1);
 });
 
+test('a focused tile answers all four keys the criterion names', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  const tile = page.locator('[data-tile="tile-status"]');
+  const page1 = page.locator('[data-container="page:overview"]');
+  const idsOnPage = () =>
+    page1.evaluate((node) =>
+      [...node.children]
+        .filter((child) => child.hasAttribute('data-tile'))
+        .map((child) => child.getAttribute('data-tile')),
+    );
+
+  await tile.focus();
+  await expect(tile).toBeFocused();
+
+  // Move.
+  expect(await idsOnPage()).toEqual(['tile-status', 'tile-notes', 'section-detail']);
+  await page.keyboard.press('ArrowRight');
+  expect(await idsOnPage()).toEqual(['tile-notes', 'tile-status', 'section-detail']);
+
+  // Focus has to survive a change, or the second of two presses goes
+  // nowhere — so this one does not re-focus in between.
+  await page.keyboard.press('ArrowLeft');
+  expect(await idsOnPage()).toEqual(['tile-status', 'tile-notes', 'section-detail']);
+
+  // Resize, both axes: the criterion says Shift and the arrow keys, and
+  // width alone would leave half of that untried in a browser.
+  const sizeOf = () =>
+    tile.evaluate((node) => ({
+      columns: (node as HTMLElement).style.gridColumn,
+      height: (node as HTMLElement).style.height,
+    }));
+
+  const before = await sizeOf();
+  await page.keyboard.press('Shift+ArrowRight');
+  await page.keyboard.press('Shift+ArrowDown');
+  const after = await sizeOf();
+
+  expect(after.columns).not.toBe(before.columns);
+  expect(Number.parseInt(after.height, 10)).toBe(Number.parseInt(before.height, 10) + 8);
+
+  // Delete. Undo brings it back, which is what makes the key safe to press.
+  await page.keyboard.press('Delete');
+  await expect(page.locator('[data-tile="tile-status"]')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('[data-tile="tile-status"]')).toHaveCount(1);
+});
+
+test('E on a focused tile opens its chart editor', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  await page.locator('[data-tile="tile-status"]').focus();
+  await page.keyboard.press('e');
+
+  // The fourth key. Where it lands is AC-034's business; that it opens the
+  // chart editor is this criterion's — so the editor has to have rendered,
+  // not merely the URL to have changed. A dead route would pass a URL check.
+  await expect(page).toHaveURL(/\/explore\/charts\/seed-chart-status\/edit$/);
+  await expect(page.getByRole('heading', { name: 'Chart editor' })).toBeVisible();
+  await expect(page.getByLabel('Cube or view')).toBeVisible();
+});
+
 test('a member keeps one colour across two tiles', async ({ page }) => {
   await open(page);
 

@@ -326,6 +326,14 @@ main { padding: 16px; }
 /* The tile in hand recedes, so the marker is what the eye follows. */
 .grid-tile[data-dragging='true'] { opacity: 0.4; }
 
+/* A focused tile in edit mode is a keyboard target for move, resize, edit and
+   delete (AC-057), so it needs a focus indicator of its own — AC-176 asks for
+   one distinct from the marking outline. */
+.grid-tile:focus-visible {
+  outline: 2px solid var(--wc-accent);
+  outline-offset: 2px;
+}
+
 /* The tile's ⋯ menu (AC-056's non-drag path). The tile clips its contents, so
    an open menu would be cut off by it — and on a short tile most of the
    destination list would simply be invisible. An inner overflow of auto

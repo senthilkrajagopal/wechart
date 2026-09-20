@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   containersOf,
+  moveBy,
   moveTile,
   pageKey,
+  placeOf,
+  removeElement,
   resizeTile,
   sectionKey,
   tabKey,
@@ -56,6 +59,33 @@ const find = (document: DashboardDocument, id: string): { w: number; h: number }
   };
   for (const page of document.pages) walk(page.items);
   return found[0] ?? { w: -1, h: -1 };
+};
+
+/** The ids a container holds, in order. */
+const idsIn = (document: DashboardDocument, key: string): string[] => {
+  const found: string[] = [];
+  const collect = (items: readonly Element_[]) => {
+    for (const element of items) found.push(element.id);
+  };
+
+  for (const page of document.pages) {
+    if (key === pageKey(page.id)) collect(page.items);
+    const walk = (items: readonly Element_[]) => {
+      for (const element of items) {
+        if (element.kind === 'section') {
+          if (key === sectionKey(element.id)) collect(element.items);
+          walk(element.items);
+        } else if (element.kind === 'tabs') {
+          for (const tab of element.tabs) {
+            if (key === tabKey(element.id, tab.id)) collect(tab.items);
+            walk(tab.items);
+          }
+        }
+      }
+    };
+    walk(page.items);
+  }
+  return found;
 };
 
 describe('resizing a tile in the document', () => {
@@ -131,37 +161,62 @@ describe('resizing a tile in the document', () => {
   });
 });
 
+/** T063 / AC-057, the document half: what the arrow keys and Delete leave behind. */
+describe('moving a tile one place with the keyboard', () => {
+  it('goes later, and earlier', () => {
+    // Three items, not two: in a two-item container +1 and −1 produce the
+    // same list, so a reversed direction or an off-by-one on the "earlier"
+    // path would pass either way.
+    const three = moveTile(DOC, 'a', { key: sectionKey('s1'), index: 0 });
+    expect(idsIn(three, sectionKey('s1'))).toEqual(['a', 'b', 'tg']);
+
+    expect(idsIn(moveBy(three, 'a', 1), sectionKey('s1'))).toEqual(['b', 'a', 'tg']);
+    expect(idsIn(moveBy(three, 'tg', -1), sectionKey('s1'))).toEqual(['a', 'tg', 'b']);
+    expect(idsIn(moveBy(three, 'b', -1), sectionKey('s1'))).toEqual(['b', 'a', 'tg']);
+  });
+
+  it('stops at the ends rather than wrapping round', () => {
+    // A tile that jumped from the end of a page to its start because someone
+    // pressed Right once too often would be a surprise, and an undo away.
+    expect(moveBy(DOC, 'b', -1)).toBe(DOC);
+    expect(moveBy(DOC, 'tg', 1)).toBe(DOC);
+  });
+
+  it('says where an element is, and how many it sits among', () => {
+    expect(placeOf(DOC, 'b')).toEqual({ key: sectionKey('s1'), index: 0, of: 2 });
+    expect(placeOf(DOC, 'a')).toEqual({ key: pageKey('p1'), index: 0, of: 2 });
+    expect(placeOf(DOC, 'nobody')).toBeNull();
+  });
+});
+
+describe('deleting an element', () => {
+  it('takes the tile out', () => {
+    expect(idsIn(removeElement(DOC, 'a'), pageKey('p1'))).toEqual(['s1']);
+  });
+
+  it('takes a container out with everything inside it', () => {
+    const after = removeElement(DOC, 's1');
+
+    // Whole, so that Undo restores it whole — AC-060 asks that an undo bring
+    // back "the element and its contents".
+    expect(idsIn(after, pageKey('p1'))).toEqual(['a']);
+    expect(idsIn(after, sectionKey('s1'))).toEqual([]);
+  });
+
+  it('reaches a tile nested in a tab', () => {
+    expect(idsIn(removeElement(DOC, 'c'), tabKey('tg', 't'))).toEqual([]);
+  });
+
+  it('hands back the very same document when there is nothing to delete', () => {
+    expect(removeElement(DOC, 'nobody')).toBe(DOC);
+  });
+});
+
 /**
  * T062 / AC-056, the document half. `dropTarget.ts` decides where a drop would
  * land and the canvas paints it; this is what the drop leaves behind.
  */
 describe('moving a tile to another container', () => {
-  const idsIn = (document: DashboardDocument, key: string): string[] => {
-    const found: string[] = [];
-    const collect = (items: readonly Element_[]) => {
-      for (const element of items) found.push(element.id);
-    };
-
-    for (const page of document.pages) {
-      if (key === pageKey(page.id)) collect(page.items);
-      const walk = (items: readonly Element_[]) => {
-        for (const element of items) {
-          if (element.kind === 'section') {
-            if (key === sectionKey(element.id)) collect(element.items);
-            walk(element.items);
-          } else if (element.kind === 'tabs') {
-            for (const tab of element.tabs) {
-              if (key === tabKey(element.id, tab.id)) collect(tab.items);
-              walk(tab.items);
-            }
-          }
-        }
-      };
-      walk(page.items);
-    }
-    return found;
-  };
-
   it('puts the tile where the marker said, and takes it out of where it was', () => {
     const after = moveTile(DOC, 'a', { key: sectionKey('s1'), index: 0 });
 

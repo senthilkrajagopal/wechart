@@ -31,6 +31,19 @@ export interface CanvasProps {
    * would land (AC-056).
    */
   readonly containerKey?: string | undefined;
+  /**
+   * What a key does to the focused tile (AC-057). Without it tiles are not
+   * focusable, because a focus stop that answered no key would be a trap for
+   * anyone tabbing through a dashboard.
+   */
+  readonly onTileKeyDown?: ((event: React.KeyboardEvent, tile: GridTile) => void) | undefined;
+  /**
+   * What each item is, and which keys answer on it — so the tab stop is
+   * announced for what it can actually do. A section answers none of them,
+   * and a markdown tile has no chart to edit.
+   */
+  readonly describeItem?:
+    ((id: string) => { readonly role: string; readonly keys: string }) | undefined;
   /** Dragging a tile by its grip. Without it, tiles have no grip. */
   readonly drag?:
     | {
@@ -100,7 +113,16 @@ interface Dragging {
  */
 const HANDLES: readonly ResizeDirection[] = ['e', 's', 'se'];
 
-export function Canvas({ tiles, editing, containerKey, drag, onResize, children }: CanvasProps) {
+export function Canvas({
+  tiles,
+  editing,
+  containerKey,
+  drag,
+  onResize,
+  onTileKeyDown,
+  describeItem,
+  children,
+}: CanvasProps) {
   const canvas = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<Dragging | null>(null);
 
@@ -198,6 +220,60 @@ export function Canvas({ tiles, editing, containerKey, drag, onResize, children 
             data-tile={tile.id}
             className="grid-tile"
             data-dragging={drag?.draggingId === tile.id ? 'true' : undefined}
+            /**
+             * One tab stop per tile in edit mode, so every tile can be reached
+             * and then moved, resized, edited or deleted from the keyboard
+             * (AC-057, direction.md rule 39). `role="group"` with a name is
+             * what makes the stop meaningful — a screen reader announces the
+             * tile and the keys it answers rather than "blank".
+             *
+             * `jsx-a11y/no-noninteractive-tabindex` and
+             * `no-static-element-interactions` do not fire here, but only
+             * because their `allowExpressionValues` option exempts a value
+             * that is an expression rather than a literal — so a clean lint
+             * is no evidence that either rule was weighed. It is weighed
+             * here instead: both assume a tabbable element is a native
+             * control or a single-purpose widget, and a tile is neither. It
+             * is a composite the arrow keys act on, which is the shape the
+             * prototype (`docs/design/prototype/dashboard.js`) and dnd-kit
+             * both use, and the keyboard contract those rules exist to
+             * protect is the whole subject of `keyboard.test.ts`.
+             */
+
+            tabIndex={onTileKeyDown === undefined ? undefined : 0}
+            role={onTileKeyDown === undefined ? undefined : 'group'}
+            aria-roledescription={
+              onTileKeyDown === undefined ? undefined : describeItem?.(tile.id).role
+            }
+            /**
+             * Named for the keys that actually answer on *this* item. A
+             * section answers none of them, and a markdown tile has no chart
+             * to edit — promising E there would be a promise the tile does
+             * not keep.
+             */
+            aria-label={
+              onTileKeyDown === undefined
+                ? undefined
+                : [`${drag?.nameOf?.(tile.id) ?? tile.id}.`, describeItem?.(tile.id).keys ?? '']
+                    .filter((part) => part !== '')
+                    .join(' ')
+            }
+            onKeyDown={
+              onTileKeyDown === undefined
+                ? undefined
+                : (event) => {
+                    /**
+                     * Only when the tile itself has focus, never when a key
+                     * merely bubbled up from something inside it. Otherwise
+                     * Delete pressed on the ⋯ button would destroy the tile,
+                     * an arrow key in the menu would move it, and typing an
+                     * "e" into a future text field would leave for the chart
+                     * editor mid-sentence.
+                     */
+                    if (event.target !== event.currentTarget) return;
+                    onTileKeyDown(event, tile);
+                  }
+            }
             style={{
               gridColumn: `span ${String(columns)}`,
               ...(height === null ? {} : { height: `${String(height)}px` }),

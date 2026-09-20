@@ -313,6 +313,98 @@ export function nameOfTile(document: DashboardDocument, id: string): string {
     : `${found.kind}: ${text.slice(0, 40)}`;
 }
 
+/** Where an element sits: its container and its position among that container's items. */
+export function placeOf(
+  document: DashboardDocument,
+  id: string,
+): { key: ContainerKey; index: number; of: number } | null {
+  let found: { key: ContainerKey; index: number; of: number } | null = null;
+
+  const look = (key: ContainerKey, items: readonly Element_[]) => {
+    const index = items.findIndex((element) => element.id === id);
+    if (index !== -1) found = { key, index, of: items.length };
+
+    for (const element of items) {
+      if (isSection(element)) look(sectionKey(element.id), element.items);
+      else if (isTabGroup(element))
+        for (const tab of element.tabs) look(tabKey(element.id, tab.id), tab.items);
+    }
+  };
+
+  for (const page of document.pages) look(pageKey(page.id), page.items);
+  return found;
+}
+
+/**
+ * Move an element one place earlier or later within its own container
+ * (AC-057's arrow keys).
+ *
+ * The index `moveTile` takes counts positions *without* the element, so a step
+ * of +1 from position i is an insertion at i + 1 and a step of −1 is an
+ * insertion at i − 1 — which happens to read the same either way, but only
+ * because the element is removed first. At either end nothing happens, rather
+ * than wrapping round: a tile that jumped from the end of a page to its start
+ * because someone pressed Right once too often would be a surprise.
+ */
+export function moveBy(document: DashboardDocument, id: string, by: -1 | 1): DashboardDocument {
+  const place = placeOf(document, id);
+  if (place === null) return document;
+
+  const next = place.index + by;
+  if (next < 0 || next >= place.of) return document;
+
+  return moveTile(document, id, { key: place.key, index: next });
+}
+
+/**
+ * A dashboard without one element (AC-057's Delete).
+ *
+ * The toast that offers the undo is AC-060's, at T066. What makes the delete
+ * recoverable today is that it goes through the edit session like every other
+ * change, so Undo already restores it — and because the element is removed
+ * whole, it comes back with everything inside it.
+ */
+export function removeElement(document: DashboardDocument, id: string): DashboardDocument {
+  if (placeOf(document, id) === null) return document;
+
+  const without = (items: readonly Element_[]): readonly Element_[] => {
+    const kept = items.filter((element) => element.id !== id);
+    if (kept.length !== items.length) return kept;
+
+    return items.map((element) => {
+      if (isSection(element)) {
+        const inside = without(element.items);
+        return inside === element.items ? element : { ...element, items: inside };
+      }
+      if (isTabGroup(element)) {
+        let changed = false;
+        const tabs = element.tabs.map((tab) => {
+          const inside = without(tab.items);
+          if (inside === tab.items) return tab;
+          changed = true;
+          return { ...tab, items: inside };
+        });
+        return changed ? { ...element, tabs } : element;
+      }
+      return element;
+    });
+  };
+
+  return {
+    ...document,
+    pages: document.pages.map((page) => {
+      const items = without(page.items);
+      return items === page.items ? page : { ...page, items };
+    }),
+  };
+}
+
+/** The chart a tile shows, if it is a chart tile that has one. */
+export function chartIdOf(document: DashboardDocument, tileId: string): string | undefined {
+  const found = tileAt(document, tileId);
+  return found !== null && isTile(found) ? found.chartId : undefined;
+}
+
 /** Whether this id belongs to a tile rather than to a section or tab group. */
 export function isTileId(document: DashboardDocument, id: string): boolean {
   const found = tileAt(document, id);

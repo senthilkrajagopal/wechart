@@ -302,6 +302,61 @@ describe('moving a tile without dragging it (AC-056)', () => {
     expect(grip.getAttribute('aria-label')).toBe('Move markdown: Notes for the quarter');
   });
 
+  it('acts on a key only when the tile itself has focus', async () => {
+    await edit();
+
+    // Delete pressed while focus is on the tile's own ⋯ button must not
+    // destroy the tile — nor would an arrow key in an open menu move it, nor
+    // an "e" typed into a future text field leave for the chart editor.
+    const before = screen.getAllByTestId('grid-item').map((item) => item.dataset['tile']);
+    screen.getByTestId('tile-menu-t1').focus();
+    await userEvent.keyboard('{Delete}');
+
+    expect(screen.getAllByTestId('grid-item').map((item) => item.dataset['tile'])).toEqual(before);
+  });
+
+  it('records nothing for a key that changed nothing', async () => {
+    await edit();
+    const first = screen.getAllByTestId('grid-item')[0] as HTMLElement;
+    first.focus();
+
+    // The first tile in its container cannot go earlier. Holding the key
+    // against that edge would otherwise pile up undo entries that each undo
+    // nothing — the failure the pointer path already guards against for a
+    // click on a resize handle.
+    for (let press = 0; press < 4; press += 1) await userEvent.keyboard('{ArrowLeft}');
+
+    expect(screen.getByRole('button', { name: /^Discard/ }).textContent).toBe('Discard');
+    expect(screen.getByRole('button', { name: 'Undo' }).getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('leaves a section alone, exactly as the drag refuses one', async () => {
+    await edit();
+    const section = screen
+      .getAllByTestId('grid-item')
+      .find((item) => item.dataset['tile'] === 's1') as HTMLElement;
+
+    section.focus();
+    await userEvent.keyboard('{Delete}');
+
+    // Delete is the most destructive of the four keys, and AC-057 says "a
+    // tile". Taking a section and everything in it, with no prompt, would
+    // also pre-empt AC-061 in the more destructive direction.
+    expect(screen.getAllByTestId('grid-item').map((item) => item.dataset['tile'])).toContain('s1');
+  });
+
+  it('says what a key did, into the same region the drag narrates into', async () => {
+    await edit();
+    const first = screen.getAllByTestId('grid-item')[0] as HTMLElement;
+    first.focus();
+    await userEvent.keyboard('{ArrowRight}');
+
+    // docs/research/dashboard-grid.md makes announcements a condition of
+    // building this in-house, and the keyboard is exactly where dnd-kit
+    // would have supplied them.
+    expect(screen.getByTestId('drag-announcement').textContent).toContain('position 2 of 3');
+  });
+
   it('gives no grip to a section, which is a container rather than a tile', async () => {
     await edit();
 

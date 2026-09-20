@@ -84,6 +84,14 @@ export interface TileDrag {
   readonly marker: Rect | null;
   /** The current state of the gesture, for a polite live region. */
   readonly announcement: string;
+  /**
+   * Put something else into that same region — what a keyboard move, resize
+   * or delete did. One region rather than two, so a reader is never told two
+   * things at once, and so the keyboard is as well narrated as the pointer:
+   * the research doc makes announcements a condition, and the keyboard is
+   * exactly where dnd-kit would have supplied them.
+   */
+  readonly say: (message: string) => void;
   readonly onGripPointerDown: (event: React.PointerEvent, tileId: string) => void;
 }
 
@@ -198,6 +206,7 @@ export function useTileDrag({ onMove, root, nameOf }: UseTileDragOptions): TileD
     draggingId: dragging?.moved === true ? dragging.id : null,
     marker: dragging?.moved === true ? (dragging.target?.marker ?? null) : null,
     announcement,
+    say: setAnnouncement,
     onGripPointerDown,
   };
 }

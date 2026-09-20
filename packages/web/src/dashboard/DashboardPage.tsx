@@ -116,6 +116,14 @@ function LoadedDashboard({
       specs={charts.data?.specs ?? {}}
       errors={charts.data?.errors ?? {}}
       loading={charts.isPending}
+      /**
+       * Where E on a focused tile leads (AC-057). Navigating is the route's
+       * business; what the editor then shows — a preview at the tile's own
+       * size, and the way back — is AC-034's.
+       */
+      onEditChart={(chartId) => {
+        globalThis.location.assign(`/explore/charts/${encodeURIComponent(chartId)}/edit`);
+      }}
       onSave={() => {
         // Saving is AC-065 (T071). Until then the dashboard is read-only and
         // an edit session is discarded when the page is left.

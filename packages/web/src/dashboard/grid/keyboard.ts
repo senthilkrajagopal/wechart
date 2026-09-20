@@ -1,0 +1,67 @@
+import { COLUMNS } from './geometry';
+import { MAX_ROWS, MIN_COLUMNS, MIN_ROWS, type TileSize } from './resize';
+
+/**
+ * What a key does to the focused tile (AC-057, direction.md rule 39).
+ *
+ * A pure decision, separate from the component, for the same reason the
+ * resize arithmetic is: the keyboard and the pointer must be able to reach
+ * exactly the same sizes. The document records what size a tile is, never how
+ * it came to be that size, so a limit that applied to a drag and not to
+ * Shift+Arrow would let one route produce a tile the other could not.
+ *
+ * The keys follow the dashboard prototype in `docs/design/prototype`, except
+ * for E — the prototype opens Properties with Enter, and the criterion names
+ * E for the chart editor.
+ */
+export type TileKeyAction =
+  | { readonly kind: 'move'; readonly by: -1 | 1 }
+  | { readonly kind: 'resize'; readonly size: TileSize }
+  | { readonly kind: 'edit' }
+  | { readonly kind: 'delete' }
+  | null;
+
+export interface KeyPress {
+  readonly key: string;
+  readonly shiftKey: boolean;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly altKey: boolean;
+}
+
+const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
+
+const STEP: Readonly<Record<string, { readonly columns: number; readonly rows: number }>> = {
+  ArrowRight: { columns: 1, rows: 0 },
+  ArrowLeft: { columns: -1, rows: 0 },
+  ArrowDown: { columns: 0, rows: 1 },
+  ArrowUp: { columns: 0, rows: -1 },
+};
+
+export function actionFor(event: KeyPress, tile: TileSize): TileKeyAction {
+  // A modifier other than Shift belongs to the browser or the operating
+  // system. Claiming ⌘E or Ctrl+E would break find-again, and worse, a screen
+  // reader's own shortcuts.
+  if (event.ctrlKey || event.metaKey || event.altKey) return null;
+
+  if (event.key === 'Delete' || event.key === 'Backspace') return { kind: 'delete' };
+  if (event.key === 'e' || event.key === 'E') return { kind: 'edit' };
+
+  const step = STEP[event.key];
+  if (step === undefined) return null;
+
+  if (!event.shiftKey) {
+    // Left and Up go earlier in the container, Right and Down later. On a
+    // wrapping grid "later" is the next position in document order, which is
+    // what the drag produces too.
+    return { kind: 'move', by: step.columns + step.rows < 0 ? -1 : 1 };
+  }
+
+  return {
+    kind: 'resize',
+    size: {
+      w: clamp(tile.w + step.columns, MIN_COLUMNS, COLUMNS),
+      h: clamp(tile.h + step.rows, MIN_ROWS, MAX_ROWS),
+    },
+  };
+}
