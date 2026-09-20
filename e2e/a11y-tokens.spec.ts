@@ -33,11 +33,12 @@ const FONT_SIZE_SWEEP = `(() => {
     if (!element) continue;
     const style = getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden') continue;
-    // <option> is drawn by the OS in WebKit's select popup, which ignores
-    // author font-size; it reports 11px there and cannot be changed. The
-    // closed select inherits our type, which is what the user reads inline.
-    // Recorded as a platform exception in docs/design/direction.md section 3.
-    if (element.tagName === 'OPTION') continue;
+    // No skip. An earlier version of this file excluded <option> on the
+    // grounds that WebKit ignored author font-size there; measuring each
+    // engine showed it does not (docs/research/webkit-select-font-size.md),
+    // and an explicit size in the shell stylesheet brings the open list to
+    // 14px. What WebKit will not move is the *closed* select control, which
+    // has no text node of its own and so was never measured here anyway.
     const size = Number.parseFloat(style.fontSize);
     if (size < ${String(MIN_FONT_SIZE_PX)}) {
       offenders.push({

@@ -16,9 +16,19 @@ button,
 input,
 select,
 textarea,
-/* option does not inherit from its select in WebKit, and defaults to 11px. */
 option {
   font: inherit;
+}
+
+/* WebKit does not honour "font: inherit" on a native select: the control and
+   its options fall back to the UA's 11px where Firefox reports the inherited
+   14px. An explicit size does move the options -- measured in
+   docs/research/webkit-select-font-size.md -- so the open list meets AC-004's
+   12px floor. The closed control stays at 11px in WebKit whatever is
+   declared, which is the exception recorded in direction.md section 3. */
+select,
+option {
+  font-size: var(--wc-text-sm-size);
 }
 
 body {
