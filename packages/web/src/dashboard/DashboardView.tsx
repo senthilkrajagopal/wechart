@@ -6,7 +6,13 @@ import { TileError } from '../tiles/TileError';
 import { TileSkeleton } from '../tiles/TileSkeleton';
 import { useDashboardColours } from './colours';
 import { AddPanel } from './edit/AddPanel';
-import { deleteFromDashboard, describeDeletion } from './edit/deletion';
+import {
+  deleteFromDashboard,
+  describeDeletion,
+  sectionHasContents,
+  ungroupSection,
+} from './edit/deletion';
+import { DeleteSectionDialog } from './edit/DeleteSectionDialog';
 import { UndoToast } from './edit/UndoToast';
 import { EditChrome, type EditSession } from './edit/EditChrome';
 import { MoveToMenu } from './edit/MoveToMenu';
@@ -486,6 +492,10 @@ function DashboardPages({
   /** What the last delete took, for the toast (AC-060). */
   const [deleted, setDeleted] = useState('');
   const onDeleted = setDeleted;
+
+  /** The section whose contents we are asking about (AC-061). */
+  const [asking, setAsking] = useState<string | null>(null);
+  const askedAbout = asking === null ? null : elementAt(document, asking);
   const showing = document.pages.find((page) => page.id === open) ?? document.pages[0];
 
   /**
@@ -604,6 +614,16 @@ function DashboardPages({
       : undefined,
     onDelete: editing
       ? (id) => {
+          /**
+           * A section that holds something asks first (AC-061). Not "are you
+           * sure" — *which* of two reasonable things to do: take the contents
+           * with it, or keep them where they are.
+           */
+          if (sectionHasContents(document, id)) {
+            setAsking(id);
+            return;
+          }
+
           const deletion = { kind: 'element', id } as const;
           const said = describeDeletion(document, deletion);
           const next = deleteFromDashboard(document, deletion);
@@ -762,6 +782,30 @@ function DashboardPages({
        * Both ways back, as AC-060 asks: this toast, and the edit bar's Undo.
        * They step the same history, so undoing in one is undoing in the other.
        */}
+      {asking === null || askedAbout === null || !isSection(askedAbout) ? null : (
+        <DeleteSectionDialog
+          title={askedAbout.title}
+          count={askedAbout.items.length}
+          onDeleteContents={() => {
+            const deletion = { kind: 'element', id: asking } as const;
+            const said = describeDeletion(document, deletion);
+            session.change(deleteFromDashboard(document, deletion));
+            setAsking(null);
+            setDeleted(said);
+          }}
+          onKeepContents={() => {
+            // Ungrouping: the section goes, its items stay where they were.
+            // "Keep" losing a tile is this criterion's own failing state.
+            session.change(ungroupSection(document, asking));
+            setAsking(null);
+            setDeleted(`Deleted section “${askedAbout.title}” and kept what was in it.`);
+          }}
+          onCancel={() => {
+            setAsking(null);
+          }}
+        />
+      )}
+
       <UndoToast
         message={deleted}
         onUndo={() => {

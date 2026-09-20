@@ -393,6 +393,10 @@ test('a delete offers an undo in a toast, restoring the contents too', async ({ 
   // on tiles alone — a container taken with no prompt would pre-empt AC-061.
   await page.getByTestId('tile-menu-section-detail').click();
   await page.getByTestId('delete-section-detail').click();
+  // A section holding something asks which of two things to do (AC-061);
+  // this is the answer that takes the contents with it.
+  await expect(page.getByRole('alertdialog')).toBeVisible();
+  await page.getByTestId('delete-contents').click();
 
   expect(await idsOn()).not.toContain('tile-region');
   const toast = page.getByTestId('undo-toast');
@@ -403,6 +407,34 @@ test('a delete offers an undo in a toast, restoring the contents too', async ({ 
 
   expect(await idsOn()).toEqual(before);
   await expect(toast).toBeHidden();
+});
+
+test('deleting a section asks, and "keep" loses nothing', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  const idsOn = () =>
+    page
+      .getByTestId('grid-item')
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-tile')));
+  const before = await idsOn();
+
+  await page.getByTestId('tile-menu-section-detail').click();
+  await page.getByTestId('delete-section-detail').click();
+
+  // Nothing may have gone yet: "the contents are deleted without asking" is
+  // the criterion's first failing state.
+  await expect(page.getByRole('alertdialog')).toBeVisible();
+  expect(await idsOn()).toEqual(before);
+
+  await page.getByTestId('keep-contents').click();
+
+  // The section is gone; the chart that was inside it is not. "Keep" losing
+  // a tile is the other failing state, and the worse of the two.
+  const after = await idsOn();
+  expect(after).not.toContain('section-detail');
+  expect(after).toContain('tile-region');
+  expect(after).toHaveLength(before.length - 1);
 });
 
 test('a member keeps one colour across two tiles', async ({ page }) => {

@@ -7,7 +7,12 @@ import {
   type DashboardDocument,
   type Element_,
 } from '../model/document';
-import { deleteFromDashboard, describeDeletion } from './deletion';
+import {
+  deleteFromDashboard,
+  describeDeletion,
+  sectionHasContents,
+  ungroupSection,
+} from './deletion';
 
 /**
  * T066 / AC-060: WHEN the user deletes a tile, section, page tab or tab, THE
@@ -128,6 +133,64 @@ describe('deleting each of the four things the criterion names', () => {
     expect(deleteFromDashboard(DOC, { kind: 'element', id: 'nobody' })).toBe(DOC);
     expect(deleteFromDashboard(DOC, { kind: 'page', id: 'nobody' })).toBe(DOC);
     expect(deleteFromDashboard(DOC, { kind: 'tab', groupId: 'tg', id: 'nobody' })).toBe(DOC);
+  });
+});
+
+/**
+ * T067 / AC-061: WHEN the user deletes a section that contains tiles, THE
+ * SYSTEM SHALL ask whether to delete its contents or keep them, and apply the
+ * choice. `Fails when: the contents are deleted without asking, or "keep"
+ * loses a tile.`
+ *
+ * "Keep them" is ungrouping: the section goes and its items stay, which is
+ * what the prototype calls it. The second failing state is the sharp one — a
+ * "keep" that dropped a tile would be worse than deleting outright, because
+ * the user chose the option that promised to lose nothing.
+ */
+describe('keeping a section’s contents', () => {
+  it('takes the section away and leaves everything that was in it', () => {
+    const after = ungroupSection(DOC, 's1');
+
+    expect(ids(after)).not.toContain('s1');
+    for (const kept of ['b', 'tg', 'c']) expect(ids(after)).toContain(kept);
+  });
+
+  it('puts them exactly where the section was, not at the end', () => {
+    const after = ungroupSection(DOC, 's1');
+
+    // The page held [a, s1]; s1 held [b, tg]. Appending would have given
+    // [a, b, tg] here too, so the fixture puts a tile before the section to
+    // tell the two apart.
+    expect(after.pages[0]?.items.map((item) => item.id)).toEqual(['a', 'b', 'tg']);
+  });
+
+  it('loses nothing at all, which is the whole promise of the option', () => {
+    const before = ids(DOC).filter((id) => id !== 's1');
+    const after = ids(ungroupSection(DOC, 's1'));
+
+    expect([...after].sort()).toEqual([...before].sort());
+  });
+
+  it('knows when there is nothing to ask about', () => {
+    const empty: DashboardDocument = {
+      ...DOC,
+      pages: [
+        {
+          id: 'p1',
+          title: 'Overview',
+          items: [{ id: 'e', kind: 'section', title: 'Empty', items: [] }],
+        },
+      ],
+    };
+
+    // An empty section is deleted outright: asking about contents it does not
+    // have would be a question with one answer.
+    expect(sectionHasContents(DOC, 's1')).toBe(true);
+    expect(sectionHasContents(empty, 'e')).toBe(false);
+  });
+
+  it('changes nothing when the section is not there', () => {
+    expect(ungroupSection(DOC, 'nobody')).toBe(DOC);
   });
 });
 

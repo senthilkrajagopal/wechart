@@ -696,8 +696,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - The undo **stack** is not this task's to build: T059 reuses `packages/web/src/editor/history.ts`, which is already generic over the state it holds and stores whole states rather than inverse operations — which is exactly what "restoring the element **and its contents**" needs. What this task adds is deletion and the toast that offers the undo, so the file is named for that rather than for a second history.
   - Failing test: `history.test.ts`: deleting a tile, section, page tab or tab offers a toast undo and an Undo entry, and either restores the element with its contents (AC-060).
   - Depends on: T064
-- [ ] T067 (AC-061) Ask whether to delete or keep a section's contents
-  - Files: `packages/web/src/dashboard/edit/DeleteSectionDialog.tsx`, `packages/web/src/dashboard/edit/DeleteSectionDialog.test.tsx`
+- [x] T067 (AC-061) Ask whether to delete or keep a section's contents
+  - Files: `packages/web/src/dashboard/edit/{DeleteSectionDialog.tsx,deletion.ts,deletion.test.ts}`, `packages/web/src/dashboard/{DashboardView.tsx,DashboardView.test.tsx}`, `packages/web/src/shell/styles.ts`, `e2e/dashboard.spec.ts`
+  - Failing test: `deletion.test.ts` proves ungrouping loses nothing and puts the items back where the section was; `DashboardView.test.tsx` and `e2e/dashboard.spec.ts` prove the question is asked and each answer applied (AC-061).
+  - Done 2026-09-20. AC-061 ticked. The dialog's own tests live in `DashboardView.test.tsx`, where the question is reached the way a user reaches it, rather than in a file that renders the dialog alone.
+  - **The question is not "are you sure".** It is which of two reasonable things to do: take the section and its contents, or take the section and leave the contents where they were. A confirm dialog offering only "delete" and "cancel" would hide the second answer entirely — which is why the criterion is worded as a choice.
+  - "Keep them" is **ungrouping**: the items move up into whatever held the section, *in its place*. Appending them to the end of the page would satisfy "no tile was lost" while still scattering the dashboard, so the fixture puts a tile before the section to tell those two outcomes apart.
+  - The safe answer takes focus, so a stray Enter cannot destroy anything.
+  - An empty section is still deleted outright: asking about contents it does not have would be a question with one answer.
+  - This changed T066's behaviour, and its test with it — deleting a non-empty section now goes through the choice. That test was updated to answer "delete the contents", which makes it exercise both criteria.
   - Failing test: `DeleteSectionDialog.test.tsx`: deleting a non-empty section prompts, "delete contents" removes them and "keep" preserves every tile (AC-061).
   - Depends on: T066
 - [ ] T068 (AC-062) Give a duplicated chart tile its own dashboard-local chart

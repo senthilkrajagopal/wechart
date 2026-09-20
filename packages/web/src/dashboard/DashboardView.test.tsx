@@ -599,12 +599,82 @@ describe('an undo for every delete (AC-060)', () => {
      */
     await userEvent.click(screen.getByTestId('tile-menu-s1'));
     await userEvent.click(screen.getByTestId('delete-s1'));
+    // Since AC-061 a section holding something asks which of two things to
+    // do; this is the answer that takes the contents with it.
+    await userEvent.click(screen.getByTestId('delete-contents'));
     expect(screen.queryAllByTestId('grid-item').map((i) => i.dataset['tile'])).not.toContain('t3');
 
     await userEvent.click(
       within(screen.getByTestId('undo-toast')).getByRole('button', { name: 'Undo' }),
     );
     expect(screen.getAllByTestId('grid-item').map((item) => item.dataset['tile'])).toEqual(before);
+  });
+});
+
+describe('asking before a section’s contents go (AC-061)', () => {
+  const edit = async () => {
+    render(<DashboardView document={DOC} specs={SPECS} onSave={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+  };
+
+  const deleteSection = async () => {
+    await userEvent.click(screen.getByTestId('tile-menu-s1'));
+    await userEvent.click(screen.getByTestId('delete-s1'));
+  };
+
+  it('asks rather than deleting outright, and says how much is at stake', async () => {
+    await edit();
+    await deleteSection();
+
+    // "The contents are deleted without asking" is the criterion's first
+    // failing state, so nothing may have gone yet.
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog.textContent).toContain('Detail');
+    expect(dialog.textContent).toMatch(/1 item\b/);
+    expect(screen.getAllByTestId('grid-item').map((i) => i.dataset['tile'])).toContain('t3');
+  });
+
+  it('keeps every tile when that is the answer', async () => {
+    await edit();
+    const before = screen.getAllByTestId('grid-item').map((item) => item.dataset['tile']);
+    await deleteSection();
+    await userEvent.click(screen.getByTestId('keep-contents'));
+
+    // The section is gone and the tile that was in it is not. "Keep losing a
+    // tile" is the criterion's other failing state, and it would be worse
+    // than deleting outright — the user chose the option that promised to
+    // lose nothing.
+    const after = screen.getAllByTestId('grid-item').map((item) => item.dataset['tile']);
+    expect(after).not.toContain('s1');
+    expect(after).toContain('t3');
+    expect(after).toHaveLength(before.length - 1);
+  });
+
+  it('takes them when that is the answer instead', async () => {
+    await edit();
+    await deleteSection();
+    await userEvent.click(screen.getByTestId('delete-contents'));
+
+    const after = screen.getAllByTestId('grid-item').map((item) => item.dataset['tile']);
+    expect(after).not.toContain('s1');
+    expect(after).not.toContain('t3');
+  });
+
+  it('does nothing at all on Cancel', async () => {
+    await edit();
+    const before = screen.getAllByTestId('grid-item').map((item) => item.dataset['tile']);
+    await deleteSection();
+    await userEvent.click(screen.getByTestId('cancel-delete-section'));
+
+    expect(screen.getAllByTestId('grid-item').map((item) => item.dataset['tile'])).toEqual(before);
+    expect(screen.getByRole('button', { name: /^Discard/ }).textContent).toBe('Discard');
+  });
+
+  it('focuses the answer that loses nothing, so a stray Enter cannot destroy', async () => {
+    await edit();
+    await deleteSection();
+
+    expect(document.activeElement).toBe(screen.getByTestId('keep-contents'));
   });
 });
 

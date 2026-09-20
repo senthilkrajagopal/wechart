@@ -70,6 +70,48 @@ export function deleteFromDashboard(
 }
 
 /**
+ * Take a section away but keep what was in it (AC-061's "keep them").
+ *
+ * The items move up into whatever held the section, in its place, so nothing
+ * is lost and nothing jumps to the end of the page — the prototype calls this
+ * ungrouping, which is what it is. The criterion's failing state is that
+ * "keep" loses a tile, so the contents go in at the section's own position
+ * rather than being appended anywhere convenient.
+ */
+export function ungroupSection(document: DashboardDocument, sectionId: string): DashboardDocument {
+  let found = false;
+
+  const inItems = (items: readonly Element_[]): readonly Element_[] => {
+    const next = items.flatMap((element) => {
+      if (isSection(element) && element.id === sectionId) {
+        found = true;
+        return element.items;
+      }
+      if (isSection(element)) return [{ ...element, items: inItems(element.items) }];
+      if (isTabGroup(element))
+        return [
+          {
+            ...element,
+            tabs: element.tabs.map((tab) => ({ ...tab, items: inItems(tab.items) })),
+          },
+        ];
+      return [element];
+    });
+
+    return next;
+  };
+
+  const pages = document.pages.map((page) => ({ ...page, items: inItems(page.items) }));
+  return found ? { ...document, pages } : document;
+}
+
+/** Whether a section holds anything, which is what decides if we ask at all. */
+export function sectionHasContents(document: DashboardDocument, sectionId: string): boolean {
+  const element = elementAt(document, sectionId);
+  return element !== null && isSection(element) && element.items.length > 0;
+}
+
+/**
  * What the toast says. Naming what went, and how much went with it, is what
  * makes an undo a decision rather than a guess — the criterion is explicit
  * that contents come back, and a reader has to know there were contents.

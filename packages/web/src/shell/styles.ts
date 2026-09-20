@@ -445,6 +445,37 @@ main { padding: 16px; }
   cursor: pointer;
 }
 
+/* The question a non-empty section asks before it goes (AC-061). Two real
+   answers and a way out, so the choice is laid out rather than crammed. */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 40%);
+}
+.dialog {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+  padding: 16px;
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+}
+.dialog h2 { margin: 0; }
+.dialog p { margin: 0 0 8px; color: var(--wc-text-secondary); }
+.dialog button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  cursor: pointer;
+}
+
 /* The undo toast (AC-060, direction.md rule 38). Bottom right, above
    everything, and it does not take the pointer away from the dashboard. */
 .undo-toast {
