@@ -60,10 +60,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Failing test: `WorkspaceSwitcher.test.tsx`: the switcher lists exactly Explore, Model, Data sources, Jobs, Schedules and Security, and contains no "Dashboards" entry (AC-001).
   - Depends on: T001
   - Done 2026-09-19. AC-001 ticked. The tests assert the **whole list** rather than the presence of each name, because "exactly" is the criterion — a seventh entry has to fail. `WORKSPACES` is the one list both the switcher and the router (T006) read, so they cannot drift apart. `e2e/smoke.spec.ts` now asserts the rendered switcher rather than a string in `main`, which keeps the AC-180 harness tied to something React produces.
-- [ ] T006 (AC-002) Route every surface so a reload restores it
-  - Files: `packages/web/src/router/{routes,router}.tsx`, `e2e/routing.spec.ts`
+- [x] T006 (AC-002) Route every surface so a reload restores it
+  - Files: `packages/web/src/router/routes.tsx`, `packages/web/src/App.tsx`, `e2e/routing.spec.ts`
   - Failing test: `e2e/routing.spec.ts`: opening a workspace, a dashboard, a chart and a model file each changes the URL, and reloading each URL restores the same surface and the same selected object (AC-002).
   - Depends on: T005
+  - Done 2026-09-19. AC-002 ticked: 12 cases, each of which navigates, **reloads**, and asserts the surface and selected object came back — reload is the criterion, so none asserts only that a link works. Workspace routes are generated from `WORKSPACES`, so a workspace cannot exist in the switcher and not the router.
+  - The object routes render a placeholder naming the selected object. The URL↔selection contract is what this task settles; the surfaces themselves arrive at T023 (dashboard), T032 (chart editor) and T137 (model file), and each re-runs the reload assertion against real content.
+  - The switcher still uses plain `<a href>` rather than client-side navigation, so a workspace change is a full page load. No AC covers that yet; revisit if a task needs state to survive a workspace switch.
 - [ ] T007 (AC-003) Switch theme without changing the route or losing scroll position
   - Files: `packages/web/src/shell/ThemeProvider.tsx`, `packages/ui/src/tokens.ts`, `e2e/theme.spec.ts`
   - Failing test: `e2e/theme.spec.ts`: after a theme switch the route and scroll offset are unchanged and no element retains the previous theme's background colour (AC-003).

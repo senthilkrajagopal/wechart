@@ -1,9 +1,9 @@
-import { AppShell } from './shell/AppShell';
+import { RouterProvider } from '@tanstack/react-router';
 
-/**
- * Routing arrives at T006; until then the shell opens on Explore, which is
- * where dashboards and charts live (docs/inputs §8).
- */
+import { buildRouter } from './router/routes';
+
+const router = buildRouter();
+
 export function App() {
-  return <AppShell workspace="explore" />;
+  return <RouterProvider router={router} />;
 }
