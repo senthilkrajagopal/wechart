@@ -23,6 +23,18 @@ import { PivotTable } from './PivotTable';
 export interface ChartTileProps {
   readonly spec: RenderSpec;
   readonly height?: number;
+  /**
+   * Whether the table view is showing, when the owner wants to keep that
+   * across a re-render.
+   *
+   * A tile that keeps this itself loses it whenever it unmounts — and the
+   * editor unmounts the tile every time the query re-runs, so changing a field
+   * would silently flip a reader back from the table to the chart. The results
+   * drawer had exactly this bug at T034 and it is the same fix: the state
+   * belongs to whatever outlives the tile.
+   */
+  readonly tableView?: boolean;
+  readonly onTableViewChange?: (showing: boolean) => void;
 }
 
 interface ChartBodyProps {
@@ -55,8 +67,15 @@ function ChartBody({ spec, height }: ChartBodyProps) {
   return <ChartCanvas spec={spec} {...(height === undefined ? {} : { height })} />;
 }
 
-export function ChartTile({ spec, height }: ChartTileProps) {
-  const [asTable, setAsTable] = useState(false);
+export function ChartTile({ spec, height, tableView, onTableViewChange }: ChartTileProps) {
+  // Uncontrolled unless the owner says otherwise, so a tile that outlives its
+  // data needs no ceremony.
+  const [ownState, setOwnState] = useState(false);
+  const asTable = tableView ?? ownState;
+  const setAsTable = (showing: boolean) => {
+    if (onTableViewChange === undefined) setOwnState(showing);
+    else onTableViewChange(showing);
+  };
 
   // A table showing itself as a table is a no-op, and offering the switch
   // there would be a control that does nothing.
@@ -70,7 +89,9 @@ export function ChartTile({ spec, height }: ChartTileProps) {
           type="button"
           data-testid="toggle-table-view"
           aria-pressed={showingTable}
-          onClick={() => setAsTable((shown) => !shown)}
+          onClick={() => {
+            setAsTable(!showingTable);
+          }}
         >
           {showingTable ? 'Chart view' : 'Table view'}
         </button>

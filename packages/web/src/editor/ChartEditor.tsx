@@ -8,6 +8,7 @@ import {
   toCubeQuery,
   toUnderlyingQuery,
   type ChartSpec,
+  type SortSettings,
 } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -52,6 +53,19 @@ import { membersOf, type Member } from './fields';
  */
 /** Every type the recommender knows about, so the override is a real one. */
 const ALL_CHART_TYPES = Object.keys(REQUIREMENTS).sort() as ChartType[];
+
+/**
+ * The sort choices (AC-044). "Cube's order" is the default and a real choice:
+ * Cube was asked for an ordering and returned one, and leaving it is not the
+ * same as having none.
+ */
+const SORT_CHOICES: readonly { value: string; label: string }[] = [
+  { value: '', label: "Cube's order" },
+  { value: 'value-desc', label: 'Value, high to low' },
+  { value: 'value-asc', label: 'Value, low to high' },
+  { value: 'label-asc', label: 'Label, A to Z' },
+  { value: 'label-desc', label: 'Label, Z to A' },
+];
 
 /**
  * The types with cartesian axes to edit. A pie, treemap, KPI, table or pivot
@@ -151,6 +165,23 @@ export function ChartEditor() {
     [spec, options],
   );
 
+  /**
+   * The sort, as one control rather than a pair. "By value, descending" is one
+   * decision to a reader, and splitting it into two selects would let them
+   * build states like "by label, but which direction?" a step at a time.
+   */
+  const sort = options['sort'] as SortSettings | undefined;
+  const sortValue = sort === undefined ? '' : `${sort.by}-${sort.direction}`;
+  const setSort = (value: string) => {
+    const [by, direction] = value.split('-');
+    change((current) => {
+      const next = { ...current.options };
+      if (by === undefined || direction === undefined || value === '') delete next['sort'];
+      else next['sort'] = { by, direction };
+      return { ...current, options: next };
+    });
+  };
+
   /** The axis settings, sparse: absent means "leave it to the data". */
   const axes = (options['axes'] ?? {}) as AxesSettings;
   const setAxis = (axis: 'x' | 'y', next: AxisSettings) => {
@@ -170,6 +201,14 @@ export function ChartEditor() {
     open: false,
     view: 'result',
   });
+
+  /**
+   * Whether the tile is showing its table. Here rather than in the tile for
+   * the same reason as the drawer: the tile unmounts on every re-query, and a
+   * reader who switched to the table should not be switched back by adding a
+   * field. Not undoable — looking at a chart differently is not a change to it.
+   */
+  const [tableView, setTableView] = useState(false);
 
   /**
    * Keyed by the query, so adding a field re-runs it: the key changes, the
@@ -366,6 +405,27 @@ export function ChartEditor() {
             <WhyThisChart explanation={explanation} />
 
             {/*
+              Sorting (AC-044). "Cube's order" is the default and is not the
+              same as any of the others: Cube was asked for an ordering and
+              returned one, and leaving it alone is a real choice rather than
+              the absence of one.
+            */}
+            <label htmlFor="chart-sort">Sort</label>
+            <select
+              id="chart-sort"
+              value={sortValue}
+              onChange={(event) => {
+                setSort(event.target.value);
+              }}
+            >
+              {SORT_CHOICES.map((choice) => (
+                <option key={choice.value} value={choice.value}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
+
+            {/*
               The inspector's Axes section (AC-040, direction.md §6). Only for
               the types that have cartesian axes: a pie or a KPI has none, and
               offering settings that cannot apply is worse than offering none.
@@ -420,7 +480,14 @@ export function ChartEditor() {
               // Only once the fields can actually produce the chosen type.
               // Drawing anyway would put a chart on screen that contradicts
               // the message AC-033 has just shown beside it.
-              <ChartTile spec={compile(previewDocument, { rows, chartType: shownType })} />
+              <ChartTile
+                spec={compile(previewDocument, { rows, chartType: shownType })}
+                // Held here, not in the tile: the tile unmounts whenever the
+                // query re-runs, so a field change would flip the reader back
+                // from the table to the chart (AC-178).
+                tableView={tableView}
+                onTableViewChange={setTableView}
+              />
             )}
           </>
         )}

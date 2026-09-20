@@ -17,6 +17,7 @@
 
 import type { ChartDefinition, ChartDocument } from './chart-document';
 import { CHANNELS, type ChartType, type Encoding, type RenderSpec } from './render-spec';
+import { applySort } from './sort';
 import { applyTopN } from './topN';
 
 export interface CompileOptions {
@@ -76,17 +77,21 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
     if (value !== undefined) encoding[channel] = value;
   }
 
-  // Folded here rather than in each renderer, so a chart type cannot be
-  // quietly exempt from the cap (AC-041). It is a transformation of the rows,
-  // which is what this step is for.
-  return applyTopN({
-    chartType: chart.chartType ?? options.chartType,
-    encoding,
-    rows: options.rows,
-    // Carried through unchanged. Compile decides the encoding; it has no
-    // business interpreting what a chart type does with its own options.
-    ...(chart.options === undefined ? {} : { options: chart.options }),
-    ...(options.palette === undefined ? {} : { palette: options.palette }),
-    ...(options.surface === undefined ? {} : { surface: options.surface }),
-  });
+  // Both transformations happen here rather than in each renderer, so a chart
+  // type cannot be quietly exempt from either. Order matters: the cap
+  // *selects* which categories are shown (AC-041) and the sort *arranges*
+  // what survives (AC-044), so folding first means the tail is chosen on
+  // merit rather than on whatever the sort put last.
+  return applySort(
+    applyTopN({
+      chartType: chart.chartType ?? options.chartType,
+      encoding,
+      rows: options.rows,
+      // Carried through unchanged. Compile decides the encoding; it has no
+      // business interpreting what a chart type does with its own options.
+      ...(chart.options === undefined ? {} : { options: chart.options }),
+      ...(options.palette === undefined ? {} : { palette: options.palette }),
+      ...(options.surface === undefined ? {} : { surface: options.surface }),
+    }),
+  );
 }

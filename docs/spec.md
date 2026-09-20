@@ -147,7 +147,7 @@ Traces to: `[docs/inputs §2]`, direction.md §6, rules 4–7, 18–19.
       Fails when: loading shows an empty tile, or the error state offers no Retry or no details.
 - [ ] AC-043 WHEN a query returns no rows, THE SYSTEM SHALL show an empty state naming the filters that are in effect.
       Fails when: the tile renders blank axes with no message, or the message omits an active filter.
-- [ ] AC-044 WHEN the user sorts a chart, THE SYSTEM SHALL order categories by value ascending, value descending or label, and keep that order after a data refresh.
+- [x] AC-044 WHEN the user sorts a chart, THE SYSTEM SHALL order categories by value ascending, value descending or label, and keep that order after a data refresh.
       Fails when: the order is not applied, or changes after a refresh with unchanged data.
 - [x] AC-045 WHEN a trellis chart is rendered, THE SYSTEM SHALL lay panels out in a grid with a shared scale by default and a per-panel title, and cap the panels at 20 (direction.md rule 6).
       Fails when: panels use different scales while the shared setting is on, or more than 20 panels render.

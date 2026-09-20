@@ -54,3 +54,5 @@ export { compile, defaultEncoding, type CompileOptions } from './compile';
 export { pivot, type PivotResult } from './pivot';
 
 export { applyTopN, OTHER_LABEL } from './topN';
+
+export { applySort, type SortBy, type SortDirection, type SortSettings } from './sort';

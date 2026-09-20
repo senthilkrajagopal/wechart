@@ -491,6 +491,42 @@ test('an axis edit is undoable like any other change', async ({ page }) => {
   await expect(canvas.getByText('Orders placed')).toBeHidden();
 });
 
+/**
+ * AC-044: WHEN the user sorts a chart, THE SYSTEM SHALL order categories by
+ * value ascending, value descending or label, and keep that order after a
+ * data refresh.
+ *
+ * Read through the table view, because that is where the order is legible as
+ * text rather than as bar positions.
+ */
+test('sorting a chart reorders its categories', async ({ page }) => {
+  await openEditorOnOrders(page);
+  // Not orders.count: the sample data has exactly 80 orders in each status,
+  // so every category ties and ascending and descending are the same order.
+  // A sort test needs a measure that actually varies.
+  await page.getByTestId('add-measures').selectOption('orders.total_amount');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
+
+  await page.getByTestId('toggle-table-view').click();
+  const firstCell = page.getByTestId('data-table').locator('tbody tr td:nth-child(1)').first();
+
+  await page.getByLabel('Sort').selectOption('value-desc');
+  const highest = await firstCell.textContent();
+
+  await page.getByLabel('Sort').selectOption('value-asc');
+  const lowest = await firstCell.textContent();
+
+  // The largest and the smallest cannot be the same category unless the sort
+  // did nothing.
+  expect(highest).not.toBe(lowest);
+
+  // And the order survives a re-query: adding a field re-runs the query.
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
+  await expect(firstCell).toHaveText(lowest ?? '');
+});
+
 test('a time dimension goes to its own well and groups by day', async ({ page }) => {
   await openEditorOnOrders(page);
 

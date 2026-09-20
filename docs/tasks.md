@@ -511,10 +511,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/tiles/TileEmpty.tsx`, `packages/web/src/tiles/TileEmpty.test.tsx`
   - Failing test: `TileEmpty.test.tsx`: a zero-row result renders a message naming every active filter, not blank axes (AC-043).
   - Depends on: T049, T084
-- [ ] T051 (AC-044) Sort categories by value or label and keep the order across a refresh
-  - Files: `packages/core/src/sort.ts`, `packages/core/src/sort.test.ts`
+- [x] T051 (AC-044) Sort categories by value or label and keep the order across a refresh
+  - Files: `packages/core/src/sort.ts`, `packages/core/src/sort.test.ts`, `packages/core/src/compile.ts`, `packages/web/src/editor/ChartEditor.tsx`, `packages/web/src/tiles/ChartTile.tsx`, `e2e/chart-editor.spec.ts`
   - Failing test: `sort.test.ts`: ascending, descending and label orders are applied, and a refresh with unchanged data preserves the order (AC-044).
   - Depends on: T035
+  - Done 2026-09-20. **AC-044 ticked.**
+  - **"Keeps the order after a refresh" is what shaped it.** The order has to be a property of the chart, not of the rows that happened to arrive, so the same setting over the same data gives the same answer — ties included. Tied categories keep arrival order, which is what stops a refresh reshuffling a chart that did not change.
+  - Sorting runs after the top-N fold in `compile`: the cap *selects* which categories are shown and the sort *arranges* what survives, so the tail is chosen on merit rather than on whatever the sort happened to put last.
+  - A category with no measurement sorts last in **either** direction. Treated as zero it would lead an ascending chart and claim to be the smallest measurement, which it is not. "Other" is pinned last for the same reason: it is not a member, and sorting it by its total would imply it were one.
+  - "Cube's order" is the default and a real choice rather than the absence of one — Cube was asked for an ordering and returned it, and leaving it alone is different from having none.
+  - **A real bug the browser test found**, and the same class as the results drawer at T034: `ChartTile` kept "showing the table" in its own state, and the editor unmounts the tile on every re-query — so adding a field silently flipped a reader back from the table to the chart. The state now belongs to whatever outlives the tile, and the tile takes it as an optional controlled prop.
+  - **A fixture that would have passed for the wrong reason:** the first version sorted by `orders.count`, and the sample data has exactly 80 orders in each status, so every category ties and ascending and descending are identical. Switched to a measure that varies.
 - [ ] T052 (AC-046) Format every value with its member's format in axes, labels, tooltips and tables
   - Files: `packages/core/src/format.ts`, `packages/core/src/format.test.ts`
   - Failing test: `format.test.ts`: currency and percentage members render with their declared format in all four places (AC-046).
