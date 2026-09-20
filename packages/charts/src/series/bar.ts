@@ -8,7 +8,8 @@
  */
 import { seriesOf, type RenderSpec } from '@wechart/core';
 
-import { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
+import { colourFor } from '../colours';
+import { DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 
 /**
  * The four members of the family, and how each differs.
@@ -63,7 +64,6 @@ export function barOption(spec: RenderSpec): EChartsOption {
   }
 
   const { horizontal, stacked } = LAYOUT[spec.chartType];
-  const palette = spec.palette ?? DEFAULT_PALETTE;
   const surface = spec.surface ?? DEFAULT_SURFACE;
   const { categories, series } = seriesOf(spec);
 
@@ -102,7 +102,9 @@ export function barOption(spec: RenderSpec): EChartsOption {
       })),
       ...(stacked ? { stack: 'total' } : {}),
       itemStyle: {
-        color: palette[index % palette.length],
+        // By member where the dashboard has decided one (AC-039), by position
+        // otherwise.
+        color: colourFor(spec, one.name, index),
         // The gap between two touching marks is drawn as a border on each of
         // them in the surface colour. An SVG stroke straddles the boundary, so
         // two adjacent marks' strokes land in the same band: each mark must

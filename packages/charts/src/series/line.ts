@@ -9,7 +9,8 @@
  */
 import { seriesOf, type RenderSpec } from '@wechart/core';
 
-import { DEFAULT_PALETTE, MARK, type EChartsOption } from '../theme';
+import { colourFor } from '../colours';
+import { MARK, type EChartsOption } from '../theme';
 
 const LAYOUT = {
   line: { filled: false, stacked: false },
@@ -39,7 +40,6 @@ export function lineOption(spec: RenderSpec): EChartsOption {
   }
 
   const { filled, stacked } = LAYOUT[spec.chartType];
-  const palette = spec.palette ?? DEFAULT_PALETTE;
   const { categories, series } = seriesOf(spec);
 
   return {
@@ -47,7 +47,7 @@ export function lineOption(spec: RenderSpec): EChartsOption {
     xAxis: { type: 'category', data: categories },
     yAxis: { type: 'value' },
     series: series.map((one, index) => {
-      const colour = palette[index % palette.length];
+      const colour = colourFor(spec, one.name, index);
       return {
         type: 'line' as const,
         name: one.name,

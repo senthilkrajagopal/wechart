@@ -8,7 +8,8 @@
  */
 import { distinctValues, memberOn, type RenderSpec } from '@wechart/core';
 
-import { DEFAULT_PALETTE, MARK, type EChartsOption } from '../theme';
+import { colourFor } from '../colours';
+import { MARK, type EChartsOption } from '../theme';
 
 export function isScatterType(chartType: string): boolean {
   return chartType === 'scatter';
@@ -35,7 +36,6 @@ export function scatterOption(spec: RenderSpec): EChartsOption {
     throw new Error(`${spec.chartType} is not a scatter chart`);
   }
 
-  const palette = spec.palette ?? DEFAULT_PALETTE;
   const x = memberOn(spec.encoding, 'x');
   const y = memberOn(spec.encoding, 'y');
   const splitBy = memberOn(spec.encoding, 'color');
@@ -68,7 +68,7 @@ export function scatterOption(spec: RenderSpec): EChartsOption {
       name: one.name,
       data: pointsFor(one.rows),
       symbolSize: MARK.markerPx,
-      itemStyle: { color: palette[index % palette.length] },
+      itemStyle: { color: colourFor(spec, one.name, index) },
     })),
   };
 }

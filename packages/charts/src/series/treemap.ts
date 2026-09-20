@@ -8,7 +8,8 @@
  */
 import { memberOn, type RenderSpec } from '@wechart/core';
 
-import { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
+import { colourFor } from '../colours';
+import { DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 
 export function isTreemapType(chartType: string): boolean {
   return chartType === 'treemap';
@@ -19,7 +20,6 @@ export function treemapOption(spec: RenderSpec): EChartsOption {
     throw new Error(`${spec.chartType} is not a treemap`);
   }
 
-  const palette = spec.palette ?? DEFAULT_PALETTE;
   const surface = spec.surface ?? DEFAULT_SURFACE;
   const category = memberOn(spec.encoding, 'x');
   const measure = memberOn(spec.encoding, 'y');
@@ -53,7 +53,7 @@ export function treemapOption(spec: RenderSpec): EChartsOption {
         data: nodes.map((node, index) => ({
           ...node,
           itemStyle: {
-            color: palette[index % palette.length],
+            color: colourFor(spec, node.name, index),
             borderColor: surface,
             borderWidth: MARK.gapPx,
           },

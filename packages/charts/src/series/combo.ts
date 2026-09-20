@@ -15,7 +15,8 @@
  */
 import { seriesOf, type RenderSpec } from '@wechart/core';
 
-import { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
+import { colourFor } from '../colours';
+import { DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 
 export function isComboType(chartType: string): boolean {
   return chartType === 'combo';
@@ -26,7 +27,6 @@ export function comboOption(spec: RenderSpec): EChartsOption {
     throw new Error(`${spec.chartType} is not a combo chart`);
   }
 
-  const palette = spec.palette ?? DEFAULT_PALETTE;
   const surface = spec.surface ?? DEFAULT_SURFACE;
   const { categories, series } = seriesOf(spec);
 
@@ -36,7 +36,7 @@ export function comboOption(spec: RenderSpec): EChartsOption {
     // Exactly one, shared by every series.
     yAxis: { type: 'value' },
     series: series.map((one, index) => {
-      const colour = palette[index % palette.length];
+      const colour = colourFor(spec, one.name, index);
       const asBars = index === 0;
 
       return asBars

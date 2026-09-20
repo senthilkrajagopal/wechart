@@ -9,7 +9,8 @@
  */
 import { memberOn, type RenderSpec } from '@wechart/core';
 
-import { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
+import { colourFor } from '../colours';
+import { DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 
 const LAYOUT = {
   pie: { innerRadius: '0%' },
@@ -29,7 +30,6 @@ export function pieOption(spec: RenderSpec): EChartsOption {
     throw new Error(`${spec.chartType} is not a pie chart`);
   }
 
-  const palette = spec.palette ?? DEFAULT_PALETTE;
   const surface = spec.surface ?? DEFAULT_SURFACE;
   const category = memberOn(spec.encoding, 'x');
   const measure = memberOn(spec.encoding, 'y');
@@ -60,7 +60,9 @@ export function pieOption(spec: RenderSpec): EChartsOption {
         data: slices.map((slice, index) => ({
           ...slice,
           itemStyle: {
-            color: palette[index % palette.length],
+            // By the slice's own member, so a category keeps its colour in
+            // every tile of a dashboard (AC-039).
+            color: colourFor(spec, slice.name, index),
             // The same surface-coloured gap the bar family uses, so slices of
             // a pie and segments of a stacked bar read the same way.
             borderColor: surface,

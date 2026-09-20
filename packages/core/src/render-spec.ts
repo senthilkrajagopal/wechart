@@ -116,6 +116,14 @@ export interface RenderSpec {
    * which is a decision about the dashboard, not about one chart.
    */
   readonly palette?: readonly string[];
+  /**
+   * Colour per member, where the dashboard has decided one (AC-039).
+   *
+   * Data rather than a function, so a compiled spec stays inspectable and
+   * serialisable. A member absent here falls back to the palette by position,
+   * which is right for a chart standing on its own.
+   */
+  readonly colours?: Readonly<Record<string, string>>;
   /** The colour the chart is drawn on, used for the gap between marks. */
   readonly surface?: string;
   /**

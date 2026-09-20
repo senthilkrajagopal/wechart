@@ -188,10 +188,11 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Done 2026-09-19. AC-024 ticked. A **roving tabindex**, so the list is one stop in the page's tab order rather than one per row — with thirty dashboards, tabbing through every one to reach what follows is its own accessibility failure, and a test asserts exactly one row is tabbable at a time.
   - Selection is marked with `aria-selected` and a background, not the focus ring alone, so it stays visible when focus moves into a control inside the row. Arrow keys stop at the ends rather than wrapping.
   - A test asserts Enter opens **the selected row, not always the first** — the bug an implementation that ignores the index would have.
-- [ ] T023 (AC-018) Open a dashboard from Explore in view mode with its saved tabs, tiles and settings
+- [ ] T023 (AC-018, AC-039) Open a dashboard from Explore in view mode with its saved tabs, tiles and settings
   - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/DashboardView.test.tsx`
-  - Failing test: `DashboardView.test.tsx`: a saved dashboard opens in view mode with every saved page tab, tile and setting present, and not in edit mode (AC-018).
-  - Depends on: T016, T071
+  - Failing test: `DashboardView.test.tsx`: a saved dashboard opens in view mode with every saved page tab, tile and setting present, and not in edit mode (AC-018); one colour assignment is shared by every tile, so a member looks the same in all of them (AC-039).
+  - Depends on: T016, T071, T046
+  - **Also ticks AC-039.** The colour mechanism is built and tested at T046, but the criterion is about "every tile of a dashboard" and this is the first place several tiles are rendered together. Share one assignment across them and assert a member matches in two tiles at once.
 
 ## F4. Chart builder and recommendation
 
@@ -464,10 +465,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **"Series" is not the number of ECharts series.** It is the count of distinctly coloured things: a pie is one series and several coloured slices, and it is the slices a legend names. A heatmap counts zero because its colour is a *scale* rather than a set — naming its values would mean naming every cell. KPI, table, pivot and trellis count zero too, having no marks for a legend to name.
   - Both halves of the criterion are tested, and the second is the one usually got wrong: a legend naming the one thing the axis and title already name is clutter, and on a small tile it costs the chart its height. Relaxing the threshold from two to one fails two tests.
   - Legend clicks do nothing yet. Toggling series visibility belongs to the interaction modes of AC-070 and AC-071, not to drawing.
-- [ ] T046 (AC-039) Give a member the same colour in every tile, and keep it when filters change the visible set
-  - Files: `packages/charts/src/colorAssignment.ts`, `packages/charts/src/colorAssignment.test.ts`
+- [x] T046 (AC-039) Give a member the same colour in every tile, and keep it when filters change the visible set
+  - Files: `packages/charts/src/colorAssignment.ts`, `packages/charts/src/colorAssignment.test.ts`, `packages/charts/src/colours.ts`, `packages/core/src/render-spec.ts`, and every series renderer
   - Failing test: `colorAssignment.test.ts`: a member keeps one colour across two tiles, and keeps it after a filter removes other members (AC-039).
   - Depends on: T035
+  - Done 2026-09-20. **AC-039 is NOT ticked**, and this is a deferral, not an oversight: the criterion says "the same colour in every tile of **a dashboard**", and there are no dashboards yet. The mechanism is built and every renderer honours it; it is ticked at **T023**, the first task that renders several tiles together, when one assignment is shared across them.
+  - **The failure this prevents is colour assigned by position.** Two tiles listing the same members in a different order paint them differently, and a filter that removes one member repaints every member after it — so a reader who has learnt that blue means "east" is taught something false by the act of filtering. A test removes the first member and asserts the second keeps its colour.
+  - Superset shows the cost of the alternative: `label_colors` is a map copied into each chart, and one shipped example carries a fifty-entry map most of whose keys belong to *other* charts. An assignment here is a dashboard-level object handed to each tile, and it only ever grows.
+  - **`RenderSpec.colours` is data, not a function**, so a compiled spec stays inspectable and serialisable. A member absent from it falls back to the palette by position, which is right for a chart standing on its own.
+  - One lookup (`colours.ts`) is used by every renderer, so the rule is a property of wechart rather than of whichever renderers remembered it.
+  - **Past the last palette slot a member takes the neutral, not a repeat.** direction.md caps categorical colour at its validated slots; cycling would give two members the same colour and so say they were the same thing, where the neutral says "not separately coloured", which is true.
+  - A test caught the legend: with two series AC-038 adds one, and its swatches are filled paths in the same colours, so the bars had to be picked out by being far taller than a legend icon.
 - [ ] T047 (AC-040) Apply the axis editor's settings to the rendered chart
   - Files: `packages/web/src/editor/AxisPanel.tsx`, `packages/charts/src/axis.ts`, `packages/charts/src/axis.test.ts`
   - Failing test: `axis.test.ts`: minimum, maximum, logarithmic scale, gridlines, tick rotation, number format and axis title each change the rendered axis (AC-040).
@@ -1118,7 +1126,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 | AC-036 | T034       | AC-081 | T087 | AC-126 | T132 | AC-171 | T177       |
 | AC-037 | T035–T044, T186, T188 | AC-082 | T088 | AC-127 | T133 | AC-172 | T178 |
 | AC-038 | T045       | AC-083 | T089 | AC-128 | T134 | AC-173 | T179       |
-| AC-039 | T046       | AC-084 | T090 | AC-129 | T135 | AC-174 | T180       |
+| AC-039 | T046, T023 | AC-084 | T090 | AC-129 | T135 | AC-174 | T180       |
 | AC-040 | T047       | AC-085 | T091 | AC-130 | T136 | AC-175 | T181       |
 | AC-041 | T048       | AC-086 | T092 | AC-131 | T137 | AC-176 | T182       |
 | AC-042 | T049       | AC-087 | T093 | AC-132 | T138 | AC-177 | T183       |
