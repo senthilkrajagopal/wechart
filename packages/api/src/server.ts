@@ -38,6 +38,21 @@ export function buildServer({
 
   app.get('/api/meta', async () => meta.meta());
 
+  /**
+   * AC-011: a superseded query is stopped in Cube, not merely ignored in the
+   * browser. Always answers 204: the tile that issued it is already gone, and
+   * a failure to cancel is not something anyone can act on.
+   */
+  app.delete('/api/running-query/:requestId', async (request, reply) => {
+    const { requestId } = request.params as { requestId: string };
+    try {
+      await client.cancel(requestId);
+    } catch (error) {
+      app.log.warn({ err: error, requestId }, 'could not cancel query');
+    }
+    return reply.status(204).send();
+  });
+
   app.post('/api/load', async (request) => {
     const body = request.body as { query?: Record<string, unknown> } | undefined;
     if (!body?.query) throw new BadRequest();

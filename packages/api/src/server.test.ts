@@ -80,6 +80,41 @@ describe('the API answers for Cube (AC-007)', () => {
   });
 });
 
+describe('cancelling a running query (AC-011)', () => {
+  it('asks Cube to stop the named query', async () => {
+    const cancelled: string[] = [];
+    const cube = stubCube(() => ({}));
+    Object.defineProperty(cube, 'cancel', {
+      value: async (requestId: string) => void cancelled.push(requestId),
+    });
+    const app = buildServer({ config, cube });
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/running-query/abc-span-0',
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(cancelled).toEqual(['abc-span-0']);
+    await app.close();
+  });
+
+  it('still answers when Cube cannot cancel, because the tile is already gone', async () => {
+    const cube = stubCube(() => ({}));
+    Object.defineProperty(cube, 'cancel', {
+      value: async () => {
+        throw new CubeError('Query not found', 404);
+      },
+    });
+    const app = buildServer({ config, cube });
+
+    const response = await app.inject({ method: 'DELETE', url: '/api/running-query/gone' });
+
+    expect(response.statusCode).toBe(204);
+    await app.close();
+  });
+});
+
 describe('the Cube secret never reaches the browser (AC-007)', () => {
   it('is absent from a successful reply', async () => {
     const app = buildServer({ config, cube: stubCube(() => ({ cubes: [] })) });

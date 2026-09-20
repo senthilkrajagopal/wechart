@@ -105,10 +105,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Done 2026-09-19. AC-010 ticked. Cube answers a still-running query with HTTP **200** and a body of `{"error":"Continue wait"}` — an error-shaped body that is not an error. Trusting the status code renders an empty tile; trusting the word "error" shows a red tile for a query that is merely slow. Both are the failure this criterion names, so the sentinel is matched explicitly and a test asserts the tile never passes through an error state on the way.
   - The request id is minted once and carried across the whole poll, so Cube sees one query rather than a series — and so T012 has something to name when it cancels.
   - The poll is bounded (`maxPolls`), because a tile that hangs forever is its own failure. Retries are off in the hook: a Cube error is something the tile shows (AC-012), and backoff would hide it and spend AC-175's budget.
-- [ ] T012 (AC-011) Cancel a superseded query against Cube before rendering the newer result
-  - Files: `packages/web/src/query/{client,loadTile}.ts`, `packages/api/src/routes/running-query.ts`, `packages/web/src/query/cancel.test.ts`
+- [x] T012 (AC-011) Cancel a superseded query against Cube before rendering the newer result
+  - Files: `packages/web/src/query/loadTile.ts`, `packages/web/src/query/cancel.test.ts`, `packages/api/src/cube/client.ts`, `packages/api/src/server.ts`, `packages/api/src/server.test.ts`
   - Failing test: `cancel.test.ts`: changing a tile's filters aborts the in-flight fetch and issues `DELETE /v1/running-query/{requestId}` for it, and the older result never replaces the newer one (AC-011).
   - Depends on: T011
+  - Done 2026-09-19. AC-011 ticked. **Dropping the response is not cancelling** — the criterion says "against Cube". An abandoned query keeps running and holds one of the queue's two default slots until its orphan timeout, so a user dragging a filter slider can starve their own dashboard. The abort listener fires `DELETE /api/running-query/{id}`, which the service forwards to Cube.
+  - A test asserts the cancellation names the id the load actually used: one naming a fresh id stops nothing, and would pass a weaker assertion.
+  - The route always answers 204, including when Cube says the query is unknown. The tile that issued it is already gone and a failed cancellation is not something anyone can act on; the warning goes to the log.
 - [ ] T013 (AC-012) Show a tile error state carrying Cube's message and the query JSON
   - Files: `packages/web/src/tiles/TileError.tsx`, `packages/web/src/tiles/TileError.test.tsx`
   - Failing test: `TileError.test.tsx`: a Cube error renders the message and a control that reveals the exact query JSON sent, instead of an empty chart (AC-012).

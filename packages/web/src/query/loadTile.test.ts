@@ -114,7 +114,9 @@ describe('long-polling a slow query (AC-010)', () => {
     });
 
     await expect(pending).rejects.toThrow(/abort/i);
-    // The first request went out; nothing followed it.
-    expect(calls).toHaveLength(1);
+    // The first load went out and nothing followed it. The abort also fires a
+    // cancellation (AC-011, T012), which is why this counts loads rather than
+    // every request.
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1);
   });
 });

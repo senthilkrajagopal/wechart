@@ -65,6 +65,17 @@ export class CubeClient {
     });
   }
 
+  /**
+   * `DELETE /v1/running-query/{requestId}`: stop a query Cube is still running
+   * (AC-011). Without this a superseded query holds one of the queue's two
+   * default slots until its orphan timeout.
+   */
+  async cancel(requestId: string): Promise<unknown> {
+    return this.#request(`/v1/running-query/${encodeURIComponent(requestId)}`, {
+      method: 'DELETE',
+    });
+  }
+
   async #request(path: string, init: RequestInit): Promise<unknown> {
     const response = await this.#fetch(`${this.#apiUrl}${path}`, {
       ...init,

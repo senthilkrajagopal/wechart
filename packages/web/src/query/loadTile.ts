@@ -50,33 +50,63 @@ export async function loadTile({
   onPoll,
   requestId = newRequestId(),
 }: LoadTileOptions): Promise<unknown> {
-  for (let attempt = 1; attempt <= maxPolls; attempt += 1) {
-    signal?.throwIfAborted();
+  let started = false;
 
-    const response = await fetchImpl('/api/load', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-request-id': requestId },
-      body: JSON.stringify({ query }),
-      ...(signal ? { signal } : {}),
+  /**
+   * AC-011: dropping the response is not cancelling. The query keeps running in
+   * Cube, holding one of the two default queue slots until its orphan timeout,
+   * so a user dragging a filter can starve their own dashboard. `keepalive`
+   * lets the cancellation survive a page the browser is tearing down.
+   */
+  const cancelOnCube = () => {
+    if (!started) return;
+    void fetchImpl(`/api/running-query/${encodeURIComponent(requestId)}`, {
+      method: 'DELETE',
+      keepalive: true,
+    }).catch(() => {
+      // Best effort: the tile is already gone, and Cube drops the query at its
+      // orphan timeout regardless.
     });
+  };
 
-    const body: unknown = await response.json().catch(() => null);
+  signal?.addEventListener('abort', cancelOnCube, { once: true });
 
-    if (!response.ok) {
-      throw new TileLoadError(errorMessage(body, response.status), query, response.status);
-    }
-
-    if (!isContinueWait(body)) return body;
-
-    onPoll?.(attempt);
-    signal?.throwIfAborted();
-    if (retryDelayMs > 0) await delay(retryDelayMs, signal);
+  try {
+    return await poll();
+  } finally {
+    signal?.removeEventListener('abort', cancelOnCube);
   }
 
-  throw new TileLoadError(
-    `Cube is still running this query after ${String(maxPolls)} checks.`,
-    query,
-  );
+  async function poll(): Promise<unknown> {
+    for (let attempt = 1; attempt <= maxPolls; attempt += 1) {
+      signal?.throwIfAborted();
+      started = true;
+
+      const response = await fetchImpl('/api/load', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-request-id': requestId },
+        body: JSON.stringify({ query }),
+        ...(signal ? { signal } : {}),
+      });
+
+      const body: unknown = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new TileLoadError(errorMessage(body, response.status), query, response.status);
+      }
+
+      if (!isContinueWait(body)) return body;
+
+      onPoll?.(attempt);
+      signal?.throwIfAborted();
+      if (retryDelayMs > 0) await delay(retryDelayMs, signal);
+    }
+
+    throw new TileLoadError(
+      `Cube is still running this query after ${String(maxPolls)} checks.`,
+      query,
+    );
+  }
 }
 
 function isContinueWait(body: unknown): boolean {

@@ -61,7 +61,7 @@ Traces to: `[R5]`, `[R4]`, `[research/cube/data-apis.md]`, `[research/cube/acces
       Fails when: 60 seconds after the change, a metadata request still returns members from the previous model.
 - [x] AC-010 WHILE Cube replies "Continue wait" for a query, THE SYSTEM SHALL keep the request open, show the tile in a loading state, and deliver the result when it arrives.
       Fails when: the tile shows an error, or the result never renders although Cube completed the query.
-- [ ] AC-011 WHEN a query is superseded, because its filters, marks or dashboard changed, THE SYSTEM SHALL cancel the earlier query against Cube before rendering the newer result.
+- [x] AC-011 WHEN a query is superseded, because its filters, marks or dashboard changed, THE SYSTEM SHALL cancel the earlier query against Cube before rendering the newer result.
       Fails when: no cancellation is issued for the superseded request, or the older result replaces the newer one.
 - [ ] AC-012 IF Cube returns an error for a query, THEN THE SYSTEM SHALL show the tile in an error state with Cube's message and a control that reveals the query JSON.
       Fails when: the tile shows an empty chart, or the message and query JSON are not reachable from the tile.
