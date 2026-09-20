@@ -14,6 +14,7 @@ import type { ChartType, RenderSpec } from '@wechart/core';
 
 import { barOption, isBarType } from './series/bar';
 import { isTrellisType, trellisOption } from './layout/trellis';
+import { comboOption, isComboType } from './series/combo';
 import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { lineOption, isLineType } from './series/line';
 import { pieOption, isPieType } from './series/pie';
@@ -40,6 +41,7 @@ export const DRAWABLE_TYPES = [
   'treemap',
   'heatmap',
   'trellis',
+  'combo',
 ] as const satisfies readonly ChartType[];
 
 export function isDrawable(chartType: string): boolean {
@@ -54,6 +56,10 @@ export function optionFor(spec: RenderSpec): EChartsOption {
   if (isTreemapType(spec.chartType)) return treemapOption(spec);
   if (isHeatmapType(spec.chartType)) return heatmapOption(spec);
   if (isTrellisType(spec.chartType)) return trellisOption(spec);
+  if (isComboType(spec.chartType)) return comboOption(spec);
 
-  throw new Error(`No renderer draws ${spec.chartType} yet.`);
+  // Reached only by the DOM-rendered types — KPI, table and pivot — which
+  // `ChartTile` routes before this is called, and which ECharts genuinely
+  // does not draw.
+  throw new Error(`No ECharts renderer draws ${spec.chartType}.`);
 }

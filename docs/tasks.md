@@ -445,11 +445,16 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     3. **`server.proxy` does not apply to `vite preview`.** Vite keeps `preview.proxy` separate, so serving the build without it would have 404'd every `/api` call.
   - Two test assumptions of mine were wrong, not the code: removing the dimension leaves one measure, which the recommender calls a KPI — a type with no renderer, so the app correctly declines to draw rather than redrawing; and the remove control is addressed by its label, not a test id.
   - The timeout is now 120s. It exists to catch a hung app and a pass takes about a second, so the ceiling costs no signal — it stops context-setup starvation on a loaded machine being reported as a product defect.
-- [ ] T044 (AC-037) Render the combo chart
-  - Files: `packages/charts/src/series/combo.ts`, `packages/charts/src/series/combo.test.ts`
+- [x] T044 (AC-037) Render the combo chart
+  - Files: `packages/charts/src/series/combo.ts`, `packages/charts/src/series/combo.test.ts`, `packages/charts/src/optionFor.ts`, `e2e/chart-editor.spec.ts`
   - Failing test: `combo.test.ts`: a combo spec renders bar and line series against one value axis (AC-037).
   - Depends on: T036, T188
   - **This is the task that ticks AC-037**, so it needs every listed type to render *and* the compile step of T188, because the criterion says "from a chart spec".
+  - Done 2026-09-20. **AC-037 ticked — all eighteen types render**, eleven through ECharts and three (KPI, table, pivot) as DOM, with the rest between.
+  - **One value axis, and the test proves it geometrically.** direction.md rules out a dual axis because two scales in one frame let any two series be made to look related. With amounts ten times the counts, the line must sit above every bar; swapping which measure is which reverses the relationship. A chart that scaled each series independently would look identical both ways and pass neither.
+  - The first measure takes bars and the rest lines. Which measure gets which mark is a decision a saved chart should eventually carry — Metabase keeps it per series in `series_settings.<key>.display` — but no criterion asks for it, and inventing a setting nothing sets would be guessing at a requirement.
+  - **A test retired and was replaced by its opposite.** "The editor says so for a type it cannot draw yet" was true while renderers were landing and stopped being true here. In its place: every type in the vocabulary is selected in the editor and none reports itself undrawable — which is AC-037's end-to-end demonstration rather than a narrower one. The guard itself is still covered by the unit test.
+  - The unit block named "a type nothing can draw yet" is now "a type ECharts does not draw", and asserts it is exactly KPI, pivot and table. Leaving the old name would have implied a gap that no longer exists.
 - [ ] T045 (AC-038) Show a legend for two or more series and none for one
   - Files: `packages/charts/src/legend.ts`, `packages/charts/src/legend.test.ts`
   - Failing test: `legend.test.ts`: a two-series chart renders a legend and a single-series chart renders no legend box (AC-038).

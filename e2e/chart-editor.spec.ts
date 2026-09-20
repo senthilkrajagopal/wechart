@@ -1,3 +1,4 @@
+import { CHART_TYPES } from '@wechart/core';
 import { expect, test } from '@playwright/test';
 
 /**
@@ -427,23 +428,23 @@ test('the editor draws a chart, and redraws it when the fields change', async ({
   }).toPass();
 });
 
-test('the editor says so for a type it cannot draw yet', async ({ page }) => {
+test('no chart type is left undrawn', async ({ page }) => {
   await openEditorOnOrders(page);
   await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
-
-  // Combo is the last type without a renderer (T044). It needs two measures,
-  // so the second one above is what keeps this a "cannot draw" case rather
-  // than AC-033's "needs more fields" case, which is a different behaviour.
-  // The guard itself is covered durably by the unit test in optionFor.test.ts,
-  // derived from the vocabulary; this is the UI-level check, and it retires at
-  // T044 when no undrawable type is left.
   await page.getByTestId('add-measures').selectOption('orders.total_amount');
-  await page.getByLabel('Chart type').selectOption('combo');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await page.getByTestId('add-dimensions').selectOption('orders.id');
+  await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
+  await expect(page.getByTestId('result-row-count')).toBeVisible();
 
-  // Drawing a bar instead would put a chart on screen the spec never asked for.
-  await expect(page.getByTestId('chart-not-drawable')).toBeVisible();
-  await expect(page.getByTestId('chart-canvas')).toBeHidden();
+  // Replaces a test that asserted the opposite: that the editor said so for a
+  // type with no renderer. That was true while renderers were still landing
+  // and stopped being true at T044, when the last of the eighteen arrived.
+  // The guard itself is still covered by the unit test in optionFor.test.ts.
+  for (const chartType of CHART_TYPES) {
+    await page.getByLabel('Chart type').selectOption(chartType);
+    await expect(page.getByTestId('chart-not-drawable')).toBeHidden();
+  }
 });
 
 test('a time dimension goes to its own well and groups by day', async ({ page }) => {

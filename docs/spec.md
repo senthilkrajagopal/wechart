@@ -133,7 +133,7 @@ Traces to: `[docs/inputs §2, §3]`, `[R2]`, direction.md §6, rules 8–10, 29�
 Purpose: render the saved chart spec with the axis, legend and label rules the design fixes.
 Traces to: `[docs/inputs §2]`, direction.md §6, rules 4–7, 18–19.
 
-- [ ] AC-037 THE SYSTEM SHALL render bar, horizontal bar, grouped and stacked bar, line, multi-series line, area, stacked area, scatter, pie, donut, treemap, heatmap, KPI, table, pivot table, trellis (small multiples) and combo charts from a chart spec.
+- [x] AC-037 THE SYSTEM SHALL render bar, horizontal bar, grouped and stacked bar, line, multi-series line, area, stacked area, scatter, pie, donut, treemap, heatmap, KPI, table, pivot table, trellis (small multiples) and combo charts from a chart spec.
       Fails when: a listed type cannot be produced from a valid spec.
 - [ ] AC-038 WHEN a chart has two or more series, THE SYSTEM SHALL show a legend; with one series it SHALL show none (direction.md rule 4).
       Fails when: a single-series chart shows a legend box, or a multi-series chart omits it.

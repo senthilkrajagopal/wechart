@@ -95,19 +95,21 @@ describe('every drawable type produces marks', () => {
   }
 });
 
-describe('a type nothing can draw yet', () => {
-  const notYetDrawn = CHART_TYPES.filter((chartType) => !isDrawable(chartType));
+describe('a type ECharts does not draw', () => {
+  const notEcharts = CHART_TYPES.filter((chartType) => !isDrawable(chartType));
 
-  it('still has some, so the case below is a real one', () => {
-    // When this finally empties, AC-037 is complete and the block below can go.
-    expect(notYetDrawn.length).toBeGreaterThan(0);
+  it('is only the DOM-rendered ones', () => {
+    // Every type is drawn now; these three are drawn as DOM by `ChartTile`,
+    // because a number or a table on a canvas is unselectable, unsearchable
+    // and invisible to a screen reader. Nothing is left undrawn.
+    expect([...notEcharts].sort()).toEqual(['kpi', 'pivot', 'table']);
   });
 
-  for (const chartType of notYetDrawn) {
+  for (const chartType of notEcharts) {
     it(`reports ${chartType} rather than drawing something else`, () => {
       // Falling back to a bar would put a chart on screen that the spec never
       // asked for. Derived from the vocabulary rather than hard-coded, so this
-      // keeps testing the right types as renderers land.
+      // keeps testing the right types as the split moves.
       expect(() => optionFor(spec(chartType))).toThrow(new RegExp(chartType));
     });
   }
