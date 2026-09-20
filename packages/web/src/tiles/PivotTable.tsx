@@ -1,4 +1,4 @@
-import { pivot, type RenderSpec } from '@wechart/core';
+import { formatValue, pivot, type RenderSpec } from '@wechart/core';
 
 /**
  * The pivot table (AC-037).
@@ -55,7 +55,10 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
 
   const rowDepth = rowHeaders[0]?.length ?? 0;
   const columnDepth = columnHeaders[0]?.length ?? 0;
-  const show = (value: number | null) => (value === null ? '' : String(value));
+  // Each cell written the way its own measure declares (AC-046), so a pivot
+  // of amounts reads as money and one of counts does not.
+  const show = (value: number | null, measureIndex: number) =>
+    formatValue(value, measures[measureIndex] ?? '', spec.formats ?? {});
 
   return (
     <div
@@ -113,12 +116,12 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
               ))}
               {columnHeaders.map((_, c) =>
                 measures.map((measure, m) => (
-                  <td key={`${String(c)}-${measure}`}>{show(cells[r]?.[c]?.[m] ?? null)}</td>
+                  <td key={`${String(c)}-${measure}`}>{show(cells[r]?.[c]?.[m] ?? null, m)}</td>
                 )),
               )}
               {measures.map((measure, m) => (
                 <td key={`total-${measure}`} data-testid="pivot-row-total">
-                  {show(rowTotals[r]?.[m] ?? null)}
+                  {show(rowTotals[r]?.[m] ?? null, m)}
                 </td>
               ))}
             </tr>
@@ -133,13 +136,13 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
             {columnHeaders.map((_, c) =>
               measures.map((measure, m) => (
                 <td key={`${String(c)}-${measure}`} data-testid="pivot-column-total">
-                  {show(columnTotals[c]?.[m] ?? null)}
+                  {show(columnTotals[c]?.[m] ?? null, m)}
                 </td>
               )),
             )}
             {measures.map((measure, m) => (
               <td key={`grand-${measure}`} data-testid="pivot-grand-total">
-                {show(grandTotals[m] ?? null)}
+                {show(grandTotals[m] ?? null, m)}
               </td>
             ))}
           </tr>

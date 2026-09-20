@@ -29,6 +29,8 @@ export interface CompileOptions {
   readonly chartType: ChartType;
   readonly palette?: readonly string[];
   readonly surface?: string;
+  /** What each member declares in the Cube model (AC-046). */
+  readonly formats?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -90,6 +92,7 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
       // Carried through unchanged. Compile decides the encoding; it has no
       // business interpreting what a chart type does with its own options.
       ...(chart.options === undefined ? {} : { options: chart.options }),
+      ...(options.formats === undefined ? {} : { formats: options.formats }),
       ...(options.palette === undefined ? {} : { palette: options.palette }),
       ...(options.surface === undefined ? {} : { surface: options.surface }),
     }),

@@ -124,6 +124,14 @@ export interface RenderSpec {
    * which is right for a chart standing on its own.
    */
   readonly colours?: Readonly<Record<string, string>>;
+  /**
+   * The `format` each member declares in the Cube model (AC-046).
+   *
+   * Carried on the spec rather than looked up per renderer, so that an axis,
+   * a table cell and a tooltip of the same chart cannot disagree about how a
+   * number is written.
+   */
+  readonly formats?: Readonly<Record<string, string>>;
   /** The colour the chart is drawn on, used for the gap between marks. */
   readonly surface?: string;
   /**

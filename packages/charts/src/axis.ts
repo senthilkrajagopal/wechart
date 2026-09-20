@@ -6,7 +6,7 @@
  * than being a second place that decides what an axis is. Every renderer gets
  * them for free, and none can forget.
  */
-import type { RenderSpec } from '@wechart/core';
+import { formatterFor, membersOn, type RenderSpec } from '@wechart/core';
 
 import type { EChartsOption } from './theme';
 
@@ -98,13 +98,36 @@ function axisFragment(settings: AxisSettings | undefined): Record<string, unknow
  */
 export function applyAxes(option: EChartsOption, spec: RenderSpec): EChartsOption {
   const { x, y } = axesOf(spec);
-  if (x === undefined && y === undefined) return option;
 
-  const merge = (key: 'xAxis' | 'yAxis', settings: AxisSettings | undefined) => {
+  /**
+   * The value axis carries the measure's declared format unless the axis
+   * editor overrides it (AC-046, AC-040). The member's format is the default
+   * and the axis setting is the exception, not the other way round — a
+   * currency measure should read as money without anyone asking.
+   */
+  const measure = membersOn(spec.encoding, 'y')[0];
+  const memberFormat =
+    measure === undefined || y?.numberFormat !== undefined
+      ? undefined
+      : { axisLabel: { formatter: formatterFor(measure, spec.formats ?? {}) } };
+
+  if (x === undefined && y === undefined && memberFormat === undefined) return option;
+
+  const merge = (
+    key: 'xAxis' | 'yAxis',
+    settings: AxisSettings | undefined,
+    extra: Record<string, unknown> = {},
+  ) => {
     const existing = option[key];
+    // A trellis has an array of axes per panel, which is a different editing
+    // problem; a pie or a KPI has none at all.
     if (existing === undefined || Array.isArray(existing)) return {};
-    return { [key]: { ...(existing as object), ...axisFragment(settings) } };
+    return { [key]: { ...extra, ...(existing as object), ...axisFragment(settings) } };
   };
 
-  return { ...option, ...merge('xAxis', x), ...merge('yAxis', y) };
+  return {
+    ...option,
+    ...merge('xAxis', x),
+    ...merge('yAxis', y, memberFormat ?? {}),
+  };
 }

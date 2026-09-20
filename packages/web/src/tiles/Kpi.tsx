@@ -1,4 +1,4 @@
-import { memberOn, type RenderSpec } from '@wechart/core';
+import { formatValue, memberOn, type RenderSpec } from '@wechart/core';
 
 /**
  * The KPI tile (AC-037).
@@ -39,7 +39,11 @@ export function Kpi({ spec }: KpiProps) {
   return (
     <div className="kpi" data-testid="kpi">
       <p className="kpi__value" data-testid="kpi-value">
-        {FORMAT.format(value)}
+        {/* The measure's own format, so a currency KPI reads as money
+            (AC-046). FORMAT is the fallback for a member that declares none. */}
+        {measure === undefined
+          ? FORMAT.format(value)
+          : formatValue(value, measure, spec.formats ?? {})}
       </p>
       <p className="kpi__label" data-testid="kpi-label">
         {measure}

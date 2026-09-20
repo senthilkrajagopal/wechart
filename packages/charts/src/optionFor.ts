@@ -16,6 +16,7 @@ import { barOption, isBarType } from './series/bar';
 import { applyAxes } from './axis';
 import { isTrellisType, trellisOption } from './layout/trellis';
 import { legendFor } from './legend';
+import { tooltipFor } from './tooltip';
 import { comboOption, isComboType } from './series/combo';
 import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { lineOption, isLineType } from './series/line';
@@ -55,7 +56,12 @@ export function optionFor(spec: RenderSpec): EChartsOption {
   // a rule about charts, not about bar charts, and a renderer that forgot it
   // would be a chart type quietly exempt from it.
   const base = legendFor(spec);
-  const drawn = (option: EChartsOption): EChartsOption => applyAxes(withLegend(option), spec);
+  const drawn = (option: EChartsOption): EChartsOption => ({
+    ...applyAxes(withLegend(option), spec),
+    // A tooltip has to exist before its values can carry member formats
+    // (AC-046), and no renderer sets one.
+    ...tooltipFor(spec),
+  });
 
   const withLegend = (option: EChartsOption): EChartsOption => ({
     ...option,

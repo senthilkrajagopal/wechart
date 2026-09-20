@@ -42,7 +42,7 @@ import {
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { FieldList } from './FieldList';
 import { Wells } from './Wells';
-import { membersOf, type Member } from './fields';
+import { formatsOf, membersOf, type Member } from './fields';
 
 /**
  * The chart editor (AC-025, AC-026).
@@ -143,6 +143,13 @@ export function ChartEditor() {
     () => (cubeName ? membersOf(meta.data, cubeName) : []),
     [meta.data, cubeName],
   );
+
+  /**
+   * What each member declares in the model (AC-046). Read from the metadata
+   * rather than chosen per chart, so a currency measure reads as money on the
+   * axis, in the tooltip and in the table without anyone setting it.
+   */
+  const formats = useMemo(() => formatsOf(meta.data), [meta.data]);
 
   const query = useMemo(() => toCubeQuery(spec), [spec]);
 
@@ -481,7 +488,7 @@ export function ChartEditor() {
               // Drawing anyway would put a chart on screen that contradicts
               // the message AC-033 has just shown beside it.
               <ChartTile
-                spec={compile(previewDocument, { rows, chartType: shownType })}
+                spec={compile(previewDocument, { rows, chartType: shownType, formats })}
                 // Held here, not in the tile: the tile unmounts whenever the
                 // query re-runs, so a field change would flip the reader back
                 // from the table to the chart (AC-178).

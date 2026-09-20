@@ -1,4 +1,4 @@
-import type { RenderSpec } from '@wechart/core';
+import { formatValue, type RenderSpec } from '@wechart/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRef } from 'react';
 
@@ -120,7 +120,7 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT }: DataTableProps) {
                 style={{ height: `${String(ROW_HEIGHT)}px` }}
               >
                 {columns.map((column) => (
-                  <td key={column}>{String(row?.[column] ?? '')}</td>
+                  <td key={column}>{formatValue(row?.[column], column, spec.formats ?? {})}</td>
                 ))}
               </tr>
             );

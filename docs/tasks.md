@@ -522,10 +522,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - "Cube's order" is the default and a real choice rather than the absence of one — Cube was asked for an ordering and returned it, and leaving it alone is different from having none.
   - **A real bug the browser test found**, and the same class as the results drawer at T034: `ChartTile` kept "showing the table" in its own state, and the editor unmounts the tile on every re-query — so adding a field silently flipped a reader back from the table to the chart. The state now belongs to whatever outlives the tile, and the tile takes it as an optional controlled prop.
   - **A fixture that would have passed for the wrong reason:** the first version sorted by `orders.count`, and the sample data has exactly 80 orders in each status, so every category ties and ascending and descending are identical. Switched to a measure that varies.
-- [ ] T052 (AC-046) Format every value with its member's format in axes, labels, tooltips and tables
-  - Files: `packages/core/src/format.ts`, `packages/core/src/format.test.ts`
-  - Failing test: `format.test.ts`: currency and percentage members render with their declared format in all four places (AC-046).
+- [x] T052 (AC-046) Format every value with its member's format in axes, labels, tooltips and tables
+  - Files: `packages/core/src/format.ts`, `packages/core/src/format.test.ts`, `packages/charts/src/tooltip.ts`, `packages/charts/src/format-places.test.ts`, `packages/charts/src/axis.ts`, `packages/web/src/editor/fields.ts`, `packages/web/src/tiles/{DataTable,Kpi,PivotTable}.tsx`
+  - Failing test: `format.test.ts`: currency and percentage members render with their declared format (AC-046); `format-places.test.ts` and `DataTable.test.tsx`: they do so in the axis, the tooltip and the table.
   - Depends on: T041, T047
+  - Done 2026-09-20. **AC-046 ticked.**
+  - **"From the Cube model" is the load-bearing phrase.** A format is not a per-tile setting: it is declared once on the measure and follows it everywhere, so the same number never appears as `1234` on an axis and `$1,234.00` in the table of the same chart. Verified against the running Cube — `/v1/meta` reports `format: "currency"` on `orders.total_amount`.
+  - **The criterion names four places for a reason, so the places are tested, not just the formatter.** A formatter nothing calls formats nothing. Separate tests cover the axis, the tooltip and the table.
+  - **A tooltip had to be built before it could carry a format.** No renderer set one. direction.md asks for a crosshair on line and area and a per-mark tooltip elsewhere, and that is the split. Every interpolated value is escaped: ECharts' tooltip formatter returns raw HTML, and `research/echarts.md` records that 6.1.0 fixed an XSS in exactly that path.
+  - The member's format is the **default** and AC-040's axis setting the **exception**, not the other way round — a currency measure should read as money without anyone asking, and an explicit `numberFormat` still wins.
+  - Cube's format vocabulary is wider than a chart can honour: `imageUrl`, `link`, `id` and d3 specifiers are all legal. Those fall back to a plain grouped number, because refusing to draw would be worse than drawing a number.
+  - A gap formats as blank, never `0` or `NaN`: nothing was measured, and both alternatives assert something. Text passes through, because formatting a dimension's label as currency would be worse than leaving it.
 
 ## F6. Quick calculations and calculation requests
 

@@ -65,6 +65,37 @@ describe('table semantics', () => {
   });
 });
 
+describe('member formats (AC-046)', () => {
+  const AMOUNT = 'orders.total_amount';
+
+  it('writes a currency member as money', () => {
+    render(
+      <DataTable
+        spec={spec({
+          rows: [{ [STATUS]: 'paid', [AMOUNT]: 1234.5 }],
+          formats: { [AMOUNT]: 'currency' },
+        })}
+      />,
+    );
+
+    expect(screen.getByText('$1,234.50')).toBeTruthy();
+  });
+
+  it('leaves a member with no declared format as a plain number', () => {
+    render(<DataTable spec={spec({ rows: [{ [STATUS]: 'paid', [COUNT]: 1234 }], formats: {} })} />);
+
+    // The format follows the member, not the table.
+    expect(screen.getByText('1,234')).toBeTruthy();
+  });
+
+  it('shows a gap as blank rather than as a zero', () => {
+    render(<DataTable spec={spec({ rows: [{ [STATUS]: 'paid', [COUNT]: null }], formats: {} })} />);
+
+    const cells = screen.getAllByTestId('table-row')[0]?.querySelectorAll('td');
+    expect(cells?.[1]?.textContent).toBe('');
+  });
+});
+
 describe('virtualisation', () => {
   const many = spec({ rows: rowsOf(1000) });
 

@@ -89,6 +89,26 @@ export function membersOf(meta: unknown, cubeName: string): Member[] {
   ];
 }
 
+/**
+ * The `format` each member declares in the model, for every cube (AC-046).
+ *
+ * Across all cubes rather than the selected one: a chart names its members in
+ * full (`orders.total_amount`), and a saved chart opened before its cube is
+ * selected should still know how to write its numbers.
+ */
+export function formatsOf(meta: unknown): Record<string, string> {
+  const formats: Record<string, string> = {};
+
+  for (const cube of (meta as { cubes?: RawCube[] } | null)?.cubes ?? []) {
+    for (const member of [...(cube.measures ?? []), ...(cube.dimensions ?? [])]) {
+      const { name, format } = member as RawMember & { format?: unknown };
+      if (typeof name === 'string' && typeof format === 'string') formats[name] = format;
+    }
+  }
+
+  return formats;
+}
+
 export const GROUP_LABELS: Record<MemberKind, string> = {
   measure: 'Measures',
   dimension: 'Dimensions',
