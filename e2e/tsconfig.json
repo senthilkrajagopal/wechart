@@ -1,6 +1,9 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
+    // page.evaluate callbacks are compiled here but run in the browser, so
+    // they need DOM types alongside Node's.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
   "include": ["**/*.ts", "../playwright.config.ts"]

@@ -41,9 +41,9 @@ Traces to: `[R2]`, `[docs/inputs §8]`, direction.md §2.
       Fails when: after reload the application shows a different workspace, dashboard, chart or file than the URL names.
 - [ ] AC-003 WHEN the user switches the theme, THE SYSTEM SHALL re-render the current surface in the other theme without changing the route or losing scroll position.
       Fails when: the route changes, the scroll position resets, or any element keeps the previous theme's background colour after the switch.
-- [ ] AC-004 THE SYSTEM SHALL render every text node at a computed font size of at least 12 px (direction.md rule 1).
+- [x] AC-004 THE SYSTEM SHALL render every text node at a computed font size of at least 12 px (direction.md rule 1).
       Fails when: any rendered text node has a computed font-size below 12 px.
-- [ ] AC-005 THE SYSTEM SHALL meet WCAG AA contrast for text in both themes: at least 4.5:1, or 3:1 for text of at least 18.66 px bold or 24 px (direction.md rule 2).
+- [x] AC-005 THE SYSTEM SHALL meet WCAG AA contrast for text in both themes: at least 4.5:1, or 3:1 for text of at least 18.66 px bold or 24 px (direction.md rule 2).
       Fails when: any text node's contrast ratio against its own background is below its threshold.
 - [ ] AC-006 WHEN the user presses ⌘K or Ctrl+K anywhere in the application, THE SYSTEM SHALL open the search palette with keyboard focus in its input.
       Fails when: after the shortcut, focus is not inside the palette input, or the palette does not open.

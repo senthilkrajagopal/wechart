@@ -73,10 +73,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Depends on: T002, T006
   - Done 2026-09-19. **AC-003 stays unchecked**: the route half and the repaint half are demonstrated (computed `background-color` on `body` and `.app-bar`, in both directions, and across a reload), but the criterion also says "without losing scroll position" and no surface is long enough to scroll yet. Asserting that against a page that cannot scroll would prove nothing. T016 builds the Explore contents list and ticks AC-003 with the scroll assertion added.
   - Both palettes ship in one stylesheet and the switch is a `data-theme` attribute on the document element, so nothing remounts and no navigation happens — which is *why* the route and scroll survive, rather than something that needs defending per surface. The stylesheet is generated from the tokens by `@wechart/ui`'s `themeCss()`, so what the browser paints and what the contrast audit checks are the same values.
-- [ ] T008 (AC-004, AC-005) Apply the tokens across the shell and run the audit over rendered surfaces
-  - Files: `packages/web/src/shell/*.css.ts`, `e2e/a11y-tokens.spec.ts`
+- [x] T008 (AC-004, AC-005) Apply the tokens across the shell and run the audit over rendered surfaces
+  - Files: `packages/web/src/shell/styles.ts`, `e2e/a11y-tokens.spec.ts`, `e2e/tsconfig.json`
   - Failing test: `e2e/a11y-tokens.spec.ts`: on the rendered shell in both themes, every text node computes to at least 12 px and meets its contrast threshold (AC-004, AC-005).
   - Depends on: T002, T007
+  - Done 2026-09-19. **AC-004 and AC-005 ticked**, from the rendered page rather than the token table — axe-core for contrast and a computed-style sweep over every visible text node, across four surfaces in both themes. This is what T002 deliberately left open: a component hard-coding a colour or an 11 px size passes every unit test and fails here.
+  - Two of the eighteen cases exist to prove the audits can fail: each injects a violation (an 11 px paragraph, and `#bbbbbb` on white) and asserts it is caught. Without them, "no offenders" could equally mean the sweep found no text at all.
+  - Re-run on every surface a later task adds. The audit is only as broad as `SURFACES`.
 - [ ] T009 (AC-006) Open the search palette on ⌘K / Ctrl+K with focus in its input
   - Files: `packages/web/src/shell/SearchPalette.tsx`, `packages/web/src/shell/SearchPalette.test.tsx`
   - Failing test: `SearchPalette.test.tsx`: the shortcut opens the palette from any workspace and `document.activeElement` is the palette input (AC-006).
