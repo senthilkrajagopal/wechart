@@ -132,7 +132,11 @@ Family: **Inter**, falling back to `system-ui, -apple-system, "Segoe UI", sans-s
 | `text-kpi-solo`  | 40/52                 | 600, `tnum` | a tile with a single KPI                                     | Metabase scalar 54 px (measured) sets the upper bound |
 
 - **Floor:** no text smaller than 12 px.
-  - **One platform exception, found at T019:** WebKit draws a native `<select>` popup with the system UI font and ignores author `font-size` on `<option>`, reporting 11 px. The closed control inherits our type, so what is read inline meets the floor; only the open OS popup does not. The rendered audit skips `option` for this reason. If a surface ever needs a dropdown whose list must meet the floor, it has to be a custom listbox rather than a native select.
+  - **One platform exception, found at T019 and corrected by measurement on 2026-09-20.** The original wording said WebKit "ignores author `font-size` on `<option>`" and that "the closed control inherits our type". Both halves were wrong; measuring each engine directly (`docs/research/webkit-select-font-size.md`) gives:
+    - `font: inherit` on a `select` does **not** take in WebKit — the control computes to **11 px**, its UA default, where Firefox honours it and reports 14 px.
+    - An explicit `font-size` on `option` **is** honoured: WebKit reports 20 px for `option { font-size: 20px }`. So the option half is fixable and was never the platform limit.
+    - The `select` itself stays at 11 px in WebKit even with an explicit `font-size`. That is the real exception, and it is the **closed** control — the part read without opening anything.
+  - The rendered audit walks text nodes, and a `select`'s text lives in its `option` children, so skipping `option` also hid the closed control. The decision (2026-09-20) is to accept 11 px for native selects in WebKit rather than replace them with custom listboxes. Any surface that must meet the floor in a dropdown needs a custom listbox.
 - **Weights:** only 400 and 600 are used.
 - **Numerals:** tabular figures (`tnum`) in tables, axes and KPIs.
 
