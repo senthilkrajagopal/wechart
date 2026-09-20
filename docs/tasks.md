@@ -245,10 +245,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **Cardinalities come from the rows the query returned**, not from a separate count query. What decides whether a chart reads is how many values are in *this* result, and it costs nothing extra.
   - `orders.id` is now `public: true` in the sample model: Cube hides primary keys from metadata by default, and without a high-cardinality dimension no capacity rule could be exercised against real data. It is also what row-level marking will need at T098 (AC-092).
   - A test of mine was wrong first: it asserted the trace names `time_as_categories`, which is a **soft** rule (a weight) and so never appears in a legality trace. The rule was right; the assertion was not.
-- [ ] T030 (AC-032) Keep a manually chosen chart type until "Back to recommended"
-  - Files: `packages/web/src/editor/chartTypeState.ts`, `packages/web/src/editor/chartTypeState.test.ts`
+- [x] T030 (AC-032) Keep a manually chosen chart type until "Back to recommended"
+  - Files: `packages/web/src/editor/chartTypeState.ts`, `packages/web/src/editor/chartTypeState.test.ts`, `packages/web/src/editor/ChartEditor.tsx`, `e2e/chart-editor.spec.ts`
   - Failing test: `chartTypeState.test.ts`: after a manual pick, later field changes leave the type unchanged, and "Back to recommended" restores the recommendation (AC-032).
   - Depends on: T028
+  - Done 2026-09-20. AC-032 ticked. The rule is one-directional and stated as such: **a field change never clears a manual choice**, only "Back to recommended" does. Re-recommending over someone's explicit decision each time they add a field is the behaviour this criterion exists to forbid — it reads as the application arguing with them.
+  - `afterFieldChange` is written as an identity function rather than left implicit, so the intent is visible and testable, and a test runs four field changes in a row: an implementation that survives one might not survive the next.
+  - The browser test picks a type the recommender *did not* choose and then changes fields so the recommendation moves — otherwise "kept" and "recommended again" look identical.
 - [ ] T031 (AC-033) Say what is missing when the fields cannot produce the chosen type
   - Files: `packages/web/src/editor/MissingFields.tsx`, `packages/web/src/editor/MissingFields.test.tsx`
   - Failing test: `MissingFields.test.tsx`: the message names the well and the member type needed, instead of rendering empty axes (AC-033).

@@ -141,6 +141,57 @@ test('the trace names the rule that rejected a candidate (AC-029)', async ({ pag
   await expect(trace.getByTestId('trace-pie-pie_slice_capacity')).toContainText('6 slices');
 });
 
+/**
+ * AC-032: WHEN the user picks a chart type manually, THE SYSTEM SHALL keep that
+ * type through later field changes until the user chooses "Back to
+ * recommended".
+ * Fails when: the type reverts to the recommendation after a field change.
+ */
+test('a manually chosen chart type survives field changes', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await expect(page.getByTestId('chart-type')).toHaveText('bar');
+
+  // Pick something the recommender did not choose.
+  await page.getByLabel('Chart type').selectOption('pie');
+  await expect(page.getByTestId('chart-type')).toHaveText('pie');
+
+  // A field change moves the recommendation on; the chart must not follow.
+  await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
+  await expect(page.getByTestId('recommended-type')).not.toHaveText('pie');
+  await expect(page.getByTestId('chart-type')).toHaveText('pie');
+});
+
+test('"Back to recommended" hands the choice back', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+
+  await page.getByLabel('Chart type').selectOption('pie');
+  await expect(page.getByTestId('chart-type')).toHaveText('pie');
+
+  await page.getByTestId('back-to-recommended').click();
+
+  await expect(page.getByTestId('chart-type')).toHaveText('bar');
+  // And it follows the recommendation again from here on.
+  await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
+  const recommended = await page.getByTestId('recommended-type').textContent();
+  await expect(page.getByTestId('chart-type')).toHaveText(recommended!);
+});
+
+test('the option to go back appears only after a manual choice', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+
+  await expect(page.getByTestId('back-to-recommended')).toBeHidden();
+
+  await page.getByLabel('Chart type').selectOption('pie');
+
+  await expect(page.getByTestId('back-to-recommended')).toBeVisible();
+});
+
 test('a time dimension goes to its own well and groups by day', async ({ page }) => {
   await openEditorOnOrders(page);
 

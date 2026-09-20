@@ -6,6 +6,13 @@ import { explain, recommend, type Signature } from '@wechart/recommender';
 
 import { loadTile } from '../query/loadTile';
 import { WhyThisChart } from './WhyThisChart';
+import {
+  FOLLOWING_RECOMMENDATION,
+  backToRecommended,
+  chooseType,
+  effectiveType,
+  isManual,
+} from './chartTypeState';
 import { FieldList } from './FieldList';
 import { Wells } from './Wells';
 import { membersOf, type Member } from './fields';
@@ -22,6 +29,7 @@ export function ChartEditor() {
   const [spec, setSpec] = useState(emptySpec());
   /** The field under the pointer during a drag, so wells can judge it (AC-027). */
   const [dragging, setDragging] = useState<Member | null>(null);
+  const [chartTypeState, setChartTypeState] = useState(FOLLOWING_RECOMMENDATION);
 
   const meta = useQuery({
     queryKey: ['meta'],
@@ -88,6 +96,17 @@ export function ChartEditor() {
   const recommendation = useMemo(() => recommend(signature), [signature]);
   const explanation = useMemo(() => explain(signature), [signature]);
 
+  /**
+   * AC-032: a manual choice survives field changes. Nothing here resets it on
+   * a spec change — only "Back to recommended" does.
+   */
+  const recommended = recommendation.top?.candidate.chartType ?? null;
+  const shownType = effectiveType(chartTypeState, recommended);
+  const alternatives = [
+    ...(recommendation.top ? [recommendation.top] : []),
+    ...recommendation.runnersUp,
+  ];
+
   return (
     <div className="chart-editor">
       <div className="chart-editor__fields">
@@ -117,8 +136,10 @@ export function ChartEditor() {
         <h3>Chart</h3>
         {recommendation.top ? (
           <div data-testid="recommendation">
-            <p data-testid="recommended-type">{recommendation.top.candidate.chartType}</p>
+            <p data-testid="chart-type">{shownType}</p>
+            <p data-testid="recommended-type">{recommended}</p>
             <p data-testid="recommended-reason">{recommendation.top.reason}</p>
+
             <h4>Or</h4>
             <ul>
               {recommendation.runnersUp.map((runnerUp) => (
@@ -130,6 +151,32 @@ export function ChartEditor() {
                 </li>
               ))}
             </ul>
+
+            <label htmlFor="chart-type-picker">Chart type</label>
+            <select
+              id="chart-type-picker"
+              value={shownType ?? ''}
+              onChange={(event) =>
+                setChartTypeState(chooseType(event.target.value as typeof shownType & string))
+              }
+            >
+              {alternatives.map((option) => (
+                <option key={option.candidate.chartType} value={option.candidate.chartType}>
+                  {option.candidate.chartType}
+                </option>
+              ))}
+            </select>
+
+            {isManual(chartTypeState) ? (
+              <button
+                type="button"
+                data-testid="back-to-recommended"
+                onClick={() => setChartTypeState(backToRecommended())}
+              >
+                Back to recommended
+              </button>
+            ) : null}
+
             <WhyThisChart explanation={explanation} />
           </div>
         ) : null}
