@@ -66,6 +66,41 @@ describe('colour capacity (AC-031)', () => {
   });
 });
 
+/**
+ * A deliberate decision, not a fallback: a field whose cardinality nobody knows
+ * is treated as *over* any cap.
+ *
+ * The two guesses are not symmetric. Assuming small offers a pie that then
+ * draws five hundred slices; assuming large offers a bar for a category that
+ * turns out to have four values — a worse chart, not a broken one.
+ */
+describe('a field with unknown cardinality', () => {
+  const unknown: Field = { name: 'orders.unknown', kind: 'dimension' };
+
+  it('fails the colour cap rather than passing it', () => {
+    expect(isLegal(candidate({ colorField: unknown }))).toBe(false);
+  });
+
+  it('fails the pie cap rather than passing it', () => {
+    expect(isLegal(candidate({ chartType: 'pie', categoryField: unknown }))).toBe(false);
+  });
+
+  it('fails the trellis cap rather than passing it', () => {
+    expect(isLegal(candidate({ facetField: unknown }))).toBe(false);
+  });
+
+  it('says the count is unknown rather than printing Infinity', () => {
+    const outcome = reasonFor(candidate({ colorField: unknown }), 'high_cardinality_color');
+    expect(outcome?.reason).toContain('unknown');
+    expect(outcome?.reason).not.toContain('Infinity');
+  });
+
+  it('still allows a chart whose capped channels carry nothing', () => {
+    // A bar's category axis has no cap, so an unknown count is fine there.
+    expect(isLegal(candidate({ chartType: 'bar', categoryField: unknown }))).toBe(true);
+  });
+});
+
 describe('trellis capacity (AC-031)', () => {
   it('accepts exactly the cap', () => {
     expect(isLegal(candidate({ facetField: dimension(CAPS.trellisPanels) }))).toBe(true);

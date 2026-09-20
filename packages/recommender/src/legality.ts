@@ -27,6 +27,22 @@ export const CAPS = {
 
 type Rule = (candidate: Candidate) => RuleOutcome;
 
+/**
+ * A field whose cardinality nobody knows is treated as **over** any cap, not
+ * under it.
+ *
+ * The two guesses are not symmetric: assuming small offers a pie that then
+ * draws five hundred slices, while assuming large offers a bar for a category
+ * that turns out to have four values — a worse chart, not a broken one. So an
+ * absent count fails a capacity rule. A channel carrying no field at all is a
+ * different thing and passes.
+ */
+const countFor = (field: Candidate['colorField']) =>
+  field === undefined ? null : (field.cardinality ?? Number.POSITIVE_INFINITY);
+
+const describeCount = (count: number) =>
+  Number.isFinite(count) ? String(count) : 'an unknown number of';
+
 const pass = (rule: string): RuleOutcome => ({ rule, passed: true });
 const fail = (rule: string, reason: string): RuleOutcome => ({ rule, passed: false, reason });
 
@@ -47,21 +63,21 @@ const noDualValueAxis: Rule = (candidate) =>
     : pass('no_dual_value_axis');
 
 const colorCapacity: Rule = (candidate) => {
-  const categories = candidate.colorField?.cardinality;
-  return categories !== undefined && categories > CAPS.colorCategories
+  const categories = countFor(candidate.colorField);
+  return categories !== null && categories > CAPS.colorCategories
     ? fail(
         'high_cardinality_color',
-        `Colour carries ${String(CAPS.colorCategories)} categories at most; this needs ${String(categories)}.`,
+        `Colour carries ${String(CAPS.colorCategories)} categories at most; this needs ${describeCount(categories)}.`,
       )
     : pass('high_cardinality_color');
 };
 
 const trellisCapacity: Rule = (candidate) => {
-  const panels = candidate.facetField?.cardinality;
-  return panels !== undefined && panels > CAPS.trellisPanels
+  const panels = countFor(candidate.facetField);
+  return panels !== null && panels > CAPS.trellisPanels
     ? fail(
         'high_cardinality_facet',
-        `A trellis shows ${String(CAPS.trellisPanels)} panels at most; this needs ${String(panels)}.`,
+        `A trellis shows ${String(CAPS.trellisPanels)} panels at most; this needs ${describeCount(panels)}.`,
       )
     : pass('high_cardinality_facet');
 };
@@ -70,11 +86,11 @@ const pieCapacity: Rule = (candidate) => {
   if (candidate.chartType !== 'pie' && candidate.chartType !== 'donut') {
     return pass('pie_slice_capacity');
   }
-  const slices = candidate.categoryField?.cardinality;
-  return slices !== undefined && slices > CAPS.pieSlices
+  const slices = countFor(candidate.categoryField);
+  return slices !== null && slices > CAPS.pieSlices
     ? fail(
         'pie_slice_capacity',
-        `A pie is readable up to ${String(CAPS.pieSlices)} slices; this has ${String(slices)}.`,
+        `A pie is readable up to ${String(CAPS.pieSlices)} slices; this has ${describeCount(slices)}.`,
       )
     : pass('pie_slice_capacity');
 };
@@ -82,15 +98,15 @@ const pieCapacity: Rule = (candidate) => {
 const heatmapCapacity: Rule = (candidate) => {
   if (candidate.chartType !== 'heatmap') return pass('heatmap_cell_capacity');
 
-  const rows = candidate.categoryField?.cardinality;
-  const columns = candidate.secondCategoryField?.cardinality;
-  if (rows === undefined || columns === undefined) return pass('heatmap_cell_capacity');
+  const rows = countFor(candidate.categoryField);
+  const columns = countFor(candidate.secondCategoryField);
+  if (rows === null || columns === null) return pass('heatmap_cell_capacity');
 
   const cells = rows * columns;
   return cells > CAPS.heatmapCells
     ? fail(
         'heatmap_cell_capacity',
-        `A heatmap stays readable up to ${String(CAPS.heatmapCells)} cells; this has ${String(cells)}.`,
+        `A heatmap stays readable up to ${String(CAPS.heatmapCells)} cells; this has ${describeCount(cells)}.`,
       )
     : pass('heatmap_cell_capacity');
 };

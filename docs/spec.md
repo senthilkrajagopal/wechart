@@ -107,13 +107,13 @@ Traces to: `[docs/inputs §2, §3]`, `[R2]`, direction.md §6, rules 8–10, 29�
       Fails when: the field is not added by either route, or the chart still shows the previous result.
 - [x] AC-027 WHILE a field is being dragged, THE SYSTEM SHALL mark each well as legal or illegal for it and give a reason for every illegal well (direction.md rule 12).
       Fails when: an illegal well accepts the drop, or gives no reason.
-- [ ] AC-028 WHEN the chart's fields change, THE SYSTEM SHALL recommend a chart type from the field signature and cardinalities, and show at least one runner-up, each with a reason of at most 80 characters (direction.md rule 9).
+- [x] AC-028 WHEN the chart's fields change, THE SYSTEM SHALL recommend a chart type from the field signature and cardinalities, and show at least one runner-up, each with a reason of at most 80 characters (direction.md rule 9).
       Fails when: no runner-up is shown, or a reason exceeds 80 characters.
 - [ ] AC-029 WHEN the user opens "Why this chart?", THE SYSTEM SHALL show the field signature, the cardinality of each field, and every hard rule with its pass or fail result (direction.md rule 29).
       Fails when: a rule that rejected a candidate is absent from the trace.
-- [ ] AC-030 THE SYSTEM SHALL never recommend a chart with two value axes (direction.md rule 8).
+- [x] AC-030 THE SYSTEM SHALL never recommend a chart with two value axes (direction.md rule 8).
       Fails when: any recommendation or runner-up uses a second value axis.
-- [ ] AC-031 WHEN a chart would exceed a channel's capacity, THE SYSTEM SHALL reject that candidate: more than 8 colour categories, more than 20 trellis panels, more than 6 pie slices, or more than 200 heatmap cells (direction.md rule 6).
+- [x] AC-031 WHEN a chart would exceed a channel's capacity, THE SYSTEM SHALL reject that candidate: more than 8 colour categories, more than 20 trellis panels, more than 6 pie slices, or more than 200 heatmap cells (direction.md rule 6).
       Fails when: a candidate over any cap is offered as the top pick or a runner-up.
 - [ ] AC-032 WHEN the user picks a chart type manually, THE SYSTEM SHALL keep that type through later field changes until the user chooses "Back to recommended" (direction.md rule 10).
       Fails when: the type reverts to the recommendation after a field change.

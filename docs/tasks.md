@@ -229,11 +229,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - The heatmap rule counts **cells**, not either axis: 15×15 is over the cap though neither side looks large.
   - The four caps live in one `CAPS` object with the provenance stated beside them — the research found no published maximum for any of them, so they are product decisions rather than literature.
   - `checkLegality` returns every rule's verdict, passed or failed, because AC-029's trace has to show the rules that *passed* too.
-- [ ] T028 (AC-028) Recommend a chart type from the field signature, with at least one runner-up and a reason
-  - Files: `packages/recommender/src/{score,recommend}.ts`, `packages/web/src/editor/Recommendation.tsx`, `packages/recommender/src/recommend.test.ts`
+- [x] T028 (AC-028, AC-030, AC-031) Recommend a chart type from the field signature, with at least one runner-up and a reason
+  - Files: `packages/recommender/src/{recommend,legality,index}.ts`, `packages/recommender/src/{recommend,legality}.test.ts`
   - Failing test: `recommend.test.ts`: a field change produces a top pick plus at least one runner-up, each with a reason of at most 80 characters (AC-028).
   - Depends on: T027
-  - Also ticks **AC-030 and AC-031**, carried from T027: both are stated over what is offered, so they are demonstrated here by asserting that nothing the recommender returns — top pick or runner-up — has two value axes or exceeds a channel cap.
+  - Done 2026-09-20. **AC-028, AC-030 and AC-031 all ticked.** The two carried from T027 are demonstrated the way they are written — over what is *offered* — by running eleven signatures through the recommender and asserting nothing it returns has two value axes or exceeds a channel cap.
+  - Enumerate, filter, rank, the shape the research recommends. The **weights are ours**: Draco's shipped weights are hand-tuned rather than learned and its design space has no pie, KPI or table, so they could not be ported wholesale (research §7). What is ported is the *shape* — a cost summed from named soft rules, lower being better — plus the channel ordering from Draco-APT and CompassQL.
+  - Runners-up are a different chart type from the winner, not the same chart again: an alternative should be another way of seeing the data, which is what Voyager's grouping achieves (research §3).
+  - **A decision the tests forced into the open**: a field whose cardinality nobody knows is treated as *over* any cap, not under it. The guesses are not symmetric — assuming small offers a pie that then draws five hundred slices, while assuming large offers a bar for a category that turns out to have four values: a worse chart, not a broken one. `legality.ts` and `recommend.ts` had silently disagreed about this, and a test caught it.
 - [ ] T029 (AC-029) Show the "Why this chart?" trace
   - Files: `packages/web/src/editor/WhyThisChart.tsx`, `packages/web/src/editor/WhyThisChart.test.tsx`
   - Failing test: `WhyThisChart.test.tsx`: the panel shows the field signature, each field's cardinality, and every hard rule with its pass or fail result, including each rule that rejected a candidate (AC-029).
