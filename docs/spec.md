@@ -203,7 +203,7 @@ Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
       Fails when: a non-http(s) URL is accepted, or the target dashboard opens without the filters while the option is on.
 - [x] AC-065 WHEN the user saves a dashboard, THE SYSTEM SHALL persist the layout, tile settings, dashboard settings and marking definitions, and leave edit mode.
       Fails when: any of those is missing after reopening the dashboard.
-- [ ] AC-066 WHEN the user discards an edit session, THE SYSTEM SHALL restore the dashboard, its chart specs and its settings to their state when editing began.
+- [x] AC-066 WHEN the user discards an edit session, THE SYSTEM SHALL restore the dashboard, its chart specs and its settings to their state when editing began.
       Fails when: any change made during the session survives the discard.
 - [ ] AC-067 WHEN the dashboard re-renders during editing, THE SYSTEM SHALL keep the canvas and sidebar scroll positions (direction.md rule 40).
       Fails when: either scroll position resets after a re-render.

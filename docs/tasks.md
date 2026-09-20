@@ -281,6 +281,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **The type picker now offers every chart type, not just the recommended ones.** It previously listed only the top pick and runners-up, which are all drawable by construction — so this criterion could never have fired. An override limited to the runners-up is barely an override, and a type the fields cannot yet produce is answered by the message rather than by hiding the option.
   - A test asserts every chart type the recommender can offer has a requirements entry: one added without it would silently claim it can always be drawn.
 - [ ] T032 (AC-034) Preview at the tile's own size and filling the editor, and return with the tile updated
+  - **AC-066 depends on how this is built.** Discard restores whatever the edit session holds, and the session holds the dashboard document. A dashboard-local chart is a *separate* document, so a chart edited through this editor would not be reverted by a discard — and AC-066 says a discard restores "the dashboard, its **chart specs** and its settings". Either the chart edit goes through the dashboard's session, or discard must be taught to revert it. Chart specs could not be exercised at T072 because E leaves the dashboard entirely; this is where that becomes testable, and where AC-066 could silently stop being true.
   - Files: `packages/web/src/editor/PreviewFrame.tsx`, `e2e/editor-preview.spec.ts`
   - Failing test: `e2e/editor-preview.spec.ts`: opened from a tile, the tile-size preview matches the tile's width and height, and returning applies the changes to that tile (AC-034).
   - Depends on: T025, T060
@@ -732,8 +733,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **Three things T023 left for this task, to check before it is done.** (1) `DashboardPage`'s `onSave` is a deliberate no-op and Save is permanently enabled, so today the button does nothing and there is no way out of edit mode — AC-065's "and leave edit mode" is the other half of fixing it. (2) A stored dashboard body is cast (`as Partial<DashboardDocument>`), not parsed, where a chart body goes through strict `readChartDocument`; a body whose `pages` is not an array throws inside render with no error boundary, so close that asymmetry once the write path exists. (3) Re-verify AC-018 as a genuine round trip: it is currently demonstrated by opening a *seeded* dashboard, since the read path existed before the write path did.
   - Failing test: `save.test.ts`: reopening a saved dashboard restores all four, and saving leaves edit mode (AC-065).
   - Depends on: T003, T064
-- [ ] T072 (AC-066) Restore the dashboard, its chart specs and its settings on discard
-  - Files: `packages/web/src/dashboard/edit/discard.ts`, `packages/web/src/dashboard/edit/discard.test.ts`
+- [x] T072 (AC-066) Restore the dashboard, its chart specs and its settings on discard
+  - Files: `packages/web/src/dashboard/edit/discard.test.tsx`, `docs/tasks.md` (checks recorded on T032 and T075)
+  - Done 2026-09-20. AC-066 ticked.
+  - **No `discard.ts`.** The restore is the edit session's own `discard`, built at T059 on a history that stores whole states: there is nothing left for a module to do, and a file existing only to match a file list would be worse than none. What this task adds is the proof, and the checks that keep it true.
+  - The tests work through the **interface**, not over the history module. `editor/history.test.ts` already proves `discard` returns the initial state; what AC-066 needs is that *every way a user can change a dashboard* goes through the session — a change made outside it would pass a history test and survive a discard. So add, move, resize, delete, delete-a-page and all of them together each get a case.
+  - Discard **stays in edit mode**: Save is how a session ends (AC-065), Discard puts the dashboard back and leaves the user where they were. It is also itself undoable, so a discard by mistake is not the end — both asserted.
+  - **Two of the three things the criterion names could not be exercised.** Chart specs cannot change during a session, because E leaves the dashboard entirely; settings cannot change at all yet. Everything that *can* change is covered, and the whole-state history covers anything added later **provided it goes through the session** — which is exactly the thing that could quietly stop being true. Hard checks are recorded on **T032** (chart editing) and **T075** (settings) rather than left to memory.
   - Failing test: `discard.test.ts`: no change made during the session survives Discard, chart specs and settings included (AC-066).
   - Depends on: T071
 - [ ] T073 (AC-067) Keep the canvas and sidebar scroll positions across a re-render
@@ -751,6 +757,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/dashboard/settings/SettingsPage.tsx`, `packages/web/src/dashboard/settings/SettingsPage.test.tsx`
   - Failing test: `SettingsPage.test.tsx`: the gear opens a page with General, Interactions, Markings, Cross-filtering and Layout, and leaving without saving applies nothing (AC-069).
   - Depends on: T059
+  - **AC-066 depends on how this is built.** A settings change made while editing has to go through the edit session, or Discard will not revert it — and AC-066 says a discard restores "the dashboard, its chart specs and its **settings**". direction.md agrees: "While editing, a save is one undoable change, and Discard reverts it." Settings could not be exercised at T072 because nothing could change them yet; this is where that becomes testable.
 - [ ] T076 (AC-070) Keep both interaction configurations and label the inactive one
   - Files: `packages/web/src/dashboard/settings/interactionMode.ts`, `packages/web/src/dashboard/settings/interactionMode.test.ts`
   - Failing test: `interactionMode.test.ts`: switching modes preserves the other mode's configuration, exactly one mode is active, and the other is labelled inactive (AC-070).
