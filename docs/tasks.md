@@ -301,10 +301,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **The chart-type vocabulary moved to `@wechart/core`**, which the recommender now re-exports. It is what a saved chart is written in, and the renderer has to agree with it; two lists would drift, and a recommendation for a type the renderer never heard of fails at draw time. The 18 names are unchanged, and `ChartSpec.chartType` is now typed as `ChartType` rather than `string` — without that the stated reason was aspirational, since a saved chart was not actually written in the vocabulary.
   - The path reader throws on any command it does not handle. Skipping one silently returns a wrong bounding box, which would make every geometry assertion in this file meaningless rather than failing.
   - A gap is `null`, never `0`: zero is a measurement and a missing row is the absence of one. Cube returns measures as JSON strings, so `seriesOf` converts them — a renderer trusting the raw value would sort and scale them as text.
-- [ ] T036 (AC-037) Render the line and area family
-  - Files: `packages/charts/src/series/line.ts`, `packages/charts/src/series/line.test.ts`
+- [x] T036 (AC-037) Render the line and area family
+  - Files: `packages/charts/src/series/line.ts`, `packages/charts/src/series/line.test.ts`, `packages/charts/src/testing/renderToSvg.ts`
   - Failing test: `line.test.ts`: line, multi-series line, area and stacked area each render from a valid spec (AC-037).
   - Depends on: T035
+  - Done 2026-09-20. **AC-037 stays unchecked** — 8 of its 18 types now render. It is ticked at T044.
+  - A line is an unfilled area, so all four are one `line` series set differing only in whether the region beneath is filled and whether the series stack. Mutating that table so `area` does not fill and `stackedArea` does not stack fails 3 tests.
+  - **Finding marks needed a second route.** A line is a stroke with `fill="none"`, invisible to the fill-based `marksOf`; an area draws both a filled polygon and the line on top. `strokesOf` keys on `fill="none"`, which is also what separates a line from its own markers — a marker is a stroked path in the series colour too, but a filled circle carrying a scale transform. Setting `symbolSize` made those markers appear and the first version of the helper counted them as lines, reporting four where one was expected.
+  - Stacking is proved by geometry rather than by the `stack` option: the upper series' line sits above the lower one at every category. The multi-series test asserts the unstacked pair **crosses** (count is below total in jan and above it in feb), so a chart that merely claims to stack fails.
+  - **A gap breaks the line.** `connectNulls` stays at ECharts' default of false, and the test asserts one break for a null month and none without. A missing month is not a month with no orders; joining across it would draw a trend through data that was never measured. This is the rendered consequence of `seriesOf` emitting `null` rather than `0`.
+  - direction.md §6 is demonstrated: lines at 2 px, and a marker per point of at least 8 px. Marker size is read from the transform matrix, because ECharts scales a unit circle — the drawn diameter is nowhere in the path data.
+  - Carries T035's review lessons: the test palette is not the default ramp, so the palette hand-in is falsifiable here too.
 - [ ] T037 (AC-037) Render scatter
   - Files: `packages/charts/src/series/scatter.ts`, `packages/charts/src/series/scatter.test.ts`
   - Failing test: `scatter.test.ts`: a scatter spec renders its points with both value axes bound (AC-037).

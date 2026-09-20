@@ -11,11 +11,11 @@
  * Test support, not a product surface: nothing outside tests imports it.
  */
 import * as echarts from 'echarts/core';
-import { BarChart } from 'echarts/charts';
+import { BarChart, LineChart } from 'echarts/charts';
 import { GridComponent, LegendComponent, TitleComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 
-echarts.use([BarChart, GridComponent, LegendComponent, TitleComponent, SVGRenderer]);
+echarts.use([BarChart, LineChart, GridComponent, LegendComponent, TitleComponent, SVGRenderer]);
 
 export const RENDER_SIZE = { width: 640, height: 400 } as const;
 
@@ -99,6 +99,78 @@ export function marksOf(svg: string, fills: readonly string[]): Box[] {
   }
 
   return boxes;
+}
+
+export interface Stroke {
+  readonly colour: string;
+  readonly widthPx: number;
+  /** The vertices the line passes through, in draw order. */
+  readonly points: readonly [number, number][];
+  /**
+   * How many times the line lifts and restarts. A `null` in the data draws a
+   * break rather than joining across it, which shows up as an extra `M`.
+   */
+  readonly breaks: number;
+}
+
+/**
+ * Every stroked line of the given colours.
+ *
+ * A line series is a stroke with `fill="none"`, so `marksOf` — which finds
+ * marks by their fill — cannot see one. An area series draws both: a filled
+ * polygon that `marksOf` finds, and the line on top that this finds.
+ *
+ * `fill="none"` is what separates the line from its own markers: a marker is
+ * also a stroked path in the series colour, but it is a filled circle carrying
+ * a scale transform (see `markersOf`).
+ */
+export function strokesOf(svg: string, colours: readonly string[]): Stroke[] {
+  const strokes: Stroke[] = [];
+
+  for (const match of svg.matchAll(
+    /<path d="([^"]*)"[^>]*\bfill="none"[^>]*\bstroke="([^"]*)"(?:[^>]*\bstroke-width="([^"]*)")?/g,
+  )) {
+    const [, path = '', colour = '', width] = match;
+    if (!colours.includes(colour)) continue;
+
+    strokes.push({
+      colour,
+      // zrender omits `stroke-width` when it is 1, so an absent attribute is
+      // a real 1 px line rather than a missing measurement.
+      widthPx: width === undefined ? 1 : Number(width),
+      points: outline(path).points,
+      breaks: (path.match(/[Mm]/g) ?? []).length - 1,
+    });
+  }
+
+  return strokes;
+}
+
+export interface Marker {
+  readonly colour: string;
+  readonly diameterPx: number;
+}
+
+/**
+ * The point markers on a line.
+ *
+ * ECharts draws each as a unit circle scaled by a transform matrix, so the
+ * drawn diameter is twice the matrix scale rather than anything in the path
+ * itself — which is why direction.md's "markers are at least 8 px" cannot be
+ * read off the path data.
+ */
+export function markersOf(svg: string, colours: readonly string[]): Marker[] {
+  const markers: Marker[] = [];
+
+  for (const match of svg.matchAll(
+    /<path d="M1 0A[^"]*"[^>]*\btransform="matrix\(([-\d.]+),[^"]*\)"[^>]*\bstroke="([^"]*)"/g,
+  )) {
+    const [, scale = '0', colour = ''] = match;
+    if (!colours.includes(colour)) continue;
+    markers.push({ colour, diameterPx: Number(scale) * 2 });
+  }
+
+  return markers;
 }
 
 /** Every point an ECharts outline passes through, and every corner it rounds. */
