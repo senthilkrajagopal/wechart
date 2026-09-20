@@ -610,3 +610,143 @@ test('a member keeps one colour across two tiles', async ({ page }) => {
   // assertion above true and meaningless.
   expect(new Set(shared.map((member) => first[member])).size).toBe(shared.length);
 });
+
+/**
+ * T073 / AC-067, the half jsdom cannot reach.
+ *
+ * `scroll.test.tsx` proves the panes are not remounted, but scrolling is a
+ * layout fact and jsdom has no layout: there, `scrollTop` is a number anyone
+ * can assign to any element, so the unit tests would pass just as happily with
+ * the window doing all the scrolling and rule 40 unmet. Only a real browser
+ * can say whether the canvas overflows itself rather than the page.
+ *
+ * The viewport is made short rather than the seed made taller, because a short
+ * window is the condition the rule is about and the seeded dashboard is shared
+ * with every other test in this file.
+ */
+test('the canvas and the sidebar scroll themselves, and hold position across an edit', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 420 });
+  await open(page);
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  const canvas = page.getByTestId('canvas-scroll');
+  const sidebar = page.getByTestId('sidebar-scroll');
+
+  const overflows = (node: HTMLElement) => node.scrollHeight > node.clientHeight;
+  expect(await canvas.evaluate(overflows)).toBe(true);
+  expect(await sidebar.evaluate(overflows)).toBe(true);
+
+  /**
+   * The tile is focused before the panes are scrolled, not after. Playwright
+   * brings an element into view to act on it, so focusing a tile that is
+   * currently scrolled out of sight would move the canvas and the test would
+   * be reading its own scrolling rather than the app's. Focus first, scroll
+   * second, and the later keypress touches neither.
+   */
+  const tile = page.getByTestId('grid-item').first();
+  await tile.focus();
+
+  await canvas.evaluate((node) => {
+    node.scrollTop = 120;
+  });
+  await sidebar.evaluate((node) => {
+    node.scrollTop = 40;
+  });
+
+  const top = (node: HTMLElement) => node.scrollTop;
+  expect(await canvas.evaluate(top)).toBe(120);
+  expect(await sidebar.evaluate(top)).toBe(40);
+
+  /**
+   * The panes scrolled, and the page did not — it cannot, because it has
+   * nothing to scroll. Both halves are asserted: without the second, a page
+   * that quietly grew a scrollbar of its own would still pass, and that is the
+   * state this criterion replaced.
+   */
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(
+    await page.evaluate(() => {
+      const root = document.scrollingElement as HTMLElement;
+      return root.scrollHeight - root.clientHeight;
+    }),
+  ).toBe(0);
+
+  /**
+   * The edit is made with the keyboard, on the already-focused tile, rather
+   * than by clicking a palette entry. Clicking one scrolls the sidebar for the
+   * same reason: Divider is the seventh of ten entries, so the click would
+   * move that pane to about 308 all by itself.
+   */
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /^Discard \(1 change/ })).toBeVisible();
+
+  expect(await canvas.evaluate(top)).toBe(120);
+  expect(await sidebar.evaluate(top)).toBe(40);
+});
+
+/**
+ * T073 / AC-067, the case that nearly shipped broken.
+ *
+ * The dashboard is not the only thing on the surface: DashboardPage renders
+ * the save-failure alert beside it. Sizing the dashboard itself against the
+ * viewport assumed it was alone there, so an alert pushed the surface past the
+ * viewport, the window took the scrollbar back, and the canvas lost the bottom
+ * of the dashboard — in the one moment a user most needs to see their work.
+ *
+ * The alert is provoked with a real stale save (AC-065's 409), not by
+ * injecting markup, so the test breaks if the alert ever moves somewhere that
+ * reintroduces the problem.
+ */
+test('a save failure does not hand the scrollbar back to the window', async ({ page, request }) => {
+  await page.setViewportSize({ width: 1280, height: 420 });
+
+  // Its own dashboard: this test saves, and the seeded one is shared with
+  // every other spec in this file and across the three browser projects.
+  const unique = `alert-${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const created = await request.post('http://localhost:4100/api/documents', {
+    data: { kind: 'dashboard', title: `Alerted ${unique}`, folderId: 'root' },
+  });
+  const { id } = (await created.json()) as { id: string };
+
+  const body = {
+    schemaVersion: 1,
+    title: `Alerted ${unique}`,
+    folderId: 'root',
+    owner: 'admin',
+    settings: { width: 'fixed' },
+    pages: [
+      {
+        id: 'only',
+        title: 'Only',
+        items: [
+          { id: 'tall-a', kind: 'chart', w: 12, h: 40 },
+          { id: 'tall-b', kind: 'chart', w: 12, h: 40 },
+        ],
+      },
+    ],
+  };
+  await request.put(`http://localhost:4100/api/documents/dashboard/${id}`, {
+    data: { version: 1, body },
+  });
+
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: `Alerted ${unique}` })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByTestId('add-header').click();
+
+  // Someone else saves first, so ours is the stale one that 409s (AC-065).
+  await request.put(`http://localhost:4100/api/documents/dashboard/${id}`, {
+    data: { version: 2, body },
+  });
+
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByTestId('save-failed')).toBeVisible();
+
+  const overflow = await page.evaluate(() => {
+    const root = document.scrollingElement as HTMLElement;
+    return root.scrollHeight - root.clientHeight;
+  });
+  expect(overflow).toBe(0);
+});

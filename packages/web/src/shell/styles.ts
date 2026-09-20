@@ -42,6 +42,16 @@ body {
   line-height: var(--wc-text-sm-line);
 }
 
+/* The two chrome measurements the dashboard has to subtract from the viewport
+   to size itself (see .dashboard). Declared once, as custom properties, for
+   the same reason styles.ts imports COLUMNS and GUTTER_PX from geometry.ts:
+   a second copy of a number is a number that can drift, and here the drift
+   would be a silent second scrollbar rather than anything that fails loudly. */
+:root {
+  --wc-app-bar-height: 48px;
+  --wc-surface-padding: 16px;
+}
+
 .app-bar {
   /* Sticky so the workspace switcher, search and theme control stay reachable
      however far a surface has scrolled. A bar that scrolls away also means any
@@ -52,7 +62,7 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
-  height: 48px;
+  height: var(--wc-app-bar-height);
   padding: 0 16px;
   background: var(--wc-bg-surface);
   border-bottom: 1px solid var(--wc-border-subtle);
@@ -99,7 +109,7 @@ body {
   cursor: pointer;
 }
 
-main { padding: 16px; }
+main { padding: var(--wc-surface-padding); }
 
 .visually-hidden {
   position: absolute;
@@ -190,7 +200,56 @@ main { padding: 16px; }
   min-height: 48px;
 }
 
-.dashboard__body { display: flex; align-items: flex-start; gap: 16px; }
+/* direction.md section 2 makes the canvas and the inspector separate panes,
+   and rule 40 asks that re-rendering keep both of their scroll positions.
+   That only means anything if each one scrolls on its own: with the window
+   scrolling instead there is no canvas position to keep, and dragging the
+   sidebar's scrollbar would carry the dashboard along with it.
+
+   So the dashboard is as tall as the space it is given and no taller — the
+   viewport less the sticky .app-bar above it — and then hands what is left
+   down, so each level keeps its natural height and only the panes absorb the
+   difference. main's own padding is inside that height, because everything
+   here is border-box.
+
+   The height is on main rather than on .dashboard because .dashboard is not
+   always main's only child: DashboardPage puts the save-failure alert beside
+   it. Sized the other way, a failed save pushed main past the viewport and
+   handed the scrollbar back to the window — the state this rule replaced, in
+   the one moment the canvas matters most. Constraining the parent makes any
+   sibling simply take its height out of the panes' share.
+
+   min-height: 0 on every level because a flex item defaults to
+   min-height: auto and so refuses to shrink below its content, which would
+   push the overflow back out to the window.
+
+   :has() rather than a class, so nothing has to remember to set one; the
+   sheet already relies on it for .grid-tile:has(.tile-menu__list).
+
+   And it is a subtraction rather than flex: 1 on a full-height shell because a
+   flex item still offers its content height to its container's intrinsic size,
+   flex-basis: 0 or not — measured, not assumed: the dashboard sized the shell
+   to its tallest tile instead of the other way round. Sizing the shell itself
+   would fix that and take the window's scrollbar away from every other
+   workspace, including the long Explore list AC-003 scrolls. */
+main:has(.dashboard) {
+  height: calc(100vh - var(--wc-app-bar-height));
+  display: flex;
+  flex-direction: column;
+}
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.dashboard__body {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
 
 /* direction.md section 2: "fixed-width and centred (max 1440px), with a toggle
    for full width". This is the saved setting AC-018 asks to come back, so it
@@ -198,7 +257,14 @@ main { padding: 16px; }
 .dashboard-page { width: 100%; }
 .dashboard-page[data-width='fixed'] { max-width: 1440px; margin-inline: auto; }
 .dashboard-page[data-width='full'] { max-width: none; }
-.dashboard__canvas { flex: 1; min-width: 0; }
+/* position: relative so the canvas is a containing block as well as a scroll
+   container. Without it an absolutely positioned descendant with no nearer
+   positioned ancestor — the visually-hidden aria-live region at the end of the
+   canvas is one — resolves against the page instead, which neither clips it
+   nor scrolls it, so it stretches the document and the window gains a second
+   scrollbar behind the canvas's own. WebKit showed it first (AC-067's e2e
+   test measured window.scrollY at 22 there). */
+.dashboard__canvas { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: auto; }
 
 .edit-bar { display: flex; gap: 8px; }
 .edit-bar button { height: 32px; padding: 0 12px; border: 1px solid var(--wc-border-strong); border-radius: 4px; background: var(--wc-bg-surface); color: var(--wc-text-primary); cursor: pointer; }
@@ -207,14 +273,21 @@ main { padding: 16px; }
    failure the token pair in @wechart/ui exists to prevent (AC-005). */
 .edit-bar__save { background: var(--wc-accent); color: var(--wc-text-on-accent); border-color: var(--wc-accent); }
 
+/* The panel scrolls, not the whole sidebar: the tab row is how the user moves
+   between panels, so scrolling it out of reach would be the one thing an
+   inspector must not do. */
 .edit-sidebar {
+  display: flex;
+  flex-direction: column;
   flex: 0 0 300px;
+  min-height: 0;
+  overflow: hidden;
   border: 1px solid var(--wc-border-subtle);
   border-radius: 6px;
   background: var(--wc-bg-surface);
 }
 
-.edit-sidebar__tabs { display: flex; border-bottom: 1px solid var(--wc-border-subtle); }
+.edit-sidebar__tabs { display: flex; flex: 0 0 auto; border-bottom: 1px solid var(--wc-border-subtle); }
 .edit-sidebar__tabs button {
   flex: 1;
   height: 32px;
@@ -228,7 +301,7 @@ main { padding: 16px; }
   color: var(--wc-text-primary);
   border-bottom-color: var(--wc-accent);
 }
-.edit-sidebar__panel { padding: 16px; }
+.edit-sidebar__panel { padding: 16px; flex: 1; min-height: 0; overflow: auto; }
 
 /* The Add palette (AC-058). Every entry carries its hint, because the
    difference between "Chart" and "Chart from folders" is the whole of

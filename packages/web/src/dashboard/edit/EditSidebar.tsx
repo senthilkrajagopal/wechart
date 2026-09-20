@@ -81,6 +81,7 @@ export function EditSidebar({ panels }: EditSidebarProps) {
         aria-labelledby={tabId(open)}
         tabIndex={0}
         className="edit-sidebar__panel"
+        data-testid="sidebar-scroll"
       >
         {panels?.[CONTENT_KEY[open]]}
       </div>

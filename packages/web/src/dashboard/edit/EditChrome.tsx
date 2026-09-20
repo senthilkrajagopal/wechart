@@ -140,7 +140,10 @@ export function EditChrome<T>({
       </header>
 
       <div className="dashboard__body">
-        <div className="dashboard__canvas">{children(session)}</div>
+        {/* The canvas scrolls on its own, so rule 40 has a position to keep. */}
+        <div className="dashboard__canvas" data-testid="canvas-scroll">
+          {children(session)}
+        </div>
         {editing ? <EditSidebar panels={panels?.(session)} /> : null}
       </div>
     </div>
