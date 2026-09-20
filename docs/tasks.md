@@ -340,10 +340,38 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/charts/src/layout/trellis.ts`, `packages/charts/src/layout/trellis.test.ts`
   - Failing test: `trellis.test.ts`: panels lay out in a grid, share one scale while the shared setting is on, each carry a title, and never exceed 20 (AC-037, AC-045).
   - Depends on: T035
+> **Plan change, 2026-09-20 (user-approved).** A cold review found that no task produced the thing AC-037 is written against: "render … **from a chart spec**". A chart document held only catalog metadata — title, owner, folder — with no query, no encoding and no chart type, and nothing turned a saved chart into a `RenderSpec`. T186–T188 close that, and they come before T044 because T044 is the task that ticks AC-037. Grounded in `docs/research/{superset-chart-serialization,metabase-card-serialization,grafana-panel-schema}.md`; see each task for which finding decides what.
+
+- [ ] T186 (AC-014, AC-037) Define the saved chart document and read it back unchanged
+  - Files: `packages/core/src/chart-document.ts`, `packages/core/src/chart-document.test.ts`, `packages/api/src/repos/documents.ts`
+  - Failing test: `chart-document.test.ts`: a document carrying source, wells, chart type, encoding overrides and options round-trips through JSON unchanged, and a body missing `schemaVersion` is refused rather than guessed at (AC-014).
+  - Depends on: T035
+  - **Persist the authoring shape only.** All three reference products agree and none stores a render shape: Grafana's resolved `DataFrame[]` is built by `PanelQueryRunner.getData()` and never saved, Metabase hands the renderer `{card, data}`, Superset builds `ChartProps` at render. The one exception anywhere is a Grafana snapshot, which is a separate mode with its own metadata block.
+  - **No cached derived query.** Superset caches one in `slices.query_context` and it is the source of its worst documented maintenance problem: the `form_data` → `query_context` derivation lived only in the frontend, so keeping the cache correct forced ~50 TypeScript functions to be re-implemented in Python. `toCubeQuery(spec)` stays a pure function computed on demand.
+  - **Roles are named in the data, not recovered by aliasing.** Superset's flat `{controlName: value}` map costs it `extract_query_fields`' alias table plus three hand-maintained key lists in `standardizedFormData.ts`, purely so switching chart type keeps the user's fields.
+  - **Encoding and options are sparse overrides over a computed baseline**, which is Metabase's model and already wechart's own for `chartTypeState`: absent means "follow the recommendation", present means the user pinned it. It is also why a permissive options map is tolerable — an unknown key is inert, not corrupt.
+- [ ] T187 (AC-181) Upgrade a chart saved in an earlier format, and refuse one from a newer format
+  - Files: `packages/core/src/chart-document.ts`, `packages/core/src/chart-migrations.ts`, `packages/core/src/chart-migrations.test.ts`
+  - Failing test: `chart-migrations.test.ts`: a fixture document at every past version upgrades to the current one and produces the same chart type, members and query; a document from a newer version is refused with a message naming the version (AC-181).
+  - Depends on: T186
+  - Forward-only, upgrade-on-read, one step per version, with a fixture per version that must keep passing. Both Grafana (`DashboardMigrator`, `if (oldVersion < N && finalTargetVersion >= N)`) and Metabase (`upgrade-card-schema-to`) work this way.
+  - **The chain is append-only.** Metabase has two upgrade steps it can never delete — 21 "caused performance problems", 23 "This fix was a failure … now it's just a no-op" — because older rows still have to traverse them. A step is therefore written once and neutered rather than removed.
+  - **A newer format is refused, not guessed at.** Metabase's reader recovers to `{}` on any deserialization error, which is how instances ended up with cards that exist but have no query — the condition a later schema upgrade was written to repair and failed to.
+  - Superset's approach is explicitly rejected: it has no version on the payload, rewrites every row in place, stores the whole pre-migration document inside the document as `form_data_bak` permanently, and swallows per-row failures so a partial migration surfaces nothing.
+- [ ] T188 (AC-037) Compile a saved chart document into a RenderSpec
+  - Files: `packages/core/src/render-spec.ts`, `packages/core/src/compile.ts`, `packages/core/src/compile.test.ts`
+  - Failing test: `compile.test.ts`: a saved document plus result rows compiles to the `RenderSpec` the renderers already consume, and the same document with an encoding override compiles to the overridden channels (AC-037).
+  - Depends on: T186
+  - **This is the bridge AC-037 is written against.** Until it exists, "render … from a chart spec" cannot be demonstrated end-to-end however many chart types render.
+  - **`Encoding` becomes a channel model** — x, y, colour, size, facet, row, column — replacing `{category, series, values[]}`, which was fitted to the bar and line families and cannot express scatter (two value axes), heatmap (two categories plus colour), treemap (hierarchy plus size), pivot (rows × columns × measures) or trellis (a facet). The channel vocabulary and its renderer-neutrality are already documented in `docs/research/vega-lite.md`: the fieldDef model "names data roles and visual channels", and rendering happens only after compiling.
+  - **Channels bind to result columns by name.** Metabase's `graph.dimensions`/`graph.metrics` are plain result-column names, arrived at after abandoning ref-keyed settings over issue #11829 — open from 2019 to 2025 — and both keying schemes still coexist in their data. Cube member names are already stable names, so this costs nothing and avoids the whole class.
+  - **Per-series and per-member settings need addressing, panel-wide ones do not** (Grafana's `options` vs `fieldConfig.defaults` vs matcher-selected `overrides`). The mechanical test: a setting that must apply to some series and not others has to be addressable. AC-040 (axes) and AC-046 (per-member format) are both in that category; the legend (AC-038) is not.
+
 - [ ] T044 (AC-037) Render the combo chart
   - Files: `packages/charts/src/series/combo.ts`, `packages/charts/src/series/combo.test.ts`
   - Failing test: `combo.test.ts`: a combo spec renders bar and line series against one value axis (AC-037).
-  - Depends on: T036
+  - Depends on: T036, T188
+  - **This is the task that ticks AC-037**, so it needs every listed type to render *and* the compile step of T188, because the criterion says "from a chart spec".
 - [ ] T045 (AC-038) Show a legend for two or more series and none for one
   - Files: `packages/charts/src/legend.ts`, `packages/charts/src/legend.test.ts`
   - Failing test: `legend.test.ts`: a two-series chart renders a legend and a single-series chart renders no legend box (AC-038).
@@ -977,7 +1005,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 | AC-011 | T012       | AC-056 | T062 | AC-101 | T107 | AC-146 | T152       |
 | AC-012 | T013       | AC-057 | T063 | AC-102 | T108 | AC-147 | T153       |
 | AC-013 | T014       | AC-058 | T064 | AC-103 | T109 | AC-148 | T154       |
-| AC-014 | T003       | AC-059 | T065 | AC-104 | T110 | AC-149 | T155       |
+| AC-014 | T003, T186 | AC-059 | T065 | AC-104 | T110 | AC-149 | T155       |
 | AC-015 | T003       | AC-060 | T066 | AC-105 | T111 | AC-150 | T156       |
 | AC-016 | T015       | AC-061 | T067 | AC-106 | T112 | AC-151 | T157       |
 | AC-017 | T016       | AC-062 | T068 | AC-107 | T113 | AC-152 | T158       |
@@ -1000,7 +1028,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 | AC-034 | T032       | AC-079 | T085 | AC-124 | T130 | AC-169 | T175       |
 | AC-035 | T033       | AC-080 | T086 | AC-125 | T131 | AC-170 | T176       |
 | AC-036 | T034       | AC-081 | T087 | AC-126 | T132 | AC-171 | T177       |
-| AC-037 | T035–T044  | AC-082 | T088 | AC-127 | T133 | AC-172 | T178       |
+| AC-037 | T035–T044, T186, T188 | AC-082 | T088 | AC-127 | T133 | AC-172 | T178 |
 | AC-038 | T045       | AC-083 | T089 | AC-128 | T134 | AC-173 | T179       |
 | AC-039 | T046       | AC-084 | T090 | AC-129 | T135 | AC-174 | T180       |
 | AC-040 | T047       | AC-085 | T091 | AC-130 | T136 | AC-175 | T181       |
@@ -1009,3 +1037,4 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 | AC-043 | T050       | AC-088 | T094 | AC-133 | T139 | AC-178 | T041       |
 | AC-044 | T051       | AC-089 | T095 | AC-134 | T140 | AC-179 | T184       |
 | AC-045 | T043       | AC-090 | T096 | AC-135 | T141 | AC-180 | T001, T185 |
+| AC-181 | T187       |        |      |        |      |        |            |
