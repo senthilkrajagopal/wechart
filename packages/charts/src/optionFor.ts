@@ -13,9 +13,11 @@
 import type { ChartType, RenderSpec } from '@wechart/core';
 
 import { barOption, isBarType } from './series/bar';
+import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { lineOption, isLineType } from './series/line';
 import { pieOption, isPieType } from './series/pie';
 import { scatterOption, isScatterType } from './series/scatter';
+import { isTreemapType, treemapOption } from './series/treemap';
 import type { EChartsOption } from './theme';
 
 /**
@@ -34,6 +36,8 @@ export const DRAWABLE_TYPES = [
   'scatter',
   'pie',
   'donut',
+  'treemap',
+  'heatmap',
 ] as const satisfies readonly ChartType[];
 
 export function isDrawable(chartType: string): boolean {
@@ -45,6 +49,8 @@ export function optionFor(spec: RenderSpec): EChartsOption {
   if (isLineType(spec.chartType)) return lineOption(spec);
   if (isScatterType(spec.chartType)) return scatterOption(spec);
   if (isPieType(spec.chartType)) return pieOption(spec);
+  if (isTreemapType(spec.chartType)) return treemapOption(spec);
+  if (isHeatmapType(spec.chartType)) return heatmapOption(spec);
 
   throw new Error(`No renderer draws ${spec.chartType} yet.`);
 }

@@ -37,6 +37,7 @@ export {
 
 export {
   CHANNELS,
+  CHART_TYPES,
   distinctValues,
   memberOn,
   membersOn,

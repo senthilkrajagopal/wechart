@@ -13,13 +13,21 @@
  * drive, so what they measure and what the browser paints come off the same
  * path. AC-174/AC-175 still owe this a measurement with real tile counts.
  */
-import { BarChart, LineChart, PieChart, ScatterChart } from 'echarts/charts';
+import {
+  BarChart,
+  HeatmapChart,
+  LineChart,
+  PieChart,
+  ScatterChart,
+  TreemapChart,
+} from 'echarts/charts';
 import {
   AxisPointerComponent,
   GridComponent,
   LegendComponent,
   TitleComponent,
   TooltipComponent,
+  VisualMapComponent,
 } from 'echarts/components';
 import * as echarts from 'echarts/core';
 import { LabelLayout } from 'echarts/features';
@@ -30,11 +38,14 @@ echarts.use([
   LineChart,
   ScatterChart,
   PieChart,
+  TreemapChart,
+  HeatmapChart,
   GridComponent,
   TooltipComponent,
   AxisPointerComponent,
   LegendComponent,
   TitleComponent,
+  VisualMapComponent,
   LabelLayout,
   SVGRenderer,
 ]);

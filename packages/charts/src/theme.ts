@@ -46,5 +46,15 @@ export const DEFAULT_PALETTE = [
   '#e34948',
 ] as const;
 
+/**
+ * direction.md §5's sequential ramp: "a single blue hue, running 100→700".
+ *
+ * The two published values are the ends. direction.md names no intermediate
+ * steps, so the shades between are interpolated by whatever consumes this — a
+ * derivation, recorded as one, in the same way the unmarked-fade opacity is
+ * recorded there as derived rather than published.
+ */
+export const SEQUENTIAL = ['#cde2fb', '#0d366b'] as const;
+
 /** direction.md §5, `bg-surface` in the light theme. */
 export const DEFAULT_SURFACE = '#ffffff';

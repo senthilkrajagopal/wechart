@@ -11,8 +11,20 @@
  * Test support, not a product surface: nothing outside tests imports it.
  */
 import * as echarts from 'echarts/core';
-import { BarChart, LineChart, PieChart, ScatterChart } from 'echarts/charts';
-import { GridComponent, LegendComponent, TitleComponent } from 'echarts/components';
+import {
+  BarChart,
+  HeatmapChart,
+  LineChart,
+  PieChart,
+  ScatterChart,
+  TreemapChart,
+} from 'echarts/charts';
+import {
+  GridComponent,
+  LegendComponent,
+  TitleComponent,
+  VisualMapComponent,
+} from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 
 echarts.use([
@@ -20,6 +32,9 @@ echarts.use([
   LineChart,
   ScatterChart,
   PieChart,
+  TreemapChart,
+  HeatmapChart,
+  VisualMapComponent,
   GridComponent,
   LegendComponent,
   TitleComponent,
@@ -83,19 +98,54 @@ export interface Box {
  * general SVG path parser and does not pretend to be.
  */
 export function marksOf(svg: string, fills: readonly string[]): Box[] {
+  return filledPaths(svg).filter((box) => fills.includes(box.fill));
+}
+
+/**
+ * Every cell of a heatmap, darkest last.
+ *
+ * A heatmap's colours are interpolated along a ramp rather than chosen from a
+ * palette, so they cannot be matched by name the way a bar's can — ECharts
+ * writes them as `rgb(…)`. What a heatmap claims is that a larger value is a
+ * darker cell, so what the helper returns is the luminance to compare.
+ */
+export function cellsOf(svg: string): (Box & { luminance: number })[] {
+  return filledPaths(svg)
+    .filter((box) => box.fill.startsWith('rgb('))
+    .map((box) => {
+      const [r = 0, g = 0, b = 0] = (box.fill.match(/\d+/g) ?? []).map(Number);
+      // Rec. 709 luma. Only the ordering matters here, not the exact value.
+      return { ...box, luminance: 0.2126 * r + 0.7152 * g + 0.0722 * b };
+    });
+}
+
+/** Every filled `<path>`, with any `translate` already applied. */
+function filledPaths(svg: string): Box[] {
   const boxes: Box[] = [];
 
-  for (const match of svg.matchAll(
-    /<path d="([^"]*)"[^>]*\bfill="([^"]*)"(?:[^>]*\bstroke-width="([^"]*)")?/g,
-  )) {
-    const [, path = '', fill = '', strokeWidth] = match;
-    if (!fills.includes(fill)) continue;
+  for (const match of svg.matchAll(/<path\b([^>]*)>/g)) {
+    const attributes = match[1] ?? '';
+    const path = /\bd="([^"]*)"/.exec(attributes)?.[1];
+    const fill = /\bfill="([^"]*)"/.exec(attributes)?.[1];
+    if (path === undefined || fill === undefined || fill === 'none') continue;
 
     const { points, corners } = outline(path);
     if (points.length === 0) continue;
 
-    const xs = points.map(([x]) => x);
-    const ys = points.map(([, y]) => y);
+    // A treemap's rectangles are drawn at the origin and placed by a
+    // transform, so a box read from the path alone would put every one of
+    // them in the same corner.
+    const translate =
+      /\btransform="matrix\(1,0,0,1,([-\d.]+),([-\d.]+)\)"|\btransform="translate\(([-\d.]+)[ ,]([-\d.]+)\)"/.exec(
+        attributes,
+      );
+    const dx = Number(translate?.[1] ?? translate?.[3] ?? 0);
+    const dy = Number(translate?.[2] ?? translate?.[4] ?? 0);
+
+    const xs = points.map(([x]) => x + dx);
+    const ys = points.map(([, y]) => y + dy);
+    const strokeWidth = /\bstroke-width="([^"]*)"/.exec(attributes)?.[1];
+
     boxes.push({
       fill,
       left: Math.min(...xs),

@@ -52,6 +52,32 @@ export type Channel = 'x' | 'y' | 'color' | 'size' | 'facet' | 'row' | 'column';
 export const CHANNELS: readonly Channel[] = ['x', 'y', 'color', 'size', 'facet', 'row', 'column'];
 
 /**
+ * Every chart type, at runtime. The union above is the same list to the type
+ * checker; this is for the places that have to iterate it — a picker offering
+ * every type, or a test asserting that whatever has no renderer says so.
+ */
+export const CHART_TYPES: readonly ChartType[] = [
+  'bar',
+  'hbar',
+  'groupedBar',
+  'stackedBar',
+  'line',
+  'multiLine',
+  'area',
+  'stackedArea',
+  'scatter',
+  'pie',
+  'donut',
+  'treemap',
+  'heatmap',
+  'kpi',
+  'table',
+  'pivot',
+  'trellis',
+  'combo',
+];
+
+/**
  * Which member plays which role in a drawn chart, as visual **channels**.
  *
  * Channels rather than `{category, series, values}`, because that trio was

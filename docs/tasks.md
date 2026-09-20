@@ -331,10 +331,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **The hole is read from the geometry, not from the option that asked for it.** ECharts writes a pie slice with its edge running to the centre and a donut's stopping at the inner radius, so "is a ring" is a fact about the path. Setting the donut's inner radius to zero fails the test.
   - A category with no measurement is left out rather than drawn as a zero-width sliver. A sliver in the legend invites the reader to look for a slice that is not there.
   - Slices carry the same surface-coloured gap as the bar family, so a pie's slices and a stacked bar's segments read the same way across a dashboard.
-- [ ] T039 (AC-037) Render treemap and heatmap
-  - Files: `packages/charts/src/series/{treemap,heatmap}.ts`, `packages/charts/src/series/heatmap.test.ts`
+- [x] T039 (AC-037) Render treemap and heatmap
+  - Files: `packages/charts/src/series/{treemap,heatmap}.ts`, `packages/charts/src/series/heatmap.test.ts`, `packages/charts/src/theme.ts`, `packages/charts/src/testing/renderToSvg.ts`, `packages/core/src/render-spec.ts`
   - Failing test: `heatmap.test.ts`: treemap and heatmap each render from a valid spec (AC-037).
-  - Depends on: T035
+  - Depends on: T035, T188
+  - Done 2026-09-20. **AC-037 stays unchecked** — 13 of its 18 types now render.
+  - Each is tested on what makes it that chart: a treemap's rectangle **areas** are the shares (60/30/10 gives ratios of 2 and 3, where three equal tiles would pass a count and fail every ratio), and a heatmap's cell **darkness** is the value.
+  - **Heatmap is the case the channel model exists for.** It is the one type whose y axis is categorical and whose measure drives colour rather than position — `x` and `y` name the two dimensions, `color` names the measure. `{category, series, values}` could not have said that at all.
+  - **ECharts requires `visualMap` for a heatmap** and throws "Heatmap must use with visualMap" without one, which `docs/research/echarts.md` does not mention. So the colour scale is its component rather than a per-cell colour of ours; the ramp's endpoints are direction.md §5's sequential blue, and a test asserts the palest and darkest cells are exactly those, so the ramp is the one that was decided rather than ECharts' default.
+  - direction.md publishes only the ends of that ramp, so the shades between are interpolated — recorded in `theme.ts` as a derivation, the way direction.md records its own derived values.
+  - **A treemap rectangle's position lives in a `transform`**, not in its path, so `marksOf` now applies any translate. Without it every rectangle would have been measured in the same corner. All 55 existing tests passed unchanged afterwards, which is what says the change was safe.
+  - `CHART_TYPES` now exists at runtime in core, so the "a type nothing draws yet is reported rather than drawn as something else" test derives its cases from the vocabulary instead of naming one that stops being true — which it had, twice, in this task alone.
 - [ ] T040 (AC-037) Render the KPI tile
   - Files: `packages/charts/src/dom/Kpi.tsx`, `packages/charts/src/dom/Kpi.test.tsx`
   - Failing test: `Kpi.test.tsx`: a KPI spec renders its value and sub-line without clipping (AC-037).

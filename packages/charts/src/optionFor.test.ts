@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { RenderSpec } from '@wechart/core';
+import { CHART_TYPES, type RenderSpec } from '@wechart/core';
 
 import { DRAWABLE_TYPES, isDrawable, optionFor } from './optionFor';
-import { marksOf, pointsOf, renderToSvg, sectorsOf } from './testing/renderToSvg';
+import { cellsOf, marksOf, pointsOf, renderToSvg, sectorsOf } from './testing/renderToSvg';
 
 /**
  * AC-037: one entry point from a spec to a drawable option.
@@ -16,30 +16,50 @@ import { marksOf, pointsOf, renderToSvg, sectorsOf } from './testing/renderToSvg
 const PALETTE = ['#123456', '#abcdef'];
 
 /**
- * Scatter is the one family whose x axis is a measure, so it needs a numeric
- * x or every row is legitimately dropped for want of a coordinate. Giving it
- * the categorical fixture would test nothing but the drop rule.
+ * Two families need more than the usual "a category and a measure":
+ *
+ * - **scatter** puts a measure on x, so a categorical x drops every row for
+ *   want of a coordinate and the test would prove nothing but the drop rule;
+ * - **heatmap** is categorical on both axes with the measure on colour.
+ *
+ * That the fixture has to branch is the point of the channel model: these are
+ * genuinely different bindings, not one binding with options.
  */
-const spec = (chartType: RenderSpec['chartType']): RenderSpec =>
-  chartType === 'scatter'
-    ? {
-        chartType,
-        encoding: { x: ['orders.total'], y: ['orders.count'] },
-        rows: [
-          { 'orders.total': 5, 'orders.count': 10 },
-          { 'orders.total': 9, 'orders.count': 30 },
-        ],
-        palette: PALETTE,
-      }
-    : {
-        chartType,
-        encoding: { x: ['orders.status'], y: ['orders.count'] },
-        rows: [
-          { 'orders.status': 'paid', 'orders.count': 10 },
-          { 'orders.status': 'refunded', 'orders.count': 30 },
-        ],
-        palette: PALETTE,
-      };
+const spec = (chartType: RenderSpec['chartType']): RenderSpec => {
+  if (chartType === 'scatter') {
+    return {
+      chartType,
+      encoding: { x: ['orders.total'], y: ['orders.count'] },
+      rows: [
+        { 'orders.total': 5, 'orders.count': 10 },
+        { 'orders.total': 9, 'orders.count': 30 },
+      ],
+      palette: PALETTE,
+    };
+  }
+
+  if (chartType === 'heatmap') {
+    return {
+      chartType,
+      encoding: { x: ['orders.status'], y: ['orders.region'], color: ['orders.count'] },
+      rows: [
+        { 'orders.status': 'paid', 'orders.region': 'east', 'orders.count': 10 },
+        { 'orders.status': 'refunded', 'orders.region': 'west', 'orders.count': 30 },
+      ],
+      palette: PALETTE,
+    };
+  }
+
+  return {
+    chartType,
+    encoding: { x: ['orders.status'], y: ['orders.count'] },
+    rows: [
+      { 'orders.status': 'paid', 'orders.count': 10 },
+      { 'orders.status': 'refunded', 'orders.count': 30 },
+    ],
+    palette: PALETTE,
+  };
+};
 
 describe('every drawable type produces marks', () => {
   for (const chartType of DRAWABLE_TYPES) {
@@ -52,6 +72,10 @@ describe('every drawable type produces marks', () => {
         marksOf(svg, PALETTE).length > 0 ||
         pointsOf(svg, PALETTE).length > 0 ||
         sectorsOf(svg, PALETTE).length > 0 ||
+        // A heatmap's colours are interpolated along a ramp rather than taken
+        // from the palette, so they arrive as rgb() and none of the above sees
+        // them.
+        cellsOf(svg).length > 0 ||
         svg.includes(`stroke="${PALETTE[0] ?? ''}"`);
 
       expect(drew).toBe(true);
@@ -60,12 +84,21 @@ describe('every drawable type produces marks', () => {
 });
 
 describe('a type nothing can draw yet', () => {
-  it('is reported rather than drawn as something else', () => {
-    // 'treemap' is in the AC-037 vocabulary but has no renderer yet. Falling
-    // back to a bar would put a chart on screen that the spec never asked for.
-    expect(isDrawable('treemap')).toBe(false);
-    expect(() => optionFor(spec('treemap'))).toThrow(/treemap/);
+  const notYetDrawn = CHART_TYPES.filter((chartType) => !isDrawable(chartType));
+
+  it('still has some, so the case below is a real one', () => {
+    // When this finally empties, AC-037 is complete and the block below can go.
+    expect(notYetDrawn.length).toBeGreaterThan(0);
   });
+
+  for (const chartType of notYetDrawn) {
+    it(`reports ${chartType} rather than drawing something else`, () => {
+      // Falling back to a bar would put a chart on screen that the spec never
+      // asked for. Derived from the vocabulary rather than hard-coded, so this
+      // keeps testing the right types as renderers land.
+      expect(() => optionFor(spec(chartType))).toThrow(new RegExp(chartType));
+    });
+  }
 
   it('agrees with its own list', () => {
     for (const chartType of DRAWABLE_TYPES) {
