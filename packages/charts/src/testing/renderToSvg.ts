@@ -387,15 +387,41 @@ export interface Label {
  * in the rendered result rather than in the option.
  */
 export function labelsOf(svg: string): Label[] {
-  return [
-    ...svg.matchAll(
-      /<text\b[^>]*transform="translate\((-?[\d.]+) (-?[\d.]+)\)"[^>]*>([^<]*)<\/text>/g,
-    ),
-  ].map((match) => ({
-    text: match[3] ?? '',
-    x: Number(match[1]),
-    y: Number(match[2]),
-  }));
+  const labels: Label[] = [];
+
+  for (const match of svg.matchAll(/<text\b([^>]*)>([^<]*)<\/text>/g)) {
+    const attributes = match[1] ?? '';
+    const text = match[2] ?? '';
+
+    // Two forms, and missing the second made this blind to every rotated
+    // label — including axis titles, which ECharts always rotates on a y
+    // axis. `translate(x y)` for upright text, `matrix(a,b,c,d,x,y)` once
+    // there is a rotation, with the position in the last two slots.
+    const translate = /\btransform="translate\((-?[\d.]+)[ ,](-?[\d.]+)\)"/.exec(attributes);
+    const matrix =
+      /\btransform="matrix\((-?[\d.]+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)\)"/.exec(
+        attributes,
+      );
+
+    if (translate !== null) {
+      labels.push({ text, x: Number(translate[1]), y: Number(translate[2]) });
+    } else if (matrix !== null) {
+      labels.push({ text, x: Number(matrix[5]), y: Number(matrix[6]) });
+    }
+  }
+
+  return labels;
+}
+
+/** True when any text in the output has been turned off the horizontal. */
+export function hasRotatedText(svg: string): boolean {
+  for (const match of svg.matchAll(/<text\b[^>]*\btransform="matrix\(([^)]*)\)"/g)) {
+    const [, b = '0', c = '0'] = (match[1] ?? '').split(',').map(Number).map(String);
+    // An upright label's matrix is the identity rotation; a turned one has
+    // non-zero off-diagonal terms.
+    if (Number(b) !== 0 || Number(c) !== 0) return true;
+  }
+  return false;
 }
 
 /** The positions of the given category labels, in the order given. */

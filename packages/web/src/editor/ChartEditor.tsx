@@ -21,6 +21,9 @@ import {
   type Signature,
 } from '@wechart/recommender';
 
+import type { AxesSettings, AxisSettings } from '@wechart/charts';
+
+import { AxisPanel } from './AxisPanel';
 import { loadTile } from '../query/loadTile';
 import { ChartTile } from '../tiles/ChartTile';
 import { ResultsDrawer, type DrawerView } from './ResultsDrawer';
@@ -49,6 +52,25 @@ import { membersOf, type Member } from './fields';
 const ALL_CHART_TYPES = Object.keys(REQUIREMENTS).sort() as ChartType[];
 
 /**
+ * The types with cartesian axes to edit. A pie, treemap, KPI, table or pivot
+ * has none, and offering settings that cannot apply is worse than offering
+ * none — the reader changes something and nothing happens.
+ */
+const CARTESIAN_TYPES: readonly (ChartType | null)[] = [
+  'bar',
+  'hbar',
+  'groupedBar',
+  'stackedBar',
+  'line',
+  'multiLine',
+  'area',
+  'stackedArea',
+  'scatter',
+  'heatmap',
+  'combo',
+];
+
+/**
  * Everything a change can touch, in one place. AC-035 asks that *every* change
  * is undoable, so the undoable state is one value rather than several pieces
  * that each would have to remember to record themselves.
@@ -57,17 +79,24 @@ interface EditorState {
   readonly cubeName: string;
   readonly spec: ChartSpec;
   readonly chartType: ChartTypeState;
+  /**
+   * How this chart is drawn, over and above its fields — axis settings today
+   * (AC-040). Part of the undoable state, because AC-035 asks that *every*
+   * change is undoable and an axis edit is a change like any other.
+   */
+  readonly options: Record<string, unknown>;
 }
 
 const OPENED_WITH: EditorState = {
   cubeName: '',
   spec: emptySpec(),
   chartType: FOLLOWING_RECOMMENDATION,
+  options: {},
 };
 
 export function ChartEditor() {
   const [history, setHistory] = useState(() => historyOf(OPENED_WITH));
-  const { cubeName, spec, chartType: chartTypeState } = history.present;
+  const { cubeName, spec, chartType: chartTypeState, options } = history.present;
 
   /** Records the change, which is what makes it undoable. */
   const change = (next: (current: EditorState) => EditorState) =>
@@ -115,7 +144,19 @@ export function ChartEditor() {
    * drawn by exactly the path a saved chart will be, so the two cannot drift
    * apart (AC-037).
    */
-  const previewDocument = useMemo(() => chartDocumentOf({ title: '', spec }), [spec]);
+  const previewDocument = useMemo(
+    () => chartDocumentOf({ title: '', spec, options }),
+    [spec, options],
+  );
+
+  /** The axis settings, sparse: absent means "leave it to the data". */
+  const axes = (options['axes'] ?? {}) as AxesSettings;
+  const setAxis = (axis: 'x' | 'y', next: AxisSettings) => {
+    change((current) => ({
+      ...current,
+      options: { ...current.options, axes: { ...axes, [axis]: next } },
+    }));
+  };
 
   /**
    * Which drawer view is open. Not part of the history — opening a drawer is
@@ -321,6 +362,32 @@ export function ChartEditor() {
             ) : null}
 
             <WhyThisChart explanation={explanation} />
+
+            {/*
+              The inspector's Axes section (AC-040, direction.md §6). Only for
+              the types that have cartesian axes: a pie or a KPI has none, and
+              offering settings that cannot apply is worse than offering none.
+            */}
+            {CARTESIAN_TYPES.includes(shownType) ? (
+              <div data-testid="axes-section">
+                <AxisPanel
+                  axis="x"
+                  label="X axis"
+                  settings={axes.x ?? {}}
+                  onChange={(next) => {
+                    setAxis('x', next);
+                  }}
+                />
+                <AxisPanel
+                  axis="y"
+                  label="Y axis"
+                  settings={axes.y ?? {}}
+                  onChange={(next) => {
+                    setAxis('y', next);
+                  }}
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
 

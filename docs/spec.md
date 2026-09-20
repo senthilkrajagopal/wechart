@@ -139,7 +139,7 @@ Traces to: `[docs/inputs §2]`, direction.md §6, rules 4–7, 18–19.
       Fails when: a single-series chart shows a legend box, or a multi-series chart omits it.
 - [ ] AC-039 THE SYSTEM SHALL give a member the same colour in every tile of a dashboard, and keep that colour when filters change the set of visible members (direction.md rule 7).
       Fails when: a member's colour changes between tiles or after filtering.
-- [ ] AC-040 WHEN the user edits an axis, THE SYSTEM SHALL apply minimum, maximum, logarithmic scale, gridlines, tick rotation, number format and axis title to the rendered chart.
+- [x] AC-040 WHEN the user edits an axis, THE SYSTEM SHALL apply minimum, maximum, logarithmic scale, gridlines, tick rotation, number format and axis title to the rendered chart.
       Fails when: any of those settings has no effect on the rendered axis.
 - [ ] AC-041 WHEN a categorical chart exceeds its top-N setting, THE SYSTEM SHALL aggregate the remainder into a single "Other (n)" item and label it with the number of members it covers.
       Fails when: the chart renders more categories than the setting, or the remainder is unlabelled.

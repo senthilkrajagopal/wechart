@@ -13,6 +13,7 @@
 import type { ChartType, RenderSpec } from '@wechart/core';
 
 import { barOption, isBarType } from './series/bar';
+import { applyAxes } from './axis';
 import { isTrellisType, trellisOption } from './layout/trellis';
 import { legendFor } from './legend';
 import { comboOption, isComboType } from './series/combo';
@@ -54,7 +55,9 @@ export function optionFor(spec: RenderSpec): EChartsOption {
   // a rule about charts, not about bar charts, and a renderer that forgot it
   // would be a chart type quietly exempt from it.
   const base = legendFor(spec);
-  const drawn = (option: EChartsOption): EChartsOption => ({
+  const drawn = (option: EChartsOption): EChartsOption => applyAxes(withLegend(option), spec);
+
+  const withLegend = (option: EChartsOption): EChartsOption => ({
     ...option,
     ...base,
     // The renderer's own grid wins on everything it sets; the legend only

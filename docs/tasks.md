@@ -476,10 +476,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - One lookup (`colours.ts`) is used by every renderer, so the rule is a property of wechart rather than of whichever renderers remembered it.
   - **Past the last palette slot a member takes the neutral, not a repeat.** direction.md caps categorical colour at its validated slots; cycling would give two members the same colour and so say they were the same thing, where the neutral says "not separately coloured", which is true.
   - A test caught the legend: with two series AC-038 adds one, and its swatches are filled paths in the same colours, so the bars had to be picked out by being far taller than a legend icon.
-- [ ] T047 (AC-040) Apply the axis editor's settings to the rendered chart
-  - Files: `packages/web/src/editor/AxisPanel.tsx`, `packages/charts/src/axis.ts`, `packages/charts/src/axis.test.ts`
-  - Failing test: `axis.test.ts`: minimum, maximum, logarithmic scale, gridlines, tick rotation, number format and axis title each change the rendered axis (AC-040).
+- [x] T047 (AC-040) Apply the axis editor's settings to the rendered chart
+  - Files: `packages/charts/src/axis.ts`, `packages/charts/src/axis.test.ts`, `packages/web/src/editor/AxisPanel.tsx`, `packages/web/src/editor/ChartEditor.tsx`, `packages/charts/src/testing/renderToSvg.ts`, `e2e/chart-editor.spec.ts`
+  - Failing test: `axis.test.ts`: minimum, maximum, logarithmic scale, gridlines, tick rotation, number format and axis title each change the rendered axis (AC-040); `e2e/chart-editor.spec.ts`: the inspector's controls reach the chart.
   - Depends on: T035
+  - Done 2026-09-20. **AC-040 ticked.**
+  - The criterion's failing state is "a setting is accepted and the drawing does not change", so every one of the seven is checked against the **drawn output**. An option that is set and never read looks identical to one that works.
+  - **The log scale is tested geometrically.** With values 1, 10 and 100 a log axis puts the ticks one decade apart at equal spacing, and a linear axis does not — so the assertion is the ratio of the gaps, not the axis type.
+  - Applied to whatever option the renderer produced, like the legend, so every chart type gets the settings and none can forget. Charts with no cartesian axes and the trellis — which has an array of axes per panel, a different editing problem — are left alone rather than half-handled, and the inspector hides the section for them: offering a setting that cannot apply is worse than offering none.
+  - **A bug in the test helper, found here and affecting earlier tasks.** ECharts writes a rotation as a transform *matrix*, not a `rotate()`, and `labelsOf` only matched `translate(x y)` — so it was silently blind to every rotated label, including axis titles, which ECharts always rotates on a y axis. It now reads both forms.
+  - Axis settings are part of the undo history, because AC-035 asks that every change is undoable and an axis edit is a change like any other. A browser test undoes one.
+  - Settings are sparse: a field left alone is absent rather than stored as a default, which is what keeps the chart following the data when nobody has overridden anything.
 - [ ] T048 (AC-041) Aggregate the remainder into a labelled "Other (n)"
   - Files: `packages/core/src/topN.ts`, `packages/core/src/topN.test.ts`
   - Failing test: `topN.test.ts`: past the top-N setting the chart renders N categories plus one "Other (n)" labelled with the number of members it covers (AC-041).

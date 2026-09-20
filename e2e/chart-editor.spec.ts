@@ -447,6 +447,50 @@ test('no chart type is left undrawn', async ({ page }) => {
   }
 });
 
+/**
+ * AC-040: WHEN the user edits an axis, THE SYSTEM SHALL apply minimum,
+ * maximum, logarithmic scale, gridlines, tick rotation, number format and axis
+ * title to the rendered chart.
+ * Fails when: a setting is accepted and the drawing does not change.
+ *
+ * Each setting is checked against the rendered SVG in the unit tests. What
+ * this adds is the half those cannot reach: that the inspector's controls
+ * actually reach the chart.
+ */
+test('editing an axis changes the drawn chart', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
+
+  const canvas = page.getByTestId('chart-canvas');
+  await expect(canvas).toBeVisible();
+  await expect(canvas.getByText('Orders placed')).toBeHidden();
+
+  await page.getByLabel('Title', { exact: true }).last().fill('Orders placed');
+
+  // The title has to appear in the drawing, not merely in the form.
+  await expect(canvas.getByText('Orders placed')).toBeVisible();
+
+  // And a maximum the data never reaches can only come from the setting.
+  await page.getByLabel('Maximum').last().fill('500');
+  await expect(canvas.getByText('500')).toBeVisible();
+});
+
+test('an axis edit is undoable like any other change', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+
+  const canvas = page.getByTestId('chart-canvas');
+  await page.getByLabel('Title', { exact: true }).last().fill('Orders placed');
+  await expect(canvas.getByText('Orders placed')).toBeVisible();
+
+  // AC-035 says every change is undoable, and an axis edit is a change.
+  await page.getByTestId('undo').click();
+  await expect(canvas.getByText('Orders placed')).toBeHidden();
+});
+
 test('a time dimension goes to its own well and groups by day', async ({ page }) => {
   await openEditorOnOrders(page);
 
