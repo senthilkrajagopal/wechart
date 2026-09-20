@@ -188,11 +188,12 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Done 2026-09-19. AC-024 ticked. A **roving tabindex**, so the list is one stop in the page's tab order rather than one per row — with thirty dashboards, tabbing through every one to reach what follows is its own accessibility failure, and a test asserts exactly one row is tabbable at a time.
   - Selection is marked with `aria-selected` and a background, not the focus ring alone, so it stays visible when focus moves into a control inside the row. Arrow keys stop at the ends rather than wrapping.
   - A test asserts Enter opens **the selected row, not always the first** — the bug an implementation that ignores the index would have.
-- [ ] T023 (AC-018, AC-039) Open a dashboard from Explore in view mode with its saved tabs, tiles and settings
+- [ ] T023 (AC-018, AC-039, AC-053) Open a dashboard from Explore in view mode with its saved tabs, tiles and settings
   - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/DashboardView.test.tsx`
   - Failing test: `DashboardView.test.tsx`: a saved dashboard opens in view mode with every saved page tab, tile and setting present, and not in edit mode (AC-018); one colour assignment is shared by every tile, so a member looks the same in all of them (AC-039).
   - Depends on: T016, T071, T046
   - **Also ticks AC-039.** The colour mechanism is built and tested at T046, but the criterion is about "every tile of a dashboard" and this is the first place several tiles are rendered together. Share one assignment across them and assert a member matches in two tiles at once.
+  - **Also ticks AC-053.** The edit bar and sidebar are built and unit-tested at T059, but nothing renders them until a dashboard exists. Render `EditChrome` around the dashboard here and add an e2e that opens a saved dashboard, activates Edit, and finds Undo, Redo, Discard, Save, Add, Outline and Properties. `EditChrome` must be mounted with the loaded dashboard, or keyed by its id, so a route change from one dashboard to another re-seeds the session.
 
 ## F4. Chart builder and recommendation
 
@@ -563,10 +564,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F7. Dashboard authoring
 
-- [ ] T059 (AC-053) Show the edit bar and the edit sidebar
-  - Files: `packages/web/src/dashboard/edit/{EditBar,EditSidebar}.tsx`, `packages/web/src/dashboard/edit/EditBar.test.tsx`
+- [x] T059 (AC-053) Show the edit bar and the edit sidebar
+  - Files: `packages/web/src/dashboard/edit/{EditChrome,EditBar,EditSidebar}.tsx`, `packages/web/src/dashboard/edit/EditBar.test.tsx`, `packages/web/src/shell/styles.ts`
   - Failing test: `EditBar.test.tsx`: activating Edit reveals Undo, Redo, Discard and Save, and the sidebar's Add, Outline and Properties panels (AC-053).
   - Depends on: T005
+  - Done 2026-09-20. **AC-053 is NOT ticked here**, and this is a deferral rather than an oversight: the criterion's trigger is "activates Edit **on a dashboard**", and no dashboard is reachable in the app yet — the dashboard route still renders the `SelectedObject` placeholder, and the surface is T023, which the dependency graph puts *after* this task (T023 → T071 → T064 → T059). Wiring the route now would ship an edit bar whose Undo, Redo and Discard are permanently idle (nothing is editable until T060) over a Save that persists nothing (T071); that is a worse product state than the placeholder and a false basis for a tick. Same reasoning as AC-039 at T046. **AC-053 ticks at T023**, where an e2e can activate Edit on a real dashboard.
+  - `EditChrome.tsx` is a third file beyond the two the task named. AC-053's trigger is an action, so something has to own the mode; `EditBar` and `EditSidebar` are presentational. The chrome is generic over the document type because it never reads one — the document's shape belongs to the grid and the element grammar (T060 onwards) — and it fixes an architecture (`EditSession<T>` with `editing`, `document`, `changes` and `change`) that T060's canvas, T064's Add panel and T071's save have to fit.
+  - It reuses `packages/web/src/editor/history.ts` rather than growing a second undo stack: it is already generic over the state it holds, `ChartEditor` uses it the same way, and storing whole states is what AC-060's "restore the element and its contents" will need. T066's file list is amended accordingly.
+  - The change count travels **inside** the history snapshot. Discard is itself undoable, so it leaves an extra entry on the past, and a count taken from the stack's depth reads "3 changes" where the user has made one. There is a test for exactly that sequence.
+  - Two deferrals worth naming so the next task does not read them as bugs: **Save does not leave edit mode** (AC-065 owns that, T071), so there is currently no way out of edit mode; and ⌘S and ⌘Z are in direction.md but trace to no AC, so they are absent.
+  - In view mode the `document` prop is the truth and the session only owns it from the moment Edit is pressed. The first cut seeded the history once at mount, which would have quietly ignored a dashboard that arrived from the server afterwards — the same class of bug as the T034 drawer and `ChartTile`'s table-view state. Found on re-reading, fixed, and covered by a test that fails against the old code. The cold review flagged it independently.
+  - The bar is a real APG toolbar: one tab stop, arrows and Home/End within it, and `aria-disabled` rather than `disabled` so an idle control keeps its place instead of changing the bar's shape under the user. The first cut declared `role="toolbar"` without the pattern, which the cold review caught.
 - [ ] T060 (AC-054) Snap tiles to the 12-column grid and 8-pixel row units, with the grid visible while editing
   - Files: `packages/web/src/dashboard/grid/{Canvas,geometry}.ts`, `packages/web/src/dashboard/grid/geometry.test.ts`
   - Failing test: `geometry.test.ts`: every tile's width is a whole number of columns and its height a multiple of 8 px, and the gridlines render in edit mode (AC-054).
@@ -592,7 +600,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Failing test: `grammar.test.ts`: adding a tab group directly to a page tab creates a wrapping section and surfaces a message explaining it (AC-059).
   - Depends on: T064
 - [ ] T066 (AC-060) Offer an undo for every delete, restoring the element and its contents
-  - Files: `packages/web/src/dashboard/edit/history.ts`, `packages/web/src/dashboard/edit/history.test.ts`
+  - Files: `packages/web/src/dashboard/edit/deletion.ts`, `packages/web/src/dashboard/edit/deletion.test.ts`
+  - The undo **stack** is not this task's to build: T059 reuses `packages/web/src/editor/history.ts`, which is already generic over the state it holds and stores whole states rather than inverse operations — which is exactly what "restoring the element **and its contents**" needs. What this task adds is deletion and the toast that offers the undo, so the file is named for that rather than for a second history.
   - Failing test: `history.test.ts`: deleting a tile, section, page tab or tab offers a toast undo and an Undo entry, and either restores the element with its contents (AC-060).
   - Depends on: T064
 - [ ] T067 (AC-061) Ask whether to delete or keep a section's contents
@@ -1128,7 +1137,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 | AC-005 | T002, T008 | AC-050 | T056 | AC-095 | T101 | AC-140 | T146       |
 | AC-006 | T009       | AC-051 | T057 | AC-096 | T102 | AC-141 | T147       |
 | AC-007 | T004, T024 | AC-052 | T058 | AC-097 | T103 | AC-142 | T148       |
-| AC-008 | T004       | AC-053 | T059 | AC-098 | T104 | AC-143 | T149       |
+| AC-008 | T004       | AC-053 | T059, T023 | AC-098 | T104 | AC-143 | T149       |
 | AC-009 | T010       | AC-054 | T060 | AC-099 | T105 | AC-144 | T150       |
 | AC-010 | T011       | AC-055 | T061 | AC-100 | T106 | AC-145 | T151       |
 | AC-011 | T012       | AC-056 | T062 | AC-101 | T107 | AC-146 | T152       |

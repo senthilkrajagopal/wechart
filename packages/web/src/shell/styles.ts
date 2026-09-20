@@ -177,6 +177,50 @@ main { padding: 16px; }
    still visible when focus moves into a control inside the row. */
 .folder-contents tbody tr[aria-selected='true'] { background: var(--wc-bg-subtle); }
 
+/* Dashboard chrome (AC-053). The sidebar is docked at 300 px and the canvas
+   takes the rest, per direction.md section 2. Only the chrome is styled here;
+   the 12-column canvas grid arrives with it (T060). */
+.dashboard__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+}
+
+.dashboard__body { display: flex; align-items: flex-start; gap: 16px; }
+.dashboard__canvas { flex: 1; min-width: 0; }
+
+.edit-bar { display: flex; gap: 8px; }
+.edit-bar button { height: 32px; padding: 0 12px; border: 1px solid var(--wc-border-strong); border-radius: 4px; background: var(--wc-bg-surface); color: var(--wc-text-primary); cursor: pointer; }
+.edit-bar button:disabled { color: var(--wc-text-muted); cursor: default; }
+/* text-on-accent, not white: white on the dark theme's accent is 2.41:1, an AA
+   failure the token pair in @wechart/ui exists to prevent (AC-005). */
+.edit-bar__save { background: var(--wc-accent); color: var(--wc-text-on-accent); border-color: var(--wc-accent); }
+
+.edit-sidebar {
+  flex: 0 0 300px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+
+.edit-sidebar__tabs { display: flex; border-bottom: 1px solid var(--wc-border-subtle); }
+.edit-sidebar__tabs button {
+  flex: 1;
+  height: 32px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--wc-text-secondary);
+  cursor: pointer;
+}
+.edit-sidebar__tabs button[aria-selected='true'] {
+  color: var(--wc-text-primary);
+  border-bottom-color: var(--wc-accent);
+}
+.edit-sidebar__panel { padding: 16px; }
+
 .chart-editor {
   display: grid;
   grid-template-columns: 280px 1fr 280px;

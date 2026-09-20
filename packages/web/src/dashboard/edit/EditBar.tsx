@@ -1,0 +1,112 @@
+import { useRef, useState } from 'react';
+
+/**
+ * The dashboard edit bar (AC-053, direction.md section 2).
+ *
+ * Undo, Redo, "Discard (n changes)" and Save. This component only shows them
+ * and says whether each one has anything to act on; the session above it owns
+ * the history.
+ */
+export interface EditBarProps {
+  /** Changes still in effect since editing began. Drives Discard's label. */
+  readonly changes: number;
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+  readonly onUndo: () => void;
+  readonly onRedo: () => void;
+  readonly onDiscard: () => void;
+  readonly onSave: () => void;
+}
+
+/**
+ * "Discard (1 change)", not "(1 changes)". The count is on the visible label
+ * rather than in an aria-label because a visible label that the accessible
+ * name does not contain fails WCAG 2.5.3, and because the count is exactly the
+ * thing a screen-reader user wants to hear before discarding.
+ */
+function discardLabel(changes: number): string {
+  if (changes === 0) return 'Discard';
+  return `Discard (${String(changes)} ${changes === 1 ? 'change' : 'changes'})`;
+}
+
+interface Control {
+  readonly label: string;
+  readonly disabled: boolean;
+  readonly run: () => void;
+  readonly className?: string;
+}
+
+export function EditBar({
+  changes,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
+  onDiscard,
+  onSave,
+}: EditBarProps) {
+  const [focused, setFocused] = useState(0);
+  const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const controls: readonly Control[] = [
+    { label: 'Undo', disabled: !canUndo, run: onUndo },
+    { label: 'Redo', disabled: !canRedo, run: onRedo },
+    { label: discardLabel(changes), disabled: changes === 0, run: onDiscard },
+    { label: 'Save', disabled: false, run: onSave, className: 'edit-bar__save' },
+  ];
+
+  /**
+   * The APG toolbar pattern: the bar is one tab stop and the arrow keys move
+   * within it. Declaring `role="toolbar"` is a promise that this is how it
+   * behaves — a screen-reader user who hears "toolbar" and presses Tab expects
+   * to leave it, not to walk through four buttons.
+   */
+  const onKeyDown = (event: React.KeyboardEvent, index: number) => {
+    const last = controls.length - 1;
+    const next =
+      event.key === 'ArrowRight'
+        ? (index + 1) % controls.length
+        : event.key === 'ArrowLeft'
+          ? (index - 1 + controls.length) % controls.length
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? last
+              : -1;
+    if (next < 0) return;
+
+    event.preventDefault();
+    setFocused(next);
+    buttons.current[next]?.focus();
+  };
+
+  return (
+    <div role="toolbar" aria-label="Dashboard editing" className="edit-bar">
+      {controls.map((control, index) => (
+        <button
+          key={control.label.startsWith('Discard') ? 'discard' : control.label}
+          type="button"
+          ref={(node) => {
+            buttons.current[index] = node;
+          }}
+          /**
+           * `aria-disabled`, not `disabled`: a toolbar item that drops out of
+           * the tab order when it has nothing to do makes the bar's shape
+           * change under the user, and AC-053 asks that these controls be
+           * *there*. The handler is what refuses.
+           */
+          aria-disabled={control.disabled}
+          tabIndex={index === focused ? 0 : -1}
+          className={control.className}
+          onFocus={() => setFocused(index)}
+          onKeyDown={(event) => onKeyDown(event, index)}
+          onClick={() => {
+            if (!control.disabled) control.run();
+          }}
+        >
+          {control.label}
+        </button>
+      ))}
+    </div>
+  );
+}
