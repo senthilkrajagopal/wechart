@@ -396,6 +396,50 @@ test('the drawer agrees with the chart after the query changes', async ({ page }
   await expect(page.getByTestId('drawer-result-rows').locator('tbody tr')).toHaveCount(3);
 });
 
+/**
+ * AC-037: THE SYSTEM SHALL render … from a chart spec.
+ *
+ * The renderers are proved headlessly per family. What this proves is the part
+ * headless rendering cannot: that the app mounts one on a real node, draws
+ * marks, and redraws when the chart changes.
+ */
+test('the editor draws a chart, and redraws it when the fields change', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
+
+  const canvas = page.getByTestId('chart-canvas');
+  await expect(canvas).toBeVisible();
+
+  // Marks, not merely an <svg>: an empty chart frame would satisfy the latter.
+  const bars = canvas.locator('svg path[fill^="#"]');
+  await expect(bars.first()).toBeVisible();
+  const drawnForThree = await bars.count();
+  expect(drawnForThree).toBeGreaterThan(0);
+
+  // A second measure makes it a grouped bar: same three categories, twice the
+  // marks. The drawing has to follow the query rather than being drawn once.
+  await page.getByTestId('add-measures').selectOption('orders.total_amount');
+  await expect(page.getByTestId('in-measures-orders.total_amount')).toBeVisible();
+  await expect(async () => {
+    expect(await bars.count()).toBeGreaterThan(drawnForThree);
+  }).toPass();
+});
+
+test('the editor says so for a type it cannot draw yet', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+
+  await page.getByLabel('Chart type').selectOption('treemap');
+
+  // A type in AC-037's vocabulary whose renderer has not landed. Drawing a bar
+  // instead would put a chart on screen the spec never asked for.
+  await expect(page.getByTestId('chart-not-drawable')).toBeVisible();
+  await expect(page.getByTestId('chart-canvas')).toBeHidden();
+});
+
 test('a time dimension goes to its own well and groups by day', async ({ page }) => {
   await openEditorOnOrders(page);
 

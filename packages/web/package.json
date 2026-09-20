@@ -13,6 +13,7 @@
   "dependencies": {
     "@tanstack/react-query": "5.103.1",
     "@tanstack/react-router": "1.170.38",
+    "@wechart/charts": "workspace:*",
     "@wechart/core": "workspace:*",
     "@wechart/recommender": "workspace:*",
     "@wechart/ui": "workspace:*",

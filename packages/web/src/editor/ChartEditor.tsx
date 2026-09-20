@@ -1,5 +1,7 @@
 import {
   addToWell,
+  chartDocumentOf,
+  compile,
   emptySpec,
   isEmpty,
   removeFromWell,
@@ -20,6 +22,7 @@ import {
 } from '@wechart/recommender';
 
 import { loadTile } from '../query/loadTile';
+import { ChartCanvas } from '../tiles/ChartCanvas';
 import { ResultsDrawer, type DrawerView } from './ResultsDrawer';
 import { WhyThisChart } from './WhyThisChart';
 import {
@@ -105,6 +108,14 @@ export function ChartEditor() {
    * the criterion's own failing state.
    */
   const underlyingQuery = useMemo(() => toUnderlyingQuery(spec), [spec]);
+
+  /**
+   * The unsaved chart, in the shape a saved one has. Going spec → document →
+   * `RenderSpec` rather than straight to a render spec means the preview is
+   * drawn by exactly the path a saved chart will be, so the two cannot drift
+   * apart (AC-037).
+   */
+  const previewDocument = useMemo(() => chartDocumentOf({ title: '', spec }), [spec]);
 
   /**
    * Which drawer view is open. Not part of the history — opening a drawer is
@@ -324,6 +335,12 @@ export function ChartEditor() {
           <>
             <p data-testid="result-row-count">{rows.length} rows</p>
             <pre data-testid="result-first-row">{JSON.stringify(rows[0] ?? null)}</pre>
+            {shownType === null || missing.length > 0 ? null : (
+              // Only once the fields can actually produce the chosen type.
+              // Drawing anyway would put a chart on screen that contradicts
+              // the message AC-033 has just shown beside it.
+              <ChartCanvas spec={compile(previewDocument, { rows, chartType: shownType })} />
+            )}
           </>
         )}
 

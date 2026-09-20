@@ -21,14 +21,18 @@ const edgeProject = {
 export default defineConfig({
   testDir: './e2e',
   /**
-   * 60s rather than Playwright's 30s. On a cold run the machine is building the
-   * API, starting Cube and launching several real browsers at once, and
-   * browser *context setup* alone can exceed 30s — which fails as a timeout on
-   * whichever test happened to be first, with nothing wrong in the app. A
-   * passing test here takes about a second, so this still catches a genuine
-   * hang.
+   * Generous on purpose, and raised twice now from Playwright's 30s.
+   *
+   * The failure it exists to absorb reports itself as `Test timeout … exceeded
+   * while setting up "context"` on an arbitrary test, which reads like that
+   * test failing and is nothing of the sort: the browser did not hand out a
+   * context in time because the machine is also running the docker stack and
+   * other services. A pass here takes about a second, so a ceiling this high
+   * still catches a genuine hang — it just stops starvation being reported as
+   * a product defect. Chasing one of these through the font tokens once was
+   * enough.
    */
-  timeout: 60_000,
+  timeout: 120_000,
   fullyParallel: true,
   /**
    * Capped locally, left to Playwright on CI.
@@ -77,10 +81,21 @@ export default defineConfig({
       },
     },
     {
-      command: `pnpm --filter @wechart/web dev --port ${PORT} --strictPort`,
+      /**
+       * The built app, not the dev server — matching what the API webServer
+       * above already does.
+       *
+       * Once the app started drawing charts it began pulling ECharts through
+       * Vite's dev transform on every page load, and the suite went from about
+       * 40 seconds to two minutes, with WebKit timing out. Serving the real
+       * bundle removes that per-load cost, and it is also the artefact users
+       * get: a dev-server-only suite cannot catch anything the production
+       * build changes.
+       */
+      command: `pnpm --filter @wechart/web build && pnpm --filter @wechart/web preview --port ${PORT} --strictPort`,
       url: baseURL,
       reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
+      timeout: 180_000,
     },
   ],
 });

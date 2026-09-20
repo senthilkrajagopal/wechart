@@ -298,6 +298,9 @@ importers:
       '@tanstack/react-router':
         specifier: 1.170.38
         version: 1.170.38(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@wechart/charts':
+        specifier: workspace:*
+        version: link:../charts
       '@wechart/core':
         specifier: workspace:*
         version: link:../core
