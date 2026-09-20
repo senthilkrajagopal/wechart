@@ -26,6 +26,8 @@ import type { AxesSettings, AxisSettings } from '@wechart/charts';
 import { AxisPanel } from './AxisPanel';
 import { loadTile } from '../query/loadTile';
 import { ChartTile } from '../tiles/ChartTile';
+import { TileError } from '../tiles/TileError';
+import { TileSkeleton } from '../tiles/TileSkeleton';
 import { ResultsDrawer, type DrawerView } from './ResultsDrawer';
 import { WhyThisChart } from './WhyThisChart';
 import {
@@ -395,9 +397,21 @@ export function ChartEditor() {
         {isEmpty(spec) ? (
           <p data-testid="result-empty">Add a field to see data.</p>
         ) : result.isPending ? (
-          <p data-testid="result-loading">Running the query…</p>
+          // A skeleton in the shape of the chart, not a spinner (AC-042): a
+          // spinner says something is happening, a skeleton says something is
+          // happening *here* and will look like this.
+          <div data-testid="result-loading">
+            <TileSkeleton chartType={shownType ?? 'bar'} />
+          </div>
         ) : result.isError ? (
-          <p role="alert">{(result.error as Error).message}</p>
+          // Cube's own message, with Retry and the query behind a disclosure
+          // (AC-012, AC-042).
+          <TileError
+            error={result.error}
+            onRetry={() => {
+              void result.refetch();
+            }}
+          />
         ) : (
           <>
             <p data-testid="result-row-count">{rows.length} rows</p>

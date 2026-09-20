@@ -498,10 +498,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **The tail takes the neutral, not a palette slot** (direction.md §5). "Other" is not a member, and giving it a member's colour would put it in the same visual class as the things it hides.
   - No item is added when the category count is exactly the setting: an "Other (0)" would be an empty category taking a colour and a legend entry for nothing.
   - Ranking uses the *first* measure. Summing across measures of different units would be adding pounds to counts. The same additivity caveat as the pivot applies: a total of averages is not an average, and a non-additive measure needs its "Other" from Cube.
-- [ ] T049 (AC-042) Show a chart-shaped loading skeleton and an error state offering Retry and details
-  - Files: `packages/web/src/tiles/{TileSkeleton,TileError}.tsx`, `packages/web/src/tiles/TileSkeleton.test.tsx`
+- [x] T049 (AC-042) Show a chart-shaped loading skeleton and an error state offering Retry and details
+  - Files: `packages/web/src/tiles/TileSkeleton.tsx`, `packages/web/src/tiles/TileSkeleton.test.tsx`, `packages/web/src/editor/ChartEditor.tsx`
   - Failing test: `TileSkeleton.test.tsx`: loading renders a skeleton matching the chart's shape, and a failure renders Retry plus the error details (AC-042).
   - Depends on: T013
+  - Done 2026-09-20. **AC-042 ticked.**
+  - `TileError` already existed from AC-012, with Cube's own message, Retry and the query behind a disclosure — but **nothing used it**: the editor rendered a bare `<p role="alert">`. Half of this task was wiring the component that was already written and tested, which is worth noting as a failure mode of its own: a tested component nobody renders satisfies no criterion.
+  - **"In the shape of the chart" is the part with teeth.** One grey rectangle for every type would satisfy "not an empty tile" and satisfy nothing else, so the tests assert the shape *varies* — a bar is not a pie, a line is not a bar, a horizontal bar is not a vertical one — and that types which genuinely look alike while empty share a shape, because pretending otherwise would be noise.
+  - A skeleton rather than a spinner. A spinner says something is happening; a skeleton says something is happening *here* and will look like this, and a tile that reserves the right shape does not jump when the data lands.
+  - The skeleton is `aria-hidden` with a single `role="status"` saying "Loading chart", so assistive technology is told once rather than being read the decoration.
 - [ ] T050 (AC-043) Show an empty state naming the filters in effect
   - Files: `packages/web/src/tiles/TileEmpty.tsx`, `packages/web/src/tiles/TileEmpty.test.tsx`
   - Failing test: `TileEmpty.test.tsx`: a zero-row result renders a message naming every active filter, not blank axes (AC-043).
