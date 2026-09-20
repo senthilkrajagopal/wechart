@@ -8,11 +8,15 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "typescript": "6.0.3",
     "vitest": "5.0.1"
+  },
+  "dependencies": {
+    "@wechart/core": "workspace:*",
+    "echarts": "6.1.0"
   }
 }

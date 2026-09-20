@@ -4,6 +4,8 @@
  * ECharts, and the renderer reads this rather than the other way round.
  */
 
+import type { ChartType } from './render-spec';
+
 export type WellName = 'measures' | 'dimensions' | 'timeDimensions';
 
 export interface ChartSpec {
@@ -12,7 +14,7 @@ export interface ChartSpec {
   readonly measures: readonly string[];
   readonly dimensions: readonly string[];
   readonly timeDimensions: readonly string[];
-  readonly chartType?: string;
+  readonly chartType?: ChartType;
 }
 
 export function emptySpec(cube = ''): ChartSpec {

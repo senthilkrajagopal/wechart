@@ -16,3 +16,12 @@ export {
   type ChartSpec,
   type WellName,
 } from './chart-spec';
+
+export {
+  distinctValues,
+  seriesOf,
+  type ChartType,
+  type Encoding,
+  type RenderSpec,
+  type SeriesData,
+} from './render-spec';

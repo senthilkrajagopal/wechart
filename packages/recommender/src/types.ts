@@ -22,25 +22,16 @@ export interface Signature {
   readonly rowCount?: number;
 }
 
-export type ChartType =
-  | 'bar'
-  | 'hbar'
-  | 'groupedBar'
-  | 'stackedBar'
-  | 'line'
-  | 'multiLine'
-  | 'area'
-  | 'stackedArea'
-  | 'scatter'
-  | 'pie'
-  | 'donut'
-  | 'treemap'
-  | 'heatmap'
-  | 'kpi'
-  | 'table'
-  | 'pivot'
-  | 'trellis'
-  | 'combo';
+/**
+ * The chart-type vocabulary is owned by the spec in @wechart/core, not by the
+ * recommender: it is what a saved chart is written in, and the renderer has to
+ * agree with it. Re-exported here so the recommender's callers need not know
+ * where it lives — but defined once, because two lists would drift and a
+ * recommendation for a type the renderer never heard of fails at draw time.
+ */
+import type { ChartType } from '@wechart/core';
+
+export type { ChartType };
 
 /**
  * A chart the recommender is considering: the type, and which fields sit on
