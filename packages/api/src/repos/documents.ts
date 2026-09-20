@@ -110,6 +110,52 @@ export function documents(db: Kysely<Database>) {
       if (!current) throw new DocumentNotFoundError(kind, id);
       throw new StaleDocumentError(kind, id, expectedVersion, current.version);
     },
+
+    /**
+     * Rename or move, merging into the existing body (AC-021).
+     *
+     * The id never changes, which is what keeps references working: everything
+     * that points at this object points at its id, not at its title or the
+     * folder it happens to sit in. A move is a change of one field, not a
+     * re-creation, and nothing referring to it has to be told.
+     */
+    async relocate({
+      kind,
+      id,
+      title,
+      folderId,
+    }: {
+      kind: DocumentKind;
+      id: string;
+      title?: string;
+      folderId?: string;
+    }): Promise<StoredDocument> {
+      const current = await db
+        .selectFrom('documents')
+        .selectAll()
+        .where('kind', '=', kind)
+        .where('id', '=', id)
+        .executeTakeFirst();
+
+      if (!current) throw new DocumentNotFoundError(kind, id);
+
+      const body = {
+        ...(current.body as Record<string, unknown>),
+        ...(title === undefined ? {} : { title }),
+        ...(folderId === undefined ? {} : { folderId }),
+      };
+
+      const updated = await db
+        .updateTable('documents')
+        .set({ body: JSON.stringify(body), version: current.version + 1, updated_at: new Date() })
+        .where('kind', '=', kind)
+        .where('id', '=', id)
+        .where('version', '=', current.version)
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      return toDocument(updated);
+    },
   };
 }
 

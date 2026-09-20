@@ -29,6 +29,12 @@ export interface DocumentWriter {
     id: string;
     body: Record<string, unknown>;
   }): Promise<{ id: string }>;
+  relocate?(input: {
+    kind: 'folder' | 'dashboard' | 'chart';
+    id: string;
+    title?: string;
+    folderId?: string;
+  }): Promise<unknown>;
 }
 
 /** The slice of the catalog repository the server exposes. */
@@ -36,6 +42,7 @@ export interface CatalogReader {
   folders(): Promise<unknown[]>;
   contents(folderId: string): Promise<unknown[]>;
   search(text: string): Promise<unknown[]>;
+  dashboardsUsing?(chartId: string): Promise<unknown[]>;
 }
 
 /** The slice of the query-log repository the server uses. */
@@ -167,6 +174,37 @@ export function buildServer({
       title,
       folderId: body?.folderId ?? 'root',
     });
+  });
+
+  /**
+   * Rename or move (AC-021). The id is not part of what can change, so every
+   * reference to the object keeps working: a dashboard points at a chart's id,
+   * never at its title or its folder.
+   */
+  app.patch('/api/documents/:kind/:id', async (request) => {
+    const { kind, id } = request.params as { kind: string; id: string };
+    const body = request.body as { title?: string; folderId?: string } | undefined;
+
+    if (kind !== 'folder' && kind !== 'dashboard' && kind !== 'chart') {
+      throw new BadRequest('kind must be one of folder, dashboard or chart');
+    }
+    if (!docs?.relocate) throw new BadRequest('Persistence is not configured');
+
+    const title = body?.title?.trim();
+    if (title !== undefined && title === '') throw new BadRequest('A title cannot be blank');
+
+    return docs.relocate({
+      kind,
+      id,
+      ...(title === undefined ? {} : { title }),
+      ...(body?.folderId === undefined ? {} : { folderId: body.folderId }),
+    });
+  });
+
+  /** The dashboards that use a library chart (AC-022). */
+  app.get('/api/charts/:chartId/dashboards', async (request) => {
+    const { chartId } = request.params as { chartId: string };
+    return cat?.dashboardsUsing ? cat.dashboardsUsing(chartId) : [];
   });
 
   // Title search over dashboards and library charts (AC-019).

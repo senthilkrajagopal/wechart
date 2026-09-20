@@ -159,10 +159,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - The id is minted by the service, never accepted from the browser, so a client cannot overwrite an existing object by claiming its id. A test asserts a supplied id is ignored.
   - **The rendered audit earned its keep:** Safari renders an unstyled `<button>` at 11 px, below AC-004's floor. Only WebKit, only visible in a real browser, and it appeared the moment this task added buttons. Fixed with `font: inherit` on form controls.
   - Two test-infrastructure fixes: browser runs now reset the catalog to the seed (`WECHART_RESET_DATA`), because these tests create objects and later runs began matching leftovers; and the a11y audit waits for the app to mount and the network to settle, since under parallel load axe was auditing a frame rendered before the token stylesheet applied.
-- [ ] T019 (AC-021) Keep every reference working when a folder, dashboard or chart is renamed or moved
-  - Files: `packages/api/src/repos/{folders,charts}.ts`, `packages/api/src/repos/references.test.ts`
-  - Failing test: `references.test.ts`: after moving a library chart, a dashboard that uses it still resolves it and renders no missing-chart state (AC-021).
+- [x] T019 (AC-021) Keep every reference working when a folder, dashboard or chart is renamed or moved
+  - Files: `packages/api/src/repos/{documents,catalog}.ts`, `packages/api/src/repos/catalog.test.ts`, `packages/api/src/server.ts`, `packages/web/src/workspaces/explore/{FolderContents,ExplorePage}.tsx`, `e2e/explore-rename-move.spec.ts`
+  - Failing test: `catalog.test.ts`: after moving a library chart, a dashboard that uses it still resolves it (AC-021); `e2e/explore-rename-move.spec.ts`: a reference captured before a rename or move still resolves after it.
   - Depends on: T016
+  - Done 2026-09-19. AC-021 ticked. **The id never changes** — that is the whole mechanism. A dashboard points at a chart's id, not at its title or its folder, so a move is a change of one field and nothing referring to it has to be told. Each test follows a reference captured *before* the change.
+  - The rendered "missing-chart state" in the criterion's `Fails when:` is re-verified once dashboards render library charts (T023 with F5); the reference layer is what exists to test today.
+  - Browser tests here **create their own objects** rather than renaming seeded ones. Mutating shared fixtures made other spec files fail depending on the order they ran in — a real isolation bug in the tests, not in the product.
+  - Two more WebKit-only type-size findings from the rendered audit, and they did not have the same answer: `<button>` and `<select>` were fixed with `font: inherit`; `<option>` **cannot be** — WebKit draws the popup with the system font and ignores author `font-size`. Recorded as a platform exception in direction.md §3, with the consequence that a dropdown whose list must meet the floor has to be a custom listbox.
 - [ ] T020 (AC-022) List the dashboards that use a library chart, and offer to add it to another
   - Files: `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, `packages/api/src/routes/charts.ts`, `packages/web/src/workspaces/explore/LibraryChartPage.test.tsx`
   - Failing test: `LibraryChartPage.test.tsx`: every dashboard containing the chart appears in the list and an "Add to dashboard" action is offered (AC-022).

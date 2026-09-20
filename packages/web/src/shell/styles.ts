@@ -15,7 +15,9 @@ const SHELL_CSS = `
 button,
 input,
 select,
-textarea {
+textarea,
+/* option does not inherit from its select in WebKit, and defaults to 11px. */
+option {
   font: inherit;
 }
 

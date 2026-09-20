@@ -132,6 +132,7 @@ Family: **Inter**, falling back to `system-ui, -apple-system, "Segoe UI", sans-s
 | `text-kpi-solo`  | 40/52                 | 600, `tnum` | a tile with a single KPI                                     | Metabase scalar 54 px (measured) sets the upper bound |
 
 - **Floor:** no text smaller than 12 px.
+  - **One platform exception, found at T019:** WebKit draws a native `<select>` popup with the system UI font and ignores author `font-size` on `<option>`, reporting 11 px. The closed control inherits our type, so what is read inline meets the floor; only the open OS popup does not. The rendered audit skips `option` for this reason. If a surface ever needs a dropdown whose list must meet the floor, it has to be a custom listbox rather than a native select.
 - **Weights:** only 400 and 600 are used.
 - **Numerals:** tabular figures (`tnum`) in tables, axes and KPIs.
 

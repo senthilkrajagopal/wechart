@@ -1,4 +1,4 @@
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 
 import type { Database } from '../db/schema';
 
@@ -62,6 +62,22 @@ export function catalog(db: Kysely<Database>) {
         .where('folder_id', '=', folderId)
         .where('local_to_dashboard_id', 'is', null)
         .orderBy('kind', 'asc')
+        .orderBy('title', 'asc')
+        .execute();
+
+      return rows.map(toItem);
+    },
+
+    /**
+     * The dashboards that use a library chart (AC-021, AC-022, AC-023).
+     *
+     * A dashboard refers to a chart by id in `body.charts`, so this survives
+     * the chart being renamed or moved — which is exactly what AC-021 asks for.
+     */
+    async dashboardsUsing(chartId: string): Promise<CatalogItem[]> {
+      const rows = await selectItems()
+        .where('kind', '=', 'dashboard')
+        .where(sql<boolean>`body -> 'charts' @> ${JSON.stringify([chartId])}::jsonb`)
         .orderBy('title', 'asc')
         .execute();
 

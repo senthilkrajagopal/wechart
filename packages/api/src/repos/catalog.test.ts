@@ -116,6 +116,91 @@ describe('folder contents (AC-017)', () => {
   });
 });
 
+describe('references survive a rename or move (AC-021)', () => {
+  /**
+   * AC-021: WHEN the user renames or moves a folder, dashboard or chart, THE
+   * SYSTEM SHALL keep every reference to it working, including dashboards that
+   * use a moved library chart.
+   * Fails when: a dashboard that used the object shows a missing-chart state
+   * after the move.
+   */
+  async function chartUsedByDashboard() {
+    const from = await folder('Reference source');
+    const chartId = randomUUID();
+    const dashboardId = randomUUID();
+
+    await repo().create({
+      kind: 'chart',
+      id: chartId,
+      body: { title: 'Shared chart', folderId: from, owner: 'admin' },
+    });
+    await repo().create({
+      kind: 'dashboard',
+      id: dashboardId,
+      body: { title: 'Uses the chart', folderId: from, charts: [chartId] },
+    });
+
+    return { from, chartId, dashboardId };
+  }
+
+  it('finds the dashboards that use a chart', async () => {
+    const { chartId, dashboardId } = await chartUsedByDashboard();
+
+    const using = await cat().dashboardsUsing(chartId);
+
+    expect(using.map((item) => item.id)).toContain(dashboardId);
+  });
+
+  it('keeps the reference working after the chart is moved to another folder', async () => {
+    const { chartId, dashboardId } = await chartUsedByDashboard();
+    const to = await folder('Reference target');
+
+    await repo().relocate({ kind: 'chart', id: chartId, folderId: to });
+
+    // The chart is in its new home...
+    expect((await cat().contents(to)).map((item) => item.id)).toContain(chartId);
+    // ...and the dashboard still resolves it, because the reference is by id.
+    expect((await cat().dashboardsUsing(chartId)).map((item) => item.id)).toContain(dashboardId);
+    expect(await repo().get('chart', chartId)).not.toBeNull();
+  });
+
+  it('keeps the reference working after the chart is renamed', async () => {
+    const { chartId, dashboardId } = await chartUsedByDashboard();
+
+    await repo().relocate({ kind: 'chart', id: chartId, title: 'Renamed chart' });
+
+    expect((await repo().get('chart', chartId))?.body['title']).toBe('Renamed chart');
+    expect((await cat().dashboardsUsing(chartId)).map((item) => item.id)).toContain(dashboardId);
+  });
+
+  it('keeps the rest of the body when renaming, so a move is not a rewrite', async () => {
+    const { chartId } = await chartUsedByDashboard();
+
+    await repo().relocate({ kind: 'chart', id: chartId, title: 'Only the title changed' });
+
+    const after = await repo().get('chart', chartId);
+    expect(after?.body['owner']).toBe('admin');
+  });
+
+  it('moves a folder without detaching what is inside it', async () => {
+    const parent = await folder('Movable parent');
+    const child = await folder('Movable child', parent);
+    const newHome = await folder('New home');
+
+    await repo().relocate({ kind: 'folder', id: parent, folderId: newHome });
+
+    // The parent moved; the child still belongs to the parent.
+    expect((await cat().contents(newHome)).map((item) => item.id)).toContain(parent);
+    expect((await cat().folders()).find((node) => node.id === child)?.parentId).toBe(parent);
+  });
+
+  it('raises a clear error rather than silently doing nothing for an unknown object', async () => {
+    await expect(
+      repo().relocate({ kind: 'chart', id: randomUUID(), title: 'Nope' }),
+    ).rejects.toThrow(/no chart found/i);
+  });
+});
+
 describe('search (AC-019)', () => {
   it('finds every dashboard and library chart whose title contains the text', async () => {
     const here = await folder('Search me');

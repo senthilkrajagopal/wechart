@@ -64,6 +64,33 @@ export function ExplorePage() {
     queryFn: () => getJson<CatalogItem[]>(`/api/folders/${encodeURIComponent(folderId)}/contents`),
   });
 
+  /**
+   * AC-021: renaming or moving changes a field, never the id, so everything
+   * that refers to this object keeps resolving.
+   */
+  const relocate = useMutation({
+    mutationFn: async ({
+      item,
+      title,
+      folderId: target,
+    }: {
+      item: CatalogItem;
+      title?: string;
+      folderId?: string;
+    }) => {
+      const response = await fetch(`/api/documents/${item.kind}/${encodeURIComponent(item.id)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title, folderId: target }),
+      });
+      if (!response.ok) throw new Error(`Could not save: ${String(response.status)}`);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+      await queryClient.invalidateQueries({ queryKey: ['folders'] });
+    },
+  });
+
   return (
     <div className="explore">
       <aside className="explore__tree">
@@ -85,7 +112,22 @@ export function ExplorePage() {
         {contents.isError ? (
           <p role="alert">Could not load this folder: {(contents.error as Error).message}</p>
         ) : null}
-        {contents.isSuccess ? <FolderContents items={contents.data} /> : null}
+        {contents.isSuccess ? (
+          <FolderContents
+            items={contents.data}
+            folders={folders.data ?? []}
+            onOpen={(item) => {
+              // A folder has no page of its own: opening it means selecting it.
+              if (item.kind === 'folder') {
+                setFolderId(item.id);
+                return;
+              }
+              globalThis.location.assign(`/explore/${item.kind}s/${encodeURIComponent(item.id)}`);
+            }}
+            onRename={(item, title) => relocate.mutate({ item, title })}
+            onMove={(item, target) => relocate.mutate({ item, folderId: target })}
+          />
+        ) : null}
       </section>
     </div>
   );
