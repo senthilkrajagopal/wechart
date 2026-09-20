@@ -342,10 +342,16 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - direction.md publishes only the ends of that ramp, so the shades between are interpolated — recorded in `theme.ts` as a derivation, the way direction.md records its own derived values.
   - **A treemap rectangle's position lives in a `transform`**, not in its path, so `marksOf` now applies any translate. Without it every rectangle would have been measured in the same corner. All 55 existing tests passed unchanged afterwards, which is what says the change was safe.
   - `CHART_TYPES` now exists at runtime in core, so the "a type nothing draws yet is reported rather than drawn as something else" test derives its cases from the vocabulary instead of naming one that stops being true — which it had, twice, in this task alone.
-- [ ] T040 (AC-037) Render the KPI tile
-  - Files: `packages/charts/src/dom/Kpi.tsx`, `packages/charts/src/dom/Kpi.test.tsx`
-  - Failing test: `Kpi.test.tsx`: a KPI spec renders its value and sub-line without clipping (AC-037).
-  - Depends on: T035
+- [x] T040 (AC-037) Render the KPI tile
+  - Files: `packages/web/src/tiles/Kpi.tsx`, `packages/web/src/tiles/Kpi.test.tsx`, `packages/web/src/tiles/ChartTile.tsx`, `packages/web/src/tiles/ChartCanvas.tsx`, `packages/web/src/editor/ChartEditor.tsx`
+  - Failing test: `Kpi.test.tsx`: a KPI spec renders its value and sub-line (AC-037).
+  - Depends on: T035, T189
+  - Done 2026-09-20. **AC-037 stays unchecked** — 14 of its 18 types now render.
+  - **It lives in `packages/web`, not `packages/charts`.** The task listed `packages/charts/src/dom/Kpi.tsx`, but T189 settled that `@wechart/charts` stays framework-free: it builds options and `packages/web` owns the DOM and React. Adding React to charts for one component would undo that. The same will apply to the table and the pivot.
+  - DOM rather than ECharts, which is also where `docs/research/echarts.md` lands: a number drawn on a canvas is unselectable, unsearchable and invisible to a screen reader, for no gain.
+  - **A KPI is one number, so the work is all in its absence.** No rows, a row that does not carry the measure, a value that will not parse and no measure bound at all each say so rather than printing `0` — an empty result is not a measurement of zero.
+  - New: `ChartTile` is the single place that knows which types are DOM and which go to ECharts, so nothing upstream has to. `ChartCanvas` lost its own not-drawable branch to it rather than keeping two copies.
+  - Values are grouped (`9,876,543`) rather than printed as a wall of digits, and the string Cube sends over JSON is converted rather than trusted. Per-member formats — currency, percentages — are AC-046's business at T052.
 - [ ] T041 (AC-037, AC-178) Render the table, and offer a table view of every chart's data from the tile
   - Files: `packages/charts/src/dom/DataTable.tsx`, `packages/web/src/tiles/TableView.tsx`, `packages/charts/src/dom/DataTable.test.tsx`, `e2e/table-view.spec.ts`
   - Failing test: `DataTable.test.tsx`: a table spec renders with real `<table>` semantics and virtualised rows (AC-037); `e2e/table-view.spec.ts`: every chart type offers a table view reachable from its tile (AC-178).

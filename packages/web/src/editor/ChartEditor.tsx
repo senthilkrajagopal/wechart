@@ -22,7 +22,7 @@ import {
 } from '@wechart/recommender';
 
 import { loadTile } from '../query/loadTile';
-import { ChartCanvas } from '../tiles/ChartCanvas';
+import { ChartTile } from '../tiles/ChartTile';
 import { ResultsDrawer, type DrawerView } from './ResultsDrawer';
 import { WhyThisChart } from './WhyThisChart';
 import {
@@ -339,7 +339,7 @@ export function ChartEditor() {
               // Only once the fields can actually produce the chosen type.
               // Drawing anyway would put a chart on screen that contradicts
               // the message AC-033 has just shown beside it.
-              <ChartCanvas spec={compile(previewDocument, { rows, chartType: shownType })} />
+              <ChartTile spec={compile(previewDocument, { rows, chartType: shownType })} />
             )}
           </>
         )}

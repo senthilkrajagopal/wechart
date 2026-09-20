@@ -1,4 +1,4 @@
-import { echarts, isDrawable, optionFor } from '@wechart/charts';
+import { echarts, optionFor } from '@wechart/charts';
 import type { RenderSpec } from '@wechart/core';
 import { useLayoutEffect, useRef } from 'react';
 
@@ -55,17 +55,6 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT }: ChartCanvasProps)
     // would leave the previous type's series in place beside the new one.
     chart.setOption(optionFor(spec), true);
   }, [spec]);
-
-  if (!isDrawable(spec.chartType)) {
-    // Saying so beats drawing something the spec never asked for. AC-033
-    // already has the editor explain when a chart cannot be drawn; this is the
-    // narrower case of a type whose renderer has not landed yet.
-    return (
-      <p data-testid="chart-not-drawable" role="status">
-        {spec.chartType} charts are not drawn yet.
-      </p>
-    );
-  }
 
   return (
     <div
