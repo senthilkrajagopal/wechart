@@ -14,7 +14,7 @@ const TOTAL = 'orders.total';
 
 const spec = (over: Partial<RenderSpec>): RenderSpec => ({
   chartType: 'bar',
-  encoding: { category: STATUS, values: [COUNT] },
+  encoding: { x: [STATUS], y: [COUNT] },
   rows: [],
   ...over,
 });
@@ -33,7 +33,7 @@ describe('one series per measure', () => {
   it('draws each measure against the shared categories', () => {
     const { categories, series } = seriesOf(
       spec({
-        encoding: { category: STATUS, values: [COUNT, TOTAL] },
+        encoding: { x: [STATUS], y: [COUNT, TOTAL] },
         rows: [
           { [STATUS]: 'paid', [COUNT]: 10, [TOTAL]: 25 },
           { [STATUS]: 'refunded', [COUNT]: 30, [TOTAL]: 15 },
@@ -53,7 +53,7 @@ describe('one series per member of a splitting dimension', () => {
   it('draws the same measure once per member', () => {
     const { categories, series } = seriesOf(
       spec({
-        encoding: { category: STATUS, series: REGION, values: [COUNT] },
+        encoding: { x: [STATUS], color: [REGION], y: [COUNT] },
         rows: [
           { [STATUS]: 'paid', [REGION]: 'east', [COUNT]: 10 },
           { [STATUS]: 'paid', [REGION]: 'west', [COUNT]: 20 },
@@ -73,7 +73,7 @@ describe('one series per member of a splitting dimension', () => {
   it('leaves a gap where a member has no row, rather than a zero', () => {
     const { series } = seriesOf(
       spec({
-        encoding: { category: STATUS, series: REGION, values: [COUNT] },
+        encoding: { x: [STATUS], color: [REGION], y: [COUNT] },
         rows: [
           { [STATUS]: 'paid', [REGION]: 'east', [COUNT]: 10 },
           { [STATUS]: 'refunded', [REGION]: 'west', [COUNT]: 40 },
@@ -117,7 +117,7 @@ describe('values that are not numbers', () => {
 describe('a chart with no category', () => {
   it('draws a single unnamed slot, so a KPI-shaped spec still yields a series', () => {
     const { categories, series } = seriesOf(
-      spec({ encoding: { values: [COUNT] }, rows: [{ [COUNT]: 240 }] }),
+      spec({ encoding: { y: [COUNT] }, rows: [{ [COUNT]: 240 }] }),
     );
 
     expect(categories).toEqual(['']);

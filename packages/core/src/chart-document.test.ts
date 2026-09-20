@@ -32,7 +32,7 @@ const full: ChartDocument = {
       timeDimensions: ['orders.ordered_at'],
     },
     chartType: 'stackedBar',
-    encoding: { x: 'orders.status', color: 'orders.status' },
+    encoding: { x: ['orders.status'], color: ['orders.status'] },
     options: { legend: { position: 'right' } },
   },
 };

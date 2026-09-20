@@ -38,7 +38,7 @@ const draw = (spec: RenderSpec) => renderToSvg(lineOption(spec));
 
 const oneMeasure = (chartType: RenderSpec['chartType']): RenderSpec => ({
   chartType,
-  encoding: { category: MONTH, values: [COUNT] },
+  encoding: { x: [MONTH], y: [COUNT] },
   rows: [
     { [MONTH]: 'jan', [COUNT]: 10 },
     { [MONTH]: 'feb', [COUNT]: 30 },
@@ -50,7 +50,7 @@ const oneMeasure = (chartType: RenderSpec['chartType']): RenderSpec => ({
 
 const twoMeasures = (chartType: RenderSpec['chartType']): RenderSpec => ({
   chartType,
-  encoding: { category: MONTH, values: [COUNT, TOTAL] },
+  encoding: { x: [MONTH], y: [COUNT, TOTAL] },
   rows: [
     { [MONTH]: 'jan', [COUNT]: 10, [TOTAL]: 20 },
     { [MONTH]: 'feb', [COUNT]: 30, [TOTAL]: 10 },

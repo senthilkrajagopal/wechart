@@ -40,18 +40,42 @@ export type ChartType =
   | 'trellis'
   | 'combo';
 
-/** Which member plays which role in a drawn chart. */
-export interface Encoding {
-  /** The member along the category axis. */
-  readonly category?: string;
-  /**
-   * The member that splits the marks into one series each. Alternative to
-   * several `values`: both produce multiple series, and a chart uses one or
-   * the other, never both.
-   */
-  readonly series?: string;
-  /** The measures drawn against the value axis. */
-  readonly values: readonly string[];
+/**
+ * The visual channels a member can be bound to.
+ *
+ * Cut down from the channel model in docs/research/vega-lite.md to the ones
+ * wechart's own chart types need. It lives here, with the drawing vocabulary,
+ * and the saved document imports it — the same direction as `ChartType`.
+ */
+export type Channel = 'x' | 'y' | 'color' | 'size' | 'facet' | 'row' | 'column';
+
+export const CHANNELS: readonly Channel[] = ['x', 'y', 'color', 'size', 'facet', 'row', 'column'];
+
+/**
+ * Which member plays which role in a drawn chart, as visual **channels**.
+ *
+ * Channels rather than `{category, series, values}`, because that trio was
+ * fitted to the bar and line families and cannot express the rest of AC-037's
+ * list: scatter has two value axes, a heatmap has two categorical axes plus a
+ * measure on colour, a treemap has a hierarchy plus a size, a pivot has rows
+ * and columns, a trellis has a facet. The channel vocabulary and the principle
+ * that a spec "names data roles and visual channels" with rendering happening
+ * only after compilation both come from docs/research/vega-lite.md.
+ *
+ * Every channel holds a list. Most hold at most one member; the value axis
+ * genuinely takes several, and one uniform shape beats a union of singular and
+ * plural channels that every caller would have to know about.
+ */
+export type Encoding = Partial<Record<Channel, readonly string[]>>;
+
+/** The one member on a channel, where a chart expects at most one. */
+export function memberOn(encoding: Encoding, channel: Channel): string | undefined {
+  return encoding[channel]?.[0];
+}
+
+/** Every member on a channel, in order. */
+export function membersOn(encoding: Encoding, channel: Channel): readonly string[] {
+  return encoding[channel] ?? [];
 }
 
 /** Everything a renderer needs to draw one chart. */
@@ -104,8 +128,13 @@ export function seriesOf(spec: RenderSpec): {
   series: SeriesData[];
 } {
   const { encoding, rows } = spec;
-  const categories =
-    encoding.category === undefined ? [''] : distinctValues(rows, encoding.category);
+  // The category axis is the x channel, the series split is colour, and the
+  // value axis is y. A cartesian chart reads exactly those three.
+  const category = memberOn(encoding, 'x');
+  const splitBy = memberOn(encoding, 'color');
+  const measures = membersOn(encoding, 'y');
+
+  const categories = category === undefined ? [''] : distinctValues(rows, category);
 
   const valueAt = (member: string, match: (row: Record<string, unknown>) => boolean) => {
     const row = rows.find(match);
@@ -116,25 +145,21 @@ export function seriesOf(spec: RenderSpec): {
     return Number.isFinite(value) ? value : null;
   };
 
-  const inCategory = (category: string) => (row: Record<string, unknown>) =>
-    encoding.category === undefined || String(row[encoding.category] ?? '') === category;
+  const inCategory = (name: string) => (row: Record<string, unknown>) =>
+    category === undefined || String(row[category] ?? '') === name;
 
   // Split by a dimension: one series per member of it, all drawing the same
   // measure.
-  if (encoding.series !== undefined) {
-    const measure = encoding.values[0];
+  if (splitBy !== undefined) {
+    const measure = measures[0];
     if (measure === undefined) return { categories, series: [] };
 
     return {
       categories,
-      series: distinctValues(rows, encoding.series).map((member) => ({
+      series: distinctValues(rows, splitBy).map((member) => ({
         name: member,
-        values: categories.map((category) =>
-          valueAt(
-            measure,
-            (row) =>
-              inCategory(category)(row) && String(row[encoding.series as string] ?? '') === member,
-          ),
+        values: categories.map((name) =>
+          valueAt(measure, (row) => inCategory(name)(row) && String(row[splitBy] ?? '') === member),
         ),
       })),
     };
@@ -143,9 +168,9 @@ export function seriesOf(spec: RenderSpec): {
   // Otherwise one series per measure.
   return {
     categories,
-    series: encoding.values.map((measure) => ({
+    series: measures.map((measure) => ({
       name: measure,
-      values: categories.map((category) => valueAt(measure, inCategory(category))),
+      values: categories.map((name) => valueAt(measure, inCategory(name))),
     })),
   };
 }

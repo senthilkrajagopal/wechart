@@ -42,7 +42,7 @@ function leftmost(boxes: readonly Box[], fill: string): Box {
 describe('bar', () => {
   const spec: RenderSpec = {
     chartType: 'bar',
-    encoding: { category: STATUS, values: [COUNT] },
+    encoding: { x: [STATUS], y: [COUNT] },
     rows: [
       { [STATUS]: 'paid', [COUNT]: 10 },
       { [STATUS]: 'refunded', [COUNT]: 30 },
@@ -84,7 +84,7 @@ describe('bar', () => {
 describe('hbar', () => {
   const spec: RenderSpec = {
     chartType: 'hbar',
-    encoding: { category: STATUS, values: [COUNT] },
+    encoding: { x: [STATUS], y: [COUNT] },
     rows: [
       { [STATUS]: 'paid', [COUNT]: 10 },
       { [STATUS]: 'refunded', [COUNT]: 30 },
@@ -125,7 +125,7 @@ describe('hbar', () => {
 describe('groupedBar', () => {
   const spec: RenderSpec = {
     chartType: 'groupedBar',
-    encoding: { category: STATUS, values: [COUNT, TOTAL] },
+    encoding: { x: [STATUS], y: [COUNT, TOTAL] },
     rows: [
       { [STATUS]: 'paid', [COUNT]: 10, [TOTAL]: 25 },
       { [STATUS]: 'refunded', [COUNT]: 30, [TOTAL]: 15 },
@@ -155,7 +155,7 @@ describe('groupedBar', () => {
     const oneMeasure: RenderSpec = {
       ...spec,
       chartType: 'groupedBar',
-      encoding: { category: STATUS, values: [COUNT] },
+      encoding: { x: [STATUS], y: [COUNT] },
     };
     expect(marksOf(draw(oneMeasure), PALETTE)).toHaveLength(2);
   });
@@ -175,7 +175,7 @@ describe('groupedBar', () => {
 describe('stackedBar', () => {
   const spec: RenderSpec = {
     chartType: 'stackedBar',
-    encoding: { category: STATUS, values: [COUNT, TOTAL] },
+    encoding: { x: [STATUS], y: [COUNT, TOTAL] },
     rows: [
       { [STATUS]: 'paid', [COUNT]: 10, [TOTAL]: 25 },
       { [STATUS]: 'refunded', [COUNT]: 30, [TOTAL]: 15 },
@@ -215,7 +215,7 @@ describe('stackedBar', () => {
 
 describe('marks follow direction.md §6', () => {
   const base = {
-    encoding: { category: STATUS, values: [COUNT, TOTAL] },
+    encoding: { x: [STATUS], y: [COUNT, TOTAL] },
     rows: [{ [STATUS]: 'paid', [COUNT]: 10, [TOTAL]: 25 }],
     palette: PALETTE,
     surface: SURFACE,
@@ -224,7 +224,7 @@ describe('marks follow direction.md §6', () => {
   const single: RenderSpec = {
     ...base,
     chartType: 'bar',
-    encoding: { category: STATUS, values: [COUNT] },
+    encoding: { x: [STATUS], y: [COUNT] },
     rows: [...base.rows],
   };
 

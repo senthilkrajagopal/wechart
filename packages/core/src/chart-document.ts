@@ -21,7 +21,7 @@
  */
 
 import { emptySpec, type ChartSpec } from './chart-spec';
-import type { ChartType } from './render-spec';
+import type { Channel, ChartType } from './render-spec';
 
 /**
  * The version of this shape. Raised only when the stored shape changes in a
@@ -31,18 +31,6 @@ import type { ChartType } from './render-spec';
 export const CHART_DOCUMENT_VERSION = 1;
 
 /**
- * The visual channels a chart can bind a member to.
- *
- * The vocabulary lives with the saved document rather than with the renderer,
- * because it is what a stored chart is written in — the same reason the chart
- * type does. Taken from the channel model in docs/research/vega-lite.md, cut
- * down to the channels wechart's own chart types need.
- */
-export type Channel = 'x' | 'y' | 'color' | 'size' | 'facet' | 'row' | 'column';
-
-export const CHANNELS: readonly Channel[] = ['x', 'y', 'color', 'size', 'facet', 'row', 'column'];
-
-/**
  * Which member the user pinned to which channel.
  *
  * Sparse on purpose: an absent channel means "work it out from the wells and
@@ -50,13 +38,23 @@ export const CHANNELS: readonly Channel[] = ['x', 'y', 'color', 'size', 'facet',
  * the computed defaults back would turn every recommendation into a pin, which
  * is the distinction AC-032 rests on.
  *
- * The value is a member name, not a reference. Metabase reached the same place
+ * The values are member names, not references. Metabase reached the same place
  * only after abandoning reference-keyed settings over an issue that stayed
  * open from 2019 to 2025, and both of its keying schemes still coexist in
  * stored data. Cube member names are already stable, so there is nothing to
  * gain by indirecting.
+ *
+ * Every channel holds a **list**, even though most hold at most one member.
+ * The value axis genuinely takes several — a grouped bar of two measures — and
+ * Metabase's equivalents (`graph.dimensions`, `graph.metrics`) are both arrays
+ * for the same reason. One shape for every channel beats a union of "some
+ * channels are singular and some are plural", which every caller would then
+ * have to know.
+ *
+ * An **empty** list and an **absent** channel are different: absent means "work
+ * it out", empty means the user cleared it.
  */
-export type EncodingOverrides = Partial<Record<Channel, string>>;
+export type EncodingOverrides = Partial<Record<Channel, readonly string[]>>;
 
 export interface ChartDefinition {
   readonly source: { readonly cube: string };

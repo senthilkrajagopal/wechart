@@ -18,13 +18,11 @@ export {
 } from './chart-spec';
 
 export {
-  CHANNELS,
   CHART_DOCUMENT_VERSION,
   ChartDocumentError,
   chartDocumentOf,
   readChartDocument,
   toChartSpec,
-  type Channel,
   type ChartDefinition,
   type ChartDocument,
   type EncodingOverrides,
@@ -38,10 +36,16 @@ export {
 } from './chart-migrations';
 
 export {
+  CHANNELS,
   distinctValues,
+  memberOn,
+  membersOn,
   seriesOf,
+  type Channel,
   type ChartType,
   type Encoding,
   type RenderSpec,
   type SeriesData,
 } from './render-spec';
+
+export { compile, defaultEncoding, type CompileOptions } from './compile';

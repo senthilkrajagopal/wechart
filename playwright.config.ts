@@ -30,6 +30,19 @@ export default defineConfig({
    */
   timeout: 60_000,
   fullyParallel: true,
+  /**
+   * Capped locally, left to Playwright on CI.
+   *
+   * The failure this prevents reports itself as `Test timeout of 60000ms
+   * exceeded while setting up "context"` on an arbitrary test — which reads
+   * like that test failing and is not: nothing in the app is involved, the
+   * browser simply did not hand out a context in time. Playwright's default is
+   * half the cores (6 here), and each worker launches a real browser at once,
+   * on a development machine that is also running the docker stack and other
+   * services. Fewer workers cut the launch spike; CI runs on a dedicated
+   * machine and keeps the default.
+   */
+  ...(process.env.CI ? {} : { workers: 4 }),
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
