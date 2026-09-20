@@ -11,6 +11,13 @@
  * rather than pixels, because that is what survives a different canvas width;
  * `grid/geometry.ts` owns the conversion.
  */
+/**
+ * From core, not from the recommender that re-exports it: the vocabulary is
+ * the render spec's, and this is a persisted document model, so it should name
+ * the same owner `chart-document.ts` does.
+ */
+import type { ChartType } from '@wechart/core';
+
 import type { GridTile } from '../grid/geometry';
 
 export const DASHBOARD_DOCUMENT_VERSION = 1;
@@ -43,6 +50,13 @@ export interface Tile extends GridTile {
   readonly kind: TileKind;
   /** For a chart tile: the chart document this tile shows. */
   readonly chartId?: string;
+  /**
+   * For a chart tile with no chartId: the type it is meant to become, so an
+   * empty tile can name what it still needs rather than sit blank (AC-068).
+   * A template may leave it out, which means the recommender chooses once the
+   * tile has fields.
+   */
+  readonly chartType?: ChartType;
   /** For markdown, header and link tiles. */
   readonly text?: string;
 }

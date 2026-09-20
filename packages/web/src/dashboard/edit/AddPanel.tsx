@@ -1,4 +1,5 @@
 import { PALETTE, type PaletteId } from '../model/insert';
+import { SECTION_TEMPLATES, type TemplateId } from './templates';
 
 /**
  * The element palette, in the edit sidebar's Add panel (AC-058).
@@ -18,9 +19,15 @@ export interface AddPanelProps {
    */
   readonly message?: string | undefined;
   readonly onAdd: (id: PaletteId) => void;
+  /**
+   * Lay out a whole section template (AC-068). Separate from `onAdd` because
+   * a template is not an element: it inserts several, and it inserts them as
+   * one change.
+   */
+  readonly onAddTemplate: (id: TemplateId) => void;
 }
 
-export function AddPanel({ destination, message, onAdd }: AddPanelProps) {
+export function AddPanel({ destination, message, onAdd, onAddTemplate }: AddPanelProps) {
   return (
     <div className="add-panel">
       <p className="add-panel__destination" data-testid="add-destination">
@@ -47,6 +54,31 @@ export function AddPanel({ destination, message, onAdd }: AddPanelProps) {
             >
               <span className="add-panel__label">{entry.label}</span>
               <span className="add-panel__hint">{entry.hint}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {/**
+       * Section templates, below the palette and visibly apart from it
+       * (direction.md section 2 lists both in the Add panel). They are a
+       * different kind of thing: a palette entry inserts one element, a
+       * template lays out several at once, and the hint says which several so
+       * the click is not a surprise.
+       */}
+      <h3 className="add-panel__heading">Section templates</h3>
+      <ul aria-label="Section templates">
+        {SECTION_TEMPLATES.map((template) => (
+          <li key={template.id}>
+            <button
+              type="button"
+              data-testid={`template-${template.id}`}
+              onClick={() => {
+                onAddTemplate(template.id);
+              }}
+            >
+              <span className="add-panel__label">{template.label}</span>
+              <span className="add-panel__hint">{template.hint}</span>
             </button>
           </li>
         ))}

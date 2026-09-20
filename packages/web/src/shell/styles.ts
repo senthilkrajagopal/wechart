@@ -323,6 +323,35 @@ main:has(.dashboard) {
 .add-panel button:hover { background: var(--wc-bg-subtle); }
 .add-panel__label { font-weight: 600; }
 .add-panel__hint { color: var(--wc-text-secondary); }
+/* Section templates, set apart from the palette above them: one click here
+   lays out several tiles rather than one (AC-068), and a run of identical
+   buttons would not say so. The dashed border is the prototype's. */
+.add-panel__heading {
+  margin: 16px 0 8px;
+  font-size: var(--wc-text-sm-size);
+  font-weight: var(--wc-text-sm-strong-weight);
+  color: var(--wc-text-secondary);
+}
+.add-panel ul[aria-label='Section templates'] button {
+  border-style: dashed;
+  border-color: var(--wc-border-strong);
+  background: none;
+}
+/* A chart tile with nothing in it yet (AC-068). It states what it needs, so it
+   is instruction rather than failure: secondary ink and no error colour, set
+   away from the tile's edges so it reads as a waiting tile rather than a
+   broken one. */
+.tile-empty {
+  display: grid;
+  gap: 4px;
+  place-content: center;
+  height: 100%;
+  padding: 16px;
+  color: var(--wc-text-secondary);
+  text-align: center;
+}
+.tile-empty p { margin: 0; }
+
 /* AC-059's explanation. Marked out, because it reports something the user did
    not ask for rather than describing what they are about to do. */
 .add-panel__message {

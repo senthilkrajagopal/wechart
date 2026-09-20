@@ -358,6 +358,45 @@ test('the Add panel offers every element type and inserts one', async ({ page })
   );
 });
 
+/**
+ * T074 / AC-068. The model tests hold what a template inserts; this holds that
+ * a user can reach one in the running app and that what lands on the canvas is
+ * visibly empty and says so.
+ *
+ * The seeded dashboard is only read here, never saved, so this does not write
+ * to the shared database the way the save tests have to.
+ */
+test('a section template lays out empty charts that say what they need', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  await sidebar.getByRole('tab', { name: 'Add' }).click();
+
+  const templates = sidebar.getByRole('list', { name: 'Section templates' });
+  await expect(templates.locator('.add-panel__label')).toHaveText([
+    'KPI row',
+    'Two charts',
+    'Chart with notes',
+  ]);
+
+  const before = await page.getByTestId('grid-item').count();
+  await page.getByTestId('template-kpis').click();
+
+  await expect(page.getByTestId('grid-item')).toHaveCount(before + 4);
+
+  // Four empty tiles, each naming the well and the member type it still wants
+  // — not "This chart is no longer available", which is what a tile bound to
+  // nothing said before this task.
+  const empty = page.getByTestId('tile-empty-chart');
+  await expect(empty).toHaveCount(4);
+  await expect(empty.first()).toContainText('needs a measure in Measures');
+  await expect(page.getByTestId('tile-missing-chart')).toHaveCount(0);
+
+  // One change for the whole layout, not one per tile.
+  await expect(page.getByRole('button', { name: /^Discard/ })).toHaveText('Discard (1 change)');
+});
+
 test('a tab group added to a page is wrapped in a section, and says so', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Edit' }).click();

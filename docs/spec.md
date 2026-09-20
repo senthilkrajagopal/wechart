@@ -207,7 +207,7 @@ Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
       Fails when: any change made during the session survives the discard.
 - [x] AC-067 WHEN the dashboard re-renders during editing, THE SYSTEM SHALL keep the canvas and sidebar scroll positions (direction.md rule 40).
       Fails when: either scroll position resets after a re-render.
-- [ ] AC-068 WHEN the user adds a section template, THE SYSTEM SHALL insert its tiles as empty charts that state what they need, rather than charts bound to sample data.
+- [x] AC-068 WHEN the user adds a section template, THE SYSTEM SHALL insert its tiles as empty charts that state what they need, rather than charts bound to sample data.
       Fails when: a template inserts a chart already bound to fields the user did not choose.
 
 ## F8. Dashboard settings and interaction modes

@@ -16,6 +16,7 @@ import { DeleteSectionDialog } from './edit/DeleteSectionDialog';
 import { UndoToast } from './edit/UndoToast';
 import { EditChrome, type EditSession } from './edit/EditChrome';
 import { MoveToMenu } from './edit/MoveToMenu';
+import { needsOf, templateElements } from './edit/templates';
 import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
 import { Canvas, type CanvasProps } from './grid/Canvas';
@@ -98,6 +99,23 @@ function TileBody({
 }) {
   switch (tile.kind) {
     case 'chart':
+      /**
+       * Empty comes before loading, missing and broken, because a tile bound
+       * to no chart is none of those: it is a chart the user has not filled in
+       * yet, and it is the state a section template leaves behind (AC-068).
+       * Left to fall through it showed a skeleton while anything else loaded
+       * and then "This chart is no longer available" — telling someone the
+       * tile they just added is gone.
+       */
+      if (tile.chartId === undefined) {
+        return (
+          <div data-testid="tile-empty-chart" className="tile-empty">
+            {needsOf(tile.chartType).map((sentence) => (
+              <p key={sentence}>{sentence}</p>
+            ))}
+          </div>
+        );
+      }
       if (error !== undefined) return <TileError error={error} />;
       /**
        * Loading, absent and broken are three states, not two. Collapsing the
@@ -391,6 +409,40 @@ function AddSlot({
         // Aim at what was just added, so a second insert follows the first
         // rather than stacking in front of it.
         where.onAdded(placed.element.id);
+      }}
+      onAddTemplate={(id) => {
+        const mint = () => `el-${String(Date.now())}-${String(counter++)}`;
+        const elements = templateElements(id, mint);
+
+        /**
+         * Folded into one document and handed to the session once, so the
+         * whole layout is a single undoable change. Calling `session.change`
+         * per tile would put four entries on the history for one click, and
+         * "Discard (4 changes)" would be counting tiles rather than decisions.
+         *
+         * The grammar is not consulted, unlike `onAdd`: a template inserts
+         * only tiles, and rule 37 is about where a tab group may live.
+         */
+        /**
+         * The insertion point advances with each element. Reusing one point
+         * looks right and is not: `insertElement` puts each element *at* that
+         * index, so the second lands in front of the first and a template
+         * comes out backwards — "Empty chart 8 + markdown 4" arriving as notes
+         * above chart. Only an append (index null) is safe to repeat, which is
+         * why every early test missed it: they all inserted with nothing
+         * selected, and inserting selects what it added.
+         */
+        let next = document;
+        let index = at.index;
+        for (const element of elements) {
+          next = insertElement(next, element, { key: at.key, index });
+          if (index !== null) index += 1;
+        }
+
+        session.change(next);
+        setSaid('');
+        const last = elements.at(-1);
+        if (last !== undefined) where.onAdded(last.id);
       }}
     />
   );
