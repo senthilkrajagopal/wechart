@@ -191,7 +191,7 @@ Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
       Fails when: an element type is missing, or an insert lands somewhere other than the stated position.
 - [x] AC-059 WHEN a tab group would be added outside a section, THE SYSTEM SHALL wrap it in a new section and say so (direction.md rule 37).
       Fails when: a tab group is created directly on a page tab, or no message explains the wrapping.
-- [ ] AC-060 WHEN the user deletes a tile, section, page tab or tab, THE SYSTEM SHALL offer an undo in a toast and through Undo, restoring the element and its contents (direction.md rule 38).
+- [x] AC-060 WHEN the user deletes a tile, section, page tab or tab, THE SYSTEM SHALL offer an undo in a toast and through Undo, restoring the element and its contents (direction.md rule 38).
       Fails when: an undo restores the element without its contents, or no undo is offered.
 - [ ] AC-061 WHEN the user deletes a section that contains tiles, THE SYSTEM SHALL ask whether to delete its contents or keep them, and apply the choice.
       Fails when: the contents are deleted without asking, or "keep" loses a tile.

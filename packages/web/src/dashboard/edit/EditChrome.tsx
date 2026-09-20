@@ -28,6 +28,13 @@ export interface EditSession<T> {
   /** Changes still in effect since editing began. */
   readonly changes: number;
   readonly change: (next: T) => void;
+  /**
+   * Step back one change — the same Undo the edit bar offers, reachable by
+   * whoever needs to offer it somewhere else. AC-060 asks for an undo "in a
+   * toast **and** through Undo", and two routes to two different histories
+   * would be worse than one.
+   */
+  readonly undo: () => void;
 }
 
 /**
@@ -84,6 +91,10 @@ export function EditChrome<T>({
       setHistory((previous) =>
         push(previous, { document: next, changes: previous.present.changes + 1 }),
       ),
+    // The very same step the edit bar's Undo takes.
+    undo: () => {
+      setHistory(undo);
+    },
   };
 
   /**

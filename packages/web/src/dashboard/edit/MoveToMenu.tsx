@@ -23,9 +23,22 @@ export interface MoveToMenuProps {
   readonly containers: readonly { readonly key: ContainerKey; readonly title: string }[];
   readonly currentKey: ContainerKey;
   readonly onMove: (to: ContainerKey) => void;
+  /**
+   * Deleting this element (AC-060). Here rather than only on the Delete key
+   * because the key acts on tiles alone — a section is a container, and the
+   * criterion names sections among the things that can be deleted.
+   */
+  readonly onDelete?: (() => void) | undefined;
 }
 
-export function MoveToMenu({ tileId, tileLabel, containers, currentKey, onMove }: MoveToMenuProps) {
+export function MoveToMenu({
+  tileId,
+  tileLabel,
+  containers,
+  currentKey,
+  onMove,
+  onDelete,
+}: MoveToMenuProps) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
@@ -92,6 +105,21 @@ export function MoveToMenu({ tileId, tileLabel, containers, currentKey, onMove }
                 </button>
               </li>
             ))
+          )}
+
+          {onDelete === undefined ? null : (
+            <li className="tile-menu__delete">
+              <button
+                type="button"
+                data-testid={`delete-${tileId}`}
+                onClick={() => {
+                  setOpen(false);
+                  onDelete();
+                }}
+              >
+                Delete
+              </button>
+            </li>
           )}
         </ul>
       ) : null}

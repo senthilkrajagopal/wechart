@@ -516,6 +516,98 @@ describe('adding an element from the sidebar (AC-058)', () => {
   });
 });
 
+describe('an undo for every delete (AC-060)', () => {
+  const edit = async () => {
+    render(<DashboardView document={DOC} specs={SPECS} onSave={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+  };
+
+  const deleteFirstTile = async () => {
+    const tile = screen.getAllByTestId('grid-item')[0] as HTMLElement;
+    tile.focus();
+    await userEvent.keyboard('{Delete}');
+  };
+
+  it('offers the undo in a toast, naming what went', async () => {
+    await edit();
+    await deleteFirstTile();
+
+    // "No undo is offered" is half the criterion's failing state. There are
+    // two Undo buttons on the page now — the toast's and the edit bar's —
+    // which is precisely what "in a toast **and** through Undo" asks for.
+    const toast = screen.getByTestId('undo-toast');
+    expect(toast.textContent).toContain('Deleted');
+    expect(within(toast).getByRole('button', { name: 'Undo' }).tagName).toBe('BUTTON');
+  });
+
+  it('puts the element back from the toast', async () => {
+    await edit();
+    const before = screen.getAllByTestId('grid-item').map((item) => item.dataset['tile']);
+    await deleteFirstTile();
+
+    await userEvent.click(
+      within(screen.getByTestId('undo-toast')).getByRole('button', { name: 'Undo' }),
+    );
+
+    expect(screen.getAllByTestId('grid-item').map((item) => item.dataset['tile'])).toEqual(before);
+    // And the toast goes with it: offering to undo what is already back would
+    // undo something else.
+    expect(screen.queryByTestId('undo-toast')).toBeNull();
+  });
+
+  it('puts it back from the edit bar too, which is the same history', async () => {
+    await edit();
+    const before = screen.getAllByTestId('grid-item').map((item) => item.dataset['tile']);
+    await deleteFirstTile();
+
+    await userEvent.click(
+      within(screen.getByRole('toolbar', { name: 'Dashboard editing' })).getByRole('button', {
+        name: 'Undo',
+      }),
+    );
+
+    expect(screen.getAllByTestId('grid-item').map((item) => item.dataset['tile'])).toEqual(before);
+  });
+
+  it('deletes a page tab and a tab, the two that are not on the grid', async () => {
+    render(<DashboardView document={withTabGroup} specs={SPECS} onSave={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    // A page tab: neither the Delete key nor a tile's ⋯ menu reaches one.
+    await userEvent.click(screen.getByTestId('delete-page-p2'));
+    expect(screen.getByTestId('undo-toast').textContent).toContain('Appendix');
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).not.toContain('Appendix');
+
+    // And a tab of a tab group, the fourth of the four.
+    await userEvent.click(screen.getByTestId('delete-tab-tg1-b'));
+    expect(screen.getByTestId('undo-toast').textContent).toContain('B');
+  });
+
+  it('restores a section with everything that was inside it', async () => {
+    await edit();
+    const before = screen.getAllByTestId('grid-item').map((item) => item.dataset['tile']);
+
+    /**
+     * Through the ⋯ menu, not the Delete key: the key acts on tiles alone,
+     * because a container taken with no prompt would pre-empt AC-061's "ask
+     * whether to delete its contents or keep them". The criterion still names
+     * sections, so the menu is where they go.
+     *
+     * The section holds t3, and "restoring the element **and its contents**"
+     * is the criterion — a delete that emptied it first would bring back an
+     * empty section.
+     */
+    await userEvent.click(screen.getByTestId('tile-menu-s1'));
+    await userEvent.click(screen.getByTestId('delete-s1'));
+    expect(screen.queryAllByTestId('grid-item').map((i) => i.dataset['tile'])).not.toContain('t3');
+
+    await userEvent.click(
+      within(screen.getByTestId('undo-toast')).getByRole('button', { name: 'Undo' }),
+    );
+    expect(screen.getAllByTestId('grid-item').map((item) => item.dataset['tile'])).toEqual(before);
+  });
+});
+
 describe('the assignment survives a re-render (AC-039)', () => {
   /**
    * `colours.test.ts` proves one call. This proves the part only a component

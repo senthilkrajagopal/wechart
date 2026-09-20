@@ -296,7 +296,12 @@ test('a focused tile answers all four keys the criterion names', async ({ page }
   await page.keyboard.press('Delete');
   await expect(page.locator('[data-tile="tile-status"]')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Undo' }).click();
+  // The edit bar's Undo specifically: since AC-060 there is a second one in
+  // the toast, which is the point of that criterion.
+  await page
+    .getByRole('toolbar', { name: 'Dashboard editing' })
+    .getByRole('button', { name: 'Undo' })
+    .click();
   await expect(page.locator('[data-tile="tile-status"]')).toHaveCount(1);
 });
 
@@ -371,6 +376,33 @@ test('a tab group added to a page is wrapped in a section, and says so', async (
 
   // And the other half: nothing explaining it.
   await expect(page.getByTestId('add-message')).toContainText(/section/i);
+});
+
+test('a delete offers an undo in a toast, restoring the contents too', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  const idsOn = () =>
+    page
+      .getByTestId('grid-item')
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-tile')));
+  const before = await idsOn();
+
+  // The section holds a chart, and "restoring the element and its contents"
+  // is the criterion. It goes through the ⋯ menu because the Delete key acts
+  // on tiles alone — a container taken with no prompt would pre-empt AC-061.
+  await page.getByTestId('tile-menu-section-detail').click();
+  await page.getByTestId('delete-section-detail').click();
+
+  expect(await idsOn()).not.toContain('tile-region');
+  const toast = page.getByTestId('undo-toast');
+  await expect(toast).toContainText('Detail');
+  await expect(toast).toContainText('items in it');
+
+  await toast.getByRole('button', { name: 'Undo' }).click();
+
+  expect(await idsOn()).toEqual(before);
+  await expect(toast).toBeHidden();
 });
 
 test('a member keeps one colour across two tiles', async ({ page }) => {

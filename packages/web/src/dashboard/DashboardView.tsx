@@ -6,6 +6,8 @@ import { TileError } from '../tiles/TileError';
 import { TileSkeleton } from '../tiles/TileSkeleton';
 import { useDashboardColours } from './colours';
 import { AddPanel } from './edit/AddPanel';
+import { deleteFromDashboard, describeDeletion } from './edit/deletion';
+import { UndoToast } from './edit/UndoToast';
 import { EditChrome, type EditSession } from './edit/EditChrome';
 import { MoveToMenu } from './edit/MoveToMenu';
 import { placeInGrammar } from './model/grammar';
@@ -38,7 +40,6 @@ import {
   moveTile,
   nameOfTile,
   placeOf,
-  removeElement,
   pageKey,
   resizeTile,
   sectionKey,
@@ -145,6 +146,10 @@ interface Affordances {
   readonly describeItem?: CanvasProps['describeItem'];
   readonly selection?: CanvasProps['selection'];
   readonly addHere?: CanvasProps['addHere'];
+  /** Deleting an element from its ⋯ menu, with an undo (AC-060). */
+  readonly onDelete?: ((id: string) => void) | undefined;
+  /** Deleting one tab of a tab group, the fourth thing AC-060 names. */
+  readonly onDeleteTab?: ((groupId: string, tabId: string) => void) | undefined;
   /**
    * Moving a tile without dragging it. WCAG SC 2.5.7 forbids a drag-only
    * path, and `docs/research/dashboard-grid.md` makes this a condition of
@@ -202,6 +207,21 @@ function Elements({
         if (isSection(element)) {
           return (
             <section className="dashboard-section" data-section={element.id}>
+              {affordances.onDelete === undefined ? null : (
+                // A section is a container, so the Delete key does not reach
+                // it — but AC-060 names sections among the things that can be
+                // deleted, so the menu does.
+                <MoveToMenu
+                  tileId={element.id}
+                  tileLabel={element.title}
+                  containers={[]}
+                  currentKey=""
+                  onMove={() => undefined}
+                  onDelete={() => {
+                    affordances.onDelete?.(element.id);
+                  }}
+                />
+              )}
               <h2>{element.title}</h2>
               <Elements
                 items={element.items}
@@ -227,6 +247,13 @@ function Elements({
                 onMove={(to: string) => {
                   affordances.moveTo?.onMove(element.id, to);
                 }}
+                {...(affordances.onDelete === undefined
+                  ? {}
+                  : {
+                      onDelete: () => {
+                        affordances.onDelete?.(element.id);
+                      },
+                    })}
               />
             )}
             <TileBody
@@ -271,6 +298,22 @@ function TabGroupView({
             {tab.title}
           </button>
         ))}
+        {/* And a tab, the fourth of the four (AC-060). */}
+        {affordances.onDeleteTab === undefined || group.tabs.length <= 1
+          ? null
+          : group.tabs.map((tab) => (
+              <button
+                key={`delete-${tab.id}`}
+                type="button"
+                data-testid={`delete-tab-${group.id}-${tab.id}`}
+                aria-label={`Delete tab ${tab.title}`}
+                onClick={() => {
+                  affordances.onDeleteTab?.(group.id, tab.id);
+                }}
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            ))}
       </div>
       {showing ? (
         <Elements
@@ -439,6 +482,10 @@ function DashboardPages({
   // Which page is open is owned above, so the Add panel adds to the page the
   // user is actually looking at.
   const open = where.pageId;
+
+  /** What the last delete took, for the toast (AC-060). */
+  const [deleted, setDeleted] = useState('');
+  const onDeleted = setDeleted;
   const showing = document.pages.find((page) => page.id === open) ?? document.pages[0];
 
   /**
@@ -518,12 +565,24 @@ function DashboardPages({
             return;
           }
 
+          if (action.kind === 'delete') {
+            // Both routes back, as the criterion asks: the toast right here,
+            // and the edit bar's Undo. They step the same history.
+            const deletion = { kind: 'element', id: tile.id } as const;
+            const said = describeDeletion(document, deletion);
+            const next = deleteFromDashboard(document, deletion);
+            if (next === document) return;
+
+            session.change(next);
+            onDeleted(said);
+            drag.say(said);
+            return;
+          }
+
           const next =
             action.kind === 'move'
               ? moveBy(document, tile.id, action.by)
-              : action.kind === 'resize'
-                ? resizeTile(document, tile.id, action.size)
-                : removeElement(document, tile.id);
+              : resizeTile(document, tile.id, action.size);
 
           /**
            * Nothing changed, nothing to record. `moveBy` hands back the same
@@ -537,12 +596,32 @@ function DashboardPages({
 
           session.change(next);
           drag.say(
-            action.kind === 'delete'
-              ? `Deleted ${nameOfTile(document, tile.id)}.`
-              : action.kind === 'resize'
-                ? `${nameOfTile(document, tile.id)}: ${readoutFor(action.size.w, action.size.h)}.`
-                : sayPlace(next, tile.id),
+            action.kind === 'resize'
+              ? `${nameOfTile(document, tile.id)}: ${readoutFor(action.size.w, action.size.h)}.`
+              : sayPlace(next, tile.id),
           );
+        }
+      : undefined,
+    onDelete: editing
+      ? (id) => {
+          const deletion = { kind: 'element', id } as const;
+          const said = describeDeletion(document, deletion);
+          const next = deleteFromDashboard(document, deletion);
+          if (next === document) return;
+
+          session.change(next);
+          onDeleted(said);
+        }
+      : undefined,
+    onDeleteTab: editing
+      ? (groupId, tabId) => {
+          const deletion = { kind: 'tab', groupId, id: tabId } as const;
+          const said = describeDeletion(document, deletion);
+          const next = deleteFromDashboard(document, deletion);
+          if (next === document) return;
+
+          session.change(next);
+          onDeleted(said);
         }
       : undefined,
     selection: editing
@@ -616,6 +695,36 @@ function DashboardPages({
         </div>
       ) : null}
 
+      {/**
+       * Deleting a page tab, which AC-060 names among the four. It is not an
+       * element on the grid, so neither the Delete key nor a tile's ⋯ menu
+       * reaches it.
+       */}
+      {editing && document.pages.length > 1 ? (
+        <div className="page-tabs__actions">
+          {document.pages.map((page) => (
+            <button
+              key={page.id}
+              type="button"
+              data-testid={`delete-page-${page.id}`}
+              aria-label={`Delete page ${page.title}`}
+              onClick={() => {
+                const deletion = { kind: 'page', id: page.id } as const;
+                const said = describeDeletion(document, deletion);
+                const next = deleteFromDashboard(document, deletion);
+                if (next === document) return;
+
+                session.change(next);
+                setDeleted(said);
+                if (page.id === open) onOpenPage(next.pages[0]?.id ?? '');
+              }}
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div
         data-testid="dashboard-page"
         className="dashboard-page"
@@ -648,6 +757,21 @@ function DashboardPages({
       >
         {drag.announcement}
       </p>
+
+      {/**
+       * Both ways back, as AC-060 asks: this toast, and the edit bar's Undo.
+       * They step the same history, so undoing in one is undoing in the other.
+       */}
+      <UndoToast
+        message={deleted}
+        onUndo={() => {
+          session.undo();
+          setDeleted('');
+        }}
+        onDismiss={() => {
+          setDeleted('');
+        }}
+      />
 
       {drag.marker === null ? null : (
         <div

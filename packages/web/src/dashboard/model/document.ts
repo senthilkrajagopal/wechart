@@ -377,10 +377,16 @@ export function removeElement(document: DashboardDocument, id: string): Dashboar
     const kept = items.filter((element) => element.id !== id);
     if (kept.length !== items.length) return kept;
 
-    return items.map((element) => {
+    // The same array back when nothing beneath it changed, so an untouched
+    // page or section keeps its identity and the edit history can tell what
+    // this edit actually touched.
+    let touched = false;
+    const next = items.map((element) => {
       if (isSection(element)) {
         const inside = without(element.items);
-        return inside === element.items ? element : { ...element, items: inside };
+        if (inside === element.items) return element;
+        touched = true;
+        return { ...element, items: inside };
       }
       if (isTabGroup(element)) {
         let changed = false;
@@ -390,10 +396,14 @@ export function removeElement(document: DashboardDocument, id: string): Dashboar
           changed = true;
           return { ...tab, items: inside };
         });
-        return changed ? { ...element, tabs } : element;
+        if (!changed) return element;
+        touched = true;
+        return { ...element, tabs };
       }
       return element;
     });
+
+    return touched ? next : items;
   };
 
   return {

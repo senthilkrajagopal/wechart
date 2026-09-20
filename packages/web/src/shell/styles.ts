@@ -431,6 +431,43 @@ main { padding: 16px; }
 }
 .tile-menu__list button:hover { background: var(--wc-bg-subtle); }
 .tile-menu__empty { padding: 4px 8px; color: var(--wc-text-secondary); }
+/* Delete sits apart from the destinations above it: one changes where a thing
+   is, the other takes it away. */
+.tile-menu__delete { margin-top: 4px; border-top: 1px solid var(--wc-border-subtle); }
+
+/* Deleting a page tab or a tab (AC-060), beside the strip they belong to. */
+.page-tabs__actions { display: flex; gap: 8px; }
+.page-tabs__actions button,
+.tab-group [role='tablist'] button[data-testid^='delete-tab-'] {
+  border: 0;
+  background: none;
+  color: var(--wc-text-secondary);
+  cursor: pointer;
+}
+
+/* The undo toast (AC-060, direction.md rule 38). Bottom right, above
+   everything, and it does not take the pointer away from the dashboard. */
+.undo-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--wc-text-primary);
+  color: var(--wc-bg-surface);
+}
+.undo-toast button {
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
 
 /* Where the tile would land. Fixed to the viewport because the rectangle is
    measured from the viewport, and painted in the accent so it reads as the
