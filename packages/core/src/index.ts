@@ -31,6 +31,13 @@ export {
 } from './chart-document';
 
 export {
+  LEGACY_FIXTURES,
+  migrateChartDocument,
+  versionOf,
+  type LegacyFixture,
+} from './chart-migrations';
+
+export {
   distinctValues,
   seriesOf,
   type ChartType,

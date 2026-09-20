@@ -16,6 +16,7 @@
     "migrate": "node-pg-migrate -m src/db/migrations"
   },
   "dependencies": {
+    "@wechart/core": "workspace:*",
     "close-with-grace": "2.5.0",
     "fastify": "5.12.5",
     "kysely": "0.29.6",

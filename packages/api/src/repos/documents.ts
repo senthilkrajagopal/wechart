@@ -1,3 +1,4 @@
+import { migrateChartDocument } from '@wechart/core';
 import type { Kysely } from 'kysely';
 
 import type { Database } from '../db/schema';
@@ -215,11 +216,27 @@ interface DocumentRow {
   updated_at: Date;
 }
 
+/**
+ * The single place a stored row becomes a document, and therefore the single
+ * place an older chart format is upgraded (AC-181).
+ *
+ * Upgrading on read rather than in a batch migration means a chart saved by an
+ * older wechart opens correctly the moment this version runs, with no
+ * migration step to remember and no window where half the rows are converted.
+ * It also never writes: the upgrade is re-applied on every read until the user
+ * saves the chart, which is what Grafana's panel migrations do and is the safe
+ * direction — reading a chart cannot corrupt it.
+ */
 function toDocument(row: DocumentRow): StoredDocument {
+  const body =
+    row.kind === 'chart'
+      ? (migrateChartDocument(row.body) as Record<string, unknown>)
+      : (row.body as Record<string, unknown>);
+
   return {
     kind: row.kind as DocumentKind,
     id: row.id,
-    body: row.body as Record<string, unknown>,
+    body,
     version: row.version,
     updatedAt: row.updated_at,
   };

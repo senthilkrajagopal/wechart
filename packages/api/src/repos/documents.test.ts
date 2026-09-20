@@ -37,6 +37,19 @@ describe('persistence across a restart (AC-014)', () => {
       title: `A ${kind}`,
       nested: { list: [1, 2, 3], flag: true, nothing: null },
       unicode: 'markings — Spotfire’s “brushing”',
+      // A chart has a document format (AC-181), so a body without one is an
+      // *older* chart and is upgraded on read by design. This criterion is
+      // about storage being faithful, so the chart it stores is a current one;
+      // the upgrade path has its own tests below.
+      ...(kind === 'chart'
+        ? {
+            schemaVersion: 1,
+            chart: {
+              source: { cube: 'orders' },
+              wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
+            },
+          }
+        : {}),
     };
 
     await repo().create({ kind, id, body });
@@ -53,11 +66,19 @@ describe('persistence across a restart (AC-014)', () => {
 
   it('keeps each kind in its own namespace, so the same id does not collide', async () => {
     const id = randomUUID();
+    const chart = {
+      title: 'chart',
+      schemaVersion: 1,
+      chart: {
+        source: { cube: 'orders' },
+        wells: { measures: [], dimensions: [], timeDimensions: [] },
+      },
+    };
     await repo().create({ kind: 'dashboard', id, body: { title: 'dashboard' } });
-    await repo().create({ kind: 'chart', id, body: { title: 'chart' } });
+    await repo().create({ kind: 'chart', id, body: chart });
 
     expect((await repo().get('dashboard', id))?.body).toEqual({ title: 'dashboard' });
-    expect((await repo().get('chart', id))?.body).toEqual({ title: 'chart' });
+    expect((await repo().get('chart', id))?.body).toEqual(chart);
   });
 
   it('returns null for an id that was never stored', async () => {
@@ -153,5 +174,65 @@ describe('optimistic concurrency (AC-015)', () => {
     expect(error).toBeInstanceOf(DocumentNotFoundError);
     expect(error).not.toBeInstanceOf(StaleDocumentError);
     expect((error as DocumentNotFoundError).message).toContain(id);
+  });
+});
+
+/**
+ * AC-181: WHEN a saved chart written in an earlier document format is opened,
+ * THE SYSTEM SHALL upgrade it to the current format on read and render the
+ * same chart.
+ *
+ * The unit tests in @wechart/core cover the upgrade steps themselves. What
+ * this file adds is the half they cannot reach: that opening a chart actually
+ * goes through them. A migration nothing calls is not a migration.
+ */
+describe('a chart saved in an earlier format (AC-181)', () => {
+  /** Exactly the body charts had before they carried a definition. */
+  const legacyBody = { title: 'Chart from an older wechart', owner: 'admin' };
+
+  it('comes back upgraded when it is opened', async () => {
+    const id = randomUUID();
+    await repo().create({ kind: 'chart', id, body: legacyBody });
+
+    const opened = await repo().get('chart', id);
+
+    expect(opened?.body['schemaVersion']).toBe(1);
+    expect(opened?.body['chart']).toEqual({
+      source: { cube: '' },
+      wells: { measures: [], dimensions: [], timeDimensions: [] },
+    });
+  });
+
+  it('keeps what the old chart said about itself', async () => {
+    const id = randomUUID();
+    await repo().create({ kind: 'chart', id, body: legacyBody });
+
+    const opened = await repo().get('chart', id);
+
+    // The upgrade adds; it must not drop or rewrite what was there.
+    expect(opened?.body['title']).toBe('Chart from an older wechart');
+    expect(opened?.body['owner']).toBe('admin');
+  });
+
+  it('does not rewrite the stored row, so reading a chart cannot corrupt it', async () => {
+    const id = randomUUID();
+    await repo().create({ kind: 'chart', id, body: legacyBody });
+
+    const before = await repo().get('chart', id);
+    await repo().get('chart', id);
+    const after = await repo().get('chart', id);
+
+    // An upgrade that saved itself would bump the version on every read, and
+    // would race with a concurrent edit (AC-015).
+    expect(after?.version).toBe(before?.version);
+  });
+
+  it('leaves other kinds alone', async () => {
+    const id = randomUUID();
+    await repo().create({ kind: 'dashboard', id, body: { title: 'A dashboard' } });
+
+    // Only charts have this format; migrating a dashboard would invent a
+    // chart definition on something that is not a chart.
+    expect((await repo().get('dashboard', id))?.body).toEqual({ title: 'A dashboard' });
   });
 });

@@ -208,6 +208,9 @@ importers:
 
   packages/api:
     dependencies:
+      '@wechart/core':
+        specifier: workspace:*
+        version: link:../core
       close-with-grace:
         specifier: 2.5.0
         version: 2.5.0

@@ -162,7 +162,12 @@ export function readChartDocument(body: unknown): ChartDocument {
     typeof source === 'object' && source !== null
       ? (source as Record<string, unknown>)['cube']
       : undefined;
-  if (typeof cube !== 'string' || cube === '') {
+  // A *missing* cube is a malformed document. An **empty** one is a chart
+  // whose cube has not been chosen yet, which is the state a newly opened
+  // editor is in and therefore a chart that is legitimately saveable. The two
+  // must not be conflated: refusing the empty case would make the pre-
+  // definition bodies of AC-181 unopenable.
+  if (typeof cube !== 'string') {
     throw new ChartDocumentError('The stored chart names no cube.');
   }
 
