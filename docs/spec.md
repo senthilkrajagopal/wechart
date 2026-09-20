@@ -149,7 +149,7 @@ Traces to: `[docs/inputs §2]`, direction.md §6, rules 4–7, 18–19.
       Fails when: the tile renders blank axes with no message, or the message omits an active filter.
 - [ ] AC-044 WHEN the user sorts a chart, THE SYSTEM SHALL order categories by value ascending, value descending or label, and keep that order after a data refresh.
       Fails when: the order is not applied, or changes after a refresh with unchanged data.
-- [ ] AC-045 WHEN a trellis chart is rendered, THE SYSTEM SHALL lay panels out in a grid with a shared scale by default and a per-panel title, and cap the panels at 20 (direction.md rule 6).
+- [x] AC-045 WHEN a trellis chart is rendered, THE SYSTEM SHALL lay panels out in a grid with a shared scale by default and a per-panel title, and cap the panels at 20 (direction.md rule 6).
       Fails when: panels use different scales while the shared setting is on, or more than 20 panels render.
 - [ ] AC-046 THE SYSTEM SHALL format every value with its member's format from the Cube model, including currency and percentage, in axes, labels, tooltips and tables.
       Fails when: a value renders without its declared format in any of those places.

@@ -38,6 +38,18 @@ const spec = (chartType: RenderSpec['chartType']): RenderSpec => {
     };
   }
 
+  if (chartType === 'trellis') {
+    return {
+      chartType,
+      encoding: { facet: ['orders.region'], x: ['orders.status'], y: ['orders.count'] },
+      rows: [
+        { 'orders.region': 'east', 'orders.status': 'paid', 'orders.count': 10 },
+        { 'orders.region': 'west', 'orders.status': 'paid', 'orders.count': 30 },
+      ],
+      palette: PALETTE,
+    };
+  }
+
   if (chartType === 'heatmap') {
     return {
       chartType,

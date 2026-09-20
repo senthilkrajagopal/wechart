@@ -118,6 +118,17 @@ export interface RenderSpec {
   readonly palette?: readonly string[];
   /** The colour the chart is drawn on, used for the gap between marks. */
   readonly surface?: string;
+  /**
+   * What the user changed about how this chart type is drawn, carried through
+   * from the saved document unchanged.
+   *
+   * Sparse: absent means every default applies. Deliberately not a union of
+   * per-type option shapes — an option belonging to a type that is not
+   * currently selected stays inert rather than becoming invalid, which is what
+   * lets a user switch type and switch back. Grafana and Metabase both leave
+   * the equivalent field untyped for the same reason.
+   */
+  readonly options?: Record<string, unknown>;
 }
 
 /**

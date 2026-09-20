@@ -432,13 +432,14 @@ test('the editor says so for a type it cannot draw yet', async ({ page }) => {
   await page.getByTestId('add-measures').selectOption('orders.count');
   await page.getByTestId('add-dimensions').selectOption('orders.status');
 
-  // Trellis: no renderer yet (T043), and its requirements *are* met by these
-  // fields — a type that still needs more fields would show AC-033's "cannot
-  // be drawn" message instead, which is a different behaviour. The guard
-  // itself is covered durably by the unit test in optionFor.test.ts, derived
-  // from the vocabulary; this is the UI-level check, and it retires when
-  // AC-037 completes and no undrawable type is left.
-  await page.getByLabel('Chart type').selectOption('trellis');
+  // Combo is the last type without a renderer (T044). It needs two measures,
+  // so the second one above is what keeps this a "cannot draw" case rather
+  // than AC-033's "needs more fields" case, which is a different behaviour.
+  // The guard itself is covered durably by the unit test in optionFor.test.ts,
+  // derived from the vocabulary; this is the UI-level check, and it retires at
+  // T044 when no undrawable type is left.
+  await page.getByTestId('add-measures').selectOption('orders.total_amount');
+  await page.getByLabel('Chart type').selectOption('combo');
 
   // Drawing a bar instead would put a chart on screen the spec never asked for.
   await expect(page.getByTestId('chart-not-drawable')).toBeVisible();

@@ -13,6 +13,7 @@
 import type { ChartType, RenderSpec } from '@wechart/core';
 
 import { barOption, isBarType } from './series/bar';
+import { isTrellisType, trellisOption } from './layout/trellis';
 import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { lineOption, isLineType } from './series/line';
 import { pieOption, isPieType } from './series/pie';
@@ -38,6 +39,7 @@ export const DRAWABLE_TYPES = [
   'donut',
   'treemap',
   'heatmap',
+  'trellis',
 ] as const satisfies readonly ChartType[];
 
 export function isDrawable(chartType: string): boolean {
@@ -51,6 +53,7 @@ export function optionFor(spec: RenderSpec): EChartsOption {
   if (isPieType(spec.chartType)) return pieOption(spec);
   if (isTreemapType(spec.chartType)) return treemapOption(spec);
   if (isHeatmapType(spec.chartType)) return heatmapOption(spec);
+  if (isTrellisType(spec.chartType)) return trellisOption(spec);
 
   throw new Error(`No renderer draws ${spec.chartType} yet.`);
 }

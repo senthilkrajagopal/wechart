@@ -79,6 +79,9 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
     chartType: chart.chartType ?? options.chartType,
     encoding,
     rows: options.rows,
+    // Carried through unchanged. Compile decides the encoding; it has no
+    // business interpreting what a chart type does with its own options.
+    ...(chart.options === undefined ? {} : { options: chart.options }),
     ...(options.palette === undefined ? {} : { palette: options.palette }),
     ...(options.surface === undefined ? {} : { surface: options.surface }),
   };

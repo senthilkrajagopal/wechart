@@ -92,6 +92,20 @@ describe('compiling a saved document', () => {
     expect(compile(pinned, { rows: ROWS, chartType: 'bar' }).chartType).toBe('hbar');
   });
 
+  it('carries the chart type options through untouched', () => {
+    const withOptions: ChartDocument = {
+      ...withStatusAndCount,
+      chart: { ...withStatusAndCount.chart, options: { sharedScale: false, legend: 'right' } },
+    };
+
+    // Compile decides the encoding; what a chart type does with its own
+    // options is the renderer's business, so they pass through unread.
+    expect(compile(withOptions, { rows: ROWS, chartType: 'trellis' }).options).toEqual({
+      sharedScale: false,
+      legend: 'right',
+    });
+  });
+
   it('carries the palette and surface it is given rather than looking them up', () => {
     const spec = compile(withStatusAndCount, {
       rows: ROWS,
