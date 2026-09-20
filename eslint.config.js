@@ -20,6 +20,14 @@ export default tseslint.config(
   js.configs.recommended,
   tseslint.configs.recommended,
   {
+    // node-pg-migrate loads migrations as CommonJS modules in Node.
+    files: ['**/db/migrations/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: { exports: 'writable', module: 'writable', require: 'readonly' },
+    },
+  },
+  {
     files: [
       'packages/web/**/*.{ts,tsx}',
       'packages/ui/**/*.{ts,tsx}',

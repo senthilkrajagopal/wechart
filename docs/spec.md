@@ -67,9 +67,9 @@ Traces to: `[R5]`, `[R4]`, `[research/cube/data-apis.md]`, `[research/cube/acces
       Fails when: the tile shows an empty chart, or the message and query JSON are not reachable from the tile.
 - [ ] AC-013 WHEN a result is served from a pre-aggregation, THE SYSTEM SHALL mark the tile as accelerated and show the age of the data; otherwise it SHALL mark the tile as live.
       Fails when: a result with `usedPreAggregations` shows no accelerated indicator, or a source-database result is labelled accelerated.
-- [ ] AC-014 WHEN a dashboard, chart, folder, bookmark or setting is saved, THE SYSTEM SHALL store it so that it is present and unchanged after the wechart service restarts.
+- [x] AC-014 WHEN a dashboard, chart, folder, bookmark or setting is saved, THE SYSTEM SHALL store it so that it is present and unchanged after the wechart service restarts.
       Fails when: any saved object is missing or altered after a restart.
-- [ ] AC-015 WHEN two browser sessions edit the same dashboard and the second saves over a newer version, THE SYSTEM SHALL refuse the save and tell the user the dashboard changed.
+- [x] AC-015 WHEN two browser sessions edit the same dashboard and the second saves over a newer version, THE SYSTEM SHALL refuse the save and tell the user the dashboard changed.
       Fails when: the second save silently overwrites the newer version.
 - [ ] AC-016 THE SYSTEM SHALL record, for every query it issues, the Cube request, the duration and whether it was accelerated, and expose those records in the Jobs workspace.
       Fails when: a rendered chart produces no query record, or the record lacks duration or acceleration.

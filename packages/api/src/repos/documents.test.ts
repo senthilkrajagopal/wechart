@@ -1,0 +1,157 @@
+import { randomUUID } from 'node:crypto';
+
+import { afterAll, describe, expect, it } from 'vitest';
+
+import { closeDb, getDb } from '../db/client';
+import { DOCUMENT_KINDS, DocumentNotFoundError, StaleDocumentError, documents } from './documents';
+
+/**
+ * AC-014: WHEN a dashboard, chart, folder, bookmark or setting is saved, THE
+ * SYSTEM SHALL store it so that it is present and unchanged after the wechart
+ * service restarts.
+ *
+ * AC-015: WHEN two browser sessions edit the same dashboard and the second
+ * saves over a newer version, THE SYSTEM SHALL refuse the save and tell the
+ * user the dashboard changed.
+ *
+ * These run against the real Postgres in docker-compose.yml, brought up and
+ * migrated by ../../vitest.globalSetup.ts. Nothing here is faked: AC-014 is a
+ * claim about what survives a restart, and an in-memory double cannot
+ * demonstrate it.
+ */
+
+/**
+ * Resolved per call, never captured: the restart test below destroys the pool,
+ * so a repo held at module scope would be dead for every test after it.
+ */
+const repo = () => documents(getDb());
+
+afterAll(async () => {
+  await closeDb();
+});
+
+describe('persistence across a restart (AC-014)', () => {
+  it.each(DOCUMENT_KINDS)('stores a %s unchanged', async (kind) => {
+    const id = randomUUID();
+    const body = {
+      title: `A ${kind}`,
+      nested: { list: [1, 2, 3], flag: true, nothing: null },
+      unicode: 'markings — Spotfire’s “brushing”',
+    };
+
+    await repo().create({ kind, id, body });
+
+    // A new pool is what the service gets after a restart: the connection that
+    // wrote the row is gone, and the row has to come back from disk.
+    await closeDb();
+    const found = await repo().get(kind, id);
+
+    expect(found).not.toBeNull();
+    expect(found?.body).toEqual(body);
+    expect(found?.version).toBe(1);
+  });
+
+  it('keeps each kind in its own namespace, so the same id does not collide', async () => {
+    const id = randomUUID();
+    await repo().create({ kind: 'dashboard', id, body: { title: 'dashboard' } });
+    await repo().create({ kind: 'chart', id, body: { title: 'chart' } });
+
+    expect((await repo().get('dashboard', id))?.body).toEqual({ title: 'dashboard' });
+    expect((await repo().get('chart', id))?.body).toEqual({ title: 'chart' });
+  });
+
+  it('returns null for an id that was never stored', async () => {
+    expect(await repo().get('dashboard', randomUUID())).toBeNull();
+  });
+});
+
+describe('optimistic concurrency (AC-015)', () => {
+  it('refuses a save over a newer version and says the dashboard changed', async () => {
+    const id = randomUUID();
+    await repo().create({ kind: 'dashboard', id, body: { title: 'original' } });
+
+    // Two sessions both read version 1.
+    const sessionA = await repo().get('dashboard', id);
+    const sessionB = await repo().get('dashboard', id);
+    expect(sessionA?.version).toBe(1);
+    expect(sessionB?.version).toBe(1);
+
+    // A saves first and wins.
+    const saved = await repo().update({
+      kind: 'dashboard',
+      id,
+      body: { title: 'from A' },
+      expectedVersion: sessionA!.version,
+    });
+    expect(saved.version).toBe(2);
+
+    // B saves over it holding the stale version, and is refused.
+    await expect(
+      repo().update({
+        kind: 'dashboard',
+        id,
+        body: { title: 'from B' },
+        expectedVersion: sessionB!.version,
+      }),
+    ).rejects.toBeInstanceOf(StaleDocumentError);
+
+    // The refusal must not have been a silent no-op: A's save stands.
+    const current = await repo().get('dashboard', id);
+    expect(current?.body).toEqual({ title: 'from A' });
+    expect(current?.version).toBe(2);
+  });
+
+  it('carries the current version on the error, so the UI can say what changed', async () => {
+    const id = randomUUID();
+    await repo().create({ kind: 'dashboard', id, body: { n: 0 } });
+    await repo().update({ kind: 'dashboard', id, body: { n: 1 }, expectedVersion: 1 });
+
+    const error = await repo()
+      .update({ kind: 'dashboard', id, body: { n: 2 }, expectedVersion: 1 })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+
+    expect(error).toBeInstanceOf(StaleDocumentError);
+    expect((error as StaleDocumentError).currentVersion).toBe(2);
+    expect((error as StaleDocumentError).expectedVersion).toBe(1);
+    expect((error as StaleDocumentError).message).toMatch(/changed/i);
+  });
+
+  it('increments the version on every accepted save', async () => {
+    const id = randomUUID();
+    await repo().create({ kind: 'setting', id, body: { theme: 'light' } });
+
+    let version = 1;
+    for (const theme of ['dark', 'light', 'dark']) {
+      const saved = await repo().update({
+        kind: 'setting',
+        id,
+        body: { theme },
+        expectedVersion: version,
+      });
+      version += 1;
+      expect(saved.version).toBe(version);
+    }
+
+    expect((await repo().get('setting', id))?.version).toBe(4);
+  });
+
+  it('refuses an update to an id that does not exist, and says so rather than reporting a conflict', async () => {
+    const id = randomUUID();
+
+    const error = await repo()
+      .update({ kind: 'dashboard', id, body: {}, expectedVersion: 1 })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+
+    // Distinct from StaleDocumentError: nothing changed under the caller, the
+    // object is simply not there.
+    expect(error).toBeInstanceOf(DocumentNotFoundError);
+    expect(error).not.toBeInstanceOf(StaleDocumentError);
+    expect((error as DocumentNotFoundError).message).toContain(id);
+  });
+});

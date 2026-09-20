@@ -1,0 +1,36 @@
+# Local development and test dependencies.
+#
+# Only wechart's own metadata database is here so far. The Cube API, Cube Store
+# and the seeded sample Postgres arrive with the tasks that need them
+# (CLAUDE.md lists all four for local dev).
+#
+# The metadata database is what `pnpm test` runs against: packages/api's Vitest
+# global setup brings this service up and applies the migrations, so the tests
+# exercise a real Postgres rather than a fake. Port 55432 is deliberately not
+# 5432, so an existing local Postgres is never touched.
+
+services:
+  wechart-meta:
+    image: postgres:18-alpine
+    container_name: wechart-meta
+    environment:
+      POSTGRES_USER: wechart
+      POSTGRES_PASSWORD: wechart
+      POSTGRES_DB: wechart_meta
+    ports:
+      - '55432:5432'
+    volumes:
+      # postgres:18+ wants a single mount at /var/lib/postgresql, not at
+      # /var/lib/postgresql/data; it places the cluster in a subdirectory so a
+      # later `pg_upgrade --link` does not cross a mount boundary. Mounting the
+      # old path makes the container exit on start.
+      - wechart-meta-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U wechart -d wechart_meta']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  wechart-meta-data:
