@@ -220,14 +220,20 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - The reason names **both sides** — what the well takes and what the field is — because "not allowed here" leaves the user to guess which of the two is wrong.
   - Legality is an outline plus written text, never colour alone (direction.md rule 3), and the illegal well points at its reason with `aria-describedby`.
   - The drag payload is not readable during `dragover` (browsers withhold it until drop), so the editor holds the dragged member in state rather than reading it back. The browser test drives the drag by hand rather than with `dragTo`, because the marking only exists *while* the drag is in progress.
-- [ ] T027 (AC-030, AC-031) Implement the recommender's legality rules: no second value axis, and the channel-capacity caps
-  - Files: `packages/recommender/src/rules/{legality,capacity}.ts`, `packages/recommender/src/rules/legality.test.ts`
+- [x] T027 (AC-030, AC-031) Implement the recommender's legality rules: no second value axis, and the channel-capacity caps
+  - Files: `packages/recommender/src/{types,legality,index}.ts`, `packages/recommender/src/legality.test.ts`
   - Failing test: `legality.test.ts`: a two-value-axis candidate is rejected (AC-030), and candidates over 8 colour categories, 20 trellis panels, 6 pie slices or 200 heatmap cells are rejected (AC-031). Rule names are ported from `docs/research/recommender-algorithms.md` §2; the four caps are recorded there as product decisions.
   - Depends on: T001
+  - Done 2026-09-20. **AC-030 and AC-031 stay unchecked**: both are stated over what is *offered* ("never recommend", "offered as the top pick or a runner-up"), and nothing recommends yet. The rules provably reject, and T028 — which produces the recommendations — asserts no offered candidate violates them. That is the criterion's actual shape.
+  - Every cap is tested **at the boundary in both directions**: accepted at the cap, rejected one past it. A rule written with the wrong comparison passes a test that only tries a wildly-over case.
+  - The heatmap rule counts **cells**, not either axis: 15×15 is over the cap though neither side looks large.
+  - The four caps live in one `CAPS` object with the provenance stated beside them — the research found no published maximum for any of them, so they are product decisions rather than literature.
+  - `checkLegality` returns every rule's verdict, passed or failed, because AC-029's trace has to show the rules that *passed* too.
 - [ ] T028 (AC-028) Recommend a chart type from the field signature, with at least one runner-up and a reason
   - Files: `packages/recommender/src/{score,recommend}.ts`, `packages/web/src/editor/Recommendation.tsx`, `packages/recommender/src/recommend.test.ts`
   - Failing test: `recommend.test.ts`: a field change produces a top pick plus at least one runner-up, each with a reason of at most 80 characters (AC-028).
   - Depends on: T027
+  - Also ticks **AC-030 and AC-031**, carried from T027: both are stated over what is offered, so they are demonstrated here by asserting that nothing the recommender returns — top pick or runner-up — has two value axes or exceeds a channel cap.
 - [ ] T029 (AC-029) Show the "Why this chart?" trace
   - Files: `packages/web/src/editor/WhyThisChart.tsx`, `packages/web/src/editor/WhyThisChart.test.tsx`
   - Failing test: `WhyThisChart.test.tsx`: the panel shows the field signature, each field's cardinality, and every hard rule with its pass or fail result, including each rule that rejected a candidate (AC-029).
@@ -944,8 +950,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 | AC-027 | T026       | AC-072 | T078 | AC-117 | T123 | AC-162 | T168       |
 | AC-028 | T028       | AC-073 | T079 | AC-118 | T124 | AC-163 | T169       |
 | AC-029 | T029       | AC-074 | T080 | AC-119 | T125 | AC-164 | T170       |
-| AC-030 | T027       | AC-075 | T081 | AC-120 | T126 | AC-165 | T171       |
-| AC-031 | T027       | AC-076 | T082 | AC-121 | T127 | AC-166 | T172       |
+| AC-030 | T027, T028 | AC-075 | T081 | AC-120 | T126 | AC-165 | T171       |
+| AC-031 | T027, T028 | AC-076 | T082 | AC-121 | T127 | AC-166 | T172       |
 | AC-032 | T030       | AC-077 | T083 | AC-122 | T128 | AC-167 | T173       |
 | AC-033 | T031       | AC-078 | T084 | AC-123 | T129 | AC-168 | T174       |
 | AC-034 | T032       | AC-079 | T085 | AC-124 | T130 | AC-169 | T175       |

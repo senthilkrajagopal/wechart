@@ -1,6 +1,10 @@
 /**
  * @wechart/recommender — legality rules and weighted scoring for chart
- * recommendation. Draco 2 is a reference only, never a dependency
+ * recommendation. Draco 2 is a reference only, never a dependency: it needs
+ * Python and clingo, and its shipped weights are hand-tuned rather than learned
  * (docs/research/recommender-algorithms.md).
  */
 export const PACKAGE_NAME = '@wechart/recommender';
+
+export { CAPS, HARD_RULES, checkLegality, isLegal } from './legality';
+export type { Candidate, ChartType, Field, FieldKind, RuleOutcome, Signature } from './types';
