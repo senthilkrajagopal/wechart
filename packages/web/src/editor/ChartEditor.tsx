@@ -2,7 +2,10 @@ import { addToWell, emptySpec, isEmpty, removeFromWell, toCubeQuery } from '@wec
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
+import { explain, recommend, type Signature } from '@wechart/recommender';
+
 import { loadTile } from '../query/loadTile';
+import { WhyThisChart } from './WhyThisChart';
 import { FieldList } from './FieldList';
 import { Wells } from './Wells';
 import { membersOf, type Member } from './fields';
@@ -47,10 +50,43 @@ export function ChartEditor() {
     enabled: !isEmpty(spec),
   });
 
-  const rows = ((result.data as { data?: unknown[] } | undefined)?.data ?? []) as Record<
-    string,
-    unknown
-  >[];
+  // Memoised: a fresh array each render would defeat every memo below it, so
+  // the signature — and with it the recommendation — would be recomputed on
+  // every keystroke.
+  const rows = useMemo(
+    () =>
+      ((result.data as { data?: unknown[] } | undefined)?.data ?? []) as Record<string, unknown>[],
+    [result.data],
+  );
+
+  /**
+   * Cardinalities come from the rows the query actually returned, not from a
+   * separate count. What decides whether a chart reads is how many values are
+   * *in this result*, and it costs nothing extra (AC-028).
+   */
+  const signature: Signature = useMemo(() => {
+    const distinct = (member: string) => new Set(rows.map((row) => String(row[member] ?? ''))).size;
+
+    return {
+      fields: [
+        ...spec.measures.map((name) => ({ name, kind: 'measure' as const })),
+        ...spec.dimensions.map((name) => ({
+          name,
+          kind: 'dimension' as const,
+          ...(rows.length > 0 ? { cardinality: distinct(name) } : {}),
+        })),
+        ...spec.timeDimensions.map((name) => ({
+          name,
+          kind: 'timeDimension' as const,
+          ...(rows.length > 0 ? { cardinality: distinct(name) } : {}),
+        })),
+      ],
+      rowCount: rows.length,
+    };
+  }, [spec, rows]);
+
+  const recommendation = useMemo(() => recommend(signature), [signature]);
+  const explanation = useMemo(() => explain(signature), [signature]);
 
   return (
     <div className="chart-editor">
@@ -78,6 +114,26 @@ export function ChartEditor() {
       </div>
 
       <section className="chart-editor__result" data-testid="editor-result">
+        <h3>Chart</h3>
+        {recommendation.top ? (
+          <div data-testid="recommendation">
+            <p data-testid="recommended-type">{recommendation.top.candidate.chartType}</p>
+            <p data-testid="recommended-reason">{recommendation.top.reason}</p>
+            <h4>Or</h4>
+            <ul>
+              {recommendation.runnersUp.map((runnerUp) => (
+                <li
+                  key={runnerUp.candidate.chartType}
+                  data-testid={`runner-up-${runnerUp.candidate.chartType}`}
+                >
+                  {runnerUp.candidate.chartType} — {runnerUp.reason}
+                </li>
+              ))}
+            </ul>
+            <WhyThisChart explanation={explanation} />
+          </div>
+        ) : null}
+
         <h3>Result</h3>
         {isEmpty(spec) ? (
           <p data-testid="result-empty">Add a field to see data.</p>

@@ -16,6 +16,11 @@ cubes:
         sql: id
         type: number
         primary_key: true
+        # Cube hides primary keys from metadata unless told otherwise. This one
+        # is public so the sample model has a high-cardinality dimension —
+        # useful for exercising the recommender's capacity rules against real
+        # data, and for row-level marking later (AC-092).
+        public: true
       - name: status
         sql: status
         type: string

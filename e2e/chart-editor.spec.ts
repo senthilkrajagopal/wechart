@@ -100,6 +100,47 @@ test('an illegal well refuses the drop', async ({ page }) => {
   await expect(page.getByTestId('result-empty')).toBeVisible();
 });
 
+/**
+ * AC-028 and AC-029 against the real model and real data: the recommendation
+ * and its trace, with cardinalities taken from the rows the query returned.
+ */
+test('recommends a chart with a runner-up, and explains why', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
+
+  // Three statuses is a small category: a bar.
+  await expect(page.getByTestId('recommended-type')).toHaveText('bar');
+  await expect(page.getByTestId('recommended-reason')).not.toBeEmpty();
+  // AC-028: at least one runner-up, and it is a different chart.
+  const runnersUp = page.locator('[data-testid^="runner-up-"]');
+  await expect(runnersUp.first()).toBeVisible();
+
+  await page.getByRole('button', { name: 'Why this chart?' }).click();
+
+  const trace = page.getByTestId('why-this-chart');
+  // The signature, with the cardinality that came from the data.
+  await expect(trace.getByTestId('trace-field-orders.status')).toContainText('3');
+  // Every rule, with its verdict.
+  await expect(trace.getByTestId('trace-bar-no_dual_value_axis')).toContainText('passed');
+});
+
+test('the trace names the rule that rejected a candidate (AC-029)', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  // 240 distinct ids: far past the 6-slice cap, so a pie is enumerated and
+  // then rejected, which is what the trace must account for.
+  await page.getByTestId('add-dimensions').selectOption('orders.id');
+  await expect(page.getByTestId('result-row-count')).toHaveText('240 rows');
+
+  await page.getByRole('button', { name: 'Why this chart?' }).click();
+  const trace = page.getByTestId('why-this-chart');
+
+  await expect(trace.getByTestId('trace-pie')).toContainText('rejected');
+  await expect(trace.getByTestId('trace-pie-pie_slice_capacity')).toContainText('6 slices');
+});
+
 test('a time dimension goes to its own well and groups by day', async ({ page }) => {
   await openEditorOnOrders(page);
 

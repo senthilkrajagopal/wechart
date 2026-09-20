@@ -7,4 +7,14 @@
 export const PACKAGE_NAME = '@wechart/recommender';
 
 export { CAPS, HARD_RULES, checkLegality, isLegal } from './legality';
+export {
+  MAX_REASON_LENGTH,
+  SOFT_RULES,
+  enumerate,
+  recommend,
+  score,
+  type Recommendation,
+  type Recommendations,
+} from './recommend';
+export { explain, type CandidateTrace, type Explanation, type FieldTrace } from './explain';
 export type { Candidate, ChartType, Field, FieldKind, RuleOutcome, Signature } from './types';

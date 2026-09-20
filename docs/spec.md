@@ -109,7 +109,7 @@ Traces to: `[docs/inputs §2, §3]`, `[R2]`, direction.md §6, rules 8–10, 29�
       Fails when: an illegal well accepts the drop, or gives no reason.
 - [x] AC-028 WHEN the chart's fields change, THE SYSTEM SHALL recommend a chart type from the field signature and cardinalities, and show at least one runner-up, each with a reason of at most 80 characters (direction.md rule 9).
       Fails when: no runner-up is shown, or a reason exceeds 80 characters.
-- [ ] AC-029 WHEN the user opens "Why this chart?", THE SYSTEM SHALL show the field signature, the cardinality of each field, and every hard rule with its pass or fail result (direction.md rule 29).
+- [x] AC-029 WHEN the user opens "Why this chart?", THE SYSTEM SHALL show the field signature, the cardinality of each field, and every hard rule with its pass or fail result (direction.md rule 29).
       Fails when: a rule that rejected a candidate is absent from the trace.
 - [x] AC-030 THE SYSTEM SHALL never recommend a chart with two value axes (direction.md rule 8).
       Fails when: any recommendation or runner-up uses a second value axis.

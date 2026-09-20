@@ -237,10 +237,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Enumerate, filter, rank, the shape the research recommends. The **weights are ours**: Draco's shipped weights are hand-tuned rather than learned and its design space has no pie, KPI or table, so they could not be ported wholesale (research §7). What is ported is the *shape* — a cost summed from named soft rules, lower being better — plus the channel ordering from Draco-APT and CompassQL.
   - Runners-up are a different chart type from the winner, not the same chart again: an alternative should be another way of seeing the data, which is what Voyager's grouping achieves (research §3).
   - **A decision the tests forced into the open**: a field whose cardinality nobody knows is treated as *over* any cap, not under it. The guesses are not symmetric — assuming small offers a pie that then draws five hundred slices, while assuming large offers a bar for a category that turns out to have four values: a worse chart, not a broken one. `legality.ts` and `recommend.ts` had silently disagreed about this, and a test caught it.
-- [ ] T029 (AC-029) Show the "Why this chart?" trace
-  - Files: `packages/web/src/editor/WhyThisChart.tsx`, `packages/web/src/editor/WhyThisChart.test.tsx`
-  - Failing test: `WhyThisChart.test.tsx`: the panel shows the field signature, each field's cardinality, and every hard rule with its pass or fail result, including each rule that rejected a candidate (AC-029).
+- [x] T029 (AC-029) Show the "Why this chart?" trace
+  - Files: `packages/recommender/src/explain.ts`, `packages/recommender/src/explain.test.ts`, `packages/web/src/editor/{WhyThisChart,ChartEditor}.tsx`, `infra/cube/model/cubes/orders.yml`, `e2e/chart-editor.spec.ts`
+  - Failing test: `explain.test.ts` and `e2e/chart-editor.spec.ts`: the panel shows the field signature, each field's cardinality, and every hard rule with its pass or fail result, including each rule that rejected a candidate (AC-029).
   - Depends on: T028
+  - Done 2026-09-20. AC-029 ticked. The trace includes the candidates that were **rejected**, with the rule that rejected them — the criterion's `Fails when:` is about exactly that. A trace of only the winner answers "what did you pick" and not "why not the one I expected", which is the question someone opens this to ask.
+  - **Cardinalities come from the rows the query returned**, not from a separate count query. What decides whether a chart reads is how many values are in *this* result, and it costs nothing extra.
+  - `orders.id` is now `public: true` in the sample model: Cube hides primary keys from metadata by default, and without a high-cardinality dimension no capacity rule could be exercised against real data. It is also what row-level marking will need at T098 (AC-092).
+  - A test of mine was wrong first: it asserted the trace names `time_as_categories`, which is a **soft** rule (a weight) and so never appears in a legality trace. The rule was right; the assertion was not.
 - [ ] T030 (AC-032) Keep a manually chosen chart type until "Back to recommended"
   - Files: `packages/web/src/editor/chartTypeState.ts`, `packages/web/src/editor/chartTypeState.test.ts`
   - Failing test: `chartTypeState.test.ts`: after a manual pick, later field changes leave the type unchanged, and "Back to recommended" restores the recommendation (AC-032).

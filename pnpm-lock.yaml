@@ -287,6 +287,9 @@ importers:
       '@wechart/core':
         specifier: workspace:*
         version: link:../core
+      '@wechart/recommender':
+        specifier: workspace:*
+        version: link:../recommender
       '@wechart/ui':
         specifier: workspace:*
         version: link:../ui
