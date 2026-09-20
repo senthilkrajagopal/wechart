@@ -1,5 +1,7 @@
 import { themeCss } from '@wechart/ui';
 
+import { COLUMNS, GUTTER_PX } from '../dashboard/grid/geometry';
+
 /**
  * The generated token custom properties plus the shell's own rules. Injected
  * once at start-up rather than imported as a .css file, so the tokens have a
@@ -220,6 +222,39 @@ main { padding: 16px; }
   border-bottom-color: var(--wc-accent);
 }
 .edit-sidebar__panel { padding: 16px; }
+
+/* The canvas grid (AC-054). The track count and the tile spans are set as
+   inline style by Canvas.tsx, because they are layout the component computes;
+   what lives here is the painting. The gridlines are a repeating background
+   sized to one column pitch, so they line up with the tracks at any canvas
+   width without a second element to keep in step.
+
+   The period has to be the pitch, not the track: with ${String(COLUMNS)}
+   tracks and ${String(COLUMNS - 1)} gaps of ${String(GUTTER_PX)}px, a track is
+   (100% - ${String(GUTTER_PX * (COLUMNS - 1))}px)/${String(COLUMNS)}, and the
+   pitch is that plus its gutter, which is (100% + ${String(GUTTER_PX)}px)/${String(COLUMNS)}.
+   Using the track alone drifts by a gutter per column and is
+   ${String(GUTTER_PX * (COLUMNS - 1))}px out by the right-hand edge.
+
+   The numbers are interpolated from grid/geometry.ts rather than written out,
+   because the painted lines only agree with the real tracks while the canvas,
+   the geometry and this rule all use the same gutter. */
+.grid-canvas { align-content: start; }
+.grid-canvas[data-gridlines='true'] {
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--wc-border-subtle) 0 1px,
+    transparent 1px calc((100% + ${String(GUTTER_PX)}px) / ${String(COLUMNS)})
+  );
+}
+.grid-tile {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  overflow: hidden;
+}
 
 .chart-editor {
   display: grid;
