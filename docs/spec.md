@@ -103,7 +103,7 @@ Traces to: `[docs/inputs §2, §3]`, `[R2]`, direction.md §6, rules 8–10, 29�
 
 - [x] AC-025 WHEN the user opens the chart editor, THE SYSTEM SHALL list the cubes and views available from `/v1/meta` and, once one is chosen, its measures, dimensions, segments and time dimensions grouped by type.
       Fails when: a member present in the metadata is missing from the field list, or a hidden member is shown.
-- [ ] AC-026 WHEN the user drags a field onto a well, or adds it with the well's "+" picker, THE SYSTEM SHALL add it to that well and re-run the chart's query.
+- [x] AC-026 WHEN the user drags a field onto a well, or adds it with the well's "+" picker, THE SYSTEM SHALL add it to that well and re-run the chart's query.
       Fails when: the field is not added by either route, or the chart still shows the previous result.
 - [ ] AC-027 WHILE a field is being dragged, THE SYSTEM SHALL mark each well as legal or illegal for it and give a reason for every illegal well (direction.md rule 12).
       Fails when: an illegal well accepts the drop, or gives no reason.

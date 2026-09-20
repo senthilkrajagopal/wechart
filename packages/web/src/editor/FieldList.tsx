@@ -17,8 +17,19 @@ const MEMBER_ICON: Record<string, string> = {
   segment: '⊂',
 };
 
-export function FieldList() {
-  const [cubeName, setCubeName] = useState('');
+export interface FieldListProps {
+  /** Lifted so the editor can build a query from the chosen cube's members. */
+  readonly cubeName?: string;
+  readonly onCubeChange?: (cubeName: string) => void;
+}
+
+export function FieldList({ cubeName: controlled, onCubeChange }: FieldListProps = {}) {
+  const [own, setOwn] = useState('');
+  const cubeName = controlled ?? own;
+  const setCubeName = (next: string) => {
+    setOwn(next);
+    onCubeChange?.(next);
+  };
 
   const meta = useQuery({
     queryKey: ['meta'],
@@ -62,7 +73,17 @@ export function FieldList() {
             <h3>{GROUP_LABELS[kind]}</h3>
             <ul aria-label={GROUP_LABELS[kind]}>
               {members.map((member) => (
-                <li key={member.name} data-testid={`member-${member.name}`}>
+                <li
+                  key={member.name}
+                  data-testid={`member-${member.name}`}
+                  draggable
+                  // The pointer route into a well (AC-026). The keyboard route
+                  // is each well's "+" picker, not this.
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData('text/plain', member.name);
+                    event.dataTransfer.effectAllowed = 'copy';
+                  }}
+                >
                   {/* Type shown as an icon and a group heading, never colour
                       alone (direction.md rule 3). */}
                   <span data-icon={kind} aria-hidden="true">

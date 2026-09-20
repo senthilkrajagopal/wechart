@@ -7,7 +7,7 @@ import {
   useParams,
 } from '@tanstack/react-router';
 
-import { FieldList } from '../editor/FieldList';
+import { ChartEditor } from '../editor/ChartEditor';
 import { AppShell } from '../shell/AppShell';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
@@ -94,7 +94,7 @@ function ChartEditorSurface() {
     <AppShell workspace="explore">
       <h1>Chart editor</h1>
       <p data-testid="selected-object">{decodeURIComponent(params.objectId ?? '')}</p>
-      <FieldList />
+      <ChartEditor />
     </AppShell>
   );
 }

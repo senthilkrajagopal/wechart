@@ -204,10 +204,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Two findings. **Cube talks to Cube Store on HTTP 3030, not the MySQL port 3306** — pointing it at 3306 fails with "Parse Error: Expected HTTP/" and a permanently unhealthy deployment. And Cube Store's image is per-architecture: `v1.7.42` is amd64-only, Apple Silicon needs `-arm64v8`, so the tag is an env var CI overrides.
   - **Time dimensions are not a separate array** in Cube's metadata — they are dimensions whose `type` is `time`. Listing them with the rest would bury the field most charts are built around, so they are their own group.
   - Also fixed here: the intermittent browser-suite failures seen since T017 were **browser context launch exceeding the 30s test timeout** on cold runs, not assertion failures — the app was never at fault. The per-test timeout is now 60s, verified over a forced cold run and a warm one.
-- [ ] T025 (AC-026) Add a field to a well by drag or by the well's "+" picker and re-run the query
-  - Files: `packages/web/src/editor/{Well,FieldPicker}.tsx`, `packages/web/src/editor/Well.test.tsx`
-  - Failing test: `Well.test.tsx`: both routes add the field to the well and the chart re-queries, replacing the previous result (AC-026).
+- [x] T025 (AC-026) Add a field to a well by drag or by the well's "+" picker and re-run the query
+  - Files: `packages/core/src/chart-spec.ts`, `packages/core/src/chart-spec.test.ts`, `packages/web/src/editor/{Wells,ChartEditor,FieldList}.tsx`, `e2e/chart-editor.spec.ts`
+  - Failing test: `chart-spec.test.ts` and `e2e/chart-editor.spec.ts`: both routes add the field to the well and the chart re-queries, replacing the previous result (AC-026).
   - Depends on: T024
+  - Done 2026-09-20. AC-026 ticked. **Both routes are exercised**, and each asserts the result *changed* rather than that something is displayed: adding a measure gives 1 row, grouping by status gives 3, by day gives 240 — real numbers from the seeded warehouse, so a query that silently did not re-run fails.
+  - The picker is not a fallback for the drag. It is the only route a keyboard or screen reader has, and a drag-only well would fail AC-176 outright.
+  - The chart spec lives in `@wechart/core` and is engine-neutral (CLAUDE.md): nothing in it mentions ECharts. `toCubeQuery` sorts members so the same spec always produces byte-identical JSON, which is what AC-105 will need for a result to come from cache.
+  - Changing cube clears the wells: members belong to a cube, and keeping them would build a query naming fields the new cube does not have.
 - [ ] T026 (AC-027) Mark each well legal or illegal during a drag, with a reason for every illegal well
   - Files: `packages/web/src/editor/wellRules.ts`, `packages/web/src/editor/wellRules.test.ts`
   - Failing test: `wellRules.test.ts`: dragging a dimension over a measure-only well marks it illegal with a reason, and dropping on it is refused (AC-027).
