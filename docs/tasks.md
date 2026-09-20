@@ -487,10 +487,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **A bug in the test helper, found here and affecting earlier tasks.** ECharts writes a rotation as a transform *matrix*, not a `rotate()`, and `labelsOf` only matched `translate(x y)` — so it was silently blind to every rotated label, including axis titles, which ECharts always rotates on a y axis. It now reads both forms.
   - Axis settings are part of the undo history, because AC-035 asks that every change is undoable and an axis edit is a change like any other. A browser test undoes one.
   - Settings are sparse: a field left alone is absent rather than stored as a default, which is what keeps the chart following the data when nobody has overridden anything.
-- [ ] T048 (AC-041) Aggregate the remainder into a labelled "Other (n)"
-  - Files: `packages/core/src/topN.ts`, `packages/core/src/topN.test.ts`
+- [x] T048 (AC-041) Aggregate the remainder into a labelled "Other (n)"
+  - Files: `packages/core/src/topN.ts`, `packages/core/src/topN.test.ts`, `packages/core/src/compile.ts`, `packages/charts/src/colours.ts`
   - Failing test: `topN.test.ts`: past the top-N setting the chart renders N categories plus one "Other (n)" labelled with the number of members it covers (AC-041).
   - Depends on: T035
+  - Done 2026-09-20. **AC-041 ticked.**
+  - **The count in the label is what stops "Other" being a lie.** A slice labelled only "Other" could cover two members or two hundred, and a reader has no way to tell how much of the chart they are not seeing. The criterion asks for it explicitly and a test asserts it for two different tail sizes.
+  - Folded in `compile`, not per renderer, so no chart type can be quietly exempt from the cap. It is a transformation of the rows, which is what that step is for.
+  - **Ranked by value, not by arrival.** Otherwise the tail is whichever members Cube happened to return last, and the chart hides large members while showing small ones. A test puts the largest member second in the rows and expects it kept.
+  - **The tail takes the neutral, not a palette slot** (direction.md §5). "Other" is not a member, and giving it a member's colour would put it in the same visual class as the things it hides.
+  - No item is added when the category count is exactly the setting: an "Other (0)" would be an empty category taking a colour and a legend entry for nothing.
+  - Ranking uses the *first* measure. Summing across measures of different units would be adding pounds to counts. The same additivity caveat as the pivot applies: a total of averages is not an average, and a non-additive measure needs its "Other" from Cube.
 - [ ] T049 (AC-042) Show a chart-shaped loading skeleton and an error state offering Retry and details
   - Files: `packages/web/src/tiles/{TileSkeleton,TileError}.tsx`, `packages/web/src/tiles/TileSkeleton.test.tsx`
   - Failing test: `TileSkeleton.test.tsx`: loading renders a skeleton matching the chart's shape, and a failure renders Retry plus the error details (AC-042).

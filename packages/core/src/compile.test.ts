@@ -92,6 +92,24 @@ describe('compiling a saved document', () => {
     expect(compile(pinned, { rows: ROWS, chartType: 'bar' }).chartType).toBe('hbar');
   });
 
+  it('folds the long tail into Other before the renderer sees it', () => {
+    const many: ChartDocument = {
+      ...withStatusAndCount,
+      chart: { ...withStatusAndCount.chart, options: { topN: 2 } },
+    };
+    const rows = [
+      { 'orders.status': 'a', 'orders.count': 50 },
+      { 'orders.status': 'b', 'orders.count': 40 },
+      { 'orders.status': 'c', 'orders.count': 30 },
+      { 'orders.status': 'd', 'orders.count': 20 },
+    ];
+
+    // Doing it here rather than per renderer means no chart type can be
+    // quietly exempt from the cap (AC-041).
+    const compiled = compile(many, { rows, chartType: 'bar' });
+    expect(compiled.rows.map((row) => row['orders.status'])).toEqual(['a', 'b', 'Other (2)']);
+  });
+
   it('carries the chart type options through untouched', () => {
     const withOptions: ChartDocument = {
       ...withStatusAndCount,

@@ -17,6 +17,7 @@
 
 import type { ChartDefinition, ChartDocument } from './chart-document';
 import { CHANNELS, type ChartType, type Encoding, type RenderSpec } from './render-spec';
+import { applyTopN } from './topN';
 
 export interface CompileOptions {
   readonly rows: readonly Record<string, unknown>[];
@@ -75,7 +76,10 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
     if (value !== undefined) encoding[channel] = value;
   }
 
-  return {
+  // Folded here rather than in each renderer, so a chart type cannot be
+  // quietly exempt from the cap (AC-041). It is a transformation of the rows,
+  // which is what this step is for.
+  return applyTopN({
     chartType: chart.chartType ?? options.chartType,
     encoding,
     rows: options.rows,
@@ -84,5 +88,5 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
     ...(chart.options === undefined ? {} : { options: chart.options }),
     ...(options.palette === undefined ? {} : { palette: options.palette }),
     ...(options.surface === undefined ? {} : { surface: options.surface }),
-  };
+  });
 }

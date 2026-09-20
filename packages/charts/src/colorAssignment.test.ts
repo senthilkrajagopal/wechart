@@ -116,6 +116,28 @@ describe('the renderers use it', () => {
   });
 });
 
+describe('the folded tail', () => {
+  it('takes the neutral rather than a palette slot', () => {
+    const spec: RenderSpec = {
+      chartType: 'bar',
+      encoding: { x: ['orders.status'], y: ['orders.count'], color: ['orders.status'] },
+      rows: [
+        { 'orders.status': 'paid', 'orders.count': 50 },
+        { 'orders.status': 'Other (7)', 'orders.count': 20 },
+      ],
+      palette: ['#aa0000', '#00bb00'],
+    };
+
+    // "Other" is not a member; giving it a member's colour would put it in
+    // the same visual class as the things it hides.
+    const fills = marksOf(renderToSvg(optionFor(spec)), [OTHER_COLOUR, '#aa0000', '#00bb00'])
+      .filter((mark) => mark.bottom - mark.top > 40)
+      .map((mark) => mark.fill);
+
+    expect(fills).toContain(OTHER_COLOUR);
+  });
+});
+
 describe('a starting assignment', () => {
   it('can be handed in, so a saved dashboard reopens with the same colours', () => {
     const colours = assignColours(PALETTE, { west: PALETTE[2] as string });
