@@ -263,10 +263,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/editor/PreviewFrame.tsx`, `e2e/editor-preview.spec.ts`
   - Failing test: `e2e/editor-preview.spec.ts`: opened from a tile, the tile-size preview matches the tile's width and height, and returning applies the changes to that tile (AC-034).
   - Depends on: T025, T060
-- [ ] T033 (AC-035) Undo, redo and discard every change made since the editor opened
-  - Files: `packages/web/src/editor/history.ts`, `packages/web/src/editor/history.test.ts`
+- [x] T033 (AC-035) Undo, redo and discard every change made since the editor opened
+  - Files: `packages/web/src/editor/history.ts`, `packages/web/src/editor/history.test.ts`, `packages/web/src/editor/ChartEditor.tsx`, `packages/web/src/shell/styles.ts`, `e2e/chart-editor.spec.ts`
   - Failing test: `history.test.ts`: every editor change is undoable and redoable, and Discard restores the chart exactly as it was on open (AC-035).
   - Depends on: T025
+  - Done 2026-09-20. AC-035 ticked. The history stores **states, not actions**. "Every change" is the criterion, and storing states means a new kind of change is undoable the day it is added, with no inverse operation to remember to write. The editor's undoable state is therefore one value — cube, spec and chart type together — rather than three pieces each of which would have to record itself.
+  - A drag in progress is deliberately **outside** the history: it is a pointer position, not a change to the chart, and undo should not step back through one.
+  - **Discard is itself undoable.** It lands on the opening state with everything before it still in the past, so discarding by mistake is recoverable. The criterion asks that Discard restores the original, not that it destroys the history.
+  - The browser test walks back through all four kinds of change — chart type, dimension, measure, and the choice of cube — until Undo is disabled, rather than testing one step.
 - [ ] T034 (AC-036) Show the results drawer: result rows, underlying rows and the query JSON
   - Files: `packages/web/src/editor/ResultsDrawer.tsx`, `packages/web/src/editor/ResultsDrawer.test.tsx`
   - Failing test: `ResultsDrawer.test.tsx`: all three views are present and each reflects the query the chart actually rendered (AC-036).

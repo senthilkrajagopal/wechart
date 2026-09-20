@@ -167,7 +167,16 @@ main { padding: 16px; }
    still visible when focus moves into a control inside the row. */
 .folder-contents tbody tr[aria-selected='true'] { background: var(--wc-bg-subtle); }
 
-.chart-editor { display: grid; grid-template-columns: 280px 1fr 280px; gap: 16px; }
+.chart-editor {
+  display: grid;
+  grid-template-columns: 280px 1fr 280px;
+  grid-template-areas: 'bar bar bar' 'fields wells result';
+  gap: 16px;
+}
+
+.editor-bar { grid-area: bar; display: flex; gap: 8px; }
+.editor-bar button { height: 32px; padding: 0 12px; border: 1px solid var(--wc-border-strong); border-radius: 4px; background: var(--wc-bg-surface); color: var(--wc-text-primary); cursor: pointer; }
+.editor-bar button:disabled { color: var(--wc-text-muted); cursor: default; }
 
 .chart-editor > *,
 .well {

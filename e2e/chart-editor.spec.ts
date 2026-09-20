@@ -234,6 +234,69 @@ test('names every missing requirement, not only the first', async ({ page }) => 
   await expect(page.getByTestId('missing-fields')).toContainText('Dimensions');
 });
 
+/**
+ * AC-035: WHEN the user changes the chart in the editor, THE SYSTEM SHALL
+ * support undo and redo of every change made since the editor opened, and a
+ * "Discard changes" that restores the chart as it was.
+ * Fails when: any change cannot be undone, or Discard leaves a change applied.
+ */
+test('undoes and redoes a field change', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
+
+  await page.getByTestId('undo').click();
+  await expect(page.getByTestId('in-measures-orders.count')).toBeHidden();
+
+  await page.getByTestId('redo').click();
+  await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
+});
+
+test('undoes every kind of change, including the chart type and the cube', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await page.getByLabel('Chart type').selectOption('pie');
+  await expect(page.getByTestId('chart-type')).toHaveText('pie');
+
+  // Back through the type change...
+  await page.getByTestId('undo').click();
+  await expect(page.getByTestId('chart-type')).not.toHaveText('pie');
+  // ...the dimension...
+  await page.getByTestId('undo').click();
+  await expect(page.getByTestId('in-dimensions-orders.status')).toBeHidden();
+  // ...the measure...
+  await page.getByTestId('undo').click();
+  await expect(page.getByTestId('in-measures-orders.count')).toBeHidden();
+  // ...and the choice of cube, which is where the editor opened.
+  await page.getByTestId('undo').click();
+  await expect(page.getByTestId('no-cube-chosen')).toBeVisible();
+  await expect(page.getByTestId('undo')).toBeDisabled();
+});
+
+test('discard restores the chart as it opened', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await page.getByLabel('Chart type').selectOption('pie');
+
+  await page.getByTestId('discard').click();
+
+  // Nothing applied: no cube, no fields, no manual type.
+  await expect(page.getByTestId('no-cube-chosen')).toBeVisible();
+  await expect(page.getByTestId('in-measures-orders.count')).toBeHidden();
+  await expect(page.getByTestId('discard')).toBeDisabled();
+});
+
+test('nothing to undo or discard when the editor opens', async ({ page }) => {
+  await page.goto('/explore/charts/new/edit');
+  await expect(page.getByLabel('Cube or view')).toBeVisible();
+
+  await expect(page.getByTestId('undo')).toBeDisabled();
+  await expect(page.getByTestId('redo')).toBeDisabled();
+  await expect(page.getByTestId('discard')).toBeDisabled();
+});
+
 test('a time dimension goes to its own well and groups by day', async ({ page }) => {
   await openEditorOnOrders(page);
 

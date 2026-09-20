@@ -1,4 +1,11 @@
-import { addToWell, emptySpec, isEmpty, removeFromWell, toCubeQuery } from '@wechart/core';
+import {
+  addToWell,
+  emptySpec,
+  isEmpty,
+  removeFromWell,
+  toCubeQuery,
+  type ChartSpec,
+} from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
@@ -19,7 +26,9 @@ import {
   chooseType,
   effectiveType,
   isManual,
+  type ChartTypeState,
 } from './chartTypeState';
+import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { FieldList } from './FieldList';
 import { Wells } from './Wells';
 import { membersOf, type Member } from './fields';
@@ -34,12 +43,42 @@ import { membersOf, type Member } from './fields';
 /** Every type the recommender knows about, so the override is a real one. */
 const ALL_CHART_TYPES = Object.keys(REQUIREMENTS).sort() as ChartType[];
 
+/**
+ * Everything a change can touch, in one place. AC-035 asks that *every* change
+ * is undoable, so the undoable state is one value rather than several pieces
+ * that each would have to remember to record themselves.
+ */
+interface EditorState {
+  readonly cubeName: string;
+  readonly spec: ChartSpec;
+  readonly chartType: ChartTypeState;
+}
+
+const OPENED_WITH: EditorState = {
+  cubeName: '',
+  spec: emptySpec(),
+  chartType: FOLLOWING_RECOMMENDATION,
+};
+
 export function ChartEditor() {
-  const [cubeName, setCubeName] = useState('');
-  const [spec, setSpec] = useState(emptySpec());
-  /** The field under the pointer during a drag, so wells can judge it (AC-027). */
+  const [history, setHistory] = useState(() => historyOf(OPENED_WITH));
+  const { cubeName, spec, chartType: chartTypeState } = history.present;
+
+  /** Records the change, which is what makes it undoable. */
+  const change = (next: (current: EditorState) => EditorState) =>
+    setHistory((current) => push(current, next(current.present)));
+
+  const setSpec = (next: (current: ChartSpec) => ChartSpec) =>
+    change((current) => ({ ...current, spec: next(current.spec) }));
+
+  const setChartTypeState = (next: ChartTypeState) =>
+    change((current) => ({ ...current, chartType: next }));
+
+  /**
+   * Not part of the history: a drag in progress is a pointer position, not a
+   * change to the chart, and undo should not step back through one.
+   */
   const [dragging, setDragging] = useState<Member | null>(null);
-  const [chartTypeState, setChartTypeState] = useState(FOLLOWING_RECOMMENDATION);
 
   const meta = useQuery({
     queryKey: ['meta'],
@@ -132,16 +171,42 @@ export function ChartEditor() {
 
   return (
     <div className="chart-editor">
+      <div className="editor-bar" data-testid="editor-bar">
+        <button
+          type="button"
+          data-testid="undo"
+          disabled={!canUndo(history)}
+          onClick={() => setHistory(undo)}
+        >
+          Undo
+        </button>
+        <button
+          type="button"
+          data-testid="redo"
+          disabled={!canRedo(history)}
+          onClick={() => setHistory(redo)}
+        >
+          Redo
+        </button>
+        <button
+          type="button"
+          data-testid="discard"
+          disabled={!isDirty(history)}
+          onClick={() => setHistory(discard)}
+        >
+          Discard changes
+        </button>
+      </div>
+
       <div className="chart-editor__fields">
         <FieldList
           cubeName={cubeName}
           onDragStateChange={setDragging}
-          onCubeChange={(next) => {
-            setCubeName(next);
+          onCubeChange={(next) =>
             // Members belong to a cube; keeping them across a change would
             // build a query naming fields the new cube does not have.
-            setSpec(emptySpec(next));
-          }}
+            change((current) => ({ ...current, cubeName: next, spec: emptySpec(next) }))
+          }
         />
       </div>
 
