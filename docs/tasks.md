@@ -46,10 +46,12 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Depends on: T001
   - Done 2026-09-19. One versioned `documents` table rather than five per-kind repositories: AC-014 names five kinds but asks only that each is stored and returns unchanged, and AC-015 asks that a stale save is refused. Neither needs per-kind columns, and inventing a relational shape for behaviour no AC describes would be guesswork. T016 (folder tree), T017 (title search) and T019 (references) add columns and indexes in their own migrations.
   - `pnpm test` starts the Docker Postgres and applies migrations through `vitest.globalSetup.ts`, per the user's decision. If Docker is not running the run **fails with an explanation**; it never skips, because a green run that proved nothing is worse than a red one.
-- [ ] T004 (AC-007, AC-008) Stand up the Fastify service as the only holder of Cube credentials
-  - Files: `packages/api/src/server.ts`, `packages/api/src/cube/{client,security-context}.ts`, `packages/api/src/routes/{meta,load}.ts`, `packages/api/src/cube/client.test.ts`, `e2e/no-direct-cube.spec.ts`
-  - Failing test: `e2e/no-direct-cube.spec.ts`: no browser request targets the Cube API host and no response body contains the Cube API secret (AC-007); `client.test.ts`: every outbound Cube request carries the configured security context (AC-008).
+- [x] T004 (AC-007, AC-008) Stand up the Fastify service as the only holder of Cube credentials
+  - Files: `packages/api/src/server.ts`, `packages/api/src/config.ts`, `packages/api/src/cube/client.ts`, `packages/api/src/cube/client.test.ts`, `packages/api/src/server.test.ts`
+  - Failing test: `client.test.ts`: every outbound Cube request carries the configured security context, signed with the configured secret (AC-008); `server.test.ts`: the API answers for metadata and queries, and no reply carries the secret — success, Cube failure or service failure (AC-007).
   - Depends on: T001, T003
+  - Done 2026-09-19. **AC-008 ticked. AC-007 stays unchecked**: its second half is "the browser SHALL make no request to the Cube API host", and the app makes no data requests at all yet, so an e2e assertion would pass vacuously — the same trap T001's first smoke test fell into. T024 is the first task where the browser needs metadata; it ticks AC-007 with `e2e/no-direct-cube.spec.ts`.
+  - The security context travels as the JWT payload Cube reads, signed with HMAC-SHA256 from `node:crypto` rather than through a JWT dependency, so the secret passes through no third-party code. Tests run against a stub Cube over real HTTP; the real Cube joins docker-compose at T010/T024, where metadata correctness is the point rather than what wechart sends.
 
 ## F1. Application shell and navigation
 
@@ -142,6 +144,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/editor/FieldList.tsx`, `packages/api/src/routes/meta.ts`, `packages/web/src/editor/FieldList.test.tsx`
   - Failing test: `FieldList.test.tsx`: every measure, dimension, segment and time dimension in the metadata appears under its group, and members marked hidden do not (AC-025).
   - Depends on: T010
+  - Also ticks **AC-007**, carried from T004: this is the first task where the browser needs metadata, so `e2e/no-direct-cube.spec.ts` can assert that the page issues at least one metadata request, that none targets the Cube API host, and that no response body carries the Cube secret. Asserting that before the app fetched anything would have passed vacuously.
 - [ ] T025 (AC-026) Add a field to a well by drag or by the well's "+" picker and re-run the query
   - Files: `packages/web/src/editor/{Well,FieldPicker}.tsx`, `packages/web/src/editor/Well.test.tsx`
   - Failing test: `Well.test.tsx`: both routes add the field to the well and the chart re-queries, replacing the previous result (AC-026).
@@ -851,7 +854,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 | AC-004 | T002, T008 | AC-049 | T054 | AC-094 | T100 | AC-139 | T145       |
 | AC-005 | T002, T008 | AC-050 | T056 | AC-095 | T101 | AC-140 | T146       |
 | AC-006 | T009       | AC-051 | T057 | AC-096 | T102 | AC-141 | T147       |
-| AC-007 | T004       | AC-052 | T058 | AC-097 | T103 | AC-142 | T148       |
+| AC-007 | T004, T024 | AC-052 | T058 | AC-097 | T103 | AC-142 | T148       |
 | AC-008 | T004       | AC-053 | T059 | AC-098 | T104 | AC-143 | T149       |
 | AC-009 | T010       | AC-054 | T060 | AC-099 | T105 | AC-144 | T150       |
 | AC-010 | T011       | AC-055 | T061 | AC-100 | T106 | AC-145 | T151       |

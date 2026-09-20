@@ -1,0 +1,61 @@
+/**
+ * Everything the service reads from its environment.
+ *
+ * The Cube secret is read here and never travels further than the CubeClient
+ * (AC-007). Nothing in this module is logged, and nothing returns it.
+ */
+
+export interface Config {
+  readonly cubeApiUrl: string;
+  readonly cubeApiSecret: string;
+  /**
+   * Phase 1 is single-user, so wechart holds one security context rather than
+   * deriving it per request (requirements.md §4). `WECHART_SECURITY_CONTEXT` is
+   * JSON; an empty context is legitimate and means "no claims".
+   */
+  readonly securityContext: Record<string, unknown>;
+  readonly port: number;
+}
+
+export class ConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigError';
+  }
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  const cubeApiUrl = env['CUBE_API_URL'] ?? 'http://localhost:4000/cubejs-api';
+  const cubeApiSecret = env['CUBE_API_SECRET'];
+
+  if (!cubeApiSecret) {
+    throw new ConfigError(
+      'CUBE_API_SECRET is not set. wechart signs every Cube request with it, and is the only ' +
+        'holder of it; the browser never sees it.',
+    );
+  }
+
+  return {
+    cubeApiUrl,
+    cubeApiSecret,
+    securityContext: parseSecurityContext(env['WECHART_SECURITY_CONTEXT']),
+    port: Number(env['PORT'] ?? 4100),
+  };
+}
+
+function parseSecurityContext(raw: string | undefined): Record<string, unknown> {
+  if (!raw) return {};
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new ConfigError('WECHART_SECURITY_CONTEXT is not valid JSON');
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new ConfigError('WECHART_SECURITY_CONTEXT must be a JSON object');
+  }
+
+  return parsed as Record<string, unknown>;
+}

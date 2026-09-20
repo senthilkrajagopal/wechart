@@ -55,7 +55,7 @@ Traces to: `[R5]`, `[R4]`, `[research/cube/data-apis.md]`, `[research/cube/acces
 
 - [ ] AC-007 WHEN the browser needs data or metadata, THE SYSTEM SHALL obtain it through the wechart API, and the browser SHALL make no request to the Cube API host.
       Fails when: a network request from the browser targets the Cube API host, or any response to the browser contains the Cube API secret.
-- [ ] AC-008 WHEN wechart queries Cube, THE SYSTEM SHALL attach the configured phase-1 security context to every request.
+- [x] AC-008 WHEN wechart queries Cube, THE SYSTEM SHALL attach the configured phase-1 security context to every request.
       Fails when: a request reaches Cube without the configured security context.
 - [ ] AC-009 WHEN Cube reports a new `schemaVersion`, THE SYSTEM SHALL serve metadata from the new model within 60 seconds without a restart.
       Fails when: 60 seconds after the change, a metadata request still returns members from the previous model.
