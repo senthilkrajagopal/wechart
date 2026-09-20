@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { ChartCanvas } from './ChartCanvas';
 import { DataTable } from './DataTable';
 import { Kpi } from './Kpi';
+import { PivotTable } from './PivotTable';
 
 /**
  * One chart, whatever kind it is (AC-037), and the table behind it (AC-178).
@@ -33,6 +34,7 @@ interface ChartBodyProps {
 const DOM_TYPES: Partial<Record<ChartType, (props: ChartBodyProps) => React.ReactElement>> = {
   kpi: Kpi,
   table: DataTable,
+  pivot: PivotTable,
 };
 
 function ChartBody({ spec, height }: ChartBodyProps) {

@@ -50,3 +50,5 @@ export {
 } from './render-spec';
 
 export { compile, defaultEncoding, type CompileOptions } from './compile';
+
+export { pivot, type PivotResult } from './pivot';

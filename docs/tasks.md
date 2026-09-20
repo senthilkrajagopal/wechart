@@ -363,10 +363,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - The virtualiser's rect is supplied rather than observed. The tile decides the height, so there is nothing to discover by measuring — and measuring is what fails without a layout engine: the default watcher reports a zero-height rect, the window comes out empty and nothing is drawn.
   - **AC-178 is tested against the vocabulary, not a sample.** All eighteen types are exercised, and the fixture fills every well so none is left unable to draw. Skipping the ones that fell short would have been the easy green and would have excused exactly the types most likely to lack a view — the test-integrity hook blocked a `test.skip` that would have done it.
   - Known, accepted: React Compiler declines to memoise `DataTable` because TanStack Virtual returns functions it cannot memoise safely (`react-hooks/incompatible-library`). It is a warning about optimisation, not correctness.
-- [ ] T042 (AC-037) Render the pivot table with row subtotals and grand totals
-  - Files: `packages/charts/src/dom/PivotTable.tsx`, `packages/core/src/pivot.ts`, `packages/charts/src/dom/PivotTable.test.tsx`
-  - Failing test: `PivotTable.test.tsx`: a pivot spec renders nested column headers from Cube's `tableColumns`, with row subtotals and grand totals (AC-037).
+- [x] T042 (AC-037) Render the pivot table with row subtotals and grand totals
+  - Files: `packages/core/src/pivot.ts`, `packages/core/src/pivot.test.ts`, `packages/web/src/tiles/PivotTable.tsx`, `packages/web/src/tiles/PivotTable.test.tsx`, `packages/web/src/tiles/ChartTile.tsx`
+  - Failing test: `pivot.test.ts`: the cross-tab, its gaps and its totals (AC-037); `PivotTable.test.tsx`: nested column headers span rather than repeat, and the totals land in the right cells (AC-037).
   - Depends on: T041
+  - Done 2026-09-20. **AC-037 stays unchecked** — 16 of its 18 types now render.
+  - **The cross-tab is computed in core, not by the grid.** `research/table.md` is explicit that TanStack Table has row grouping and aggregation but *no* cross-tab. Doing it in `@wechart/core` also means it is tested on values rather than on rendered cells, and the component is left only drawing.
+  - The task said to take the cross-tab from Cube's `ResultSet.tablePivot`/`tableColumns`. wechart does not use `@cubejs-client/core` — the API returns raw rows — so the same shape is derived from those rows instead. The `row` and `column` channels exist for exactly this and needed no extension.
+  - **A gap is `null`, and so is a total of nothing.** Zero would claim a measurement the result never contained. Once one real number is present the gaps beside it are skipped.
+  - **Sum only, and that is a limitation worth naming.** A subtotal of an average is not an average, and nothing here knows a measure's aggregation: `RenderSpec` carries member names, not the model's metadata. Non-additive measures need their totals from Cube — the same conclusion AC-048 reaches for quick calculations. Revisit when member metadata reaches the renderer at T052.
+  - Nested headers span rather than repeat, and equal leaves under *different* parents do not merge. The first version of that test used leaves that were not adjacent, so it would have passed without the rule; with adjacent `Q1/paid` and `Q2/paid` it fails the moment the parent check is removed.
+  - Last write wins for a duplicate row/column pair. Cube has already grouped by those dimensions, so two rows for one pair mean the query and the pivot disagree about the grain — not something to silently add up.
 - [ ] T043 (AC-037, AC-045) Render trellis panels with a shared scale, per-panel titles and a cap of 20
   - Files: `packages/charts/src/layout/trellis.ts`, `packages/charts/src/layout/trellis.test.ts`
   - Failing test: `trellis.test.ts`: panels lay out in a grid, share one scale while the shared setting is on, each carry a title, and never exceed 20 (AC-037, AC-045).
