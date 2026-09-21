@@ -483,6 +483,70 @@ describe('the dashboard settings page', () => {
     expect(screen.queryByTestId('dashboard-settings')).toBeNull();
   });
 
+  it('offers both page widths in Layout, with the saved one chosen', async () => {
+    // T081 / AC-075. direction.md: "Layout: page width, either fixed
+    // (1,440 px) or full width."
+    show();
+    await openSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Layout' }));
+
+    const widths = screen.getAllByRole('radio');
+    expect(widths.map((width) => width.getAttribute('value'))).toEqual(['fixed', 'full']);
+    expect(widths.filter((width) => (width as HTMLInputElement).checked)).toHaveLength(1);
+    expect((screen.getByRole('radio', { name: /Fixed/ }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('carries a width change through the save onto the page', async () => {
+    /**
+     * The rendered width is a CSS fact and jsdom has no layout, so
+     * `e2e/dashboard.spec.ts` measures it. What this holds is the half jsdom
+     * can: the setting the user chose reaches the document and the attribute
+     * the stylesheet keys off.
+     *
+     * **Applied on save, not as a live preview**, and that is deliberate.
+     * T079 recorded the trap: `isDirty` compares the whole document, which is
+     * only safe while the dashboard is unmounted behind the overlay. A live
+     * preview written through `session.change` would move both sides of that
+     * comparison together, `isDirty` would go false, and Cancel would discard
+     * silently — breaking AC-073 and AC-074 at once.
+     */
+    const onSave = show();
+    await openSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Layout' }));
+    await userEvent.click(screen.getByRole('radio', { name: /Full width/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    // In view mode the save goes up to whoever owns the document; the page
+    // repaints once that comes back, which is the page above's business.
+    expect((onSave.mock.calls[0] as [DashboardDocument])[0].settings.width).toBe('full');
+  });
+
+  it('repaints the page at the new width when the change is made while editing', async () => {
+    // Editing is the mode where the change lands in the session and the
+    // dashboard is right there to repaint, so the attribute the stylesheet
+    // keys off has to follow immediately.
+    show();
+    await edit();
+    await openSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Layout' }));
+    await userEvent.click(screen.getByRole('radio', { name: /Full width/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect(screen.getByTestId('dashboard-page').getAttribute('data-width')).toBe('full');
+  });
+
+  it('still asks before dropping a width change, like any other setting', async () => {
+    // The guard is about the document, not about the name field — this is the
+    // third setting to prove that, after the mode.
+    show();
+    await openSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Layout' }));
+    await userEvent.click(screen.getByRole('radio', { name: /Full width/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+  });
+
   it('keeps the dashboard underneath it out of the way', async () => {
     // Full-viewport, like the chart editor: the dashboard is not a backdrop to
     // click through by accident.

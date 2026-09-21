@@ -407,6 +407,56 @@ test('saving a dashboard keeps the fields the editor never shows', async ({ page
 });
 
 /**
+ * T081 / AC-075: WHEN the page width setting changes, THE SYSTEM SHALL render
+ * the dashboard centred at 1,440 pixels or across the full width, according to
+ * the setting.
+ * `Fails when: the rendered canvas width does not follow the setting.`
+ *
+ * "Rendered" is the word, so this measures painted pixels rather than the
+ * attribute the stylesheet keys off — a `data-width` that changed while the
+ * CSS did not would satisfy the jsdom tests and fail the criterion. Both
+ * positions are measured, because a rule that never constrains anything
+ * satisfies "full width" perfectly.
+ */
+test('the dashboard is painted at the width the setting asks for', async ({ page, request }) => {
+  // Wide enough that 1,440px is a real constraint rather than the same thing
+  // as full width.
+  await page.setViewportSize({ width: 1800, height: 900 });
+
+  const unique = `width-${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const created = await request.post('http://localhost:4100/api/documents', {
+    data: { kind: 'dashboard', title: `Wide ${unique}`, folderId: 'root' },
+  });
+  const { id } = (await created.json()) as { id: string };
+
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: `Wide ${unique}` })).toBeVisible();
+
+  const surface = page.getByTestId('dashboard-page');
+  const paintedWidth = async () =>
+    surface.evaluate((node) => Math.round(node.getBoundingClientRect().width));
+
+  // A new dashboard starts fixed (AC-072's body), so it is constrained.
+  await expect(surface).toHaveAttribute('data-width', 'fixed');
+  expect(await paintedWidth()).toBe(1440);
+
+  await page.getByRole('button', { name: 'Dashboard settings' }).click();
+  await page.getByRole('button', { name: 'Layout' }).click();
+  await page.getByRole('radio', { name: /Full width/ }).click();
+  await page.getByRole('button', { name: 'Save settings' }).click();
+
+  await expect(surface).toHaveAttribute('data-width', 'full');
+  // Wider than the fixed cap, and the whole pane: full width means the canvas,
+  // not the window, because the canvas is what the dashboard lives in.
+  const full = await paintedWidth();
+  expect(full).toBeGreaterThan(1440);
+  const canvas = await page
+    .getByTestId('canvas-scroll')
+    .evaluate((node) => Math.round(node.clientWidth));
+  expect(full).toBe(canvas);
+});
+
+/**
  * T075 / AC-069. The page itself is plain DOM and jsdom covers it; what jsdom
  * cannot show is that the gear is reachable in the assembled app at all, and
  * that a full-viewport page really does take the dashboard's place rather than

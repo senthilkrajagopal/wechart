@@ -827,10 +827,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **Every case changes two settings and presses Undo once**, because the criterion's two failing states pull against each other: recording each setting separately satisfies "nothing left applied" and fails "one Undo", while folding them into one change but dropping one satisfies "one Undo" and fails the rest. Mutation-verified by splitting the save into two `session.change` calls — "Discard (2 changes)", and an Undo that leaves the rename applied.
   - **One real defect: saving an unaltered page recorded a change.** The draft is a fresh object even when nothing was touched, so Save on a page nobody edited put "Discard (1 change)" on a dashboard that was exactly as it opened — and that count is the only thing telling an editor whether they have unsaved work. Saving a clean page now leaves it, which is what it is.
   - Depends on: T066, T075
-- [ ] T081 (AC-075) Render the dashboard centred at 1,440 px or full width, per the setting
-  - Files: `packages/web/src/dashboard/grid/Canvas.tsx`, `packages/web/src/dashboard/settings/pageWidth.test.ts`
-  - Failing test: `pageWidth.test.ts`: the rendered canvas width follows the setting in both positions (AC-075).
+- [x] T081 (AC-075) Render the dashboard centred at 1,440 px or full width, per the setting
+  - Files: `packages/web/src/dashboard/settings/SettingsPage.tsx`, `packages/web/src/dashboard/settings/SettingsPage.test.tsx`, `e2e/dashboard.spec.ts`
+  - Failing test: `e2e/dashboard.spec.ts`: the rendered dashboard width follows the setting in both positions (AC-075).
   - Depends on: T075
+  - Done 2026-09-20. AC-075 ticked. **Files differ from the plan above, which has been corrected**: the painting already existed from AC-018 and needed no change in `Canvas.tsx`; what was missing was the Layout control that changes the setting, and a test measuring what is actually painted.
+  - **Ticked on painted pixels, not on the attribute.** The criterion says "render", and a `data-width` that changed while the CSS did not would satisfy every jsdom test and fail the criterion. The e2e measures `getBoundingClientRect` at a 1,800px viewport — wide enough that 1,440 is a real constraint rather than the same thing as full width — and asserts full width equals the canvas pane's own width, so "full" means the pane the dashboard lives in rather than the window. Mutation-verified by deleting the `max-width`: 1,768 instead of 1,440.
+  - **Applied on save, with no live preview, deliberately.** T079's note is the reason: `isDirty` compares the whole document and is safe only while the dashboard is unmounted behind the overlay. A preview written through `session.change` would move both sides of that comparison together, so `isDirty` would read clean and Cancel would discard silently — breaking AC-073 and AC-074 at once. The hazard is now closed rather than inherited.
+  - The two radio groups were factored into one `RadioCards`, which is also what direction.md calls them.
+  - **Unrelated flake seen once:** `a11y-tokens.spec.ts` "meets WCAG AA contrast at /jobs" failed under a full parallel run and passed 12/12 in isolation and in three later full runs. Not caused by this task — the rules added here exist only on the settings dialog — but recorded rather than ignored.
 
 ## F9. Filters
 

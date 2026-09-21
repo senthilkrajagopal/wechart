@@ -227,7 +227,7 @@ Traces to: `[docs/inputs §12]`, direction.md §2, rules 13, 32, 56.
       Fails when: unsaved changes are discarded without asking.
 - [x] AC-074 WHEN settings are saved while the dashboard is being edited, THE SYSTEM SHALL record them as one undoable change.
       Fails when: Undo after saving settings leaves any of them applied, or requires more than one Undo.
-- [ ] AC-075 WHEN the page width setting changes, THE SYSTEM SHALL render the dashboard centred at 1,440 pixels or across the full width, according to the setting.
+- [x] AC-075 WHEN the page width setting changes, THE SYSTEM SHALL render the dashboard centred at 1,440 pixels or across the full width, according to the setting.
       Fails when: the rendered canvas width does not follow the setting.
 
 ## F9. Filters

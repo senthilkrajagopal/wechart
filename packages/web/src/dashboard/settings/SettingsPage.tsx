@@ -49,10 +49,65 @@ const MODE_OF: Partial<Record<SettingsSection, InteractionMode>> = {
   'Cross-filtering': 'crossFilter',
 };
 
-const MODE_CARDS: readonly { readonly mode: InteractionMode; readonly label: string }[] = [
-  { mode: 'markings', label: 'Markings' },
-  { mode: 'crossFilter', label: 'Cross-filtering and cross-highlighting' },
+interface Card<T> {
+  readonly value: T;
+  readonly label: string;
+}
+
+const MODE_CARDS: readonly Card<InteractionMode>[] = [
+  { value: 'markings', label: 'Markings' },
+  { value: 'crossFilter', label: 'Cross-filtering and cross-highlighting' },
 ];
+
+const WIDTH_CARDS: readonly Card<'fixed' | 'full'>[] = [
+  { value: 'fixed', label: 'Fixed width, centred at 1,440 px' },
+  { value: 'full', label: 'Full width' },
+];
+
+/**
+ * A choice of one, as direction.md's "radio cards".
+ *
+ * Radios rather than buttons or a switch because the mutual exclusion is the
+ * rule: AC-070's other failing state is "both modes are active at once", and a
+ * radio group cannot express that. The control carries the rule so the handler
+ * does not have to.
+ */
+function RadioCards<T extends string>({
+  legend,
+  group,
+  chosen,
+  cards,
+  onChoose,
+  note,
+}: {
+  readonly legend: string;
+  readonly group: string;
+  readonly chosen: T;
+  readonly cards: readonly Card<T>[];
+  readonly onChoose: (value: T) => void;
+  readonly note?: string;
+}) {
+  return (
+    <fieldset className="settings-modes">
+      <legend>{legend}</legend>
+      {cards.map((card) => (
+        <label key={card.value} className="settings-modes__card">
+          <input
+            type="radio"
+            name={group}
+            value={card.value}
+            checked={chosen === card.value}
+            onChange={() => {
+              onChoose(card.value);
+            }}
+          />
+          <span>{card.label}</span>
+        </label>
+      ))}
+      {note === undefined ? null : <p className="settings-page__later">{note}</p>}
+    </fieldset>
+  );
+}
 
 export interface SettingsPageProps {
   readonly document: DashboardDocument;
@@ -190,26 +245,35 @@ export function SettingsPage({ document, onCancel, onSave }: SettingsPageProps) 
              * once" — a radio group cannot express that, so the control itself
              * carries the rule instead of the handler having to.
              */
-            <fieldset className="settings-modes">
-              <legend>Interaction mode</legend>
-              {MODE_CARDS.map((card) => (
-                <label key={card.mode} className="settings-modes__card">
-                  <input
-                    type="radio"
-                    name="interaction-mode"
-                    value={card.mode}
-                    checked={interactions.mode === card.mode}
-                    onChange={() => {
-                      chooseMode(card.mode);
-                    }}
-                  />
-                  <span>{card.label}</span>
-                </label>
-              ))}
-              <p className="settings-page__later">
-                The configuration of the mode you are not using is kept, not cleared.
-              </p>
-            </fieldset>
+            <RadioCards
+              legend="Interaction mode"
+              group="interaction-mode"
+              chosen={interactions.mode}
+              cards={MODE_CARDS}
+              onChoose={chooseMode}
+              note="The configuration of the mode you are not using is kept, not cleared."
+            />
+          ) : open === 'Layout' ? (
+            /**
+             * direction.md: "The dashboard is fixed-width and centred (max
+             * 1,440 px), with a toggle for full width."
+             *
+             * Applied when the page is saved, not as a live preview. T079
+             * recorded why: `isDirty` compares the whole document, which is
+             * safe only while the dashboard is unmounted behind this overlay.
+             * A preview written through the edit session would move both sides
+             * of that comparison together, so `isDirty` would read clean and
+             * Cancel would discard the change silently.
+             */
+            <RadioCards
+              legend="Page width"
+              group="page-width"
+              chosen={draft.settings.width}
+              cards={WIDTH_CARDS}
+              onChoose={(width) => {
+                setDraft({ ...draft, settings: { ...draft.settings, width } });
+              }}
+            />
           ) : (
             /**
              * Said plainly rather than left blank or filled with invented
