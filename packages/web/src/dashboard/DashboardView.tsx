@@ -34,7 +34,7 @@ import { activeFilters, type ActiveFilter } from '../filters/apply';
 import { coverageOf, type Reach } from '../filters/coverage';
 import { describeFilter } from '../filters/describe';
 import { NotCovered } from '../filters/NotCovered';
-import { TileProperties } from './edit/TileProperties';
+import { PageTabsProperties, TileProperties } from './edit/TileProperties';
 import { ImageTile } from './tiles/ImageTile';
 import { LinkTile } from './tiles/LinkTile';
 import { FilterBar } from '../filters/FilterBar';
@@ -968,6 +968,8 @@ export function DashboardView({
 
   const [openPage, setOpenPage] = useState<string | null>(null);
   const pageId = openPage ?? document.pages[0]?.id ?? '';
+  /** What the last delete took, for the undo toast (AC-060). */
+  const [deleted, setDeleted] = useState('');
   const where = {
     selected,
     addTarget,
@@ -1135,14 +1137,35 @@ export function DashboardView({
         panels={(session) => ({
           add: <AddSlot session={session} where={where} />,
           properties: (
-            <TileProperties
-              dashboardId={dashboardId}
-              document={session.document}
-              selected={selected}
-              onChange={(apply) => {
-                session.update(apply);
-              }}
-            />
+            <>
+              <TileProperties
+                dashboardId={dashboardId}
+                document={session.document}
+                selected={selected}
+                onChange={(apply) => {
+                  session.update(apply);
+                }}
+              />
+              {/**
+               * The dashboard's page tabs, each deletable (AC-060), as the
+               * prototype's Properties shows them rather than a row of ×
+               * under the tabs (AC-187). Always here, below the tile's own
+               * settings: a selection has no way back to none, and deleting a
+               * page must not wait on one.
+               */}
+              <PageTabsProperties
+                document={session.document}
+                onDelete={(page) => {
+                  const deletion = { kind: 'page', id: page } as const;
+                  const said = describeDeletion(session.document, deletion);
+                  const next = deleteFromDashboard(session.document, deletion);
+                  if (next === session.document) return;
+                  session.change(next);
+                  setDeleted(said);
+                  if (page === pageId) setOpenPage(next.pages[0]?.id ?? '');
+                }}
+              />
+            </>
           ),
         })}
       >
@@ -1193,6 +1216,8 @@ export function DashboardView({
                 setAddTarget(next.addTarget);
               }}
               onOpenPage={setOpenPage}
+              deleted={deleted}
+              onDeleted={setDeleted}
             />
           </>
         )}
@@ -1253,11 +1278,19 @@ function DashboardPages({
   onAim,
   onOpenPage,
   filterBar,
+  deleted,
+  onDeleted,
 }: {
   session: EditSession<DashboardDocument>;
   charts: TileCharts;
   /** The filter bar, drawn under the page tabs. */
   filterBar?: ReactNode;
+  /**
+   * What the last delete took, for the toast (AC-060). Held above, because a
+   * page tab is deleted from the sidebar's Properties, outside this.
+   */
+  deleted: string;
+  onDeleted: (said: string) => void;
   /**
    * Open a tile's chart in the editor overlay (T032) — what E does to the
    * focused tile (AC-057) and what the tile's pencil does. The tile id comes
@@ -1305,9 +1338,8 @@ function DashboardPages({
     });
   }, [editTile, editorOpenFor, onEditChart, document, session]);
 
-  /** What the last delete took, for the toast (AC-060). */
-  const [deleted, setDeleted] = useState('');
-  const onDeleted = setDeleted;
+  /** What the last delete took, for the toast (AC-060), held above. */
+  const setDeleted = onDeleted;
 
   /** The section whose contents we are asking about (AC-061). */
   const [asking, setAsking] = useState<string | null>(null);
@@ -1563,36 +1595,6 @@ function DashboardPages({
               }}
             >
               {page.title}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {/**
-       * Deleting a page tab, which AC-060 names among the four. It is not an
-       * element on the grid, so neither the Delete key nor a tile's ⋯ menu
-       * reaches it.
-       */}
-      {editing && document.pages.length > 1 ? (
-        <div className="page-tabs__actions">
-          {document.pages.map((page) => (
-            <button
-              key={page.id}
-              type="button"
-              data-testid={`delete-page-${page.id}`}
-              aria-label={`Delete page ${page.title}`}
-              onClick={() => {
-                const deletion = { kind: 'page', id: page.id } as const;
-                const said = describeDeletion(document, deletion);
-                const next = deleteFromDashboard(document, deletion);
-                if (next === document) return;
-
-                session.change(next);
-                setDeleted(said);
-                if (page.id === open) onOpenPage(next.pages[0]?.id ?? '');
-              }}
-            >
-              <span aria-hidden="true">×</span>
             </button>
           ))}
         </div>

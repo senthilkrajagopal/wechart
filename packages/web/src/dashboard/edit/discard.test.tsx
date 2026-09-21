@@ -68,6 +68,16 @@ const discard = async () => {
   await userEvent.click(screen.getByRole('button', { name: /^Discard/ }));
 };
 
+/** A page tab is deleted from Properties, as the prototype has it (AC-187). */
+const deletePage = async (id: string) => {
+  await userEvent.click(
+    within(screen.getByRole('complementary', { name: 'Edit sidebar' })).getByRole('tab', {
+      name: 'Properties',
+    }),
+  );
+  await userEvent.click(screen.getByTestId(`delete-page-${id}`));
+};
+
 describe('discarding a session', () => {
   it('undoes an element that was added', async () => {
     const before = await edit();
@@ -113,7 +123,7 @@ describe('discarding a session', () => {
 
   it('undoes a page tab that was deleted', async () => {
     await edit();
-    await userEvent.click(screen.getByTestId('delete-page-p2'));
+    await deletePage('p2');
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).not.toContain('Appendix');
 
     await discard();
@@ -155,7 +165,7 @@ describe('discarding a session', () => {
     first.focus();
     await userEvent.keyboard('{Shift>}{ArrowDown}{/Shift}');
     await userEvent.keyboard('{ArrowRight}');
-    await userEvent.click(screen.getByTestId('delete-page-p2'));
+    await deletePage('p2');
 
     await discard();
 

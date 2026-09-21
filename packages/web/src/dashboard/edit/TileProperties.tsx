@@ -54,6 +54,44 @@ export function TileProperties({
   }
 }
 
+/**
+ * The dashboard's page tabs, each with Delete (AC-060): the prototype's
+ * Properties › Dashboard › Page tabs (AC-187). Only while there are two or
+ * more, since a dashboard keeps at least one page.
+ */
+export function PageTabsProperties({
+  document,
+  onDelete,
+}: {
+  document: DashboardDocument;
+  onDelete: (pageId: string) => void;
+}) {
+  if (document.pages.length < 2) return null;
+  return (
+    <div className="panel-section">
+      <h3>Page tabs</h3>
+      <ul className="page-tabs-list">
+        {document.pages.map((page) => (
+          <li key={page.id}>
+            <span>{page.title}</span>
+            <button
+              type="button"
+              className="btn-ghost btn-sm"
+              data-testid={`delete-page-${page.id}`}
+              aria-label={`Delete page ${page.title}`}
+              onClick={() => {
+                onDelete(page.id);
+              }}
+            >
+              Delete
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** The panel with nothing to set, said in a section of its own. */
 function Note({ children }: { children: string }) {
   return (

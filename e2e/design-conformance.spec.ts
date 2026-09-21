@@ -415,6 +415,14 @@ test.describe('T203: the dashboard header, page tabs and tiles', () => {
       });
     }
 
+    // Page tabs are deleted from Properties, as dashboard.js has it, not from
+    // a row of × under the tabs.
+    await expect(page.getByRole('button', { name: /^Delete page / })).toHaveCount(0);
+    const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+    await sidebar.getByRole('tab', { name: 'Properties' }).click();
+    await expect(sidebar.getByRole('heading', { name: 'Page tabs', level: 3 })).toBeVisible();
+    await expect(sidebar.getByRole('button', { name: 'Delete page Appendix' })).toBeVisible();
+
     // The tile's ⋯ menu, which editing brings: the same 26 px icon button.
     expect(
       await tileActionStyle(page.locator('[data-tile="tile-status"] .tile-menu > button')),

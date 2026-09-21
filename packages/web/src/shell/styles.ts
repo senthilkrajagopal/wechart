@@ -1137,8 +1137,16 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   color: var(--wc-text-primary);
   border-bottom-color: var(--wc-accent);
 }
-.page-tabs__actions { display: flex; gap: 8px; padding: 0 24px; }
-.page-tabs__actions button,
+/* A dashboard's page tabs in Properties, each with Delete (AC-060, AC-187). */
+.page-tabs-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.page-tabs-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  font-size: 12px;
+}
 .tab-group [role='tablist'] button[data-testid^='delete-tab-'] {
   border: 0;
   background: none;

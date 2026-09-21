@@ -584,7 +584,13 @@ describe('an undo for every delete (AC-060)', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
-    // A page tab: neither the Delete key nor a tile's ⋯ menu reaches one.
+    // A page tab: neither the Delete key nor a tile's ⋯ menu reaches one. It
+    // is deleted from Properties, as the prototype has it (AC-187).
+    await userEvent.click(
+      within(screen.getByRole('complementary', { name: 'Edit sidebar' })).getByRole('tab', {
+        name: 'Properties',
+      }),
+    );
     await userEvent.click(screen.getByTestId('delete-page-p2'));
     expect(screen.getByTestId('undo-toast').textContent).toContain('Appendix');
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).not.toContain('Appendix');

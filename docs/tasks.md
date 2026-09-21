@@ -1967,7 +1967,11 @@ Each task below measures its components' computed styles in `e2e/design-conforma
       - The theme toggle has both `aria-pressed` and a name that changes with the state, and `ThemeToggle.test.tsx` asserts `aria-pressed`.
       - The Add palette's entries lack the prototype's icons.
       - The image upload is a native file input where the prototype has a button.
-      - The page-tab delete buttons (AC-060) still form their own row under the tabs. The prototype puts that action in the sidebar's Dashboard section.
+      - ~~The page-tab delete buttons (AC-060) still form their own row under the tabs.~~ **Done 2026-09-21:** they moved into the sidebar's Properties as a "Page tabs" section, each tab listed with Delete, as the prototype's Properties › Dashboard › Page tabs has them.
+        - The section always shows, below the selected tile's own settings. Once a tile is selected there is no way back to none, and deleting a page must not wait on that.
+        - The undo toast's state moved up to `DashboardView` to reach it.
+        - The three tests that delete a page now open Properties first; their assertions are unchanged.
+        - `design-conformance.spec.ts` asserts there are no Delete page buttons outside Properties, and that "Page tabs" with "Delete page Appendix" is there.
 
 - [x] T206 (AC-188) Write time values by their granularity in axes, labels, tooltips and tables
   - Files: `packages/core/src/format.ts`, `packages/core/src/format.test.ts`, `packages/charts/src/axis.ts`, `packages/charts/src/tooltip.ts`, `packages/web/src/tiles/DataTable.tsx`, `e2e/dashboard.spec.ts`
