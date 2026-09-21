@@ -1014,10 +1014,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/charts/src/interaction/keyboardMarking.ts`, `packages/charts/src/interaction/keyboardMarking.test.ts`
   - Failing test: `keyboardMarking.test.ts`: arrow keys move between items without changing the marking, Space marks the focused item, Ctrl/⌘+Space toggles it and Shift+arrows extend the marking (AC-100).
   - Depends on: T102
-- [ ] T107 (AC-101) Announce marking changes in a polite live region
+- [x] T107 (AC-101) Announce marking changes in a polite live region
   - Files: `packages/web/src/dashboard/markings/LiveRegion.tsx`, `packages/web/src/dashboard/markings/LiveRegion.test.tsx`
   - Failing test: `LiveRegion.test.tsx`: each marking change announces the marking's name, the number of marked items and the source tile (AC-101).
   - Depends on: T101
+  - Done 2026-09-20. AC-101 ticked.
+  - **Why the criterion singles out the count.** Marking is otherwise an entirely visual event — items fade, an outline appears — so this is the only channel carrying it to someone not watching the chart. "Marking changed" *is* an announcement and says nothing anyone can act on. Mutation-verified: dropping the count fails four tests.
+  - **The region renders even when empty.** Assistive technology watches the node, and a live region added at the same moment as its content is commonly not announced at all — so returning `null` for an empty message would make the *first* announcement of a session silently vanish. Mutation-verified, and it is the kind of bug that never reproduces for whoever wrote it.
+  - **Clearing says "cleared", not "0 items marked".** The zero is arithmetically right and reads as a failure; clearing is something the user did on purpose, so the announcement confirms the act. The marking is still named, because four can be live at once and "cleared" alone leaves them guessing which one went.
+  - **Polite, not assertive**: marking is something the user has just done, and interrupting someone to report their own action is what makes people switch live regions off. `aria-atomic` so "3 items" becoming "4 items" reads as a sentence rather than as the word that changed.
 - [x] T108 (AC-102) Refuse items past the 1,000-item limit, exempting "Mark all"
   - Files: `packages/core/src/markings/limit.ts`, `packages/core/src/markings/limit.test.ts`, `packages/core/src/index.ts`
   - Failing test: `limit.test.ts`: adding past 1,000 items is refused with an explanation, while "Mark all" succeeds because it stores the tile's filter rather than a list (AC-102).
