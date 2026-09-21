@@ -108,6 +108,15 @@ export interface DashboardViewProps {
    */
   readonly onEditStart?: (() => void) | undefined;
   /**
+   * The tile the URL names as open in the chart editor (T196, AC-002). A
+   * reload, or the browser's Forward, that brings one in opens the editor on
+   * its chart; one that goes — the browser's Back — closes the editor the way
+   * its own Back does, keeping the change.
+   */
+  readonly editTile?: string | undefined;
+  /** Name a tile in the URL as the one open in the editor, or none. */
+  readonly onEditTile?: ((tileId: string | undefined) => void) | undefined;
+  /**
    * Saving the dashboard. Receives it with no chart drafts on it: drafts are
    * the session's, and a save sends the whole document (T032).
    */
@@ -536,6 +545,11 @@ interface OpenChart {
   readonly rows: number | undefined;
   /** A selector for the control that opened it: the tile for E, the pencil for a click. */
   readonly returnTo: string;
+  /**
+   * Opened because the URL names the tile — a reload, or the browser's
+   * Forward — so the URL needs no change (T196).
+   */
+  readonly fromUrl?: boolean;
 }
 
 /** Ids only have to be unique within a document; Date.now alone collides. */
@@ -549,6 +563,8 @@ export function DashboardView({
   loading = false,
   formats,
   onEditStart,
+  editTile,
+  onEditTile,
   onSave,
 }: DashboardViewProps) {
   /**
@@ -587,10 +603,21 @@ export function DashboardView({
    * opening a page is not a change to the dashboard.
    */
   const [editingChart, setEditingChart] = useState<{
+    /** The tile it was opened from, which the URL names (T196). */
+    readonly tileId: string;
     readonly chartId: string;
     readonly tile: TileSize | undefined;
     readonly returnTo: string;
   } | null>(null);
+
+  /**
+   * The editor has closed by its own Back or Save: take the tile out of the
+   * URL, if it is still there. Not when the browser's Back closed it — the
+   * URL has already moved on (T196).
+   */
+  const closeInUrl = () => {
+    if (editTile !== undefined) onEditTile?.(undefined);
+  };
 
   /**
    * Where focus goes once the dashboard is back after the editor closes
@@ -647,12 +674,16 @@ export function DashboardView({
      * drawn at the old height inside it — the preview ignoring the tile's
      * height, which is AC-034's failing state.
      */
-    ({ tileId, chartId, rows, returnTo }: OpenChart) => {
+    ({ tileId, chartId, rows, returnTo, fromUrl = false }: OpenChart) => {
       const box = globalThis.document
         .querySelector(`[data-tile="${CSS.escape(tileId)}"]`)
         ?.getBoundingClientRect();
 
+      // Named in the URL, so a reload reopens it and the browser's Back
+      // closes it (T196, AC-002).
+      if (!fromUrl) onEditTile?.(tileId);
       setEditingChart({
+        tileId,
         chartId,
         returnTo,
         tile:
@@ -665,7 +696,7 @@ export function DashboardView({
               },
       });
     },
-    [],
+    [onEditTile],
   );
 
   /**
@@ -805,12 +836,17 @@ export function DashboardView({
             dashboardTitle={session.document.title}
             tile={editingChart.tile}
             draft={session.document.chartDrafts?.[editingChart.chartId]}
+            // The browser's Back takes the tile out of the URL; the editor
+            // then leaves as its own Back would, keeping the change (T196).
+            tileId={editingChart.tileId}
+            urlTile={editTile}
             onBack={(draft) => {
               if (draft !== undefined) {
                 session.change(withDraft(session.document, editingChart.chartId, draft));
               }
               returnFocus.current = editingChart.returnTo;
               setEditingChart(null);
+              closeInUrl();
             }}
             /**
              * "Save dashboard" (direction.md §2: "applies the chart and saves
@@ -822,6 +858,7 @@ export function DashboardView({
             onSaveDashboard={(draft) => {
               returnFocus.current = editingChart.returnTo;
               setEditingChart(null);
+              closeInUrl();
               session.save(
                 draft === undefined
                   ? session.document
@@ -850,6 +887,8 @@ export function DashboardView({
             session={session}
             charts={charts}
             onEditChart={openEditor}
+            editTile={editTile}
+            editorOpenFor={editingChart?.tileId}
             where={where}
             onAim={(next) => {
               setSelected(next.selected);
@@ -902,6 +941,8 @@ function DashboardPages({
   session,
   charts,
   onEditChart,
+  editTile,
+  editorOpenFor,
   where,
   onAim,
   onOpenPage,
@@ -915,6 +956,10 @@ function DashboardPages({
    * chart at its size; it used to be dropped on the way through.
    */
   onEditChart?: ((open: OpenChart) => void) | undefined;
+  /** The tile the URL names as open in the editor (T196). */
+  editTile?: string | undefined;
+  /** The tile the editor is open on now, if it is open. */
+  editorOpenFor?: string | undefined;
   /** Where the next insert is aimed, owned above so the sidebar agrees. */
   where: { selected: string | null; addTarget: string | null; pageId: string };
   onAim: (next: { selected: string | null; addTarget: string | null }) => void;
@@ -924,6 +969,32 @@ function DashboardPages({
   // Which page is open is owned above, so the Add panel adds to the page the
   // user is actually looking at.
   const open = where.pageId;
+
+  /**
+   * The URL naming a tile the editor is not open on — a reload, or the
+   * browser's Forward (T196, AC-002): open it, as its pencil would, entering
+   * edit mode first. Only when the named tile *changes*, not whenever the two
+   * differ: closing the editor takes the tile out of the URL a moment after
+   * the editor has gone, and in that moment they differ too.
+   */
+  const lastEditTile = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (editTile === lastEditTile.current) return;
+    lastEditTile.current = editTile;
+    if (editTile === undefined || editTile === editorOpenFor || onEditChart === undefined) return;
+
+    const chartId = chartIdOf(document, editTile);
+    if (chartId === undefined) return;
+    session.edit();
+    const element = elementAt(document, editTile);
+    onEditChart({
+      tileId: editTile,
+      chartId,
+      rows: element !== null && isTile(element) ? element.h : undefined,
+      returnTo: `[data-edit-chart="${CSS.escape(editTile)}"]`,
+      fromUrl: true,
+    });
+  }, [editTile, editorOpenFor, onEditChart, document, session]);
 
   /** What the last delete took, for the toast (AC-060). */
   const [deleted, setDeleted] = useState('');

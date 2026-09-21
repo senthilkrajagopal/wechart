@@ -37,7 +37,7 @@ Traces to: `[R2]`, `[docs/inputs §8]`, direction.md §2.
 
 - [x] AC-001 WHEN the application loads, THE SYSTEM SHALL show a top bar whose workspace switcher lists exactly Explore, Model, Data sources, Jobs, Schedules and Security.
       Fails when: the switcher shows a "Dashboards" entry, or any of the six entries is absent.
-- [ ] AC-002 WHEN the user opens a workspace, a dashboard, a chart or a model file, THE SYSTEM SHALL change the URL so that reloading it restores the same surface and the same selected object.
+- [x] AC-002 WHEN the user opens a workspace, a dashboard, a chart or a model file, THE SYSTEM SHALL change the URL so that reloading it restores the same surface and the same selected object.
       Fails when: after reload the application shows a different workspace, dashboard, chart or file than the URL names.
 - [x] AC-003 WHEN the user switches the theme, THE SYSTEM SHALL re-render the current surface in the other theme without changing the route or losing scroll position.
       Fails when: the route changes, the scroll position resets, or any element keeps the previous theme's background colour after the switch.

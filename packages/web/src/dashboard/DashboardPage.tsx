@@ -112,9 +112,13 @@ interface SaveVariables {
 
 export interface DashboardPageProps {
   readonly dashboardId: string;
+  /** The tile whose chart the URL has open in the editor (T196, AC-002). */
+  readonly editTile?: string | undefined;
+  /** Put a tile in the URL as the one open in the editor, or none (T196). */
+  readonly onEditTile?: ((tileId: string | undefined) => void) | undefined;
 }
 
-export function DashboardPage({ dashboardId }: DashboardPageProps) {
+export function DashboardPage({ dashboardId, editTile, onEditTile }: DashboardPageProps) {
   const saved = useQuery({
     queryKey: ['dashboard', dashboardId],
     // Parsed here rather than during render: a body that cannot be read
@@ -156,6 +160,8 @@ export function DashboardPage({ dashboardId }: DashboardPageProps) {
       document={document}
       dashboardId={dashboardId}
       version={saved.data?.version ?? 1}
+      editTile={editTile}
+      onEditTile={onEditTile}
     />
   );
 }
@@ -169,10 +175,14 @@ function LoadedDashboard({
   document,
   dashboardId,
   version,
+  editTile,
+  onEditTile,
 }: {
   document: DashboardDocument;
   dashboardId: string;
   version: number;
+  editTile: string | undefined;
+  onEditTile: ((tileId: string | undefined) => void) | undefined;
 }) {
   const queryClient = useQueryClient();
   const [saveFailed, setSaveFailed] = useState('');
@@ -355,6 +365,8 @@ function LoadedDashboard({
         // The save's outcome goes back to the session: it leaves edit mode when
         // the save resolves, and keeps every change when it rejects (AC-184).
         // The rejection is the session's to handle; why is shown above.
+        editTile={editTile}
+        onEditTile={onEditTile}
         onEditStart={() => {
           setEditBase(version);
         }}

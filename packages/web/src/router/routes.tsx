@@ -5,8 +5,10 @@ import {
   Outlet,
   redirect,
   useParams,
+  useRouter,
 } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { useRef } from 'react';
 
 import { DashboardPage } from '../dashboard/DashboardPage';
 import { ChartEditor } from '../editor/ChartEditor';
@@ -75,14 +77,50 @@ function SelectedObject({ workspace, label }: { workspace: WorkspaceId; label: s
   );
 }
 
-/** The dashboard, in view mode with its saved pages, tiles and settings (AC-018). */
+/**
+ * The dashboard, in view mode with its saved pages, tiles and settings
+ * (AC-018) — and, when the URL names a tile in `edit`, its chart open in the
+ * editor over it (T196, AC-002), so a reload restores that too.
+ */
 function DashboardSurface() {
   const params = useParams({ strict: false }) as { objectId?: string };
   const dashboardId = decodeURIComponent(params.objectId ?? '');
+  const { edit } = dashboardRoute.useSearch();
+  const navigate = dashboardRoute.useNavigate();
+  const router = useRouter();
+
+  /**
+   * Whether the `edit` entry in history is ours — pushed when the editor was
+   * opened here — so closing the editor can step back over it rather than
+   * leave it behind for the browser's Back to reopen. After a reload there is
+   * no entry of ours before it, and closing replaces instead.
+   */
+  const pushed = useRef(false);
+
+  const onEditTile = (tileId: string | undefined) => {
+    // Search-only navigations keep the dashboard mounted, and its edit
+    // session with it; the window is not scrolled to the top (research:
+    // router-search-history.md, Q4 and Q8).
+    if (tileId !== undefined) {
+      pushed.current = true;
+      void navigate({ search: (prev) => ({ ...prev, edit: tileId }), resetScroll: false });
+      return;
+    }
+    if (pushed.current) {
+      pushed.current = false;
+      router.history.back();
+      return;
+    }
+    void navigate({
+      search: (prev) => ({ ...prev, edit: undefined }),
+      replace: true,
+      resetScroll: false,
+    });
+  };
 
   return (
     <AppShell workspace="explore">
-      <DashboardPage dashboardId={dashboardId} />
+      <DashboardPage dashboardId={dashboardId} editTile={edit} onEditTile={onEditTile} />
     </AppShell>
   );
 }
@@ -90,6 +128,15 @@ function DashboardSurface() {
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/explore/dashboards/$objectId',
+  /**
+   * `edit`, the tile whose chart is open in the editor (T196). Always returned,
+   * as undefined when absent or not a tile id: omitted, a malformed value would
+   * reach the page untyped; thrown, the dashboard and its edit session would
+   * be replaced by an error (research: router-search-history.md, Q1).
+   */
+  validateSearch: (search: Record<string, unknown>): { edit?: string | undefined } => ({
+    edit: typeof search['edit'] === 'string' && search['edit'] !== '' ? search['edit'] : undefined,
+  }),
   component: DashboardSurface,
 });
 

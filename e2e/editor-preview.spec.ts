@@ -52,8 +52,8 @@ test('the pencil opens the editor over the dashboard, in edit mode, with a way b
   await expect(overlay(page).getByRole('heading', { name: 'Chart editor' })).toBeVisible();
   await expect(page.getByTestId('editor-back')).toHaveText('← Back to Company dashboard 01');
   // The dashboard was not left for another page: the path is still the
-  // dashboard's. (The path, not the whole URL, which T196 will give an
-  // `?edit=` so a reload and the browser's Back both work.)
+  // dashboard's. (The path, not the whole URL, which names the tile in
+  // `?edit=` so a reload and the browser's Back both work — T196, below.)
   expect(new URL(page.url()).pathname).toBe(DASHBOARD);
 
   await page.getByTestId('editor-back').click();
@@ -61,6 +61,66 @@ test('the pencil opens the editor over the dashboard, in edit mode, with a way b
   // Back on the dashboard — and in edit mode, which the pencil entered.
   await expect(overlay(page)).toBeHidden();
   await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
+});
+
+/**
+ * T196 / AC-002: WHEN the user opens a workspace, a dashboard, a chart or a
+ * model file, THE SYSTEM SHALL change the URL so that reloading it restores the
+ * same surface and the same selected object.
+ *
+ * The chart editor opened from a tile is a surface over the dashboard, so the
+ * URL names it — `?edit=<tile>` — a reload restores it, and the browser's Back
+ * closes it the way the editor's own Back does: keeping the change.
+ */
+test.describe('the chart editor in the URL (AC-002)', () => {
+  const editUrl = (page: Page) => new URL(page.url()).searchParams.get('edit');
+
+  test('opening it from a tile names the tile in the URL; going back removes it', async ({
+    page,
+  }) => {
+    await open(page);
+    await openEditorFromPencil(page);
+    await expect.poll(() => editUrl(page)).toBe('tile-status');
+    expect(new URL(page.url()).pathname).toBe(DASHBOARD);
+
+    await page.getByTestId('editor-back').click();
+    await expect(overlay(page)).toBeHidden();
+    await expect.poll(() => editUrl(page)).toBeNull();
+  });
+
+  test('reloading it reopens the editor on that tile’s chart, in edit mode', async ({ page }) => {
+    await open(page);
+    await openEditorFromPencil(page);
+    await expect.poll(() => editUrl(page)).toBe('tile-status');
+
+    await page.reload();
+
+    await expect(overlay(page)).toBeVisible();
+    await expect(page.getByTestId('in-dimensions-products.category')).toBeVisible();
+    await page.getByTestId('editor-back').click();
+    await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
+    await expect.poll(() => editUrl(page)).toBeNull();
+  });
+
+  test('the browser’s Back closes it and keeps the change, as its own Back does', async ({
+    page,
+  }) => {
+    await open(page);
+    await openEditorFromPencil(page);
+    await expect.poll(() => editUrl(page)).toBe('tile-status');
+    await page.getByLabel('Chart type').selectOption('stackedBar');
+
+    await page.goBack();
+
+    await expect(overlay(page)).toBeHidden();
+    expect(new URL(page.url()).pathname).toBe(DASHBOARD);
+    await expect(page.locator(TILE).getByTestId('chart-canvas')).toHaveAttribute(
+      'data-chart-type',
+      'stackedBar',
+    );
+    // Still the same edit session, the change in it.
+    await expect(discard(page)).toHaveText('Discard (1 change)');
+  });
 });
 
 test('the preview starts at the tile’s own width and height', async ({ page }) => {

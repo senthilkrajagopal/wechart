@@ -41,6 +41,14 @@ export interface ChartEditorOverlayProps {
   readonly saveBlocked: (
     pending: Pick<ChartDraft, 'document' | 'version'> | undefined,
   ) => string | undefined;
+  /** The tile it was opened from (T196). */
+  readonly tileId?: string;
+  /**
+   * The tile the URL names as open in the editor. Once it has named this
+   * editor's tile, its going — the browser's Back — closes the editor the way
+   * its own Back does, keeping the change (T196, AC-002).
+   */
+  readonly urlTile?: string | undefined;
 }
 
 /** Runs a chart's query for its draft — exactly as a dashboard tile runs it. */
@@ -72,6 +80,8 @@ export function ChartEditorOverlay({
   onBack,
   onSaveDashboard,
   saveBlocked,
+  tileId,
+  urlTile,
 }: ChartEditorOverlayProps) {
   /**
    * **A chart already drafted opens on its draft**, not on what is stored.
@@ -168,6 +178,22 @@ export function ChartEditorOverlay({
     [opened],
   );
   const back = useCallback(() => leave(onBack), [leave, onBack]);
+
+  /**
+   * The browser's Back (T196). Opened from a tile, the editor puts the tile in
+   * the URL a moment after it opens; once it has seen it there, the tile's
+   * going means the user went back, and the editor leaves as its own Back
+   * would — the change kept, not dropped with the overlay.
+   */
+  const seenInUrl = useRef(false);
+  useEffect(() => {
+    if (tileId === undefined) return;
+    if (urlTile === tileId) {
+      seenInUrl.current = true;
+      return;
+    }
+    if (seenInUrl.current) void back();
+  }, [urlTile, tileId, back]);
 
   /**
    * Asked with the chart as it was loaded, not as the edit would write it:
