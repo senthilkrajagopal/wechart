@@ -279,7 +279,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: the stripe does not appear, or the bounds move when a filter changes.
 - [ ] AC-094 WHEN the user clicks an empty plot area, or presses Escape on a focused tile, THE SYSTEM SHALL unmark that tile's marking and leave other markings unchanged.
       Fails when: another marking is cleared, or the marking survives.
-- [ ] AC-095 WHEN a marking changes, THE SYSTEM SHALL update every tile that uses it or is limited by it, on every page tab of the dashboard (direction.md rule 48).
+- [x] AC-095 WHEN a marking changes, THE SYSTEM SHALL update every tile that uses it or is limited by it, on every page tab of the dashboard (direction.md rule 48).
       Fails when: a tile on another page tab still shows the previous marking state when opened.
 - [ ] AC-096 WHEN a tile shows a marking, THE SYSTEM SHALL draw marked items in their own colour with an outline in the marking's colour and fade unmarked items (direction.md rule 49).
       Fails when: unmarked items render at full strength, or marked items carry no outline.

@@ -962,10 +962,16 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/charts/src/interaction/clear.ts`, `packages/charts/src/interaction/clear.test.ts`
   - Failing test: `clear.test.ts`: clicking empty plot area or pressing Escape on a focused tile clears only that tile's marking (AC-094).
   - Depends on: T093
-- [ ] T101 (AC-095) Update every tile that uses or is limited by a marking, on every page tab
-  - Files: `packages/web/src/dashboard/markings/store.ts`, `packages/web/src/dashboard/markings/propagation.test.ts`
+- [x] T101 (AC-095) Update every tile that uses or is limited by a marking, on every page tab
+  - Files: `packages/web/src/dashboard/markings/store.ts`, `packages/web/src/dashboard/markings/propagation.test.ts`, `packages/web/src/dashboard/model/document.ts`
   - Failing test: `propagation.test.ts`: after a marking change, a tile on a different page tab shows the new state when that tab is opened (AC-095).
   - Depends on: T093
+  - Done 2026-09-20. AC-095 ticked.
+  - **Read by tiles, never pushed to them**, which is the whole criterion. Tabs load lazily, so a tile on an unopened tab does not exist yet — and the obvious design, telling each mounted tile when a marking changes, works for everything on screen and silently fails for everything that is not: the tab opens later and renders whatever it was last told, or nothing. Held once and read at render time, a tile that appears afterwards agrees with the ones already there by construction.
+  - **Kept out of the dashboard document**, per rule 54: "Saved dashboards store marking definitions only. Current marks are carried only by a link or a bookmark." What is marked *now* is session state, so it must not make the edit session think the dashboard is dirty.
+  - **`Tile` gains `marksWith` and `limitedBy`.** AC-085 (T091) owns the control that *sets* `marksWith`; the field is here because AC-095 cannot know which tiles a change reaches without it.
+  - **A mutation found an untested claim of mine.** Walking only a tab group's first tab passed every test, because the fixture had no tab group — while a comment in the source claimed closed tabs were covered. A tile in a closed tab is precisely what "still shows the previous marking state when opened" describes, so the fixture now has one and the mutation fails.
+  - **Unresolved: `a11y-tokens.spec.ts` "meets WCAG AA contrast at /jobs" is intermittent.** Seen four times, mostly under full-suite parallel load but once in isolation; it passes on re-run and I have not managed to capture axe's actual violation. I tried hardening the wait (`main` having rendered text) and **that broke 36 tests**, because several audited surfaces legitimately have no text in `main` — reverted. The existing `networkidle` wait and its comment are unchanged. **Next step is to capture the violation, not to harden the wait again.**
 - [ ] T102 (AC-096) Draw marked items with a marking-coloured outline and fade unmarked ones
   - Files: `packages/charts/src/marking/render.ts`, `packages/charts/src/marking/render.test.ts`
   - Failing test: `render.test.ts`: marked items carry their own colour plus the marking's outline and unmarked items render faded, on every chart type that marks (AC-096).

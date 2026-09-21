@@ -60,6 +60,19 @@ export interface Tile extends GridTile {
   readonly chartType?: ChartType;
   /** For markdown, header and link tiles. */
   readonly text?: string;
+  /**
+   * Which marking a chart tile marks with, or absent for "(None)" — a tile
+   * that cannot be marked at all (direction.md rule 44). The control that sets
+   * it is AC-085's (T091); the field is here because AC-095 has to know which
+   * tiles a marking change reaches.
+   */
+  readonly marksWith?: string;
+  /**
+   * Markings that limit what this tile shows — how a details tile follows its
+   * master (direction.md: "Details tiles are limited by markings"). Several,
+   * because AC-098 combines them with AND/OR.
+   */
+  readonly limitedBy?: readonly string[];
 }
 
 export interface Section {
