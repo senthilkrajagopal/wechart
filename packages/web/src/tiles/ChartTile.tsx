@@ -6,6 +6,7 @@ import { ChartCanvas } from './ChartCanvas';
 import { DataTable } from './DataTable';
 import { Kpi } from './Kpi';
 import { PivotTable } from './PivotTable';
+import { TileEmpty } from './TileEmpty';
 
 /**
  * One chart, whatever kind it is (AC-037), and the table behind it (AC-178).
@@ -41,6 +42,11 @@ export interface ChartTileProps {
    * unmount the tile and drop a reader's table view with it.
    */
   readonly busy?: boolean;
+  /**
+   * The filters in effect on this chart, in words — named by the empty state
+   * when the query comes back with no rows (AC-043).
+   */
+  readonly inEffect?: readonly string[] | undefined;
 }
 
 interface ChartBodyProps {
@@ -73,7 +79,14 @@ function ChartBody({ spec, height }: ChartBodyProps) {
   return <ChartCanvas spec={spec} {...(height === undefined ? {} : { height })} />;
 }
 
-export function ChartTile({ spec, height, tableView, onTableViewChange, busy }: ChartTileProps) {
+export function ChartTile({
+  spec,
+  height,
+  tableView,
+  onTableViewChange,
+  busy,
+  inEffect,
+}: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
   const [ownState, setOwnState] = useState(false);
@@ -87,6 +100,20 @@ export function ChartTile({ spec, height, tableView, onTableViewChange, busy }: 
   // there would be a control that does nothing.
   const canSwitch = spec.chartType !== 'table';
   const showingTable = asTable && canSwitch;
+
+  // No rows: said in words, whatever the chart type (AC-043) — not blank
+  // axes, and no table switch, since there is no data behind either view.
+  if (spec.rows.length === 0) {
+    return (
+      <div
+        className={busy === true ? 'chart-tile chart-tile--busy' : 'chart-tile'}
+        data-testid="chart-tile"
+        aria-busy={busy === true ? true : undefined}
+      >
+        <TileEmpty inEffect={inEffect} />
+      </div>
+    );
+  }
 
   return (
     <div

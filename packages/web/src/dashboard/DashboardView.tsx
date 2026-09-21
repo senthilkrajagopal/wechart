@@ -32,6 +32,7 @@ import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
 import { activeFilters, type ActiveFilter } from '../filters/apply';
 import { coverageOf, type Reach } from '../filters/coverage';
+import { describeFilter } from '../filters/describe';
 import { NotCovered } from '../filters/NotCovered';
 import { FilterBar } from '../filters/FilterBar';
 import { FilteredCharts, keepLastAnswers, type FilteredResults } from '../filters/FilteredCharts';
@@ -113,6 +114,8 @@ export interface DashboardViewProps {
    * is taken to reach every chart.
    */
   readonly reach?: Reach | undefined;
+  /** A field's title in the model, which names a filter in words (AC-043). */
+  readonly memberTitle?: ((member: string) => string | undefined) | undefined;
   /**
    * Each member's number format from the Cube model (AC-046). Applied here,
    * after any chart edited from a tile has replaced its saved spec, so a
@@ -170,6 +173,7 @@ function TileBody({
   error,
   loading,
   busy = false,
+  inEffect,
 }: {
   tile: Tile;
   spec: RenderSpec | undefined;
@@ -177,6 +181,8 @@ function TileBody({
   loading: boolean;
   /** A filtered answer is on its way (AC-078): what is drawn stays, marked busy. */
   busy?: boolean;
+  /** The filters in effect on it, in words (AC-043). */
+  inEffect?: readonly string[] | undefined;
 }) {
   switch (tile.kind) {
     case 'chart':
@@ -212,6 +218,7 @@ function TileBody({
         <ChartTile
           spec={spec}
           busy={busy}
+          inEffect={inEffect}
           {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
         />
       );
@@ -244,6 +251,8 @@ interface TileCharts {
   readonly pending?: ReadonlySet<string>;
   /** Charts in a filter's scope that cannot reach its field (AC-079), with those filters. */
   readonly notCovered?: Readonly<Record<string, readonly ActiveFilter[]>>;
+  /** Each filtered chart's filters, in words, for its empty state (AC-043). */
+  readonly inEffect?: Readonly<Record<string, readonly string[]>>;
 }
 
 interface Affordances {
@@ -412,6 +421,7 @@ function Elements({
               error={charts.errors[chartId]}
               loading={charts.loading}
               busy={charts.pending?.has(chartId) === true}
+              inEffect={charts.inEffect?.[chartId]}
             />
           </>
         );
@@ -615,6 +625,7 @@ export function DashboardView({
   loading = false,
   documents,
   reach,
+  memberTitle,
   formats,
   onEditStart,
   editTile,
@@ -727,12 +738,31 @@ export function DashboardView({
   // The assignment is held across renders, so a filter that hides a member
   // does not hand its colour to whoever is now first (AC-039).
   const coloured = useDashboardColours(document, formatted);
+  /**
+   * Each filtered chart's filters in words, for the empty state (AC-043):
+   * named by the field each was set on — the filter bar's field, not the name
+   * a view takes it by.
+   */
+  const inEffect = useMemo(() => {
+    const setOn = new Map((live.filters ?? []).map((filter) => [filter.id, filter.member ?? '']));
+    return Object.fromEntries(
+      Object.entries(reached).map(([chartId, applied]) => [
+        chartId,
+        applied.map(({ filter, value }) => {
+          const field = setOn.get(filter.id) ?? filter.member ?? '';
+          return describeFilter(memberTitle?.(field) ?? field, value);
+        }),
+      ]),
+    );
+  }, [reached, live.filters, memberTitle]);
+
   const charts: TileCharts = {
     specs: coloured,
     errors: withFiltered.errors,
     loading,
     pending: withFiltered.pending,
     notCovered,
+    inEffect,
   };
 
   /**

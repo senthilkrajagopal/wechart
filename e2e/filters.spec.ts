@@ -570,6 +570,41 @@ test('a view takes a filter on a cube field it offers, by its own name for it', 
 });
 
 /**
+ * T050 / AC-043: WHEN a query returns no rows, THE SYSTEM SHALL show an empty
+ * state naming the filters that are in effect.
+ * Fails when: the tile renders blank axes with no message, or the message
+ * omits an active filter.
+ *
+ * The seed's orders run to 2026-08-29, so none was placed today; with a
+ * status picked as well, both filters are in effect on the empty tile.
+ */
+test('a filtered tile with no rows says so, naming every filter in effect', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await makeTwoTabDashboard(request, [
+    { id: 'f-status', widget: 'checkbox', member: 'orders.status' },
+    { id: 'f-ordered', widget: 'dateRange', member: 'orders.ordered_at' },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const sales = page.locator('[data-tile="tile-sales"]');
+  await expect(sales.getByTestId('chart-canvas')).toBeVisible();
+
+  await filterBar(page).getByRole('checkbox', { name: 'shipped' }).check();
+  await filterBar(page).getByLabel(ORDERED_AT, { exact: true }).selectOption('today');
+
+  const empty = sales.getByTestId('tile-no-rows');
+  await expect(empty).toBeVisible();
+  await expect(empty.getByRole('listitem')).toHaveText([
+    'Orders Status is shipped',
+    `${ORDERED_AT}: today`,
+  ]);
+  // No blank axes behind it.
+  await expect(sales.getByTestId('chart-canvas')).toHaveCount(0);
+});
+
+/**
  * T086 / AC-080: WHEN the user clears a filter, THE SYSTEM SHALL return every
  * tile in its scope to the unfiltered result.
  * Fails when: any tile still reflects the cleared filter.

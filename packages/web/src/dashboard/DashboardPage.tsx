@@ -5,6 +5,7 @@ import { readChartDocument, type ChartDocument, type RenderSpec } from '@wechart
 import { loadTile } from '../query/loadTile';
 import { META_QUERY } from '../query/meta';
 import { reachFrom } from '../filters/coverage';
+import { allMembers } from '../filters/FilterBar';
 import type { FilterValues } from '../filters/model';
 import { formatsFrom, tileChartOf, type TileChart } from './chartSpec';
 import { DashboardView } from './DashboardView';
@@ -359,6 +360,11 @@ function LoadedDashboard({
   // Which fields reach which cubes and views, for filters (AC-079). Until the
   // model arrives it cannot say, and no filter is applied or marked.
   const reach = useMemo(() => reachFrom(meta.data), [meta.data]);
+  // Fields by the titles the filter bar shows, to name filters in words.
+  const memberTitle = useMemo(() => {
+    const titles = new Map(allMembers(meta.data).map((member) => [member.name, member.title]));
+    return (name: string) => titles.get(name);
+  }, [meta.data]);
 
   return (
     <>
@@ -382,6 +388,7 @@ function LoadedDashboard({
         specs={charts.data?.specs ?? {}}
         documents={charts.data?.documents}
         reach={reach}
+        memberTitle={memberTitle}
         formats={formats}
         errors={charts.data?.errors ?? {}}
         loading={charts.isPending}

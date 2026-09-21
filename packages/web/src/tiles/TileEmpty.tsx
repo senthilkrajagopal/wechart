@@ -1,0 +1,25 @@
+/**
+ * A chart whose query came back with no rows (AC-043): said in words, with
+ * every filter in effect named — so a reader can tell "nothing matches these
+ * filters" from "nothing there at all" — rather than blank axes, which read as
+ * a chart that failed to draw.
+ */
+export function TileEmpty({ inEffect = [] }: { inEffect?: readonly string[] | undefined }) {
+  return (
+    <div className="tile-no-rows" data-testid="tile-no-rows" role="status">
+      <p className="tile-no-rows__headline">No rows to show.</p>
+      {inEffect.length === 0 ? (
+        <p>The query returned no rows.</p>
+      ) : (
+        <>
+          <p>Nothing matches the filters in effect:</p>
+          <ul>
+            {inEffect.map((filter) => (
+              <li key={filter}>{filter}</li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
