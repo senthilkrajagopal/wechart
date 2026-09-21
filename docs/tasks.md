@@ -1160,10 +1160,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/core/src/query/compose.ts`, `packages/core/src/query/compose.test.ts`
   - Failing test: `compose.test.ts`: a row satisfying only the filter or only the marking limit is excluded from the composed query (AC-082).
   - Depends on: T084, T113
-- [ ] T089 (AC-083) Send relative date presets to Cube as relative ranges
+- [x] T089 (AC-083) Send relative date presets to Cube as relative ranges
   - Files: `packages/core/src/query/dateRange.ts`, `packages/core/src/query/dateRange.test.ts`
   - Failing test: `dateRange.test.ts`: "last 30 days" produces a relative `dateRange`, not fixed dates (AC-083).
   - Depends on: T082
+  - **Built with T084, demonstrated 2026-09-21.** The translation is in `packages/web/src/filters/apply.ts` (`withFilters`), not in core. It turns a filter's value into Cube query terms, so it lives with the other filter kinds, and no other package sends dashboard filters. A preset goes into `timeDimensions[].dateRange` as its words, or into an `inDateRange` filter's values where the chart already limits that field. Its words are the ones Cube v1.7.42 was observed to resolve (`docs/research/cube/data-apis.md`).
+  - **Tests:** `apply.test.ts` "every preset as its own words, wherever it goes — never as dates" (all twelve, both routes). `e2e/filters.spec.ts` "a relative preset is sent to Cube as those words, not as dates": on the real app the query sent carries `dateRange: 'last 30 days'`, Cube answers it, and the tile draws with no error. These were not red first, because T084 had already built the behaviour. **Mutation-verified instead:** with presets sent as two fixed dates, three `apply.test.ts` tests fail.
+  - **Done 2026-09-21. AC-083 ticked** — both tests above.
 
 ## F10. Markings
 

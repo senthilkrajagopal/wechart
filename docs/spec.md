@@ -259,7 +259,7 @@ Traces to: `[docs/inputs §2]`, direction.md §7, rule 14.
       Fails when: opening the URL in a new session produces different filter values.
 - [ ] AC-082 THE SYSTEM SHALL combine dashboard, tab and tile filters with marking limits using AND (direction.md rule 20).
       Fails when: a tile's rows satisfy only one of the two and are still shown.
-- [ ] AC-083 WHEN a date filter uses a relative preset such as "last 30 days", THE SYSTEM SHALL send it to Cube as that relative range rather than as fixed dates.
+- [x] AC-083 WHEN a date filter uses a relative preset such as "last 30 days", THE SYSTEM SHALL send it to Cube as that relative range rather than as fixed dates.
       Fails when: the query contains fixed dates for a relative preset.
 
 ## F10. Markings

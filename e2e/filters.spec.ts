@@ -272,6 +272,41 @@ test('a value re-queries the tiles in its scope, and a tab’s filter leaves the
 });
 
 /**
+ * T089 / AC-083: WHEN a date filter uses a relative preset such as "last 30
+ * days", THE SYSTEM SHALL send it to Cube as that relative range rather than
+ * as fixed dates.
+ * Fails when: the query contains fixed dates for a relative preset.
+ */
+test('a relative preset is sent to Cube as those words, not as dates', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await makeTwoTabDashboard(request, [
+    { id: 'f-ordered', widget: 'dateRange', member: 'orders.ordered_at' },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const sales = page.locator('[data-tile="tile-sales"]');
+  await expect(sales.getByTestId('chart-canvas')).toBeVisible();
+
+  const sent = page.waitForRequest((request) => {
+    if (!request.url().endsWith('/api/load')) return false;
+    const { query } = request.postDataJSON() as { query: Record<string, unknown> };
+    return query['timeDimensions'] !== undefined;
+  });
+  await filterBar(page).getByLabel(ORDERED_AT, { exact: true }).selectOption('last 30 days');
+
+  const { query } = (await sent).postDataJSON() as { query: Record<string, unknown> };
+  expect(query['timeDimensions']).toEqual([
+    { dimension: 'orders.ordered_at', dateRange: 'last 30 days' },
+  ]);
+  // Cube answered it: the tile draws its chart, not "Could not load this chart".
+  await expect(sales.getByTestId('chart-tile')).not.toHaveAttribute('aria-busy', 'true');
+  await expect(sales.getByTestId('chart-tile')).toBeVisible();
+  await expect(sales.getByRole('alert')).toHaveCount(0);
+});
+
+/**
  * T086 / AC-080: WHEN the user clears a filter, THE SYSTEM SHALL return every
  * tile in its scope to the unfiltered result.
  * Fails when: any tile still reflects the cleared filter.

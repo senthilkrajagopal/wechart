@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { DashboardDocument } from '../dashboard/model/document';
 import { activeFilters, filteredCharts, withFilters } from './apply';
-import { valueKeyOf, type DashboardFilter, type FilterValues } from './model';
+import { DATE_PRESETS, valueKeyOf, type DashboardFilter, type FilterValues } from './model';
 
 /**
  * T084 / AC-078: WHEN a filter value changes, THE SYSTEM SHALL re-query every
@@ -156,6 +156,32 @@ describe('what a filter adds to a query', () => {
         { member: 'orders.ordered_at', operator: 'beforeOrOnDate', values: ['2026-03-31'] },
       ],
     });
+  });
+
+  /**
+   * T089 / AC-083: WHEN a date filter uses a relative preset such as "last 30
+   * days", THE SYSTEM SHALL send it to Cube as that relative range rather than
+   * as fixed dates.
+   * Fails when: the query contains fixed dates for a relative preset.
+   */
+  it('every preset as its own words, wherever it goes — never as dates', () => {
+    for (const preset of DATE_PRESETS) {
+      const value = { kind: 'preset', preset } as const;
+      expect(withFilters({ measures: ['orders.count'] }, [{ filter: ordered, value }])).toEqual({
+        measures: ['orders.count'],
+        timeDimensions: [{ dimension: 'orders.ordered_at', dateRange: preset }],
+      });
+      // Where the chart already limits the field, as an inDateRange filter.
+      expect(
+        withFilters(
+          {
+            measures: ['orders.count'],
+            timeDimensions: [{ dimension: 'orders.ordered_at', dateRange: 'this year' }],
+          },
+          [{ filter: ordered, value }],
+        )['filters'],
+      ).toEqual([{ member: 'orders.ordered_at', operator: 'inDateRange', values: [preset] }]);
+    }
   });
 
   it('nothing, and the same query back, when no filter applies', () => {
