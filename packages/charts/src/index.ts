@@ -41,3 +41,10 @@ export {
   type ItemStyle,
   type TileMarking,
 } from './marking/render';
+export {
+  isAdditive,
+  partialMark,
+  type MarkColours,
+  type PartialMark,
+  type PartlyMarked,
+} from './marking/partial';
