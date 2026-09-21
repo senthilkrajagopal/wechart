@@ -193,9 +193,11 @@ Two further changes made at the same time, neither of them a contrast failure:
 
 **Marking colours.**
 
-- Validated with `validate_palette.js` against every categorical slot and `other`, pair by pair, in both themes.
+- Validated with `validate_palette.js` against every categorical slot and `other`, pair by pair, in both themes. **That script is not in this repository**, so the figures below cannot be re-run and are historical notes rather than expected test output. The live check is `packages/ui/src/audit/markingPalette.test.ts` (AC-099), whose numbers are a new measurement; see `docs/research/palette-validation.md`.
 - Each marking is at least ΔE 15 (normal vision) and at least ΔE 8 (protan/deutan simulation) from every series colour. So with "Use separate color for marked items", marked items stay distinguishable from every series.
-- Between markings, dark-mode `mk1`↔`mk4` is ΔE 6.8 under colour-blindness simulation, inside the 6–8 floor band. That is legal only with secondary encoding, which chips and badges provide by always naming the marking.
+- **ΔE here means W3C CSS Color 4's ΔEOK scaled ×100** (user decision, 2026-09-20), on which black→white is 100. Simulation is Viénot, Brettel & Mollon 1999 at full dichromacy. The criterion named none of these, and each changes every number.
+- **The thresholds 15 and 8 are product decisions, not a published standard** — the same footing as the channel-capacity numbers below. No published just-noticeable-difference exists for any OKLab ΔE, and CIELAB's familiar ≈2.3 does not transfer, because CIELAB L\* runs 0–100 where OKLab L runs 0–1.
+- Between markings, dark-mode `mk1`↔`mk4` is ΔE 6.8 under colour-blindness simulation, inside the 6–8 floor band. That is legal only with secondary encoding, which chips and badges provide by always naming the marking. **The 6–8 band is also a product decision** — no source was found for it — and marking↔marking distance is deliberately outside AC-099, which constrains marking-vs-series only.
 - The earlier single `crossfilter`/marking token, `#7a3fb0`, failed against categorical violet `#4a3aa7` (ΔE 9.0), so it is no longer used for markings.
 - Four slots exist. How many markings analyses need at once is still open (`references-markings.md`, open question 7).
 - **Unmarked fade:** opacity 0.28. **Marked outline:** 1.5 px in the marking colour. Spotfire publishes neither value; both are derived here.

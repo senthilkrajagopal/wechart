@@ -78,6 +78,27 @@ export const COLORS = {
   },
 } as const satisfies Palette;
 
+/**
+ * The categorical series ramp, eight slots in fixed order, both themes
+ * (direction.md §5, "Categorical, 8 slots, in fixed order (light / dark)").
+ *
+ * Here rather than in `@wechart/charts` because AC-099 audits it against the
+ * marking tokens above, in both themes, and those live here — a second copy
+ * of eight hex values is eight chances to disagree. `DEFAULT_PALETTE` in
+ * charts is the light ramp, and re-exports this.
+ *
+ * Eight and no more: past eight the recommender facets or folds the tail into
+ * "Other" rather than inventing a ninth hue, because this is the number of
+ * slots that have been validated pairwise.
+ */
+export const CATEGORICAL = {
+  light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'],
+  dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'],
+} as const;
+
+/** The four marking slots, in order, per theme (direction.md §5). */
+export const MARKING_SLOT_KEYS = ['mk1', 'mk2', 'mk3', 'mk4'] as const;
+
 export type ColorTokenName = keyof (typeof COLORS)['light'];
 
 /** Every token that carries text, and so must meet AA on the surfaces below. */

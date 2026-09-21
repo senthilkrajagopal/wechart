@@ -1,3 +1,5 @@
+import { CATEGORICAL } from '@wechart/ui';
+
 /**
  * The renderer's drawing constants, and the loose option type the series
  * modules build.
@@ -35,16 +37,12 @@ export const MARK = {
  * eight the chart facets or folds the tail into "Other" rather than inventing
  * a ninth hue.
  */
-export const DEFAULT_PALETTE = [
-  '#2a78d6',
-  '#eb6834',
-  '#1baf7a',
-  '#eda100',
-  '#e87ba4',
-  '#008300',
-  '#4a3aa7',
-  '#e34948',
-] as const;
+/**
+ * Re-exported from `@wechart/ui` rather than written out again. AC-099 audits
+ * this ramp against the marking tokens, which live there, and a second copy of
+ * eight hex values is eight chances to disagree with the thing being audited.
+ */
+export const DEFAULT_PALETTE = CATEGORICAL.light;
 
 /**
  * direction.md §5's sequential ramp: "a single blue hue, running 100→700".

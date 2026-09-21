@@ -252,6 +252,9 @@ importers:
       '@wechart/core':
         specifier: workspace:*
         version: link:../core
+      '@wechart/ui':
+        specifier: workspace:*
+        version: link:../ui
       echarts:
         specifier: 6.1.0
         version: 6.1.0

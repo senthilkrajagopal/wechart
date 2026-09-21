@@ -8,7 +8,9 @@ export { themeCss } from './css';
 
 export {
   AUDIT_TYPE_TOKEN,
+  CATEGORICAL,
   COLORS,
+  MARKING_SLOT_KEYS,
   TEXT_COLOR_TOKENS,
   TEXT_SURFACE_TOKENS,
   THEMES,
@@ -31,3 +33,17 @@ export {
   type TypeScale,
   type TypeToken,
 } from './audit/contrast';
+
+export {
+  deltaEOK,
+  deltaEUnderDichromacy,
+  hexToSrgb,
+  linearize,
+  oklabFromHex,
+  oklabFromLinear,
+  simulateDichromacy,
+  type Dichromacy,
+  type Lin,
+  type Oklab,
+  type Rgb,
+} from './audit/oklab';

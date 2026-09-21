@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@wechart/core": "workspace:*",
+    "@wechart/ui": "workspace:*",
     "echarts": "6.1.0"
   }
 }
