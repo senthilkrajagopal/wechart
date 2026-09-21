@@ -472,6 +472,17 @@ Traces to: `[R4]`, `[docs/inputs §1]`, direction.md §7c; `[research/cube/pre-a
 Purpose: run and watch pre-aggregation builds, since Cube Core keeps only 24 hours of job records.
 Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube/refresh-jobs-caching.md]`.
 
+> **Status, 2026-09-21: AC-150, AC-153, AC-154 and AC-155 deferred, at the user's direction.**
+> The user: "Lets first integrate what works with cube... and for requirements
+> that dont work with cube defer..". These four need machinery Cube Core has no
+> API for (`research/cube-capabilities.md` §3–4):
+> - build history beyond Cube's 24 hours (a Cloud feature wechart would rebuild);
+> - a scheduler ("Core has no scheduler API"), with its ownership labels and
+>   suspension.
+>
+> Starting a build, the queue, the state badges and deployment health
+> (AC-149, AC-151, AC-152, AC-156) are Cube's own APIs and stay.
+
 - [ ] AC-149 WHEN the user starts a build for a pre-aggregation, THE SYSTEM SHALL submit it to Cube, show the job token, and poll until the job reports done, missing partition, failure or not found.
       Fails when: the job's terminal state is never shown, or the token is absent.
 - [ ] AC-150 WHEN a build finishes, THE SYSTEM SHALL record it in wechart's own history with its target, partitions, duration, outcome and log, and keep that record beyond Cube's 24-hour window.
@@ -493,6 +504,18 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
 
 Purpose: add, test and assign connections, which Cube Core cannot do through an API.
 Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[research/cube/data-sources.md]`.
+
+> **Status, 2026-09-21: deferred, except AC-162, at the user's direction** ("for
+> requirements that dont work with cube defer").
+> Cube Core has no API to list, add or test a connection
+> (`research/cube-capabilities.md` §6):
+> - a source is Cube's environment, changed by restarting Cube;
+> - a test means wechart calling the drivers itself;
+> - `/v1/data-sources` is Cloud-only.
+>
+> AC-157 to AC-161, AC-163 and AC-164 wait. AC-162 stays: it writes
+> `data_source` into a cube's model file, and belongs with the Model workspace
+> (F15). Data sources are configured as they are today, in Cube's environment.
 
 - [ ] AC-157 THE SYSTEM SHALL list every configured data source with its driver type, its health from the last test, and the cubes assigned to it.
       Fails when: a configured source is missing, or the cube list disagrees with the model.

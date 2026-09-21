@@ -1687,6 +1687,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F17. Jobs, builds and scheduling
 
+> **2026-09-21: T156, T159, T160 and T161 are deferred.** Cube Core has no API for them: wechart's own build history and scheduler. The user: "for requirements that dont work with cube defer". See the status note under F17 in spec.md. T155, T157, T158 and T162 stay.
+
 - [ ] T155 (AC-149) Start a build, show its token, and poll to a terminal state
   - Files: `packages/api/src/jobs/build.ts`, `packages/web/src/workspaces/jobs/BuildPanel.tsx`, `packages/api/src/jobs/build.test.ts`
   - Failing test: `build.test.ts`: the job token is shown and polling reports done, missing partition, failure or not found (AC-149).
@@ -1721,6 +1723,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Depends on: T158
 
 ## F18. Data sources and connections
+
+> **2026-09-21: deferred, except T168.** Cube Core has no API to list, add or test a connection. The user: "for requirements that dont work with cube defer". See the status note under F18 in spec.md. T168 writes `data_source` into a model file and is done with the Model workspace (F15).
 
 - [ ] T163 (AC-157) List every data source with its driver, health and assigned cubes
   - Files: `packages/web/src/workspaces/sources/SourceList.tsx`, `packages/api/src/routes/sources.ts`, `packages/web/src/workspaces/sources/SourceList.test.tsx`
