@@ -693,6 +693,21 @@ main:has(.dashboard) {
   color: var(--wc-text-primary);
   cursor: pointer;
 }
+/* Answers on one row, the safe one first, because it is the one that reads
+   first and the one focus lands on (AC-073). */
+.dialog__actions { display: flex; justify-content: flex-end; gap: 8px; }
+/* The answer that loses work is marked as such rather than merely available.
+   The selector beats the .dialog button rule above, which sets colour and
+   border; written the short way first this rule was inert and the two answers
+   rendered identically. The token is status-error, and there is no -text
+   variant: the version that named one was invalid at computed-value time, so
+   it did nothing twice over. Both mistakes were invisible, because no test
+   renders this dialog's colours and the rendered token audit sweeps only
+   /explore, /jobs, /model and /security. */
+.dialog button.dialog__destructive {
+  color: var(--wc-status-error);
+  border-color: var(--wc-status-error);
+}
 
 /* The undo toast (AC-060, direction.md rule 38). Bottom right, above
    everything, and it does not take the pointer away from the dashboard. */

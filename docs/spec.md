@@ -223,7 +223,7 @@ Traces to: `[docs/inputs §12]`, direction.md §2, rules 13, 32, 56.
       Fails when: a mark or cross-filter from the previous mode still affects a tile.
 - [x] AC-072 WHEN a new dashboard is created, THE SYSTEM SHALL set its interaction mode to Markings with one marking named "Marking" as the default (direction.md rule 57).
       Fails when: a new dashboard starts in cross-filter mode, or without a default marking.
-- [ ] AC-073 WHEN the user leaves the settings page with unsaved changes, THE SYSTEM SHALL ask before discarding them.
+- [x] AC-073 WHEN the user leaves the settings page with unsaved changes, THE SYSTEM SHALL ask before discarding them.
       Fails when: unsaved changes are discarded without asking.
 - [ ] AC-074 WHEN settings are saved while the dashboard is being edited, THE SYSTEM SHALL record them as one undoable change.
       Fails when: Undo after saving settings leaves any of them applied, or requires more than one Undo.
@@ -261,7 +261,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: a dashboard has no default marking, or a fifth marking can be created.
 - [ ] AC-085 WHEN a chart tile is created, THE SYSTEM SHALL set it to mark with the dashboard's default marking, and the tile's Marking setting SHALL also offer "(None)" and every other marking (direction.md rule 44).
       Fails when: a new chart tile marks with no marking, or "(None)" is missing from the setting.
-- [ ] AC-086 THE SYSTEM SHALL store a marking only as a predicate over Cube dimension members — tuples of member, granularity and value, or bounded ranges — and never as row numbers or result positions (direction.md rule 46).
+- [x] AC-086 THE SYSTEM SHALL store a marking only as a predicate over Cube dimension members — tuples of member, granularity and value, or bounded ranges — and never as row numbers or result positions (direction.md rule 46).
       Fails when: a stored marking references a row index or a position in a result set.
 - [ ] AC-087 WHEN the user clicks an item in a tile that marks, THE SYSTEM SHALL replace that marking with the clicked item; WHEN the user Ctrl-clicks or ⌘-clicks, THE SYSTEM SHALL toggle that item and leave the rest (direction.md rule 47).
       Fails when: a plain click adds to the marking, or a modified click replaces it.

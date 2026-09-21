@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { DashboardDocument } from '../model/document';
+import { isDirty } from './dirtyGuard';
 import { interactionsOf, labelOf, setMode, type InteractionMode } from './interactionMode';
 
 /**
@@ -75,6 +76,29 @@ export function SettingsPage({ document, onCancel, onSave }: SettingsPageProps) 
   /** Both configurations and which is active, defaulted for older dashboards. */
   const interactions = interactionsOf(draft.settings);
 
+  /**
+   * Whether the question has been asked and is waiting for an answer
+   * (AC-073). The page stays open behind it: the point of asking is that the
+   * answer can be no, and a page that had already closed would have lost the
+   * work whatever the answer was.
+   */
+  const [asking, setAsking] = useState(false);
+
+  /**
+   * Stable, because the dialog focuses its safe answer in an effect keyed on
+   * this. A fresh arrow each render re-ran that effect on every keystroke —
+   * see the note there.
+   */
+  const keepEditing = useCallback(() => {
+    setAsking(false);
+  }, []);
+
+  /** Leave, but not silently if there is something to lose. */
+  const leave = () => {
+    if (isDirty(document, draft)) setAsking(true);
+    else onCancel();
+  };
+
   const chooseMode = (mode: InteractionMode) => {
     setDraft({
       ...draft,
@@ -85,11 +109,15 @@ export function SettingsPage({ document, onCancel, onSave }: SettingsPageProps) 
   return (
     <div className="settings-page" data-testid="dashboard-settings">
       <header className="settings-page__bar">
-        <button type="button" data-testid="settings-back" onClick={onCancel}>
+        {/* Both ways out go through the guard, not just the one called
+            Cancel: "← Back to …" is the one someone reaches for without
+            thinking of it as cancelling, which makes it the more likely way
+            to lose work (AC-073). */}
+        <button type="button" data-testid="settings-back" onClick={leave}>
           ← Back to {document.title}
         </button>
         <div className="settings-page__actions">
-          <button type="button" onClick={onCancel}>
+          <button type="button" onClick={leave}>
             Cancel
           </button>
           <button
@@ -186,6 +214,69 @@ export function SettingsPage({ document, onCancel, onSave }: SettingsPageProps) 
             </p>
           )}
         </section>
+      </div>
+
+      {asking ? <DiscardSettingsDialog onDiscard={onCancel} onKeep={keepEditing} /> : null}
+    </div>
+  );
+}
+
+/**
+ * The question AC-073 asks, when leaving would lose work.
+ *
+ * An `alertdialog` rather than a `dialog`: it interrupts to prevent a loss
+ * rather than to collect something, which is the distinction the role draws.
+ * Focus goes to "Keep editing" — the answer that loses nothing — so a stray
+ * Enter cannot throw the work away, the same rule `DeleteSectionDialog`
+ * follows. Escape means the same as Keep editing: the least destructive
+ * reading of "I did not mean that".
+ */
+function DiscardSettingsDialog({
+  onDiscard,
+  onKeep,
+}: {
+  readonly onDiscard: () => void;
+  readonly onKeep: () => void;
+}) {
+  const safe = useRef<HTMLButtonElement>(null);
+
+  /**
+   * `onKeep` has to be stable, and the caller makes it so. Given a fresh
+   * arrow on every parent render this effect re-ran on every keystroke — and
+   * since the dialog does not trap focus, a keyboard user who Tabbed back to
+   * the Name field behind it had focus pulled onto "Keep editing" mid-word,
+   * where the next Space would activate it.
+   */
+  useEffect(() => {
+    safe.current?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onKeep();
+    };
+    window.document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [onKeep]);
+
+  return (
+    <div className="dialog-backdrop" data-testid="discard-settings-dialog">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="discard-settings-heading"
+        className="dialog"
+      >
+        <h2 id="discard-settings-heading">Discard your changes?</h2>
+        <p>These settings have not been saved. Leaving now loses them.</p>
+        <div className="dialog__actions">
+          <button type="button" ref={safe} onClick={onKeep}>
+            Keep editing
+          </button>
+          <button type="button" className="dialog__destructive" onClick={onDiscard}>
+            Discard changes
+          </button>
+        </div>
       </div>
     </div>
   );

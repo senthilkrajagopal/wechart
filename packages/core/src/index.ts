@@ -71,6 +71,19 @@ export {
 } from './dashboard-document';
 
 export {
+  EMPTY_PREDICATE,
+  isEmptyPredicate,
+  matchesPredicate,
+  predicateProblems,
+  withItem,
+  withRange,
+  type BoundedRange,
+  type MarkedItem,
+  type MarkingPredicate,
+  type MemberValue,
+} from './markings/predicate';
+
+export {
   MARKING_SLOTS,
   MAX_MARKINGS,
   addMarking,

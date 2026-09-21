@@ -121,6 +121,10 @@ describe('the dashboard settings page', () => {
     await userEvent.type(name, 'Something else');
 
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    // Since T079 leaving with changes asks first (AC-073). The change must
+    // still not survive — that is AC-069's clause either way — so the
+    // confirmation is answered rather than the assertion relaxed.
+    await userEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
 
     // Back on the dashboard, with the title it had. The criterion's failing
     // state is a change surviving the exit, so both are checked: the heading
@@ -142,6 +146,7 @@ describe('the dashboard settings page', () => {
     await userEvent.type(name, 'Something else');
 
     await userEvent.click(screen.getByTestId('settings-back'));
+    await userEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
 
     expect(screen.getByRole('heading', { name: 'Revenue' })).toBeTruthy();
     expect(onSave).not.toHaveBeenCalled();
@@ -168,6 +173,7 @@ describe('the dashboard settings page', () => {
     await userEvent.clear(name);
     await userEvent.type(name, 'Should not survive');
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
 
     expect(screen.getByRole('heading', { name: 'Revenue' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^Discard/ }).textContent).toBe('Discard');
@@ -196,6 +202,7 @@ describe('the dashboard settings page', () => {
     await userEvent.clear(name);
     await userEvent.type(name, 'Abandoned');
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
 
     await openSettings();
 
@@ -335,6 +342,145 @@ describe('the dashboard settings page', () => {
     expect(saved.settings.interactions?.mode).toBe('crossFilter');
     expect(saved.markings?.map((marking) => marking.name)).toEqual(['Q3 cohort', 'Outliers']);
     expect(saved.settings.interactions?.crossFilter.defaultAction).toBe('highlight');
+  });
+
+  it('asks before discarding unsaved changes (AC-073)', async () => {
+    /**
+     * T079 / AC-073: WHEN the user leaves the settings page with unsaved
+     * changes, THE SYSTEM SHALL ask before discarding them.
+     * `Fails when: unsaved changes are discarded without asking.`
+     *
+     * Asserted as *still there*, not merely as "a dialog appeared": the point
+     * of asking is that the answer can be no, and a prompt that appeared after
+     * the page had already closed would satisfy a weaker test while losing the
+     * work exactly as before.
+     */
+    show();
+    await openSettings();
+
+    const name = screen.getByLabelText('Name');
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Half-finished');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    /**
+     * By role, not by test id. Every one of these assertions used to key off
+     * `data-testid`, which meant the role, `aria-modal`, `aria-labelledby` and
+     * the focus placement could all be deleted with the suite staying green —
+     * while the docstring on the component claimed them. Asserted the way
+     * `DeleteSectionDialog`'s are, which is what this says it follows.
+     */
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(screen.getByRole('heading', { name: 'Discard your changes?' })).toBeTruthy();
+
+    // Focus is on the answer that loses nothing, so a stray Enter cannot throw
+    // the work away.
+    expect(document.activeElement).toBe(
+      within(dialog).getByRole('button', { name: 'Keep editing' }),
+    );
+
+    // The page is still open behind the question, and the change is still in it.
+    expect(screen.getByTestId('dashboard-settings')).toBeTruthy();
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Half-finished');
+  });
+
+  it('treats Escape as keeping the work, not as discarding it', async () => {
+    // The least destructive reading of "I did not mean that". Escape on a
+    // question about losing work must never be the answer that loses it.
+    show();
+    await openSettings();
+
+    const name = screen.getByLabelText('Name');
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Half-finished');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByTestId('dashboard-settings')).toBeTruthy();
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Half-finished');
+  });
+
+  it('asks about a mode change too, not only about the name', async () => {
+    /**
+     * The page can change exactly two things, and every other guard case here
+     * drives the name. Replacing the whole-document comparison with
+     * `document.title !== draft.title` leaves all 449 tests green while
+     * someone who switches to Cross-filtering and presses Cancel loses it
+     * without being asked — AC-073's failing state exactly, and invisible.
+     *
+     * Found by cold review, which is the second time a settings test has been
+     * strong about the field it drives and silent about the other one.
+     */
+    show();
+    await openSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Interactions' }));
+    await userEvent.click(screen.getByRole('radio', { name: /Cross-filtering/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+  });
+
+  it('keeps the work when the answer is to stay', async () => {
+    show();
+    await openSettings();
+
+    const name = screen.getByLabelText('Name');
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Half-finished');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+
+    expect(screen.queryByTestId('discard-settings-dialog')).toBeNull();
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Half-finished');
+  });
+
+  it('leaves without asking when there is nothing to lose', async () => {
+    /**
+     * The other half, and the half that decides whether the guard is worth
+     * having. A page that asked every time would train people to dismiss it
+     * without reading, and then it protects nothing.
+     */
+    show();
+    await openSettings();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByTestId('discard-settings-dialog')).toBeNull();
+    expect(screen.queryByTestId('dashboard-settings')).toBeNull();
+  });
+
+  it('leaves without asking when a change was typed and taken back', async () => {
+    // Content, not keystrokes: the draft is a new object after any edit, so
+    // identity would ask about a dashboard that is exactly as it was.
+    show();
+    await openSettings();
+
+    const name = screen.getByLabelText('Name');
+    await userEvent.type(name, '!');
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Revenue');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByTestId('discard-settings-dialog')).toBeNull();
+    expect(screen.queryByTestId('dashboard-settings')).toBeNull();
+  });
+
+  it('does not ask after saving, because there is nothing unsaved', async () => {
+    // Save leaves the page itself, so this is really a guard against the page
+    // asking on its way out of a save.
+    show();
+    await openSettings();
+
+    const name = screen.getByLabelText('Name');
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Saved properly');
+    await userEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect(screen.queryByTestId('discard-settings-dialog')).toBeNull();
+    expect(screen.queryByTestId('dashboard-settings')).toBeNull();
   });
 
   it('keeps the dashboard underneath it out of the way', async () => {
