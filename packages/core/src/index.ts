@@ -85,6 +85,13 @@ export {
 } from './markings/range';
 
 export {
+  MARKING_ITEM_LIMIT,
+  addItemsWithinLimit,
+  markAll,
+  type LimitedMarking,
+} from './markings/limit';
+
+export {
   itemForRow,
   markRowClick,
   rowsMarkable,

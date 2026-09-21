@@ -1018,10 +1018,16 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/dashboard/markings/LiveRegion.tsx`, `packages/web/src/dashboard/markings/LiveRegion.test.tsx`
   - Failing test: `LiveRegion.test.tsx`: each marking change announces the marking's name, the number of marked items and the source tile (AC-101).
   - Depends on: T101
-- [ ] T108 (AC-102) Refuse items past the 1,000-item limit, exempting "Mark all"
-  - Files: `packages/core/src/markings/limit.ts`, `packages/core/src/markings/limit.test.ts`
+- [x] T108 (AC-102) Refuse items past the 1,000-item limit, exempting "Mark all"
+  - Files: `packages/core/src/markings/limit.ts`, `packages/core/src/markings/limit.test.ts`, `packages/core/src/index.ts`
   - Failing test: `limit.test.ts`: adding past 1,000 items is refused with an explanation, while "Mark all" succeeds because it stores the tile's filter rather than a list (AC-102).
   - Depends on: T092
+  - Done 2026-09-20. AC-102 ticked.
+  - **Two documents disagree about the number, and the code says which it followed.** `docs/spec.md` fixes it at 1,000; `docs/design/direction.md` still lists "The item cap. Spotfire's in-db default is 1,000" under **"Still open for the user"**. The spec is the contract, so 1,000 is implemented and the constant records the provenance. **If the user settles on another figure, the constant and AC-102 move together.**
+  - **Five ACs cite "rule N of §7a" and §7a has no numbered rules.** AC-102 cites rule 29 of §7a; the global rule 29 is about "Why this chart?" traces. The same broken citation appears at rules 7, 10, 18 and 30 of §7a. Each AC's own text is complete, so nothing is blocked — but the references point nowhere.
+  - **Items past the cap are dropped, not the whole gesture.** A lasso over 1,050 points is a reasonable thing to do and mostly succeeds; throwing all 1,050 away would punish someone for the size of their data and leave them with nothing marked. Mutation-verified.
+  - **Re-adding something already marked is not growth**, or the cap would refuse items while leaving room unused.
+  - **"Mark all"'s exemption is structural and the tests say so.** It takes a predicate and returns it, so there is no enumeration that could reach the cap and no mutation that makes it refuse without changing its signature — routing it through the limit leaves every test green, because adding nothing to anything refuses nothing. The cases hold the *shape* of the exemption, which is what a future version could break by enumerating the tile's rows instead.
 - [ ] T109 (AC-103) Label a tile as not linked when it cannot resolve a marking's members
   - Files: `packages/core/src/markings/applicability.ts`, `packages/core/src/markings/applicability.test.ts`
   - Failing test: `applicability.test.ts`: when a tile's cube or view cannot resolve a predicate member, the tile renders unmarked with a "not linked" label and no query error; join-path applicability is checked with `/v1/dry-run` (AC-103).
