@@ -24,6 +24,12 @@ import { EditSidebar, type SidebarContent } from './EditSidebar';
  */
 export interface EditSession<T> {
   readonly editing: boolean;
+  /**
+   * A save is under way (AC-184). The session takes no change until it
+   * settles; what else the caller offers — a page over the dashboard, an
+   * editor — should not open meanwhile either.
+   */
+  readonly saving: boolean;
   readonly document: T;
   /** Changes still in effect since editing began. */
   readonly changes: number;
@@ -77,7 +83,14 @@ export interface EditChromeProps<T> {
    * keep the old name until the dashboard was saved and re-fetched.
    */
   readonly title: (document: T) => string;
-  readonly onSave: (document: T) => void;
+  /**
+   * Save this document. Return a promise and it decides the outcome (AC-184):
+   * edit mode is left once it resolves, and if it rejects the session stays,
+   * every change kept, for the user to try again or change course. Saying why
+   * it failed is the caller's — the rejection is not shown here. A caller
+   * that returns nothing is taken to have saved.
+   */
+  readonly onSave: (document: T) => void | Promise<unknown>;
   /**
    * What the sidebar's three panels hold. A function of the session, because
    * the Add panel needs to know what is selected and to make a change
@@ -100,9 +113,11 @@ export interface EditChromeProps<T> {
   readonly overlay?: ((session: EditSession<T>) => ReactNode) | undefined;
   /**
    * Controls that sit in the header in both view and edit mode — the settings
-   * gear is one (AC-069, direction.md puts it there for both).
+   * gear is one (AC-069, direction.md puts it there for both). A function of
+   * the session when they need it: the header is outside the body a save
+   * makes inert, so a control there has to hold itself back while saving.
    */
-  readonly headerActions?: ReactNode;
+  readonly headerActions?: ReactNode | ((session: EditSession<T>) => ReactNode);
   /**
    * Why the document cannot be saved as it stands, or undefined when it can.
    * While there is a reason, Save is held back with the reason beside it,
@@ -142,32 +157,73 @@ export function EditChrome<T>({
   // Only while editing: view mode has no Save to hold back.
   const blocked = editing ? saveBlocked?.(current) : undefined;
 
+  /**
+   * A save under way (AC-184). Every guard below reads this render's value,
+   * so it holds from the render after the save starts; a second press of Save
+   * then meets a held-back "Saving…" (`saveOutcome.test.tsx` presses it and
+   * finds one save sent).
+   */
+  const [saving, setSaving] = useState(false);
+
+  /**
+   * No change while a save is under way. A save that then succeeds re-seeds
+   * the session from what it saved, so a change made meanwhile would be
+   * dropped with nothing said. The body is inert as well; this also stops
+   * what inert does not — a key handled on the document.
+   */
   const change = (next: T) => {
+    if (saving) return;
     setHistory((previous) =>
       push(previous, { document: next, changes: previous.present.changes + 1 }),
     );
   };
 
   /**
-   * Saving leaves edit mode, which is the second half of AC-065. The session
-   * is re-seeded from what was saved, so the change count starts again at
-   * nothing — otherwise "Discard (4 changes)" would still be offering to undo
-   * work that is now safely stored.
+   * Leaving edit mode is the second half of AC-065. The session is re-seeded
+   * from what was saved, so the change count starts again at nothing —
+   * otherwise "Discard (4 changes)" would still be offering to undo work that
+   * is now safely stored.
+   */
+  const leave = (saved: T) => {
+    setHistory(historyOf<Snapshot<T>>({ document: saved, changes: 0 }));
+    setEditing(false);
+  };
+
+  /**
+   * Edit mode is left only once the save has gone through (AC-184). Leaving
+   * at once, as it did, took every change with it when the save then failed.
+   * On failure the session stays as it is; the caller says why.
    */
   const saveDocument = (document: T) => {
-    onSave(document);
-    setHistory(historyOf<Snapshot<T>>({ document, changes: 0 }));
-    setEditing(false);
+    if (saving) return;
+    const outcome = onSave(document);
+    if (!(outcome instanceof Promise)) {
+      leave(document);
+      return;
+    }
+
+    setSaving(true);
+    outcome.then(
+      () => {
+        setSaving(false);
+        leave(document);
+      },
+      () => {
+        setSaving(false);
+      },
+    );
   };
 
   const session: EditSession<T> = {
     editing,
+    saving,
     document: current,
     changes,
     change,
-    // The very same step the edit bar's Undo takes.
+    // The very same step the edit bar's Undo takes — and, like it, not while
+    // a save is under way.
     undo: () => {
-      setHistory(undo);
+      if (!saving) setHistory(undo);
     },
     /**
      * Only from view mode. Entering starts a fresh history, so entering again
@@ -177,11 +233,14 @@ export function EditChrome<T>({
     edit: () => {
       if (!editing) start();
     },
+    /**
+     * The document is recorded as a change first, then saved: if the save is
+     * refused, or fails (AC-184), the caller's own change is still there.
+     */
     save: (document) => {
-      if (saveBlocked?.(document) !== undefined) {
-        if (document !== current) change(document);
-        return;
-      }
+      if (saving) return;
+      if (document !== current) change(document);
+      if (saveBlocked?.(document) !== undefined) return;
       saveDocument(document);
     },
   };
@@ -234,7 +293,7 @@ export function EditChrome<T>({
       >
         <header className="dashboard__header">
           <h1>{title(current)}</h1>
-          {headerActions}
+          {typeof headerActions === 'function' ? headerActions(session) : headerActions}
           {editing ? (
             <EditBar
               changes={changes}
@@ -244,6 +303,7 @@ export function EditChrome<T>({
               onRedo={() => setHistory(redo)}
               onDiscard={() => setHistory(discard)}
               saveBlocked={blocked}
+              saving={saving}
               onSave={() => {
                 // Refused here too, not only by the button: nothing that reaches
                 // Save by another route should save a document that cannot be
@@ -259,7 +319,7 @@ export function EditChrome<T>({
           )}
         </header>
 
-        <div className="dashboard__body">
+        <div className="dashboard__body" inert={saving} aria-busy={saving}>
           {/* The canvas scrolls on its own, so rule 40 has a position to keep. */}
           <div className="dashboard__canvas" data-testid="canvas-scroll">
             {children(session)}

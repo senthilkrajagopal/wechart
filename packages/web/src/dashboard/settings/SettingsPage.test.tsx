@@ -236,6 +236,56 @@ describe('the dashboard settings page', () => {
     expect((onSave.mock.calls[0] as [DashboardDocument])[0].title).toBe('Something else');
   });
 
+  it('leaves a failed view-mode save to the page to report, rather than throwing it', async () => {
+    /**
+     * The page's save now returns its outcome (AC-184, T197), and it rejects
+     * when the save fails. Through the session that rejection is handled;
+     * from the settings page in view mode it went nowhere — an unhandled
+     * rejection. The page says why the save failed; nothing more is owed here.
+     */
+    /**
+     * Watched for directly. Vitest does report an unhandled rejection, but as
+     * an error of the whole run, with this test itself marked passed
+     * (observed at T197: "Errors 1", exit 1); the listener pins the failure
+     * on the test it belongs to. And a plain function, not `vi.fn`: with a
+     * `vi.fn` returning the rejected promise, nothing was reported at all
+     * (observed at T197), so the mock hides the very thing under test.
+     */
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', record);
+    try {
+      let calls = 0;
+      render(
+        <DashboardView
+          dashboardId="d1"
+          document={DOC}
+          specs={{}}
+          onSave={() => {
+            calls += 1;
+            return Promise.reject(new Error('Could not save: 409'));
+          }}
+        />,
+      );
+      await openSettings();
+
+      const name = screen.getByLabelText('Name');
+      await userEvent.clear(name);
+      await userEvent.type(name, 'Something else');
+      await userEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // Whether the page stays open meanwhile is AC-185's (T199), not this
+      // test's: it asks only that the failure is not thrown.
+      expect(calls).toBe(1);
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
+
   it('folds a save made while editing into the session, where Discard can reach it', async () => {
     /**
      * The other half of the same rule: "While editing, a save is one undoable

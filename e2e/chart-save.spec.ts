@@ -14,6 +14,15 @@ import { expect, test, type APIRequestContext, type Page, type Route } from '@pl
  */
 const API = 'http://localhost:4100/api';
 
+/** What a save refused as stale says (AC-015), and what to do (AC-184, T197). */
+const CHART_CONFLICT =
+  'A chart on this dashboard changed somewhere else while you were editing it. To save the rest, undo back past your change to that chart — anything changed after it is undone too — and save again. Or reload: that shows their change and discards yours.';
+const DASHBOARD_CONFLICT =
+  'This dashboard changed somewhere else while you were editing it. Reloading shows that change and discards yours — copy anything you need first.';
+/** What a save that never reached the server says (AC-184, T197). */
+const UNREACHABLE =
+  'Could not save: the server could not be reached. Check the connection, then save again.';
+
 const definition = {
   source: { cube: 'orders' },
   wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
@@ -248,6 +257,9 @@ test('the editor’s Save dashboard applies the chart and saves the dashboard', 
   await expect(bar(page)).toBeHidden();
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
   await expect.poll(() => storedType(request, chartId)).toBe('stackedBar');
+  // Focus back on the pencil the editor was opened from, as Back leaves it —
+  // not dropped to the page because the dashboard was busy saving.
+  await expect(page.getByTestId('edit-chart-tile-save')).toBeFocused();
 
   // The dashboard was saved, not only the chart: its own change is kept too.
   await page.reload();
@@ -392,9 +404,7 @@ test('a chart changed elsewhere meanwhile is refused, not overwritten', async ({
   await changeElsewhere(request, chartId);
   await barButton(page, 'Save').click();
 
-  await expect(page.getByTestId('save-failed')).toHaveText(
-    'A chart on this dashboard changed somewhere else while you were editing it.',
-  );
+  await expect(page.getByTestId('save-failed')).toHaveText(CHART_CONFLICT);
   // Their change stands.
   expect(await storedType(request, chartId)).toBe('pie');
 });
@@ -423,10 +433,226 @@ test('a chart reopened from its draft is still checked against the version first
 
   await barButton(page, 'Save').click();
 
-  await expect(page.getByTestId('save-failed')).toHaveText(
-    'A chart on this dashboard changed somewhere else while you were editing it.',
-  );
+  await expect(page.getByTestId('save-failed')).toHaveText(CHART_CONFLICT);
   expect(await storedType(request, chartId)).toBe('pie');
+});
+
+/**
+ * T197 / AC-184: IF a dashboard save fails, THEN THE SYSTEM SHALL stay in edit
+ * mode with every change made in the session kept, including charts edited
+ * from its tiles, and show why the save failed.
+ * Fails when: after a failed save the dashboard is out of edit mode, a change
+ * made before the save is missing from the dashboard or from Undo, or no
+ * reason for the failure is shown.
+ */
+test.describe('a save that fails keeps the session (AC-184)', () => {
+  /**
+   * Still editing, with both changes on screen, and Undo able to step back
+   * through them. `stored` is the chart the tile goes back to once the edit
+   * is undone: what the server has *now*, which after someone else's save is
+   * theirs, not the chart the session opened with.
+   */
+  async function expectSessionKept(page: Page, stored = 'bar') {
+    await expect(bar(page)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'New heading' })).toBeVisible();
+    await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
+
+    await barButton(page, 'Undo').click();
+    await expect(canvas(page)).toHaveAttribute('data-chart-type', stored);
+    await barButton(page, 'Undo').click();
+    await expect(page.getByRole('heading', { name: 'New heading' })).toBeHidden();
+  }
+
+  test('when a chart was changed elsewhere', async ({ page, request }) => {
+    const { dashboardId, chartId } = await makeDashboard(request);
+    await page.goto(`/explore/dashboards/${dashboardId}`);
+    await addHeading(page);
+    await editToStacked(page);
+
+    await changeElsewhere(request, chartId);
+    await barButton(page, 'Save').click();
+
+    await expect(page.getByTestId('save-failed')).toHaveText(CHART_CONFLICT);
+    await expectSessionKept(page, 'pie');
+  });
+
+  test('and after a chart conflict, the rest can be saved as the message says', async ({
+    page,
+    request,
+  }) => {
+    // "To save the rest, undo back past your change to that chart … and save
+    // again": the dashboard itself has not moved, so that save goes through.
+    const { dashboardId, chartId } = await makeDashboard(request);
+    await page.goto(`/explore/dashboards/${dashboardId}`);
+    await addHeading(page);
+    await editToStacked(page);
+
+    await changeElsewhere(request, chartId);
+    await barButton(page, 'Save').click();
+    await expect(page.getByTestId('save-failed')).toHaveText(CHART_CONFLICT);
+
+    await barButton(page, 'Undo').click();
+    await expect(canvas(page)).toHaveAttribute('data-chart-type', 'pie');
+    await barButton(page, 'Save').click();
+    await expect(bar(page)).toBeHidden();
+
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'New heading' })).toBeVisible();
+    await expect(canvas(page)).toHaveAttribute('data-chart-type', 'pie');
+    expect(await storedType(request, chartId)).toBe('pie');
+  });
+
+  test('when the dashboard was changed elsewhere', async ({ page, request }) => {
+    const { dashboardId } = await makeDashboard(request);
+    await page.goto(`/explore/dashboards/${dashboardId}`);
+    await addHeading(page);
+    await editToStacked(page);
+
+    const current = (await (
+      await request.get(`${API}/documents/dashboard/${dashboardId}`)
+    ).json()) as { body: Record<string, unknown>; version: number };
+    await request.put(`${API}/documents/dashboard/${dashboardId}`, {
+      data: { version: current.version, body: { ...current.body, title: 'Renamed elsewhere' } },
+    });
+    await barButton(page, 'Save').click();
+
+    await expect(page.getByTestId('save-failed')).toHaveText(DASHBOARD_CONFLICT);
+    await expectSessionKept(page);
+  });
+
+  test('when the editor’s Save dashboard fails', async ({ page, request }) => {
+    // The editor closes as it saves; the edit it applied must be in the
+    // session regardless, with the dashboard's own change before it.
+    const { dashboardId, chartId } = await makeDashboard(request);
+    await page.goto(`/explore/dashboards/${dashboardId}`);
+    await addHeading(page);
+    await page.getByTestId('edit-chart-tile-save').click();
+    await page.getByLabel('Chart type').selectOption('stackedBar');
+
+    await changeElsewhere(request, chartId);
+    await saveDashboard(page).click();
+
+    await expect(editor(page)).toBeHidden();
+    await expect(page.getByTestId('save-failed')).toHaveText(CHART_CONFLICT);
+    await expect(page.getByTestId('edit-chart-tile-save')).toBeFocused();
+    await expectSessionKept(page, 'pie');
+  });
+
+  test('at once, not after every tile’s query has run again', async ({ page, request }) => {
+    /**
+     * A dashboard-only save (its own route, `PUT /api/documents/dashboard`),
+     * refused because the dashboard changed elsewhere — with every tile's
+     * query held. The session must come back as soon as the refusal does:
+     * waiting for Cube to re-run each tile would keep the user at "Saving…",
+     * locked out, beside a message saying the save has already failed.
+     */
+    const { dashboardId } = await makeDashboard(request);
+    await page.goto(`/explore/dashboards/${dashboardId}`);
+    await addHeading(page);
+
+    const current = (await (
+      await request.get(`${API}/documents/dashboard/${dashboardId}`)
+    ).json()) as { body: Record<string, unknown>; version: number };
+    await request.put(`${API}/documents/dashboard/${dashboardId}`, {
+      data: { version: current.version, body: { ...current.body, title: 'Renamed elsewhere' } },
+    });
+    const heldQueries: Route[] = [];
+    await page.route('**/api/load', (route) => {
+      heldQueries.push(route);
+    });
+
+    await barButton(page, 'Save').click();
+
+    await expect(page.getByTestId('save-failed')).toHaveText(DASHBOARD_CONFLICT);
+    await expect(barButton(page, 'Save')).toHaveAttribute('aria-disabled', 'false');
+    await expect(page.getByRole('heading', { name: 'New heading' })).toBeVisible();
+    await barButton(page, 'Undo').click();
+    await expect(page.getByRole('heading', { name: 'New heading' })).toBeHidden();
+  });
+
+  test('at once, with a chart edit in it too', async ({ page, request }) => {
+    /**
+     * The same on the route that carries chart edits, where a failure also
+     * takes the unsaved charts back out of the cache and fetches them again —
+     * which must not be waited for either.
+     */
+    const { dashboardId, chartId } = await makeDashboard(request);
+    await page.goto(`/explore/dashboards/${dashboardId}`);
+    await addHeading(page);
+    await editToStacked(page);
+
+    await changeElsewhere(request, chartId);
+    const heldQueries: Route[] = [];
+    await page.route('**/api/load', (route) => {
+      heldQueries.push(route);
+    });
+
+    await barButton(page, 'Save').click();
+
+    await expect(page.getByTestId('save-failed')).toHaveText(CHART_CONFLICT);
+    await expect(barButton(page, 'Save')).toHaveAttribute('aria-disabled', 'false');
+    await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
+    await expect(page.getByRole('heading', { name: 'New heading' })).toBeVisible();
+    // The charts were fetched again, and their queries are the ones held: the
+    // session came back without them. Never let through; they end with the page.
+    await expect.poll(() => heldQueries.length).toBeGreaterThan(0);
+  });
+
+  test('when the server fails', async ({ page, request }) => {
+    const { dashboardId } = await makeDashboard(request);
+    await page.goto(`/explore/dashboards/${dashboardId}`);
+    await addHeading(page);
+    await editToStacked(page);
+
+    await page.route(`**/api/dashboards/${dashboardId}`, (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Internal error' }),
+      }),
+    );
+    await barButton(page, 'Save').click();
+
+    await expect(page.getByTestId('save-failed')).toHaveText('Could not save: 500');
+    await expectSessionKept(page);
+  });
+
+  test('when the browser is offline', async ({ page, context, request }) => {
+    /**
+     * Decided with the user (2026-09-21): a save made offline fails at once
+     * and keeps the work, rather than waiting for the connection behind
+     * "Saving…" with nothing said — which is what the data library does with
+     * a save by default (docs/research/tanstack-query-mutations.md, gotcha 4).
+     * Unlike an aborted request, this is the browser *reporting* itself
+     * offline, which is what makes the library wait.
+     */
+    const { dashboardId } = await makeDashboard(request);
+    await page.goto(`/explore/dashboards/${dashboardId}`);
+    await addHeading(page);
+    await editToStacked(page);
+
+    await context.setOffline(true);
+    await barButton(page, 'Save').click();
+
+    await expect(page.getByTestId('save-failed')).toHaveText(UNREACHABLE);
+    await expectSessionKept(page);
+    await context.setOffline(false);
+  });
+
+  test('when the connection drops', async ({ page, request }) => {
+    const { dashboardId } = await makeDashboard(request);
+    await page.goto(`/explore/dashboards/${dashboardId}`);
+    await addHeading(page);
+    await editToStacked(page);
+
+    await page.route(`**/api/dashboards/${dashboardId}`, (route) => route.abort('failed'));
+    await barButton(page, 'Save').click();
+
+    // Not the browser's own words for a failed request, which differ between
+    // browsers and say nothing about what to do.
+    await expect(page.getByTestId('save-failed')).toHaveText(UNREACHABLE);
+    await expectSessionKept(page);
+  });
 });
 
 test('a library chart edited from its tile keeps Save held back, saying why', async ({

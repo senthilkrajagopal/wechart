@@ -114,7 +114,12 @@ export interface DashboardViewProps {
      * written (`whyUnsaveable`).
      */
     drafts?: DashboardDocument['chartDrafts'],
-  ) => void;
+    /**
+     * The save's outcome, when the caller has one: edit mode is left once it
+     * resolves, and the session is kept, every change in it, if it rejects
+     * (AC-184, T197).
+     */
+  ) => void | Promise<unknown>;
 }
 
 function TileBody({
@@ -541,7 +546,7 @@ export function DashboardView({
 }: DashboardViewProps) {
   /**
    * Charts edited from a tile and held in the edit session (T032), mirrored
-   * up from it by `DraftMirror` — because the colours are assigned here,
+   * up from it by `SessionMirror` — because the colours are assigned here,
    * above the session, and a drafted chart has to be coloured by the same
    * assignment as every other tile (AC-039). Assigning colours inside the
    * session instead would lose the assignment whenever the dashboard is
@@ -589,17 +594,32 @@ export function DashboardView({
    * whatever opened it.
    */
   const returnFocus = useRef<string | null>(null);
+  /**
+   * Whether the session is saving, mirrored up from it (`SessionMirror`).
+   * The editor's Save dashboard closes the editor and starts a save in one
+   * step, and a saving dashboard's body is inert — nothing in it can take
+   * focus — so focus waits until the save has settled (AC-184, T197).
+   */
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
-    // Only once the editor has closed and the dashboard is drawn again.
-    if (editingChart !== null || returnFocus.current === null) return;
+    // Only once the editor has closed, the dashboard is drawn again, and it
+    // can take focus.
+    if (editingChart !== null || saving || returnFocus.current === null) return;
+    const target = globalThis.document.querySelector<HTMLElement>(returnFocus.current);
+    /**
+     * Inert, so it cannot take focus yet. `saving` above lags by a render: the
+     * mirror sets it from an effect, and state set there reaches this
+     * component only on its next render — so on the render where the save
+     * starts it still reads false, which is why the element is asked too.
+     * Kept for when the mirrored `saving` settles and this runs again.
+     */
+    if (target?.closest('[inert]')) return;
     // Without scrolling: whatever opened the editor was on screen when it was
     // used, and the dashboard is where it was left, so moving it would undo
     // exactly what keeping it mounted preserves (AC-067).
-    globalThis.document
-      .querySelector<HTMLElement>(returnFocus.current)
-      ?.focus({ preventScroll: true });
+    target?.focus({ preventScroll: true });
     returnFocus.current = null;
-  }, [editingChart]);
+  }, [editingChart, saving]);
 
   /**
    * Opens a tile's chart in the editor, measuring the tile first.
@@ -688,11 +708,13 @@ export function DashboardView({
        * beside it, and are written as the chart documents they are, in the
        * same transaction as the dashboard (AC-183, T192).
        */
-      onSave={(next) => {
-        // The document without its drafts, and the drafts beside it: the
-        // save writes them as chart documents, never into the dashboard's row.
-        onSave(withoutDrafts(next), next.chartDrafts);
-      }}
+      onSave={(next) =>
+        // The document without its drafts, and the drafts beside it: the save
+        // writes them as chart documents, never into the dashboard's row. Its
+        // outcome goes back to the session, which leaves edit mode only on
+        // success (AC-184).
+        onSave(withoutDrafts(next), next.chartDrafts)
+      }
       /**
        * Held back only while a draft cannot be written with this dashboard: a
        * library chart (AC-128's warning comes first, T134), a chart local to
@@ -703,18 +725,25 @@ export function DashboardView({
        * `whyUnsaveable` for the wording and why it names Undo, not Discard.
        */
       saveBlocked={(shown) => whyUnsaveable(shown, dashboardId)}
-      headerActions={
+      headerActions={(session) => (
         <button
           type="button"
           className="dashboard__gear"
           aria-label="Dashboard settings"
+          /**
+           * Not while a save is under way (AC-184, T197). The header is
+           * outside the body a save makes inert, and a settings save made now
+           * goes to a session that takes no change — the page would close
+           * with the settings lost and nothing said.
+           */
+          disabled={session.saving}
           onClick={() => {
             setSettingsOpen(true);
           }}
         >
           ⚙
         </button>
-      }
+      )}
       /**
        * The settings page, opened over the dashboard rather than navigated to,
        * so the edit session survives it (AC-069, and AC-074 later).
@@ -742,7 +771,12 @@ export function DashboardView({
              */
             onSave={(next) => {
               if (session.editing) session.change(next);
-              else onSave(withoutDrafts(next));
+              else {
+                // A failed save is the page's to report, and it does; here it
+                // is only swallowed, or it would surface as an unhandled
+                // rejection (the save has returned its outcome since T197).
+                void Promise.resolve(onSave(withoutDrafts(next))).catch(() => undefined);
+              }
               setSettingsOpen(false);
             }}
           />
@@ -793,7 +827,12 @@ export function DashboardView({
     >
       {(session: EditSession<DashboardDocument>) => (
         <>
-          <DraftMirror drafts={session.document.chartDrafts} onDrafts={setDrafts} />
+          <SessionMirror
+            drafts={session.document.chartDrafts}
+            onDrafts={setDrafts}
+            saving={session.saving}
+            onSaving={setSaving}
+          />
           <DashboardPages
             session={session}
             charts={charts}
@@ -821,17 +860,28 @@ export function DashboardView({
  * overlay replaces the dashboard. So the drafts are copied up, and nothing
  * above treats the copy as the truth: it is re-read from the session after
  * every change, undo and discard.
+ *
+ * Whether a save is under way comes up the same way, for the one thing above
+ * that needs it: returning focus after the editor closes, which has to wait
+ * for the saving body to take focus again (T197).
  */
-function DraftMirror({
+function SessionMirror({
   drafts,
   onDrafts,
+  saving,
+  onSaving,
 }: {
   readonly drafts: DashboardDocument['chartDrafts'];
   readonly onDrafts: (drafts: DashboardDocument['chartDrafts']) => void;
+  readonly saving: boolean;
+  readonly onSaving: (saving: boolean) => void;
 }) {
   useEffect(() => {
     onDrafts(drafts);
   }, [drafts, onDrafts]);
+  useEffect(() => {
+    onSaving(saving);
+  }, [saving, onSaving]);
   return null;
 }
 
@@ -903,6 +953,9 @@ function DashboardPages({
       onEditChart === undefined
         ? undefined
         : (tileId, chartId) => {
+            // Not while a save is under way: an edit applied now would go to
+            // a session that takes no change (AC-184, T197).
+            if (session.saving) return;
             session.edit();
             // The height as the session has it, resizes included (see openEditor).
             const element = elementAt(document, tileId);
@@ -947,6 +1000,9 @@ function DashboardPages({
            * or keep them" in the more destructive direction.
            */
           if (!isTileId(document, tile.id)) return;
+          // Nothing while a save is under way (AC-184, T197): the session
+          // takes no change, and the editor would apply to one about to end.
+          if (session.saving) return;
 
           const element = elementAt(document, tile.id);
           const action = actionFor(

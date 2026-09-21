@@ -23,6 +23,12 @@ export interface EditBarProps {
    * or waiting on something they have not done.
    */
   readonly saveBlocked?: string | undefined;
+  /**
+   * A save is under way (AC-184). Save reads "Saving…" and nothing on the bar
+   * can be pressed: a second Save would send the session twice, and Undo or
+   * Discard now would change a document the save has already taken.
+   */
+  readonly saving?: boolean;
 }
 
 /**
@@ -37,6 +43,8 @@ function discardLabel(changes: number): string {
 }
 
 interface Control {
+  /** Stable across label changes — "Save" becoming "Saving…" must not remount the button and lose focus. */
+  readonly id: string;
   readonly label: string;
   readonly disabled: boolean;
   readonly run: () => void;
@@ -54,18 +62,25 @@ export function EditBar({
   onDiscard,
   onSave,
   saveBlocked,
+  saving = false,
 }: EditBarProps) {
   const [focused, setFocused] = useState(0);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const reasonId = useId();
 
   const controls: readonly Control[] = [
-    { label: 'Undo', disabled: !canUndo, run: onUndo },
-    { label: 'Redo', disabled: !canRedo, run: onRedo },
-    { label: discardLabel(changes), disabled: changes === 0, run: onDiscard },
+    { id: 'undo', label: 'Undo', disabled: saving || !canUndo, run: onUndo },
+    { id: 'redo', label: 'Redo', disabled: saving || !canRedo, run: onRedo },
     {
-      label: 'Save',
-      disabled: saveBlocked !== undefined,
+      id: 'discard',
+      label: discardLabel(changes),
+      disabled: saving || changes === 0,
+      run: onDiscard,
+    },
+    {
+      id: 'save',
+      label: saving ? 'Saving…' : 'Save',
+      disabled: saving || saveBlocked !== undefined,
       run: onSave,
       className: 'edit-bar__save',
       ...(saveBlocked === undefined ? {} : { describedBy: reasonId }),
@@ -102,7 +117,7 @@ export function EditBar({
       <div role="toolbar" aria-label="Dashboard editing" className="edit-bar">
         {controls.map((control, index) => (
           <button
-            key={control.label.startsWith('Discard') ? 'discard' : control.label}
+            key={control.id}
             type="button"
             ref={(node) => {
               buttons.current[index] = node;

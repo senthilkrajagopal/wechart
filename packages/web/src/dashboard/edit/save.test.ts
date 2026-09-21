@@ -91,6 +91,24 @@ describe('when the save cannot go through', () => {
     ).rejects.toThrow(/500/);
   });
 
+  it('says the server could not be reached, in words a user can act on', async () => {
+    /**
+     * Offline, or the connection dropped: the request itself fails, and each
+     * browser words that differently ("Failed to fetch", "Load failed", …) —
+     * none of which says what to do. The work is kept (AC-184); the reason
+     * says how to get it saved.
+     */
+    const fetchImpl = vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+
+    await expect(
+      saveDashboard({ dashboardId: 'd1', document: DOC, version: 1, fetchImpl }),
+    ).rejects.toThrow(
+      'Could not save: the server could not be reached. Check the connection, then save again.',
+    );
+  });
+
   it('passes on the server’s reason for refusing, rather than only its status', async () => {
     /**
      * The server says why it refused a chart — a library chart, one belonging
@@ -222,7 +240,20 @@ describe('saving with charts edited from tiles', () => {
         fetchImpl,
       }),
     ).rejects.toThrow(
-      'A chart on this dashboard changed somewhere else while you were editing it.',
+      'A chart on this dashboard changed somewhere else while you were editing it. To save the rest, undo back past your change to that chart — anything changed after it is undone too — and save again. Or reload: that shows their change and discards yours.',
+    );
+  });
+});
+
+describe('a conflict says what to do', () => {
+  /**
+   * Saving again cannot succeed — the version has moved on — and the work is
+   * still on screen (AC-184). Decided with the user (2026-09-21): the message
+   * says so plainly, rather than leave a Save that fails every time.
+   */
+  it('for the dashboard itself', () => {
+    expect(new StaleSaveError('dashboard').message).toBe(
+      'This dashboard changed somewhere else while you were editing it. Reloading shows that change and discards yours — copy anything you need first.',
     );
   });
 });

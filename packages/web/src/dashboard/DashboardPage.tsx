@@ -95,6 +95,21 @@ export function dashboardOf(stored: StoredDocument): DashboardDocument {
   });
 }
 
+/** Each chart's drawn spec, or why it could not be drawn — the charts query's data. */
+interface DrawnCharts {
+  specs: Record<string, RenderSpec>;
+  errors: Record<string, unknown>;
+}
+
+/** A save, whole: nothing it needs is read from the render it started in. */
+interface SaveVariables {
+  readonly id: string;
+  readonly next: DashboardDocument;
+  readonly drafts: DashboardDocument['chartDrafts'];
+  /** The dashboard's version, which the server checks the save against. */
+  readonly version: number;
+}
+
 export interface DashboardPageProps {
   readonly dashboardId: string;
 }
@@ -116,16 +131,28 @@ export function DashboardPage({ dashboardId }: DashboardPageProps) {
   const document = saved.data?.document;
 
   if (saved.isPending) return <p data-testid="dashboard-loading">Loading…</p>;
-  if (saved.isError)
+  /**
+   * The error only when there is no dashboard to show. A fetch that fails
+   * after one has loaded — the library fetches again on its own, on
+   * reconnecting once the data is stale — keeps what it had (research,
+   * Answer 4); putting an error in its place took any edit session on it
+   * down with it, AC-184's failing state reached without a save (T197).
+   */
+  if (document === undefined)
     return (
       <p role="alert" data-testid="dashboard-error">
-        {(saved.error as Error).message}
+        {(saved.error as Error | null)?.message ?? 'This dashboard could not be opened.'}
       </p>
     );
-  if (document === undefined) return null;
 
   return (
     <LoadedDashboard
+      /**
+       * Keyed by the dashboard, as the view below is: what the page holds
+       * for one dashboard — why its save failed, the save itself — must not
+       * be shown over the next one opened (T197).
+       */
+      key={dashboardId}
       document={document}
       dashboardId={dashboardId}
       version={saved.data?.version ?? 1}
@@ -155,56 +182,99 @@ function LoadedDashboard({
    * a dashboard changed somewhere else is refused rather than overwritten —
    * and on success the cached copy is refreshed, or the next Edit would begin
    * from the document as it was before this save.
+   *
+   * **Everything the save needs rides in its own variables** — the dashboard,
+   * the document, its drafts, the version — and no callback reads them from
+   * this render. A pending save picks up newer renders' options
+   * (docs/research/tanstack-query-mutations.md, gotcha 7), so a save still
+   * starting when the user moved to another dashboard could otherwise write
+   * this dashboard's document under that one's id. The version is the
+   * dashboard's when Save is pressed; pinning it to when *Edit* was pressed —
+   * so a re-fetch during the session cannot move it on — is T198 (AC-015).
+   *
+   * `networkMode: 'always'`: with the default, a save made while the browser
+   * reports itself offline waits for the connection, neither resolving nor
+   * failing — the session would sit "Saving…", untouchable, with nothing
+   * said (gotcha 4). Sent regardless, it fails, and AC-184 keeps the work and
+   * says why.
    */
   const save = useMutation({
-    mutationFn: ({
-      next,
-      drafts,
-    }: {
-      next: DashboardDocument;
-      drafts: DashboardDocument['chartDrafts'];
-    }) =>
+    networkMode: 'always',
+    mutationFn: ({ id, next, drafts, version: from }: SaveVariables) =>
       saveDashboard({
-        dashboardId,
+        dashboardId: id,
         document: next,
-        version,
-        charts:
-          drafts === undefined ? [] : chartWritesOf({ ...next, chartDrafts: drafts }, dashboardId),
+        version: from,
+        charts: drafts === undefined ? [] : chartWritesOf({ ...next, chartDrafts: drafts }, id),
       }),
     /**
-     * The tiles keep showing the edited charts while the save is in flight.
-     * Saving leaves edit mode at once, before the server has answered, and
-     * the drafts go with the session — so without this the tiles fell back
-     * to the charts as they were loaded, and the old chart flashed up until
-     * the charts were fetched again.
+     * The tiles keep showing the edited charts once the save has gone
+     * through. The session leaves edit mode then, and the drafts go with it —
+     * so without this the tiles fell back to the charts as they were loaded,
+     * and the old chart flashed up until the charts were fetched again.
      */
-    onMutate: async ({ next, drafts }) => {
-      if (drafts === undefined) return;
+    onMutate: async ({ id, next, drafts }) => {
+      if (drafts === undefined) return undefined;
       /**
        * A load of the charts still running — the last save's re-fetch, with
        * Cube slow — would otherwise land after this and put that save's
        * charts back over this one's edits. Cancelled, its result is dropped
        * and the query reverts (`cancelQueries`, docs/research/data-layer.md).
        */
-      await queryClient.cancelQueries({ queryKey: ['dashboard-charts', dashboardId] });
-      queryClient.setQueryData<{
-        specs: Record<string, RenderSpec>;
-        errors: Record<string, unknown>;
-      }>(['dashboard-charts', dashboardId], (drawn) =>
-        drawn === undefined
-          ? drawn
-          : (drawnWithDrafts(drawn, { ...next, chartDrafts: drafts }) as typeof drawn),
+      await queryClient.cancelQueries({ queryKey: ['dashboard-charts', id] });
+      /**
+       * Only over charts already drawn: with none yet there is nothing to
+       * keep showing, and nothing for a failure to put back. What was there
+       * is kept, so a save that fails can put the cache back as it was
+       * (`onError`).
+       */
+      const before = queryClient.getQueryData<DrawnCharts>(['dashboard-charts', id]);
+      if (before === undefined) return undefined;
+      queryClient.setQueryData<DrawnCharts>(
+        ['dashboard-charts', id],
+        drawnWithDrafts(before, { ...next, chartDrafts: drafts }) as DrawnCharts,
       );
+      return { before };
     },
-    onSuccess: async () => {
+    /**
+     * Awaited before the save's promise resolves, and so before the session
+     * leaves edit mode (AC-184) — the dashboard's re-fetch, that is: the saved
+     * dashboard is in the cache by the time the session leaves. The page
+     * itself picks it up a moment later — the library tells a query's users
+     * on a timeout, after the save's promise has settled (research, Answer 7)
+     * — so for that moment the dashboard may show as it was opened; before
+     * T197 it did so for the whole re-fetch. The charts are fetched again
+     * without waiting: that re-runs every tile's query, which with Cube slow
+     * would hold the user at "Saving…" long after the save is stored, and the
+     * tiles already show the saved charts (`onMutate`). Must not throw — a
+     * throw here would turn a stored save into a failure (gotcha 1) — and
+     * `invalidateQueries` neither throws nor rejects unless asked to.
+     */
+    onSuccess: async (_saved, { id }) => {
       setSaveFailed('');
-      await queryClient.invalidateQueries({ queryKey: ['dashboard', dashboardId] });
-      await queryClient.invalidateQueries({ queryKey: ['dashboard-charts', dashboardId] });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-charts', id] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard', id] });
     },
-    onError: async (failure: Error) => {
+    onError: (failure: Error, { id }, written) => {
       setSaveFailed(failure.message);
-      // Back to what the server has: the edit shown optimistically was not kept.
-      await queryClient.invalidateQueries({ queryKey: ['dashboard-charts', dashboardId] });
+      if (written === undefined) return;
+      /**
+       * The drafts `onMutate` wrote into the cache were not saved, so they
+       * come out of it: put back as it was, at once, then fetched again for
+       * anything changed meanwhile. The tiles still show the drafts — the
+       * session is kept (AC-184) and draws them over the saved charts — but
+       * undone, a tile must show the chart as stored, not the unsaved edit.
+       *
+       * Put back, not only fetched again: offline, or with the server down,
+       * the fetch cannot run, and the unsaved edit stayed in the cache as if
+       * saved — found by the offline test (the research's documented pattern,
+       * gotcha 9). And not waited for: the save's promise rejects only once
+       * this returns (Answer 2), and the fetch re-runs every tile's query —
+       * waited for, it kept the session locked at "Saving…" beside a message
+       * saying the save had failed.
+       */
+      queryClient.setQueryData(['dashboard-charts', id], written.before);
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-charts', id] });
     },
   });
   const charts = useQuery({
@@ -244,8 +314,8 @@ function LoadedDashboard({
   return (
     <>
       {saveFailed === '' ? null : (
-        // A save that failed in silence is the worst outcome of all: the
-        // editor has left edit mode believing the work is stored.
+        // Why the save failed (AC-184). The session is still open beneath it,
+        // every change kept, for another try or another course.
         <p role="alert" data-testid="save-failed">
           {saveFailed}
         </p>
@@ -268,9 +338,10 @@ function LoadedDashboard({
         // the view itself (T032). They used to navigate here, a full page
         // load that ended the edit session — so there was no dashboard to
         // return to with the tile updated, and nothing a Discard could reach.
-        onSave={(next, drafts) => {
-          save.mutate({ next, drafts });
-        }}
+        // The save's outcome goes back to the session: it leaves edit mode when
+        // the save resolves, and keeps every change when it rejects (AC-184).
+        // The rejection is the session's to handle; why is shown above.
+        onSave={(next, drafts) => save.mutateAsync({ id: dashboardId, next, drafts, version })}
       />
     </>
   );
