@@ -23,3 +23,11 @@ export {
   type ItemClicks,
   type ItemEvent,
 } from './interaction/itemClick';
+export {
+  BAR_SAMPLES,
+  insideShape,
+  touchesSpan,
+  type Point,
+  type Shape,
+} from './interaction/hitTest';
+export { dragGesture, type DragEvent, type DragGesture } from './interaction/dragOverlay';

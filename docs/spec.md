@@ -265,7 +265,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: a stored marking references a row index or a position in a result set.
 - [x] AC-087 WHEN the user clicks an item in a tile that marks, THE SYSTEM SHALL replace that marking with the clicked item; WHEN the user Ctrl-clicks or ⌘-clicks, THE SYSTEM SHALL toggle that item and leave the rest (direction.md rule 47).
       Fails when: a plain click adds to the marking, or a modified click replaces it.
-- [ ] AC-088 WHEN the user drags a rectangle, or Alt-drags a lasso, over a tile that marks, THE SYSTEM SHALL mark every item the shape touches, and a press-and-release without movement SHALL be treated as a click, not a selection.
+- [x] AC-088 WHEN the user drags a rectangle, or Alt-drags a lasso, over a tile that marks, THE SYSTEM SHALL mark every item the shape touches, and a press-and-release without movement SHALL be treated as a click, not a selection.
       Fails when: a drag of at least 5 pixels is treated as a click, or a click is treated as an empty selection.
 - [ ] AC-089 WHEN the user Ctrl-drags or ⌘-drags a shape, THE SYSTEM SHALL toggle the enclosed items when all or none of them are marked, and otherwise add them (direction.md rule 47).
       Fails when: a Ctrl-drag over a partly marked set unmarks items instead of adding them.
