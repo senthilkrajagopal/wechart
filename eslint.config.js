@@ -10,6 +10,7 @@ export default tseslint.config(
     // design direction, not source we ship (CLAUDE.md).
     ignores: [
       '**/dist/**',
+      '**/dist-demo/**',
       '**/node_modules/**',
       '.claude/**',
       'docs/**',
