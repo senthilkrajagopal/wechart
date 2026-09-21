@@ -1,6 +1,13 @@
-import { formatValue, type RenderSpec } from '@wechart/core';
+import {
+  formatValue,
+  markRowClick,
+  matchesPredicate,
+  rowsMarkable,
+  type MarkingPredicate,
+  type RenderSpec,
+} from '@wechart/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
 /**
  * The table (AC-037), and the table view every chart can switch to (AC-178).
@@ -24,15 +31,47 @@ import { useRef } from 'react';
 export interface DataTableProps {
   readonly spec: RenderSpec;
   readonly height?: number;
+  /**
+   * Row marking (AC-092). Absent, or present without a primary key, and rows
+   * are not markable at all: `references-markings.md` quotes Spotfire — "A
+   * primary key is required to know which rows to mark" — and it is AC-086's
+   * reasoning again, since without a key no combination of members names one
+   * row rather than every row that looks like it.
+   */
+  readonly marking?: {
+    readonly predicate: MarkingPredicate;
+    readonly primaryKey?: string | undefined;
+    readonly onMark: (predicate: MarkingPredicate) => void;
+  };
 }
 
 const DEFAULT_HEIGHT = 320;
 /** Fixed, so the native table layout survives virtualisation. */
 const ROW_HEIGHT = 28;
 
-export function DataTable({ spec, height = DEFAULT_HEIGHT }: DataTableProps) {
+export function DataTable({ spec, height = DEFAULT_HEIGHT, marking }: DataTableProps) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const { rows } = spec;
+
+  /**
+   * Where a Shift-range starts. Held here rather than in the marking, because
+   * it is not part of what is marked — reopening a dashboard restores the
+   * marking, not the last row someone happened to click.
+   */
+  const [anchor, setAnchor] = useState<number | null>(null);
+  const markable = rowsMarkable(marking?.primaryKey);
+
+  const clickRow = (index: number, shift: boolean) => {
+    if (marking === undefined || !markable) return;
+
+    const next = markRowClick(rows, index, {
+      shift,
+      anchor,
+      primaryKey: marking.primaryKey,
+    });
+    setAnchor(next.anchor);
+    marking.onMark(next.predicate);
+  };
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -117,7 +156,26 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT }: DataTableProps) {
                 key={item.key}
                 data-testid="table-row"
                 aria-rowindex={item.index + 2}
-                style={{ height: `${String(ROW_HEIGHT)}px` }}
+                /**
+                 * `aria-selected` only where rows can actually be marked: on a
+                 * table without a primary key it would announce a state the
+                 * user has no way to reach.
+                 */
+                {...(markable
+                  ? {
+                      'aria-selected':
+                        row !== undefined &&
+                        marking !== undefined &&
+                        matchesPredicate(marking.predicate, row),
+                    }
+                  : {})}
+                onClick={(event) => {
+                  clickRow(item.index, event.shiftKey);
+                }}
+                style={{
+                  height: `${String(ROW_HEIGHT)}px`,
+                  ...(markable ? { cursor: 'pointer' } : {}),
+                }}
               >
                 {columns.map((column) => (
                   <td key={column}>{formatValue(row?.[column], column, spec.formats ?? {})}</td>

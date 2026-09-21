@@ -85,6 +85,14 @@ export {
 } from './markings/range';
 
 export {
+  itemForRow,
+  markRowClick,
+  rowsMarkable,
+  type RowClick,
+  type RowMarking,
+} from './markings/rows';
+
+export {
   EMPTY_PREDICATE,
   isEmptyPredicate,
   matchesPredicate,
