@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# A build served beside the browser suite's, to try the app in.
+dist-demo/
 coverage/
 
 # Playwright and Vite build output
