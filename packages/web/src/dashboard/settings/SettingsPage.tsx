@@ -124,7 +124,15 @@ export function SettingsPage({ document, onCancel, onSave }: SettingsPageProps) 
             type="button"
             className="settings-page__save"
             onClick={() => {
-              onSave(draft);
+              /**
+               * Saving a page nobody altered is leaving it, not a change to
+               * record. Handed to the session regardless, it put "Discard (1
+               * change)" on a dashboard that was exactly as it opened — and
+               * that count is the only thing telling an editor whether they
+               * have unsaved work (AC-074).
+               */
+              if (isDirty(document, draft)) onSave(draft);
+              else onCancel();
             }}
           >
             Save settings

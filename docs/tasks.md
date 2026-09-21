@@ -820,9 +820,12 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **Known gaps, left for T182 (AC-176) rather than invented here:** focus is not returned to whatever opened the dialog when it closes, and there is no focus trap — `DeleteSectionDialog` has both gaps too. T182's sweep says "every dialog", so it will find them.
   - **A warning T081 inherits.** `isDirty` compares the whole document, which is safe only because the dashboard is unmounted while the settings overlay is open, so `document` cannot move underneath. If AC-075's width setting gains a live preview through `session.change`, both sides gain it, `isDirty` goes false, and Cancel discards silently.
   - **This will change two tests T075 wrote, and that is expected, not a regression.** `SettingsPage.test.tsx` asserts Cancel and "← Back to …" return *immediately* with the change dropped, which is AC-069's clause ("a way to return without saving") and is what the page does until this task. Once leaving asks first, both go through the prompt. Update them rather than weakening them: the thing to keep proving is that the change does not survive, which is AC-069's failing state either way.
-- [ ] T080 (AC-074) Record a settings save as one undoable change
-  - Files: `packages/web/src/dashboard/edit/history.ts`, `packages/web/src/dashboard/settings/undo.test.ts`
-  - Failing test: `undo.test.ts`: one Undo after saving several settings reverts all of them (AC-074).
+- [x] T080 (AC-074) Record a settings save as one undoable change
+  - Files: `packages/web/src/dashboard/settings/undo.test.tsx`, `packages/web/src/dashboard/settings/SettingsPage.tsx`
+  - Failing test: `undo.test.tsx`: one Undo after saving several settings reverts all of them (AC-074).
+  - Done 2026-09-20. AC-074 ticked. **Files differ from the plan above, which has been corrected**: `edit/history.ts` needed no change — T075 routed a settings save through `session.change`, which is one entry by construction, so most of this criterion was already standing and what was missing was the test that says so.
+  - **Every case changes two settings and presses Undo once**, because the criterion's two failing states pull against each other: recording each setting separately satisfies "nothing left applied" and fails "one Undo", while folding them into one change but dropping one satisfies "one Undo" and fails the rest. Mutation-verified by splitting the save into two `session.change` calls — "Discard (2 changes)", and an Undo that leaves the rename applied.
+  - **One real defect: saving an unaltered page recorded a change.** The draft is a fresh object even when nothing was touched, so Save on a page nobody edited put "Discard (1 change)" on a dashboard that was exactly as it opened — and that count is the only thing telling an editor whether they have unsaved work. Saving a clean page now leaves it, which is what it is.
   - Depends on: T066, T075
 - [ ] T081 (AC-075) Render the dashboard centred at 1,440 px or full width, per the setting
   - Files: `packages/web/src/dashboard/grid/Canvas.tsx`, `packages/web/src/dashboard/settings/pageWidth.test.ts`
