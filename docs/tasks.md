@@ -1875,6 +1875,13 @@ Each task below measures its components' computed styles in `e2e/design-conforma
   - Failing test: `e2e/design-conformance.spec.ts`: the sidebar tabs are 36 px, 12 px 600, underlined in the accent colour when selected; Properties fields have 12/16 600 secondary labels over 32 px inputs, in sections with a 12 px uppercase heading (AC-187).
   - Depends on: T202
 
+- [ ] T206 (AC-188) Write time values by their granularity in axes, labels, tooltips and tables
+  - Files: `packages/core/src/format.ts`, `packages/core/src/format.test.ts`, `packages/charts/src/axis.ts`, `packages/charts/src/tooltip.ts`, `packages/web/src/tiles/DataTable.tsx`, `e2e/dashboard.spec.ts`
+  - Failing test: `format.test.ts`: each granularity writes its value as AC-188 lists; `e2e/dashboard.spec.ts`: the seeded "Orders over time by status" tile's axis shows no raw timestamp (AC-188).
+  - Depends on: T195
+  - Added 2026-09-21. The screenshots taken for AC-187 showed the seeded time chart's axis as `2026-01-02T00:00:00.000`, and no criterion covered it. The formats in AC-188 are a default the user can change; the model's own format for a member wins.
+  - **Also seen, not a formatting matter:** the same seeded chart is a *bar* chart of daily counts over 240 days and three statuses. Its bars are 0 or 1 and less than a pixel wide, so it reads as empty. The seed chose `bar` for its tests; the recommender would not pick it for this shape.
+
 ## F22. Wiring the marking subsystem (deferred)
 
 - [ ] T190 (AC-087, AC-088, AC-089, AC-090, AC-091, AC-092, AC-093, AC-094, AC-095, AC-096, AC-097, AC-098, AC-100, AC-101, AC-102, AC-103, AC-107, AC-108, AC-109) Connect the marking subsystem to the rendering path
@@ -1938,4 +1945,4 @@ Each task below measures its components' computed styles in `e2e/design-conforma
 | AC-044 | T051       | AC-089 | T095 | AC-134 | T140 | AC-179 | T184       |
 | AC-045 | T043       | AC-090 | T096 | AC-135 | T141 | AC-180 | T001, T185 |
 | AC-181 | T187       | AC-182 | T191 | AC-183 | T192 | AC-184 | T197       |
-| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205 |        |            |
+| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205 | AC-188 | T206       |
