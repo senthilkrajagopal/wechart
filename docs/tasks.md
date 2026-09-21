@@ -1642,6 +1642,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Failing test: `JoinEditor.test.tsx`: every declared join appears with the direction the model declares, and adding one takes a target cube, a relationship and a condition (AC-138).
   - Depends on: T138
 - [ ] T145 (AC-139) Generate cubes from a data source's tables
+  - **Deferred 2026-09-21 with F18**, under the user's rule "for requirements that dont work with cube defer". It depends on T165, the connection test. Reading a source's tables goes through Cube's drivers called from wechart's server, as a test does, and not through a Cube API: `research/cube-capabilities.md` §6 has "Schema and table browsing: Core (driver methods; dev-only route)".
   - Files: `packages/api/src/model/generate.ts`, `packages/web/src/workspaces/model/GenerateCubes.tsx`, `packages/api/src/model/generate.test.ts`
   - Failing test: `generate.test.ts`: each selected table produces a cube whose columns map to dimensions plus a count measure, and any dropped column is reported (AC-139).
   - Depends on: T142, T165
