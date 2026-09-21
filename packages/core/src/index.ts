@@ -58,3 +58,17 @@ export { applyTopN, OTHER_LABEL } from './topN';
 export { applySort, type SortBy, type SortDirection, type SortSettings } from './sort';
 
 export { formatValue, formatterFor, type MemberFormats } from './format';
+
+export {
+  MARKING_SLOTS,
+  MAX_MARKINGS,
+  addMarking,
+  canAddMarking,
+  defaultMarkings,
+  markingsFrom,
+  problemsWith,
+  removeMarking,
+  setDefaultMarking,
+  type Marking,
+  type MarkingSlot,
+} from './markings/model';

@@ -418,13 +418,26 @@ test('the gear opens a settings page with its five sections and a way back', asy
   await page.getByRole('button', { name: 'Dashboard settings' }).click();
 
   const nav = page.getByRole('navigation', { name: 'Settings sections' });
+  /**
+   * Anchored patterns rather than exact strings, because each mode section's
+   * visible text also carries its Active/Inactive label (AC-070). This keeps
+   * what `toHaveText` gives and a `dataset` read does not: it retries until
+   * the overlay has committed, and it asserts the names are actually *visible*
+   * — against attributes alone, a nav of unlabelled buttons would pass.
+   */
   await expect(nav.getByRole('button')).toHaveText([
-    'General',
-    'Interactions',
-    'Markings',
-    'Cross-filtering',
-    'Layout',
+    /^General/,
+    /^Interactions/,
+    /^Markings/,
+    /^Cross-filtering/,
+    /^Layout/,
   ]);
+
+  // T076 / AC-070: exactly one mode active, the other labelled, in the real
+  // app. A dashboard saved before interactions existed — which the seeded one
+  // is — has to read as Markings rather than as neither.
+  await expect(nav.locator('[data-section="Markings"]')).toContainText('Active');
+  await expect(nav.locator('[data-section="Cross-filtering"]')).toContainText('Inactive');
 
   // The dashboard is gone from the page, not merely covered over.
   await expect(page.getByTestId('grid-item')).toHaveCount(0);

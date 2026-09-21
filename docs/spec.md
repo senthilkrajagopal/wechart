@@ -217,7 +217,7 @@ Traces to: `[docs/inputs §12]`, direction.md §2, rules 13, 32, 56.
 
 - [x] AC-069 WHEN the user activates the gear control on a dashboard, THE SYSTEM SHALL open a settings page with General, Interactions, Markings, Cross-filtering and Layout sections, and a way to return without saving.
       Fails when: a section is missing, or leaving the page applies changes that were not saved.
-- [ ] AC-070 WHEN the user changes the interaction mode, THE SYSTEM SHALL keep both configurations, activate the chosen one and label the other as inactive (direction.md rule 56).
+- [x] AC-070 WHEN the user changes the interaction mode, THE SYSTEM SHALL keep both configurations, activate the chosen one and label the other as inactive (direction.md rule 56).
       Fails when: switching discards the other mode's configuration, or both modes are active at once.
 - [ ] AC-071 WHEN the interaction mode changes and the settings are saved, THE SYSTEM SHALL clear current marks and cross-filters.
       Fails when: a mark or cross-filter from the previous mode still affects a tile.
@@ -257,7 +257,7 @@ Traces to: `[docs/inputs §2]`, direction.md §7, rule 14.
 Purpose: Spotfire's linked selections, on a live semantic layer.
 Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; `[docs/design/references-markings.md]`, `[research/cube/markings-query-support.md]`.
 
-- [ ] AC-084 THE SYSTEM SHALL give every dashboard at least one marking and exactly one default marking, and SHALL allow at most four markings per dashboard (direction.md rules 43, 57; `[R7]`).
+- [x] AC-084 THE SYSTEM SHALL give every dashboard at least one marking and exactly one default marking, and SHALL allow at most four markings per dashboard (direction.md rules 43, 57; `[R7]`).
       Fails when: a dashboard has no default marking, or a fifth marking can be created.
 - [ ] AC-085 WHEN a chart tile is created, THE SYSTEM SHALL set it to mark with the dashboard's default marking, and the tile's Marking setting SHALL also offer "(None)" and every other marking (direction.md rule 44).
       Fails when: a new chart tile marks with no marking, or "(None)" is missing from the setting.

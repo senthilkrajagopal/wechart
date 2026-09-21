@@ -68,13 +68,20 @@ describe('the dashboard settings page', () => {
     await openSettings();
 
     const nav = screen.getByRole('navigation', { name: 'Settings sections' });
-    expect([...nav.querySelectorAll('button')].map((button) => button.textContent)).toEqual([
+    const buttons = [...nav.querySelectorAll('button')];
+
+    expect(buttons.map((button) => button.dataset['section'])).toEqual([
       'General',
       'Interactions',
       'Markings',
       'Cross-filtering',
       'Layout',
     ]);
+    // And each one actually says its name. On the attribute alone a nav of
+    // unlabelled buttons would satisfy the criterion.
+    for (const button of buttons) {
+      expect(button.textContent).toContain(button.dataset['section']);
+    }
   });
 
   it('opens each of the five, not just the one', async () => {
@@ -84,8 +91,10 @@ describe('the dashboard settings page', () => {
     show();
     await openSettings();
 
+    const nav = screen.getByRole('navigation', { name: 'Settings sections' });
     for (const section of SETTINGS_SECTIONS) {
-      const button = screen.getByRole('button', { name: section });
+      const button = nav.querySelector<HTMLButtonElement>(`[data-section="${section}"]`);
+      if (button === null) throw new Error(`no nav entry for ${section}`);
       await userEvent.click(button);
 
       expect(screen.getByRole('heading', { name: section })).toBeTruthy();
@@ -241,6 +250,91 @@ describe('the dashboard settings page', () => {
     // the dashboard is written, and that is its own Save.
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /^Discard/ }).textContent).toBe('Discard (1 change)');
+  });
+
+  it('offers the two interaction modes as a choice of one', async () => {
+    // T076 / AC-070. direction.md calls them radio cards; what the criterion
+    // needs is that they are a single choice, which is what radios are.
+    show();
+    await openSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Interactions' }));
+
+    const modes = screen.getAllByRole('radio');
+    expect(modes.map((mode) => mode.getAttribute('value'))).toEqual(['markings', 'crossFilter']);
+    expect(modes.filter((mode) => (mode as HTMLInputElement).checked)).toHaveLength(1);
+  });
+
+  it('labels the inactive mode in the nav, and moves the label when the mode changes', async () => {
+    /**
+     * direction.md rule 56: the nav "labels each section active or inactive".
+     * Asserted as a pair and across a switch, because a nav that hard-coded
+     * "Active" beside Markings would read correctly on a new dashboard and be
+     * wrong the moment anyone changed anything.
+     */
+    show();
+    await openSettings();
+
+    const nav = screen.getByRole('navigation', { name: 'Settings sections' });
+    expect(within(nav).getByRole('button', { name: /^Markings/ }).textContent).toContain('Active');
+    expect(within(nav).getByRole('button', { name: /^Cross-filtering/ }).textContent).toContain(
+      'Inactive',
+    );
+
+    await userEvent.click(within(nav).getByRole('button', { name: /^Interactions/ }));
+    await userEvent.click(screen.getByRole('radio', { name: /Cross-filtering/ }));
+
+    expect(within(nav).getByRole('button', { name: /^Markings/ }).textContent).toContain(
+      'Inactive',
+    );
+    expect(within(nav).getByRole('button', { name: /^Cross-filtering/ }).textContent).toContain(
+      'Active',
+    );
+  });
+
+  it('keeps the configuration of the mode left behind, all the way through a save', async () => {
+    /**
+     * The model test proves `setMode` keeps both. This proves the page does
+     * not undo that on its way to the document — the place a careful pure
+     * function is most often wasted.
+     */
+    /**
+     * The dashboard carries markings that are *not* the default ones. Against
+     * the default fixture this test passed even with `setMode` rewritten to
+     * return `{...DEFAULT_INTERACTIONS, mode}` — the classic discard-on-switch
+     * bug — because the value kept and the value reset to were identical.
+     * That is the same trap `interactionMode.test.ts` is built to avoid, fallen
+     * into one layer up.
+     */
+    const onSave = vi.fn();
+    render(
+      <DashboardView
+        document={{
+          ...DOC,
+          // Markings sit beside the settings, not inside the mode (AC-065
+          // names them peers). Both sides are distinctive so that "kept" and
+          // "reset to the default" are different values.
+          markings: [
+            { id: 'mk1', name: 'Q3 cohort', slot: 'mk1', isDefault: true },
+            { id: 'mk2', name: 'Outliers', slot: 'mk2', isDefault: false },
+          ],
+          settings: {
+            width: 'fixed',
+            interactions: { mode: 'markings', crossFilter: { defaultAction: 'highlight' } },
+          },
+        }}
+        specs={{}}
+        onSave={onSave}
+      />,
+    );
+    await openSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Interactions' }));
+    await userEvent.click(screen.getByRole('radio', { name: /Cross-filtering/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    const saved = (onSave.mock.calls[0] as [DashboardDocument])[0];
+    expect(saved.settings.interactions?.mode).toBe('crossFilter');
+    expect(saved.markings?.map((marking) => marking.name)).toEqual(['Q3 cohort', 'Outliers']);
+    expect(saved.settings.interactions?.crossFilter.defaultAction).toBe('highlight');
   });
 
   it('keeps the dashboard underneath it out of the way', async () => {

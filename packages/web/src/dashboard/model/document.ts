@@ -16,9 +16,10 @@
  * the render spec's, and this is a persisted document model, so it should name
  * the same owner `chart-document.ts` does.
  */
-import type { ChartType } from '@wechart/core';
+import type { ChartType, Marking } from '@wechart/core';
 
 import type { GridTile } from '../grid/geometry';
+import type { Interactions } from '../settings/interactionMode';
 
 export const DASHBOARD_DOCUMENT_VERSION = 1;
 
@@ -99,6 +100,12 @@ export interface Page {
 export interface DashboardSettings {
   /** direction.md: fixed 1,440 px and centred, or full width. */
   readonly width: 'fixed' | 'full';
+  /**
+   * Which interaction mode is in effect and the configuration of *both*
+   * (AC-070). Optional because every dashboard stored so far predates it;
+   * `interactionsOf` supplies the default rather than a migration.
+   */
+  readonly interactions?: Interactions;
 }
 
 export interface DashboardDocument {
@@ -108,6 +115,17 @@ export interface DashboardDocument {
   readonly owner?: string;
   readonly pages: readonly Page[];
   readonly settings: DashboardSettings;
+  /**
+   * Marking definitions, beside the settings rather than inside them: AC-065
+   * names "dashboard settings **and** marking definitions" as peers, and
+   * direction.md rule 54 says a saved dashboard stores the definitions (never
+   * the current marks, which a link or a bookmark carries).
+   *
+   * Optional because every dashboard stored so far predates them;
+   * `markingsFrom` in @wechart/core supplies and repairs, so a dashboard is
+   * never read without a default marking (AC-084).
+   */
+  readonly markings?: readonly Marking[];
 }
 
 export const DEFAULT_SETTINGS: DashboardSettings = { width: 'fixed' };

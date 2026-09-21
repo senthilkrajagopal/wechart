@@ -344,6 +344,34 @@ main:has(.dashboard) {
   background: var(--wc-bg-surface);
 }
 .settings-page__later { color: var(--wc-text-secondary); }
+/* Which of the two interaction modes is in effect (AC-070, rule 56). Pushed to
+   the end of the nav row, in secondary ink: it reports state rather than
+   naming the destination, so it must not compete with the section name. */
+.settings-page__nav button { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.settings-page__activity {
+  font-size: var(--wc-text-xs-size);
+  color: var(--wc-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* direction.md calls these radio cards, so they are cards: the whole option is
+   the target, not a 13px circle beside it. */
+.settings-modes { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; max-width: 520px; }
+.settings-modes legend { padding: 0 0 8px; font-weight: var(--wc-text-sm-strong-weight); }
+.settings-modes__card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.settings-modes__card:hover { background: var(--wc-bg-subtle); }
+.settings-modes__card:has(input:checked) {
+  border-color: var(--wc-accent);
+  background: var(--wc-bg-subtle);
+}
 .settings-field { display: grid; gap: 4px; max-width: 420px; }
 .settings-field input {
   height: 32px;

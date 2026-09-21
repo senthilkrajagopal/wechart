@@ -42,7 +42,12 @@ describe('what goes to the server', () => {
   it('sends parts of the document it knows nothing about', async () => {
     // Markings are exactly this case. A save that enumerated fields would
     // drop them at F9 and nothing here would fail.
-    const withMarkings = { ...DOC, markings: [{ id: 'm1', name: 'Selection' }] };
+    // A real marking now that markings have a type (T090); this case is about
+    // the save being field-agnostic, so what matters is that it travels.
+    const withMarkings = {
+      ...DOC,
+      markings: [{ id: 'mk1', name: 'Selection', slot: 'mk1', isDefault: true }],
+    };
     const fetchImpl = ok();
     await saveDashboard({
       dashboardId: 'd1',
