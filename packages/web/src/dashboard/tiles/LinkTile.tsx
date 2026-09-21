@@ -30,12 +30,24 @@ export function webAddressProblem(address: string): string | undefined {
  * came to be in the document.
  */
 function hrefOf(tile: Tile, carried: readonly SearchFilter[] | undefined): string | undefined {
-  const target = tile.link?.target;
-  if (target === undefined) return undefined;
-  if (target.kind === 'url')
-    return webAddressProblem(target.url) === undefined ? target.url.trim() : undefined;
-  const path = `/explore/dashboards/${encodeURIComponent(target.dashboardId)}`;
-  if (target.passFilters !== true || carried === undefined || carried.length === 0) return path;
+  /**
+   * Read as untrusted: a body saved through the API, or an older one, can
+   * hold a target of any shape, and one that throws here fails the whole
+   * dashboard rather than one tile (T070's review). Anything unexpected is
+   * no link.
+   */
+  const target = tile.link?.target as unknown;
+  if (typeof target !== 'object' || target === null) return undefined;
+  const { kind, url, dashboardId, passFilters } = target as Record<string, unknown>;
+  if (kind === 'url') {
+    if (typeof url !== 'string' || webAddressProblem(url) !== undefined) return undefined;
+    // The address as parsed, not as typed: "http:evil.com" is accepted as
+    // http://evil.com/, but as an href it resolves against wechart's page.
+    return new URL(url.trim()).href;
+  }
+  if (kind !== 'dashboard' || typeof dashboardId !== 'string') return undefined;
+  const path = `/explore/dashboards/${encodeURIComponent(dashboardId)}`;
+  if (passFilters !== true || carried === undefined || carried.length === 0) return path;
   return `${path}?filters=${encodeURIComponent(JSON.stringify(carried))}`;
 }
 

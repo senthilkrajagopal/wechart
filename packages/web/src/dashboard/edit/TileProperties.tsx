@@ -173,8 +173,18 @@ function LinkProperties({
           id={ids.goes}
           value={goesTo}
           onChange={(event) => {
-            setGoesTo(event.target.value === 'url' ? 'url' : 'dashboard');
+            const next = event.target.value === 'url' ? 'url' : 'dashboard';
+            setGoesTo(next);
             setProblem('');
+            /**
+             * A target of the other kind goes: kept, the panel said "No
+             * dashboard chosen yet." while the tile still opened the web
+             * address (T070's review). Undo brings it back.
+             */
+            if (target !== undefined && target.kind !== next) {
+              const style = tile.link?.style;
+              onChange({ link: style === undefined ? {} : { style } });
+            }
           }}
         >
           <option value="dashboard">A dashboard</option>
@@ -195,7 +205,9 @@ function LinkProperties({
               onBlur={() => {
                 const refused = webAddressProblem(address);
                 setProblem(refused ?? '');
-                if (refused === undefined) link({ target: { kind: 'url', url: address.trim() } });
+                // Stored as parsed, the address the link will follow.
+                if (refused === undefined)
+                  link({ target: { kind: 'url', url: new URL(address.trim()).href } });
               }}
             />
           </Field>

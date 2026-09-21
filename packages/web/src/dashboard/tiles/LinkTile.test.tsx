@@ -201,3 +201,127 @@ describe('a link tile’s properties', () => {
     });
   });
 });
+
+describe('found at T070’s review', () => {
+  it('carries only the filters in effect, not every value held', () => {
+    /**
+     * A value held for a filter that cannot use it — kept for Undo, or left
+     * from a URL — was carried to the target, which then opened filtered by
+     * something this dashboard was not showing.
+     */
+    const withFilters: DashboardDocument = {
+      ...DOC,
+      pages: [
+        {
+          id: 'p1',
+          title: 'Overview',
+          items: [
+            {
+              id: 't-link',
+              kind: 'link',
+              w: 3,
+              h: 7,
+              text: 'Open dashboard',
+              link: { target: { kind: 'dashboard', dashboardId: 'd-2', passFilters: true } },
+            },
+          ],
+        },
+      ],
+      filters: [
+        { id: 'f-amount', widget: 'range', member: 'orders.amount' },
+        { id: 'f-status', widget: 'checkbox', member: 'orders.status' },
+        { id: 'f-region', widget: 'checkbox', member: 'orders.region' },
+      ],
+    };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <DashboardView
+          dashboardId="d1"
+          document={withFilters}
+          specs={{}}
+          onSave={vi.fn()}
+          urlFilterValues={{
+            // Not a range: held, but it cannot filter a range filter.
+            'f-amount orders.amount': { kind: 'values', values: ['10'] },
+            'f-status orders.status': { kind: 'values', values: ['shipped'] },
+            // Nothing picked: no filter at all.
+            'f-region orders.region': { kind: 'values', values: [] },
+          }}
+        />
+      </QueryClientProvider>,
+    );
+
+    const href = screen.getByRole('link', { name: 'Open dashboard' }).getAttribute('href') ?? '';
+    const carried = new URL(href, 'http://wechart.test').searchParams.get('filters');
+    expect(JSON.parse(carried ?? 'null')).toEqual([
+      { id: 'f-status', member: 'orders.status', value: { kind: 'values', values: ['shipped'] } },
+    ]);
+  });
+
+  it('draws a malformed stored link as text rather than failing the dashboard', () => {
+    for (const target of [
+      null,
+      { kind: 'url' },
+      { kind: 'url', url: 42 },
+      { kind: 'dashboard' },
+      { kind: 'somewhere' },
+    ]) {
+      const { unmount } = render(
+        <LinkTile tile={tile({ target } as unknown as Tile['link'])} editing={false} />,
+      );
+      expect(screen.queryByRole('link')).toBeNull();
+      expect(screen.getByText('Open report')).toBeTruthy();
+      unmount();
+    }
+  });
+
+  it('links to the address it accepted, not to the text as typed', () => {
+    // "http:evil.com" parses as http://evil.com/, but as an href the browser
+    // resolves it against wechart's own page.
+    render(
+      <LinkTile tile={tile({ target: { kind: 'url', url: 'http:evil.com' } })} editing={false} />,
+    );
+    expect(screen.getByRole('link', { name: 'Open report' }).getAttribute('href')).toBe(
+      'http://evil.com/',
+    );
+  });
+
+  it('forgets the old target when where it goes to changes', async () => {
+    const linked: DashboardDocument = {
+      ...DOC,
+      pages: [
+        {
+          id: 'p1',
+          title: 'Overview',
+          items: [
+            {
+              id: 't-link',
+              kind: 'link',
+              w: 3,
+              h: 7,
+              text: 'Open dashboard',
+              link: { target: { kind: 'url', url: 'https://example.com/' } },
+            },
+          ],
+        },
+      ],
+    };
+    const onSave = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <DashboardView dashboardId="d1" document={linked} specs={{}} onSave={onSave} />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(document.querySelector('[data-tile="t-link"]') as HTMLElement);
+    const sidebar = screen.getByRole('complementary', { name: 'Edit sidebar' });
+    await userEvent.click(within(sidebar).getByRole('tab', { name: 'Properties' }));
+
+    // The panel said "No dashboard chosen yet." while the tile still opened
+    // the web address.
+    await userEvent.selectOptions(within(sidebar).getByLabelText('Goes to'), 'dashboard');
+    await userEvent.click(screen.getByRole('button', { name: /^Save/ }));
+
+    expect(savedLink(onSave)?.target).toBeUndefined();
+  });
+});

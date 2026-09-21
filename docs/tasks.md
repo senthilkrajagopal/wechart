@@ -1027,6 +1027,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - `e2e/tiles.spec.ts` (2), on the real app: dashboard A, status "shipped" set, links to dashboard B, which opens with its own status filter ticked, the chart narrowed to one row, and its URL naming its own filter. A's web-address link has the address, `_blank` and `noopener noreferrer`. And in edit mode a `javascript:` address is refused, and after saving nothing is a link and no target is stored.
   - **Full runs:** typecheck and lint clean (the existing DataTable warning aside); 1,449 unit tests and 600 browser runs passed.
   - **Done 2026-09-21. AC-064 ticked** — `e2e/tiles.spec.ts`, with `LinkTile.test.tsx` and `url.test.ts`.
+  - **Cold review (2026-09-21): AC-064 met.** Four real bugs, fixed with a test for each in `LinkTile.test.tsx`, red first:
+    1. **The link carried every value held, not the filters in effect.** A value kept for Undo on a field its filter had left, a value its widget cannot use, or an empty pick all reached the target, which opened filtered by something the source was not showing. It now carries `activeFilters`.
+    2. **A malformed stored target failed the whole dashboard.** Examples: a target of `null`, a `url` that isn't a string, a dashboard target with no id, or an unknown kind, saved through the API. `hrefOf` now reads the target as untrusted, and any of these is text, not a link.
+    3. **The link followed the text as typed, not the address accepted.** `http:evil.com` parses as `http://evil.com/`, but as an href it resolves against wechart's page. Both the link and what Properties stores now use the parsed `URL.href`.
+    4. **Properties could show a different target from the one stored.** Changing "Goes to" now drops a target of the other kind, and Undo brings it back.
+  - **Left, reported to the user:**
+    - The target silently drops a carried value for a field it has no filter on. No criterion or direction.md rule says how carried filters meet a target's different filters, so what the reader is told in that case is the user's call.
+    - The API stores a link target without checking its scheme; only drawing it disarms one. T069 checks images on the server.
+  - **Full runs:** 765 web unit tests; `tiles.spec.ts` and `filters.spec.ts` passed in every browser (45).
 - [x] T071 (AC-065) Persist the layout, tile settings, dashboard settings and marking definitions on save
   - Files: `packages/api/src/repos/dashboards.ts`, `packages/web/src/dashboard/edit/save.ts`, `packages/web/src/dashboard/edit/save.test.ts`
   - Done 2026-09-20. AC-065 ticked, and **all three things T023 left here are closed** — see below.

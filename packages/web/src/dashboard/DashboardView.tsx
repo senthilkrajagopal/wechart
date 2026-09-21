@@ -40,7 +40,7 @@ import { LinkTile } from './tiles/LinkTile';
 import { FilterBar } from '../filters/FilterBar';
 import { FilteredCharts, keepLastAnswers, type FilteredResults } from '../filters/FilteredCharts';
 import { newFilter, type FilterValues } from '../filters/model';
-import { adoptValues, sameValues, valuesToSearch, type SearchFilter } from '../filters/url';
+import { adoptValues, sameValues, type SearchFilter } from '../filters/url';
 import { Canvas, type CanvasProps } from './grid/Canvas';
 import { DRAG_INSTRUCTIONS, DRAG_INSTRUCTIONS_ID, useTileDrag } from './grid/drag';
 import { COLUMNS, ROW_UNIT_PX } from './grid/geometry';
@@ -797,6 +797,22 @@ export function DashboardView({
   }, [reached, filtered, live.filters, memberTitle]);
 
   /**
+   * What a link tile passes on (AC-064): the filters in effect, and only
+   * those. Every value held went before — one kept for Undo on a field its
+   * filter has left, or one its widget cannot use — and the target opened
+   * filtered by something this dashboard was not showing (T070's review).
+   */
+  const carried = useMemo(
+    () =>
+      activeFilters(live.filters ?? [], filterValues).map(({ filter, value }) => ({
+        id: filter.id,
+        member: filter.member ?? '',
+        value,
+      })),
+    [live.filters, filterValues],
+  );
+
+  /**
    * Not covered (AC-079): the filters the model rules out, and those Cube
    * refused to join to the chart when asked (`FilteredCharts`).
    */
@@ -818,7 +834,7 @@ export function DashboardView({
     pending: withFiltered.pending,
     notCovered: marked,
     inEffect,
-    carried: valuesToSearch(filterValues),
+    carried,
     titleOf: chartTitleOf,
   };
 
