@@ -123,6 +123,13 @@ export interface DashboardViewProps {
    * its own Back does, keeping the change.
    */
   readonly editTile?: string | undefined;
+  /**
+   * The filter values to open with — the URL's (AC-081). Read once, when the
+   * dashboard opens; after that the view holds them and reports each change.
+   */
+  readonly initialFilterValues?: FilterValues | undefined;
+  /** The filter values changed, for the URL (AC-081). */
+  readonly onFilterValues?: ((values: FilterValues) => void) | undefined;
   /** Name a tile in the URL as the one open in the editor, or none. */
   readonly onEditTile?: ((tileId: string | undefined) => void) | undefined;
   /**
@@ -593,6 +600,8 @@ export function DashboardView({
   onEditStart,
   editTile,
   onEditTile,
+  initialFilterValues,
+  onFilterValues,
   onSave,
 }: DashboardViewProps) {
   /**
@@ -620,7 +629,17 @@ export function DashboardView({
    * in the saved document, and not in the edit history — setting a filter is
    * reading the dashboard, not changing it.
    */
-  const [filterValues, setFilterValues] = useState<FilterValues>({});
+  const [openedWith] = useState<FilterValues>(() => initialFilterValues ?? {});
+  const [filterValues, setFilterValues] = useState<FilterValues>(openedWith);
+  /**
+   * Each change reported for the URL (AC-081) — not the values it opened
+   * with, which came from there. From an effect, after the change is in:
+   * reported from inside the state update it would run twice under
+   * StrictMode.
+   */
+  useEffect(() => {
+    if (filterValues !== openedWith) onFilterValues?.(filterValues);
+  }, [filterValues, openedWith, onFilterValues]);
   /**
    * The dashboard as the session has it, mirrored up (`SessionMirror`): its
    * filters and scopes may be edits not yet saved, and a filter set while

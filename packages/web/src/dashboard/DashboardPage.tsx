@@ -4,6 +4,7 @@ import { readChartDocument, type ChartDocument, type RenderSpec } from '@wechart
 
 import { loadTile } from '../query/loadTile';
 import { META_QUERY } from '../query/meta';
+import type { FilterValues } from '../filters/model';
 import { formatsFrom, tileChartOf, type TileChart } from './chartSpec';
 import { DashboardView } from './DashboardView';
 import { chartWritesOf, drawnWithDrafts, withoutDrafts } from './edit/chartDrafts';
@@ -118,9 +119,19 @@ export interface DashboardPageProps {
   readonly editTile?: string | undefined;
   /** Put a tile in the URL as the one open in the editor, or none (T196). */
   readonly onEditTile?: ((tileId: string | undefined) => void) | undefined;
+  /** The filter values the URL opened the dashboard with (AC-081). */
+  readonly initialFilterValues?: FilterValues | undefined;
+  /** The filter values changed: put them in the URL (AC-081). */
+  readonly onFilterValues?: ((values: FilterValues) => void) | undefined;
 }
 
-export function DashboardPage({ dashboardId, editTile, onEditTile }: DashboardPageProps) {
+export function DashboardPage({
+  dashboardId,
+  editTile,
+  onEditTile,
+  initialFilterValues,
+  onFilterValues,
+}: DashboardPageProps) {
   const saved = useQuery({
     queryKey: ['dashboard', dashboardId],
     // Parsed here rather than during render: a body that cannot be read
@@ -164,6 +175,8 @@ export function DashboardPage({ dashboardId, editTile, onEditTile }: DashboardPa
       version={saved.data?.version ?? 1}
       editTile={editTile}
       onEditTile={onEditTile}
+      initialFilterValues={initialFilterValues}
+      onFilterValues={onFilterValues}
     />
   );
 }
@@ -179,12 +192,16 @@ function LoadedDashboard({
   version,
   editTile,
   onEditTile,
+  initialFilterValues,
+  onFilterValues,
 }: {
   document: DashboardDocument;
   dashboardId: string;
   version: number;
   editTile: string | undefined;
   onEditTile: ((tileId: string | undefined) => void) | undefined;
+  initialFilterValues: FilterValues | undefined;
+  onFilterValues: ((values: FilterValues) => void) | undefined;
 }) {
   const queryClient = useQueryClient();
   const [saveFailed, setSaveFailed] = useState('');
@@ -372,6 +389,8 @@ function LoadedDashboard({
         // The rejection is the session's to handle; why is shown above.
         editTile={editTile}
         onEditTile={onEditTile}
+        initialFilterValues={initialFilterValues}
+        onFilterValues={onFilterValues}
         onEditStart={() => {
           setEditBase(version);
         }}

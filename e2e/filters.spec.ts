@@ -307,6 +307,79 @@ test('a relative preset is sent to Cube as those words, not as dates', async ({
 });
 
 /**
+ * T087 / AC-081: WHEN filters are active, THE SYSTEM SHALL include them in the
+ * dashboard's URL so that opening that URL reproduces them.
+ * Fails when: opening the URL in a new session produces different filter
+ * values.
+ */
+test('the filters in effect are in the URL, and the URL opens with them', async ({
+  page,
+  browser,
+  request,
+}) => {
+  const { id, title } = await makeTwoTabDashboard(request, [
+    { id: 'f-status', widget: 'checkbox', member: 'orders.status' },
+    { id: 'f-ordered', widget: 'dateRange', member: 'orders.ordered_at' },
+  ]);
+  // Every URL write the app makes, to catch one that repeats on its own.
+  await page.addInitScript(() => {
+    const counted = window as unknown as { urlWrites: number };
+    counted.urlWrites = 0;
+    const replace = history.replaceState.bind(history);
+    history.replaceState = (...args: Parameters<History['replaceState']>) => {
+      counted.urlWrites += 1;
+      replace(...args);
+    };
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  await filterBar(page).getByRole('checkbox', { name: 'shipped' }).check();
+  await filterBar(page).getByLabel(ORDERED_AT, { exact: true }).selectOption('this year');
+
+  const inUrl = () => {
+    const raw = new URL(page.url()).searchParams.get('filters');
+    return raw === null ? null : (JSON.parse(raw) as unknown);
+  };
+  await expect.poll(inUrl).toEqual([
+    { id: 'f-status', member: 'orders.status', value: { kind: 'values', values: ['shipped'] } },
+    {
+      id: 'f-ordered',
+      member: 'orders.ordered_at',
+      value: { kind: 'preset', preset: 'this year' },
+    },
+  ]);
+  // Written as values change, not over and over.
+  const writes = await page.evaluate(() => (window as unknown as { urlWrites: number }).urlWrites);
+  expect(writes).toBeGreaterThan(0);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => (window as unknown as { urlWrites: number }).urlWrites)).toBe(
+    writes,
+  );
+
+  // A new session, opening that URL: the same values, and the tiles filtered.
+  const other = await browser.newContext();
+  const opened = await other.newPage();
+  await opened.goto(page.url());
+  await expect(opened.getByRole('heading', { name: title })).toBeVisible();
+  await expect(filterBar(opened).getByRole('checkbox', { name: 'shipped' })).toBeChecked();
+  await expect(filterBar(opened).getByRole('checkbox', { name: 'completed' })).not.toBeChecked();
+  await expect(filterBar(opened).getByLabel(ORDERED_AT, { exact: true })).toHaveValue('this year');
+  const sales = opened.locator('[data-tile="tile-sales"]');
+  await sales.getByTestId('toggle-table-view').click();
+  await expect(sales.getByTestId('table-row')).toHaveCount(1);
+  await expect(sales.getByTestId('table-row')).toContainText('shipped');
+  await other.close();
+
+  // Cleared, they leave the URL.
+  await filterBar(page).getByRole('button', { name: 'Clear Orders Status' }).click();
+  await filterBar(page)
+    .getByRole('button', { name: `Clear ${ORDERED_AT}` })
+    .click();
+  await expect.poll(inUrl).toBeNull();
+});
+
+/**
  * T086 / AC-080: WHEN the user clears a filter, THE SYSTEM SHALL return every
  * tile in its scope to the unfiltered result.
  * Fails when: any tile still reflects the cleared filter.

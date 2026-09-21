@@ -8,11 +8,13 @@ import {
   useRouter,
 } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { useRef } from 'react';
+import { useCallback, useRef } from 'react';
 
 import { DashboardPage } from '../dashboard/DashboardPage';
 import { ChartEditor } from '../editor/ChartEditor';
 import { editorViewOf, loadEditorState } from '../editor/openChart';
+import type { FilterValues } from '../filters/model';
+import { valuesFromSearch, valuesToSearch, type SearchFilter } from '../filters/url';
 import { AppShell } from '../shell/AppShell';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
@@ -85,7 +87,7 @@ function SelectedObject({ workspace, label }: { workspace: WorkspaceId; label: s
 function DashboardSurface() {
   const params = useParams({ strict: false }) as { objectId?: string };
   const dashboardId = decodeURIComponent(params.objectId ?? '');
-  const { edit } = dashboardRoute.useSearch();
+  const { edit, filters } = dashboardRoute.useSearch();
   const navigate = dashboardRoute.useNavigate();
   const router = useRouter();
 
@@ -128,9 +130,35 @@ function DashboardSurface() {
     });
   };
 
+  /**
+   * The filters in effect, written into the URL as they change (AC-081), so
+   * the URL opens the dashboard filtered the same way. Replacing, not pushing:
+   * a filter set is not a place Back should step through.
+   *
+   * The same function across renders: the view reports changes from an
+   * effect that depends on it, and a new one each render would report — and
+   * navigate — again on every render.
+   */
+  const onFilterValues = useCallback(
+    (values: FilterValues) => {
+      void navigate({
+        search: (prev) => ({ ...prev, filters: valuesToSearch(values) }),
+        replace: true,
+        resetScroll: false,
+      });
+    },
+    [navigate],
+  );
+
   return (
     <AppShell workspace="explore">
-      <DashboardPage dashboardId={dashboardId} editTile={edit} onEditTile={onEditTile} />
+      <DashboardPage
+        dashboardId={dashboardId}
+        editTile={edit}
+        onEditTile={onEditTile}
+        initialFilterValues={valuesFromSearch(filters)}
+        onFilterValues={onFilterValues}
+      />
     </AppShell>
   );
 }
@@ -144,8 +172,12 @@ const dashboardRoute = createRoute({
    * reach the page untyped; thrown, the dashboard and its edit session would
    * be replaced by an error (research: router-search-history.md, Q1).
    */
-  validateSearch: (search: Record<string, unknown>): { edit?: string | undefined } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { edit?: string | undefined; filters?: SearchFilter[] | undefined } => ({
     edit: typeof search['edit'] === 'string' && search['edit'] !== '' ? search['edit'] : undefined,
+    // The filters in effect (AC-081), each checked; none is no parameter.
+    filters: valuesToSearch(valuesFromSearch(search['filters'])),
   }),
   component: DashboardSurface,
 });
