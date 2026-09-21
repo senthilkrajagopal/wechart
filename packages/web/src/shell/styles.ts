@@ -550,6 +550,21 @@ main:has(.dashboard) {
   border-color: var(--wc-accent);
   color: var(--wc-text-on-accent);
 }
+/* A filter's scope (direction.md rule 14): a 24 px chip, like the other chips. */
+.filter-bar__scope {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.filter-bar__tiles { flex-basis: 100%; border: 0; margin: 0; padding: 0; }
+.filter-bar__tiles legend { color: var(--wc-text-secondary); }
+.filter-bar__tiles label { margin-right: 10px; white-space: nowrap; }
 fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* Every widget names its field on screen, the same way (T082's review). */
 .filter-widget__label {

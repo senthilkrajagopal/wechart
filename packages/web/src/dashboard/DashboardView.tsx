@@ -1,4 +1,4 @@
-import type { RenderSpec } from '@wechart/core';
+import type { ChartDocument, RenderSpec } from '@wechart/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { TileSize } from '../editor/PreviewFrame';
@@ -97,6 +97,11 @@ export interface DashboardViewProps {
   readonly errors?: Readonly<Record<string, unknown>>;
   /** The charts are still on their way, so tiles show a skeleton (AC-042). */
   readonly loading?: boolean;
+  /**
+   * The saved chart documents, by chart id: what names a tile when a filter
+   * is scoped to it (AC-077), and what a filter re-queries (AC-078).
+   */
+  readonly documents?: Readonly<Record<string, ChartDocument>> | undefined;
   /**
    * Each member's number format from the Cube model (AC-046). Applied here,
    * after any chart edited from a tile has replaced its saved spec, so a
@@ -574,6 +579,7 @@ export function DashboardView({
   specs,
   errors,
   loading = false,
+  documents,
   formats,
   onEditStart,
   editTile,
@@ -593,11 +599,12 @@ export function DashboardView({
   const drawn = useMemo(
     () =>
       drawnWithDrafts(
-        { specs, errors: errors ?? {} },
+        { specs, errors: errors ?? {}, documents },
         { ...document, ...(drafts === undefined ? {} : { chartDrafts: drafts }) },
       ),
-    [specs, errors, document, drafts],
+    [specs, errors, documents, document, drafts],
   );
+  const chartTitleOf = (chartId: string) => drawn.documents?.[chartId]?.title;
 
   // Formatted after the drafts are in, so a drafted tile is formatted too.
   const formatted = useMemo(
@@ -905,6 +912,8 @@ export function DashboardView({
           />
           <FilterBar
             filters={session.document.filters ?? []}
+            dashboard={session.document}
+            chartTitleOf={chartTitleOf}
             values={filterValues}
             onValue={(key, value) => {
               setFilterValues((current) => {

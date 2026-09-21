@@ -1,4 +1,4 @@
-import type { RenderSpec } from '@wechart/core';
+import type { ChartDocument, RenderSpec } from '@wechart/core';
 
 import { chartIdsOf, type ChartDraft, type DashboardDocument } from '../model/document';
 import type { ChartWrite } from './save';
@@ -30,6 +30,11 @@ export function withDraft(
 export interface Drawn {
   readonly specs: Readonly<Record<string, RenderSpec>>;
   readonly errors: Readonly<Record<string, unknown>>;
+  /**
+   * The chart documents the tiles show, by chart id — a drafted chart's as
+   * edited. What filters re-query (F9), and what names a tile.
+   */
+  readonly documents?: Readonly<Record<string, ChartDocument>> | undefined;
 }
 
 /**
@@ -52,7 +57,9 @@ export function drawnWithDrafts(saved: Drawn, dashboard: DashboardDocument): Dra
 
   const specs: Record<string, RenderSpec> = { ...saved.specs };
   const errors: Record<string, unknown> = { ...saved.errors };
+  const documents: Record<string, ChartDocument> = { ...saved.documents };
   for (const [chartId, draft] of Object.entries(drafts)) {
+    documents[chartId] = draft.document;
     if ('spec' in draft.drawn) {
       specs[chartId] = draft.drawn.spec;
       delete errors[chartId];
@@ -61,7 +68,7 @@ export function drawnWithDrafts(saved: Drawn, dashboard: DashboardDocument): Dra
       delete specs[chartId];
     }
   }
-  return { specs, errors };
+  return { specs, errors, documents };
 }
 
 /**

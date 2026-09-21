@@ -25,11 +25,22 @@ export const FILTER_WIDGETS: readonly {
   { widget: 'checkbox', label: 'Checkbox list', hint: 'Tick the values to keep' },
 ];
 
+/**
+ * Which tiles a filter reaches (AC-077): the whole dashboard, one page tab, or
+ * tiles named one by one.
+ */
+export type FilterScope =
+  | { readonly kind: 'dashboard' }
+  | { readonly kind: 'page'; readonly pageId: string }
+  | { readonly kind: 'tiles'; readonly tileIds: readonly string[] };
+
 export interface DashboardFilter {
   readonly id: string;
   readonly widget: FilterWidget;
   /** The Cube member it filters on; chosen after the filter is added. */
   readonly member?: string;
+  /** Absent is the whole dashboard, which a filter reaches until told otherwise. */
+  readonly scope?: FilterScope;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { readChartDocument, type RenderSpec } from '@wechart/core';
+import { readChartDocument, type ChartDocument, type RenderSpec } from '@wechart/core';
 
 import { loadTile } from '../query/loadTile';
 import { META_QUERY } from '../query/meta';
@@ -99,6 +99,8 @@ export function dashboardOf(stored: StoredDocument): DashboardDocument {
 interface DrawnCharts {
   specs: Record<string, RenderSpec>;
   errors: Record<string, unknown>;
+  /** Each chart's document as read, which filters re-query and tiles are named by (F9). */
+  documents: Record<string, ChartDocument>;
 }
 
 /** A save, whole: nothing it needs is read from the render it started in. */
@@ -313,11 +315,13 @@ function LoadedDashboard({
       // "no spec" would be drawn as an empty chart, which reads as "no data".
       const specs: Record<string, RenderSpec> = {};
       const errors: Record<string, unknown> = {};
-      for (const [id, loaded] of entries) {
-        if ('spec' in loaded) specs[id] = loaded.spec;
-        else errors[id] = loaded.error;
+      const documents: Record<string, ChartDocument> = {};
+      for (const [id, { chart, document: read }] of entries) {
+        if ('spec' in chart) specs[id] = chart.spec;
+        else errors[id] = chart.error;
+        if (read !== undefined) documents[id] = read;
       }
-      return { specs, errors };
+      return { specs, errors, documents };
     },
   });
 
@@ -355,6 +359,7 @@ function LoadedDashboard({
         dashboardId={dashboardId}
         document={document}
         specs={charts.data?.specs ?? {}}
+        documents={charts.data?.documents}
         formats={formats}
         errors={charts.data?.errors ?? {}}
         loading={charts.isPending}
@@ -386,7 +391,9 @@ function LoadedDashboard({
  * `readChartDocument` is strict, so a body in an older or broken format is
  * refused here rather than drawn as an empty chart.
  */
-async function specFor(chartId: string): Promise<TileChart> {
+async function specFor(
+  chartId: string,
+): Promise<{ chart: TileChart; document: ChartDocument | undefined }> {
   let document;
   try {
     const stored = await getJson<StoredDocument>(
@@ -397,13 +404,14 @@ async function specFor(chartId: string): Promise<TileChart> {
     // The chart itself is gone or unreadable. That is the missing-chart state
     // (AC-017), which the tile shows, and it is not the same thing as a query
     // that failed — one is a broken dashboard, the other a broken query.
-    return { error: 'This chart is no longer available.' };
+    return { chart: { error: 'This chart is no longer available.' }, document: undefined };
   }
 
   // AC-012: a failed query reaches the tile as the thrown value, so that a
   // TileLoadError still carries its query and the tile can offer it.
-  return tileChartOf(document, async (query) => {
+  const chart = await tileChartOf(document, async (query) => {
     const result = (await loadTile({ query })) as { data?: Record<string, unknown>[] };
     return result.data ?? [];
   });
+  return { chart, document };
 }

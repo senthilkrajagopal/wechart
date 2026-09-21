@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
+import type { DashboardDocument } from '../dashboard/model/document';
 import { cubesFrom, membersOf, type Member } from '../editor/fields';
 import { loadTile } from '../query/loadTile';
 import { META_QUERY } from '../query/meta';
@@ -12,6 +13,8 @@ import {
   type FilterValue,
   type FilterValues,
 } from './model';
+import { scopeLabel } from './scope';
+import { ScopeEditor } from './ScopeEditor';
 import { CheckboxList } from './widgets/CheckboxList';
 import { DateRange } from './widgets/DateRange';
 import { ListSearch } from './widgets/ListSearch';
@@ -24,6 +27,10 @@ import { NumericRange } from './widgets/NumericRange';
  */
 export interface FilterBarProps {
   readonly filters: readonly DashboardFilter[];
+  /** The dashboard, whose tabs and tiles a filter's scope names (AC-077). */
+  readonly dashboard: DashboardDocument;
+  /** A chart's title, which names its tile. */
+  readonly chartTitleOf: (chartId: string) => string | undefined;
   /** The values held, by `valueKeyOf` each filter. */
   readonly values: FilterValues;
   /** A filter's value changed; `undefined` is no filter. */
@@ -146,7 +153,15 @@ export function FilterBar(props: FilterBarProps) {
   return props.filters.length === 0 ? null : <Filters {...props} />;
 }
 
-function Filters({ filters, values, onValue, editing, onFilters }: FilterBarProps) {
+function Filters({
+  filters,
+  dashboard,
+  chartTitleOf,
+  values,
+  onValue,
+  editing,
+  onFilters,
+}: FilterBarProps) {
   const meta = useQuery(META_QUERY);
   const members = useMemo(() => allMembers(meta.data), [meta.data]);
 
@@ -210,8 +225,22 @@ function Filters({ filters, values, onValue, editing, onFilters }: FilterBarProp
                 >
                   ×
                 </button>
+                <ScopeEditor
+                  filter={filter}
+                  dashboard={dashboard}
+                  chartTitleOf={chartTitleOf}
+                  onScope={(scope) => {
+                    onFilters?.(
+                      filters.map((each) => (each.id === filter.id ? { ...each, scope } : each)),
+                    );
+                  }}
+                />
               </>
             ) : null}
+            {/* Its scope, on the widget, in either mode (direction.md rule 14). */}
+            <span className="filter-bar__scope" data-testid="scope-badge">
+              {scopeLabel(filter, dashboard, chartTitleOf)}
+            </span>
             {member === undefined ? null : (
               <FilterWidgetFor
                 filter={filter}
