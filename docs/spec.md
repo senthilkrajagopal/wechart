@@ -285,7 +285,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: unmarked items render at full strength, or marked items carry no outline.
 - [x] AC-097 WHEN an item is partly marked and its measure is additive, THE SYSTEM SHALL draw the marked share from the baseline at full strength and fade the remainder; WHEN the measure is not additive, THE SYSTEM SHALL draw the whole item with a pattern and show the marked and total values in its tooltip (direction.md rule 49; `[docs/inputs §11]`).
       Fails when: a partial average or distinct count is drawn as a sub-length, or a partly marked sum shows no marked share.
-- [ ] AC-098 THE SYSTEM SHALL convey marking state by more than colour: every tile using a non-empty marking shows a badge naming the marking and the number of marked items, and every non-empty marking has a chip naming it and summarising its values (direction.md rule 50).
+- [x] AC-098 THE SYSTEM SHALL convey marking state by more than colour: every tile using a non-empty marking shows a badge naming the marking and the number of marked items, and every non-empty marking has a chip naming it and summarising its values (direction.md rule 50).
       Fails when: a tile or chip conveys the marking only through colour.
 - [ ] AC-099 THE SYSTEM SHALL keep every marking colour at least ΔE 15 from every categorical series colour under normal vision, and at least ΔE 8 under protan and deutan simulation, in both themes (direction.md rule 51).
       Fails when: the palette validator reports a marking colour below either threshold against any series colour.

@@ -996,10 +996,16 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/charts/src/marking/partial.ts`, `packages/charts/src/marking/partial.test.ts`
   - Failing test: `partial.test.ts`: a partly marked sum renders the marked share from the baseline at full strength with the remainder faded, and a partly marked average or distinct count renders whole with a decal and both values in its tooltip (AC-097).
   - Depends on: T102
-- [ ] T104 (AC-098) Convey marking state beyond colour with tile badges and marking chips
-  - Files: `packages/web/src/dashboard/markings/{MarkBadge,MarkChip}.tsx`, `packages/web/src/dashboard/markings/MarkBadge.test.tsx`
+- [x] T104 (AC-098) Convey marking state beyond colour with tile badges and marking chips
+  - Files: `packages/web/src/dashboard/markings/{MarkBadge,MarkChip}.tsx`, `packages/web/src/dashboard/markings/MarkBadge.test.tsx`, `packages/web/src/shell/styles.ts`
   - Failing test: `MarkBadge.test.tsx`: every tile using a non-empty marking shows a badge naming it and the marked-item count, and every non-empty marking shows a chip naming it and summarising its values (AC-098).
   - Depends on: T102
+  - Done 2026-09-20. AC-098 ticked.
+  - **This criterion is what makes the marking palette legal**, not a courtesy. direction.md's colour audit records dark-mode `mk1`↔`mk4` at ΔE 6.8 under colour-blindness simulation — inside the 6–8 floor band, which is allowed "only with secondary encoding, which chips and badges provide by always naming the marking". Remove the name and the count and the colours themselves stop being defensible.
+  - **The swatch is `aria-hidden` and the text carries the meaning.** Announced as well as drawn, a screen reader would read a colour and learn nothing. Mutation-verified both ways: removing the text fails two tests, exposing the swatch fails one.
+  - **The chip summarises values rather than counting them.** "Marking (2)" names the marking and says nothing about what is in it — the same failure as colour alone, where you can see that something is marked but not what. Values are written `member = a, b` only when every marked item names the same single member; a tuple across two dimensions cannot be written that way without misstating it, so those are counted instead. An honest count beats a readable untruth.
+  - **Neither appears when nothing is marked.** Rule 50 is about tiles using a *non-empty* marking, and "0 marked" on every tile of an untouched dashboard is noise that would teach people to ignore the badge — the one thing it cannot afford.
+  - **The `/jobs` contrast flake reached five sightings** during this task and then passed on a clean full-suite run. Still uncaptured. See T101's note: the next step is to capture axe's violation, not to harden the wait.
 - [ ] T105 (AC-099) Keep every marking colour clear of the categorical palette under normal and CVD vision
   - Files: `packages/ui/src/tokens.ts`, `packages/ui/src/audit/markingPalette.test.ts`
   - Failing test: `markingPalette.test.ts`: the validator reports every marking colour at ΔE ≥ 15 from each series colour under normal vision and ΔE ≥ 8 under protan and deutan simulation, in both themes (AC-099).

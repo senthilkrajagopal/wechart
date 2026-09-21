@@ -468,6 +468,38 @@ main:has(.dashboard) {
 }
 .tile-empty p { margin: 0; }
 
+/* The marking badge and chip (AC-098, rule 50). These are what make the
+   marking palette legal: direction.md's audit puts dark-mode mk1 against mk4
+   at ΔE 6.8 under colour-blindness simulation, inside the 6-8 floor band,
+   which is allowed "only with secondary encoding, which chips and badges
+   provide by always naming the marking". The swatch is decorative; the text
+   carries the meaning. */
+.mark-badge,
+.mark-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--wc-text-xs-size);
+  color: var(--wc-text-secondary);
+}
+.mark-badge__swatch,
+.mark-chip__swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+/* references-markings.md fixes the chip: 24px high, 999px radius, 12px at 600. */
+.mark-chip {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-primary);
+  font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
+
 /* AC-059's explanation. Marked out, because it reports something the user did
    not ask for rather than describing what they are about to do. */
 .add-panel__message {
