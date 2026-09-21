@@ -1825,10 +1825,31 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 Each task below measures its components' computed styles in `e2e/design-conformance.spec.ts` against the prototype's CSS, citing the rule, with colours compared as tokens rather than hex values.
 
-- [ ] T202 (AC-187) Draw the app bar, workspace navigation, buttons, inputs and selects as the prototype does
+- [x] T202 (AC-187) Draw the app bar, workspace navigation, buttons, inputs and selects as the prototype does
   - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/shell/AppShell.tsx`, `e2e/design-conformance.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts`: the app bar is 48 px with the "we" mark, the current workspace is underlined in the accent colour, the theme control is a 32 px icon button, and buttons, inputs and selects measure the prototype's `.btn`, `.btn.primary`, `.input` and `.select` (AC-187).
   - Depends on: none
+  - **Built 2026-09-21.** Files as planned, plus `shell/ThemeToggle.tsx` and `packages/ui/src/tokens.ts` (`bg-hover`).
+    - **App bar:** the prototype's brand ("we" mark, 22 px, accent), 12 px side padding, and full-height workspace tabs, with the current one underlined 2 px in the accent colour and set at 600. The theme control is the prototype's 32 px icon button, the half-filled circle, named "Switch to dark theme" or "Switch to light theme" for assistive technology and in a tooltip. Rule 3's icon-and-label covers states; this is a named control.
+    - **Buttons, inputs, selects:**
+      - Every button takes the prototype's border (1 px `border-strong`), 6 px radius, surface and ink.
+      - A plain button, one no component styles, also takes its 32 px and 12 px padding, as a minimum height.
+      - A form's submit, or `.btn-primary`, is the accent-filled primary; `.btn-ghost` and `.btn-sm` are the prototype's variants.
+      - Inputs and selects are 32 px, 1 px `border-strong`, radius 4, padding 8.
+      - The first version imposed the size on every button, which squeezed the Add palette's two-line entries into 32 px. The screenshot caught it and the size is now kept to plain buttons.
+    - **`bg-hover`, a new token, is not the prototype's value.** The prototype's #e9e8e4 (dark #323230) leaves muted and status text under AA (4.28:1). #efeeea (dark #2c2c2a) is the nearest shade that passes every pair. It joins the audited surfaces, so text on a hovered control is contrast-checked too (AC-005).
+    - **Seen against the prototype, still to do:** the prototype's search box and avatar in the app bar. The search palette opens on ⌘K (AC-006) but has no trigger in the bar, and phase 1 has no user to put in an avatar. Recorded for when those land.
+  - **Tests, red first:** `e2e/design-conformance.spec.ts` (4 in each browser):
+    - the app bar's height, surface and rule, and the mark's size, radius and colours;
+    - the current and other workspace links' ink, underline, weight, height and padding;
+    - the theme control's size, radius, transparency and icon;
+    - a plain button's size, padding, border and surface, an input's, and the primary button's fill, ink and weight.
+    - Colours are compared as tokens resolved in the page, never as hex values.
+    - **Two of my expectations were wrong and were corrected:**
+      - The nav link is 47 px, not 48, because it fills the bar inside its 1 px rule. Measured on the prototype itself, which gives 47.
+      - The Create button was found by a name other tests' items also contain; it is now scoped to its form.
+  - **Full runs:** typecheck and lint clean (the existing DataTable warning aside); 1,451 unit tests and 612 browser runs passed. The global button look broke no existing test.
+  - **Done 2026-09-21.** AC-187 stays unticked until T203–T205 bring the rest of its components into line.
 - [ ] T203 (AC-187) Draw the dashboard header, page tabs and tiles as the prototype does
   - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/ChartTile.tsx`, `e2e/design-conformance.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts`: the title is 24/32 at weight 600; Edit is a primary button and the gear an icon button; page tabs are underlined; a chart tile is 1 px `border-subtle`, radius 6, padding 16, headed by its chart's title at 14/20 600, with its table view as a small ghost button in the header (AC-187).

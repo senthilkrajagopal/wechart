@@ -29,6 +29,10 @@ export const COLORS = {
     'bg-surface': '#ffffff',
     'bg-raised': '#ffffff',
     'bg-subtle': '#f0efec',
+    // A control under the pointer (the prototype's --bg-hover, AC-187). The
+    // prototype's #e9e8e4 (dark #323230) leaves muted and status text under
+    // AA (4.28:1); these are the nearest shades that pass every pair (AC-005).
+    'bg-hover': '#efeeea',
     'border-subtle': '#e3e2de',
     'border-strong': '#c9c7c1',
     'text-primary': '#1f1f1e',
@@ -55,6 +59,7 @@ export const COLORS = {
     'bg-surface': '#1c1c1b',
     'bg-raised': '#252523',
     'bg-subtle': '#2a2a28',
+    'bg-hover': '#2c2c2a',
     'border-subtle': 'rgba(255,255,255,.10)',
     'border-strong': 'rgba(255,255,255,.20)',
     'text-primary': '#f2f2f0',
@@ -126,6 +131,8 @@ export const TEXT_SURFACE_TOKENS = [
   'bg-surface',
   'bg-raised',
   'bg-subtle',
+  // Text sits on a hovered button or row as much as on a resting one.
+  'bg-hover',
 ] as const satisfies readonly ColorTokenName[];
 
 export const THEMES = ['light', 'dark'] as const satisfies readonly Theme[];

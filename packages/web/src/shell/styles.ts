@@ -52,6 +52,72 @@ body {
   --wc-surface-padding: 16px;
 }
 
+/* Buttons, inputs and selects, as the prototype draws them (AC-187: its .btn,
+   .btn.primary, .input and .select). Every button takes the look — border,
+   radius, surface, ink; a plain button, one no component has styled, also
+   takes the prototype's size. Size is kept to plain buttons because a styled
+   one lays itself out — the Add palette's two-line entries, the filter bar's
+   28 px choices — and a size imposed on all of them broke those. */
+button {
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  cursor: pointer;
+}
+button:not([class]) {
+  min-height: 32px;
+  padding: 0 12px;
+}
+button:hover:not(:disabled):not([aria-disabled='true']) { background: var(--wc-bg-hover); }
+button:disabled,
+button[aria-disabled='true'] { opacity: 0.5; cursor: not-allowed; }
+/* The primary action: a form's submit, or a button marked so. */
+button[type='submit'],
+.btn-primary {
+  background: var(--wc-accent);
+  border-color: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+  font-weight: var(--wc-text-sm-strong-weight);
+}
+button[type='submit']:hover:not(:disabled):not([aria-disabled='true']),
+.btn-primary:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--wc-accent);
+  filter: brightness(1.08);
+}
+.btn-primary { min-height: 32px; padding: 0 12px; }
+.btn-ghost { border-color: transparent; background: none; }
+.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; font-size: var(--wc-text-xs-size); }
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']),
+select,
+textarea {
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+}
+select { padding-right: 4px; }
+textarea { height: auto; padding: 6px 8px; }
+
+/* A control that is only an icon (the prototype's .iconbtn), named for
+   assistive technology by aria-label. */
+.icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--wc-text-secondary);
+}
+.icon-button:hover:not(:disabled) { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
+
 .app-bar {
   /* Sticky so the workspace switcher, search and theme control stay reachable
      however far a surface has scrolled. A bar that scrolls away also means any
@@ -63,51 +129,58 @@ body {
   align-items: center;
   gap: 16px;
   height: var(--wc-app-bar-height);
-  padding: 0 16px;
+  padding: 0 12px;
   background: var(--wc-bg-surface);
   border-bottom: 1px solid var(--wc-border-subtle);
 }
 
+/* The prototype's .brand and .brand-mark. */
 .app-bar__product {
-  font-size: var(--wc-text-md-size);
-  font-weight: var(--wc-text-md-weight);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: var(--wc-text-sm-strong-weight);
+  letter-spacing: -0.01em;
+}
+.app-bar__mark {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+  font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-strong-weight);
 }
 
+/* The prototype's .wsnav: full-height tabs, the current one underlined. */
+.workspace-switcher { align-self: stretch; }
 .workspace-switcher ul {
   display: flex;
-  gap: 4px;
+  gap: 2px;
+  height: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-
 .workspace-switcher a {
-  display: inline-block;
-  padding: 6px 10px;
-  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 12px;
   color: var(--wc-text-secondary);
   text-decoration: none;
+  border-bottom: 2px solid transparent;
 }
-
-.workspace-switcher a:hover { background: var(--wc-bg-subtle); }
-
+.workspace-switcher a:hover { color: var(--wc-text-primary); }
 .workspace-switcher a[aria-current='page'] {
   color: var(--wc-text-primary);
-  background: var(--wc-bg-subtle);
+  border-bottom-color: var(--wc-accent);
   font-weight: var(--wc-text-sm-strong-weight);
 }
 
-.theme-toggle {
-  margin-left: auto;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--wc-border-strong);
-  border-radius: 4px;
-  background: var(--wc-bg-surface);
-  color: var(--wc-text-primary);
-  font: inherit;
-  cursor: pointer;
-}
+.theme-toggle { margin-left: auto; }
 
 main { padding: var(--wc-surface-padding); }
 

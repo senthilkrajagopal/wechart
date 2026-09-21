@@ -18,7 +18,13 @@ export function AppShell({ workspace, children }: AppShellProps) {
   return (
     <div className="app-shell">
       <header className="app-bar">
-        <span className="app-bar__product">wechart</span>
+        {/* The prototype's brand: the "we" mark, then the name (AC-187). */}
+        <span className="app-bar__product">
+          <span className="app-bar__mark" data-testid="brand-mark" aria-hidden="true">
+            we
+          </span>
+          wechart
+        </span>
         <WorkspaceSwitcher current={workspace} />
         <ThemeToggle />
       </header>
