@@ -15,6 +15,24 @@ export type FilteredResults = Readonly<
 >;
 
 /**
+ * New results over the ones before: a chart still being asked keeps the
+ * answer it last had, so its tile goes on showing that — marked busy — rather
+ * than its unfiltered chart. Charts no longer reached are dropped, so one
+ * reached again starts from its unfiltered chart, which is what it last drew.
+ */
+export function keepLastAnswers(
+  before: FilteredResults,
+  results: FilteredResults,
+): FilteredResults {
+  return Object.fromEntries(
+    Object.entries(results).map(([chartId, { chart, asking }]) => [
+      chartId,
+      { chart: chart ?? before[chartId]?.chart, asking },
+    ]),
+  );
+}
+
+/**
  * Re-queries every chart a filter in effect reaches (AC-078), each with the
  * filters that reach it added to its own query, and reports what each draws.
  * A chart no filter reaches is not here, so it is asked nothing.
@@ -25,6 +43,11 @@ export type FilteredResults = Readonly<
  * Keyed by the chart as the tile shows it — a drafted chart as edited — and
  * by what reaches it, so the same filters on the same chart are asked once,
  * and a value changed back is answered from the cache.
+ *
+ * A changed key is a new query with no answer yet: `useQueries` matches its
+ * observers by key, so `placeholderData` never sees the previous answer (T084's
+ * review, checked against query-core 5.103.1). Keeping the last answer drawn
+ * meanwhile is the dashboard's (`keepLastAnswers`).
  */
 export function FilteredCharts({
   reached,
@@ -48,8 +71,6 @@ export function FilteredCharts({
         document,
         applied.map(({ filter, value }) => [filter.member, value]),
       ],
-      // The last answer stays drawn while the next value is asked.
-      placeholderData: (previous: TileChart | undefined) => previous,
       queryFn: ({ signal }: { signal: AbortSignal }) =>
         tileChartOf(document, async (query) => {
           const result = (await loadTile({ query: withFilters(query, applied), signal })) as {
@@ -79,6 +100,13 @@ export function FilteredCharts({
     // `results` is a new object every render; `reported` is what it says.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reported, onResults]);
+  // Gone with the last filter in effect: nothing it answered is current.
+  useEffect(
+    () => () => {
+      onResults({});
+    },
+    [onResults],
+  );
 
   return null;
 }

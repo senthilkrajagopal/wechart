@@ -156,6 +156,27 @@ describe('a filter value, changed', () => {
     });
   });
 
+  it('on named tiles, asks those tiles’ charts and no other', async () => {
+    dashboard({
+      ...DOC,
+      filters: [
+        {
+          id: 'f1',
+          widget: 'checkbox',
+          member: 'orders.status',
+          scope: { kind: 'tiles', tileIds: ['t-ops'] },
+        },
+      ],
+    });
+
+    await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'completed' }));
+
+    await vi.waitFor(() => {
+      expect(groupedBy('orders.region')).toHaveLength(1);
+    });
+    expect(groupedBy('orders.status')).toEqual([]);
+  });
+
   it('draws the tile from the answer', async () => {
     dashboard();
     await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'completed' }));

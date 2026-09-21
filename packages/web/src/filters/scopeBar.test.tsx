@@ -1,6 +1,6 @@
 import type { ChartDocument } from '@wechart/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -109,6 +109,46 @@ describe('a filter’s scope, on its widget', () => {
         },
       ],
     });
+    expect(await badge()).toBe('Tab: Operations');
+    cleanup();
+
+    dashboard({
+      ...DOC,
+      filters: [
+        {
+          id: 'f1',
+          widget: 'list',
+          member: 'orders.status',
+          scope: { kind: 'tiles', tileIds: ['t-revenue', 't-orders'] },
+        },
+      ],
+    });
+    expect(await badge()).toBe('Tiles: Revenue by month, Orders by status');
+  });
+
+  /**
+   * Found by T083's review: choosing "choose a field…" again rebuilt the
+   * filter from its id and kind alone, and its scope went with the field — a
+   * tab's filter became the whole dashboard's without a word.
+   */
+  it('is kept when the filter’s field is unset and chosen again', async () => {
+    dashboard({
+      ...DOC,
+      filters: [
+        {
+          id: 'f1',
+          widget: 'list',
+          member: 'orders.status',
+          scope: { kind: 'page', pageId: 'ops' },
+        },
+      ],
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const field = await within(bar()).findByLabelText('Filter on');
+
+    await userEvent.selectOptions(field, '');
+    await userEvent.selectOptions(within(bar()).getByLabelText('Filter on'), 'orders.status');
+
     expect(await badge()).toBe('Tab: Operations');
   });
 

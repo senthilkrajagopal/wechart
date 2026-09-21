@@ -58,7 +58,11 @@ const META = {
   ],
 };
 
+/** Answers to chart queries held back until released, while set. */
+let holding: (() => void)[] | undefined;
+
 beforeEach(() => {
+  holding = undefined;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -70,8 +74,19 @@ beforeEach(() => {
             data: [{ 'orders.status': 'completed' }, { 'orders.status': 'shipped' }],
           }),
         );
-      const filtered = query['filters'] !== undefined;
-      return new Response(JSON.stringify({ data: [{ 'orders.count': filtered ? 80 : 240 }] }));
+      if (holding !== undefined) {
+        const held = holding;
+        await new Promise<void>((release) => {
+          held.push(release);
+        });
+      }
+      // 80 orders for each status picked; 240 in all.
+      const picked = (query['filters'] as { values: string[] }[] | undefined)?.[0]?.values;
+      return new Response(
+        JSON.stringify({
+          data: [{ 'orders.count': picked === undefined ? 240 : 80 * picked.length }],
+        }),
+      );
     }),
   );
 });
@@ -127,6 +142,36 @@ describe('a filter, cleared', () => {
     await userEvent.click(within(bar()).getByRole('checkbox', { name: 'completed' }));
 
     expect(within(bar()).getByRole('button', { name: 'Clear Status' })).toBeTruthy();
+  });
+
+  /**
+   * Found by T084's review (AC-078: "a tile inside it keeps the previous
+   * result" is the failing state, so what shows in between matters): while a
+   * changed value was being asked, the tile fell back to its *unfiltered*
+   * chart, dimmed — a reader saw every status for as long as Cube took. It
+   * keeps the answer it last drew, marked busy, until the new one is in.
+   */
+  it('shows the last filtered answer, busy, while a changed value is asked', async () => {
+    dashboard();
+    await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'completed' }));
+    await vi.waitFor(() => {
+      expect(values()).toEqual(['80', '80']);
+    });
+
+    holding = [];
+    await userEvent.click(within(bar()).getByRole('checkbox', { name: 'shipped' }));
+    await vi.waitFor(() => {
+      expect(holding).toHaveLength(2);
+    });
+
+    expect(values()).toEqual(['80', '80']);
+    expect(document.querySelectorAll('[aria-busy="true"]')).toHaveLength(2);
+
+    for (const release of holding) release();
+    await vi.waitFor(() => {
+      expect(values()).toEqual(['160', '160']);
+    });
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
   });
 
   it('returns them too when its last value is unpicked', async () => {

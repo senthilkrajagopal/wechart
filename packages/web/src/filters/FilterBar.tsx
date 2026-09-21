@@ -9,6 +9,7 @@ import {
   FILTER_WIDGETS,
   membersFor,
   valueKeyOf,
+  withoutMember,
   type DashboardFilter,
   type FilterValue,
   type FilterValues,
@@ -198,13 +199,10 @@ function Filters({
                     // The value stays with the field it was chosen on
                     // (`valueKeyOf`), so there is nothing here to clear.
                     onFilters?.(
-                      filters.map((each) =>
-                        each.id !== filter.id
-                          ? each
-                          : chosen === ''
-                            ? { id: each.id, widget: each.widget }
-                            : { ...each, member: chosen },
-                      ),
+                      filters.map((each) => {
+                        if (each.id !== filter.id) return each;
+                        return chosen === '' ? withoutMember(each) : { ...each, member: chosen };
+                      }),
                     );
                   }}
                 >

@@ -32,7 +32,7 @@ import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
 import { activeFilters, filteredCharts } from '../filters/apply';
 import { FilterBar } from '../filters/FilterBar';
-import { FilteredCharts, type FilteredResults } from '../filters/FilteredCharts';
+import { FilteredCharts, keepLastAnswers, type FilteredResults } from '../filters/FilteredCharts';
 import { newFilter, type FilterValues } from '../filters/model';
 import { Canvas, type CanvasProps } from './grid/Canvas';
 import { DRAG_INSTRUCTIONS, DRAG_INSTRUCTIONS_ID, useTileDrag } from './grid/drag';
@@ -655,6 +655,10 @@ export function DashboardView({
     [live, filterValues],
   );
   const [filtered, setFiltered] = useState<FilteredResults>({});
+  // A chart being asked again keeps its last answer, busy, meanwhile.
+  const onFiltered = useCallback((results: FilteredResults) => {
+    setFiltered((before) => keepLastAnswers(before, results));
+  }, []);
   const withFiltered = useMemo(() => {
     const ids = Object.keys(reached).filter((id) => drawn.documents?.[id] !== undefined);
     if (ids.length === 0) return { ...drawn, pending: new Set<string>() };
@@ -838,7 +842,7 @@ export function DashboardView({
   return (
     <>
       {Object.keys(reached).length === 0 ? null : (
-        <FilteredCharts reached={reached} documents={drawn.documents} onResults={setFiltered} />
+        <FilteredCharts reached={reached} documents={drawn.documents} onResults={onFiltered} />
       )}
       <EditChrome
         document={document}

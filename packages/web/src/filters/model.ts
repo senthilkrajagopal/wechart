@@ -112,6 +112,17 @@ export function membersFor(widget: FilterWidget, members: readonly Member[]): Me
   }
 }
 
+/**
+ * The filter with no field chosen. Only the field goes — its scope and
+ * anything else it carries stay as they were set (T083's review: rebuilt from
+ * its id and kind, a tab's filter became the whole dashboard's).
+ */
+export function withoutMember(filter: DashboardFilter): DashboardFilter {
+  const next: { -readonly [K in keyof DashboardFilter]: DashboardFilter[K] } = { ...filter };
+  delete next.member;
+  return next;
+}
+
 /** A new filter of this kind, with no member yet. */
 export function newFilter(widget: FilterWidget, id: string): DashboardFilter {
   return { id, widget };
