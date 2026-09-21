@@ -930,10 +930,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **A single-member tuple is what makes "every item of that category" true**: it matches on the category alone, whatever else varies in the rows underneath. Mutation-verified — a tuple naming a second dimension marks one bar instead of the series and fails five tests.
   - **Ctrl-click adds here, where AC-087 toggles on an item.** That asymmetry is the criteria's own words — AC-090 "SHALL add further categories", AC-087 "SHALL toggle that item" — and matches Spotfire. Recorded because it reads like an inconsistency and is not one. A category comes off by marking again without it.
   - `references-markings.md` records this criterion as a **resolved conflict**: direction.md §6 originally had a legend click toggle a series, which contradicts Spotfire, Looker and Qlik. The spec follows the marking reading and moves visibility to the Customize panel.
-- [ ] T097 (AC-091) Mark every item in a trellis panel from its header
-  - Files: `packages/charts/src/interaction/panelMark.ts`, `packages/charts/src/interaction/panelMark.test.ts`
+- [x] T097 (AC-091) Mark every item in a trellis panel from its header
+  - Files: `packages/charts/src/interaction/panelMark.ts`, `packages/charts/src/interaction/panelMark.test.ts`, `packages/charts/src/index.ts`
   - Failing test: `panelMark.test.ts`: a click on a panel header marks all of that panel's items, not one and not none (AC-091). Uses `title.triggerEvent` per `docs/research/echarts.md`.
   - Depends on: T093, T043
+  - Done 2026-09-20. AC-091 ticked.
+  - **The same shape as T096, including the same gap.** `trellis.ts` has set `title.triggerEvent: true` since AC-045, with a comment naming this criterion — and nothing asserted it. Turning it off fails only the new test; all of `trellis.test.ts` stays green. Both of these criteria have a failing state reached by *removing a line that looks unused* rather than by writing anything wrong, which is the argument for pinning the enabling line to the criterion that needs it, not only to the one that added it.
+  - **A single-member tuple on the facet dimension** is what makes "every item in that panel" true. A tuple naming more marks one item, which is the criterion's first failing state word for word.
+  - **`markFromPanel` takes no previous marking**, because it does not consult one: a panel click replaces, and AC-091 describes no modifier. An ignored parameter would have been a lie about what the function considers. `references-markings.md` notes Spotfire's Ctrl-click adds further panels; **no criterion asks for it, so it is not built** — recorded rather than quietly added.
+  - A title index naming no panel returns nothing rather than defaulting to the first, so a click on some other title component cannot mark a panel by accident.
 - [ ] T098 (AC-092) Mark table rows, with Shift-range, only when a primary key is available
   - Files: `packages/charts/src/dom/DataTable.tsx`, `packages/charts/src/dom/rowMarking.test.tsx`
   - Failing test: `rowMarking.test.tsx`: a click marks the row, Shift-click marks the range from the anchor in display order, and rows are not markable when the cube exposes no primary key (AC-092).

@@ -33,3 +33,4 @@ export {
 export { dragGesture, type DragEvent, type DragGesture } from './interaction/dragOverlay';
 export { stripeFor, type AxisPixels, type Stripe } from './interaction/axisRange';
 export { markFromLegend, type LegendModifiers } from './interaction/legendMark';
+export { markFromPanel, panelOfTitleClick } from './interaction/panelMark';
