@@ -1068,10 +1068,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F11. Details tiles and marked-rows actions
 
-- [ ] T113 (AC-107) Limit a tile by markings, combined as AND or OR, skipping empty markings
-  - Files: `packages/core/src/markings/limit-by.ts`, `packages/core/src/markings/limit-by.test.ts`
+- [x] T113 (AC-107) Limit a tile by markings, combined as AND or OR, skipping empty markings
+  - Files: `packages/core/src/markings/limit-by.ts`, `packages/core/src/markings/limit-by.test.ts`, `packages/core/src/index.ts`
   - Failing test: `limit-by.test.ts`: two limiting markings with one empty return the rows of the non-empty one, and OR returns the union where AND returns the intersection (AC-107).
   - Depends on: T092
+  - Done 2026-09-20. AC-107 ticked.
+  - **The skip-empty rule is ours, and direction.md flags it as such**: "Proposed rule, not from Spotfire's docs." It matters because the naive reading is catastrophic under AND — a details tile limited by two markings, where the user has marked in only one, would intersect against an empty set and show nothing. The tile goes blank exactly when someone starts working, and the remedy ("also mark something in the other master tile") is not a thing anyone would guess. Mutation-verified.
+  - **Nothing marked anywhere returns every row, not none.** What the tile then *shows* is a per-tile setting — All data, an empty visualisation, or a message, with the message the default — so the decision belongs to whoever renders it. Returning nothing here would make "All data" impossible to implement.
+  - Rows come back by identity and in their original order: the tile's own sort is the tile's business, and identity is what lets a renderer tell whether a row actually changed rather than repainting everything on each marking change.
+  - **The `/jobs` contrast flake, sixth sighting, with two hypotheses eliminated.** Stressing `a11y-tokens.spec.ts` alone — 216 runs at 6 workers — passes every time, so it is contention with the *rest* of the suite rather than a timing problem inside that spec. And the query log's error text, the obvious content that only appears once other specs have run, carries no colour rule at all (`.query-log__error` and `[data-icon]` are unstyled), so it is not that either. Still uncaptured; next attempt should snapshot axe's violation from a full-suite run rather than re-testing the spec in isolation.
 - [ ] T114 (AC-108) Prevent a tile from being limited by the marking it marks with, and say why
   - Files: `packages/web/src/dashboard/settings/TileLimits.tsx`, `packages/web/src/dashboard/settings/TileLimits.test.tsx`
   - Failing test: `TileLimits.test.tsx`: the tile's own marking is not selectable as a limit and the reason is shown where the option appears (AC-108).

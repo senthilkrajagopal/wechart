@@ -309,7 +309,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
 Purpose: Spotfire's master-detail workflow and the operations on a selection.
 Traces to: `[docs/inputs §11]`, direction.md §7a, rules 33, 53, 55.
 
-- [ ] AC-107 WHEN a tile is limited by one or more markings, THE SYSTEM SHALL restrict its query to those markings, combined as All markings (AND) or Any marking (OR) according to its setting, and SHALL skip markings that are empty (direction.md rule 33).
+- [x] AC-107 WHEN a tile is limited by one or more markings, THE SYSTEM SHALL restrict its query to those markings, combined as All markings (AND) or Any marking (OR) according to its setting, and SHALL skip markings that are empty (direction.md rule 33).
       Fails when: a tile limited by two markings with one empty returns no rows, or OR behaves as AND.
 - [ ] AC-108 THE SYSTEM SHALL prevent a tile from being limited by the marking it marks with, and SHALL state the reason where that option is offered (direction.md rule 45).
       Fails when: a tile can be limited by its own marking.

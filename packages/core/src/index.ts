@@ -86,6 +86,8 @@ export {
 
 export { markingApplicability, type Applicability } from './markings/applicability';
 
+export { limitRowsBy, limitingMarkings, type LimitCombination } from './markings/limit-by';
+
 export {
   MARKING_ITEM_LIMIT,
   addItemsWithinLimit,
