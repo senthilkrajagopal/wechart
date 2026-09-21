@@ -35,6 +35,12 @@ export interface ChartTileProps {
    */
   readonly tableView?: boolean;
   readonly onTableViewChange?: (showing: boolean) => void;
+  /**
+   * A new answer is on its way — a filter changed (AC-078). What is drawn
+   * stays, marked busy, rather than giving way to a skeleton: that would
+   * unmount the tile and drop a reader's table view with it.
+   */
+  readonly busy?: boolean;
 }
 
 interface ChartBodyProps {
@@ -67,7 +73,7 @@ function ChartBody({ spec, height }: ChartBodyProps) {
   return <ChartCanvas spec={spec} {...(height === undefined ? {} : { height })} />;
 }
 
-export function ChartTile({ spec, height, tableView, onTableViewChange }: ChartTileProps) {
+export function ChartTile({ spec, height, tableView, onTableViewChange, busy }: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
   const [ownState, setOwnState] = useState(false);
@@ -83,7 +89,11 @@ export function ChartTile({ spec, height, tableView, onTableViewChange }: ChartT
   const showingTable = asTable && canSwitch;
 
   return (
-    <div className="chart-tile" data-testid="chart-tile">
+    <div
+      className={busy === true ? 'chart-tile chart-tile--busy' : 'chart-tile'}
+      data-testid="chart-tile"
+      aria-busy={busy === true ? true : undefined}
+    >
       {canSwitch ? (
         <button
           type="button"

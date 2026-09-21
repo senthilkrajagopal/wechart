@@ -30,7 +30,9 @@ import { needsOf, templateElements } from './edit/templates';
 import { SettingsPage } from './settings/SettingsPage';
 import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
+import { activeFilters, filteredCharts } from '../filters/apply';
 import { FilterBar } from '../filters/FilterBar';
+import { FilteredCharts, type FilteredResults } from '../filters/FilteredCharts';
 import { newFilter, type FilterValues } from '../filters/model';
 import { Canvas, type CanvasProps } from './grid/Canvas';
 import { DRAG_INSTRUCTIONS, DRAG_INSTRUCTIONS_ID, useTileDrag } from './grid/drag';
@@ -149,11 +151,14 @@ function TileBody({
   spec,
   error,
   loading,
+  busy = false,
 }: {
   tile: Tile;
   spec: RenderSpec | undefined;
   error: unknown;
   loading: boolean;
+  /** A filtered answer is on its way (AC-078): what is drawn stays, marked busy. */
+  busy?: boolean;
 }) {
   switch (tile.kind) {
     case 'chart':
@@ -188,6 +193,7 @@ function TileBody({
       ) : (
         <ChartTile
           spec={spec}
+          busy={busy}
           {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
         />
       );
@@ -216,6 +222,8 @@ interface TileCharts {
   readonly specs: Readonly<Record<string, RenderSpec>>;
   readonly errors: Readonly<Record<string, unknown>>;
   readonly loading: boolean;
+  /** Charts a filter has just reached, whose filtered answer is not yet in (AC-078). */
+  readonly pending?: ReadonlySet<string>;
 }
 
 interface Affordances {
@@ -378,6 +386,7 @@ function Elements({
               spec={charts.specs[chartId]}
               error={charts.errors[chartId]}
               loading={charts.loading}
+              busy={charts.pending?.has(chartId) === true}
             />
           </>
         );
@@ -606,16 +615,66 @@ export function DashboardView({
   );
   const chartTitleOf = (chartId: string) => drawn.documents?.[chartId]?.title;
 
-  // Formatted after the drafts are in, so a drafted tile is formatted too.
+  /**
+   * What each filter holds now (F9). The reader's, not the dashboard's: not
+   * in the saved document, and not in the edit history — setting a filter is
+   * reading the dashboard, not changing it.
+   */
+  const [filterValues, setFilterValues] = useState<FilterValues>({});
+  /**
+   * The dashboard as the session has it, mirrored up (`SessionMirror`): its
+   * filters and scopes may be edits not yet saved, and a filter set while
+   * editing reaches the tiles as they are being edited.
+   */
+  const [live, setLive] = useState<DashboardDocument>(document);
+  /**
+   * The charts a filter in effect reaches, each with the filters that reach it
+   * (AC-078), and what each draws once filtered — asked by `FilteredCharts`.
+   */
+  const reached = useMemo(
+    () => filteredCharts(live, activeFilters(live.filters ?? [], filterValues)),
+    [live, filterValues],
+  );
+  const [filtered, setFiltered] = useState<FilteredResults>({});
+  const withFiltered = useMemo(() => {
+    const ids = Object.keys(reached).filter((id) => drawn.documents?.[id] !== undefined);
+    if (ids.length === 0) return { ...drawn, pending: new Set<string>() };
+    const shown: Record<string, RenderSpec> = { ...drawn.specs };
+    const failed: Record<string, unknown> = { ...drawn.errors };
+    const pending = new Set<string>();
+    for (const id of ids) {
+      const { chart: answer, asking } = filtered[id] ?? { chart: undefined, asking: true };
+      // Being asked: what the tile drew stays, marked busy, so it is not taken
+      // for the answer to the value now set; a skeleton would unmount the chart
+      // and drop a reader's table view.
+      if (asking || answer === undefined) pending.add(id);
+      if (answer === undefined) continue;
+      if ('spec' in answer) {
+        shown[id] = answer.spec;
+        delete failed[id];
+      } else {
+        failed[id] = answer.error;
+        delete shown[id];
+      }
+    }
+    return { specs: shown, errors: failed, pending };
+  }, [drawn, reached, filtered]);
+
+  // Formatted after the drafts and filters are in, so those tiles are too.
   const formatted = useMemo(
-    () => (formats === undefined ? drawn.specs : withFormats(drawn.specs, formats)),
-    [drawn.specs, formats],
+    () => (formats === undefined ? withFiltered.specs : withFormats(withFiltered.specs, formats)),
+    [withFiltered.specs, formats],
   );
 
   // The assignment is held across renders, so a filter that hides a member
   // does not hand its colour to whoever is now first (AC-039).
   const coloured = useDashboardColours(document, formatted);
-  const charts: TileCharts = { specs: coloured, errors: drawn.errors, loading };
+  const charts: TileCharts = {
+    specs: coloured,
+    errors: withFiltered.errors,
+    loading,
+    pending: withFiltered.pending,
+  };
 
   /**
    * The chart editor, when it is open over the dashboard (T032, AC-034). Not
@@ -729,12 +788,6 @@ export function DashboardView({
    */
   const [selected, setSelected] = useState<string | null>(null);
 
-  /**
-   * What each filter holds now (F9). The reader's, not the dashboard's: not
-   * in the saved document, and not in the edit history — setting a filter is
-   * reading the dashboard, not changing it.
-   */
-  const [filterValues, setFilterValues] = useState<FilterValues>({});
   const [addTarget, setAddTarget] = useState<string | null>(null);
 
   /**
@@ -764,186 +817,193 @@ export function DashboardView({
   };
 
   return (
-    <EditChrome
-      document={document}
-      title={(shown) => shown.title}
-      /**
-       * Never with drafts on it. The save sends the whole document, so a draft
-       * left there would be written into the dashboard's own row. The drafts go
-       * beside it, and are written as the chart documents they are, in the
-       * same transaction as the dashboard (AC-183, T192).
-       */
-      onSave={(next) =>
-        // The document without its drafts, and the drafts beside it: the save
-        // writes them as chart documents, never into the dashboard's row. Its
-        // outcome goes back to the session, which leaves edit mode only on
-        // success (AC-184).
-        onSave(withoutDrafts(next), next.chartDrafts)
-      }
-      /**
-       * Held back only while a draft cannot be written with this dashboard: a
-       * library chart (AC-128's warning comes first, T134), a chart local to
-       * another dashboard, or a draft with no version to check. Charts local
-       * to this dashboard are written with it (T192). Saving a draft that
-       * cannot be written would drop it in silence and put the old chart back
-       * on the tile — AC-034's failing state, reached through Save. See
-       * `whyUnsaveable` for the wording and why it names Undo, not Discard.
-       */
-      saveBlocked={(shown) => whyUnsaveable(shown, dashboardId)}
-      onStart={onEditStart}
-      headerActions={(session) => (
-        <button
-          type="button"
-          className="dashboard__gear"
-          aria-label="Dashboard settings"
-          /**
-           * Not while a save is under way (AC-184, T197). The header is
-           * outside the body a save makes inert, and a settings save made now
-           * goes to a session that takes no change — the page would close
-           * with the settings lost and nothing said.
-           */
-          disabled={session.saving}
-          onClick={() => {
-            // In view mode the settings page is an edit of its own, begun now
-            // with the dashboard as it stands: its save is checked against
-            // this moment's version (T198, AC-015). While editing, it is part
-            // of the session, which began earlier.
-            if (!session.editing) onEditStart?.();
-            setSettingsOpen(true);
-          }}
-        >
-          ⚙
-        </button>
+    <>
+      {Object.keys(reached).length === 0 ? null : (
+        <FilteredCharts reached={reached} documents={drawn.documents} onResults={setFiltered} />
       )}
-      /**
-       * The settings page, opened over the dashboard rather than navigated to,
-       * so the edit session survives it (AC-069, and AC-074 later).
-       *
-       * Cancel simply closes: the page keeps its edits to itself until Save,
-       * which is AC-069's "a way to return without saving".
-       */
-      overlay={(session) =>
-        settingsOpen ? (
-          <SettingsPage
-            document={session.document}
-            onCancel={() => {
-              setSettingsOpen(false);
-            }}
+      <EditChrome
+        document={document}
+        title={(shown) => shown.title}
+        /**
+         * Never with drafts on it. The save sends the whole document, so a draft
+         * left there would be written into the dashboard's own row. The drafts go
+         * beside it, and are written as the chart documents they are, in the
+         * same transaction as the dashboard (AC-183, T192).
+         */
+        onSave={(next) =>
+          // The document without its drafts, and the drafts beside it: the save
+          // writes them as chart documents, never into the dashboard's row. Its
+          // outcome goes back to the session, which leaves edit mode only on
+          // success (AC-184).
+          onSave(withoutDrafts(next), next.chartDrafts)
+        }
+        /**
+         * Held back only while a draft cannot be written with this dashboard: a
+         * library chart (AC-128's warning comes first, T134), a chart local to
+         * another dashboard, or a draft with no version to check. Charts local
+         * to this dashboard are written with it (T192). Saving a draft that
+         * cannot be written would drop it in silence and put the old chart back
+         * on the tile — AC-034's failing state, reached through Save. See
+         * `whyUnsaveable` for the wording and why it names Undo, not Discard.
+         */
+        saveBlocked={(shown) => whyUnsaveable(shown, dashboardId)}
+        onStart={onEditStart}
+        headerActions={(session) => (
+          <button
+            type="button"
+            className="dashboard__gear"
+            aria-label="Dashboard settings"
             /**
-             * direction.md: "Saving in view mode saves the dashboard. While
-             * editing, a save is one undoable change, and Discard reverts it."
-             *
-             * Two different things, so two different routes. In view mode
-             * there is no session to fold into — `EditChrome` takes the prop
-             * as the truth there — so a settings save that only called
-             * `session.change` changed nothing a viewer could see. While
-             * editing it must go through the session, or Discard would not
-             * reach it (AC-074).
+             * Not while a save is under way (AC-184, T197). The header is
+             * outside the body a save makes inert, and a settings save made now
+             * goes to a session that takes no change — the page would close
+             * with the settings lost and nothing said.
              */
-            onSave={(next) => {
-              if (session.editing) session.change(next);
-              else {
-                // A failed save is the page's to report, and it does; here it
-                // is only swallowed, or it would surface as an unhandled
-                // rejection (the save has returned its outcome since T197).
-                void Promise.resolve(onSave(withoutDrafts(next))).catch(() => undefined);
-              }
-              setSettingsOpen(false);
+            disabled={session.saving}
+            onClick={() => {
+              // In view mode the settings page is an edit of its own, begun now
+              // with the dashboard as it stands: its save is checked against
+              // this moment's version (T198, AC-015). While editing, it is part
+              // of the session, which began earlier.
+              if (!session.editing) onEditStart?.();
+              setSettingsOpen(true);
             }}
-          />
-        ) : editingChart === null ? null : (
-          /**
-           * The chart editor over the dashboard (T032, AC-034). Going back
-           * with a change holds it as a draft on the session — one change,
-           * which Undo and Discard reach like any other (AC-066) — and going
-           * back with none records nothing.
-           */
-          <ChartEditorOverlay
-            chartId={editingChart.chartId}
-            dashboardTitle={session.document.title}
-            tile={editingChart.tile}
-            draft={session.document.chartDrafts?.[editingChart.chartId]}
-            // The browser's Back takes the tile out of the URL; the editor
-            // then leaves as its own Back would, keeping the change (T196).
-            tileId={editingChart.tileId}
-            urlTile={editTile}
-            onBack={(draft) => {
-              if (draft !== undefined) {
-                session.change(withDraft(session.document, editingChart.chartId, draft));
-              }
-              returnFocus.current = editingChart.returnTo;
-              setEditingChart(null);
-              closeInUrl();
-            }}
+          >
+            ⚙
+          </button>
+        )}
+        /**
+         * The settings page, opened over the dashboard rather than navigated to,
+         * so the edit session survives it (AC-069, and AC-074 later).
+         *
+         * Cancel simply closes: the page keeps its edits to itself until Save,
+         * which is AC-069's "a way to return without saving".
+         */
+        overlay={(session) =>
+          settingsOpen ? (
+            <SettingsPage
+              document={session.document}
+              onCancel={() => {
+                setSettingsOpen(false);
+              }}
+              /**
+               * direction.md: "Saving in view mode saves the dashboard. While
+               * editing, a save is one undoable change, and Discard reverts it."
+               *
+               * Two different things, so two different routes. In view mode
+               * there is no session to fold into — `EditChrome` takes the prop
+               * as the truth there — so a settings save that only called
+               * `session.change` changed nothing a viewer could see. While
+               * editing it must go through the session, or Discard would not
+               * reach it (AC-074).
+               */
+              onSave={(next) => {
+                if (session.editing) session.change(next);
+                else {
+                  // A failed save is the page's to report, and it does; here it
+                  // is only swallowed, or it would surface as an unhandled
+                  // rejection (the save has returned its outcome since T197).
+                  void Promise.resolve(onSave(withoutDrafts(next))).catch(() => undefined);
+                }
+                setSettingsOpen(false);
+              }}
+            />
+          ) : editingChart === null ? null : (
             /**
-             * "Save dashboard" (direction.md §2: "applies the chart and saves
-             * the dashboard", T192): the draft Back would apply, saved with
-             * the dashboard in one step through the session — so the same
-             * refusal as the bar's Save applies, and a refused edit is kept
-             * as a change rather than lost.
+             * The chart editor over the dashboard (T032, AC-034). Going back
+             * with a change holds it as a draft on the session — one change,
+             * which Undo and Discard reach like any other (AC-066) — and going
+             * back with none records nothing.
              */
-            onSaveDashboard={(draft) => {
-              returnFocus.current = editingChart.returnTo;
-              setEditingChart(null);
-              closeInUrl();
-              session.save(
-                draft === undefined
-                  ? session.document
-                  : withDraft(session.document, editingChart.chartId, draft),
-              );
-            }}
-            saveBlocked={(pending) =>
-              whyUnsaveableWith(session.document, dashboardId, editingChart.chartId, pending)
-            }
-          />
-        )
-      }
-      panels={(session) => ({
-        add: <AddSlot session={session} where={where} />,
-      })}
-    >
-      {(session: EditSession<DashboardDocument>) => (
-        <>
-          <SessionMirror
-            drafts={session.document.chartDrafts}
-            onDrafts={setDrafts}
-            saving={session.saving}
-            onSaving={setSaving}
-          />
-          <FilterBar
-            filters={session.document.filters ?? []}
-            dashboard={session.document}
-            chartTitleOf={chartTitleOf}
-            values={filterValues}
-            onValue={(key, value) => {
-              setFilterValues((current) => {
-                const next = { ...current };
-                if (value === undefined) delete next[key];
-                else next[key] = value;
-                return next;
-              });
-            }}
-            editing={session.editing}
-            onFilters={(next) => {
-              session.change({ ...session.document, filters: next });
-            }}
-          />
-          <DashboardPages
-            session={session}
-            charts={charts}
-            onEditChart={openEditor}
-            editTile={editTile}
-            editorOpenFor={editingChart?.tileId}
-            where={where}
-            onAim={(next) => {
-              setSelected(next.selected);
-              setAddTarget(next.addTarget);
-            }}
-            onOpenPage={setOpenPage}
-          />
-        </>
-      )}
-    </EditChrome>
+            <ChartEditorOverlay
+              chartId={editingChart.chartId}
+              dashboardTitle={session.document.title}
+              tile={editingChart.tile}
+              draft={session.document.chartDrafts?.[editingChart.chartId]}
+              // The browser's Back takes the tile out of the URL; the editor
+              // then leaves as its own Back would, keeping the change (T196).
+              tileId={editingChart.tileId}
+              urlTile={editTile}
+              onBack={(draft) => {
+                if (draft !== undefined) {
+                  session.change(withDraft(session.document, editingChart.chartId, draft));
+                }
+                returnFocus.current = editingChart.returnTo;
+                setEditingChart(null);
+                closeInUrl();
+              }}
+              /**
+               * "Save dashboard" (direction.md §2: "applies the chart and saves
+               * the dashboard", T192): the draft Back would apply, saved with
+               * the dashboard in one step through the session — so the same
+               * refusal as the bar's Save applies, and a refused edit is kept
+               * as a change rather than lost.
+               */
+              onSaveDashboard={(draft) => {
+                returnFocus.current = editingChart.returnTo;
+                setEditingChart(null);
+                closeInUrl();
+                session.save(
+                  draft === undefined
+                    ? session.document
+                    : withDraft(session.document, editingChart.chartId, draft),
+                );
+              }}
+              saveBlocked={(pending) =>
+                whyUnsaveableWith(session.document, dashboardId, editingChart.chartId, pending)
+              }
+            />
+          )
+        }
+        panels={(session) => ({
+          add: <AddSlot session={session} where={where} />,
+        })}
+      >
+        {(session: EditSession<DashboardDocument>) => (
+          <>
+            <SessionMirror
+              document={session.document}
+              onDocument={setLive}
+              drafts={session.document.chartDrafts}
+              onDrafts={setDrafts}
+              saving={session.saving}
+              onSaving={setSaving}
+            />
+            <FilterBar
+              filters={session.document.filters ?? []}
+              dashboard={session.document}
+              chartTitleOf={chartTitleOf}
+              values={filterValues}
+              onValue={(key, value) => {
+                setFilterValues((current) => {
+                  const next = { ...current };
+                  if (value === undefined) delete next[key];
+                  else next[key] = value;
+                  return next;
+                });
+              }}
+              editing={session.editing}
+              onFilters={(next) => {
+                session.change({ ...session.document, filters: next });
+              }}
+            />
+            <DashboardPages
+              session={session}
+              charts={charts}
+              onEditChart={openEditor}
+              editTile={editTile}
+              editorOpenFor={editingChart?.tileId}
+              where={where}
+              onAim={(next) => {
+                setSelected(next.selected);
+                setAddTarget(next.addTarget);
+              }}
+              onOpenPage={setOpenPage}
+            />
+          </>
+        )}
+      </EditChrome>
+    </>
   );
 }
 
@@ -963,16 +1023,23 @@ export function DashboardView({
  * for the saving body to take focus again (T197).
  */
 function SessionMirror({
+  document,
+  onDocument,
   drafts,
   onDrafts,
   saving,
   onSaving,
 }: {
+  readonly document: DashboardDocument;
+  readonly onDocument: (document: DashboardDocument) => void;
   readonly drafts: DashboardDocument['chartDrafts'];
   readonly onDrafts: (drafts: DashboardDocument['chartDrafts']) => void;
   readonly saving: boolean;
   readonly onSaving: (saving: boolean) => void;
 }) {
+  useEffect(() => {
+    onDocument(document);
+  }, [document, onDocument]);
   useEffect(() => {
     onDrafts(drafts);
   }, [drafts, onDrafts]);

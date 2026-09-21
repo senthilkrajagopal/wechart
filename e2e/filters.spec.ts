@@ -41,7 +41,10 @@ async function makeDashboard(request: APIRequestContext) {
  * holding one chart local to it — orders counted by status, as a bar — titled
  * "Sales by status" and "Operations by status".
  */
-async function makeTwoTabDashboard(request: APIRequestContext) {
+async function makeTwoTabDashboard(
+  request: APIRequestContext,
+  filters: readonly Record<string, unknown>[] = [],
+) {
   const { id, title } = await makeDashboard(request);
   const chartOn = async (chartTitle: string) => {
     const chart = (await (
@@ -94,6 +97,7 @@ async function makeTwoTabDashboard(request: APIRequestContext) {
             items: [{ id: 'tile-operations', kind: 'chart', w: 6, h: 40, chartId: operations }],
           },
         ],
+        filters,
       },
     },
   });
@@ -201,4 +205,68 @@ test('a filter is scoped to the dashboard, a tab or chosen tiles, and shows it',
   // Kept, and shown to a reader in view mode.
   await page.reload();
   await expect(filterBar(page).getByTestId('scope-badge')).toHaveText('Tab: Sales');
+});
+
+/**
+ * T084 / AC-078: WHEN a filter value changes, THE SYSTEM SHALL re-query every
+ * tile in its scope and leave tiles outside the scope unchanged.
+ * Fails when: a tile outside the scope re-queries, or a tile inside it keeps
+ * the previous result.
+ *
+ * And AC-077's other half: a tab-scoped filter changes no tile on another tab.
+ * The two charts are the same query — orders counted by status, 80 of each of
+ * three — so every chart query sent once a value is set must carry it, and the
+ * other tab's chart must still show all three.
+ */
+test('a value re-queries the tiles in its scope, and a tab’s filter leaves the other tab alone', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await makeTwoTabDashboard(request, [
+    {
+      id: 'f-status',
+      widget: 'checkbox',
+      member: 'orders.status',
+      scope: { kind: 'page', pageId: 'sales' },
+    },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  const sales = page.locator('[data-tile="tile-sales"]');
+  await sales.getByTestId('toggle-table-view').click();
+  await expect(sales.getByTestId('table-row')).toHaveCount(3);
+
+  const asked: Record<string, unknown>[] = [];
+  page.on('request', (sent) => {
+    if (!sent.url().endsWith('/api/load')) return;
+    const { query } = sent.postDataJSON() as { query: Record<string, unknown> };
+    if (query['measures'] !== undefined) asked.push(query);
+  });
+
+  await filterBar(page).getByRole('checkbox', { name: 'completed' }).check();
+
+  // In scope: asked again with the value, and drawn from the answer — the
+  // table view kept through it.
+  await expect(sales.getByTestId('table-row')).toHaveCount(1);
+  await expect(sales.getByTestId('table-row')).toContainText('completed');
+  await expect(sales.getByTestId('chart-tile')).not.toHaveAttribute('aria-busy', 'true');
+  expect(asked.length).toBeGreaterThan(0);
+  for (const query of asked)
+    expect(query['filters']).toEqual([
+      { member: 'orders.status', operator: 'equals', values: ['completed'] },
+    ]);
+
+  // Changed again: asked again, with both.
+  await filterBar(page).getByRole('checkbox', { name: 'shipped' }).check();
+  await expect(sales.getByTestId('table-row')).toHaveCount(2);
+
+  // Out of scope: the other tab's chart shows all three, and was never asked
+  // with the filter — nor asked again at all, since every query sent since the
+  // first value carries it.
+  await page.getByRole('tab', { name: 'Operations' }).click();
+  const operations = page.locator('[data-tile="tile-operations"]');
+  await operations.getByTestId('toggle-table-view').click();
+  await expect(operations.getByTestId('table-row')).toHaveCount(3);
+  for (const query of asked) expect(query['filters']).toBeDefined();
 });

@@ -1117,10 +1117,29 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **Tests, red first:** `scope.test.ts` (eight: the default; every chart tile on every page and in every tab of a tab group; the dashboard reaches all; a tab reaches its own tiles and none on the other tab; named tiles reach only those; the badge's four forms; what is gone, and nothing chosen; untitled); `scopeBar.test.tsx` (four: the badge for the default and for a tab; setting a tab and then chosen tiles, named by chart and tab, and saved; Undo); `e2e/filters.spec.ts` (scoped on the real app to chosen tiles and then a tab, saved, and the badge still there in view mode after a reload).
   - **AC-077 not ticked yet.** Its failing state has two halves. The badge half is demonstrated. "A tab-scoped filter changes a tile on another tab" can only be observed once a filter changes tiles at all (T084). Until then no tile changes, so passing that half would prove nothing. It is ticked at T084, by a test that sets a tab-scoped value and watches both tabs.
   - **Known:** filtering will be applied per chart (T084). A chart shown by two tiles with different scopes would take the first tile's. Duplicating a tile gives the copy a chart of its own (AC-062), so this is reached only by a hand-built document.
-- [ ] T084 (AC-078) Re-query every tile in a filter's scope and no tile outside it
+- [x] T084 (AC-078) Re-query every tile in a filter's scope and no tile outside it
   - Files: `packages/web/src/filters/apply.ts`, `packages/web/src/filters/apply.test.ts`
   - Failing test: `apply.test.ts`: a value change re-queries exactly the in-scope tiles, and out-of-scope tiles issue no query (AC-078).
   - Depends on: T083
+  - **Built 2026-09-21.** Files as planned, plus `filters/FilteredCharts.tsx`, `filters/applyOnDashboard.test.tsx`, `dashboard/DashboardView.tsx`, `tiles/ChartTile.tsx`, `shell/styles.ts`, `e2e/filters.spec.ts`.
+    - **What a value adds to a query** (`withFilters`, with Cube's operators from `docs/research/cube/data-apis.md`), always ANDed with the chart's own:
+      - Picked values become `equals`.
+      - A numeric range becomes `gte` and/or `lte`.
+      - A date range goes into the chart's time dimension's `dateRange` when it has none. That is where Cube's pre-aggregation matching applies (research recommendation 12). A chart that does not use the field gets a time dimension of its own with no granularity.
+      - A time dimension that already has a `dateRange` or `compareDateRange` gets an `inDateRange` filter instead, so both limits hold.
+      - One end of a date range becomes `afterOrOnDate` or `beforeOrOnDate`.
+      - A relative preset is sent as its words.
+      - A filter with no field, or with no value that filters (two dates still to be chosen), is not in effect.
+    - **Which charts are asked** (`filteredCharts`): every chart tile in scope of a filter in effect, with every filter that reaches it. A chart no filter reaches is not listed, and nothing is asked for it.
+    - **Asking** (`FilteredCharts`): one query per reached chart, through the same `tileChartOf` every tile uses. It is keyed by the chart as the tile shows it (a drafted chart as edited) and by what reaches it, so a value set back is answered from the cache. It is cancelled on Cube when overtaken (AC-011). It is mounted only while a filter is in effect, so a dashboard without one asks the query client for nothing. It is outside the edit chrome, so opening the chart editor or the settings page does not re-ask.
+    - **Drawn** before formats and colours, so a filtered tile is formatted like any other, and a member keeps its colour when a filter hides others (AC-039). While an answer is on its way, the tile keeps what it drew, dimmed and `aria-busy`, rather than a skeleton, which would unmount the chart and drop a reader's table view. A failed filtered query shows on its tile as any failed query does (AC-012).
+    - **Filters set while editing reach the tiles too.** The session's document is mirrored up (`SessionMirror`) so that unsaved filters and scopes apply.
+  - **Tests, red first:**
+    - `apply.test.ts`, 12 tests: what is in effect (a field and a value; not two empty dates; not a value held for the filter's previous field); what each kind adds (equals beside the chart's own filters; gte/lte with either end open; a preset on a grouped time dimension's `dateRange`; two dates on a time dimension of its own; `inDateRange` where the chart already limits it; one end; the same query back when nothing applies); which charts a value reaches.
+    - `applyOnDashboard.test.tsx`, 3 tests: a tab-scoped value asks again only the chart on its tab, with the value, and again with a changed value; a dashboard-scoped one asks both; the tile is drawn from the answer.
+    - `e2e/filters.spec.ts`: on the real app, a tab-scoped checkbox filter on status. The Sales tile's table goes from three rows to one ("completed"), then two, and every chart query sent carries the filter. The Operations tab's chart, the same query, still shows all three.
+    - **Mutation-verified:** with scope ignored, the tab test and the model test fail. With the loader never mounted, all three dashboard tests fail.
+  - **Done 2026-09-21. AC-078 ticked** — `e2e/filters.spec.ts` "a value re-queries the tiles in its scope, and a tab's filter leaves the other tab alone", with `applyOnDashboard.test.tsx`. **AC-077 ticked** by the same test (a tab-scoped filter left the other tab's tile unchanged) together with T083's badge tests.
 - [ ] T085 (AC-079) Leave a tile unfiltered and mark it not covered when the member is unreachable
   - Files: `packages/web/src/filters/coverage.ts`, `packages/web/src/filters/coverage.test.ts`
   - Failing test: `coverage.test.ts`: when a filter's member is not reachable from a tile's cube or view, that tile renders unfiltered with a "not covered" label and no query error (AC-079).

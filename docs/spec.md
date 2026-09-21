@@ -247,9 +247,9 @@ Traces to: `[docs/inputs §2]`, direction.md §7, rule 14.
 
 - [x] AC-076 THE SYSTEM SHALL offer filter widgets for a date range with presets, a list with search, a numeric range, and a checkbox list.
       Fails when: a listed widget type cannot be added to a dashboard.
-- [ ] AC-077 WHEN a filter is added, THE SYSTEM SHALL scope it to the dashboard, a page tab or named tiles, and show its scope on the widget (direction.md rule 14).
+- [x] AC-077 WHEN a filter is added, THE SYSTEM SHALL scope it to the dashboard, a page tab or named tiles, and show its scope on the widget (direction.md rule 14).
       Fails when: the widget does not show its scope, or a tab-scoped filter changes a tile on another tab.
-- [ ] AC-078 WHEN a filter value changes, THE SYSTEM SHALL re-query every tile in its scope and leave tiles outside the scope unchanged.
+- [x] AC-078 WHEN a filter value changes, THE SYSTEM SHALL re-query every tile in its scope and leave tiles outside the scope unchanged.
       Fails when: a tile outside the scope re-queries, or a tile inside it keeps the previous result.
 - [ ] AC-079 WHEN a filter's member is not reachable from a tile's cube or view, THE SYSTEM SHALL leave that tile unfiltered and mark it as not covered by the filter.
       Fails when: the tile shows a query error, or is silently left unfiltered with no indication.

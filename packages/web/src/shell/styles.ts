@@ -550,6 +550,8 @@ main:has(.dashboard) {
   border-color: var(--wc-accent);
   color: var(--wc-text-on-accent);
 }
+/* A chart whose filtered answer is on its way (AC-078): still drawn, dimmed. */
+.chart-tile--busy { opacity: 0.55; transition: opacity 120ms ease-in; }
 /* A filter's scope (direction.md rule 14): a 24 px chip, like the other chips. */
 .filter-bar__scope {
   display: inline-flex;
