@@ -208,8 +208,11 @@ describe('a filter Cube cannot join to a tile', () => {
       chartType: 'kpi',
     },
   };
+  /** Filtered answers come back with no rows, while set. */
+  let answerNothing = false;
 
   beforeEach(() => {
+    answerNothing = false;
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -236,6 +239,7 @@ describe('a filter Cube cannot join to a tile', () => {
             }),
             { status: 400 },
           );
+        if (filters.length > 0 && answerNothing) return new Response(JSON.stringify({ data: [] }));
         return new Response(
           JSON.stringify({ data: [{ 'customers.count': filters.length ? 1 : 4 }] }),
         );
@@ -299,6 +303,29 @@ describe('a filter Cube cannot join to a tile', () => {
       { member: 'customers.country', operator: 'equals', values: ['Norway'] },
     ]);
     expect(within(tile('t-customers')).queryByRole('alert')).toBeNull();
+  });
+
+  /**
+   * T050's review: the empty state names the filters in effect (AC-043), and
+   * one Cube refused is not in effect — no test showed it was left out.
+   */
+  it('leaves a refused filter out of the filters an empty tile names', async () => {
+    answerNothing = true;
+    customers();
+    const [category, country] = (await within(bar()).findAllByRole('group', {
+      name: /filter \d$/,
+    })) as [HTMLElement, HTMLElement];
+    await userEvent.click(await within(category).findByRole('checkbox', { name: 'Components' }));
+    await userEvent.click(await within(country).findByRole('checkbox', { name: 'Norway' }));
+
+    const empty = await within(tile('t-customers')).findByTestId('tile-no-rows');
+    await vi.waitFor(() => {
+      expect(
+        within(empty)
+          .getAllByRole('listitem')
+          .map((item) => item.textContent),
+      ).toEqual(['customers.country is Norway']);
+    });
   });
 });
 

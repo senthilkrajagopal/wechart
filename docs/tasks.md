@@ -785,7 +785,16 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **In words** (`describeFilter`): "Status is completed, shipped or processing", "Amount from 10 to 99" / "at least 10" / "at most 99", "Ordered at: last 30 days", "Ordered at from … to …" / "on or after …" / "on or before …".
   - **Tests, red first:** `TileEmpty.test.tsx`, 9 tests. Five chart types (bar, line, pie, table, KPI) each show the state, naming both filters, with no canvas and no table. Before the change the bar tried to draw axes. Then: nothing in effect; and the three kinds of wording. `e2e/filters.spec.ts`: on the real app, a status and "today" (the seed's orders end on 2026-08-29) leave the tile empty, and it lists "Orders Status is shipped" and "Orders Ordered at: today", with no chart canvas.
   - **Full runs:** typecheck and lint clean (the existing DataTable warning aside); 1,420 unit tests and 585 browser runs passed.
-  - **Done 2026-09-21. AC-043 ticked** — `e2e/filters.spec.ts` "a filtered tile with no rows says so, naming every filter in effect", with `TileEmpty.test.tsx`. Marking limits (F10), once built, are filters in effect too, and T088/T113 must add them to this list.
+  - **Done 2026-09-21. AC-043 ticked** — `e2e/filters.spec.ts` "a filtered tile with no rows says so, naming every filter in effect", with `TileEmpty.test.tsx`. Marking limits (F10), once built, are filters in effect too; that is now on T088.
+  - **Cold review: PASS.** AC-043 met. AC-042, AC-036/037, AC-046 and AC-178 were not regressed, nor was the editor's zero-row display. Fixed in a follow-up:
+    - duplicate React keys when two filters read alike (the list is now keyed by place);
+    - the empty state's style, which it had none of;
+    - a test, mutation-verified, that a filter Cube refused is left out of the list;
+    - the marking-limits note, moved onto T088, which is open.
+    - **Recorded, not changed:**
+      - While a tile is being asked again, its list describes the new filters beside the old rows (marked busy); it corrects itself when the answer lands.
+      - A plain KPI (a measure, no dimensions) filtered to nothing gets one aggregate row back (0 or null), not zero rows. It shows "0" or "No value" and names no filters. AC-043's trigger, "returns no rows", is not met there, so it is not a violation. Whether an empty aggregate should show the empty state is a question for the user.
+      - direction.md's empty state has an illustration and a primary action; this one has words only, which is all AC-043 asks for.
 - [x] T051 (AC-044) Sort categories by value or label and keep the order across a refresh
   - Files: `packages/core/src/sort.ts`, `packages/core/src/sort.test.ts`, `packages/core/src/compile.ts`, `packages/web/src/editor/ChartEditor.tsx`, `packages/web/src/tiles/ChartTile.tsx`, `e2e/chart-editor.spec.ts`
   - Failing test: `sort.test.ts`: ascending, descending and label orders are applied, and a refresh with unchanged data preserves the order (AC-044).
@@ -1229,6 +1238,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/core/src/query/compose.ts`, `packages/core/src/query/compose.test.ts`
   - Failing test: `compose.test.ts`: a row satisfying only the filter or only the marking limit is excluded from the composed query (AC-082).
   - Depends on: T084, T113
+  - **Waits on markings reaching dashboards (T190, deferred by the user).** Nothing in the web package applies marking limits yet, so AC-082's failing state ("a tile's rows … still shown") cannot be observed on a tile.
+  - **When built, carry AC-043 with it:** a marking limit on a tile is a filter in effect, so the empty state (`TileEmpty`, fed by `inEffect` in `DashboardView.tsx`) must name it too (T050's review).
 - [x] T089 (AC-083) Send relative date presets to Cube as relative ranges
   - Files: `packages/core/src/query/dateRange.ts`, `packages/core/src/query/dateRange.test.ts`
   - Failing test: `dateRange.test.ts`: "last 30 days" produces a relative `dateRange`, not fixed dates (AC-083).

@@ -550,6 +550,11 @@ main:has(.dashboard) {
   border-color: var(--wc-accent);
   color: var(--wc-text-on-accent);
 }
+/* A chart with no rows (AC-043): said in words, in secondary ink. */
+.tile-no-rows { padding: 8px 0; color: var(--wc-text-secondary); }
+.tile-no-rows p { margin: 0 0 4px; }
+.tile-no-rows__headline { color: var(--wc-text-primary); font-weight: 600; }
+.tile-no-rows ul { margin: 0; padding-left: 18px; }
 /* An image tile (AC-063): the image fills the tile, fitted inside or cropped. */
 .image-tile { position: relative; height: 100%; min-height: 64px; }
 .image-tile__image { display: block; width: 100%; height: 100%; }

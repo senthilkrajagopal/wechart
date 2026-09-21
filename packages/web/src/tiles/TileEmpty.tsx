@@ -14,8 +14,9 @@ export function TileEmpty({ inEffect = [] }: { inEffect?: readonly string[] | un
         <>
           <p>Nothing matches the filters in effect:</p>
           <ul>
-            {inEffect.map((filter) => (
-              <li key={filter}>{filter}</li>
+            {/* By place: two filters on one field can read alike. */}
+            {inEffect.map((filter, index) => (
+              <li key={`${String(index)} ${filter}`}>{filter}</li>
             ))}
           </ul>
         </>
