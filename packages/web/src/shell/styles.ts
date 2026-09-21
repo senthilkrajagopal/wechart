@@ -266,6 +266,94 @@ main:has(.dashboard) {
    test measured window.scrollY at 22 there). */
 .dashboard__canvas { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: auto; }
 
+/* The settings gear (AC-069). In the header in both view and edit mode, so it
+   sits between the title and whatever the mode puts on the right. */
+.dashboard__gear {
+  margin-right: auto;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  cursor: pointer;
+}
+.dashboard__gear:hover { background: var(--wc-bg-subtle); }
+
+/* The settings page (AC-069). Full-viewport like the chart editor: it takes
+   the place of the dashboard rather than floating over it, so there is one bar
+   on screen and one meaning of Save. .dashboard--overlaid is the same height
+   box as .dashboard, so the page inherits the pane sizing rule 40 set up. */
+.dashboard--overlaid { display: flex; flex-direction: column; min-height: 0; }
+.settings-page { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.settings-page__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+}
+.settings-page__actions { display: flex; gap: 8px; }
+.settings-page__bar button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  cursor: pointer;
+}
+.settings-page__save {
+  background: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+  border-color: var(--wc-accent);
+}
+.settings-page__body { display: flex; align-items: stretch; gap: 16px; flex: 1; min-height: 0; }
+/* The left nav direction.md asks for, at the workbench tree's 280px. */
+.settings-page__nav {
+  flex: 0 0 280px;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  overflow: auto;
+  min-height: 0;
+}
+.settings-page__nav button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--wc-text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+.settings-page__nav button:hover { background: var(--wc-bg-subtle); }
+.settings-page__nav button[aria-current='true'] {
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-primary);
+  font-weight: var(--wc-text-sm-strong-weight);
+}
+.settings-page__panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+.settings-page__later { color: var(--wc-text-secondary); }
+.settings-field { display: grid; gap: 4px; max-width: 420px; }
+.settings-field input {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+}
+
 .edit-bar { display: flex; gap: 8px; }
 .edit-bar button { height: 32px; padding: 0 12px; border: 1px solid var(--wc-border-strong); border-radius: 4px; background: var(--wc-bg-surface); color: var(--wc-text-primary); cursor: pointer; }
 .edit-bar button:disabled { color: var(--wc-text-muted); cursor: default; }

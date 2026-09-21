@@ -17,6 +17,7 @@ import { UndoToast } from './edit/UndoToast';
 import { EditChrome, type EditSession } from './edit/EditChrome';
 import { MoveToMenu } from './edit/MoveToMenu';
 import { needsOf, templateElements } from './edit/templates';
+import { SettingsPage } from './settings/SettingsPage';
 import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
 import { Canvas, type CanvasProps } from './grid/Canvas';
@@ -482,6 +483,13 @@ export function DashboardView({
    * landed off-screen, and "Discard (1 change)" was the only sign anything
    * had happened at all.
    */
+  /**
+   * Whether the settings page is showing (AC-069). Not part of the history:
+   * opening a page is not a change to the dashboard, so Undo must not step
+   * back through it — the same reason the selection is held out here.
+   */
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   const [openPage, setOpenPage] = useState<string | null>(null);
   const pageId = openPage ?? document.pages[0]?.id ?? '';
   const where = {
@@ -497,8 +505,53 @@ export function DashboardView({
   return (
     <EditChrome
       document={document}
-      title={document.title}
+      title={(shown) => shown.title}
       onSave={onSave}
+      headerActions={
+        <button
+          type="button"
+          className="dashboard__gear"
+          aria-label="Dashboard settings"
+          onClick={() => {
+            setSettingsOpen(true);
+          }}
+        >
+          ⚙
+        </button>
+      }
+      /**
+       * The settings page, opened over the dashboard rather than navigated to,
+       * so the edit session survives it (AC-069, and AC-074 later).
+       *
+       * Cancel simply closes: the page keeps its edits to itself until Save,
+       * which is AC-069's "a way to return without saving".
+       */
+      overlay={(session) =>
+        settingsOpen ? (
+          <SettingsPage
+            document={session.document}
+            onCancel={() => {
+              setSettingsOpen(false);
+            }}
+            /**
+             * direction.md: "Saving in view mode saves the dashboard. While
+             * editing, a save is one undoable change, and Discard reverts it."
+             *
+             * Two different things, so two different routes. In view mode
+             * there is no session to fold into — `EditChrome` takes the prop
+             * as the truth there — so a settings save that only called
+             * `session.change` changed nothing a viewer could see. While
+             * editing it must go through the session, or Discard would not
+             * reach it (AC-074).
+             */
+            onSave={(next) => {
+              if (session.editing) session.change(next);
+              else onSave(next);
+              setSettingsOpen(false);
+            }}
+          />
+        ) : null
+      }
       panels={(session) => ({
         add: <AddSlot session={session} where={where} />,
       })}

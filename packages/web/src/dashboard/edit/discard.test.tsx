@@ -120,6 +120,33 @@ describe('discarding a session', () => {
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toContain('Appendix');
   });
 
+  it('undoes a settings change, which T072 could not test and recorded here', async () => {
+    /**
+     * AC-066 names three things a discard restores: "the dashboard, its chart
+     * specs and its **settings**". At T072 the first was covered and the other
+     * two could not be exercised at all — nothing could change a setting yet —
+     * so a hard check was recorded on this task rather than left to memory.
+     *
+     * This is that check. A settings save made while editing goes through the
+     * session (direction.md: "While editing, a save is one undoable change,
+     * and Discard reverts it"), so a discard has to take it back with
+     * everything else. Routed around the session instead it would survive the
+     * discard, and nothing else here would have noticed.
+     */
+    await edit();
+    await userEvent.click(screen.getByRole('button', { name: 'Dashboard settings' }));
+
+    const name = screen.getByLabelText('Name');
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Renamed in settings');
+    await userEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    expect(screen.getByRole('heading', { name: 'Renamed in settings' })).toBeTruthy();
+
+    await discard();
+
+    expect(screen.getByRole('heading', { name: 'Revenue' })).toBeTruthy();
+  });
+
   it('undoes all of them at once, which is what a real session looks like', async () => {
     const before = await edit();
 

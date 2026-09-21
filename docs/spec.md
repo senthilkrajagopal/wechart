@@ -215,7 +215,7 @@ Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
 Purpose: one place for a dashboard's name, interaction mode, markings, cross-filter matrix and layout.
 Traces to: `[docs/inputs §12]`, direction.md §2, rules 13, 32, 56.
 
-- [ ] AC-069 WHEN the user activates the gear control on a dashboard, THE SYSTEM SHALL open a settings page with General, Interactions, Markings, Cross-filtering and Layout sections, and a way to return without saving.
+- [x] AC-069 WHEN the user activates the gear control on a dashboard, THE SYSTEM SHALL open a settings page with General, Interactions, Markings, Cross-filtering and Layout sections, and a way to return without saving.
       Fails when: a section is missing, or leaving the page applies changes that were not saved.
 - [ ] AC-070 WHEN the user changes the interaction mode, THE SYSTEM SHALL keep both configurations, activate the chosen one and label the other as inactive (direction.md rule 56).
       Fails when: switching discards the other mode's configuration, or both modes are active at once.

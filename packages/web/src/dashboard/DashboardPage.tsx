@@ -55,7 +55,7 @@ export class DashboardDocumentError extends Error {
  * were pages — every seeded one but the first — opens as an empty dashboard
  * rather than as an error, because "no tiles yet" is what it is.
  */
-function dashboardOf(stored: StoredDocument): DashboardDocument {
+export function dashboardOf(stored: StoredDocument): DashboardDocument {
   const body = stored.body as Partial<DashboardDocument>;
 
   // A dashboard saved before there were pages — every seeded one but the
@@ -70,7 +70,20 @@ function dashboardOf(stored: StoredDocument): DashboardDocument {
     }
   }
 
+  /**
+   * Spread first, defaults over the top. The four named fields are the ones
+   * this build reads; everything else a stored dashboard carries has to come
+   * through untouched, because a save sends back the document it was given
+   * (AC-065) and the server replaces the body wholesale.
+   *
+   * Rebuilt as four fields, this dropped `folderId` on every save — and
+   * `folder_id` is a column derived from it, so the dashboard left its folder
+   * without anyone moving it (AC-017, AC-020). `owner` went the same way, and
+   * markings would have at F10. `save.test.ts` could not see it: it builds the
+   * document it sends, so the loss happened one step upstream of it.
+   */
   return {
+    ...body,
     schemaVersion: body.schemaVersion ?? 1,
     title: typeof body.title === 'string' ? body.title : 'Dashboard',
     pages: body.pages ?? [],

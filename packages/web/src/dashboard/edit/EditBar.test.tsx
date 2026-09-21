@@ -35,7 +35,7 @@ const DOC: Doc = { tiles: ['a'] };
 
 function Harness({ onSave = vi.fn() }: { onSave?: (document: Doc) => void }) {
   return (
-    <EditChrome document={DOC} title="Revenue" onSave={onSave}>
+    <EditChrome document={DOC} title={() => 'Revenue'} onSave={onSave}>
       {(session) => (
         <button type="button" onClick={() => session.change({ tiles: ['a', 'b'] })}>
           Add a tile
@@ -134,7 +134,7 @@ describe('what the bar reports', () => {
   it('edits the dashboard as it stands now, not as it was when the page mounted', async () => {
     const onSave = vi.fn();
     const { rerender } = render(
-      <EditChrome document={DOC} title="Revenue" onSave={onSave}>
+      <EditChrome document={DOC} title={() => 'Revenue'} onSave={onSave}>
         {() => null}
       </EditChrome>,
     );
@@ -143,7 +143,7 @@ describe('what the bar reports', () => {
     // the normal case once a route loads one (T023).
     const loaded: Doc = { tiles: ['loaded'] };
     rerender(
-      <EditChrome document={loaded} title="Revenue" onSave={onSave}>
+      <EditChrome document={loaded} title={() => 'Revenue'} onSave={onSave}>
         {() => null}
       </EditChrome>,
     );
@@ -252,7 +252,7 @@ describe('the sidebar panels', () => {
     render(
       <EditChrome
         document={DOC}
-        title="Revenue"
+        title={() => 'Revenue'}
         onSave={vi.fn()}
         panels={() => ({ outline: <p>Page 1</p> })}
       >

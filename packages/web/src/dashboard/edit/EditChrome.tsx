@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { isValidElement, useState, type ReactNode } from 'react';
 
 import { canRedo, canUndo, discard, historyOf, push, redo, undo } from '../../editor/history';
 import { EditBar } from './EditBar';
@@ -50,7 +50,14 @@ interface Snapshot<T> {
 
 export interface EditChromeProps<T> {
   readonly document: T;
-  readonly title: string;
+  /**
+   * Read from the document being edited, not passed as a fixed string: the
+   * title is part of the document, so renaming it in the settings page has to
+   * show in the header the rename is about. A caller that handed in a string
+   * would be handing in the *opened* document's title, and the heading would
+   * keep the old name until the dashboard was saved and re-fetched.
+   */
+  readonly title: (document: T) => string;
   readonly onSave: (document: T) => void;
   /**
    * What the sidebar's three panels hold. A function of the session, because
@@ -58,6 +65,25 @@ export interface EditChromeProps<T> {
    * (AC-058) — and the session is created here.
    */
   readonly panels?: ((session: EditSession<T>) => SidebarContent) | undefined;
+  /**
+   * A full-viewport page shown *instead of* the dashboard and its chrome, with
+   * the session left running underneath — the dashboard settings page is one
+   * (AC-069).
+   *
+   * It takes the place of the header and body rather than covering them
+   * because it brings its own bar, and a second bar behind it would offer Save
+   * twice with two different meanings. Keeping the session mounted is the
+   * point: AC-074 makes a settings save one undoable change, and unmounting
+   * here would take the history with it.
+   *
+   * Returning nothing means no overlay, so the dashboard shows as usual.
+   */
+  readonly overlay?: ((session: EditSession<T>) => ReactNode) | undefined;
+  /**
+   * Controls that sit in the header in both view and edit mode — the settings
+   * gear is one (AC-069, direction.md puts it there for both).
+   */
+  readonly headerActions?: ReactNode;
   readonly children: (session: EditSession<T>) => ReactNode;
 }
 
@@ -66,6 +92,8 @@ export function EditChrome<T>({
   title,
   onSave,
   panels,
+  overlay,
+  headerActions,
   children,
 }: EditChromeProps<T>) {
   const [editing, setEditing] = useState(false);
@@ -107,10 +135,24 @@ export function EditChrome<T>({
     setEditing(true);
   };
 
+  /**
+   * Only a real element counts. Checking merely for "not null" let a falsy
+   * ReactNode — `''`, `0`, `false` — blank the dashboard while rendering
+   * nothing in its place, which is the one failure mode a full-viewport
+   * overlay must not have.
+   */
+  const shown = overlay?.(session);
+  if (isValidElement(shown)) {
+    // The session stays mounted around it, so an overlay that changes the
+    // document is a change to this session and not to a copy of it.
+    return <div className="dashboard dashboard--overlaid">{shown}</div>;
+  }
+
   return (
     <div className="dashboard" data-editing={editing ? 'true' : undefined}>
       <header className="dashboard__header">
-        <h1>{title}</h1>
+        <h1>{title(current)}</h1>
+        {headerActions}
         {editing ? (
           <EditBar
             changes={changes}

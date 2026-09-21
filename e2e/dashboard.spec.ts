@@ -359,6 +359,83 @@ test('the Add panel offers every element type and inserts one', async ({ page })
 });
 
 /**
+ * T075. Not AC-069's own clause — the defect its cold review found.
+ *
+ * Reading a dashboard rebuilt the body as four named fields, and a save sends
+ * the document it was given, so `folderId` and `owner` were dropped on the way
+ * out. `folder_id` is a column derived from `body->>'folderId'`, so the
+ * dashboard left its folder with nobody moving it: AC-017's failing state
+ * reached by saving. T075 is what made it reachable without editing anything —
+ * gear, Save settings, gone.
+ *
+ * Asserted against the stored body rather than the browser, because that is
+ * where the loss happened and where a future rebuild would happen again.
+ */
+test('saving a dashboard keeps the fields the editor never shows', async ({ page, request }) => {
+  const unique = `keeps-${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const created = await request.post('http://localhost:4100/api/documents', {
+    data: { kind: 'dashboard', title: `Keeper ${unique}`, folderId: 'root' },
+  });
+  const { id } = (await created.json()) as { id: string };
+
+  await request.put(`http://localhost:4100/api/documents/dashboard/${id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: `Keeper ${unique}`,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [{ id: 'only', title: 'Only', items: [{ id: 't1', kind: 'chart', w: 6, h: 40 }] }],
+      },
+    },
+  });
+
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: `Keeper ${unique}` })).toBeVisible();
+
+  // The shortest path to a save there is: no edit, just the gear.
+  await page.getByRole('button', { name: 'Dashboard settings' }).click();
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.getByRole('heading', { name: `Keeper ${unique}` })).toBeVisible();
+
+  const after = await request.get(`http://localhost:4100/api/documents/dashboard/${id}`);
+  const stored = (await after.json()) as { body: { folderId?: string; owner?: string } };
+  expect(stored.body.folderId).toBe('root');
+  expect(stored.body.owner).toBe('admin');
+});
+
+/**
+ * T075 / AC-069. The page itself is plain DOM and jsdom covers it; what jsdom
+ * cannot show is that the gear is reachable in the assembled app at all, and
+ * that a full-viewport page really does take the dashboard's place rather than
+ * leaving it visible behind.
+ */
+test('the gear opens a settings page with its five sections and a way back', async ({ page }) => {
+  await open(page);
+
+  await page.getByRole('button', { name: 'Dashboard settings' }).click();
+
+  const nav = page.getByRole('navigation', { name: 'Settings sections' });
+  await expect(nav.getByRole('button')).toHaveText([
+    'General',
+    'Interactions',
+    'Markings',
+    'Cross-filtering',
+    'Layout',
+  ]);
+
+  // The dashboard is gone from the page, not merely covered over.
+  await expect(page.getByTestId('grid-item')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Cancel' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Company dashboard 01' })).toBeVisible();
+  await expect(page.getByTestId('grid-item')).toHaveCount(4);
+});
+
+/**
  * T074 / AC-068. The model tests hold what a template inserts; this holds that
  * a user can reach one in the running app and that what lands on the canvas is
  * visibly empty and says so.
