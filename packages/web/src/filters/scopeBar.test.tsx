@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../dashboard/DashboardView';
 import type { DashboardDocument } from '../dashboard/model/document';
+import { openFilter } from './testing';
 
 /**
  * T083 / AC-077, on the filter bar: a filter's widget shows its scope
@@ -144,6 +145,7 @@ describe('a filter’s scope, on its widget', () => {
       ],
     });
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await openFilter();
     const field = await within(bar()).findByLabelText('Filter on');
 
     await userEvent.selectOptions(field, '');
@@ -155,6 +157,7 @@ describe('a filter’s scope, on its widget', () => {
   it('can be set to a tab, or to tiles named by their charts, and is saved', async () => {
     const onSave = dashboard();
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await openFilter();
 
     const appliesTo = await within(bar()).findByLabelText('Applies to');
     expect([...appliesTo.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
@@ -188,6 +191,7 @@ describe('a filter’s scope, on its widget', () => {
   it('is one change, which Undo takes back', async () => {
     dashboard();
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await openFilter();
     await userEvent.selectOptions(
       await within(bar()).findByLabelText('Applies to'),
       'Tab: Operations',

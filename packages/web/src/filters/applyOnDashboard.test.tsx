@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../dashboard/DashboardView';
 import type { DashboardDocument } from '../dashboard/model/document';
+import { openFilter } from './testing';
 
 /**
  * T084 / AC-078: WHEN a filter value changes, THE SYSTEM SHALL re-query every
@@ -124,6 +125,7 @@ describe('a filter value, changed', () => {
     dashboard();
     expect(charted).toEqual([]);
 
+    await openFilter();
     await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'completed' }));
 
     await vi.waitFor(() => {
@@ -148,6 +150,7 @@ describe('a filter value, changed', () => {
   it('on the whole dashboard, asks every chart', async () => {
     dashboard({ ...DOC, filters: [{ id: 'f1', widget: 'checkbox', member: 'orders.status' }] });
 
+    await openFilter();
     await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'completed' }));
 
     await vi.waitFor(() => {
@@ -169,6 +172,7 @@ describe('a filter value, changed', () => {
       ],
     });
 
+    await openFilter();
     await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'completed' }));
 
     await vi.waitFor(() => {
@@ -179,6 +183,7 @@ describe('a filter value, changed', () => {
 
   it('draws the tile from the answer', async () => {
     dashboard();
+    await openFilter();
     await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'completed' }));
 
     // The Sales tile had no chart to draw (none was given it); it now draws

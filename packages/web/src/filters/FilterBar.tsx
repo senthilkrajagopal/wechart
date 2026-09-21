@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DashboardDocument } from '../dashboard/model/document';
 import { cubesFrom, membersOf, type Member } from '../editor/fields';
 import { loadTile } from '../query/loadTile';
 import { META_QUERY } from '../query/meta';
+import { summaryOf } from './describe';
 import {
   FILTER_WIDGETS,
   membersFor,
@@ -166,8 +167,46 @@ function Filters({
   const meta = useQuery(META_QUERY);
   const members = useMemo(() => allMembers(meta.data), [meta.data]);
 
+  /**
+   * Which filter's popover is open. Unset, the newest filter still without a
+   * field is open while editing — it shows nothing until one is chosen; `null`
+   * is every popover closed.
+   */
+  const [chosenOpen, setChosenOpen] = useState<{ id: string | null } | undefined>(undefined);
+  // A filter just added opens, ready for its field.
+  const ids = filters.map((filter) => filter.id).join(' ');
+  const [knownIds, setKnownIds] = useState(ids);
+  if (knownIds !== ids) {
+    setKnownIds(ids);
+    const known = new Set(knownIds.split(' '));
+    const added = filters.findLast((filter) => !known.has(filter.id));
+    if (editing && added !== undefined) setChosenOpen({ id: added.id });
+  }
+  const unset = editing ? filters.findLast((filter) => filter.member === undefined)?.id : undefined;
+  const openId = chosenOpen === undefined ? (unset ?? null) : chosenOpen.id;
+  const bar = useRef<HTMLElement>(null);
+
+  // Escape, or a press outside the open pill, closes its popover.
+  useEffect(() => {
+    if (openId === null) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setChosenOpen({ id: null });
+    };
+    const onPress = (event: PointerEvent) => {
+      const pill = bar.current?.querySelector(`[data-filter-id="${CSS.escape(openId)}"]`);
+      if (pill !== null && pill !== undefined && !pill.contains(event.target as Node))
+        setChosenOpen({ id: null });
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPress);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPress);
+    };
+  }, [openId]);
+
   return (
-    <section aria-label="Filters" className="filter-bar">
+    <section aria-label="Filters" className="filter-bar" ref={bar}>
       {filters.map((filter, index) => {
         const member = members.find((candidate) => candidate.name === filter.member);
         const kind = FILTER_WIDGETS.find((entry) => entry.widget === filter.widget);
@@ -179,93 +218,133 @@ function Filters({
          */
         const name = `${kind?.label ?? 'Filter'} filter ${String(index + 1)}`;
         const key = valueKeyOf(filter);
+        const value = values[key];
+        const open = openId === filter.id;
+        const popover = `filter-popover-${filter.id}`;
+        const summary =
+          member === undefined
+            ? `${kind?.label ?? 'Filter'}: choose a field…`
+            : `${member.title}: ${summaryOf(filter.widget, value)}`;
 
         return (
+          /**
+           * The prototype's filter pill (AC-187): its scope, then the field
+           * and what it holds; its control, and while editing its settings,
+           * in a popover that opens from it.
+           */
           <div
             key={filter.id}
             role="group"
             aria-label={name}
-            className="filter-bar__filter"
+            className="filter-pill"
             data-testid={`filter-${filter.id}`}
+            data-filter-id={filter.id}
             data-widget={filter.widget}
           >
-            {editing ? (
-              <>
-                <select
-                  aria-label="Filter on"
-                  value={filter.member ?? ''}
-                  onChange={(event) => {
-                    const chosen = event.target.value;
-                    // The value stays with the field it was chosen on
-                    // (`valueKeyOf`), so there is nothing here to clear.
-                    onFilters?.(
-                      filters.map((each) => {
-                        if (each.id !== filter.id) return each;
-                        return chosen === '' ? withoutMember(each) : { ...each, member: chosen };
-                      }),
-                    );
-                  }}
-                >
-                  <option value="">{kind?.label ?? 'Filter'}: choose a field…</option>
-                  {membersFor(filter.widget, members).map((candidate) => (
-                    <option key={candidate.name} value={candidate.name}>
-                      {candidate.title}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  aria-label={`Remove ${name}`}
-                  onClick={() => {
-                    onFilters?.(filters.filter((each) => each.id !== filter.id));
-                    onValue(key, undefined);
-                  }}
-                >
-                  ×
-                </button>
-                <ScopeEditor
-                  filter={filter}
-                  dashboard={dashboard}
-                  chartTitleOf={chartTitleOf}
-                  onScope={(scope) => {
-                    onFilters?.(
-                      filters.map((each) => (each.id === filter.id ? { ...each, scope } : each)),
-                    );
-                  }}
-                />
-              </>
-            ) : null}
             {/* Its scope, on the widget, in either mode (direction.md rule 14). */}
-            <span className="filter-bar__scope" data-testid="scope-badge">
+            <span className="filter-pill__scope" data-testid="scope-badge">
               {scopeLabel(filter, dashboard, chartTitleOf)}
             </span>
-            {member === undefined ? null : (
-              <FilterWidgetFor
-                filter={filter}
-                member={member}
-                value={values[key]}
-                onValue={(value) => {
-                  onValue(key, value);
-                }}
-              />
-            )}
+            <button
+              type="button"
+              className="filter-pill__summary"
+              aria-expanded={open}
+              aria-controls={popover}
+              onClick={() => {
+                setChosenOpen({ id: open ? null : filter.id });
+              }}
+            >
+              {summary}
+              <span aria-hidden="true" className="filter-pill__caret">
+                ▾
+              </span>
+            </button>
             {/*
               Clearing puts every tile it reaches back to its unfiltered result
               (AC-080) in one step, whatever the widget — offered only while
               there is something to clear.
             */}
-            {member === undefined || values[key] === undefined ? null : (
+            {member === undefined || value === undefined ? null : (
               <button
                 type="button"
-                className="filter-bar__clear"
+                className="filter-pill__clear icon-button"
                 aria-label={`Clear ${member.title}`}
+                title={`Clear ${member.title}`}
                 onClick={() => {
                   onValue(key, undefined);
                 }}
               >
-                Clear
+                ×
               </button>
             )}
+            {open ? (
+              <div id={popover} className="filter-popover">
+                {editing ? (
+                  <div className="filter-popover__settings">
+                    <select
+                      aria-label="Filter on"
+                      value={filter.member ?? ''}
+                      onChange={(event) => {
+                        const chosen = event.target.value;
+                        // Kept open on this filter: its control comes next.
+                        setChosenOpen({ id: filter.id });
+                        // The value stays with the field it was chosen on
+                        // (`valueKeyOf`), so there is nothing here to clear.
+                        onFilters?.(
+                          filters.map((each) => {
+                            if (each.id !== filter.id) return each;
+                            return chosen === ''
+                              ? withoutMember(each)
+                              : { ...each, member: chosen };
+                          }),
+                        );
+                      }}
+                    >
+                      <option value="">{kind?.label ?? 'Filter'}: choose a field…</option>
+                      {membersFor(filter.widget, members).map((candidate) => (
+                        <option key={candidate.name} value={candidate.name}>
+                          {candidate.title}
+                        </option>
+                      ))}
+                    </select>
+                    <ScopeEditor
+                      filter={filter}
+                      dashboard={dashboard}
+                      chartTitleOf={chartTitleOf}
+                      onScope={(scope) => {
+                        onFilters?.(
+                          filters.map((each) =>
+                            each.id === filter.id ? { ...each, scope } : each,
+                          ),
+                        );
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-ghost btn-sm filter-popover__remove"
+                      aria-label={`Remove ${name}`}
+                      onClick={() => {
+                        setChosenOpen({ id: null });
+                        onFilters?.(filters.filter((each) => each.id !== filter.id));
+                        onValue(key, undefined);
+                      }}
+                    >
+                      Remove filter
+                    </button>
+                  </div>
+                ) : null}
+                {member === undefined ? null : (
+                  <FilterWidgetFor
+                    filter={filter}
+                    member={member}
+                    value={value}
+                    onValue={(next) => {
+                      onValue(key, next);
+                    }}
+                  />
+                )}
+              </div>
+            ) : null}
           </div>
         );
       })}

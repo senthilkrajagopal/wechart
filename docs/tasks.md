@@ -1866,10 +1866,23 @@ Each task below measures its components' computed styles in `e2e/design-conforma
   - **Seen on the screenshot, not in this task:** the seeded "Orders over time by status" draws no lines and prints raw timestamps (`2026-01-02T00:00:00.000`) on its time axis. That is a chart bug (time-dimension formatting and drawing: AC-046, T201), not styling, and is looked at next. The prototype's breadcrumb, "Published" badge, and Preview as / Markings / Schedule buttons belong to features not built yet (navigation context, security preview, markings, schedules).
   - **Full runs:** typecheck and lint clean (the existing DataTable warning aside); 1,451 unit tests and 621 browser runs passed.
   - **Done 2026-09-21.** AC-187 stays unticked until T204–T205.
-- [ ] T204 (AC-187) Draw each filter as the prototype's 32 px pill, its scope tag first, its control opening from it
+- [x] T204 (AC-187) Draw each filter as the prototype's 32 px pill, its scope tag first, its control opening from it
   - Files: `packages/web/src/filters/FilterBar.tsx`, `packages/web/src/filters/widgets/*.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts`: each filter is a 32 px pill with a 6 px radius and a 12 px 600 muted scope tag, and a list, checkbox or range filter opens its control in a popover from the pill; the filter bar sits on the page background with a subtle bottom border (AC-187). The existing filter tests keep passing through the popover.
   - Depends on: T202
+  - **Built 2026-09-21.** The widgets needed no change. Files as planned, plus `filters/describe.ts` and a test helper, `filters/testing.ts`.
+    - **The bar** (the prototype's `.filterbar`): a band on `bg-page` with a 1 px `border-subtle` rule below it.
+    - **Each filter** (`.fw`) is a 32 px pill: 1 px `border-strong`, a 6 px radius, `bg-surface`, and 13 px type. In order it holds:
+      - its scope tag (`.scope`: 12 px at 600, muted, a 1 px subtle border with a 3 px radius);
+      - a summary button that names the field and what it holds ("Orders Status: All", "Orders Status: shipped, completed +1", "Orders Ordered at: Last 30 days", "Orders Id: 10 – 99"), written by the new `summaryOf`;
+      - a × that clears it, shown only while it holds a value.
+    - **The popover:** the summary button opens it (`aria-expanded`, `aria-controls`). It holds the filter's control and, while editing, its field, its scope and Remove. It sits on `bg-raised` with the prototype's `--shadow-pop`, now defined for both themes.
+      - One popover is open at a time. Escape or a press outside the pill closes it.
+      - A filter just added opens at once, ready for its field, and stays open once the field is chosen, so its control is next.
+  - **Tests, red first:** `e2e/design-conformance.spec.ts` (1 more in each browser) checks the bar, the pill, the scope tag, the summary before and after a value is picked, and that Escape closes the popover. `addFilter.test.tsx` gains one test: the newly added filter opens (even after another has its field), and opening one closes the other.
+  - **Existing filter tests:** their unit and browser versions now open the pill before using its control, through `openFilter` in the unit tests and `open(pill(…))` in `e2e/filters.spec.ts`. Three browser tests also press Escape before clicking something the open popover lies over (the page tabs, a link tile), as a person would. No assertion was removed or weakened.
+  - **Full runs:** typecheck and lint clean. 1,452 unit tests passed. Browsers: 622 passed; the 2 a11y contrast timeouts under full-suite load passed alone (54/54).
+  - **Done 2026-09-21.** AC-187 stays unticked until T205.
 - [ ] T205 (AC-187) Draw the edit sidebar's tabs, Add palette and Properties as the prototype does
   - Files: `packages/web/src/dashboard/edit/EditSidebar.tsx`, `packages/web/src/dashboard/edit/AddPanel.tsx`, `packages/web/src/dashboard/edit/TileProperties.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts`: the sidebar tabs are 36 px, 12 px 600, underlined in the accent colour when selected; Properties fields have 12/16 600 secondary labels over 32 px inputs, in sections with a 12 px uppercase heading (AC-187).

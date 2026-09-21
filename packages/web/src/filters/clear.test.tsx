@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../dashboard/DashboardView';
 import type { DashboardDocument } from '../dashboard/model/document';
+import { openFilter } from './testing';
 
 /**
  * T086 / AC-080: WHEN the user clears a filter, THE SYSTEM SHALL return every
@@ -117,6 +118,7 @@ describe('a filter, cleared', () => {
     dashboard();
     expect(values()).toEqual(['240', '240']);
 
+    await openFilter();
     await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'completed' }));
     await vi.waitFor(() => {
       expect(values()).toEqual(['80', '80']);
@@ -134,6 +136,7 @@ describe('a filter, cleared', () => {
 
   it('offers Clear only while the filter holds a value', async () => {
     dashboard();
+    await openFilter();
     await within(bar()).findByRole('checkbox', { name: 'completed' });
     expect(within(bar()).queryByRole('button', { name: 'Clear Status' })).toBeNull();
 
@@ -151,6 +154,7 @@ describe('a filter, cleared', () => {
    */
   it('shows the last filtered answer, busy, while a changed value is asked', async () => {
     dashboard();
+    await openFilter();
     await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'completed' }));
     await vi.waitFor(() => {
       expect(values()).toEqual(['80', '80']);
@@ -189,11 +193,13 @@ describe('a filter, cleared', () => {
       HTMLElement,
       HTMLElement,
     ];
+    await openFilter(boxes);
     await userEvent.click(await within(boxes).findByRole('checkbox', { name: 'completed' }));
     await userEvent.click(within(boxes).getByRole('checkbox', { name: 'shipped' }));
     await vi.waitFor(() => {
       expect(values()).toEqual(['160', '160']);
     });
+    await openFilter(list);
     await userEvent.click(await within(list).findByRole('button', { name: 'shipped' }));
     await vi.waitFor(() => {
       expect(values()).toEqual(['80', '80']);
@@ -209,6 +215,7 @@ describe('a filter, cleared', () => {
 
   it('returns them too when its last value is unpicked', async () => {
     dashboard();
+    await openFilter();
     const completed = await within(bar()).findByRole('checkbox', { name: 'completed' });
     await userEvent.click(completed);
     await vi.waitFor(() => {

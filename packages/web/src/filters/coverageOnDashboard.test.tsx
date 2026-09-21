@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DashboardView } from '../dashboard/DashboardView';
 import type { DashboardDocument } from '../dashboard/model/document';
 import { reachFrom } from './coverage';
+import { openFilter } from './testing';
 
 /**
  * T085 / AC-079: WHEN a filter's member is not reachable from a tile's cube or
@@ -124,6 +125,7 @@ const tile = (id: string) => document.querySelector(`[data-tile="${id}"]`) as HT
 describe('a filter on a field a tile cannot reach', () => {
   it('leaves that tile unfiltered — never asks it with the filter — and marks it', async () => {
     dashboard();
+    await openFilter();
     await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'completed' }));
 
     await vi.waitFor(() => {
@@ -140,6 +142,7 @@ describe('a filter on a field a tile cannot reach', () => {
 
   it('is not marked while no value is set, nor once the filter is cleared', async () => {
     dashboard();
+    await openFilter();
     const completed = await within(bar()).findByRole('checkbox', { name: 'completed' });
     expect(within(tile('t-weather')).queryByTestId('not-covered')).toBeNull();
 
@@ -275,6 +278,7 @@ describe('a filter Cube cannot join to a tile', () => {
     const [category] = (await within(bar()).findAllByRole('group', {
       name: /filter \d$/,
     })) as [HTMLElement];
+    await openFilter(category);
     await userEvent.click(await within(category).findByRole('checkbox', { name: 'Components' }));
 
     expect((await within(tile('t-customers')).findByTestId('not-covered')).textContent).toBe(
@@ -290,7 +294,9 @@ describe('a filter Cube cannot join to a tile', () => {
     const [category, country] = (await within(bar()).findAllByRole('group', {
       name: /filter \d$/,
     })) as [HTMLElement, HTMLElement];
+    await openFilter(category);
     await userEvent.click(await within(category).findByRole('checkbox', { name: 'Components' }));
+    await openFilter(country);
     await userEvent.click(await within(country).findByRole('checkbox', { name: 'Norway' }));
 
     await vi.waitFor(() => {
@@ -315,7 +321,9 @@ describe('a filter Cube cannot join to a tile', () => {
     const [category, country] = (await within(bar()).findAllByRole('group', {
       name: /filter \d$/,
     })) as [HTMLElement, HTMLElement];
+    await openFilter(category);
     await userEvent.click(await within(category).findByRole('checkbox', { name: 'Components' }));
+    await openFilter(country);
     await userEvent.click(await within(country).findByRole('checkbox', { name: 'Norway' }));
 
     const empty = await within(tile('t-customers')).findByTestId('tile-no-rows');
@@ -332,6 +340,7 @@ describe('a filter Cube cannot join to a tile', () => {
 describe('before the model can say', () => {
   it('filters as asked, for Cube to answer', async () => {
     dashboard(() => undefined);
+    await openFilter();
     await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'completed' }));
 
     await vi.waitFor(() => {

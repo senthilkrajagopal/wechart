@@ -349,3 +349,103 @@ test.describe('T203: the dashboard header, page tabs and tiles', () => {
     });
   });
 });
+
+test.describe('T204: the filter bar', () => {
+  test('each filter is the prototype’s pill, its control opening from it', async ({
+    page,
+    request,
+  }) => {
+    const api = 'http://localhost:4100/api';
+    const title = `Pills ${String(Date.now())}`;
+    const { id } = (await (
+      await request.post(`${api}/documents`, {
+        data: { kind: 'dashboard', title, folderId: 'root' },
+      })
+    ).json()) as { id: string };
+    await request.put(`${api}/documents/dashboard/${id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          folderId: 'root',
+          owner: 'admin',
+          settings: { width: 'fixed' },
+          pages: [{ id: 'only', title: 'Only', items: [] }],
+          filters: [{ id: 'f-status', widget: 'checkbox', member: 'orders.status' }],
+        },
+      },
+    });
+    await page.goto(`/explore/dashboards/${id}`);
+    await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
+
+    // .filterbar { background: var(--bg-page); border-bottom: 1px solid var(--border-subtle) }
+    const bar = page.getByRole('region', { name: 'Filters' });
+    expect(
+      await style(bar, 'background-color', 'border-bottom-width', 'border-bottom-color'),
+    ).toEqual({
+      'background-color': await token(page, 'bg-page'),
+      'border-bottom-width': '1px',
+      'border-bottom-color': await token(page, 'border-subtle'),
+    });
+
+    // .fw { height: 32px; border: 1px solid var(--border-strong); border-radius: 6px;
+    //       background: var(--bg-surface); padding: 0 6px 0 10px; font-size: 13px }
+    const pill = bar.getByRole('group', { name: 'Checkbox list filter 1' });
+    expect(
+      await style(
+        pill,
+        'height',
+        'border-top-width',
+        'border-top-color',
+        'border-radius',
+        'background-color',
+        'padding-left',
+        'font-size',
+      ),
+    ).toEqual({
+      height: '32px',
+      'border-top-width': '1px',
+      'border-top-color': await token(page, 'border-strong'),
+      'border-radius': '6px',
+      'background-color': await token(page, 'bg-surface'),
+      'padding-left': '10px',
+      'font-size': '13px',
+    });
+
+    // .fw .scope { font-size: 12px; font-weight: 600; color: var(--text-muted);
+    //              border: 1px solid var(--border-subtle); border-radius: 3px; padding: 0 4px }
+    const scope = pill.getByTestId('scope-badge');
+    await expect(scope).toHaveText('Dashboard');
+    expect(
+      await style(
+        scope,
+        'font-size',
+        'font-weight',
+        'color',
+        'border-top-width',
+        'border-top-color',
+        'border-radius',
+      ),
+    ).toEqual({
+      'font-size': '12px',
+      'font-weight': '600',
+      color: await token(page, 'text-muted'),
+      'border-top-width': '1px',
+      'border-top-color': await token(page, 'border-subtle'),
+      'border-radius': '3px',
+    });
+
+    // The field and its value, in the pill; its control in a popover that
+    // opens from it and closes with Escape.
+    const summary = pill.getByRole('button', { name: 'Orders Status: All' });
+    await expect(summary).toHaveAttribute('aria-expanded', 'false');
+    await expect(pill.getByRole('checkbox')).toHaveCount(0);
+    await summary.click();
+    await expect(summary).toHaveAttribute('aria-expanded', 'true');
+    await pill.getByRole('checkbox', { name: 'shipped' }).check();
+    await expect(pill.getByRole('button', { name: 'Orders Status: shipped' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(pill.getByRole('checkbox')).toHaveCount(0);
+  });
+});

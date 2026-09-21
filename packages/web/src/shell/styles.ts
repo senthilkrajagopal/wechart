@@ -11,6 +11,11 @@ import { COLUMNS, GUTTER_PX } from '../dashboard/grid/geometry';
 const SHELL_CSS = `
 * { box-sizing: border-box; }
 
+/* A popover's lift, the prototype's --shadow-pop in each theme. Not a colour
+   text sits on, so it is kept here rather than among the audited tokens. */
+:root { --wc-shadow-pop: 0 8px 24px rgba(20, 20, 18, 0.14), 0 1px 3px rgba(20, 20, 18, 0.1); }
+:root[data-theme='dark'] { --wc-shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4); }
+
 /* Form controls do not inherit type by default, and Safari's default button
    font-size is 11px -- below the 12px floor (AC-004). The rendered audit in
    e2e/a11y-tokens.spec.ts caught this in WebKit only. */
@@ -576,35 +581,91 @@ main:has(.dashboard) {
 /* The four filter kinds, under the Filter entry they came from. */
 .add-panel__choices { margin: 4px 0 0 12px !important; }
 
-/* The filter bar (F9; direction.md §2: horizontal, under the title). Controls
-   are 32 px high, direction.md's default control height. */
+/* The filter bar (F9; direction.md §2: horizontal, under the title), drawn as
+   the prototype's .filterbar: a band on the page ground, ruled off below. */
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 8px 12px;
-  padding: 8px 0 12px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 0;
+  background: var(--wc-bg-page);
+  border-bottom: 1px solid var(--wc-border-subtle);
 }
-.filter-bar__filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.filter-bar__filter select,
-.filter-bar__filter input:not([type='checkbox']) {
+/* Each filter is the prototype's .fw pill: its scope tag, the field and what
+   it holds, and its control in a popover that opens from it (AC-187). */
+.filter-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 32px;
-  padding: 0 8px;
+  padding: 0 6px 0 10px;
   border: 1px solid var(--wc-border-strong);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--wc-bg-surface);
-  color: var(--wc-text-primary);
+  font-size: 13px;
 }
-.filter-bar__filter input[type='number'] { width: 7em; }
-.filter-bar__filter > button {
-  height: 32px;
-  min-width: 32px;
+.filter-pill__scope {
+  padding: 0 4px;
   border: 1px solid var(--wc-border-subtle);
-  border-radius: 4px;
-  background: var(--wc-bg-surface);
-  color: var(--wc-text-secondary);
+  border-radius: 3px;
+  color: var(--wc-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+button.filter-pill__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  height: 28px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--wc-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
+.filter-pill__caret { color: var(--wc-text-muted); font-weight: 400; }
+button.filter-pill__clear {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  border: 0;
+  background: none;
+  color: var(--wc-text-secondary);
+}
+.filter-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  min-width: 260px;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 12px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  background: var(--wc-bg-raised);
+  box-shadow: var(--wc-shadow-pop);
+  font-size: var(--wc-text-sm-size);
+}
+.filter-popover__settings {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.filter-popover__remove { justify-self: start; }
+.filter-popover input[type='number'] { width: 7em; }
 .filter-widget { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .filter-widget__options {
   display: flex;
@@ -710,18 +771,6 @@ main:has(.dashboard) {
 .tile-head__action { margin-left: auto; }
 /* A chart whose filtered answer is on its way (AC-078): still drawn, dimmed. */
 .chart-tile--busy { opacity: 0.55; transition: opacity 120ms ease-in; }
-/* A filter's scope (direction.md rule 14): a 24 px chip, like the other chips. */
-.filter-bar__scope {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: 12px;
-  background: var(--wc-bg-subtle);
-  color: var(--wc-text-secondary);
-  font-size: 12px;
-  white-space: nowrap;
-}
 .filter-bar__tiles { flex-basis: 100%; border: 0; margin: 0; padding: 0; }
 .filter-bar__tiles legend { color: var(--wc-text-secondary); }
 .filter-bar__tiles label { margin-right: 10px; white-space: nowrap; }

@@ -241,14 +241,15 @@ test('a link tile opens another dashboard carrying the filters, and a web addres
   await expect(web).toHaveAttribute('rel', 'noopener noreferrer');
 
   // The dashboard, with the current filters.
-  await page
-    .getByRole('region', { name: 'Filters' })
-    .getByRole('checkbox', { name: 'shipped' })
-    .check();
+  const filterBar = page.getByRole('region', { name: 'Filters' });
+  // A filter's control opens from its pill (AC-187).
+  await filterBar.locator('button[aria-expanded]').click();
+  await filterBar.getByRole('checkbox', { name: 'shipped' }).check();
+  await page.keyboard.press('Escape');
   await page.getByRole('link', { name: 'See the orders' }).click();
 
   await expect(page.getByRole('heading', { name: target.title })).toBeVisible();
-  const filterBar = page.getByRole('region', { name: 'Filters' });
+  await filterBar.locator('button[aria-expanded]').click();
   await expect(filterBar.getByRole('checkbox', { name: 'shipped' })).toBeChecked();
   const orders = page.locator('[data-tile="tile-orders"]');
   await orders.getByTestId('toggle-table-view').click();

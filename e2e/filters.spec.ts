@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 /**
  * F9 — dashboard filters.
@@ -162,6 +162,15 @@ const filterBar = (page: Page) => page.getByRole('region', { name: 'Filters' });
 /** The seeded model's title for `orders.ordered_at`. */
 const ORDERED_AT = 'Orders Ordered at';
 
+/** The filter pill of a kind: the bar's only one of that kind. */
+const pill = (page: Page, widget: string) => filterBar(page).locator(`[data-widget="${widget}"]`);
+
+/** Opens a filter pill's popover, where its control is (AC-187); left open if open. */
+async function open(filter: Locator) {
+  const summary = filter.locator('button[aria-expanded]');
+  if ((await summary.getAttribute('aria-expanded')) !== 'true') await summary.click();
+}
+
 async function addFilter(page: Page, widget: string, member: string) {
   await page.getByTestId('add-filter').click();
   await page.getByTestId(`add-filter-${widget}`).click();
@@ -191,9 +200,13 @@ test('each of the four filter widgets can be added to a dashboard, and is kept',
   // Each shows its own control, on the model's real fields and values —
   // labelled with the field's full title, since two fields' short titles are
   // both "Name".
+  await open(pill(page, 'dateRange'));
   await expect(filterBar(page).getByLabel(ORDERED_AT, { exact: true })).toBeVisible();
+  await open(pill(page, 'list'));
   await expect(filterBar(page).getByRole('searchbox', { name: /^Search / })).toBeVisible();
+  await open(pill(page, 'range'));
   await expect(filterBar(page).getByLabel(/ from$/)).toBeVisible();
+  await open(pill(page, 'checkbox'));
   await expect(filterBar(page).getByRole('checkbox').first()).toBeVisible();
 
   await page
@@ -210,6 +223,7 @@ test('each of the four filter widgets can be added to a dashboard, and is kept',
       .locator('[data-widget]')
       .evaluateAll((filters) => filters.map((filter) => filter.getAttribute('data-widget'))),
   ).toEqual(['dateRange', 'list', 'range', 'checkbox']);
+  await open(pill(page, 'dateRange'));
   await expect(filterBar(page).getByLabel(ORDERED_AT, { exact: true })).toBeVisible();
 
   // A reader can use them: the date range's presets are there to choose.
@@ -297,6 +311,7 @@ test('a value re-queries the tiles in its scope, and a tab’s filter leaves the
     if (query['measures'] !== undefined) asked.push(query);
   });
 
+  await open(pill(page, 'checkbox'));
   await filterBar(page).getByRole('checkbox', { name: 'completed' }).check();
 
   // In scope: asked again with the value, and drawn from the answer — the
@@ -313,6 +328,8 @@ test('a value re-queries the tiles in its scope, and a tab’s filter leaves the
   // Changed again: asked again, with both.
   await filterBar(page).getByRole('checkbox', { name: 'shipped' }).check();
   await expect(sales.getByTestId('table-row')).toHaveCount(2);
+  // Closed, it no longer lies over the page tabs.
+  await page.keyboard.press('Escape');
 
   // Out of scope: the other tab's chart shows all three, and was never asked
   // with the filter — nor asked again at all, since every query sent since the
@@ -347,6 +364,7 @@ test('a relative preset is sent to Cube as those words, not as dates', async ({
     const { query } = request.postDataJSON() as { query: Record<string, unknown> };
     return query['timeDimensions'] !== undefined;
   });
+  await open(pill(page, 'dateRange'));
   await filterBar(page).getByLabel(ORDERED_AT, { exact: true }).selectOption('last 30 days');
 
   const { query } = (await sent).postDataJSON() as { query: Record<string, unknown> };
@@ -387,7 +405,9 @@ test('the filters in effect are in the URL, and the URL opens with them', async 
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
 
+  await open(pill(page, 'checkbox'));
   await filterBar(page).getByRole('checkbox', { name: 'shipped' }).check();
+  await open(pill(page, 'dateRange'));
   await filterBar(page).getByLabel(ORDERED_AT, { exact: true }).selectOption('this year');
 
   const inUrl = () => {
@@ -415,8 +435,10 @@ test('the filters in effect are in the URL, and the URL opens with them', async 
   const opened = await other.newPage();
   await opened.goto(page.url());
   await expect(opened.getByRole('heading', { name: title })).toBeVisible();
+  await open(pill(opened, 'checkbox'));
   await expect(filterBar(opened).getByRole('checkbox', { name: 'shipped' })).toBeChecked();
   await expect(filterBar(opened).getByRole('checkbox', { name: 'completed' })).not.toBeChecked();
+  await open(pill(opened, 'dateRange'));
   await expect(filterBar(opened).getByLabel(ORDERED_AT, { exact: true })).toHaveValue('this year');
   const sales = opened.locator('[data-tile="tile-sales"]');
   await sales.getByTestId('toggle-table-view').click();
@@ -455,6 +477,7 @@ test('the URL keeps the dashboard’s filters through the chart editor, Back and
     return (JSON.parse(raw) as { value: { values: string[] } }[]).map((each) => each.value.values);
   };
 
+  await open(pill(page, 'checkbox'));
   await filterBar(page).getByRole('checkbox', { name: 'shipped' }).check();
   await expect.poll(picked).toEqual([['shipped']]);
 
@@ -467,6 +490,7 @@ test('the URL keeps the dashboard’s filters through the chart editor, Back and
   await expect.poll(picked).toEqual([['shipped']]);
 
   // A newer value, then Forward onto the editor's entry, which reopens it.
+  await open(pill(page, 'checkbox'));
   await filterBar(page).getByRole('checkbox', { name: 'completed' }).check();
   await expect.poll(picked).toEqual([['shipped', 'completed']]);
   await page.goForward();
@@ -475,6 +499,7 @@ test('the URL keeps the dashboard’s filters through the chart editor, Back and
   await expect(page.getByTestId('chart-editor-overlay')).toBeHidden();
 
   // The URL says what the dashboard shows.
+  await open(pill(page, 'checkbox'));
   await expect(filterBar(page).getByRole('checkbox', { name: 'completed' })).toBeChecked();
   await expect.poll(picked).toEqual([['shipped', 'completed']]);
 });
@@ -524,6 +549,7 @@ test('a tile a filter cannot reach is left unfiltered and marked, with no error'
     const { query } = sent.postDataJSON() as { query: Record<string, unknown> };
     if (query['measures'] !== undefined) asked.push(query);
   });
+  await open(pill(page, 'checkbox'));
   await filterBar(page).getByRole('checkbox', { name: 'Components' }).check();
 
   // The view's tile: not asked with the filter, marked, and no error.
@@ -572,6 +598,7 @@ test('a filter Cube cannot join to a tile leaves it unfiltered and marked; the o
   const everyCountry = await customers.getByTestId('table-row').count();
   expect(everyCountry).toBeGreaterThan(1);
 
+  await open(pill(page, 'checkbox'));
   await filterBar(page).getByRole('checkbox', { name: 'Components' }).check();
 
   await expect(customers.getByTestId('not-covered')).toHaveText(
@@ -584,6 +611,7 @@ test('a filter Cube cannot join to a tile leaves it unfiltered and marked; the o
   // A filter it can take, beside the one it cannot: applied.
   const country =
     (await customers.getByTestId('table-row').first().locator('td').first().textContent()) ?? '';
+  await open(pill(page, 'list'));
   await filterBar(page).getByRole('button', { name: country, exact: true }).click();
   await expect(customers.getByTestId('table-row')).toHaveCount(1);
   await expect(customers.getByTestId('table-row')).toContainText(country);
@@ -615,6 +643,7 @@ test('a view takes a filter on a cube field it offers, by its own name for it', 
   await summary.getByTestId('toggle-table-view').click();
   await expect(summary.getByTestId('table-row')).toHaveCount(3);
 
+  await open(pill(page, 'checkbox'));
   await filterBar(page).getByRole('checkbox', { name: 'shipped' }).check();
 
   await expect(summary.getByTestId('table-row')).toHaveCount(1);
@@ -644,7 +673,9 @@ test('a filtered tile with no rows says so, naming every filter in effect', asyn
   const sales = page.locator('[data-tile="tile-sales"]');
   await expect(sales.getByTestId('chart-canvas')).toBeVisible();
 
+  await open(pill(page, 'checkbox'));
   await filterBar(page).getByRole('checkbox', { name: 'shipped' }).check();
+  await open(pill(page, 'dateRange'));
   await filterBar(page).getByLabel(ORDERED_AT, { exact: true }).selectOption('today');
 
   const empty = sales.getByTestId('tile-no-rows');
@@ -675,6 +706,7 @@ test('clearing a filter returns every tile in its scope to the unfiltered result
   await sales.getByTestId('toggle-table-view').click();
   await expect(sales.getByTestId('table-row')).toHaveCount(3);
 
+  await open(pill(page, 'checkbox'));
   await filterBar(page).getByRole('checkbox', { name: 'processing' }).check();
   await expect(sales.getByTestId('table-row')).toHaveCount(1);
 
@@ -683,6 +715,7 @@ test('clearing a filter returns every tile in its scope to the unfiltered result
   await expect(sales.getByTestId('table-row')).toHaveCount(3);
   await expect(filterBar(page).getByRole('checkbox', { name: 'processing' })).not.toBeChecked();
   // The other tab's tile, in scope too, is unfiltered as well.
+  await page.keyboard.press('Escape');
   await page.getByRole('tab', { name: 'Operations' }).click();
   const operations = page.locator('[data-tile="tile-operations"]');
   await operations.getByTestId('toggle-table-view').click();

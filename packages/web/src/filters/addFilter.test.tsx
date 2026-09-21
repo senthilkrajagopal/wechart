@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../dashboard/DashboardView';
 import type { DashboardDocument } from '../dashboard/model/document';
+import { openFilter } from './testing';
 
 /**
  * T082 / AC-076, on the dashboard: each of the four filter widgets can be
@@ -84,7 +85,8 @@ function dashboard() {
 
 async function addFilter(label: string) {
   await userEvent.click(screen.getByTestId('add-filter'));
-  await userEvent.click(screen.getByRole('button', { name: new RegExp(`^${label}`) }));
+  const kinds = screen.getByRole('list', { name: 'Filter widgets' });
+  await userEvent.click(within(kinds).getByRole('button', { name: new RegExp(`^${label}`) }));
 }
 
 const bar = () => screen.getByRole('region', { name: 'Filters' });
@@ -109,6 +111,7 @@ describe('adding a filter', () => {
 
     // Each asks for its field, offering only the members it can filter on.
     const pick = async (index: number, member: string) => {
+      await openFilter(filters[index]);
       const select = within(filters[index] as HTMLElement).getByLabelText('Filter on');
       await userEvent.selectOptions(select, member);
     };
@@ -117,10 +120,31 @@ describe('adding a filter', () => {
     await pick(2, 'orders.id');
     await pick(3, 'orders.status');
 
+    await openFilter(filters[0]);
     expect(within(bar()).getByLabelText('Ordered at').tagName).toBe('SELECT');
+    await openFilter(filters[1]);
     expect(await within(bar()).findByRole('searchbox', { name: 'Search Status' })).toBeTruthy();
+    await openFilter(filters[2]);
     expect(within(bar()).getByLabelText('Id from')).toBeTruthy();
+    await openFilter(filters[3]);
     expect(await within(bar()).findByRole('checkbox', { name: 'shipped' })).toBeTruthy();
+  });
+
+  it('opens the filter just added, ready for its field, and one filter at a time', async () => {
+    dashboard();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await addFilter('Date range');
+    await userEvent.selectOptions(within(bar()).getByLabelText('Filter on'), 'orders.ordered_at');
+    await addFilter('Checkbox list');
+
+    const [dates, boxes] = within(bar()).getAllByTestId(/^filter-/) as [HTMLElement, HTMLElement];
+    expect(within(boxes).getByLabelText('Filter on')).toBeTruthy();
+    expect(within(dates).queryByLabelText('Filter on')).toBeNull();
+
+    await openFilter(dates);
+
+    expect(within(dates).getByLabelText('Filter on')).toBeTruthy();
+    expect(within(boxes).queryByLabelText('Filter on')).toBeNull();
   });
 
   it('offers a date range only time fields, and a numeric range only number fields', async () => {
@@ -129,15 +153,17 @@ describe('adding a filter', () => {
     await addFilter('Date range');
     await addFilter('Numeric range');
 
+    const filterAt = (index: number) => within(bar()).getAllByTestId(/^filter-/)[index];
     const optionsOf = (index: number) =>
       [
-        ...within(within(bar()).getAllByTestId(/^filter-/)[index] as HTMLElement)
+        ...within(filterAt(index) as HTMLElement)
           .getByLabelText('Filter on')
           .querySelectorAll('option'),
       ]
         .map((option) => option.value)
         .filter((value) => value !== '');
 
+    await openFilter(filterAt(0));
     expect(
       await vi.waitFor(() => {
         const found = optionsOf(0);
@@ -145,6 +171,7 @@ describe('adding a filter', () => {
         return found;
       }),
     ).toEqual(['orders.ordered_at']);
+    await openFilter(filterAt(1));
     expect(optionsOf(1)).toEqual(['orders.id']);
   });
 
@@ -256,6 +283,7 @@ it('a value stays with the field it was chosen on, through Undo', async () => {
   expect(within(bar()).getByRole('checkbox', { name: 'shipped' }).matches(':checked')).toBe(true);
 
   await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+  await openFilter();
 
   expect(within(bar()).getByRole('group', { name: 'Status' })).toBeTruthy();
   expect(
