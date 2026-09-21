@@ -17,7 +17,7 @@ import { expect, test, type Page } from '@playwright/test';
  * most likely to be missing a view.
  */
 async function openEditorWithEveryWellFilled(page: Page, chartType: string) {
-  await page.goto('/explore/charts/new/edit');
+  await page.goto('/explore/charts/seed-chart-empty/edit');
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
 

@@ -1,3 +1,4 @@
+import { ChartDocumentError } from '@wechart/core';
 import { describe, expect, it } from 'vitest';
 
 import { CubeClient, CubeError } from './cube/client';
@@ -128,6 +129,73 @@ describe('creating catalog objects (AC-020)', () => {
     // The pages and the settings have to survive the round trip, because the
     // criterion fails when "a saved tile or setting is missing".
     expect(response.json().body).toEqual(saved);
+    await app.close();
+  });
+
+  it('says a chart is from a newer format, rather than failing as an internal error', async () => {
+    /**
+     * AC-181: "SHALL refuse to open one whose format is newer than it
+     * understands, **saying so**". The repo upgrades a chart on read and
+     * throws `ChartDocumentError` for a version it does not know — and until
+     * this test that error fell through to the generic handler as a 500
+     * "Internal error". The message saying *why* was produced and then thrown
+     * away on the server, so no browser surface could ever show it; the
+     * criterion's tick rested on a test that called the core function
+     * directly. A chart that exists would have been reported as broken.
+     *
+     * The fake throws exactly what `toDocument` throws, so this pins the
+     * server's half: what that error becomes on the wire.
+     */
+    const newer =
+      'The stored chart is version 9, but this wechart understands only up to 1. It was saved by a newer version.';
+    const documents = {
+      ...recordingDocuments(),
+      get: async () => {
+        throw new ChartDocumentError(newer);
+      },
+    };
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await app.inject({ method: 'GET', url: '/api/documents/chart/c1' });
+
+    // 422, not 500: the request was fine and nothing broke — the stored
+    // content is one this version cannot read, which is a known condition
+    // with a reason, not a fault.
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toEqual({ error: newer });
+    await app.close();
+  });
+
+  it('never answers a save with a refusal once the write has happened', async () => {
+    /**
+     * The repo upgrades a chart as it reads it back, and it reads a saved
+     * document back *after* writing it (`update`, `relocate`). So for a stored
+     * chart in a format this build cannot read, the write commits and only
+     * then does the upgrade throw. A 4xx there would tell the browser nothing
+     * was written, when it was — and Explore would show "Could not save" over
+     * a rename that had gone through.
+     *
+     * The mapping to 422 therefore belongs to the read route alone. What a
+     * write should answer instead is a separate, older problem (recorded on
+     * T187); this pins only that it must not be a refusal.
+     */
+    const documents = {
+      ...recordingDocuments(),
+      update: async () => {
+        throw new ChartDocumentError(
+          'The stored chart is version 9, but this wechart understands only up to 1.',
+        );
+      },
+    };
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/documents/chart/c1',
+      payload: { body: { title: 'Renamed' }, version: 1 },
+    });
+
+    expect(response.statusCode).toBeGreaterThanOrEqual(500);
     await app.close();
   });
 

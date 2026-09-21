@@ -16,7 +16,7 @@ import { expect, test } from '@playwright/test';
 const CUBE_HOST_PORT = '54000';
 
 test('lists the cubes and views from the model', async ({ page }) => {
-  await page.goto('/explore/charts/new/edit');
+  await page.goto('/explore/charts/seed-chart-empty/edit');
 
   const picker = page.getByLabel('Cube or view');
   await expect(picker).toBeVisible();
@@ -28,7 +28,7 @@ test('lists the cubes and views from the model', async ({ page }) => {
 });
 
 test('shows a chosen cube’s members grouped by type', async ({ page }) => {
-  await page.goto('/explore/charts/new/edit');
+  await page.goto('/explore/charts/seed-chart-empty/edit');
   await expect(page.getByTestId('no-cube-chosen')).toBeVisible();
 
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
@@ -54,7 +54,7 @@ test('the browser asks wechart for metadata and never Cube (AC-007)', async ({ p
   const requested: string[] = [];
   page.on('request', (request) => requested.push(request.url()));
 
-  await page.goto('/explore/charts/new/edit');
+  await page.goto('/explore/charts/seed-chart-empty/edit');
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
 
@@ -72,7 +72,7 @@ test('no response reaching the browser carries the Cube secret (AC-007)', async 
     bodies.push(await response.text().catch(() => ''));
   });
 
-  await page.goto('/explore/charts/new/edit');
+  await page.goto('/explore/charts/seed-chart-empty/edit');
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
 

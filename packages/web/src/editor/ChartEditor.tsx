@@ -32,13 +32,13 @@ import { TileSkeleton } from '../tiles/TileSkeleton';
 import { ResultsDrawer, type DrawerView } from './ResultsDrawer';
 import { WhyThisChart } from './WhyThisChart';
 import {
-  FOLLOWING_RECOMMENDATION,
   backToRecommended,
   chooseType,
   effectiveType,
   isManual,
   type ChartTypeState,
 } from './chartTypeState';
+import { OPENED_WITH, type EditorState } from './openChart';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { FieldList } from './FieldList';
 import { Wells } from './Wells';
@@ -86,32 +86,23 @@ const CARTESIAN_TYPES: readonly (ChartType | null)[] = [
   'combo',
 ];
 
-/**
- * Everything a change can touch, in one place. AC-035 asks that *every* change
- * is undoable, so the undoable state is one value rather than several pieces
- * that each would have to remember to record themselves.
- */
-interface EditorState {
-  readonly cubeName: string;
-  readonly spec: ChartSpec;
-  readonly chartType: ChartTypeState;
+export interface ChartEditorProps {
   /**
-   * How this chart is drawn, over and above its fields — axis settings today
-   * (AC-040). Part of the undoable state, because AC-035 asks that *every*
-   * change is undoable and an axis edit is a change like any other.
+   * The state the editor opens with: a saved chart's, via `editorStateOf`, or
+   * `OPENED_WITH` for a chart with nothing in it yet (AC-182).
+   *
+   * Read once, on mount, because it seeds the undo history — and that is the
+   * point. AC-035's Discard "restores the chart as it was", and *as it was* is
+   * this state. Seeding the history with `OPENED_WITH` regardless would make
+   * Discard wipe a saved chart back to blank. A caller that opens a different
+   * chart must remount the editor (key it by chart id) rather than pass a new
+   * `initial`, which would otherwise be ignored.
    */
-  readonly options: Record<string, unknown>;
+  readonly initial?: EditorState;
 }
 
-const OPENED_WITH: EditorState = {
-  cubeName: '',
-  spec: emptySpec(),
-  chartType: FOLLOWING_RECOMMENDATION,
-  options: {},
-};
-
-export function ChartEditor() {
-  const [history, setHistory] = useState(() => historyOf(OPENED_WITH));
+export function ChartEditor({ initial = OPENED_WITH }: ChartEditorProps = {}) {
+  const [history, setHistory] = useState(() => historyOf(initial));
   const { cubeName, spec, chartType: chartTypeState, options } = history.present;
 
   /** Records the change, which is what makes it undoable. */

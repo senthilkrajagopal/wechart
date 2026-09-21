@@ -12,7 +12,7 @@ import { expect, test } from '@playwright/test';
  * result *changed* rather than merely that something is displayed.
  */
 async function openEditorOnOrders(page: import('@playwright/test').Page) {
-  await page.goto('/explore/charts/new/edit');
+  await page.goto('/explore/charts/seed-chart-empty/edit');
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
 }
@@ -290,7 +290,7 @@ test('discard restores the chart as it opened', async ({ page }) => {
 });
 
 test('nothing to undo or discard when the editor opens', async ({ page }) => {
-  await page.goto('/explore/charts/new/edit');
+  await page.goto('/explore/charts/seed-chart-empty/edit');
   await expect(page.getByLabel('Cube or view')).toBeVisible();
 
   await expect(page.getByTestId('undo')).toBeDisabled();
@@ -360,7 +360,7 @@ test('the drawer shows result rows, underlying rows and the query', async ({ pag
  * primary key" message where AC-036 requires rows.
  */
 test('the underlying rows work on a cube that publishes no primary key', async ({ page }) => {
-  await page.goto('/explore/charts/new/edit');
+  await page.goto('/explore/charts/seed-chart-empty/edit');
   await page.getByLabel('Cube or view').selectOption({ label: 'Customers' });
   await expect(page.getByTestId('member-customers.count')).toBeVisible();
   await page.getByTestId('add-measures').selectOption('customers.count');
@@ -536,4 +536,124 @@ test('a time dimension goes to its own well and groups by day', async ({ page })
   await expect(page.getByTestId('in-timeDimensions-orders.ordered_at')).toBeVisible();
   // 240 orders, one per day.
   await expect(page.getByTestId('result-row-count')).toHaveText('240 rows');
+});
+
+/**
+ * AC-182: WHEN the chart editor is opened on an existing chart, THE SYSTEM
+ * SHALL load that chart's cube, fields, chart type and axis settings into the
+ * editor.
+ * Fails when: the editor opens with empty wells, or with a chart type other
+ * than the one saved.
+ *
+ * Until AC-182 the editor ignored the id in its URL and always opened blank,
+ * so every spec above used to navigate to a made-up id and none of them could
+ * have noticed. The seeded chart below is `orders`, one measure, two
+ * dimensions and a saved type of `bar`.
+ */
+test.describe('opening a saved chart (AC-182)', () => {
+  const SAVED = '/explore/charts/seed-chart-status/edit';
+
+  test('opens with the chart’s cube and every field in its well', async ({ page }) => {
+    await page.goto(SAVED);
+
+    // The criterion's first failing state: "the editor opens with empty wells".
+    await expect(page.getByLabel('Cube or view')).toHaveValue('orders');
+    await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
+    await expect(page.getByTestId('in-dimensions-products.category')).toBeVisible();
+    await expect(page.getByTestId('in-dimensions-orders.status')).toBeVisible();
+    // And it runs: the loaded fields reach the query, not only the wells.
+    await expect(page.getByTestId('result-row-count')).not.toHaveText('0 rows');
+  });
+
+  test('opens with the saved chart type, as the user’s own choice', async ({ page }) => {
+    await page.goto(SAVED);
+
+    // The second failing state: "a chart type other than the one saved".
+    await expect(page.getByTestId('chart-type')).toHaveText('bar');
+    /**
+     * A saved type is a choice the user made, so it must load as manual.
+     * Loaded as the recommendation it would be silently replaced the next
+     * time a field changed — AC-032's forbidden behaviour. "Back to
+     * recommended" is offered only while the type is manual, so its presence
+     * is the witness.
+     */
+    await expect(page.getByTestId('back-to-recommended')).toBeVisible();
+  });
+
+  test('opens with the chart’s saved axis settings', async ({ page }) => {
+    /**
+     * The criterion names axis settings, and the editor reads them from one
+     * place only (`options.axes`). Asserted where the user sees them — in the
+     * Axes panel — because a unit test of the loader cannot notice the editor
+     * failing to seed its options from what was loaded.
+     */
+    await page.goto('/explore/charts/seed-chart-axes/edit');
+
+    const yAxis = page.getByTestId('axis-panel-y');
+    await expect(yAxis.getByLabel('Title')).toHaveValue('Order count');
+    await expect(yAxis.getByLabel('Minimum')).toHaveValue('5');
+  });
+
+  test('opening a chart is not itself an undoable change', async ({ page }) => {
+    /**
+     * AC-035 counts every change "since the editor opened". Loading is what
+     * opening *is*, so it must not be the first entry in the history —
+     * otherwise Undo would step a saved chart back to blank, and Discard
+     * would do the same.
+     */
+    await page.goto(SAVED);
+    await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
+
+    await expect(page.getByTestId('undo')).toBeDisabled();
+    await expect(page.getByTestId('discard')).toBeDisabled();
+  });
+
+  test('Discard returns to the saved chart, not to an empty one', async ({ page }) => {
+    /**
+     * AC-035: "a Discard changes that restores the chart as it was". Before
+     * AC-182 "as it was" always meant empty, because every editor opened
+     * empty. Now it means the saved chart, and the history has to be seeded
+     * with it for Discard to land there.
+     */
+    await page.goto(SAVED);
+    await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
+
+    await page.getByTestId('add-dimensions').selectOption('orders.id');
+    await expect(page.getByTestId('in-dimensions-orders.id')).toBeVisible();
+    await expect(page.getByTestId('discard')).toBeEnabled();
+    await page.getByTestId('discard').click();
+
+    // The added field is gone and the saved ones are back — both directions,
+    // so a Discard that emptied everything would fail the second half.
+    await expect(page.getByTestId('in-dimensions-orders.id')).toBeHidden();
+    await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
+    await expect(page.getByTestId('in-dimensions-orders.status')).toBeVisible();
+    await expect(page.getByTestId('chart-type')).toHaveText('bar');
+  });
+
+  test('a chart nobody has built yet opens empty', async ({ page }) => {
+    /**
+     * Stored as the create endpoint stores one — no format version and no
+     * definition — and upgraded on read into an empty chart. The path every
+     * brand-new chart takes into the editor.
+     */
+    await page.goto('/explore/charts/seed-chart-empty/edit');
+
+    await expect(page.getByLabel('Cube or view')).toHaveValue('');
+    await expect(page.getByTestId('no-cube-chosen')).toBeVisible();
+  });
+
+  test('a chart that does not exist is refused, not opened blank', async ({ page }) => {
+    /**
+     * Opening an empty editor in its place would let the user build a new
+     * chart believing they were editing the old one. The editor must not
+     * render at all.
+     */
+    await page.goto('/explore/charts/no-such-chart/edit');
+
+    await expect(page.getByTestId('editor-load-error')).toHaveText(
+      'This chart is no longer available.',
+    );
+    await expect(page.getByLabel('Cube or view')).toBeHidden();
+  });
 });

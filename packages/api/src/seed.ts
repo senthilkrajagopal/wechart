@@ -219,4 +219,48 @@ export async function seedDevData(db: Kysely<Database>): Promise<void> {
       },
     });
   }
+
+  /**
+   * A chart nobody has built yet, stored exactly as `POST /api/documents`
+   * stores one: a title and an owner, with **no `schemaVersion` and no chart
+   * definition**. The repo upgrades it on every read into a well-formed empty
+   * chart (`UPGRADES[0]`), which is how a brand-new chart reaches the editor.
+   *
+   * Editor e2e specs open this rather than a made-up id. Before AC-182 they
+   * navigated to `/explore/charts/new/edit`, which worked only because the
+   * editor ignored its id and always opened blank; once the editor loads the
+   * chart it is given, that id is a missing chart and is correctly refused.
+   * Opening this one instead exercises the path a real new chart takes.
+   *
+   * No `folderId`, which the real endpoint does write: that has no bearing on
+   * what is being proven, and a foldered chart would appear in Explore's
+   * listings and move other specs' counts.
+   */
+  await repo.create({
+    kind: 'chart',
+    id: 'seed-chart-empty',
+    body: { title: 'Untitled chart', owner: 'admin' },
+  });
+
+  /**
+   * A chart whose axis settings are saved, so AC-182's "axis settings" can be
+   * seen to load in the editor's Axes panel. None of the dashboard's charts
+   * carries any, and giving one of them some would change how that tile draws
+   * under every other spec. Values chosen so none could pass for a default.
+   */
+  await repo.create({
+    kind: 'chart',
+    id: 'seed-chart-axes',
+    body: {
+      schemaVersion: 1,
+      title: 'Orders with axis settings',
+      owner: 'admin',
+      chart: {
+        source: { cube: 'orders' },
+        wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+        chartType: 'bar',
+        options: { axes: { y: { title: 'Order count', min: 5 } } },
+      },
+    },
+  });
 }

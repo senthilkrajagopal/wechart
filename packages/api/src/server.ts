@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { newDashboardBody } from '@wechart/core';
+import { ChartDocumentError, newDashboardBody } from '@wechart/core';
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import { CubeClient, CubeError } from './cube/client';
@@ -224,7 +224,34 @@ export function buildServer({
     }
     if (!docs?.get) throw new BadRequest('Persistence is not configured');
 
-    const found = await docs.get(kind, id);
+    /**
+     * A stored chart this version cannot read — from a newer format, or with
+     * no upgrade registered — is refused *saying so* (AC-181). The repo raises
+     * `ChartDocumentError` while upgrading on read; left to the generic error
+     * handler it became a 500 "Internal error", and the sentence explaining
+     * the refusal was produced and then discarded, so the browser reported a
+     * chart that exists as broken.
+     *
+     * **Here, and only here.** The repo also reads a document back *after*
+     * writing it, so on a save or a rename the same error arrives once the
+     * write has committed. Mapped globally, that answered a successful write
+     * with a 4xx — "nothing was written" — which is false.
+     *
+     * 422 on a read: the request is sound and nothing broke; the stored
+     * content is one this build cannot read, a known condition with a reason.
+     * Safe to pass through — the message is authored in `@wechart/core` and
+     * built from version numbers only, so none of the service's environment
+     * can ride along with it (AC-007).
+     */
+    let found;
+    try {
+      found = await docs.get(kind, id);
+    } catch (failure) {
+      if (failure instanceof ChartDocumentError) {
+        return reply.code(422).send({ error: failure.message });
+      }
+      throw failure;
+    }
     if (found === null) return reply.code(404).send({ message: 'No such document' });
     return found;
   });

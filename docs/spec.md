@@ -127,7 +127,7 @@ Traces to: `[docs/inputs §2, §3]`, `[R2]`, direction.md §6, rules 8–10, 29�
       Fails when: any change cannot be undone, or Discard leaves a change applied.
 - [x] AC-036 WHEN the user opens the results drawer, THE SYSTEM SHALL show the result rows, the underlying rows, and the Cube query JSON for the current chart.
       Fails when: any of the three views is missing, or shows data from a different query than the chart rendered.
-- [ ] AC-182 WHEN the chart editor is opened on an existing chart, THE SYSTEM SHALL load that chart's cube, fields, chart type and axis settings into the editor.
+- [x] AC-182 WHEN the chart editor is opened on an existing chart, THE SYSTEM SHALL load that chart's cube, fields, chart type and axis settings into the editor.
       Fails when: the editor opens with empty wells, or with a chart type other than the one saved.
 - [ ] AC-183 WHEN a chart edited from a dashboard tile is applied, THE SYSTEM SHALL hold the edit in the dashboard's edit session and write the chart document only when the dashboard is saved (direction.md §2 Layout: "Save dashboard (applies the chart and saves the dashboard)").
       Fails when: the chart document changes before the dashboard is saved, or the tile does not show the edit before saving.

@@ -6,9 +6,11 @@ import {
   redirect,
   useParams,
 } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
 
 import { DashboardPage } from '../dashboard/DashboardPage';
 import { ChartEditor } from '../editor/ChartEditor';
+import { editorViewOf, loadEditorState } from '../editor/openChart';
 import { AppShell } from '../shell/AppShell';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
@@ -100,14 +102,54 @@ function ChartSurface() {
   );
 }
 
-/** The chart editor (AC-025 onwards). */
+/**
+ * The chart editor (AC-025 onwards), opened on the chart the URL names
+ * (AC-182).
+ *
+ * Until AC-182 the id was printed and never used, so every editor opened
+ * blank whichever chart it was reached from.
+ */
 function ChartEditorSurface() {
   const params = useParams({ strict: false }) as { objectId?: string };
+  const chartId = decodeURIComponent(params.objectId ?? '');
+
+  const chart = useQuery({
+    queryKey: ['chart-editor', chartId],
+    queryFn: () => loadEditorState(chartId),
+    /**
+     * Fetched once per opening, and never again while the editor is open.
+     *
+     * `gcTime: 0` drops the result when the editor closes, so every opening
+     * fetches what is stored now — an editor seeded from a cached copy would
+     * put stale content in its undo history, and Discard would "restore" a
+     * chart that no longer exists.
+     *
+     * `staleTime: Infinity` then stops any refetch while it is open. The
+     * editor reads its chart once, to seed its history, so a refetch could
+     * only ever do harm: `refetchOnReconnect` is on by default, and a failed
+     * one sets the query's error. `editorViewOf` already refuses to let that
+     * unmount a loaded editor; this makes it not happen at all.
+     */
+    staleTime: Infinity,
+    gcTime: 0,
+  });
+  const view = editorViewOf({ data: chart.data, error: chart.error });
+
   return (
     <AppShell workspace="explore">
       <h1>Chart editor</h1>
-      <p data-testid="selected-object">{decodeURIComponent(params.objectId ?? '')}</p>
-      <ChartEditor />
+      <p data-testid="selected-object">{chartId}</p>
+      {view.kind === 'loading' ? (
+        <p data-testid="editor-loading">Opening the chart…</p>
+      ) : view.kind === 'error' ? (
+        <p role="alert" data-testid="editor-load-error">
+          {view.message}
+        </p>
+      ) : (
+        // Keyed by chart id: the editor reads `initial` once, to seed its
+        // history, so a different chart has to be a different editor.
+        <ChartEditor key={chartId} initial={view.initial} />
+      )}
     </AppShell>
   );
 }
