@@ -269,7 +269,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: a drag of at least 5 pixels is treated as a click, or a click is treated as an empty selection.
 - [x] AC-089 WHEN the user Ctrl-drags or ⌘-drags a shape, THE SYSTEM SHALL toggle the enclosed items when all or none of them are marked, and otherwise add them (direction.md rule 47).
       Fails when: a Ctrl-drag over a partly marked set unmarks items instead of adding them.
-- [ ] AC-090 WHEN the user clicks a legend entry's text in a tile that marks, THE SYSTEM SHALL mark every item of that category, and Ctrl-click or ⌘-click SHALL add further categories; series visibility SHALL be changed elsewhere (direction.md rule 7 of §7a).
+- [x] AC-090 WHEN the user clicks a legend entry's text in a tile that marks, THE SYSTEM SHALL mark every item of that category, and Ctrl-click or ⌘-click SHALL add further categories; series visibility SHALL be changed elsewhere (direction.md rule 7 of §7a).
       Fails when: a legend click hides the series, or does not mark it.
 - [ ] AC-091 WHEN the user clicks a trellis panel header, THE SYSTEM SHALL mark every item in that panel.
       Fails when: the click marks a single item, or nothing.

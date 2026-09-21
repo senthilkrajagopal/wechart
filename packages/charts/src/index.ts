@@ -32,3 +32,4 @@ export {
 } from './interaction/hitTest';
 export { dragGesture, type DragEvent, type DragGesture } from './interaction/dragOverlay';
 export { stripeFor, type AxisPixels, type Stripe } from './interaction/axisRange';
+export { markFromLegend, type LegendModifiers } from './interaction/legendMark';

@@ -921,10 +921,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - A shape can enclose two representations of one item, so duplicates are collapsed: marked twice, an item would need two toggles to clear.
   - Failing test: `toggleOrAdd.test.ts`: a Ctrl-drag over an all-marked or all-unmarked set toggles it, and over a partly marked set adds rather than unmarks (AC-089).
   - Depends on: T094
-- [ ] T096 (AC-090) Mark a category from its legend entry, keeping visibility elsewhere
-  - Files: `packages/charts/src/interaction/legendMark.ts`, `packages/charts/src/interaction/legendMark.test.ts`
+- [x] T096 (AC-090) Mark a category from its legend entry, keeping visibility elsewhere
+  - Files: `packages/charts/src/interaction/legendMark.ts`, `packages/charts/src/interaction/legendMark.test.ts`, `packages/charts/src/index.ts`
   - Failing test: `legendMark.test.ts`: clicking a legend entry's text marks every item of that category without hiding the series, and Ctrl-click adds further categories (AC-090).
   - Depends on: T093, T045
+  - Done 2026-09-20. AC-090 ticked.
+  - **The "does not hide the series" half was already true and completely unprotected.** `legendFor` has set `selectedMode: false` since AC-038, with a comment saying why — but nothing asserted it. Re-enabling it fails **only** the new AC-090 test; every test in `legend.test.ts` stays green. That failing state is ECharts' *default*, so it is not reached by writing a bug but by anyone deleting a line that looks unused.
+  - **A single-member tuple is what makes "every item of that category" true**: it matches on the category alone, whatever else varies in the rows underneath. Mutation-verified — a tuple naming a second dimension marks one bar instead of the series and fails five tests.
+  - **Ctrl-click adds here, where AC-087 toggles on an item.** That asymmetry is the criteria's own words — AC-090 "SHALL add further categories", AC-087 "SHALL toggle that item" — and matches Spotfire. Recorded because it reads like an inconsistency and is not one. A category comes off by marking again without it.
+  - `references-markings.md` records this criterion as a **resolved conflict**: direction.md §6 originally had a legend click toggle a series, which contradicts Spotfire, Looker and Qlik. The spec follows the marking reading and moves visibility to the Customize panel.
 - [ ] T097 (AC-091) Mark every item in a trellis panel from its header
   - Files: `packages/charts/src/interaction/panelMark.ts`, `packages/charts/src/interaction/panelMark.test.ts`
   - Failing test: `panelMark.test.ts`: a click on a panel header marks all of that panel's items, not one and not none (AC-091). Uses `title.triggerEvent` per `docs/research/echarts.md`.
