@@ -820,7 +820,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F6. Quick calculations and calculation requests
 
-> **2026-09-21: T053–T055 are deferred for phase 1** (the user: "C. Defer or drop quick calculations for phase 1"; see the status note under F6 in spec.md). Don't start them unless asked. T056–T058, the request flow, are unchanged pending the user's word. T056's dependency on T053 was for the menu that starts a request, and it will need another entry point if the request flow stays.
+> **2026-09-21: T053–T058 are deferred for phase 1**, the quick calculations and the request flow alike. The user: "C. Defer or drop quick calculations for phase 1", then "any pending work.. defer". See the status note under F6 in spec.md. Don't start them unless asked. Nothing here had been built; the spike (`research/cube/spike-model-store-and-quick-calcs.md`) is kept.
 
 - [ ] T053 (AC-047) Offer the six quick calculations on a measure
   - Files: `packages/web/src/editor/QuickCalcMenu.tsx`, `packages/web/src/editor/QuickCalcMenu.test.tsx`

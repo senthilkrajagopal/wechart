@@ -172,9 +172,10 @@ Traces to: `[R7]`, `[R2]`, `[research/cube/data-modeling.md]`.
 > the design (`research/cube/spike-model-store-and-quick-calcs.md`) is kept.
 > The two semantic questions asked with it (what a running total counts from,
 > and % of total under a filter) are closed with it.
-> The request flow, AC-050 to AC-052, was not part of that answer and is
-> unchanged pending the user's word. It waits on the Model workspace (T137 on)
-> either way.
+> The request flow, AC-050 to AC-052 (tasks T056–T058), is deferred with them.
+> The user: "same with quick calculations.. if already some work is done.. keep
+> it as it is.. any pending work.. defer". None of F6 had been built beyond the
+> spike, so the whole of F6 waits.
 
 - [ ] AC-047 WHEN the user opens the menu on a measure in the chart editor, THE SYSTEM SHALL offer % of total, difference from previous period, % difference from previous period, running total, rank and moving average.
       Fails when: any of the six is missing from the menu.
