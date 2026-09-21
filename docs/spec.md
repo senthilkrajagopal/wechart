@@ -277,7 +277,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: Shift-click marks a single row, or rows are markable without a primary key.
 - [x] AC-093 WHILE a marking is in range mode, THE SYSTEM SHALL let the user drag along an axis to mark a continuous range, show it as a coloured stripe on that axis, and keep its bounds when filters change (direction.md rule 30 of §7a; `[R7]`).
       Fails when: the stripe does not appear, or the bounds move when a filter changes.
-- [ ] AC-094 WHEN the user clicks an empty plot area, or presses Escape on a focused tile, THE SYSTEM SHALL unmark that tile's marking and leave other markings unchanged.
+- [x] AC-094 WHEN the user clicks an empty plot area, or presses Escape on a focused tile, THE SYSTEM SHALL unmark that tile's marking and leave other markings unchanged.
       Fails when: another marking is cleared, or the marking survives.
 - [x] AC-095 WHEN a marking changes, THE SYSTEM SHALL update every tile that uses it or is limited by it, on every page tab of the dashboard (direction.md rule 48).
       Fails when: a tile on another page tab still shows the previous marking state when opened.

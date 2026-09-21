@@ -958,10 +958,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **A range entirely off the axis draws nothing**, rather than clamping — a clamped stripe would sit at the edge advertising a marking that is not on this axis at all.
   - **A backwards drag is the same range.** Dragging right to left is the same intention, and a range that ended before it started would match nothing: a marking that silently does nothing, which is worse than one that refuses. Mutation-verified.
   - The pixel conversion stays at the call site (`convertToPixel` / `convertFromPixel`), as with the hit-testing geometry, so the part worth testing needs no chart instance — and so the stripe can be asserted to come from the stored bounds rather than from the current result.
-- [ ] T100 (AC-094) Unmark on an empty-plot click or Escape, leaving other markings alone
-  - Files: `packages/charts/src/interaction/clear.ts`, `packages/charts/src/interaction/clear.test.ts`
+- [x] T100 (AC-094) Unmark on an empty-plot click or Escape, leaving other markings alone
+  - Files: `packages/web/src/dashboard/markings/clear.ts`, `packages/web/src/dashboard/markings/clear.test.ts`
   - Failing test: `clear.test.ts`: clicking empty plot area or pressing Escape on a focused tile clears only that tile's marking (AC-094).
   - Depends on: T093
+  - Done 2026-09-20. AC-094 ticked. **Files differ from the plan above, which has been corrected**: the operation is on `MarkingState`, which lives in the web package beside the store, and the *gesture* already exists — `itemClicks` has reported an empty-plot click as `item: null` since T093.
+  - **One marking, not all of them.** Four can be live at once (AC-084), so "unmark" means the one this tile marks with; a dashboard where Escape or a stray background click wiped every marking is one nobody would risk either gesture on. Mutation-verified — clearing the whole state fails the test that holds the other marking.
+  - **A "(None)" tile clears nothing.** It has no marking, and picking one would be exactly the over-reach the criterion forbids. Mutation-verified.
+  - **`Esc` here is the focused-tile case only.** direction.md distinguishes them — "Esc — Unmark all markings (Esc on a focused tile unmarks its marking)" — and the global one has **no criterion**, so it is not built. Recorded rather than quietly added.
+  - Returned by identity when there is nothing to clear, so pressing Escape twice is not two changes for anything downstream to react to.
 - [x] T101 (AC-095) Update every tile that uses or is limited by a marking, on every page tab
   - Files: `packages/web/src/dashboard/markings/store.ts`, `packages/web/src/dashboard/markings/propagation.test.ts`, `packages/web/src/dashboard/model/document.ts`
   - Failing test: `propagation.test.ts`: after a marking change, a tile on a different page tab shows the new state when that tab is opened (AC-095).
