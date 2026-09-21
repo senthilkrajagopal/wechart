@@ -127,6 +127,10 @@ Traces to: `[docs/inputs §2, §3]`, `[R2]`, direction.md §6, rules 8–10, 29�
       Fails when: any change cannot be undone, or Discard leaves a change applied.
 - [x] AC-036 WHEN the user opens the results drawer, THE SYSTEM SHALL show the result rows, the underlying rows, and the Cube query JSON for the current chart.
       Fails when: any of the three views is missing, or shows data from a different query than the chart rendered.
+- [ ] AC-182 WHEN the chart editor is opened on an existing chart, THE SYSTEM SHALL load that chart's cube, fields, chart type and axis settings into the editor.
+      Fails when: the editor opens with empty wells, or with a chart type other than the one saved.
+- [ ] AC-183 WHEN a chart edited from a dashboard tile is applied, THE SYSTEM SHALL hold the edit in the dashboard's edit session and write the chart document only when the dashboard is saved (direction.md §2 Layout: "Save dashboard (applies the chart and saves the dashboard)").
+      Fails when: the chart document changes before the dashboard is saved, or the tile does not show the edit before saving.
 
 ## F5. Chart rendering
 
@@ -568,12 +572,12 @@ Copied from [requirements.md §7](./requirements.md):
 | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | Problem: replace Spotfire, browser-based, no installed client `[R1]`                          | AC-001 … AC-006, AC-180                                               |
 | Problem: data need not be loaded into the tool; live queries with acceleration `[R1]`, `[R4]` | AC-007 … AC-013, AC-142 … AC-148                                      |
-| Users: analyst without SQL `[R2]`                                                             | AC-025 … AC-036, AC-047 … AC-052                                      |
+| Users: analyst without SQL `[R2]`                                                             | AC-025 … AC-036, AC-047 … AC-052, AC-182, AC-183                      |
 | Users: business consumer `[R2]`                                                               | AC-017 … AC-019, AC-084 … AC-106, AC-121 … AC-125, AC-171 … AC-173    |
 | Users: semantic-layer engineer `[R2]`                                                         | AC-131 … AC-141, AC-142 … AC-148, AC-157 … AC-164                     |
 | Users: platform operator `[R2]`                                                               | AC-149 … AC-156, AC-157 … AC-170                                      |
 | M1: 50 analyses rebuilt and accepted `[R3]`                                                   | AC-037, AC-084 … AC-116 (Spotfire parity behaviours), AC-053 … AC-068 |
-| M2: 80% self-service authoring `[R3]`                                                         | AC-025 … AC-036, AC-047 … AC-052, AC-053 … AC-068                     |
+| M2: 80% self-service authoring `[R3]`                                                         | AC-025 … AC-036, AC-047 … AC-052, AC-053 … AC-068, AC-182, AC-183     |
 | M3: p95 under 3 s for 10 charts `[R3]`                                                        | AC-174, AC-175, AC-104, AC-105                                        |
 | M4: Spotfire parity checklist `[R3]`                                                          | AC-084 … AC-116                                                       |
 | Constraint: wechart service owns Cube credentials `[R5]`                                      | AC-007, AC-008, AC-164                                                |
