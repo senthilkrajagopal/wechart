@@ -243,6 +243,65 @@ export async function seedDevData(db: Kysely<Database>): Promise<void> {
   });
 
   /**
+   * A dashboard whose one chart has **no saved type** — the document's way of
+   * saying "follow the recommender" (T193). Every other seeded chart saves an
+   * explicit `bar`, which is why a dashboard could refuse typeless charts for
+   * so long without any test noticing.
+   *
+   * A dashboard of its own rather than a change to the main one: the main
+   * dashboard's second chart runs over time, so making it typeless would
+   * redraw it as lines, and AC-039's colour test finds legend markers as small
+   * *filled* shapes. Unfoldered, so it appears in no folder listing, and
+   * titled to match none of the search specs' queries.
+   */
+  await repo.create({
+    kind: 'dashboard',
+    id: 'seed-dashboard-recommended',
+    body: {
+      title: 'Recommended chart dashboard',
+      owner: 'admin',
+      schemaVersion: 1,
+      settings: { width: 'fixed' },
+      pages: [
+        {
+          id: 'main',
+          title: 'Main',
+          items: [
+            {
+              id: 'tile-recommended',
+              kind: 'chart',
+              w: 12,
+              h: 40,
+              chartId: 'seed-chart-recommended',
+            },
+          ],
+        },
+      ],
+    },
+  });
+  await repo.create({
+    kind: 'chart',
+    id: 'seed-chart-recommended',
+    body: {
+      schemaVersion: 1,
+      title: 'Orders over time, following the recommendation',
+      localToDashboardId: 'seed-dashboard-recommended',
+      owner: 'admin',
+      // Over time, so the recommendation is *not* `bar`. Count by status
+      // recommends `bar` — the type every other seeded chart saves — and a
+      // dashboard that drew every typeless chart as `bar` would then pass.
+      chart: {
+        source: { cube: 'orders' },
+        wells: {
+          measures: ['orders.count'],
+          dimensions: [],
+          timeDimensions: ['orders.ordered_at'],
+        },
+      },
+    },
+  });
+
+  /**
    * A chart whose axis settings are saved, so AC-182's "axis settings" can be
    * seen to load in the editor's Axes panel. None of the dashboard's charts
    * carries any, and giving one of them some would change how that tile draws

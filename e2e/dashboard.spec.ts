@@ -929,3 +929,38 @@ test('a save failure does not hand the scrollbar back to the window', async ({ p
   });
   expect(overflow).toBe(0);
 });
+
+/**
+ * T193 / AC-034 ("Fails when … the dashboard tile does not reflect the applied
+ * changes"): a chart saved without a type — "follow the recommender" — has to
+ * draw on a dashboard, and with the type the editor gives it.
+ *
+ * Until T193 every such chart showed "This chart has no chart type yet" on a
+ * dashboard while drawing normally in the editor. The test does not name a
+ * type: it reads the one the editor shows and requires the tile to draw that
+ * one, because agreement between the two is the rule — "a chart has to look
+ * the same on a dashboard as it did where it was built".
+ */
+test('a chart following its recommendation draws on the dashboard as it does in the editor', async ({
+  page,
+}) => {
+  await page.goto('/explore/charts/seed-chart-recommended/edit');
+  // Recommended from the rows, so wait for them before reading the type —
+  // before the query settles the editor is recommending from none.
+  await expect(page.getByTestId('result-row-count')).not.toHaveText('0 rows');
+  const inEditor = await page.getByTestId('chart-type').textContent();
+  expect(inEditor).toMatch(/\S/);
+  /**
+   * A guard on the fixture, not on the recommender: the chart is seeded over
+   * time so that its pick differs from `bar`, the type every other seeded
+   * chart saves. If a change to either ever made it `bar`, this test would
+   * stop telling a recommending dashboard from one that defaults to `bar` —
+   * so it says so instead of passing quietly.
+   */
+  expect(inEditor).not.toBe('bar');
+
+  await page.goto('/explore/dashboards/seed-dashboard-recommended');
+  const tile = page.locator('[data-tile="tile-recommended"]');
+
+  await expect(tile.getByTestId('chart-canvas')).toHaveAttribute('data-chart-type', inEditor ?? '');
+});

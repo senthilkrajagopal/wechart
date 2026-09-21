@@ -1,14 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import {
-  compile,
-  readChartDocument,
-  toChartSpec,
-  toCubeQuery,
-  type RenderSpec,
-} from '@wechart/core';
+import { readChartDocument, type RenderSpec } from '@wechart/core';
 
 import { loadTile } from '../query/loadTile';
+import { tileChartOf, type TileChart } from './chartSpec';
 import { DashboardView } from './DashboardView';
 import { saveDashboard } from './edit/save';
 import { DEFAULT_SETTINGS, type DashboardDocument } from './model/document';
@@ -221,21 +216,13 @@ function LoadedDashboard({
 }
 
 /**
- * One tile's chart, ready to render: the saved chart document, the rows its
- * query returns, and the two compiled together.
+ * One tile's chart, ready to render: the saved chart document, read strictly,
+ * then drawn by `tileChartOf` — the same recommendation the editor makes, so a
+ * chart looks the same on a dashboard as it did where it was built (T193).
  *
- * The same three steps the editor takes (`ChartEditor`), which is the point —
- * a chart has to look the same on a dashboard as it did where it was built.
  * `readChartDocument` is strict, so a body in an older or broken format is
  * refused here rather than drawn as an empty chart.
  */
-/**
- * The error is carried as the thrown value, not as its message. `TileError`
- * offers the query JSON only for a `TileLoadError` (AC-012), and flattening to
- * a string throws away the one thing that makes a failed tile diagnosable.
- */
-type TileChart = { readonly spec: RenderSpec } | { readonly error: unknown };
-
 async function specFor(chartId: string): Promise<TileChart> {
   let document;
   try {
@@ -250,19 +237,12 @@ async function specFor(chartId: string): Promise<TileChart> {
     return { error: 'This chart is no longer available.' };
   }
 
-  const chartType = document.chart.chartType;
-  if (chartType === undefined) return { error: 'This chart has no chart type yet.' };
-
-  try {
-    const query = toCubeQuery(toChartSpec(document));
+  // AC-012: a failed query reaches the tile as the thrown value, so that a
+  // TileLoadError still carries its query and the tile can offer it.
+  return tileChartOf(document, async (query) => {
     const result = (await loadTile({ query })) as { data?: Record<string, unknown>[] };
-    return { spec: compile(document, { rows: result.data ?? [], chartType }) };
-  } catch (failure) {
-    // AC-012: what Cube said, on the tile — the thrown value, so that a
-    // TileLoadError still carries its query and the tile can offer it. The
-    // message alone would show the text and lose the diagnosis.
-    return { error: failure };
-  }
+    return result.data ?? [];
+  });
 }
 
 function chartIdsOf(document: DashboardDocument): string[] {

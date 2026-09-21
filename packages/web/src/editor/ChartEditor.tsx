@@ -39,6 +39,7 @@ import {
   type ChartTypeState,
 } from './chartTypeState';
 import { OPENED_WITH, type EditorState } from './openChart';
+import { signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { FieldList } from './FieldList';
 import { Wells } from './Wells';
@@ -229,30 +230,11 @@ export function ChartEditor({ initial = OPENED_WITH }: ChartEditorProps = {}) {
   );
 
   /**
-   * Cardinalities come from the rows the query actually returned, not from a
-   * separate count. What decides whether a chart reads is how many values are
-   * *in this result*, and it costs nothing extra (AC-028).
+   * The same function the dashboard recommends through (T193), so a chart is
+   * given the same type in both places. Cardinalities come from the rows the
+   * query actually returned (AC-028).
    */
-  const signature: Signature = useMemo(() => {
-    const distinct = (member: string) => new Set(rows.map((row) => String(row[member] ?? ''))).size;
-
-    return {
-      fields: [
-        ...spec.measures.map((name) => ({ name, kind: 'measure' as const })),
-        ...spec.dimensions.map((name) => ({
-          name,
-          kind: 'dimension' as const,
-          ...(rows.length > 0 ? { cardinality: distinct(name) } : {}),
-        })),
-        ...spec.timeDimensions.map((name) => ({
-          name,
-          kind: 'timeDimension' as const,
-          ...(rows.length > 0 ? { cardinality: distinct(name) } : {}),
-        })),
-      ],
-      rowCount: rows.length,
-    };
-  }, [spec, rows]);
+  const signature: Signature = useMemo(() => signatureOf(spec, rows), [spec, rows]);
 
   const recommendation = useMemo(() => recommend(signature), [signature]);
   const explanation = useMemo(() => explain(signature), [signature]);
@@ -261,7 +243,9 @@ export function ChartEditor({ initial = OPENED_WITH }: ChartEditorProps = {}) {
    * AC-032: a manual choice survives field changes. Nothing here resets it on
    * a spec change — only "Back to recommended" does.
    */
-  const recommended = recommendation.top?.candidate.chartType ?? null;
+  // Read exactly as the dashboard reads it (T193), so a chart is drawn with
+  // the same type on a tile as here.
+  const recommended = topTypeOf(recommendation);
   const shownType = effectiveType(chartTypeState, recommended);
   const alternatives = [
     ...(recommendation.top ? [recommendation.top] : []),
