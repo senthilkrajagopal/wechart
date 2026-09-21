@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { cubesFrom, membersOf, type Member } from '../editor/fields';
 import { loadTile } from '../query/loadTile';
@@ -7,6 +7,7 @@ import { META_QUERY } from '../query/meta';
 import {
   FILTER_WIDGETS,
   membersFor,
+  valueKeyOf,
   type DashboardFilter,
   type FilterValue,
   type FilterValues,
@@ -23,8 +24,10 @@ import { NumericRange } from './widgets/NumericRange';
  */
 export interface FilterBarProps {
   readonly filters: readonly DashboardFilter[];
+  /** The values held, by `valueKeyOf` each filter. */
   readonly values: FilterValues;
-  readonly onValue: (filterId: string, value: FilterValue | undefined) => void;
+  /** A filter's value changed; `undefined` is no filter. */
+  readonly onValue: (key: string, value: FilterValue | undefined) => void;
   readonly editing: boolean;
   /** Change the filters themselves — their fields, which there are. Edit mode only. */
   readonly onFilters?: ((next: readonly DashboardFilter[]) => void) | undefined;
@@ -43,26 +46,64 @@ function allMembers(meta: unknown): Member[] {
 
 /**
  * The values a list or checkbox filter picks from: the member's own values,
- * asked of Cube as one ungrouped dimension. Capped, because a filter over a
- * member with more values than that wants a search, which the list has.
+ * asked of Cube as one ungrouped dimension, in order, so which ones arrive
+ * under the cap is the same every time.
  */
 const OPTION_LIMIT = 1000;
 
-function useOptions(member: string | undefined, needed: boolean) {
-  return useQuery({
-    queryKey: ['filter-options', member],
-    enabled: needed && member !== undefined,
-    queryFn: async () => {
+/** How long typing pauses before a search is asked of Cube. */
+const SEARCH_PAUSE_MS = 250;
+
+interface Options {
+  readonly values: readonly string[];
+  /** As many rows came back as were asked for: there are more. */
+  readonly cutShort: boolean;
+}
+
+function useOptions(member: Member, search: string, needed: boolean) {
+  // Cube matches `contains` only on a string dimension; any other type is
+  // searched among the values already here.
+  const asked = member.type === 'string' ? search.trim() : '';
+  return useQuery<Options>({
+    queryKey: ['filter-options', member.name, asked],
+    enabled: needed,
+    // The previous values stay listed while a search is asked.
+    placeholderData: (previous) => previous,
+    queryFn: async ({ signal }) => {
       const result = (await loadTile({
-        query: { dimensions: [member], limit: OPTION_LIMIT },
+        query: {
+          dimensions: [member.name],
+          ...(asked === ''
+            ? {}
+            : { filters: [{ member: member.name, operator: 'contains', values: [asked] }] }),
+          order: { [member.name]: 'asc' },
+          limit: OPTION_LIMIT,
+        },
+        // A search overtaken by the next is cancelled on Cube too (AC-011).
+        signal,
       })) as { data?: Record<string, unknown>[] };
-      const values = (result.data ?? [])
-        .map((row) => row[member ?? ''])
+      const rows = result.data ?? [];
+      const values = rows
+        .map((row) => row[member.name])
         .filter((value) => value !== null && value !== undefined && value !== '')
         .map(String);
-      return [...new Set(values)];
+      return { values: [...new Set(values)], cutShort: rows.length >= OPTION_LIMIT };
     },
   });
+}
+
+/** What was typed, once typing has paused. */
+function usePaused(text: string): string {
+  const [paused, setPaused] = useState(text);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPaused(text);
+    }, SEARCH_PAUSE_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [text]);
+  return paused;
 }
 
 function FilterWidgetFor({
@@ -77,8 +118,13 @@ function FilterWidgetFor({
   onValue: (value: FilterValue | undefined) => void;
 }) {
   const picksValues = filter.widget === 'list' || filter.widget === 'checkbox';
-  const options = useOptions(filter.member, picksValues);
+  const [search, setSearch] = useState('');
+  const options = useOptions(member, usePaused(search), picksValues);
   const props = { label: member.title, value, onChange: onValue };
+  const values = {
+    options: options.data?.values ?? [],
+    cutShort: options.data?.cutShort ?? false,
+  };
 
   switch (filter.widget) {
     case 'dateRange':
@@ -86,9 +132,9 @@ function FilterWidgetFor({
     case 'range':
       return <NumericRange {...props} />;
     case 'list':
-      return <ListSearch {...props} options={options.data ?? []} />;
+      return <ListSearch {...props} {...values} onSearch={setSearch} />;
     case 'checkbox':
-      return <CheckboxList {...props} options={options.data ?? []} />;
+      return <CheckboxList {...props} {...values} />;
   }
 }
 
@@ -106,15 +152,23 @@ function Filters({ filters, values, onValue, editing, onFilters }: FilterBarProp
 
   return (
     <section aria-label="Filters" className="filter-bar">
-      {filters.map((filter) => {
+      {filters.map((filter, index) => {
         const member = members.find((candidate) => candidate.name === filter.member);
         const kind = FILTER_WIDGETS.find((entry) => entry.widget === filter.widget);
         // A filter with no field yet has nothing to show a reader.
         if (!editing && member === undefined) return null;
+        /**
+         * Each filter is a group named by its kind and place, so a reader who
+         * cannot see the bar can tell one "Filter on" menu from the next.
+         */
+        const name = `${kind?.label ?? 'Filter'} filter ${String(index + 1)}`;
+        const key = valueKeyOf(filter);
 
         return (
           <div
             key={filter.id}
+            role="group"
+            aria-label={name}
             className="filter-bar__filter"
             data-testid={`filter-${filter.id}`}
             data-widget={filter.widget}
@@ -126,6 +180,8 @@ function Filters({ filters, values, onValue, editing, onFilters }: FilterBarProp
                   value={filter.member ?? ''}
                   onChange={(event) => {
                     const chosen = event.target.value;
+                    // The value stays with the field it was chosen on
+                    // (`valueKeyOf`), so there is nothing here to clear.
                     onFilters?.(
                       filters.map((each) =>
                         each.id !== filter.id
@@ -135,8 +191,6 @@ function Filters({ filters, values, onValue, editing, onFilters }: FilterBarProp
                             : { ...each, member: chosen },
                       ),
                     );
-                    // A value made for another field means nothing on this one.
-                    onValue(filter.id, undefined);
                   }}
                 >
                   <option value="">{kind?.label ?? 'Filter'}: choose a field…</option>
@@ -148,10 +202,10 @@ function Filters({ filters, values, onValue, editing, onFilters }: FilterBarProp
                 </select>
                 <button
                   type="button"
-                  aria-label={`Remove filter${member === undefined ? '' : ` ${member.title}`}`}
+                  aria-label={`Remove ${name}`}
                   onClick={() => {
                     onFilters?.(filters.filter((each) => each.id !== filter.id));
-                    onValue(filter.id, undefined);
+                    onValue(key, undefined);
                   }}
                 >
                   ×
@@ -162,9 +216,9 @@ function Filters({ filters, values, onValue, editing, onFilters }: FilterBarProp
               <FilterWidgetFor
                 filter={filter}
                 member={member}
-                value={values[filter.id]}
+                value={values[key]}
                 onValue={(value) => {
-                  onValue(filter.id, value);
+                  onValue(key, value);
                 }}
               />
             )}

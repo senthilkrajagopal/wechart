@@ -66,7 +66,19 @@ export type FilterValue =
       readonly max?: number | undefined;
     };
 
+/** The values held, by `valueKeyOf` each filter. */
 export type FilterValues = Readonly<Record<string, FilterValue>>;
+
+/**
+ * Where a filter's value is held: the filter *and* the field it is on. A
+ * value chosen on one field means nothing on another, and Undo can put a
+ * filter back on its old field — keyed by the filter alone, it came back
+ * holding the new field's values (T082's review). Keyed by both, it comes back
+ * with the value it had there.
+ */
+export function valueKeyOf(filter: DashboardFilter): string {
+  return `${filter.id} ${filter.member ?? ''}`;
+}
 
 /**
  * The members a widget can filter on. A date range needs a time dimension; a

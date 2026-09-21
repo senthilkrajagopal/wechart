@@ -550,9 +550,21 @@ main:has(.dashboard) {
   border-color: var(--wc-accent);
   color: var(--wc-text-on-accent);
 }
-.filter-widget--checkbox { border: 0; margin: 0; padding: 0; }
-.filter-widget--checkbox legend { float: left; margin-right: 8px; color: var(--wc-text-secondary); }
-.filter-widget--checkbox label { margin-right: 10px; white-space: nowrap; }
+fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
+/* Every widget names its field on screen, the same way (T082's review). */
+.filter-widget__label {
+  float: left;
+  margin-right: 8px;
+  line-height: 32px;
+  color: var(--wc-text-secondary);
+}
+.filter-widget__cut {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--wc-text-secondary);
+}
+.filter-widget--checkbox label:not(.filter-widget__label) { margin-right: 10px; white-space: nowrap; }
 /* Section templates, set apart from the palette above them: one click here
    lays out several tiles rather than one (AC-068), and a run of identical
    buttons would not say so. The dashed border is the prototype's. */

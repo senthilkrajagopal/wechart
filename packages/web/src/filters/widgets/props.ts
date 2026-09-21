@@ -15,6 +15,13 @@ export interface WidgetProps {
 /** A widget that picks from the member's values, fetched from Cube. */
 export interface ValuesWidgetProps extends WidgetProps {
   readonly options: readonly string[];
+  /**
+   * What the reader has typed to search for, handed on to be asked of Cube:
+   * the options are capped, and a value past the cap is found only there.
+   */
+  readonly onSearch?: ((text: string) => void) | undefined;
+  /** The options stop at the cap: there are more than are listed. */
+  readonly cutShort?: boolean | undefined;
 }
 
 /** The picked values, when the value is a pick of values. */

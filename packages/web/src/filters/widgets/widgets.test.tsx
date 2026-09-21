@@ -56,6 +56,43 @@ describe('a date range', () => {
     fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
     expect(onChange).toHaveBeenLastCalledWith({ kind: 'dates', from: '2026-01-01', to: '' });
   });
+
+  it('reports two dates still to be chosen when between dates is picked', async () => {
+    const onChange = vi.fn();
+    render(<DateRange label="Ordered at" value={undefined} onChange={onChange} />);
+
+    await userEvent.selectOptions(screen.getByLabelText('Ordered at'), 'dates');
+    expect(onChange).toHaveBeenLastCalledWith({ kind: 'dates', from: '', to: '' });
+  });
+});
+
+/**
+ * Found by T082's review: the date and numeric ranges named their field only
+ * to a screen reader, so a reader of a dashboard with two date filters saw two
+ * "All time" menus and could not tell which filtered what.
+ */
+describe('every widget names its field on screen', () => {
+  const shown = (text: string) => screen.getByText(text, { selector: 'label, legend' });
+
+  it('a date range', () => {
+    render(<DateRange label="Ordered at" value={undefined} onChange={vi.fn()} />);
+    expect(shown('Ordered at').textContent).toBe('Ordered at');
+  });
+
+  it('a numeric range', () => {
+    render(<NumericRange label="Amount" value={undefined} onChange={vi.fn()} />);
+    expect(shown('Amount').textContent).toBe('Amount');
+  });
+
+  it('a list with search', () => {
+    render(<ListSearch label="Status" options={STATUSES} value={undefined} onChange={vi.fn()} />);
+    expect(shown('Status').textContent).toBe('Status');
+  });
+
+  it('a checkbox list', () => {
+    render(<CheckboxList label="Status" options={STATUSES} value={undefined} onChange={vi.fn()} />);
+    expect(shown('Status').textContent).toBe('Status');
+  });
 });
 
 describe('a list with search', () => {
@@ -92,6 +129,47 @@ describe('a list with search', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'shipped' }));
     expect(onChange).toHaveBeenLastCalledWith(undefined);
+  });
+
+  /**
+   * The values come from Cube, capped; a search that only looked through what
+   * had arrived could not find a value past the cap (T082's review). So what is
+   * typed is handed on to be asked of Cube, and a list cut short says so.
+   */
+  it('hands on what is searched for', async () => {
+    const onSearch = vi.fn();
+    render(
+      <ListSearch
+        label="Status"
+        options={STATUSES}
+        value={undefined}
+        onChange={vi.fn()}
+        onSearch={onSearch}
+      />,
+    );
+
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search Status' }), 'pro');
+    expect(onSearch).toHaveBeenLastCalledWith('pro');
+  });
+
+  it('says when the list is cut short, and not otherwise', () => {
+    const { rerender } = render(
+      <ListSearch label="Status" options={STATUSES} value={undefined} onChange={vi.fn()} />,
+    );
+    expect(screen.queryByTestId('filter-options-cut')).toBeNull();
+
+    rerender(
+      <ListSearch
+        label="Status"
+        options={STATUSES}
+        value={undefined}
+        onChange={vi.fn()}
+        cutShort
+      />,
+    );
+    expect(screen.getByTestId('filter-options-cut').textContent).toBe(
+      'Showing the first 1,000 values. Search to find others.',
+    );
   });
 });
 

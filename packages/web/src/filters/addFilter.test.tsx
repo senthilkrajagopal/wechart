@@ -28,25 +28,39 @@ const META = {
       dimensions: [
         { name: 'orders.ordered_at', title: 'Ordered at', type: 'time' },
         { name: 'orders.status', title: 'Status', type: 'string' },
+        { name: 'orders.region', title: 'Region', type: 'string' },
         { name: 'orders.id', title: 'Id', type: 'number' },
       ],
     },
   ],
 };
 
+/** Every query the filter bar asked Cube, in order. */
+let asked: Record<string, unknown>[] = [];
+/** How many values each answer carries: two, or the cap. */
+let answerRows = 2;
+
 beforeEach(() => {
+  asked = [];
+  answerRows = 2;
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (input: RequestInfo | URL) => {
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === '/api/meta') return new Response(JSON.stringify(META), { status: 200 });
-      if (url.startsWith('/api/load'))
+      if (url.startsWith('/api/load')) {
+        const { query } = JSON.parse(String(init?.body)) as { query: Record<string, unknown> };
+        asked.push(query);
+        const member = (query['dimensions'] as string[])[0] ?? '';
+        const values =
+          answerRows === 2
+            ? ['completed', 'shipped']
+            : Array.from({ length: answerRows }, (_, index) => `value ${String(index)}`);
         return new Response(
-          JSON.stringify({
-            data: [{ 'orders.status': 'completed' }, { 'orders.status': 'shipped' }],
-          }),
+          JSON.stringify({ data: values.map((value) => ({ [member]: value })) }),
           { status: 200 },
         );
+      }
       return new Response('{}', { status: 404 });
     }),
   );
@@ -147,4 +161,106 @@ describe('adding a filter', () => {
       ['checkbox', 'orders.status'],
     ]);
   });
+
+  it('is one change: Undo takes it off the filter bar', async () => {
+    dashboard();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await addFilter('Numeric range');
+    expect(within(bar()).getAllByTestId(/^filter-/)).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+    expect(screen.queryByRole('region', { name: 'Filters' })).toBeNull();
+  });
+
+  it('says a filter goes to the filter bar while its kinds are offered', async () => {
+    dashboard();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByTestId('add-destination').textContent).toBe('Adds to the end of Overview.');
+
+    await userEvent.click(screen.getByTestId('add-filter'));
+
+    expect(screen.getByTestId('add-destination').textContent).toBe('Adds to the filter bar.');
+  });
+
+  it('names each filter apart, for a reader who cannot see the bar', async () => {
+    dashboard();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await addFilter('Date range');
+    await addFilter('Date range');
+
+    expect(
+      within(bar())
+        .getAllByRole('group', { name: /filter/ })
+        .map((group) => group.getAttribute('aria-label')),
+    ).toEqual(['Date range filter 1', 'Date range filter 2']);
+  });
+});
+
+/**
+ * Found by T082's review: the values are fetched capped at 1,000, and the
+ * search looked only through those — a value past the cap could not be found,
+ * and nothing said the list was short.
+ */
+describe('the values a list filter offers', () => {
+  async function listOn(member: string) {
+    dashboard();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await addFilter('List with search');
+    await userEvent.selectOptions(within(bar()).getByLabelText('Filter on'), member);
+  }
+
+  it('are asked of Cube in order, and a search is asked of Cube too', async () => {
+    await listOn('orders.status');
+    await within(bar()).findByRole('button', { name: 'shipped' });
+    expect(asked.at(-1)).toEqual({
+      dimensions: ['orders.status'],
+      order: { 'orders.status': 'asc' },
+      limit: 1000,
+    });
+
+    await userEvent.type(within(bar()).getByRole('searchbox', { name: 'Search Status' }), 'ship');
+
+    await vi.waitFor(() => {
+      expect(asked.at(-1)).toEqual({
+        dimensions: ['orders.status'],
+        filters: [{ member: 'orders.status', operator: 'contains', values: ['ship'] }],
+        order: { 'orders.status': 'asc' },
+        limit: 1000,
+      });
+    });
+  });
+
+  it('say when they stop at the cap', async () => {
+    answerRows = 1000;
+    await listOn('orders.status');
+
+    expect((await within(bar()).findByTestId('filter-options-cut')).textContent).toBe(
+      'Showing the first 1,000 values. Search to find others.',
+    );
+  });
+});
+
+/**
+ * Found by T082's review: a value belongs to the field it was chosen on. Undo
+ * put a filter back on its old field and left it holding values from the new
+ * one — which, applied, would empty every tile it reaches.
+ */
+it('a value stays with the field it was chosen on, through Undo', async () => {
+  dashboard();
+  await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+  await addFilter('Checkbox list');
+  await userEvent.selectOptions(within(bar()).getByLabelText('Filter on'), 'orders.status');
+  await userEvent.selectOptions(within(bar()).getByLabelText('Filter on'), 'orders.region');
+  await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'shipped' }));
+  expect(within(bar()).getByRole('checkbox', { name: 'shipped' }).matches(':checked')).toBe(true);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+  expect(within(bar()).getByRole('group', { name: 'Status' })).toBeTruthy();
+  expect(
+    within(bar())
+      .getAllByRole('checkbox')
+      .filter((box) => box.matches(':checked')),
+  ).toHaveLength(0);
 });

@@ -48,7 +48,8 @@ export function AddPanel({
   return (
     <div className="add-panel">
       <p className="add-panel__destination" data-testid="add-destination">
-        Adds to {destination}.
+        {/* A filter goes to the filter bar wherever the selection is. */}
+        Adds to {choosingFilter ? 'the filter bar' : destination}.
       </p>
 
       {message === undefined || message === '' ? null : (

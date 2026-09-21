@@ -9,14 +9,18 @@ import type { WidgetProps } from './props';
  * (AC-083) — and "Between dates" takes two fixed dates.
  */
 export function DateRange({ label, value, onChange }: WidgetProps) {
+  const range = useId();
   const from = useId();
   const to = useId();
   const chosen = value?.kind === 'preset' ? value.preset : value?.kind === 'dates' ? 'dates' : '';
 
   return (
     <span className="filter-widget filter-widget--date">
+      <label htmlFor={range} className="filter-widget__label">
+        {label}
+      </label>
       <select
-        aria-label={label}
+        id={range}
         value={chosen}
         onChange={(event) => {
           const next = event.target.value;

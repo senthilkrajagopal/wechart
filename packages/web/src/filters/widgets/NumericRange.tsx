@@ -22,7 +22,8 @@ export function NumericRange({ label, value, onChange }: WidgetProps) {
   const max = value?.kind === 'range' ? value.max : undefined;
 
   return (
-    <span className="filter-widget filter-widget--range">
+    <fieldset className="filter-widget filter-widget--range">
+      <legend className="filter-widget__label">{label}</legend>
       <input
         type="number"
         aria-label={`${label} from`}
@@ -41,6 +42,6 @@ export function NumericRange({ label, value, onChange }: WidgetProps) {
           onChange(rangeOf(min, numberFrom(event.target.value)));
         }}
       />
-    </span>
+    </fieldset>
   );
 }

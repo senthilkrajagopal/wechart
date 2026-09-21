@@ -906,11 +906,11 @@ export function DashboardView({
           <FilterBar
             filters={session.document.filters ?? []}
             values={filterValues}
-            onValue={(filterId, value) => {
+            onValue={(key, value) => {
               setFilterValues((current) => {
                 const next = { ...current };
-                if (value === undefined) delete next[filterId];
-                else next[filterId] = value;
+                if (value === undefined) delete next[key];
+                else next[key] = value;
                 return next;
               });
             }}
