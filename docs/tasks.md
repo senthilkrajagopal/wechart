@@ -1038,10 +1038,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **Items past the cap are dropped, not the whole gesture.** A lasso over 1,050 points is a reasonable thing to do and mostly succeeds; throwing all 1,050 away would punish someone for the size of their data and leave them with nothing marked. Mutation-verified.
   - **Re-adding something already marked is not growth**, or the cap would refuse items while leaving room unused.
   - **"Mark all"'s exemption is structural and the tests say so.** It takes a predicate and returns it, so there is no enumeration that could reach the cap and no mutation that makes it refuse without changing its signature — routing it through the limit leaves every test green, because adding nothing to anything refuses nothing. The cases hold the *shape* of the exemption, which is what a future version could break by enumerating the tile's rows instead.
-- [ ] T109 (AC-103) Label a tile as not linked when it cannot resolve a marking's members
-  - Files: `packages/core/src/markings/applicability.ts`, `packages/core/src/markings/applicability.test.ts`
+- [x] T109 (AC-103) Label a tile as not linked when it cannot resolve a marking's members
+  - Files: `packages/core/src/markings/applicability.ts`, `packages/core/src/markings/applicability.test.ts`, `packages/core/src/index.ts`
   - Failing test: `applicability.test.ts`: when a tile's cube or view cannot resolve a predicate member, the tile renders unmarked with a "not linked" label and no query error; join-path applicability is checked with `/v1/dry-run` (AC-103).
   - Depends on: T101
+  - Done 2026-09-20. AC-103 ticked.
+  - **Both failing states are about what the user is told, and they are the two ways of telling them badly.** A query error blames them for something they did not do — the marking is fine, the tile is fine, they simply do not meet. Silence is worse: a tile sitting unbrushed among brushed ones looks like a tile with *nothing marked in it*, which is a different and wrong answer. So the check runs before a query is sent, not after one fails.
+  - **The label names the missing members.** "Not linked" alone says the dashboard is not doing what was expected and nothing about why; the member name turns it into something fixable, usually a missing join. Every missing member is listed, because two missing joins are a different conversation from one.
+  - **A caveat recorded from the research, and it is a security one.** `docs/research/cube/access-control.md` says `/v1/dry-run` returns "the normalized queries from *before* RLS and `queryRewrite`", so a member a security context would hide still looks resolvable. Fine for *linking*, which asks whether a join path exists — but **this must never be read as an authorisation check**, and the module says so.
+  - **Mutation testing found dead code.** An early return for the empty-marking case turned out to change nothing: an empty marking names no members, so the general path already reports it linked. Removed, with the reasoning kept on the line that actually does the work and the behaviour still held by a test.
 - [ ] T110 (AC-104) Obtain the marked share with one extra query per tile and keep the base result cached
   - Files: `packages/web/src/query/markedShare.ts`, `packages/web/src/query/markedShare.test.ts`
   - Failing test: `markedShare.test.ts`: a marking change issues at most one additional query per tile and does not re-fetch the base result (AC-104).

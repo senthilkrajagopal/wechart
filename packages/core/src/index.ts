@@ -84,6 +84,8 @@ export {
   type RangeModifiers,
 } from './markings/range';
 
+export { markingApplicability, type Applicability } from './markings/applicability';
+
 export {
   MARKING_ITEM_LIMIT,
   addItemsWithinLimit,
