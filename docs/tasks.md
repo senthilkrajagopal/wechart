@@ -132,6 +132,9 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Recording never fails a chart that loaded. A test asserts a load still returns 200 when the log write throws — observability that can break the thing it observes is worse than none.
   - Its own table, not `documents`: this is append-only and read by recency, so the only index is `created_at DESC` (`research/db-access.md`).
   - Still to wire: the Jobs **route** renders `QueryLog` against `/api/jobs/queries`. The component and the endpoint both exist and are tested; joining them belongs with the Jobs surface work at T155–T158.
+  - **Wired 2026-09-21, found while building T137:** AC-016 had been ticked on the component's and the endpoint's tests alone. The Jobs workspace rendered nothing, which is exactly the rule in `ac-ticks-need-the-real-surface`.
+    - `workspaces/jobs/JobsPage.tsx` fetches `/api/jobs/queries`, refetching when the workspace opens, and renders `QueryLog`. It is mounted as the Jobs workspace's content.
+    - `e2e/jobs.spec.ts` (1 in each browser): open the seeded dashboard, then `/jobs` lists an `orders.count` query with its duration and source. It failed first, with no Jobs heading, then passed.
 
 ## F3. Explore: folders, catalog and search
 
