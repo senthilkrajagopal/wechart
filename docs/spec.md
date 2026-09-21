@@ -281,7 +281,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: another marking is cleared, or the marking survives.
 - [x] AC-095 WHEN a marking changes, THE SYSTEM SHALL update every tile that uses it or is limited by it, on every page tab of the dashboard (direction.md rule 48).
       Fails when: a tile on another page tab still shows the previous marking state when opened.
-- [ ] AC-096 WHEN a tile shows a marking, THE SYSTEM SHALL draw marked items in their own colour with an outline in the marking's colour and fade unmarked items (direction.md rule 49).
+- [x] AC-096 WHEN a tile shows a marking, THE SYSTEM SHALL draw marked items in their own colour with an outline in the marking's colour and fade unmarked items (direction.md rule 49).
       Fails when: unmarked items render at full strength, or marked items carry no outline.
 - [ ] AC-097 WHEN an item is partly marked and its measure is additive, THE SYSTEM SHALL draw the marked share from the baseline at full strength and fade the remainder; WHEN the measure is not additive, THE SYSTEM SHALL draw the whole item with a pattern and show the marked and total values in its tooltip (direction.md rule 49; `[docs/inputs §11]`).
       Fails when: a partial average or distinct count is drawn as a sub-length, or a partly marked sum shows no marked share.

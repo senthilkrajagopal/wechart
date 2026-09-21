@@ -34,3 +34,10 @@ export { dragGesture, type DragEvent, type DragGesture } from './interaction/dra
 export { stripeFor, type AxisPixels, type Stripe } from './interaction/axisRange';
 export { markFromLegend, type LegendModifiers } from './interaction/legendMark';
 export { markFromPanel, panelOfTitleClick } from './interaction/panelMark';
+export {
+  MARKED_OUTLINE_PX,
+  UNMARKED_OPACITY,
+  markedItemStyle,
+  type ItemStyle,
+  type TileMarking,
+} from './marking/render';
