@@ -1,0 +1,391 @@
+import { expect, test, type Page } from '@playwright/test';
+
+/**
+ * T032 / AC-034: WHEN the editor is opened from a dashboard tile, THE SYSTEM
+ * SHALL offer a preview at the tile's own size and a preview that fills the
+ * editor, and SHALL return to the dashboard with the tile updated.
+ * Fails when: the preview ignores the tile's width and height, or the
+ * dashboard tile does not reflect the applied changes.
+ *
+ * direction.md §2: the pencil "opens the chart editor as a full-viewport
+ * overlay with '← Back to _dashboard_'"; "From view mode, the pencil switches
+ * the dashboard into edit mode first"; "Esc = Back (keeps the changes)".
+ *
+ * The seeded chart on `tile-status` saves `bar`, with one measure and two
+ * dimensions, so `stackedBar` is a change it can legally take.
+ */
+const DASHBOARD = '/explore/dashboards/seed-root-dashboard-1';
+const TILE = '[data-tile="tile-status"]';
+
+async function open(page: Page) {
+  await page.goto(DASHBOARD);
+  await expect(page.getByRole('heading', { name: 'Company dashboard 01' })).toBeVisible();
+  await expect(page.locator(TILE).getByTestId('chart-canvas')).toHaveAttribute(
+    'data-chart-type',
+    'bar',
+  );
+}
+
+async function openEditorFromPencil(page: Page) {
+  await page.getByTestId('edit-chart-tile-status').click();
+  await expect(page.getByTestId('chart-editor-overlay')).toBeVisible();
+  // The chart it was opened on, loaded — not an empty editor, and not the
+  // dashboard's other chart. Both seeded charts are `orders.count`, so the
+  // measure alone could not tell them apart; only this one groups by category.
+  await expect(page.getByTestId('in-dimensions-products.category')).toBeVisible();
+}
+
+const overlay = (page: Page) => page.getByTestId('chart-editor-overlay');
+const discard = (page: Page) =>
+  page.getByRole('toolbar', { name: 'Dashboard editing' }).getByRole('button', { name: /Discard/ });
+
+test('the pencil opens the editor over the dashboard, in edit mode, with a way back', async ({
+  page,
+}) => {
+  await open(page);
+
+  await openEditorFromPencil(page);
+
+  // Over the dashboard: the dashboard's own heading is gone, replaced by the
+  // overlay's, and the way back names the dashboard.
+  await expect(page.getByRole('heading', { name: 'Company dashboard 01' })).toBeHidden();
+  await expect(overlay(page).getByRole('heading', { name: 'Chart editor' })).toBeVisible();
+  await expect(page.getByTestId('editor-back')).toHaveText('← Back to Company dashboard 01');
+  // The dashboard was not left for another page: the path is still the
+  // dashboard's. (The path, not the whole URL, which T196 will give an
+  // `?edit=` so a reload and the browser's Back both work.)
+  expect(new URL(page.url()).pathname).toBe(DASHBOARD);
+
+  await page.getByTestId('editor-back').click();
+
+  // Back on the dashboard — and in edit mode, which the pencil entered.
+  await expect(overlay(page)).toBeHidden();
+  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
+});
+
+test('the preview starts at the tile’s own width and height', async ({ page }) => {
+  await open(page);
+  const tile = await page.locator(TILE).boundingBox();
+  const tileChart = await page.locator(TILE).getByTestId('chart-canvas').boundingBox();
+  expect(tile).not.toBeNull();
+
+  await openEditorFromPencil(page);
+
+  const frame = page.getByTestId('preview-frame');
+  await expect(frame).toHaveAttribute('data-size', 'actual');
+  const drawn = await frame.boundingBox();
+  // The criterion's first failing state: "the preview ignores the tile's
+  // width and height". Within a pixel, for sub-pixel rounding.
+  expect(Math.abs((drawn?.width ?? 0) - (tile?.width ?? 0))).toBeLessThanOrEqual(1);
+  expect(Math.abs((drawn?.height ?? 0) - (tile?.height ?? 0))).toBeLessThanOrEqual(1);
+
+  // And the chart inside it, not only the box: the frame is handed the tile's
+  // box outright, so comparing boxes alone could not see a chart drawn at the
+  // wrong height within it.
+  const previewChart = await frame.getByTestId('chart-canvas').boundingBox();
+  expect(Math.abs((previewChart?.height ?? 0) - (tileChart?.height ?? 0))).toBeLessThanOrEqual(1);
+});
+
+test('a tile resized in this session is previewed at its new height', async ({ page }) => {
+  /**
+   * The chart's height used to come from the saved dashboard, not the
+   * session's, so a tile made taller and then opened had a frame of the new
+   * size with the chart drawn at the old height inside it.
+   */
+  await open(page);
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.locator(TILE).focus();
+  await page.keyboard.press('Shift+ArrowDown');
+  await page.keyboard.press('Shift+ArrowDown');
+  const tileChart = await page.locator(TILE).getByTestId('chart-canvas').boundingBox();
+
+  await page.locator(TILE).focus();
+  await page.keyboard.press('e');
+  await expect(overlay(page)).toBeVisible();
+
+  const previewChart = await page
+    .getByTestId('preview-frame')
+    .getByTestId('chart-canvas')
+    .boundingBox();
+  expect(Math.abs((previewChart?.height ?? 0) - (tileChart?.height ?? 0))).toBeLessThanOrEqual(1);
+});
+
+test('Fit fills the editor, and Actual size goes back to the tile', async ({ page }) => {
+  await open(page);
+  const tile = await page.locator(TILE).boundingBox();
+  await openEditorFromPencil(page);
+  const frame = page.getByTestId('preview-frame');
+
+  await page.getByRole('button', { name: 'Fit' }).click();
+  await expect(frame).toHaveAttribute('data-size', 'fit');
+  const fitted = await frame.boundingBox();
+  const area = await page.getByTestId('editor-result').boundingBox();
+
+  // Fills the preview area — not merely wider than a half-width tile, which a
+  // frame filling half the editor would also be.
+  expect(fitted?.width ?? 0).toBeGreaterThan((area?.width ?? 0) * 0.9);
+  expect(fitted?.width ?? 0).toBeGreaterThan((tile?.width ?? 0) + 50);
+
+  // The tile scaled, keeping its proportions — from the first frame painted,
+  // not after a correction (the frame was measured once before the fix and
+  // read 380 where 373 was right).
+  const aspect = (tile?.height ?? 0) / (tile?.width ?? 1);
+  expect(Math.abs((fitted?.height ?? 0) - (fitted?.width ?? 0) * aspect)).toBeLessThanOrEqual(2);
+
+  // And settled. A frame whose height followed its own content could grow on
+  // every measurement; one reading could not see that, two a second apart can.
+  await page.waitForTimeout(1000);
+  const later = await frame.boundingBox();
+  expect(later?.height).toBe(fitted?.height);
+
+  await page.getByRole('button', { name: 'Actual size' }).click();
+  const actual = await frame.boundingBox();
+  expect(Math.abs((actual?.width ?? 0) - (tile?.width ?? 0))).toBeLessThanOrEqual(1);
+});
+
+test('going back shows the change on the tile', async ({ page }) => {
+  await open(page);
+  await openEditorFromPencil(page);
+
+  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await page.getByTestId('editor-back').click();
+
+  // The criterion's second failing state: "the dashboard tile does not
+  // reflect the applied changes".
+  await expect(page.locator(TILE).getByTestId('chart-canvas')).toHaveAttribute(
+    'data-chart-type',
+    'stackedBar',
+  );
+  // One change, held in the session like any other.
+  await expect(discard(page)).toHaveText('Discard (1 change)');
+});
+
+test('Discard takes the chart back as well (AC-066)', async ({ page }) => {
+  /**
+   * AC-066: "restore the dashboard, its chart specs and its settings". The
+   * chart-spec clause could not be exercised until now, because the editor
+   * was a separate page and a chart edit never passed through the session.
+   */
+  await open(page);
+  await openEditorFromPencil(page);
+  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await page.getByTestId('editor-back').click();
+  await expect(page.locator(TILE).getByTestId('chart-canvas')).toHaveAttribute(
+    'data-chart-type',
+    'stackedBar',
+  );
+
+  await discard(page).click();
+
+  await expect(page.locator(TILE).getByTestId('chart-canvas')).toHaveAttribute(
+    'data-chart-type',
+    'bar',
+  );
+});
+
+test('Esc goes back and keeps the change', async ({ page }) => {
+  await open(page);
+  await openEditorFromPencil(page);
+  await page.getByLabel('Chart type').selectOption('stackedBar');
+
+  await page.getByTestId('editor-back').focus();
+  await page.keyboard.press('Escape');
+
+  await expect(overlay(page)).toBeHidden();
+  await expect(page.locator(TILE).getByTestId('chart-canvas')).toHaveAttribute(
+    'data-chart-type',
+    'stackedBar',
+  );
+});
+
+test('going back without changing anything records nothing', async ({ page }) => {
+  /**
+   * An untouched editor is left, not saved. Recording it would put "Discard (1
+   * change)" on a dashboard exactly as it was — and that count is the only
+   * thing telling an editor they have unsaved work.
+   */
+  await open(page);
+  await openEditorFromPencil(page);
+
+  await page.getByTestId('editor-back').click();
+
+  await expect(discard(page)).toHaveText('Discard');
+});
+
+test('a chart edited once opens on that edit the second time', async ({ page }) => {
+  /**
+   * Opened from the server again, the editor would start from the saved chart
+   * and the second edit would silently replace the first.
+   */
+  await open(page);
+  await openEditorFromPencil(page);
+  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await page.getByTestId('editor-back').click();
+  await expect(overlay(page)).toBeHidden();
+
+  await openEditorFromPencil(page);
+
+  await expect(page.getByTestId('chart-type')).toHaveText('stackedBar');
+});
+
+test('Save is held back while a chart edit is waiting, and the edit is kept', async ({ page }) => {
+  /**
+   * A dashboard save cannot keep a chart edited from a tile yet (AC-183,
+   * T192). Saving regardless dropped the edit in silence and put the old
+   * chart back on the tile — AC-034's failing state, reached through Save.
+   */
+  await open(page);
+  await openEditorFromPencil(page);
+  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await page.getByTestId('editor-back').click();
+
+  const save = page
+    .getByRole('toolbar', { name: 'Dashboard editing' })
+    .getByRole('button', { name: 'Save' });
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByTestId('save-blocked')).toBeVisible();
+
+  // Pressed anyway, as a user can: aria-disabled keeps it focusable and
+  // clickable by design (the toolbar pattern), and Playwright would otherwise
+  // wait for it to become enabled rather than press it.
+  await save.click({ force: true });
+
+  // Still editing, and the edit still on the tile.
+  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
+  await expect(page.locator(TILE).getByTestId('chart-canvas')).toHaveAttribute(
+    'data-chart-type',
+    'stackedBar',
+  );
+});
+
+test('changing the chart and changing it back records nothing', async ({ page }) => {
+  // A new state object with the same content is not a change to the chart.
+  await open(page);
+  await openEditorFromPencil(page);
+  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await page.getByLabel('Chart type').selectOption('bar');
+
+  await page.getByTestId('editor-back').click();
+
+  await expect(discard(page)).toHaveText('Discard');
+});
+
+test('Esc straight after choosing a type goes back and keeps it', async ({ page }) => {
+  // The realistic case: focus still on the list just used, not on Back.
+  await open(page);
+  await openEditorFromPencil(page);
+  const picker = page.getByLabel('Chart type');
+  // Focused explicitly and checked: choosing an option does not move focus by
+  // itself, so without this the test would press Esc from the Back button —
+  // the same as the test above, not the case this one names.
+  await picker.focus();
+  await picker.selectOption('stackedBar');
+  await expect(picker).toBeFocused();
+
+  await page.keyboard.press('Escape');
+
+  await expect(overlay(page)).toBeHidden();
+  await expect(page.locator(TILE).getByTestId('chart-canvas')).toHaveAttribute(
+    'data-chart-type',
+    'stackedBar',
+  );
+});
+
+test('Esc that closes the search palette leaves the editor open', async ({ page }) => {
+  /**
+   * The palette opens over the editor. Esc was heard by both, so closing the
+   * palette also went back from the editor, applying the draft.
+   */
+  await open(page);
+  await openEditorFromPencil(page);
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
+  await expect(page.getByRole('dialog', { name: /search/i })).toBeVisible();
+
+  await page.keyboard.press('Escape');
+
+  await expect(page.getByRole('dialog', { name: /search/i })).toBeHidden();
+  await expect(overlay(page)).toBeVisible();
+});
+
+test('going back returns focus to what opened the editor', async ({ page }) => {
+  // The overlay replaces the dashboard, so its opener is gone by the time the
+  // editor closes; focus fell to the page and a keyboard user lost their place.
+  await open(page);
+  await openEditorFromPencil(page);
+  await page.getByTestId('editor-back').click();
+  await expect(page.getByTestId('edit-chart-tile-status')).toBeFocused();
+
+  await page.locator(TILE).focus();
+  await page.keyboard.press('e');
+  await expect(overlay(page)).toBeVisible();
+  await page.getByTestId('editor-back').click();
+  await expect(page.locator(TILE)).toBeFocused();
+});
+
+test('a tile on a later tab is still on screen, and focused, after going back', async ({
+  page,
+}) => {
+  /**
+   * A tab group's open tab is its own state. When the overlay replaced the
+   * dashboard, that state went with it, so the group came back on its first
+   * tab: the tile just edited was not on screen, and focus had nowhere to go.
+   */
+  await page.goto('/explore/dashboards/seed-dashboard-recommended');
+  await page.getByRole('tab', { name: 'Chart', exact: true }).click();
+  const tabbed = page.locator('[data-tile="tile-tabbed"]');
+  await expect(tabbed.getByTestId('chart-canvas')).toBeVisible();
+
+  await page.getByTestId('edit-chart-tile-tabbed').click();
+  await expect(overlay(page)).toBeVisible();
+  await page.getByTestId('editor-back').click();
+
+  await expect(tabbed.getByTestId('chart-canvas')).toBeVisible();
+  await expect(page.getByTestId('edit-chart-tile-tabbed')).toBeFocused();
+});
+
+test('the dashboard is where it was scrolled to, after going back', async ({ page }) => {
+  // AC-067: "either scroll position resets after a re-render". An overlay that
+  // unmounted the dashboard brought it back at the top.
+  await open(page);
+  // In edit mode first. The pencil enters it, and edit mode lays the canvas
+  // out differently (the edit bar, the Add slots between tiles), so a scroll
+  // position taken in view mode is not comparable with one taken after.
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const canvas = page.getByTestId('canvas-scroll');
+  await canvas.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  const before = await canvas.evaluate((element) => element.scrollTop);
+  expect(before).toBeGreaterThan(0);
+
+  await page.getByTestId('edit-chart-tile-region').click();
+  await expect(overlay(page)).toBeVisible();
+  await page.getByTestId('editor-back').click();
+  await expect(overlay(page)).toBeHidden();
+
+  expect(await canvas.evaluate((element) => element.scrollTop)).toBe(before);
+});
+
+test('a chart edited from its tile keeps its number format there', async ({ page }) => {
+  /**
+   * Formats were applied to the saved charts before a draft replaced one, so a
+   * currency tile read "76,900" after Back where the preview had just shown
+   * "$76,900.00".
+   */
+  await page.goto('/explore/dashboards/seed-dashboard-formats');
+  const revenue = page.locator('[data-tile="tile-revenue"]');
+  await expect(revenue.getByTestId('chart-canvas')).toBeVisible();
+
+  await page.getByTestId('edit-chart-tile-revenue').click();
+  await expect(overlay(page)).toBeVisible();
+  await page.getByLabel('Chart type').selectOption('hbar');
+  await page.getByTestId('editor-back').click();
+  await expect(revenue.getByTestId('chart-canvas')).toHaveAttribute('data-chart-type', 'hbar');
+
+  await expect(
+    revenue
+      .locator('svg text')
+      .filter({ hasText: /^\$[\d,.KMB]+$/ })
+      .first(),
+  ).toBeVisible();
+});

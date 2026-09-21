@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 
 /**
  * The dashboard edit bar (AC-053, direction.md section 2).
@@ -16,6 +16,13 @@ export interface EditBarProps {
   readonly onRedo: () => void;
   readonly onDiscard: () => void;
   readonly onSave: () => void;
+  /**
+   * Why Save is held back, when it is — shown beside it and tied to it for
+   * assistive technology. A disabled control with no explanation is the most
+   * frustrating kind (T114): nobody can tell whether it is broken, forbidden,
+   * or waiting on something they have not done.
+   */
+  readonly saveBlocked?: string | undefined;
 }
 
 /**
@@ -34,6 +41,8 @@ interface Control {
   readonly disabled: boolean;
   readonly run: () => void;
   readonly className?: string;
+  /** The id of the text explaining why the control is disabled. */
+  readonly describedBy?: string;
 }
 
 export function EditBar({
@@ -44,15 +53,23 @@ export function EditBar({
   onRedo,
   onDiscard,
   onSave,
+  saveBlocked,
 }: EditBarProps) {
   const [focused, setFocused] = useState(0);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  const reasonId = useId();
 
   const controls: readonly Control[] = [
     { label: 'Undo', disabled: !canUndo, run: onUndo },
     { label: 'Redo', disabled: !canRedo, run: onRedo },
     { label: discardLabel(changes), disabled: changes === 0, run: onDiscard },
-    { label: 'Save', disabled: false, run: onSave, className: 'edit-bar__save' },
+    {
+      label: 'Save',
+      disabled: saveBlocked !== undefined,
+      run: onSave,
+      className: 'edit-bar__save',
+      ...(saveBlocked === undefined ? {} : { describedBy: reasonId }),
+    },
   ];
 
   /**
@@ -81,32 +98,44 @@ export function EditBar({
   };
 
   return (
-    <div role="toolbar" aria-label="Dashboard editing" className="edit-bar">
-      {controls.map((control, index) => (
-        <button
-          key={control.label.startsWith('Discard') ? 'discard' : control.label}
-          type="button"
-          ref={(node) => {
-            buttons.current[index] = node;
-          }}
-          /**
-           * `aria-disabled`, not `disabled`: a toolbar item that drops out of
-           * the tab order when it has nothing to do makes the bar's shape
-           * change under the user, and AC-053 asks that these controls be
-           * *there*. The handler is what refuses.
-           */
-          aria-disabled={control.disabled}
-          tabIndex={index === focused ? 0 : -1}
-          className={control.className}
-          onFocus={() => setFocused(index)}
-          onKeyDown={(event) => onKeyDown(event, index)}
-          onClick={() => {
-            if (!control.disabled) control.run();
-          }}
-        >
-          {control.label}
-        </button>
-      ))}
-    </div>
+    <>
+      <div role="toolbar" aria-label="Dashboard editing" className="edit-bar">
+        {controls.map((control, index) => (
+          <button
+            key={control.label.startsWith('Discard') ? 'discard' : control.label}
+            type="button"
+            ref={(node) => {
+              buttons.current[index] = node;
+            }}
+            /**
+             * `aria-disabled`, not `disabled`: a toolbar item that drops out of
+             * the tab order when it has nothing to do makes the bar's shape
+             * change under the user, and AC-053 asks that these controls be
+             * *there*. The handler is what refuses.
+             */
+            aria-disabled={control.disabled}
+            aria-describedby={control.describedBy}
+            tabIndex={index === focused ? 0 : -1}
+            className={control.className}
+            onFocus={() => setFocused(index)}
+            onKeyDown={(event) => onKeyDown(event, index)}
+            onClick={() => {
+              if (!control.disabled) control.run();
+            }}
+          >
+            {control.label}
+          </button>
+        ))}
+      </div>
+      {/* Outside the toolbar: a toolbar holds controls, and arrow keys moving
+        through it should not land on a sentence. */}
+      {/* Always in the document, with its text changing: a live region that
+          appears together with its words is announced unreliably, and
+          someone returning from the chart editor, with focus on a tile,
+          would otherwise not learn that Save is now held back. */}
+      <p id={reasonId} className="edit-bar__blocked" data-testid="save-blocked" role="status">
+        {saveBlocked ?? ''}
+      </p>
+    </>
   );
 }

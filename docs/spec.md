@@ -37,7 +37,7 @@ Traces to: `[R2]`, `[docs/inputs §8]`, direction.md §2.
 
 - [x] AC-001 WHEN the application loads, THE SYSTEM SHALL show a top bar whose workspace switcher lists exactly Explore, Model, Data sources, Jobs, Schedules and Security.
       Fails when: the switcher shows a "Dashboards" entry, or any of the six entries is absent.
-- [x] AC-002 WHEN the user opens a workspace, a dashboard, a chart or a model file, THE SYSTEM SHALL change the URL so that reloading it restores the same surface and the same selected object.
+- [ ] AC-002 WHEN the user opens a workspace, a dashboard, a chart or a model file, THE SYSTEM SHALL change the URL so that reloading it restores the same surface and the same selected object.
       Fails when: after reload the application shows a different workspace, dashboard, chart or file than the URL names.
 - [x] AC-003 WHEN the user switches the theme, THE SYSTEM SHALL re-render the current surface in the other theme without changing the route or losing scroll position.
       Fails when: the route changes, the scroll position resets, or any element keeps the previous theme's background colour after the switch.
@@ -121,7 +121,7 @@ Traces to: `[docs/inputs §2, §3]`, `[R2]`, direction.md §6, rules 8–10, 29�
       Fails when: the type reverts to the recommendation after a field change.
 - [x] AC-033 WHEN the chart's fields cannot produce the chosen type, THE SYSTEM SHALL show what is missing, naming the well and the member type needed.
       Fails when: the chart renders empty axes with no message, or the message does not name what is missing.
-- [ ] AC-034 WHEN the editor is opened from a dashboard tile, THE SYSTEM SHALL offer a preview at the tile's own size and a preview that fills the editor, and SHALL return to the dashboard with the tile updated.
+- [x] AC-034 WHEN the editor is opened from a dashboard tile, THE SYSTEM SHALL offer a preview at the tile's own size and a preview that fills the editor, and SHALL return to the dashboard with the tile updated.
       Fails when: the preview ignores the tile's width and height, or the dashboard tile does not reflect the applied changes.
 - [x] AC-035 WHEN the user changes the chart in the editor, THE SYSTEM SHALL support undo and redo of every change made since the editor opened, and a "Discard changes" that restores the chart as it was.
       Fails when: any change cannot be undone, or Discard leaves a change applied.

@@ -548,15 +548,37 @@ describe('the dashboard settings page', () => {
   });
 
   it('keeps the dashboard underneath it out of the way', async () => {
-    // Full-viewport, like the chart editor: the dashboard is not a backdrop to
-    // click through by accident.
+    /**
+     * Full-viewport, like the chart editor: the dashboard is not a backdrop to
+     * click through by accident.
+     *
+     * Changed at T032, deliberately. This used to assert that the tiles were
+     * gone from the document, because the overlay replaced the dashboard. That
+     * unmounted it, so every tab group reopened on its first tab and both
+     * panes returned to the top when the overlay closed (AC-067's failing
+     * state). The dashboard now stays mounted beneath, and what this test is
+     * for is asserted directly instead: nothing under the overlay can be
+     * clicked or focused, or is presented to assistive technology.
+     */
     show();
     // A positive control first: asserting an absence with nothing to compare
     // against would stay green if the fixture simply stopped making tiles.
-    expect(screen.queryAllByTestId('grid-item').length).toBeGreaterThan(0);
+    const tiles = screen.queryAllByTestId('grid-item');
+    expect(tiles.length).toBeGreaterThan(0);
 
     await openSettings();
 
-    expect(screen.queryAllByTestId('grid-item')).toHaveLength(0);
+    const covered = screen.queryAllByTestId('grid-item');
+    // Still there, beneath — which is the point of the change.
+    expect(covered).toHaveLength(tiles.length);
+    for (const tile of covered) {
+      // Inert: it cannot be clicked or focused.
+      expect(tile.closest('[inert]')?.hasAttribute('inert')).toBe(true);
+      // Hidden from assistive technology.
+      expect(tile.closest('[inert]')?.getAttribute('aria-hidden')).toBe('true');
+    }
+    // And none of them is reachable by role, which is how people using
+    // assistive technology find things.
+    expect(screen.queryAllByRole('button', { name: 'Edit' })).toHaveLength(0);
   });
 });

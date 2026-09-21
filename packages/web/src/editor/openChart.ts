@@ -88,6 +88,20 @@ export async function loadEditorState(
   chartId: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<EditorState> {
+  return (await loadChart(chartId, fetchImpl)).state;
+}
+
+/**
+ * The chart as stored, and the editor state it opens with. For a caller that
+ * will write the edit back (T032's overlay): the state alone cannot be, since
+ * it holds only what the editor edits — see `chartDocumentWith`.
+ *
+ * Refuses exactly as `loadEditorState` does, which is a thin wrapper over it.
+ */
+export async function loadChart(
+  chartId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ readonly document: ChartDocument; readonly state: EditorState }> {
   const response = await fetchImpl(`/api/documents/chart/${encodeURIComponent(chartId)}`);
 
   if (!response.ok) {
@@ -100,7 +114,8 @@ export async function loadEditorState(
   }
 
   const stored = (await response.json()) as { readonly body?: unknown };
-  return editorStateOf(readChartDocument(stored.body));
+  const document = readChartDocument(stored.body);
+  return { document, state: editorStateOf(document) };
 }
 
 /** The server's own explanation, when its error body carries one. */
@@ -112,6 +127,95 @@ async function reasonFrom(response: Response): Promise<string | undefined> {
     // Not JSON, or empty: there is no reason to pass on.
     return undefined;
   }
+}
+
+/**
+ * The editor's state written back onto the chart it was loaded from — the
+ * inverse of `editorStateOf` (T032; T192 saves what this returns).
+ *
+ * **Merged, never rebuilt.** `EditorState` holds only what the editor edits;
+ * the document also carries `encoding`, its title, owner, folder and the
+ * dashboard it belongs to. Built fresh from the state, those would all be
+ * dropped — a chart leaving its folder or its dashboard on save, the shape of
+ * the `dashboardOf` data loss at T075. So every field is the loaded one unless
+ * the editor edits it, and loading then writing back unchanged gives back the
+ * identical document.
+ *
+ * **A type only if the user chose one.** A present type *means* a choice, and
+ * `editorStateOf` loads one as manual. A chart following the recommendation is
+ * written with none — including one that had a type and was put back to
+ * recommended, which must not reopen pinned to the type it left.
+ */
+export function chartDocumentWith(loaded: ChartDocument, state: EditorState): ChartDocument {
+  // Every field of the loaded chart first, known to this build or not.
+  const chart: Record<string, unknown> = {
+    ...loaded.chart,
+    source: { ...loaded.chart.source, cube: state.spec.cube },
+    wells: {
+      measures: [...state.spec.measures],
+      dimensions: [...state.spec.dimensions],
+      timeDimensions: [...state.spec.timeDimensions],
+    },
+    options: state.options,
+  };
+
+  const chosen = state.chartType.manual;
+  if (chosen === null) delete chart['chartType'];
+  else chart['chartType'] = chosen;
+
+  // The editor holds "no settings" as {}; a chart that had none keeps none,
+  // so writing an unchanged chart back really does give the same document.
+  if (Object.keys(state.options).length === 0 && loaded.chart.options === undefined) {
+    delete chart['options'];
+  }
+
+  return { ...loaded, chart: chart as unknown as ChartDocument['chart'] };
+}
+
+/**
+ * Whether going from `opened` to `now` changes what would be written for this
+ * chart (T032).
+ *
+ * By content, not identity. Changing a chart and changing it back — choosing
+ * another type, then the original — gives a new state object with the same
+ * content, and the editor's history rightly treats that as a change. Going
+ * back to the dashboard should not: it would put "Discard (1 change)" on a
+ * dashboard exactly as it was, and that count is what tells an editor they
+ * have unsaved work. The settings page draws the same line, structurally.
+ *
+ * Both sides are written through `chartDocumentWith` and compared in a
+ * canonical form. Plain JSON was not exact, as an earlier version of this
+ * comment claimed: key order inside the options follows the order settings
+ * were made, so the same settings made in another order read as a change.
+ */
+export function changesChart(
+  document: ChartDocument,
+  opened: EditorState,
+  now: EditorState,
+): boolean {
+  if (Object.is(opened, now)) return false;
+
+  return (
+    canonical(chartDocumentWith(document, opened)) !== canonical(chartDocumentWith(document, now))
+  );
+}
+
+/**
+ * A value as JSON with every object's keys in sorted order, so two objects
+ * with the same content compare equal however their keys were added. Arrays
+ * keep their order: the order of fields in a well is meaningful, and changing
+ * it is a change.
+ */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, part: unknown) =>
+    part !== null && typeof part === 'object' && !Array.isArray(part)
+      ? Object.fromEntries(
+          Object.entries(part as Record<string, unknown>).sort(([a], [b]) =>
+            a < b ? -1 : a > b ? 1 : 0,
+          ),
+        )
+      : part,
+  );
 }
 
 /**

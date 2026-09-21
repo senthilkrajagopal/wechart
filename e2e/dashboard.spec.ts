@@ -28,7 +28,7 @@ test('opens in view mode with its saved pages, tiles and settings', async ({ pag
 
   // View mode, not edit mode: the criterion fails if it opens ready to edit.
   await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
 
   // Both saved page tabs.
   const pages = page.getByRole('tablist', { name: 'Pages' });
@@ -60,7 +60,7 @@ test('opens the other saved page tab', async ({ page }) => {
 
 test('activating Edit reveals the edit bar and the sidebar', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const bar = page.getByRole('toolbar', { name: 'Dashboard editing' });
   await expect(bar.getByRole('button')).toHaveText(['Undo', 'Redo', 'Discard', 'Save']);
@@ -77,7 +77,7 @@ test('the canvas is actually painted with a 12-column grid while editing', async
   // In view mode the gridlines would be chrome over the data.
   expect(before).toBe('none');
 
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const painted = await canvas.evaluate((node) => getComputedStyle(node).backgroundImage);
   // The data- attribute is the switch; this is the painting. A rule that was
@@ -108,7 +108,7 @@ test('the canvas is actually painted with a 12-column grid while editing', async
 
 test('dragging a tile edge resizes it and shows the live readout', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const tile = page.locator('[data-tile="tile-status"]');
   const before = (await tile.boundingBox())?.width ?? 0;
@@ -160,7 +160,7 @@ test('dragging a tile edge resizes it and shows the live readout', async ({ page
 
 test('dragging a tile by its grip shows a drop marker and moves it', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const page1 = page.locator('[data-container="page:overview"]');
   const idsOnPage = () =>
@@ -197,7 +197,7 @@ test('dragging a tile by its grip shows a drop marker and moves it', async ({ pa
 
 test('dropping a tile on a page tab moves it to that page', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const grip = page.getByTestId('grip-tile-notes');
   const from = await grip.boundingBox();
@@ -225,7 +225,7 @@ test('dropping a tile on a tab-group label moves it into that tab', async ({ pag
   // page tab is covered above; this is the other one.
   await open(page);
   await page.getByRole('tablist', { name: 'Pages' }).getByRole('tab', { name: 'Appendix' }).click();
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const group = page.getByRole('tablist', { name: /Tabs in/ });
   const dimensions = group.getByRole('tab', { name: 'Dimensions' });
@@ -252,7 +252,7 @@ test('dropping a tile on a tab-group label moves it into that tab', async ({ pag
 
 test('a focused tile answers all four keys the criterion names', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const tile = page.locator('[data-tile="tile-status"]');
   const page1 = page.locator('[data-container="page:overview"]');
@@ -307,22 +307,30 @@ test('a focused tile answers all four keys the criterion names', async ({ page }
 
 test('E on a focused tile opens its chart editor', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   await page.locator('[data-tile="tile-status"]').focus();
   await page.keyboard.press('e');
 
   // The fourth key. Where it lands is AC-034's business; that it opens the
-  // chart editor is this criterion's — so the editor has to have rendered,
-  // not merely the URL to have changed. A dead route would pass a URL check.
-  await expect(page).toHaveURL(/\/explore\/charts\/seed-chart-status\/edit$/);
+  // chart editor is this criterion's — so the editor has to have rendered.
+  //
+  // Since T032 it opens over the dashboard rather than navigating away, so
+  // the URL no longer changes and is not what this asserts (T196 will give it
+  // an `?edit=`). What replaces it is stronger: the editor is open on *this
+  // tile's* chart. Both seeded charts count orders, so the measure could not
+  // tell them apart; only this one groups by category. Until T191 the editor
+  // opened blank whichever chart it came from.
+  await expect(page.getByTestId('chart-editor-overlay')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Chart editor' })).toBeVisible();
-  await expect(page.getByLabel('Cube or view')).toBeVisible();
+  await expect(page.getByLabel('Cube or view')).toHaveValue('orders');
+  await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
+  await expect(page.getByTestId('in-dimensions-products.category')).toBeVisible();
 });
 
 test('the Add panel offers every element type and inserts one', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
   await sidebar.getByRole('tab', { name: 'Add' }).click();
@@ -489,8 +497,15 @@ test('the gear opens a settings page with its five sections and a way back', asy
   await expect(nav.locator('[data-section="Markings"]')).toContainText('Active');
   await expect(nav.locator('[data-section="Cross-filtering"]')).toContainText('Inactive');
 
-  // The dashboard is gone from the page, not merely covered over.
-  await expect(page.getByTestId('grid-item')).toHaveCount(0);
+  // The dashboard is out of sight and out of reach — full-viewport, as
+  // direction.md and AC-069 ask. Changed at T032: this used to assert the
+  // tiles were gone from the page, because the page replaced the dashboard.
+  // That unmounted it, so every tab group reopened on its first tab and both
+  // panes came back at the top (AC-067). It now stays mounted beneath, hidden
+  // and inert; what the user can see and reach is what is asserted.
+  await expect(page.getByTestId('grid-item')).not.toHaveCount(0);
+  await expect(page.getByTestId('grid-item').filter({ visible: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Cancel' }).click();
 
@@ -508,7 +523,7 @@ test('the gear opens a settings page with its five sections and a way back', asy
  */
 test('a section template lays out empty charts that say what they need', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
   await sidebar.getByRole('tab', { name: 'Add' }).click();
@@ -539,7 +554,7 @@ test('a section template lays out empty charts that say what they need', async (
 
 test('a tab group added to a page is wrapped in a section, and says so', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page
     .getByRole('complementary', { name: 'Edit sidebar' })
     .getByRole('tab', { name: 'Add' })
@@ -559,7 +574,7 @@ test('a tab group added to a page is wrapped in a section, and says so', async (
 
 test('a delete offers an undo in a toast, restoring the contents too', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const idsOn = () =>
     page
@@ -590,7 +605,7 @@ test('a delete offers an undo in a toast, restoring the contents too', async ({ 
 
 test('deleting a section asks, and "keep" loses nothing', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const idsOn = () =>
     page
@@ -654,7 +669,7 @@ test('a saved dashboard comes back the way it was left', async ({ page, request 
 
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: `Saveable ${unique}` })).toBeVisible();
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const idsOn = () =>
     page
@@ -679,7 +694,7 @@ test('a saved dashboard comes back the way it was left', async ({ page, request 
 
   // Leaving edit mode is the criterion's other half.
   await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
 
   // And the real test: reopen it from scratch. "Fails when: any of those is
   // missing after reopening the dashboard" — so this reloads rather than
@@ -808,7 +823,7 @@ test('the canvas and the sidebar scroll themselves, and hold position across an 
 }) => {
   await page.setViewportSize({ width: 1280, height: 420 });
   await open(page);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const canvas = page.getByTestId('canvas-scroll');
   const sidebar = page.getByTestId('sidebar-scroll');
@@ -912,7 +927,7 @@ test('a save failure does not hand the scrollbar back to the window', async ({ p
 
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: `Alerted ${unique}` })).toBeVisible();
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.getByTestId('add-header').click();
 
   // Someone else saves first, so ours is the stale one that 409s (AC-065).

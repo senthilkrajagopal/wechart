@@ -4,8 +4,9 @@ import { readChartDocument, type RenderSpec } from '@wechart/core';
 
 import { loadTile } from '../query/loadTile';
 import { META_QUERY } from '../query/meta';
-import { formatsFrom, tileChartOf, withFormats, type TileChart } from './chartSpec';
+import { formatsFrom, tileChartOf, type TileChart } from './chartSpec';
 import { DashboardView } from './DashboardView';
+import { withoutDrafts } from './edit/chartDrafts';
 import { saveDashboard } from './edit/save';
 import { DEFAULT_SETTINGS, type DashboardDocument } from './model/document';
 
@@ -78,13 +79,20 @@ export function dashboardOf(stored: StoredDocument): DashboardDocument {
    * markings would have at F10. `save.test.ts` could not see it: it builds the
    * document it sends, so the loss happened one step upstream of it.
    */
-  return {
+  /**
+   * Never with chart drafts. They belong to one edit session and are never
+   * saved (T032), so a stored body carrying them was written by something
+   * else — and read as they are, they would draw tiles from specs no query
+   * produced, and survive a Discard as part of the state the session opens
+   * with.
+   */
+  return withoutDrafts({
     ...body,
     schemaVersion: body.schemaVersion ?? 1,
     title: typeof body.title === 'string' ? body.title : 'Dashboard',
     pages: body.pages ?? [],
     settings: body.settings ?? DEFAULT_SETTINGS,
-  };
+  });
 }
 
 export interface DashboardPageProps {
@@ -184,12 +192,14 @@ function LoadedDashboard({
    * are drawn rather than while they load: no tile waits for the model, and
    * each picks its formats up when the model arrives. The same query the
    * editor uses, so the two read one cache entry.
+   *
+   * Handed to the view rather than applied here, because the view is where a
+   * chart edited from a tile replaces the saved one (T032). Applied here, they
+   * reached only the saved charts, and a drafted tile read "76,900" where the
+   * editor's preview had just shown "$76,900.00".
    */
   const meta = useQuery(META_QUERY);
-  const specs = useMemo(
-    () => withFormats(charts.data?.specs ?? {}, formatsFrom(meta.data)),
-    [charts.data, meta.data],
-  );
+  const formats = useMemo(() => formatsFrom(meta.data), [meta.data]);
 
   return (
     <>
@@ -209,17 +219,14 @@ function LoadedDashboard({
          */
         key={dashboardId}
         document={document}
-        specs={specs}
+        specs={charts.data?.specs ?? {}}
+        formats={formats}
         errors={charts.data?.errors ?? {}}
         loading={charts.isPending}
-        /**
-         * Where E on a focused tile leads (AC-057). Navigating is the route's
-         * business; what the editor then shows — a preview at the tile's own
-         * size, and the way back — is AC-034's.
-         */
-        onEditChart={(chartId) => {
-          globalThis.location.assign(`/explore/charts/${encodeURIComponent(chartId)}/edit`);
-        }}
+        // E and a tile's pencil open the chart editor over the dashboard, in
+        // the view itself (T032). They used to navigate here, a full page
+        // load that ended the edit session — so there was no dashboard to
+        // return to with the tile updated, and nothing a Discard could reach.
         onSave={(next) => {
           save.mutate(next);
         }}

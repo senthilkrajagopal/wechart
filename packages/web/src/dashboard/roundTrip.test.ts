@@ -59,6 +59,23 @@ describe('reading a dashboard for editing', () => {
     expect(read.settings).toEqual({ width: 'fixed' });
   });
 
+  it('never reads chart drafts out of a stored dashboard', () => {
+    /**
+     * Drafts belong to one edit session and are never saved (T032), so a
+     * stored body carrying them was written by something else. Read as they
+     * are, they would draw tiles from specs no query produced — and, being
+     * part of the state the session opens with, survive a Discard.
+     */
+    const smuggled = {
+      id: 'd3',
+      kind: 'dashboard' as const,
+      version: 1,
+      body: { title: 'Revenue', chartDrafts: { c1: { document: {}, drawn: { spec: {} } } } },
+    };
+
+    expect('chartDrafts' in dashboardOf(smuggled)).toBe(false);
+  });
+
   it('still supplies defaults for a dashboard saved before they existed', () => {
     const old = { id: 'd2', kind: 'dashboard' as const, version: 1, body: { title: 'Old' } };
 

@@ -1,11 +1,15 @@
 import type { RenderSpec } from '@wechart/core';
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { TileSize } from '../editor/PreviewFrame';
 import { ChartTile } from '../tiles/ChartTile';
 import { TileError } from '../tiles/TileError';
 import { TileSkeleton } from '../tiles/TileSkeleton';
 import { useDashboardColours } from './colours';
 import { AddPanel } from './edit/AddPanel';
+import { withFormats } from './chartSpec';
+import { ChartEditorOverlay } from './edit/ChartEditorOverlay';
+import { drawnWithDrafts, withDraft, withoutDrafts } from './edit/chartDrafts';
 import {
   deleteFromDashboard,
   describeDeletion,
@@ -43,6 +47,7 @@ import {
   isSection,
   isSized,
   isTabGroup,
+  isTile,
   isTileId,
   moveBy,
   moveTile,
@@ -79,11 +84,15 @@ export interface DashboardViewProps {
   /** The charts are still on their way, so tiles show a skeleton (AC-042). */
   readonly loading?: boolean;
   /**
-   * Open a tile's chart editor — what E does to the focused tile (AC-057) and
-   * where the pencil will lead. The route supplies it, because navigating is
-   * the route's business; AC-034 settles what the editor then shows.
+   * Each member's number format from the Cube model (AC-046). Applied here,
+   * after any chart edited from a tile has replaced its saved spec, so a
+   * drafted tile is formatted like every other.
    */
-  readonly onEditChart?: ((tileId: string) => void) | undefined;
+  readonly formats?: Readonly<Record<string, string>> | undefined;
+  /**
+   * Saving the dashboard. Receives it with no chart drafts on it: drafts are
+   * the session's, and a save sends the whole document (T032).
+   */
   readonly onSave: (document: DashboardDocument) => void;
 }
 
@@ -173,6 +182,8 @@ interface Affordances {
   readonly addHere?: CanvasProps['addHere'];
   /** Deleting an element from its ⋯ menu, with an undo (AC-060). */
   readonly onDelete?: ((id: string) => void) | undefined;
+  /** Opening a chart tile's chart in the editor, from its pencil (T032). */
+  readonly onEditChart?: ((tileId: string, chartId: string) => void) | undefined;
   /** Deleting one tab of a tab group, the fourth thing AC-060 names. */
   readonly onDeleteTab?: ((groupId: string, tabId: string) => void) | undefined;
   /**
@@ -263,6 +274,39 @@ function Elements({
         const chartId = element.chartId ?? '';
         return (
           <>
+            {/**
+              The pointer route into the chart editor (T032; direction.md §2:
+              "A tile's ✎ pencil opens the chart editor as a full-viewport
+              overlay"). Until now E on a focused tile in edit mode was the
+              only way in. Only on a tile bound to a chart: an empty one has
+              nothing to open.
+            */}
+            {element.kind !== 'chart' ||
+            element.chartId === undefined ||
+            affordances.onEditChart === undefined ? null : (
+              <button
+                type="button"
+                className="tile-pencil"
+                data-testid={`edit-chart-${element.id}`}
+                // What focus returns to when the editor closes. Its own
+                // attribute, not the test id: a build that stripped test ids
+                // would otherwise lose focus return without a sound.
+                data-edit-chart={element.id}
+                /**
+                 * Labelled as the tile's ⋯ menu is ("Actions for …"), from the
+                 * same source. That makes two chart tiles' pencils read alike,
+                 * as their menus already do: a chart's title lives on the chart
+                 * document, not the tile, and giving tiles distinct accessible
+                 * names is a fix for every tile control at once, not this one.
+                 */
+                aria-label={`Edit ${element.text ?? element.kind}`}
+                onClick={() => {
+                  affordances.onEditChart?.(element.id, chartId);
+                }}
+              >
+                ✎
+              </button>
+            )}
             {affordances.moveTo === undefined ? null : (
               <MoveToMenu
                 tileId={element.id}
@@ -449,6 +493,19 @@ function AddSlot({
   );
 }
 
+/**
+ * Opening a tile's chart in the editor overlay (T032): which tile and chart,
+ * the tile's height in row units as the session has it (resizes included),
+ * and where focus should return when the editor closes.
+ */
+interface OpenChart {
+  readonly tileId: string;
+  readonly chartId: string;
+  readonly rows: number | undefined;
+  /** A selector for the control that opened it: the tile for E, the pencil for a click. */
+  readonly returnTo: string;
+}
+
 /** Ids only have to be unique within a document; Date.now alone collides. */
 let counter = 0;
 
@@ -457,13 +514,110 @@ export function DashboardView({
   specs,
   errors,
   loading = false,
-  onEditChart,
+  formats,
   onSave,
 }: DashboardViewProps) {
+  /**
+   * Charts edited from a tile and held in the edit session (T032), mirrored
+   * up from it by `DraftMirror` — because the colours are assigned here,
+   * above the session, and a drafted chart has to be coloured by the same
+   * assignment as every other tile (AC-039). Assigning colours inside the
+   * session instead would lose the assignment whenever the dashboard is
+   * replaced by an overlay, so closing the settings page with a filter active
+   * would recolour every member from scratch.
+   */
+  const [drafts, setDrafts] = useState<DashboardDocument['chartDrafts']>(undefined);
+  const drawn = useMemo(
+    () =>
+      drawnWithDrafts(
+        { specs, errors: errors ?? {} },
+        { ...document, ...(drafts === undefined ? {} : { chartDrafts: drafts }) },
+      ),
+    [specs, errors, document, drafts],
+  );
+
+  // Formatted after the drafts are in, so a drafted tile is formatted too.
+  const formatted = useMemo(
+    () => (formats === undefined ? drawn.specs : withFormats(drawn.specs, formats)),
+    [drawn.specs, formats],
+  );
+
   // The assignment is held across renders, so a filter that hides a member
   // does not hand its colour to whoever is now first (AC-039).
-  const coloured = useDashboardColours(document, specs);
-  const charts: TileCharts = { specs: coloured, errors: errors ?? {}, loading };
+  const coloured = useDashboardColours(document, formatted);
+  const charts: TileCharts = { specs: coloured, errors: drawn.errors, loading };
+
+  /**
+   * The chart editor, when it is open over the dashboard (T032, AC-034). Not
+   * part of the history, for the same reason the settings page is not:
+   * opening a page is not a change to the dashboard.
+   */
+  const [editingChart, setEditingChart] = useState<{
+    readonly chartId: string;
+    readonly tile: TileSize | undefined;
+    readonly returnTo: string;
+  } | null>(null);
+
+  /**
+   * Where focus goes once the dashboard is back after the editor closes
+   * (T032). The overlay replaces the dashboard, so whatever opened it is
+   * unmounted by then, and focus fell to the page — a keyboard user who opened
+   * the editor with E lost their place. It returns to the equivalent element
+   * after the dashboard is drawn again, as the search palette returns focus to
+   * whatever opened it.
+   */
+  const returnFocus = useRef<string | null>(null);
+  useEffect(() => {
+    // Only once the editor has closed and the dashboard is drawn again.
+    if (editingChart !== null || returnFocus.current === null) return;
+    // Without scrolling: whatever opened the editor was on screen when it was
+    // used, and the dashboard is where it was left, so moving it would undo
+    // exactly what keeping it mounted preserves (AC-067).
+    globalThis.document
+      .querySelector<HTMLElement>(returnFocus.current)
+      ?.focus({ preventScroll: true });
+    returnFocus.current = null;
+  }, [editingChart]);
+
+  /**
+   * Opens a tile's chart in the editor, measuring the tile first.
+   *
+   * **Measured, not computed.** A tile stores columns, not pixels, and each
+   * section and tab group has its own nested canvas, so a nested tile's
+   * column is narrower than the page's — computing its width from `w` and the
+   * page width would be wrong for exactly the tiles inside sections. It is
+   * measured now, while it is still on screen: the overlay replaces the
+   * dashboard, tile included.
+   */
+  const openEditor = useCallback(
+    /**
+     * `rows` is the tile's height in row units *as the session has it*, passed
+     * in by the caller that holds the session. Read from the saved document
+     * here, it was the height from before any resize in this session: a tile
+     * made taller and then opened had a frame of the new size with the chart
+     * drawn at the old height inside it — the preview ignoring the tile's
+     * height, which is AC-034's failing state.
+     */
+    ({ tileId, chartId, rows, returnTo }: OpenChart) => {
+      const box = globalThis.document
+        .querySelector(`[data-tile="${CSS.escape(tileId)}"]`)
+        ?.getBoundingClientRect();
+
+      setEditingChart({
+        chartId,
+        returnTo,
+        tile:
+          box === undefined
+            ? undefined
+            : {
+                width: Math.round(box.width),
+                height: Math.round(box.height),
+                chartHeight: rows === undefined ? undefined : rows * ROW_UNIT_PX,
+              },
+      });
+    },
+    [],
+  );
 
   /**
    * Where the next insert goes (AC-058): after the selection, or into the
@@ -506,7 +660,33 @@ export function DashboardView({
     <EditChrome
       document={document}
       title={(shown) => shown.title}
-      onSave={onSave}
+      /**
+       * Never with drafts on it. The save sends the whole document, so a draft
+       * left there would be written into the dashboard's own row. Writing the
+       * edited chart itself is AC-183's (T192); until then a dashboard save
+       * does not keep a chart edited from a tile.
+       */
+      onSave={(next) => {
+        onSave(withoutDrafts(next));
+      }}
+      /**
+       * Held back while a chart edited from a tile is waiting, because a save
+       * cannot keep it yet (AC-183, T192). Saving anyway dropped the edit in
+       * silence and put the old chart back on the tile — AC-034's failing
+       * state, reached through Save.
+       *
+       * The way out has to be stated truly. Undo is linear, and every change
+       * made after a chart edit carries that edit, so undoing it undoes
+       * everything since, too; "undo that change to save the rest" was true
+       * only when the rest came first. Discard is not offered: it throws away
+       * every change in the session, not only the chart edits. T192 lifts this
+       * for dashboard-local charts.
+       */
+      saveBlocked={(shown) =>
+        shown.chartDrafts !== undefined && Object.keys(shown.chartDrafts).length > 0
+          ? 'Charts changed from their tiles can’t be saved yet. To save, undo back past those changes — anything changed after them is undone too.'
+          : undefined
+      }
       headerActions={
         <button
           type="button"
@@ -546,31 +726,78 @@ export function DashboardView({
              */
             onSave={(next) => {
               if (session.editing) session.change(next);
-              else onSave(next);
+              else onSave(withoutDrafts(next));
               setSettingsOpen(false);
             }}
           />
-        ) : null
+        ) : editingChart === null ? null : (
+          /**
+           * The chart editor over the dashboard (T032, AC-034). Going back
+           * with a change holds it as a draft on the session — one change,
+           * which Undo and Discard reach like any other (AC-066) — and going
+           * back with none records nothing.
+           */
+          <ChartEditorOverlay
+            chartId={editingChart.chartId}
+            dashboardTitle={session.document.title}
+            tile={editingChart.tile}
+            draft={session.document.chartDrafts?.[editingChart.chartId]}
+            onBack={(draft) => {
+              if (draft !== undefined) {
+                session.change(withDraft(session.document, editingChart.chartId, draft));
+              }
+              returnFocus.current = editingChart.returnTo;
+              setEditingChart(null);
+            }}
+          />
+        )
       }
       panels={(session) => ({
         add: <AddSlot session={session} where={where} />,
       })}
     >
       {(session: EditSession<DashboardDocument>) => (
-        <DashboardPages
-          session={session}
-          charts={charts}
-          onEditChart={onEditChart}
-          where={where}
-          onAim={(next) => {
-            setSelected(next.selected);
-            setAddTarget(next.addTarget);
-          }}
-          onOpenPage={setOpenPage}
-        />
+        <>
+          <DraftMirror drafts={session.document.chartDrafts} onDrafts={setDrafts} />
+          <DashboardPages
+            session={session}
+            charts={charts}
+            onEditChart={openEditor}
+            where={where}
+            onAim={(next) => {
+              setSelected(next.selected);
+              setAddTarget(next.addTarget);
+            }}
+            onOpenPage={setOpenPage}
+          />
+        </>
       )}
     </EditChrome>
   );
+}
+
+/**
+ * Mirrors the edit session's chart drafts up to `DashboardView`, which
+ * colours every tile and so has to colour drafted charts too (AC-039).
+ *
+ * The session owns the drafts — its history is what undoes and discards them
+ * — and it lives inside `EditChrome`, below where the colours are assigned.
+ * Assigning colours down here instead would lose the assignment whenever an
+ * overlay replaces the dashboard. So the drafts are copied up, and nothing
+ * above treats the copy as the truth: it is re-read from the session after
+ * every change, undo and discard.
+ */
+function DraftMirror({
+  drafts,
+  onDrafts,
+}: {
+  readonly drafts: DashboardDocument['chartDrafts'];
+  readonly onDrafts: (drafts: DashboardDocument['chartDrafts']) => void;
+}) {
+  useEffect(() => {
+    onDrafts(drafts);
+  }, [drafts, onDrafts]);
+  return null;
 }
 
 function DashboardPages({
@@ -583,7 +810,13 @@ function DashboardPages({
 }: {
   session: EditSession<DashboardDocument>;
   charts: TileCharts;
-  onEditChart?: ((tileId: string) => void) | undefined;
+  /**
+   * Open a tile's chart in the editor overlay (T032) — what E does to the
+   * focused tile (AC-057) and what the tile's pencil does. The tile id comes
+   * with the chart id, because the overlay measures the tile to preview the
+   * chart at its size; it used to be dropped on the way through.
+   */
+  onEditChart?: ((open: OpenChart) => void) | undefined;
   /** Where the next insert is aimed, owned above so the sidebar agrees. */
   where: { selected: string | null; addTarget: string | null; pageId: string };
   onAim: (next: { selected: string | null; addTarget: string | null }) => void;
@@ -624,6 +857,28 @@ function DashboardPages({
   const affordances: Affordances = {
     editing,
     charts,
+    /**
+     * A chart tile's pencil (T032). In view mode too — direction.md §2: "From
+     * view mode, the pencil switches the dashboard into edit mode first" —
+     * because the edit is held in the session until the dashboard is saved,
+     * and in view mode there is no session to hold it. `session.edit()` does
+     * nothing when already editing, so no change made so far is re-based.
+     */
+    onEditChart:
+      onEditChart === undefined
+        ? undefined
+        : (tileId, chartId) => {
+            session.edit();
+            // The height as the session has it, resizes included (see openEditor).
+            const element = elementAt(document, tileId);
+            onEditChart({
+              tileId,
+              chartId,
+              rows: element !== null && isTile(element) ? element.h : undefined,
+              // Back returns to the pencil it was opened from.
+              returnTo: `[data-edit-chart="${CSS.escape(tileId)}"]`,
+            });
+          },
     // A change to the dashboard goes through the session rather than into
     // local state, which is what makes it undoable and what Discard reverts
     // (AC-060, AC-066).
@@ -676,7 +931,16 @@ function DashboardPages({
             // saved copy: they are the same today and will not be once a tile
             // can be added (AC-058) or duplicated (AC-062).
             const chartId = chartIdOf(document, tile.id);
-            if (chartId !== undefined) onEditChart?.(chartId);
+            // The height as the session has it, resizes included; Back returns
+            // to the tile, which is where E was pressed.
+            if (chartId !== undefined) {
+              onEditChart?.({
+                tileId: tile.id,
+                chartId,
+                rows: tile.h,
+                returnTo: `[data-tile="${CSS.escape(tile.id)}"]`,
+              });
+            }
             return;
           }
 

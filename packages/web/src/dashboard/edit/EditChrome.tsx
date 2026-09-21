@@ -35,6 +35,13 @@ export interface EditSession<T> {
    * would be worse than one.
    */
   readonly undo: () => void;
+  /**
+   * Enter edit mode, as the Edit button does — for a control inside the
+   * dashboard that needs it, such as a tile's pencil (T032, direction.md §2:
+   * "From view mode, the pencil switches the dashboard into edit mode
+   * first").
+   */
+  readonly edit: () => void;
 }
 
 /**
@@ -84,6 +91,14 @@ export interface EditChromeProps<T> {
    * gear is one (AC-069, direction.md puts it there for both).
    */
   readonly headerActions?: ReactNode;
+  /**
+   * Why the document cannot be saved as it stands, or undefined when it can.
+   * While there is a reason, Save is held back with the reason beside it,
+   * rather than saving what it can and leaving edit mode — which drops the
+   * rest in silence. A dashboard holding a chart edited from a tile is one
+   * such document until those edits can be written (T032, T192).
+   */
+  readonly saveBlocked?: ((document: T) => string | undefined) | undefined;
   readonly children: (session: EditSession<T>) => ReactNode;
 }
 
@@ -94,6 +109,7 @@ export function EditChrome<T>({
   panels,
   overlay,
   headerActions,
+  saveBlocked,
   children,
 }: EditChromeProps<T>) {
   const [editing, setEditing] = useState(false);
@@ -110,6 +126,8 @@ export function EditChrome<T>({
    */
   const current = editing ? history.present.document : opened;
   const changes = editing ? history.present.changes : 0;
+  // Only while editing: view mode has no Save to hold back.
+  const blocked = editing ? saveBlocked?.(current) : undefined;
 
   const session: EditSession<T> = {
     editing,
@@ -122,6 +140,14 @@ export function EditChrome<T>({
     // The very same step the edit bar's Undo takes.
     undo: () => {
       setHistory(undo);
+    },
+    /**
+     * Only from view mode. Entering starts a fresh history, so entering again
+     * while editing would keep the document but move the baseline under it:
+     * every change so far would stay applied and stop being discardable.
+     */
+    edit: () => {
+      if (!editing) start();
     },
   };
 
@@ -142,52 +168,79 @@ export function EditChrome<T>({
    * overlay must not have.
    */
   const shown = overlay?.(session);
-  if (isValidElement(shown)) {
-    // The session stays mounted around it, so an overlay that changes the
-    // document is a change to this session and not to a copy of it.
-    return <div className="dashboard dashboard--overlaid">{shown}</div>;
-  }
+  const overlaid = isValidElement(shown);
 
+  /**
+   * The overlay covers the dashboard; it does not replace it.
+   *
+   * It used to be returned *instead of* the dashboard, which unmounted the
+   * whole dashboard for as long as an overlay was open. Coming back, every tab
+   * group reopened on its first tab — so a tile edited from a later tab was
+   * not even on screen on return (T032, AC-034) and focus had nowhere to go —
+   * and both panes were back at the top, which is AC-067's failing state. The
+   * settings page had always done this; the chart editor made it the main
+   * authoring path.
+   *
+   * So the dashboard stays exactly where it is in the tree — the same second
+   * child whether or not an overlay is showing, so React never remounts it —
+   * and keeps its geometry: it is hidden with visibility, which changes no
+   * layout, so its scroll positions are still valid when it is shown again. It
+   * is inert and hidden from assistive technology while covered, so there is
+   * still one bar and one meaning of Save that anyone can reach.
+   */
   return (
-    <div className="dashboard" data-editing={editing ? 'true' : undefined}>
-      <header className="dashboard__header">
-        <h1>{title(current)}</h1>
-        {headerActions}
-        {editing ? (
-          <EditBar
-            changes={changes}
-            canUndo={canUndo(history)}
-            canRedo={canRedo(history)}
-            onUndo={() => setHistory(undo)}
-            onRedo={() => setHistory(redo)}
-            onDiscard={() => setHistory(discard)}
-            onSave={() => {
-              /**
-               * Saving leaves edit mode, which is the second half of AC-065.
-               * The session is re-seeded from what was saved, so the change
-               * count starts again at nothing — otherwise "Discard (4
-               * changes)" would still be offering to undo work that is now
-               * safely stored.
-               */
-              onSave(current);
-              setHistory(historyOf<Snapshot<T>>({ document: current, changes: 0 }));
-              setEditing(false);
-            }}
-          />
-        ) : (
-          <button type="button" onClick={start}>
-            Edit
-          </button>
-        )}
-      </header>
+    <>
+      {overlaid ? <div className="dashboard dashboard--overlaid">{shown}</div> : null}
+      <div
+        className={overlaid ? 'dashboard dashboard--under-overlay' : 'dashboard'}
+        data-editing={editing ? 'true' : undefined}
+        inert={overlaid}
+        aria-hidden={overlaid ? true : undefined}
+      >
+        <header className="dashboard__header">
+          <h1>{title(current)}</h1>
+          {headerActions}
+          {editing ? (
+            <EditBar
+              changes={changes}
+              canUndo={canUndo(history)}
+              canRedo={canRedo(history)}
+              onUndo={() => setHistory(undo)}
+              onRedo={() => setHistory(redo)}
+              onDiscard={() => setHistory(discard)}
+              saveBlocked={blocked}
+              onSave={() => {
+                // Refused here too, not only by the button: nothing that reaches
+                // Save by another route should save a document that cannot be
+                // kept whole.
+                if (blocked !== undefined) return;
+                /**
+                 * Saving leaves edit mode, which is the second half of AC-065.
+                 * The session is re-seeded from what was saved, so the change
+                 * count starts again at nothing — otherwise "Discard (4
+                 * changes)" would still be offering to undo work that is now
+                 * safely stored.
+                 */
+                onSave(current);
+                setHistory(historyOf<Snapshot<T>>({ document: current, changes: 0 }));
+                setEditing(false);
+              }}
+            />
+          ) : (
+            <button type="button" onClick={start}>
+              Edit
+            </button>
+          )}
+        </header>
 
-      <div className="dashboard__body">
-        {/* The canvas scrolls on its own, so rule 40 has a position to keep. */}
-        <div className="dashboard__canvas" data-testid="canvas-scroll">
-          {children(session)}
+        <div className="dashboard__body">
+          {/* The canvas scrolls on its own, so rule 40 has a position to keep. */}
+          <div className="dashboard__canvas" data-testid="canvas-scroll">
+            {children(session)}
+          </div>
+          {editing ? <EditSidebar panels={panels?.(session)} /> : null}
         </div>
-        {editing ? <EditSidebar panels={panels?.(session)} /> : null}
       </div>
-    </div>
+    </>
   );
 }

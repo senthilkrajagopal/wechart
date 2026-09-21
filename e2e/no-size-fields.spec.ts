@@ -47,7 +47,7 @@ async function sizeFields(page: Page): Promise<string[]> {
 
 test('a dashboard in edit mode offers no width or height field', async ({ page }) => {
   await page.goto(DASHBOARD);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
 
   expect(await sizeFields(page)).toEqual([]);
@@ -55,7 +55,7 @@ test('a dashboard in edit mode offers no width or height field', async ({ page }
 
 test('every panel of the edit sidebar offers no width or height field', async ({ page }) => {
   await page.goto(DASHBOARD);
-  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
   for (const panel of ['Add', 'Outline', 'Properties']) {

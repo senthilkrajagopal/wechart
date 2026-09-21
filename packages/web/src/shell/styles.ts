@@ -233,6 +233,7 @@ main { padding: var(--wc-surface-padding); }
    would fix that and take the window's scrollbar away from every other
    workspace, including the long Explore list AC-003 scrolls. */
 main:has(.dashboard) {
+  position: relative;
   height: calc(100vh - var(--wc-app-bar-height));
   display: flex;
   flex-direction: column;
@@ -284,7 +285,21 @@ main:has(.dashboard) {
    the place of the dashboard rather than floating over it, so there is one bar
    on screen and one meaning of Save. .dashboard--overlaid is the same height
    box as .dashboard, so the page inherits the pane sizing rule 40 set up. */
-.dashboard--overlaid { display: flex; flex-direction: column; min-height: 0; }
+/* An overlay covers the dashboard rather than replacing it (T032): it sits
+   over exactly the box the dashboard occupies, inside main's padding, while
+   the dashboard keeps its place and its geometry beneath. Hidden with
+   visibility, which changes no layout, so its scroll positions are intact
+   when the overlay closes (AC-067) and its tab groups are still on the tab
+   they were on. */
+.dashboard--overlaid {
+  position: absolute;
+  inset: var(--wc-surface-padding);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.dashboard--under-overlay { visibility: hidden; }
 .settings-page { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .settings-page__bar {
   display: flex;
@@ -413,10 +428,22 @@ main:has(.dashboard) {
 
 .edit-bar { display: flex; gap: 8px; }
 .edit-bar button { height: 32px; padding: 0 12px; border: 1px solid var(--wc-border-strong); border-radius: 4px; background: var(--wc-bg-surface); color: var(--wc-text-primary); cursor: pointer; }
-.edit-bar button:disabled { color: var(--wc-text-muted); cursor: default; }
+/* aria-disabled, not :disabled. The bar keeps disabled buttons focusable (the
+   APG toolbar pattern, T059), so they are never :disabled and that rule never
+   matched: Undo, Redo and Discard looked active when they had nothing to do,
+   and a held-back Save looked like the primary action (T032). */
+.edit-bar button[aria-disabled='true'] { color: var(--wc-text-muted); cursor: default; }
 /* text-on-accent, not white: white on the dark theme's accent is 2.41:1, an AA
    failure the token pair in @wechart/ui exists to prevent (AC-005). */
 .edit-bar__save { background: var(--wc-accent); color: var(--wc-text-on-accent); border-color: var(--wc-accent); }
+.edit-bar__save[aria-disabled='true'] {
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-muted);
+  border-color: var(--wc-border-strong);
+}
+/* Why Save is held back, beside it (T032). Secondary ink: it explains, it
+   does not alarm — nothing has gone wrong and nothing is lost. */
+.edit-bar__blocked { margin: 0; color: var(--wc-text-secondary); font-size: var(--wc-text-sm-size); }
 
 /* The panel scrolls, not the whole sidebar: the tab row is how the user moves
    between panels, so scrolling it out of reach would be the one thing an
@@ -835,6 +862,87 @@ main:has(.dashboard) {
   border: 1px solid var(--wc-border-subtle);
   border-radius: 6px;
   background: var(--wc-bg-surface);
+}
+
+/* The chart editor opened over the dashboard from a tile (T032). Laid out
+   as the settings page is: its own bar in place of the dashboard's, and the
+   editor filling what is left. */
+.chart-editor-overlay { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 16px; }
+.chart-editor-overlay__bar { display: flex; align-items: center; gap: 16px; min-height: 48px; }
+.chart-editor-overlay__bar h1 {
+  margin: 0;
+  font-size: var(--wc-text-lg-size);
+  font-weight: var(--wc-text-lg-weight);
+}
+.chart-editor-overlay__bar button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  cursor: pointer;
+}
+/* Here the preview takes the flexible column, not the narrow side one: a
+   tile at its actual size is often far wider than 280 pixels. The editor
+   fills the overlay's height so that Fit has somewhere to grow, and the
+   preview scrolls within itself rather than widening the page. */
+.chart-editor-overlay .chart-editor {
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: 240px 240px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.chart-editor-overlay .chart-editor__result { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+/* Never shrinks below its content. Allowed to shrink, it collapsed under a
+   tile taller than the space left, and the results drawer that follows it
+   was laid over its top, covering the Actual size and Fit buttons so neither
+   could be pressed. Its size is set outright in both modes, so it has no
+   reason to grow either. */
+.chart-editor-overlay .preview-frame { flex: none; }
+
+/* Actual size or Fit (T032, direction.md section 2). The frame is the tile's
+   own chrome, grid-tile, so actual size is the tile and not a likeness. */
+.preview-frame { display: flex; flex-direction: column; gap: 8px; }
+.preview-frame__sizes { display: flex; gap: 4px; }
+.preview-frame__sizes button {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  cursor: pointer;
+}
+.preview-frame__sizes button[aria-pressed='true'] {
+  border-color: var(--wc-accent);
+  background: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+}
+.preview-frame__tile { flex: none; }
+
+/* A chart tile's pencil (T032): beside the tile's menu and revealed the same
+   way, so the two read as one set of tile controls. It stays visible where
+   there is no hover to reveal it. */
+.tile-pencil {
+  position: absolute;
+  top: 4px;
+  right: 28px;
+  z-index: 3;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--wc-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+}
+.grid-tile:hover .tile-pencil,
+.tile-pencil:focus-visible { opacity: 1; }
+@media (hover: none) {
+  .tile-pencil { opacity: 1; }
 }
 
 .wells { display: grid; gap: 8px; }

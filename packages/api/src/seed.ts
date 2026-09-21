@@ -274,9 +274,71 @@ export async function seedDevData(db: Kysely<Database>): Promise<void> {
               h: 40,
               chartId: 'seed-chart-recommended',
             },
+            /**
+             * A chart on the *second* tab of a tab group (T032). A tab group's
+             * open tab is its own local state, so an overlay that unmounted the
+             * dashboard brought it back on the first tab — the tile just edited
+             * was not on screen on return. Inside a section, because direction.md
+             * rule 37 allows a tab group nowhere else.
+             */
+            {
+              id: 'section-tabbed',
+              kind: 'section',
+              title: 'Tabbed',
+              items: [
+                {
+                  id: 'group-tabbed',
+                  kind: 'tabs',
+                  w: 12,
+                  tabs: [
+                    {
+                      id: 'tab-notes',
+                      title: 'Notes',
+                      items: [
+                        {
+                          id: 'tile-tab-notes',
+                          kind: 'markdown',
+                          w: 12,
+                          h: 16,
+                          text: 'Read me first.',
+                        },
+                      ],
+                    },
+                    {
+                      id: 'tab-chart',
+                      title: 'Chart',
+                      items: [
+                        {
+                          id: 'tile-tabbed',
+                          kind: 'chart',
+                          w: 12,
+                          h: 40,
+                          chartId: 'seed-chart-tabbed',
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
           ],
         },
       ],
+    },
+  });
+  await repo.create({
+    kind: 'chart',
+    id: 'seed-chart-tabbed',
+    body: {
+      schemaVersion: 1,
+      title: 'Orders by status, on a second tab',
+      localToDashboardId: 'seed-dashboard-recommended',
+      owner: 'admin',
+      chart: {
+        source: { cube: 'orders' },
+        wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+        chartType: 'bar',
+      },
     },
   });
   await repo.create({

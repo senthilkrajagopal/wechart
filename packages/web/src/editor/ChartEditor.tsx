@@ -11,7 +11,7 @@ import {
   type SortSettings,
 } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
   REQUIREMENTS,
@@ -39,6 +39,7 @@ import {
   type ChartTypeState,
 } from './chartTypeState';
 import { OPENED_WITH, type EditorState } from './openChart';
+import { PreviewFrame, type TileSize } from './PreviewFrame';
 import { META_QUERY } from '../query/meta';
 import { signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
@@ -101,11 +102,27 @@ export interface ChartEditorProps {
    * `initial`, which would otherwise be ignored.
    */
   readonly initial?: EditorState;
+  /**
+   * The tile the editor was opened from, measured as the dashboard draws it —
+   * which offers an Actual size / Fit preview (T032, AC-034). Absent when the
+   * editor is opened on its own.
+   */
+  readonly tile?: TileSize | undefined;
+  /**
+   * The editor's state after every change, and once on opening. For a caller
+   * that applies the edit elsewhere — the overlay, which holds it as a draft
+   * on the dashboard when the user goes back (T032).
+   */
+  readonly onChange?: ((state: EditorState) => void) | undefined;
 }
 
-export function ChartEditor({ initial = OPENED_WITH }: ChartEditorProps = {}) {
+export function ChartEditor({ initial = OPENED_WITH, tile, onChange }: ChartEditorProps = {}) {
   const [history, setHistory] = useState(() => historyOf(initial));
   const { cubeName, spec, chartType: chartTypeState, options } = history.present;
+
+  useEffect(() => {
+    onChange?.(history.present);
+  }, [history.present, onChange]);
 
   /** Records the change, which is what makes it undoable. */
   const change = (next: (current: EditorState) => EditorState) =>
@@ -457,14 +474,19 @@ export function ChartEditor({ initial = OPENED_WITH }: ChartEditorProps = {}) {
               // Only once the fields can actually produce the chosen type.
               // Drawing anyway would put a chart on screen that contradicts
               // the message AC-033 has just shown beside it.
-              <ChartTile
-                spec={compile(previewDocument, { rows, chartType: shownType, formats })}
-                // Held here, not in the tile: the tile unmounts whenever the
-                // query re-runs, so a field change would flip the reader back
-                // from the table to the chart (AC-178).
-                tableView={tableView}
-                onTableViewChange={setTableView}
-              />
+              <PreviewFrame tile={tile}>
+                {(chartHeight) => (
+                  <ChartTile
+                    spec={compile(previewDocument, { rows, chartType: shownType, formats })}
+                    {...(chartHeight === undefined ? {} : { height: chartHeight })}
+                    // Held here, not in the tile: the tile unmounts whenever
+                    // the query re-runs, so a field change would flip the
+                    // reader back from the table to the chart (AC-178).
+                    tableView={tableView}
+                    onTableViewChange={setTableView}
+                  />
+                )}
+              </PreviewFrame>
             )}
           </>
         )}

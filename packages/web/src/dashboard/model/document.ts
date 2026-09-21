@@ -16,7 +16,7 @@
  * the render spec's, and this is a persisted document model, so it should name
  * the same owner `chart-document.ts` does.
  */
-import type { ChartType, Marking } from '@wechart/core';
+import type { ChartDocument, ChartType, Marking, RenderSpec } from '@wechart/core';
 
 import type { GridTile } from '../grid/geometry';
 import type { Interactions } from '../settings/interactionMode';
@@ -139,6 +139,31 @@ export interface DashboardDocument {
    * never read without a default marking (AC-084).
    */
   readonly markings?: readonly Marking[];
+  /**
+   * Charts edited from a tile during this edit session, by chart id, not yet
+   * written (T032). **Session-only: never saved.** `withoutDrafts` strips
+   * them before any save, and a stored dashboard never carries them.
+   *
+   * On the document rather than beside it because the session's history
+   * stores whole documents, so a draft is undone, redone and discarded with
+   * everything else — which AC-066 needs.
+   */
+  readonly chartDrafts?: Readonly<Record<string, ChartDraft>>;
+}
+
+/**
+ * A chart edited from a tile and not yet written (T032): the chart document
+ * as edited, which saving the dashboard will write (AC-183, T192), and what
+ * the tile draws for it.
+ *
+ * `drawn` is exactly what `tileChartOf` gives any tile — a spec, or the reason
+ * there is none — because a draft is drawn by the same function as every
+ * saved chart. So an emptied chart reads "no fields yet" and one that cannot
+ * be placed "no chart type yet", rather than the tile keeping its old chart.
+ */
+export interface ChartDraft {
+  readonly document: ChartDocument;
+  readonly drawn: { readonly spec: RenderSpec } | { readonly error: unknown };
 }
 
 export const DEFAULT_SETTINGS: DashboardSettings = { width: 'fixed' };

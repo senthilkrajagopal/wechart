@@ -8,7 +8,15 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import { FOLLOWING_RECOMMENDATION } from './chartTypeState';
-import { editorStateOf, editorViewOf, loadEditorState, OPENED_WITH } from './openChart';
+import {
+  changesChart,
+  chartDocumentWith,
+  editorStateOf,
+  editorViewOf,
+  loadChart,
+  loadEditorState,
+  OPENED_WITH,
+} from './openChart';
 
 /**
  * T191 / AC-182: WHEN the chart editor is opened on an existing chart, THE
@@ -149,6 +157,18 @@ describe('opening a chart by id', () => {
     expect(state.chartType).toEqual({ manual: 'bar' });
   });
 
+  it('can give back the stored document as well, for a caller that will write the edit', async () => {
+    // The overlay (T032) merges the edit onto this; the state alone would
+    // lose everything the editor does not edit.
+    const { document, state } = await loadChart(
+      'seed-chart-status',
+      answering(200, { body: saved }),
+    );
+
+    expect(document).toEqual(saved);
+    expect(state).toEqual(editorStateOf(saved));
+  });
+
   it('asks for the chart it was given, escaped', async () => {
     // An id is interpolated into a path, so one containing a slash must not
     // reach a different resource.
@@ -186,6 +206,183 @@ describe('opening a chart by id', () => {
       'The stored chart is version 9, but this wechart understands only up to 1. It was saved by a newer version.';
 
     await expect(loadEditorState('c1', answering(422, { error: newer }))).rejects.toThrow(newer);
+  });
+});
+
+/**
+ * T032: the inverse — the editor's state, written back onto the chart it was
+ * loaded from, for a tile's draft (and, at T192, for saving).
+ *
+ * `EditorState` holds only what the editor edits. The chart document also
+ * carries `encoding`, a title, an owner, a folder and the dashboard it belongs
+ * to. Rebuilding the document from the state would drop all of them — a chart
+ * leaving its folder or its dashboard on save, the shape of the `dashboardOf`
+ * data loss at T075 — so the state is merged onto the loaded document.
+ */
+describe('writing the editor’s state back onto the chart', () => {
+  const everything = {
+    ...chartDocumentOf({
+      title: 'Orders by status',
+      owner: 'admin',
+      folderId: 'f1',
+      localToDashboardId: 'd1',
+      encoding: { color: ['orders.status'] },
+      spec: {
+        ...emptySpec('orders'),
+        measures: ['orders.count'],
+        dimensions: ['orders.status'],
+        chartType: 'bar',
+      },
+      options: { axes: { y: { title: 'Orders' } } },
+    }),
+  } as ChartDocument;
+
+  it('gives back the same chart when nothing was edited', () => {
+    // The whole round trip: every field survives, edited or not.
+    expect(chartDocumentWith(everything, editorStateOf(everything))).toEqual(everything);
+  });
+
+  it('gives back the same chart for one with no axis settings, as every seeded chart is', () => {
+    /**
+     * The editor holds "no settings" as `{}`, so writing that back verbatim
+     * added `options: {}` to a chart that had none — not the identical
+     * document the round trip promises. An earlier version of this file
+     * tested only a chart that had options, and so could not see it.
+     */
+    const plain = chartDocumentOf({
+      title: 'Plain',
+      spec: { ...emptySpec('orders'), measures: ['orders.count'], chartType: 'bar' },
+    });
+
+    expect(chartDocumentWith(plain, editorStateOf(plain))).toEqual(plain);
+  });
+
+  it('takes a changed cube', () => {
+    const written = chartDocumentWith(everything, {
+      ...editorStateOf(everything),
+      cubeName: 'customers',
+      spec: { ...emptySpec('customers'), measures: ['customers.count'] },
+    });
+
+    expect(written.chart.source.cube).toBe('customers');
+  });
+
+  // The cube has a test of its own below; this one never changes it.
+  it('takes the edited fields and axis settings', () => {
+    const state = {
+      ...editorStateOf(everything),
+      cubeName: 'orders',
+      spec: {
+        ...emptySpec('orders'),
+        measures: ['orders.total_amount'],
+        dimensions: ['orders.status'],
+        timeDimensions: ['orders.ordered_at'],
+      },
+      options: { axes: { y: { title: 'Revenue' } } },
+    };
+
+    const written = chartDocumentWith(everything, state);
+
+    expect(written.chart.wells).toEqual({
+      measures: ['orders.total_amount'],
+      dimensions: ['orders.status'],
+      timeDimensions: ['orders.ordered_at'],
+    });
+    expect(written.chart.options).toEqual({ axes: { y: { title: 'Revenue' } } });
+  });
+
+  it('keeps what the editor does not edit: title, owner, folder, dashboard and encoding', () => {
+    const written = chartDocumentWith(everything, {
+      ...editorStateOf(everything),
+      options: {},
+    });
+
+    expect(written.title).toBe('Orders by status');
+    expect(written.owner).toBe('admin');
+    expect(written.folderId).toBe('f1');
+    expect(written.localToDashboardId).toBe('d1');
+    expect(written.chart.encoding).toEqual({ color: ['orders.status'] });
+  });
+
+  it('writes a type the user chose', () => {
+    const written = chartDocumentWith(everything, {
+      ...editorStateOf(everything),
+      chartType: { manual: 'pie' },
+    });
+
+    expect(written.chart.chartType).toBe('pie');
+  });
+
+  it('writes no type when the chart follows the recommendation, even if it had one', () => {
+    /**
+     * A present type means the user chose it, and T191 loads it as manual. A
+     * user who went "back to recommended" on a chart that had a type must not
+     * have the old type written back — the chart would reopen pinned to it.
+     */
+    const written = chartDocumentWith(everything, {
+      ...editorStateOf(everything),
+      chartType: FOLLOWING_RECOMMENDATION,
+    });
+
+    expect('chartType' in written.chart).toBe(false);
+  });
+});
+
+/**
+ * T032: whether going back from the editor changed anything. Decided by what
+ * would be written, not by object identity — changing a chart and changing it
+ * back yields a new state object with the same content, and recording that as
+ * a change would put "Discard (1 change)" on a dashboard exactly as it was.
+ */
+describe('whether the chart was changed', () => {
+  const opened = editorStateOf(saved);
+
+  it('is unchanged when the state is the one it opened with', () => {
+    expect(changesChart(saved, opened, opened)).toBe(false);
+  });
+
+  it('is unchanged when a change was made and then undone by hand', () => {
+    // A different object — made by choosing another type and then the
+    // original again — with the same content.
+    const roundabout = { ...opened, chartType: { manual: 'bar' as const } };
+
+    expect(roundabout).not.toBe(opened);
+    expect(changesChart(saved, opened, roundabout)).toBe(false);
+  });
+
+  it('is unchanged when the same settings were made in a different order', () => {
+    /**
+     * Key order in the options depends on the order settings were made:
+     * clearing a sort and setting the same sort again moves its key. Compared
+     * as written JSON, that read as a change. The content is the same.
+     */
+    const inOrder = {
+      ...opened,
+      options: { axes: { y: { title: 'Orders' } }, sort: { by: 'value' } },
+    };
+    const reordered = {
+      ...opened,
+      options: { sort: { by: 'value' }, axes: { y: { title: 'Orders' } } },
+    };
+
+    expect(changesChart(saved, inOrder, reordered)).toBe(false);
+  });
+
+  it('is changed when the fields in a well are put in another order', () => {
+    // Keys are compared in any order; the order of fields is not — it decides
+    // how the chart is drawn, so changing it is a change.
+    const flipped = {
+      ...opened,
+      spec: { ...opened.spec, dimensions: [...opened.spec.dimensions].reverse() },
+    };
+
+    expect(changesChart(saved, opened, flipped)).toBe(true);
+  });
+
+  it('is changed when what would be written differs', () => {
+    const changed = { ...opened, chartType: { manual: 'stackedBar' as const } };
+
+    expect(changesChart(saved, opened, changed)).toBe(true);
   });
 });
 
