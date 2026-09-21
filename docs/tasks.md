@@ -1414,6 +1414,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Depends on: T184
   - Note: two gaps to close here, both recorded at T001. **Edge** only runs where the `msedge` channel is installed and `CI` is set, so AC-180 is demonstrated by the CI run, not by a local one — do not tick AC-180 from a local three-browser pass. **Safari** is covered by Playwright's bundled WebKit, not by the shipped Safari; `docs/research/test-stack.md` records that as a residual gap against "current Safari". Switch the `webServer` from `vite dev` to `vite preview` over a real build first, so the suite exercises the artifact users receive rather than the dev server.
 
+## F22. Wiring the marking subsystem (deferred)
+
+- [ ] T190 (AC-087, AC-088, AC-089, AC-090, AC-091, AC-092, AC-093, AC-094, AC-095, AC-096, AC-097, AC-098, AC-100, AC-101, AC-102, AC-103, AC-107, AC-108, AC-109) Connect the marking subsystem to the rendering path
+  - Files: `packages/web/src/tiles/ChartTile.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/model/document.ts`, `packages/web/src/dashboard/settings/TileLimits.tsx`, `e2e/markings.spec.ts`
+  - Failing test: `e2e/markings.spec.ts`: clicking a bar in a running dashboard marks it, a second tile limited by that marking re-queries, and the badge names the marking and the count — each of the listed criteria observed on a tile, the way its `Fails when:` is written.
+  - Depends on: T086–T119
+  - **Deferred 2026-09-20 at the user's direction.** No code deleted; the subsystem stays as it is.
+  - **Why this task exists.** T086–T119 each built and tested one module, and every one of their Files lists names only that module and its test — no renderer, no e2e spec. The F5–F9 dashboard tasks by contrast each list `DashboardView.tsx` and `e2e/dashboard.spec.ts`. So the plan never contained the step that makes marking reachable, and 18 criteria were ticked on unit tests of code nothing imports. Unticked 2026-09-20; see the status note in `docs/spec.md` under F10.
+  - **The lesson worth keeping, independent of markings.** A criterion whose `Fails when:` names an observation on a tile is not demonstrated by a test that renders a component with hand-passed props. When planning any future feature, the task that introduces a UI module must also name the renderer that mounts it, or the feature is finished everywhere except where the user is.
+  - Known interface hazard for whoever does this: `allLimitsEmpty(limitingMarkings(xs))` is false for every input, because `limitingMarkings` keeps only the non-empty markings. Pinned by a test in `NothingMarked.test.tsx`.
+
 ---
 
 ## Coverage: acceptance criterion → task

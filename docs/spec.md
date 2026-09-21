@@ -257,45 +257,64 @@ Traces to: `[docs/inputs §2]`, direction.md §7, rule 14.
 Purpose: Spotfire's linked selections, on a live semantic layer.
 Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; `[docs/design/references-markings.md]`, `[research/cube/markings-query-support.md]`.
 
+> **Status, 2026-09-20: built but not wired. Deferred at the user's direction.**
+> The modules behind these criteria exist and are tested — `core/src/markings/*`,
+> `charts/src/interaction/*`, `charts/src/marking/*`, `web/src/dashboard/markings/*`,
+> `web/src/dashboard/tiles/NothingMarked.tsx` — but nothing in the running app
+> imports them. `ChartTile.tsx` contains no marking code and `DashboardView.tsx`
+> none either, so a user cannot mark anything today.
+>
+> Eighteen criteria here were ticked on unit tests of those modules and have been
+> unticked, because each one's `Fails when:` names an observation on *a tile* and
+> no test makes it. Only AC-084, AC-086 and AC-099 stay ticked: their failing
+> states are observable on artifacts that do exist in the product — the dashboard
+> document (`core/src/dashboard-document.ts`) and the shipped palette.
+>
+> The cause was a planning gap, not a coding one: unlike the F5–F9 tasks, which
+> list `DashboardView.tsx` and an e2e spec in their Files, every marking task
+> (T086–T119) lists only its own module and test. No task wires the subsystem, so
+> on the current plan these ticks could never be earned. T190 covers that work and
+> is deferred; none of the code has been deleted.
+
 - [x] AC-084 THE SYSTEM SHALL give every dashboard at least one marking and exactly one default marking, and SHALL allow at most four markings per dashboard (direction.md rules 43, 57; `[R7]`).
       Fails when: a dashboard has no default marking, or a fifth marking can be created.
 - [ ] AC-085 WHEN a chart tile is created, THE SYSTEM SHALL set it to mark with the dashboard's default marking, and the tile's Marking setting SHALL also offer "(None)" and every other marking (direction.md rule 44).
       Fails when: a new chart tile marks with no marking, or "(None)" is missing from the setting.
 - [x] AC-086 THE SYSTEM SHALL store a marking only as a predicate over Cube dimension members — tuples of member, granularity and value, or bounded ranges — and never as row numbers or result positions (direction.md rule 46).
       Fails when: a stored marking references a row index or a position in a result set.
-- [x] AC-087 WHEN the user clicks an item in a tile that marks, THE SYSTEM SHALL replace that marking with the clicked item; WHEN the user Ctrl-clicks or ⌘-clicks, THE SYSTEM SHALL toggle that item and leave the rest (direction.md rule 47).
+- [ ] AC-087 WHEN the user clicks an item in a tile that marks, THE SYSTEM SHALL replace that marking with the clicked item; WHEN the user Ctrl-clicks or ⌘-clicks, THE SYSTEM SHALL toggle that item and leave the rest (direction.md rule 47).
       Fails when: a plain click adds to the marking, or a modified click replaces it.
-- [x] AC-088 WHEN the user drags a rectangle, or Alt-drags a lasso, over a tile that marks, THE SYSTEM SHALL mark every item the shape touches, and a press-and-release without movement SHALL be treated as a click, not a selection.
+- [ ] AC-088 WHEN the user drags a rectangle, or Alt-drags a lasso, over a tile that marks, THE SYSTEM SHALL mark every item the shape touches, and a press-and-release without movement SHALL be treated as a click, not a selection.
       Fails when: a drag of at least 5 pixels is treated as a click, or a click is treated as an empty selection.
-- [x] AC-089 WHEN the user Ctrl-drags or ⌘-drags a shape, THE SYSTEM SHALL toggle the enclosed items when all or none of them are marked, and otherwise add them (direction.md rule 47).
+- [ ] AC-089 WHEN the user Ctrl-drags or ⌘-drags a shape, THE SYSTEM SHALL toggle the enclosed items when all or none of them are marked, and otherwise add them (direction.md rule 47).
       Fails when: a Ctrl-drag over a partly marked set unmarks items instead of adding them.
-- [x] AC-090 WHEN the user clicks a legend entry's text in a tile that marks, THE SYSTEM SHALL mark every item of that category, and Ctrl-click or ⌘-click SHALL add further categories; series visibility SHALL be changed elsewhere (direction.md rule 7 of §7a).
+- [ ] AC-090 WHEN the user clicks a legend entry's text in a tile that marks, THE SYSTEM SHALL mark every item of that category, and Ctrl-click or ⌘-click SHALL add further categories; series visibility SHALL be changed elsewhere (direction.md rule 7 of §7a).
       Fails when: a legend click hides the series, or does not mark it.
-- [x] AC-091 WHEN the user clicks a trellis panel header, THE SYSTEM SHALL mark every item in that panel.
+- [ ] AC-091 WHEN the user clicks a trellis panel header, THE SYSTEM SHALL mark every item in that panel.
       Fails when: the click marks a single item, or nothing.
-- [x] AC-092 WHEN the user clicks a row in a table tile, THE SYSTEM SHALL mark it; Shift-click SHALL mark the range from the anchor row; and rows SHALL be markable only when the cube's primary key is available (direction.md rule 10 of §7a).
+- [ ] AC-092 WHEN the user clicks a row in a table tile, THE SYSTEM SHALL mark it; Shift-click SHALL mark the range from the anchor row; and rows SHALL be markable only when the cube's primary key is available (direction.md rule 10 of §7a).
       Fails when: Shift-click marks a single row, or rows are markable without a primary key.
-- [x] AC-093 WHILE a marking is in range mode, THE SYSTEM SHALL let the user drag along an axis to mark a continuous range, show it as a coloured stripe on that axis, and keep its bounds when filters change (direction.md rule 30 of §7a; `[R7]`).
+- [ ] AC-093 WHILE a marking is in range mode, THE SYSTEM SHALL let the user drag along an axis to mark a continuous range, show it as a coloured stripe on that axis, and keep its bounds when filters change (direction.md rule 30 of §7a; `[R7]`).
       Fails when: the stripe does not appear, or the bounds move when a filter changes.
-- [x] AC-094 WHEN the user clicks an empty plot area, or presses Escape on a focused tile, THE SYSTEM SHALL unmark that tile's marking and leave other markings unchanged.
+- [ ] AC-094 WHEN the user clicks an empty plot area, or presses Escape on a focused tile, THE SYSTEM SHALL unmark that tile's marking and leave other markings unchanged.
       Fails when: another marking is cleared, or the marking survives.
-- [x] AC-095 WHEN a marking changes, THE SYSTEM SHALL update every tile that uses it or is limited by it, on every page tab of the dashboard (direction.md rule 48).
+- [ ] AC-095 WHEN a marking changes, THE SYSTEM SHALL update every tile that uses it or is limited by it, on every page tab of the dashboard (direction.md rule 48).
       Fails when: a tile on another page tab still shows the previous marking state when opened.
-- [x] AC-096 WHEN a tile shows a marking, THE SYSTEM SHALL draw marked items in their own colour with an outline in the marking's colour and fade unmarked items (direction.md rule 49).
+- [ ] AC-096 WHEN a tile shows a marking, THE SYSTEM SHALL draw marked items in their own colour with an outline in the marking's colour and fade unmarked items (direction.md rule 49).
       Fails when: unmarked items render at full strength, or marked items carry no outline.
-- [x] AC-097 WHEN an item is partly marked and its measure is additive, THE SYSTEM SHALL draw the marked share from the baseline at full strength and fade the remainder; WHEN the measure is not additive, THE SYSTEM SHALL draw the whole item with a pattern and show the marked and total values in its tooltip (direction.md rule 49; `[docs/inputs §11]`).
+- [ ] AC-097 WHEN an item is partly marked and its measure is additive, THE SYSTEM SHALL draw the marked share from the baseline at full strength and fade the remainder; WHEN the measure is not additive, THE SYSTEM SHALL draw the whole item with a pattern and show the marked and total values in its tooltip (direction.md rule 49; `[docs/inputs §11]`).
       Fails when: a partial average or distinct count is drawn as a sub-length, or a partly marked sum shows no marked share.
-- [x] AC-098 THE SYSTEM SHALL convey marking state by more than colour: every tile using a non-empty marking shows a badge naming the marking and the number of marked items, and every non-empty marking has a chip naming it and summarising its values (direction.md rule 50).
+- [ ] AC-098 THE SYSTEM SHALL convey marking state by more than colour: every tile using a non-empty marking shows a badge naming the marking and the number of marked items, and every non-empty marking has a chip naming it and summarising its values (direction.md rule 50).
       Fails when: a tile or chip conveys the marking only through colour.
 - [x] AC-099 THE SYSTEM SHALL keep every marking colour at least ΔE 15 from every categorical series colour under normal vision, and at least ΔE 8 under protan and deutan simulation, in both themes (direction.md rule 51).
       Fails when: the palette validator reports a marking colour below either threshold against any series colour.
-- [x] AC-100 WHEN a tile has keyboard focus in view mode, THE SYSTEM SHALL move between its items with the arrow keys without changing the marking, mark the focused item with Space, toggle it with Ctrl+Space or ⌘+Space, and extend the marking with Shift and the arrow keys (direction.md rule 52).
+- [ ] AC-100 WHEN a tile has keyboard focus in view mode, THE SYSTEM SHALL move between its items with the arrow keys without changing the marking, mark the focused item with Space, toggle it with Ctrl+Space or ⌘+Space, and extend the marking with Shift and the arrow keys (direction.md rule 52).
       Fails when: an arrow key changes the marking, or Space does not mark the focused item.
-- [x] AC-101 WHEN a marking changes, THE SYSTEM SHALL announce the marking's name, the number of marked items and the source tile in a polite live region (direction.md rule 52).
+- [ ] AC-101 WHEN a marking changes, THE SYSTEM SHALL announce the marking's name, the number of marked items and the source tile in a polite live region (direction.md rule 52).
       Fails when: no announcement is made, or it omits the count.
-- [x] AC-102 IF a marking would exceed 1,000 items, THEN THE SYSTEM SHALL refuse the additional items and explain the limit; "Mark all" SHALL be exempt because it stores the tile's filter rather than a list (`[R7]`, direction.md rule 29 of §7a).
+- [ ] AC-102 IF a marking would exceed 1,000 items, THEN THE SYSTEM SHALL refuse the additional items and explain the limit; "Mark all" SHALL be exempt because it stores the tile's filter rather than a list (`[R7]`, direction.md rule 29 of §7a).
       Fails when: a marking exceeds 1,000 stored items, or "Mark all" is refused.
-- [x] AC-103 WHEN a tile's cube or view cannot resolve every member of a marking's predicate, THE SYSTEM SHALL leave that tile unmarked and label it as not linked to that marking (direction.md rule 18 of §7a).
+- [ ] AC-103 WHEN a tile's cube or view cannot resolve every member of a marking's predicate, THE SYSTEM SHALL leave that tile unmarked and label it as not linked to that marking (direction.md rule 18 of §7a).
       Fails when: the tile shows a query error, or is silently left unbrushed with no label.
 - [ ] AC-104 WHEN a tile needs the marked share and the marking's members are not among its own groupings, THE SYSTEM SHALL obtain it with one additional query per tile and keep the unmarked result cached across marking changes.
       Fails when: more than one extra query per tile is issued for a marking change, or the base result is re-fetched when only the marking changed.
@@ -309,9 +328,9 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
 Purpose: Spotfire's master-detail workflow and the operations on a selection.
 Traces to: `[docs/inputs §11]`, direction.md §7a, rules 33, 53, 55.
 
-- [x] AC-107 WHEN a tile is limited by one or more markings, THE SYSTEM SHALL restrict its query to those markings, combined as All markings (AND) or Any marking (OR) according to its setting, and SHALL skip markings that are empty (direction.md rule 33).
+- [ ] AC-107 WHEN a tile is limited by one or more markings, THE SYSTEM SHALL restrict its query to those markings, combined as All markings (AND) or Any marking (OR) according to its setting, and SHALL skip markings that are empty (direction.md rule 33).
       Fails when: a tile limited by two markings with one empty returns no rows, or OR behaves as AND.
-- [x] AC-108 THE SYSTEM SHALL prevent a tile from being limited by the marking it marks with, and SHALL state the reason where that option is offered (direction.md rule 45).
+- [ ] AC-108 THE SYSTEM SHALL prevent a tile from being limited by the marking it marks with, and SHALL state the reason where that option is offered (direction.md rule 45).
       Fails when: a tile can be limited by its own marking.
 - [ ] AC-109 WHEN every marking limiting a tile is empty, THE SYSTEM SHALL show the tile's nothing-marked state: all data, an empty visualization, or a message on an empty background, as set on the tile (direction.md rule 33).
       Fails when: the tile shows a state other than the one configured.
