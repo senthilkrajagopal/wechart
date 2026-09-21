@@ -90,6 +90,12 @@ WebKit only, varying the rule:
 - **Not measured: Chromium.** Its Playwright build is not installed; the suite
   runs the real `chrome` channel instead. Whether Chrome matches Firefox here
   is untested.
+- **Also measured (T205's review, 2026-09-21): the closed `select`'s border radius.**
+  Playwright's WebKit reports `border-radius: 5px` for a select whose author
+  rule is `4px`. Chrome and Firefox report `4px`. The same holds for a
+  bare probe `<select style="border-radius:4px">`, so it is the native control,
+  not wechart's cascade. `e2e/design-conformance.spec.ts` compares against such
+  a probe for that reason. Measured, not explained, as with the font size.
 - **Not measured: `appearance: none`,** which is the usual lever for making a
   native control take author styling, and which might move the closed control.
   It was not tried, and it changes the control's whole appearance, so it is a

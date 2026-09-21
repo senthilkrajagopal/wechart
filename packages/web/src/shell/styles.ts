@@ -281,6 +281,8 @@ main { padding: var(--wc-surface-padding); }
   align-items: center;
   gap: 12px;
   min-height: 48px;
+  /* The prototype's .dash-head. */
+  padding: 12px 24px 0;
 }
 /* The prototype's .dash-head h1; what follows it sits at the right. */
 .dashboard__header h1 {
@@ -328,6 +330,9 @@ main:has(.dashboard) {
   height: calc(100vh - var(--wc-app-bar-height));
   display: flex;
   flex-direction: column;
+  /* Edge to edge, as the prototype's .dash: the header, the tab rule and the
+     filter band run the full width, each padded 24 px in (AC-187). */
+  padding: 0;
 }
 .dashboard {
   display: flex;
@@ -338,7 +343,6 @@ main:has(.dashboard) {
 .dashboard__body {
   display: flex;
   align-items: stretch;
-  gap: 16px;
   flex: 1;
   min-height: 0;
 }
@@ -346,7 +350,8 @@ main:has(.dashboard) {
 /* direction.md section 2: "fixed-width and centred (max 1440px), with a toggle
    for full width". This is the saved setting AC-018 asks to come back, so it
    has to change the page and not just an attribute. */
-.dashboard-page { width: 100%; }
+/* The prototype's .dgrid padding, round the tiles. */
+.dashboard-page { width: 100%; padding: 16px 24px 40px; }
 .dashboard-page[data-width='fixed'] { max-width: 1440px; margin-inline: auto; }
 .dashboard-page[data-width='full'] { max-width: none; }
 /* position: relative so the canvas is a containing block as well as a scroll
@@ -375,7 +380,8 @@ main:has(.dashboard) {
    they were on. */
 .dashboard--overlaid {
   position: absolute;
-  inset: var(--wc-surface-padding);
+  /* main has no padding round a dashboard (AC-187), so nothing to keep clear. */
+  inset: 0;
   z-index: 5;
   display: flex;
   flex-direction: column;
@@ -518,8 +524,26 @@ main:has(.dashboard) {
 .edit-bar button[aria-disabled='true'] { color: var(--wc-text-muted); cursor: default; }
 /* text-on-accent, not white: white on the dark theme's accent is 2.41:1, an AA
    failure the token pair in @wechart/ui exists to prevent (AC-005). */
-.edit-bar__save { background: var(--wc-accent); color: var(--wc-text-on-accent); border-color: var(--wc-accent); }
-.edit-bar__save[aria-disabled='true'] {
+/* Scoped under .edit-bar: ".edit-bar button" outranks a bare class, and Save
+   painted as an ordinary button while the prototype makes it the primary one
+   (AC-187, T205's review). */
+.edit-bar .edit-bar__save { background: var(--wc-accent); color: var(--wc-text-on-accent); border-color: var(--wc-accent); }
+/* Hovered, still the primary button: the global hover repainted it bg-hover. */
+.edit-bar .edit-bar__save:hover:not([aria-disabled='true']) {
+  background: var(--wc-accent);
+  filter: brightness(1.08);
+}
+/* Undo and Redo: the prototype's .iconbtn — 32 px, borderless until hovered. */
+.edit-bar .icon-button {
+  width: 32px;
+  padding: 0;
+  border-color: transparent;
+  background: none;
+  color: var(--wc-text-secondary);
+  font-size: 16px;
+}
+.edit-bar .icon-button:hover:not([aria-disabled='true']) { background: var(--wc-bg-hover); }
+.edit-bar .edit-bar__save[aria-disabled='true'] {
   background: var(--wc-bg-surface);
   color: var(--wc-text-muted);
   border-color: var(--wc-border-strong);
@@ -537,8 +561,8 @@ main:has(.dashboard) {
   flex: 0 0 300px;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 6px;
+  /* The prototype's .pane.right: docked, ruled off on its left only. */
+  border-left: 1px solid var(--wc-border-subtle);
   background: var(--wc-bg-surface);
 }
 
@@ -591,6 +615,13 @@ main:has(.dashboard) {
 }
 .panel-section__note { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .field { display: grid; gap: 4px; }
+/* An inspector's controls are the prototype's .input.sm and .select.sm: 28 px
+   at 12 px, direction.md §4's compact row for inspectors. */
+.panel-section .field input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.panel-section .field select {
+  height: 28px;
+  font-size: 12px;
+}
 .field > label {
   font-size: 12px;
   line-height: 16px;
@@ -628,8 +659,7 @@ main:has(.dashboard) {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
-  padding: 10px 0;
+  padding: 10px 24px;
   background: var(--wc-bg-page);
   border-bottom: 1px solid var(--wc-border-subtle);
 }
@@ -791,9 +821,12 @@ button.filter-pill__clear {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 24px;
+  min-height: 20px;
   margin-bottom: 8px;
-  padding-right: 48px;
+  /* The prototype puts the tile's two 26 px actions at the end of this row;
+     here they sit over the tile's corner, so the row keeps their room
+     (26 + 2 + 26, and its 8 px gap) and nothing lies under them. */
+  padding-right: 62px;
 }
 .tile-head__title {
   flex: 1;
@@ -1020,13 +1053,20 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
    cannot scroll what the parent has already clipped, so the tile stops
    clipping while its menu is open. */
 .grid-tile:has(.tile-menu__list) { overflow: visible; }
-.tile-menu { position: absolute; top: 4px; right: 4px; z-index: 3; }
+/* The tile's actions: the prototype's .tile-actions .iconbtn, 26 px with a
+   6 px radius, level with the tile's head (its 16 px padding, less the 3 px
+   they overhang a 20 px head). */
+.tile-menu { position: absolute; top: 13px; right: 16px; z-index: 3; }
 .tile-menu > button {
-  width: 20px;
-  height: 20px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  /* It has no class, so the plain button's 32 px minimum would reach it. */
+  min-height: 0;
   padding: 0;
-  border: 0;
-  border-radius: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: none;
   color: var(--wc-text-secondary);
   cursor: pointer;
@@ -1040,7 +1080,7 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 }
 .tile-menu__list {
   position: absolute;
-  top: 24px;
+  top: 28px;
   right: 0;
   z-index: 3;
   min-width: 180px;
@@ -1074,7 +1114,8 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  margin-bottom: 12px;
+  /* The prototype's .dash-tabs. */
+  padding: 8px 24px 0;
   border-bottom: 1px solid var(--wc-border-subtle);
 }
 .page-tabs [role='tab'] {
@@ -1096,7 +1137,7 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   color: var(--wc-text-primary);
   border-bottom-color: var(--wc-accent);
 }
-.page-tabs__actions { display: flex; gap: 8px; }
+.page-tabs__actions { display: flex; gap: 8px; padding: 0 24px; }
 .page-tabs__actions button,
 .tab-group [role='tablist'] button[data-testid^='delete-tab-'] {
   border: 0;
@@ -1299,14 +1340,16 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
    there is no hover to reveal it. */
 .tile-pencil {
   position: absolute;
-  top: 4px;
-  right: 28px;
+  top: 13px;
+  right: 44px;
   z-index: 3;
-  width: 20px;
-  height: 20px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
   padding: 0;
-  border: 0;
-  border-radius: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: none;
   color: var(--wc-text-secondary);
   cursor: pointer;

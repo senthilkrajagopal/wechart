@@ -1897,6 +1897,12 @@ Each task below measures its components' computed styles in `e2e/design-conforma
   - **Existing filter tests:** their unit and browser versions now open the pill before using its control, through `openFilter` in the unit tests and `open(pill(…))` in `e2e/filters.spec.ts`. Three browser tests also press Escape before clicking something the open popover lies over (the page tabs, a link tile), as a person would. No assertion was removed or weakened.
   - **Full runs:** typecheck and lint clean. 1,452 unit tests passed. Browsers: 622 passed; the 2 a11y contrast timeouts under full-suite load passed alone (54/54).
   - **Done 2026-09-21.** AC-187 stays unticked until T205.
+  - **Cold review, 2026-09-21** (together with T202, T203 and T205): no filter AC regressed, and no assertion was weakened. Real bugs, fixed with tests in `filters/pill.test.tsx`, red first:
+    1. **Escape dropped focus.** It closed the popover with focus inside it, and focus fell to the page. Focus now goes back to the pill's summary button, as the ⋯ menu's does.
+    2. **Tab could leave focus under the popover.** Nothing closed it when focus left, and it lay over the page tabs. It now closes when focus moves out of the pill. That happens only on a real move to another element: a click on a control that takes no focus, as a checkbox in Safari does not, leaves it open.
+    3. **Summaries of values that filter nothing** read "≤ undefined" (a range with no bounds) and "Status: " (an empty pick). Both now read "All".
+    - Also, both a11y: `aria-controls` is set only while the popover exists, and Remove's visible text is "Remove", so its name "Remove {filter}" begins with what it shows (WCAG 2.5.3).
+    - The filter bar moved under the page tabs, as the prototype has it. That is recorded with T205's review, since it is AC-187 layout.
 - [x] T205 (AC-187) Draw the edit sidebar's tabs, Add palette and Properties as the prototype does
   - Files: `packages/web/src/dashboard/edit/EditSidebar.tsx`, `packages/web/src/dashboard/edit/AddPanel.tsx`, `packages/web/src/dashboard/edit/TileProperties.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts`: the sidebar tabs are 36 px, 12 px 600, underlined in the accent colour when selected; Properties fields have 12/16 600 secondary labels over 32 px inputs, in sections with a 12 px uppercase heading (AC-187).
@@ -1910,6 +1916,19 @@ Each task below measures its components' computed styles in `e2e/design-conforma
   - **Tests, red first:** `e2e/design-conformance.spec.ts` (1 more in each browser). It first failed on the tab list's missing surface. It checks the tabs, a section heading and its box, a palette entry and its hint, then an image tile's Properties: the "Image" heading, the "Alternative text" label, and its 32 px input.
   - **Full runs:** typecheck and lint clean; 1,452 unit tests and 627 browser runs passed.
   - **Done 2026-09-21.** With T202–T205, every component AC-187 names has a conformance test on the rendered app, so AC-187 is ticked.
+  - **Cold review of T202–T205, 2026-09-21: AC-187 unmet.** The tick was early: its Fails-when still held in places the tests didn't look, and in one the test itself asserted a value the prototype contradicts. Each was fixed and is now asserted in `e2e/design-conformance.spec.ts`:
+    1. **Properties controls** were 32 px at 14 px, and the T205 test asserted 32 px. The prototype draws every Properties control as `.input.sm`, 28 px at 12 px, which is also direction.md §4's compact inspector row. The controls and the test's expectation were corrected; the user is told the test was wrong.
+    2. **Edit-mode Save wasn't the primary button.** `.edit-bar button` outranked `.edit-bar__save`, so Save painted as an ordinary button. It now has the accent fill, and keeps it on hover, where the global hover rule had repainted it. Undo and Redo are now the prototype's 32 px icon buttons (↶ ↷), named by `aria-label`. `saveOutcome.test.tsx` reads each control by that name, with its assertions unchanged.
+    3. **The edit sidebar** had a border on all sides and a 6 px radius. It is now docked with a rule on its left only, as the prototype's `.pane.right`.
+    4. **Container padding:** main no longer pads a dashboard. The header (12 24 0), the page tabs (8 24 0), the filter band (10 24) and the page of tiles (16 24 40) are padded as the prototype's `.dash-head`, `.dash-tabs`, `.filterbar` and `.dgrid`. The filter band now sits under the page tabs, and the chart-editor overlay fills main's box exactly.
+    5. **Tile actions:** the pencil and ⋯ menu are 26 px with a 6 px radius and a transparent border, level with the head. The head keeps 62 px at its right for them, because here they sit over the tile's corner rather than at the end of the head's row. Its minimum height is the prototype's 20 px.
+    6. **Selects**, which weren't asserted, now are, on the date filter's presets. WebKit reports a 5 px radius on any native select, whatever is declared (measured, and recorded in `research/webkit-select-font-size.md`). So the test compares against a probe select given the prototype's 4 px, not against a fixed number.
+    - direction.md §7d now records what AC-187 took from the prototype where it differs from §3–5: the 6 px radius, the 13 px type, the 28 px inspector controls, `bg-hover`, `--wc-shadow-pop`, and the edge-to-edge layout.
+    - **Left as minor:**
+      - The theme toggle has both `aria-pressed` and a name that changes with the state, and `ThemeToggle.test.tsx` asserts `aria-pressed`.
+      - The Add palette's entries lack the prototype's icons.
+      - The image upload is a native file input where the prototype has a button.
+      - The page-tab delete buttons (AC-060) still form their own row under the tabs. The prototype puts that action in the sidebar's Dashboard section.
 
 - [x] T206 (AC-188) Write time values by their granularity in axes, labels, tooltips and tables
   - Files: `packages/core/src/format.ts`, `packages/core/src/format.test.ts`, `packages/charts/src/axis.ts`, `packages/charts/src/tooltip.ts`, `packages/web/src/tiles/DataTable.tsx`, `e2e/dashboard.spec.ts`

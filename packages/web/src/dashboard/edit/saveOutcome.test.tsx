@@ -136,9 +136,13 @@ describe('saving, while the save is under way', () => {
     await editAndAddATile(save.onSave);
     await userEvent.click(within(bar() as HTMLElement).getByRole('button', { name: 'Save' }));
 
+    // Each by its name: Undo and Redo are icon buttons, named by aria-label.
     const disabled = within(bar() as HTMLElement)
       .getAllByRole('button')
-      .map((button) => [button.textContent, button.getAttribute('aria-disabled')]);
+      .map((button) => [
+        button.getAttribute('aria-label') ?? button.textContent,
+        button.getAttribute('aria-disabled'),
+      ]);
     expect(disabled).toEqual([
       ['Undo', 'true'],
       ['Redo', 'true'],

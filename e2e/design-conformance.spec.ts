@@ -219,6 +219,17 @@ test.describe('T202: the app bar, workspace navigation, buttons and inputs', () 
   });
 });
 
+/** A tile's action button as the prototype draws it, and how to read one. */
+const TILE_ACTION = {
+  width: '26px',
+  height: '26px',
+  'border-radius': '6px',
+  'border-top-width': '1px',
+  'border-top-color': 'rgba(0, 0, 0, 0)',
+};
+const tileActionStyle = (action: Locator) =>
+  style(action, 'width', 'height', 'border-radius', 'border-top-width', 'border-top-color');
+
 test.describe('T203: the dashboard header, page tabs and tiles', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/explore/dashboards/seed-root-dashboard-1');
@@ -347,6 +358,83 @@ test.describe('T203: the dashboard header, page tabs and tiles', () => {
       'background-color': 'rgba(0, 0, 0, 0)',
       'border-top-color': 'rgba(0, 0, 0, 0)',
     });
+
+    // .tile-actions .iconbtn { width: 26px; height: 26px } over .iconbtn
+    // { border: 1px solid transparent; border-radius: 6px; background: none }
+    // — the pencil here, the ⋯ menu while editing (T205's review).
+    expect(await tileActionStyle(page.getByTestId('edit-chart-tile-status'))).toEqual(TILE_ACTION);
+  });
+
+  test('the header, the page tabs and the page are padded as the prototype’s (T205’s review)', async ({
+    page,
+  }) => {
+    // .dash-head { padding: 12px 24px 0 }
+    expect(await style(page.locator('.dashboard__header'), 'padding-top', 'padding-left')).toEqual({
+      'padding-top': '12px',
+      'padding-left': '24px',
+    });
+    // .dash-tabs { padding: 8px 24px 0 }
+    expect(
+      await style(page.getByRole('tablist', { name: 'Pages' }), 'padding-top', 'padding-left'),
+    ).toEqual({ 'padding-top': '8px', 'padding-left': '24px' });
+    // .dgrid { padding: 16px 24px 40px }
+    expect(await style(page.getByTestId('dashboard-page'), 'padding-top', 'padding-left')).toEqual({
+      'padding-top': '16px',
+      'padding-left': '24px',
+    });
+  });
+
+  test('editing: Save is the primary button, Undo and Redo icon buttons, the sidebar docked (T205’s review)', async ({
+    page,
+  }) => {
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    const bar = page.getByRole('toolbar', { name: 'Dashboard editing' });
+
+    // <button class="btn primary" data-save>Save</button>
+    expect(
+      await style(bar.getByRole('button', { name: 'Save' }), 'background-color', 'color'),
+    ).toEqual({
+      'background-color': await token(page, 'accent'),
+      color: await token(page, 'text-on-accent'),
+    });
+    // <button class="iconbtn" data-undo aria-label="Undo">↶</button>, and Redo the same
+    for (const name of ['Undo', 'Redo']) {
+      expect(
+        await style(
+          bar.getByRole('button', { name }),
+          'width',
+          'height',
+          'border-top-color',
+          'background-color',
+        ),
+      ).toEqual({
+        width: '32px',
+        height: '32px',
+        'border-top-color': 'rgba(0, 0, 0, 0)',
+        'background-color': 'rgba(0, 0, 0, 0)',
+      });
+    }
+
+    // The tile's ⋯ menu, which editing brings: the same 26 px icon button.
+    expect(
+      await tileActionStyle(page.locator('[data-tile="tile-status"] .tile-menu > button')),
+    ).toEqual(TILE_ACTION);
+
+    // .pane.right { border-left: 1px solid var(--border-subtle) } — and no other border or radius
+    expect(
+      await style(
+        page.getByRole('complementary', { name: 'Edit sidebar' }),
+        'border-left-width',
+        'border-left-color',
+        'border-top-width',
+        'border-radius',
+      ),
+    ).toEqual({
+      'border-left-width': '1px',
+      'border-left-color': await token(page, 'border-subtle'),
+      'border-top-width': '0px',
+      'border-radius': '0px',
+    });
   });
 });
 
@@ -371,23 +459,47 @@ test.describe('T204: the filter bar', () => {
           folderId: 'root',
           owner: 'admin',
           settings: { width: 'fixed' },
-          pages: [{ id: 'only', title: 'Only', items: [] }],
-          filters: [{ id: 'f-status', widget: 'checkbox', member: 'orders.status' }],
+          pages: [
+            { id: 'only', title: 'Only', items: [] },
+            { id: 'second', title: 'Second', items: [] },
+          ],
+          filters: [
+            { id: 'f-status', widget: 'checkbox', member: 'orders.status' },
+            { id: 'f-ordered', widget: 'dateRange', member: 'orders.ordered_at' },
+          ],
         },
       },
     });
     await page.goto(`/explore/dashboards/${id}`);
     await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
 
-    // .filterbar { background: var(--bg-page); border-bottom: 1px solid var(--border-subtle) }
+    // .filterbar { padding: 10px 24px; background: var(--bg-page); border-bottom: 1px solid var(--border-subtle) }
     const bar = page.getByRole('region', { name: 'Filters' });
     expect(
-      await style(bar, 'background-color', 'border-bottom-width', 'border-bottom-color'),
+      await style(
+        bar,
+        'background-color',
+        'border-bottom-width',
+        'border-bottom-color',
+        'padding-top',
+        'padding-left',
+      ),
     ).toEqual({
       'background-color': await token(page, 'bg-page'),
       'border-bottom-width': '1px',
       'border-bottom-color': await token(page, 'border-subtle'),
+      'padding-top': '10px',
+      'padding-left': '24px',
     });
+    // Under the page tabs, as dashboard.js draws .dash-tabs and then .filterbar.
+    const tabsFirst = await page.evaluate(() => {
+      const tabs = document.querySelector('[role="tablist"][aria-label="Pages"]');
+      const filters = document.querySelector('section[aria-label="Filters"]');
+      return tabs !== null && filters !== null
+        ? Boolean(tabs.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING)
+        : null;
+    });
+    expect(tabsFirst).toBe(true);
 
     // .fw { height: 32px; border: 1px solid var(--border-strong); border-radius: 6px;
     //       background: var(--bg-surface); padding: 0 6px 0 10px; font-size: 13px }
@@ -445,8 +557,49 @@ test.describe('T204: the filter bar', () => {
     await expect(summary).toHaveAttribute('aria-expanded', 'true');
     await pill.getByRole('checkbox', { name: 'shipped' }).check();
     await expect(pill.getByRole('button', { name: 'Orders Status: shipped' })).toBeVisible();
+    // Focus in the popover, as a keyboard user has it — Safari does not
+    // focus a checkbox on click.
+    await pill.getByRole('checkbox', { name: 'shipped' }).focus();
     await page.keyboard.press('Escape');
     await expect(pill.getByRole('checkbox')).toHaveCount(0);
+    // Escape hands focus back to the pill (T204's review).
+    await expect(pill.getByRole('button', { name: 'Orders Status: shipped' })).toBeFocused();
+
+    // .select { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px;
+    //           background: var(--bg-surface) } — the date filter's presets.
+    const dates = bar.getByRole('group', { name: 'Date range filter 2' });
+    await dates.locator('button[aria-expanded]').click();
+    /**
+     * The radius a select given the prototype's 4 px computes in this browser.
+     * WebKit's native select reports its own (5 px, measured) whatever is
+     * declared — as it keeps its own closed font size (direction.md §3) — and
+     * would do the same to the prototype's select, so the rule is compared,
+     * not WebKit's rendering of it.
+     */
+    const prototypeRadius = await page.evaluate(() => {
+      const probe = document.createElement('select');
+      probe.style.borderRadius = '4px';
+      document.body.append(probe);
+      const radius = getComputedStyle(probe).borderRadius;
+      probe.remove();
+      return radius;
+    });
+    expect(
+      await style(
+        dates.getByLabel('Orders Ordered at', { exact: true }),
+        'height',
+        'border-top-width',
+        'border-top-color',
+        'border-radius',
+        'background-color',
+      ),
+    ).toEqual({
+      height: '32px',
+      'border-top-width': '1px',
+      'border-top-color': await token(page, 'border-strong'),
+      'border-radius': prototypeRadius,
+      'background-color': await token(page, 'bg-surface'),
+    });
   });
 });
 
@@ -575,7 +728,7 @@ test.describe('T205: the edit sidebar', () => {
     });
 
     // Properties: a section headed by the tile's kind; each field's label
-    // (.field > label: 12/16 600, secondary) over its 32 px input.
+    // (.field > label: 12/16 600, secondary) over its 28 px input.
     await image.click();
     await page
       .locator('[data-tile]')
@@ -597,8 +750,12 @@ test.describe('T205: the edit sidebar', () => {
       'font-weight': '600',
       color: await token(page, 'text-secondary'),
     });
-    expect(await style(sidebar.getByLabel('Alternative text'), 'height')).toEqual({
-      height: '32px',
+    // .input.sm { height: 28px; font-size: 12px } — dashboard.js draws every
+    // Properties control small. This said 32 px, against the prototype, until
+    // T205's review.
+    expect(await style(sidebar.getByLabel('Alternative text'), 'height', 'font-size')).toEqual({
+      height: '28px',
+      'font-size': '12px',
     });
   });
 });

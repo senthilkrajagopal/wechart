@@ -63,7 +63,11 @@ test('activating Edit reveals the edit bar and the sidebar', async ({ page }) =>
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const bar = page.getByRole('toolbar', { name: 'Dashboard editing' });
-  await expect(bar.getByRole('button')).toHaveText(['Undo', 'Redo', 'Discard', 'Save']);
+  // By name: Undo and Redo are icon buttons, named by aria-label (AC-187).
+  const names = ['Undo', 'Redo', 'Discard', 'Save'];
+  await expect(bar.getByRole('button')).toHaveCount(names.length);
+  for (const [index, name] of names.entries())
+    await expect(bar.getByRole('button').nth(index)).toHaveAccessibleName(name);
 
   const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
   await expect(sidebar.getByRole('tab')).toHaveText(['Add', 'Outline', 'Properties']);

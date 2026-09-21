@@ -1,5 +1,5 @@
 import type { ChartDocument, RenderSpec } from '@wechart/core';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { TileSize } from '../editor/PreviewFrame';
 import { ChartTile } from '../tiles/ChartTile';
@@ -1156,25 +1156,32 @@ export function DashboardView({
               saving={session.saving}
               onSaving={setSaving}
             />
-            <FilterBar
-              filters={session.document.filters ?? []}
-              dashboard={session.document}
-              chartTitleOf={chartTitleOf}
-              values={filterValues}
-              onValue={(key, value) => {
-                setFilterValues((current) => {
-                  const next = { ...current };
-                  if (value === undefined) delete next[key];
-                  else next[key] = value;
-                  return next;
-                });
-              }}
-              editing={session.editing}
-              onFilters={(next) => {
-                session.change({ ...session.document, filters: next });
-              }}
-            />
             <DashboardPages
+              /**
+               * Under the page tabs, as the prototype has it (AC-187: its
+               * `.dash-tabs`, then `.filterbar`), so an open filter's popover
+               * lies over the tiles rather than over the tabs.
+               */
+              filterBar={
+                <FilterBar
+                  filters={session.document.filters ?? []}
+                  dashboard={session.document}
+                  chartTitleOf={chartTitleOf}
+                  values={filterValues}
+                  onValue={(key, value) => {
+                    setFilterValues((current) => {
+                      const next = { ...current };
+                      if (value === undefined) delete next[key];
+                      else next[key] = value;
+                      return next;
+                    });
+                  }}
+                  editing={session.editing}
+                  onFilters={(next) => {
+                    session.change({ ...session.document, filters: next });
+                  }}
+                />
+              }
               session={session}
               charts={charts}
               onEditChart={openEditor}
@@ -1245,9 +1252,12 @@ function DashboardPages({
   where,
   onAim,
   onOpenPage,
+  filterBar,
 }: {
   session: EditSession<DashboardDocument>;
   charts: TileCharts;
+  /** The filter bar, drawn under the page tabs. */
+  filterBar?: ReactNode;
   /**
    * Open a tile's chart in the editor overlay (T032) — what E does to the
    * focused tile (AC-057) and what the tile's pencil does. The tile id comes
@@ -1587,6 +1597,8 @@ function DashboardPages({
           ))}
         </div>
       ) : null}
+
+      {filterBar}
 
       <div
         data-testid="dashboard-page"

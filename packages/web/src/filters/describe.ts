@@ -14,6 +14,8 @@ export function summaryOf(widget: FilterWidget, value: FilterValue | undefined):
       if (value.from !== '') return `From ${value.from}`;
       return value.to === '' ? 'Between dates' : `To ${value.to}`;
     case 'values': {
+      // Nothing picked filters nothing (a URL can carry an empty pick).
+      if (value.values.length === 0) return 'All';
       const [first, second, ...rest] = value.values;
       const shown = [first, second].filter((each) => each !== undefined).join(', ');
       return rest.length === 0 ? shown : `${shown} +${String(rest.length)}`;
@@ -21,7 +23,8 @@ export function summaryOf(widget: FilterWidget, value: FilterValue | undefined):
     case 'range':
       if (value.min !== undefined && value.max !== undefined)
         return `${String(value.min)} – ${String(value.max)}`;
-      return value.min !== undefined ? `≥ ${String(value.min)}` : `≤ ${String(value.max)}`;
+      if (value.min !== undefined) return `≥ ${String(value.min)}`;
+      return value.max !== undefined ? `≤ ${String(value.max)}` : 'All';
   }
 }
 

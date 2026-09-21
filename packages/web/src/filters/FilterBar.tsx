@@ -189,11 +189,21 @@ function Filters({
   // Escape, or a press outside the open pill, closes its popover.
   useEffect(() => {
     if (openId === null) return undefined;
+    const pillOf = () => bar.current?.querySelector(`[data-filter-id="${CSS.escape(openId)}"]`);
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setChosenOpen({ id: null });
+      if (event.key !== 'Escape') return;
+      const pill = pillOf();
+      setChosenOpen({ id: null });
+      /**
+       * Focus inside goes back to the pill's summary: left where it was, it
+       * fell to the page when the popover went (T204's review), as the ⋯
+       * menu's does not (`MoveToMenu`).
+       */
+      if (pill?.contains(document.activeElement) === true)
+        pill.querySelector<HTMLElement>('button[aria-expanded]')?.focus();
     };
     const onPress = (event: PointerEvent) => {
-      const pill = bar.current?.querySelector(`[data-filter-id="${CSS.escape(openId)}"]`);
+      const pill = pillOf();
       if (pill !== null && pill !== undefined && !pill.contains(event.target as Node))
         setChosenOpen({ id: null });
     };
@@ -240,6 +250,18 @@ function Filters({
             data-testid={`filter-${filter.id}`}
             data-filter-id={filter.id}
             data-widget={filter.widget}
+            /**
+             * Focus moved out of the pill — Tab past the popover's last
+             * control — closes it, or focus lands on whatever it lies over
+             * (T204's review). Only a move to somewhere else: a click on a
+             * control that takes no focus, as a checkbox in Safari does not,
+             * has no next element, and must not close it.
+             */
+            onBlur={(event) => {
+              const next = event.relatedTarget;
+              if (open && next !== null && !event.currentTarget.contains(next))
+                setChosenOpen({ id: null });
+            }}
           >
             {/* Its scope, on the widget, in either mode (direction.md rule 14). */}
             <span className="filter-pill__scope" data-testid="scope-badge">
@@ -249,7 +271,8 @@ function Filters({
               type="button"
               className="filter-pill__summary"
               aria-expanded={open}
-              aria-controls={popover}
+              // Only while there is a popover for it to name.
+              {...(open ? { 'aria-controls': popover } : {})}
               onClick={() => {
                 setChosenOpen({ id: open ? null : filter.id });
               }}
@@ -329,7 +352,8 @@ function Filters({
                         onValue(key, undefined);
                       }}
                     >
-                      Remove filter
+                      {/* Its name begins with what it shows (WCAG 2.5.3). */}
+                      Remove
                     </button>
                   </div>
                 ) : null}

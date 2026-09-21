@@ -418,6 +418,17 @@ Two further changes made at the same time, neither of them a contrast failure:
 - **Jobs** adds Run history (wechart-owned, because Cube Core keeps none), a Queue view with job tokens, per-run logs, partition-level builds, and "Resume" for suspended schedules.
 - **Data sources** adds an add wizard (Type → Connection → Test → Name and assign), driver-specific fields, a health history recorded by wechart's periodic tests, and a Usage tab listing the cubes on each source.
 
+## 7d. Taken from the approved prototype (AC-187, user decision, 2026-09-21)
+
+The user asked that the UI "align with the ui styles in" the design prototype (`docs/design/prototype/`). Where the prototype's component rules differ from §3–5, the prototype's rule is followed, and each difference is recorded here:
+
+- **Radius:** buttons, icon buttons, filter pills, tiles and panels are 6 px, where §4 says 4 px for controls. Inputs and selects stay 4 px, and a pill's scope tag is 3 px.
+- **13 px type**, which is outside the §3 scale, on filter pills and page tabs.
+- **Inspector controls** (the Properties panel) are 28 px at 12 px (`.input.sm`), as §4's compact row for inspectors.
+- **`bg-hover`**, a token not in §5, for a hovered button or row. Light `#efeeea`, dark `#2c2c2a`. These are the nearest shades to the prototype's that pass the contrast audit (AC-005); the prototype's own `#e9e8e4` does not.
+- **`--wc-shadow-pop`**, the prototype's popover shadow, in each theme. It is a shadow, not a colour text sits on, so it is outside the audited tokens.
+- **Layout:** the dashboard runs edge to edge. The header, the page tabs, the filter band and the tiles are each padded 24 px from the sides, the filter band sits below the page tabs, and the edit sidebar is docked with a rule on its left.
+
 ## 8. Components (primitives and states)
 
 - **Shell:** TopBar, WorkspaceSwitcher, Pane (with collapsed rail), Splitter, Drawer, CommandPalette.

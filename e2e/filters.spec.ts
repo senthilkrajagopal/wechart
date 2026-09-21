@@ -440,6 +440,8 @@ test('the filters in effect are in the URL, and the URL opens with them', async 
   await expect(filterBar(opened).getByRole('checkbox', { name: 'completed' })).not.toBeChecked();
   await open(pill(opened, 'dateRange'));
   await expect(filterBar(opened).getByLabel(ORDERED_AT, { exact: true })).toHaveValue('this year');
+  // Closed: under the page tabs (AC-187), an open popover lies over the tiles.
+  await opened.keyboard.press('Escape');
   const sales = opened.locator('[data-tile="tile-sales"]');
   await sales.getByTestId('toggle-table-view').click();
   await expect(sales.getByTestId('table-row')).toHaveCount(1);

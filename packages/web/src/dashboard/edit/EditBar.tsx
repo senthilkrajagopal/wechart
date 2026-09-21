@@ -51,6 +51,8 @@ interface Control {
   readonly className?: string;
   /** The id of the text explaining why the control is disabled. */
   readonly describedBy?: string;
+  /** Drawn as this glyph, named by its label (the prototype's `.iconbtn`). */
+  readonly icon?: string;
 }
 
 export function EditBar({
@@ -69,8 +71,23 @@ export function EditBar({
   const reasonId = useId();
 
   const controls: readonly Control[] = [
-    { id: 'undo', label: 'Undo', disabled: saving || !canUndo, run: onUndo },
-    { id: 'redo', label: 'Redo', disabled: saving || !canRedo, run: onRedo },
+    // Icon buttons, as the prototype's edit bar has them (AC-187).
+    {
+      id: 'undo',
+      label: 'Undo',
+      disabled: saving || !canUndo,
+      run: onUndo,
+      icon: '↶',
+      className: 'icon-button',
+    },
+    {
+      id: 'redo',
+      label: 'Redo',
+      disabled: saving || !canRedo,
+      run: onRedo,
+      icon: '↷',
+      className: 'icon-button',
+    },
     {
       id: 'discard',
       label: discardLabel(changes),
@@ -137,8 +154,15 @@ export function EditBar({
             onClick={() => {
               if (!control.disabled) control.run();
             }}
+            {...(control.icon === undefined
+              ? {}
+              : { 'aria-label': control.label, title: control.label })}
           >
-            {control.label}
+            {control.icon === undefined ? (
+              control.label
+            ) : (
+              <span aria-hidden="true">{control.icon}</span>
+            )}
           </button>
         ))}
       </div>
