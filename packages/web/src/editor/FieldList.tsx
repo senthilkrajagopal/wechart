@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { META_QUERY } from '../query/meta';
 import { GROUP_LABELS, cubesFrom, groupMembers, membersOf, type Member } from './fields';
 
 /**
@@ -41,14 +42,8 @@ export function FieldList({
     onCubeChange?.(next);
   };
 
-  const meta = useQuery({
-    queryKey: ['meta'],
-    queryFn: async () => {
-      const response = await fetch('/api/meta');
-      if (!response.ok) throw new Error(`Could not load the model: ${String(response.status)}`);
-      return (await response.json()) as unknown;
-    },
-  });
+  // One definition of the model query for every caller (see META_QUERY).
+  const meta = useQuery(META_QUERY);
 
   if (meta.isPending) return <p>Loading the model…</p>;
   if (meta.isError) {

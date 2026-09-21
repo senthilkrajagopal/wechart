@@ -302,6 +302,74 @@ export async function seedDevData(db: Kysely<Database>): Promise<void> {
   });
 
   /**
+   * A dashboard showing a currency measure, so AC-046 can be seen on a tile
+   * (T194). None of the main dashboard's charts uses a formatted member —
+   * both count orders — which is why tiles could draw raw numbers for so long
+   * without any test noticing.
+   *
+   * Unfoldered, so it appears in no folder listing, and titled to match none
+   * of the search specs' queries ("Company dashboard", "chart 3", "Seeded
+   * local chart", "Finance chart"); its charts are local to it, so search
+   * never lists them (AC-019).
+   */
+  await repo.create({
+    kind: 'dashboard',
+    id: 'seed-dashboard-formats',
+    body: {
+      title: 'Revenue formats dashboard',
+      owner: 'admin',
+      schemaVersion: 1,
+      settings: { width: 'fixed' },
+      pages: [
+        {
+          id: 'main',
+          title: 'Main',
+          items: [
+            { id: 'tile-revenue', kind: 'chart', w: 12, h: 40, chartId: 'seed-chart-revenue' },
+            // A measure with no format beside it, so a change that wrote every
+            // measure as money would fail rather than pass.
+            { id: 'tile-count', kind: 'chart', w: 12, h: 40, chartId: 'seed-chart-count-plain' },
+          ],
+        },
+      ],
+    },
+  });
+  await repo.create({
+    kind: 'chart',
+    id: 'seed-chart-revenue',
+    body: {
+      schemaVersion: 1,
+      title: 'Revenue by status',
+      localToDashboardId: 'seed-dashboard-formats',
+      owner: 'admin',
+      chart: {
+        source: { cube: 'orders' },
+        wells: {
+          measures: ['orders.total_amount'],
+          dimensions: ['orders.status'],
+          timeDimensions: [],
+        },
+        chartType: 'bar',
+      },
+    },
+  });
+  await repo.create({
+    kind: 'chart',
+    id: 'seed-chart-count-plain',
+    body: {
+      schemaVersion: 1,
+      title: 'Orders by status',
+      localToDashboardId: 'seed-dashboard-formats',
+      owner: 'admin',
+      chart: {
+        source: { cube: 'orders' },
+        wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+        chartType: 'bar',
+      },
+    },
+  });
+
+  /**
    * A chart whose axis settings are saved, so AC-182's "axis settings" can be
    * seen to load in the editor's Axes panel. None of the dashboard's charts
    * carries any, and giving one of them some would change how that tile draws

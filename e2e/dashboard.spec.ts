@@ -931,6 +931,59 @@ test('a save failure does not hand the scrollbar back to the window', async ({ p
 });
 
 /**
+ * T194 / AC-046: THE SYSTEM SHALL format every value with its member's format
+ * from the Cube model … in axes, labels, tooltips and tables.
+ * Fails when: a value renders without its declared format in any of those
+ * places.
+ *
+ * Proven in the editor at T052, and never on a dashboard, where the model's
+ * formats were not supplied: the same currency measure read "$…" where it was
+ * built and a bare number on every tile.
+ */
+/** The first row's value in the named column of a tile's table view. */
+async function tableValue(tile: import('@playwright/test').Locator, member: string) {
+  await tile.getByTestId('toggle-table-view').click();
+  const headers = await tile.locator('thead th').allTextContents();
+  const column = headers.indexOf(member);
+  expect(column).toBeGreaterThanOrEqual(0);
+  return tile.getByTestId('table-row').first().locator('td').nth(column);
+}
+
+test('a dashboard tile writes a currency measure as money, on its axis and in its table', async ({
+  page,
+}) => {
+  await page.goto('/explore/dashboards/seed-dashboard-formats');
+  const tile = page.locator('[data-tile="tile-revenue"]');
+  await expect(tile.getByTestId('chart-canvas')).toBeVisible();
+
+  // The axis — drawn as SVG text, so read as it is drawn.
+  await expect(
+    tile
+      .locator('svg text')
+      .filter({ hasText: /^\$[\d,.KMB]+$/ })
+      .first(),
+  ).toBeVisible();
+
+  // The table, by the measure's own column rather than by position: Cube
+  // decides the order of the columns it returns.
+  await expect(await tableValue(tile, 'orders.total_amount')).toHaveText(/^\$[\d,]+\.\d{2}$/);
+});
+
+test('a measure with no declared format stays a plain number on a tile', async ({ page }) => {
+  /**
+   * The other half. A change that wrote *every* measure as money would pass
+   * the test above; a count has no format in the model and must be left as
+   * it is.
+   */
+  await page.goto('/explore/dashboards/seed-dashboard-formats');
+  const tile = page.locator('[data-tile="tile-count"]');
+  await expect(tile.getByTestId('chart-canvas')).toBeVisible();
+
+  await expect(tile.locator('svg text').filter({ hasText: /^\$/ })).toHaveCount(0);
+  await expect(await tableValue(tile, 'orders.count')).toHaveText(/^[\d,]+$/);
+});
+
+/**
  * T193 / AC-034 ("Fails when … the dashboard tile does not reflect the applied
  * changes"): a chart saved without a type — "follow the recommender" — has to
  * draw on a dashboard, and with the type the editor gives it.

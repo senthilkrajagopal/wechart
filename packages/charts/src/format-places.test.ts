@@ -47,6 +47,40 @@ describe('the axis', () => {
     expect(labels.some((label) => label.startsWith('$'))).toBe(false);
   });
 
+  it('formats the value axis of a horizontal bar, not its category axis', () => {
+    /**
+     * T194. A horizontal bar draws its value axis along x and its categories
+     * down y, but the member's formatter was always hung on `yAxis`. So the
+     * measure's values went unformatted and the measure's currency format was
+     * applied to the *categories* — order ids reading "$1,234.00". Numeric
+     * categories are used here so that mistake shows; with text categories a
+     * currency formatter would pass them through looking untouched.
+     *
+     * It is reached without anyone choosing a horizontal bar: the recommender
+     * turns a bar with more than fifty categories horizontal, and since T193 a
+     * dashboard follows it.
+     */
+    const ORDER = 'orders.id';
+    const horizontal: RenderSpec = {
+      chartType: 'hbar',
+      encoding: { x: [ORDER], y: [AMOUNT] },
+      rows: [
+        { [ORDER]: 1234, [AMOUNT]: 1000 },
+        { [ORDER]: 5678, [AMOUNT]: 4000 },
+      ],
+      palette: ['#123456'],
+      formats: { [AMOUNT]: 'currency' },
+    };
+
+    const labels = labelsOf(renderToSvg(optionFor(horizontal))).map((label) => label.text);
+
+    // The categories are shown as they are…
+    expect(labels).toContain('1234');
+    expect(labels).not.toContain('$1,234.00');
+    // …and the values as money.
+    expect(labels.some((label) => /^\$[\d,]+/.test(label))).toBe(true);
+  });
+
   it('gives way to an explicit axis setting, which is the more specific one', () => {
     const overridden: RenderSpec = {
       ...spec,

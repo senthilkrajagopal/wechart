@@ -39,6 +39,7 @@ import {
   type ChartTypeState,
 } from './chartTypeState';
 import { OPENED_WITH, type EditorState } from './openChart';
+import { META_QUERY } from '../query/meta';
 import { signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { FieldList } from './FieldList';
@@ -122,14 +123,8 @@ export function ChartEditor({ initial = OPENED_WITH }: ChartEditorProps = {}) {
    */
   const [dragging, setDragging] = useState<Member | null>(null);
 
-  const meta = useQuery({
-    queryKey: ['meta'],
-    queryFn: async () => {
-      const response = await fetch('/api/meta');
-      if (!response.ok) throw new Error(`Could not load the model: ${String(response.status)}`);
-      return (await response.json()) as unknown;
-    },
-  });
+  // Shared with the dashboard, which takes its number formats from it (AC-046).
+  const meta = useQuery(META_QUERY);
 
   const available = useMemo(
     () => (cubeName ? membersOf(meta.data, cubeName) : []),

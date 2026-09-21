@@ -7,6 +7,7 @@ import {
   type RenderSpec,
 } from '@wechart/core';
 
+import { formatsOf } from '../editor/fields';
 import { recommendedTypeOf } from '../query/signature';
 import { NOTHING_CHOSEN } from './edit/templates';
 
@@ -43,6 +44,45 @@ export type LoadRows = (query: Record<string, unknown>) => Promise<Record<string
  * sending one to Cube to learn that would put an error on a tile that simply
  * has not been built. The editor's guard is the same (`!isEmpty(spec)`).
  */
+/**
+ * Each member's number format from the Cube model (AC-046), or none.
+ *
+ * Never throws. None while the model has not arrived; none if it is
+ * malformed — a `cubes` that is not a list, or holds a null, makes
+ * `formatsOf` throw, and that would otherwise fail every tile together over
+ * something that affects only how numbers are written.
+ *
+ * What a tile shows when the model is unavailable is not settled: no
+ * criterion covers it, and the user has not decided. It draws unformatted —
+ * which for a `percent` measure changes how large the number looks, not only
+ * its style. Recorded on T194 as an open question.
+ */
+export function formatsFrom(meta: unknown): Readonly<Record<string, string>> {
+  try {
+    return formatsOf(meta);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Every tile's chart with the model's formats applied (T194, AC-046).
+ *
+ * Applied when the dashboard draws, not when it loads. `compile` only carries
+ * formats onto the spec — it computes nothing from them — so this is the same
+ * result the editor gets by passing them to `compile`, without making any
+ * tile wait for the model: each paints as soon as its own data arrives, and
+ * picks up its formats when the model does. The first version awaited the
+ * model inside every chart's load, so every tile's first paint waited on it
+ * and a stuck model request held the whole dashboard.
+ */
+export function withFormats(
+  specs: Readonly<Record<string, RenderSpec>>,
+  formats: Readonly<Record<string, string>>,
+): Readonly<Record<string, RenderSpec>> {
+  return Object.fromEntries(Object.entries(specs).map(([id, spec]) => [id, { ...spec, formats }]));
+}
+
 export async function tileChartOf(document: ChartDocument, load: LoadRows): Promise<TileChart> {
   /**
    * Everything after reading the document is inside one `try`. Every tile's

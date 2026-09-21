@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { TileLoadError } from '../query/loadTile';
 import { recommendedTypeOf } from '../query/signature';
-import { tileChartOf } from './chartSpec';
+import { formatsFrom, tileChartOf, withFormats } from './chartSpec';
 import { NOTHING_CHOSEN } from './edit/templates';
 
 /**
@@ -195,6 +195,67 @@ describe('a chart whose query returns no rows', () => {
     // Drawn, not refused — stated outright rather than implied.
     expect('spec' in chart).toBe(true);
     expect(typeDrawn(chart)).toBe(recommendedTypeOf(spec, []));
+  });
+});
+
+/**
+ * T194 / AC-046. The editor has always given `compile` the model's formats;
+ * the dashboard never did, so a currency measure read "$76,900.00" where it
+ * was built and "76,900" on every dashboard.
+ *
+ * `compile` only carries formats onto the spec — it computes nothing from them
+ * — so the dashboard applies them when it draws rather than when it loads.
+ * Every tile then paints as soon as its own data arrives, whatever the model
+ * is doing, and a slow or broken model cannot hold up or blank a dashboard.
+ */
+describe('number formats (AC-046)', () => {
+  const drawn = (formats?: Readonly<Record<string, string>>) =>
+    ({
+      chartType: 'bar',
+      encoding: { x: ['orders.status'], y: ['orders.total_amount'] },
+      rows: [],
+      palette: [],
+      ...(formats === undefined ? {} : { formats }),
+    }) as const;
+
+  it('gives every tile’s chart the model’s formats', () => {
+    const formats = { 'orders.total_amount': 'currency' };
+
+    const specs = withFormats({ a: drawn(), b: drawn() }, formats);
+
+    expect(specs['a']?.formats).toEqual(formats);
+    expect(specs['b']?.formats).toEqual(formats);
+  });
+
+  it('reads the formats out of the model', () => {
+    const meta = {
+      cubes: [
+        {
+          name: 'orders',
+          measures: [{ name: 'orders.total_amount', format: 'currency' }, { name: 'orders.count' }],
+          dimensions: [{ name: 'orders.share', format: 'percent' }],
+        },
+      ],
+    };
+
+    expect(formatsFrom(meta)).toEqual({
+      'orders.total_amount': 'currency',
+      'orders.share': 'percent',
+    });
+  });
+
+  it('has none while the model has not arrived', () => {
+    expect(formatsFrom(undefined)).toEqual({});
+  });
+
+  it('has none, rather than failing every tile, when the model is malformed', () => {
+    /**
+     * Reading a model whose `cubes` is not a list, or holds a null, throws.
+     * Were that to escape, every tile on the dashboard would fail together
+     * over something that affects only how numbers are written.
+     */
+    expect(formatsFrom({ cubes: 5 })).toEqual({});
+    expect(formatsFrom({ cubes: [null] })).toEqual({});
   });
 });
 

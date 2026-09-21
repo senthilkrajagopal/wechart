@@ -105,9 +105,30 @@ export function applyAxes(option: EChartsOption, spec: RenderSpec): EChartsOptio
    * and the axis setting is the exception, not the other way round — a
    * currency measure should read as money without anyone asking.
    */
+  /**
+   * The member's format belongs on the axis that carries the *values*, which
+   * is not always `yAxis`: a horizontal bar draws its values along x and its
+   * categories down y. Hung on `yAxis` regardless, the measure's values went
+   * unformatted and its currency format was applied to the categories — order
+   * ids reading "$1,234.00" (T194). Found by the axis's own type rather than
+   * by chart type, so a horizontal type added later needs no entry here.
+   *
+   * Only where exactly one axis is a value axis. A scatter has two, each its
+   * own measure, which is T195's to format.
+   */
+  const isValueAxis = (key: 'xAxis' | 'yAxis') => {
+    const axis = option[key];
+    return (
+      axis !== undefined && !Array.isArray(axis) && (axis as { type?: unknown }).type === 'value'
+    );
+  };
+  const valueKey: 'xAxis' | 'yAxis' =
+    isValueAxis('xAxis') && !isValueAxis('yAxis') ? 'xAxis' : 'yAxis';
+  const valueSettings = valueKey === 'xAxis' ? x : y;
+
   const measure = membersOn(spec.encoding, 'y')[0];
   const memberFormat =
-    measure === undefined || y?.numberFormat !== undefined
+    measure === undefined || valueSettings?.numberFormat !== undefined
       ? undefined
       : { axisLabel: { formatter: formatterFor(measure, spec.formats ?? {}) } };
 
@@ -127,7 +148,7 @@ export function applyAxes(option: EChartsOption, spec: RenderSpec): EChartsOptio
 
   return {
     ...option,
-    ...merge('xAxis', x),
-    ...merge('yAxis', y, memberFormat ?? {}),
+    ...merge('xAxis', x, valueKey === 'xAxis' ? (memberFormat ?? {}) : {}),
+    ...merge('yAxis', y, valueKey === 'yAxis' ? (memberFormat ?? {}) : {}),
   };
 }

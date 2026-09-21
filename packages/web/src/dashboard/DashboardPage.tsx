@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { readChartDocument, type RenderSpec } from '@wechart/core';
 
 import { loadTile } from '../query/loadTile';
-import { tileChartOf, type TileChart } from './chartSpec';
+import { META_QUERY } from '../query/meta';
+import { formatsFrom, tileChartOf, withFormats, type TileChart } from './chartSpec';
 import { DashboardView } from './DashboardView';
 import { saveDashboard } from './edit/save';
 import { DEFAULT_SETTINGS, type DashboardDocument } from './model/document';
@@ -178,6 +179,18 @@ function LoadedDashboard({
     },
   });
 
+  /**
+   * Number formats from the Cube model (AC-046, T194), applied as the tiles
+   * are drawn rather than while they load: no tile waits for the model, and
+   * each picks its formats up when the model arrives. The same query the
+   * editor uses, so the two read one cache entry.
+   */
+  const meta = useQuery(META_QUERY);
+  const specs = useMemo(
+    () => withFormats(charts.data?.specs ?? {}, formatsFrom(meta.data)),
+    [charts.data, meta.data],
+  );
+
   return (
     <>
       {saveFailed === '' ? null : (
@@ -196,7 +209,7 @@ function LoadedDashboard({
          */
         key={dashboardId}
         document={document}
-        specs={charts.data?.specs ?? {}}
+        specs={specs}
         errors={charts.data?.errors ?? {}}
         loading={charts.isPending}
         /**
