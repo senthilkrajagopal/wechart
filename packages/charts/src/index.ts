@@ -31,3 +31,4 @@ export {
   type Shape,
 } from './interaction/hitTest';
 export { dragGesture, type DragEvent, type DragGesture } from './interaction/dragOverlay';
+export { stripeFor, type AxisPixels, type Stripe } from './interaction/axisRange';

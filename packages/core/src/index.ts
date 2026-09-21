@@ -78,6 +78,13 @@ export {
 } from './markings/apply';
 
 export {
+  applyAxisRange,
+  rangeFromDrag,
+  type AxisDrag,
+  type RangeModifiers,
+} from './markings/range';
+
+export {
   EMPTY_PREDICATE,
   isEmptyPredicate,
   matchesPredicate,

@@ -933,10 +933,16 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/charts/src/dom/DataTable.tsx`, `packages/charts/src/dom/rowMarking.test.tsx`
   - Failing test: `rowMarking.test.tsx`: a click marks the row, Shift-click marks the range from the anchor in display order, and rows are not markable when the cube exposes no primary key (AC-092).
   - Depends on: T041, T093
-- [ ] T099 (AC-093) Mark a continuous range by dragging along an axis, shown as a stripe with stable bounds
-  - Files: `packages/core/src/markings/range.ts`, `packages/charts/src/interaction/axisRange.ts`, `packages/core/src/markings/range.test.ts`
+- [x] T099 (AC-093) Mark a continuous range by dragging along an axis, shown as a stripe with stable bounds
+  - Files: `packages/core/src/markings/range.ts`, `packages/core/src/markings/range.test.ts`, `packages/charts/src/interaction/axisRange.ts`, `packages/charts/src/interaction/axisRange.test.ts`, `packages/core/src/index.ts`, `packages/charts/src/index.ts`
   - Failing test: `range.test.ts`: an axis drag stores a bounded range, renders a coloured stripe on that axis, and the bounds are unchanged after a filter change (AC-093).
   - Depends on: T094
+  - Done 2026-09-20. AC-093 ticked.
+  - **Why the stability clause exists**, from `references-markings.md` quoting Spotfire: a marked range "does not take active filtering and data limitations into consideration". A range derived from the extent of the data on screen would rescale on every filter change, so the same stripe would cover a different span of values from one moment to the next and two readings of one dashboard would not be comparable. The bounds are two values on the axis and nothing else.
+  - **The stripe is widened when it would otherwise vanish.** "The stripe does not appear" is the criterion's first failing state, and a range narrower than a pixel on a zoomed-out axis reaches it by arithmetic rather than by anyone forgetting to draw it. Mutation-verified. The widening goes away from the far edge so it cannot push the stripe off the axis.
+  - **A range entirely off the axis draws nothing**, rather than clamping — a clamped stripe would sit at the edge advertising a marking that is not on this axis at all.
+  - **A backwards drag is the same range.** Dragging right to left is the same intention, and a range that ended before it started would match nothing: a marking that silently does nothing, which is worse than one that refuses. Mutation-verified.
+  - The pixel conversion stays at the call site (`convertToPixel` / `convertFromPixel`), as with the hit-testing geometry, so the part worth testing needs no chart instance — and so the stripe can be asserted to come from the stored bounds rather than from the current result.
 - [ ] T100 (AC-094) Unmark on an empty-plot click or Escape, leaving other markings alone
   - Files: `packages/charts/src/interaction/clear.ts`, `packages/charts/src/interaction/clear.test.ts`
   - Failing test: `clear.test.ts`: clicking empty plot area or pressing Escape on a focused tile clears only that tile's marking (AC-094).
