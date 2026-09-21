@@ -344,7 +344,8 @@ type CubeTimeDimension = BaseCubeDimension & {
 };
 ```
 
-- **`connectedComponent`:** "If the same value is returned for two cubes, then there is at least one join path between them" ([rest-ref]).
+- **`connectedComponent`:** "If the same value is returned for two cubes, then there is at least one join path between them" ([rest-ref]). **This overstates it.** See `markings-query-support.md`, "Corrections to sibling research docs" item 2 and Q4. The component is computed over the undirected join graph, but Cube joins along directed edges, so the same component is necessary and not sufficient. Use it only to rule a join out.
+- **Observed against the running Cube v1.7.42 (2026-09-21, T085 review), confirming that correction.** The seed's `customers` and `products` both have `connectedComponent: 1`, and both are joined only *from* `orders`. `{measures:['customers.count'], dimensions:['customers.country'], filters:[{member:'products.category', operator:'equals', values:['Components']}]}` returns **HTTP 400 `{"type":"UserError","error":"Can't find join path to join 'customers', 'products'"}`**. The same filter on an `orders` query returns 200.
 - **Observed against the running Cube v1.7.42 (local docker-compose, 2026-09-21, T085)**, in `/v1/meta` for the seed model plus one view (`infra/cube/model/views/order_summary.yml`, `join_path: orders`, `includes: [count, status]`):
   - The three joined cubes (`orders` joins `customers` and `products`) each carry `type: 'cube'` and `connectedComponent: 1`.
   - The view carries `type: 'view'` and **no `connectedComponent`**.

@@ -64,13 +64,23 @@ const META = {
 describe('whether a filter’s field reaches a tile’s cube or view', () => {
   const reaches = reachFrom(META);
 
-  it('its own cube, and a cube joined to it, by the field itself', () => {
+  it('its own cube, by the field itself', () => {
     expect(reaches('orders.status', 'orders')).toBe('orders.status');
-    expect(reaches('orders.status', 'products')).toBe('orders.status');
-    expect(reaches('products.category', 'orders')).toBe('products.category');
   });
 
-  it('not a cube with no join path to it', () => {
+  /**
+   * Found by T085's review: the same `connectedComponent` is necessary, not
+   * sufficient — the component ignores direction, Cube's joins do not, and
+   * the seed's customers and products share one yet cannot be joined
+   * (docs/research/cube/markings-query-support.md, Q4). So between two cubes
+   * the model can only rule out; Cube answers the rest.
+   */
+  it('cannot say between two cubes in one join component — Cube answers that', () => {
+    expect(reaches('orders.status', 'products')).toBeUndefined();
+    expect(reaches('products.category', 'orders')).toBeUndefined();
+  });
+
+  it('not a cube in another join component', () => {
     expect(reaches('orders.status', 'weather')).toBe(false);
     expect(reaches('weather.city', 'orders')).toBe(false);
   });
@@ -130,7 +140,7 @@ describe('which tiles a filter covers', () => {
     value: { kind: 'values', values: ['completed'] },
   };
 
-  it('filters the charts it reaches — a view by its own name for the field — and marks the rest', () => {
+  it('filters the charts it may reach — a view by its own name for the field — and marks those it cannot', () => {
     const { reached, notCovered } = coverageOf(DOC, [status], (field, chartId) =>
       reachFrom(META)(field, sources[chartId] ?? ''),
     );
@@ -152,9 +162,17 @@ describe('which tiles a filter covers', () => {
     ).toEqual({ 'c-weather': ['f1'] });
   });
 
-  it('neither filters nor marks a chart it cannot yet say about', () => {
+  /**
+   * Found by T085's review: held back until the model could say, a filter
+   * did nothing at all while the model loaded, or ever if it failed, and a
+   * cube the model could not place was left unfiltered with nothing said.
+   * Asked instead, Cube's own answer decides: a join it cannot build comes
+   * back as such, and the tile is marked then (`FilteredCharts`).
+   */
+  it('filters a chart it cannot yet say about, as it is, for Cube to answer', () => {
     const { reached, notCovered } = coverageOf(DOC, [status], () => undefined);
-    expect(reached).toEqual({});
+    expect(Object.keys(reached)).toEqual(['c-orders', 'c-weather', 'c-summary']);
+    expect(reached['c-weather']?.[0]?.filter.member).toBe('orders.status');
     expect(notCovered).toEqual({});
   });
 

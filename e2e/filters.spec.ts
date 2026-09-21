@@ -540,6 +540,59 @@ test('a tile a filter cannot reach is left unfiltered and marked, with no error'
   await expect(orders.getByRole('alert')).toHaveCount(0);
 });
 
+/**
+ * Found by T085's review: the seed's customers and products share a join
+ * component, but both join only *from* orders, so Cube cannot join them. A
+ * chart on customers, filtered on products' category, is left unfiltered and
+ * marked — and a second filter it can take still applies.
+ */
+test('a filter Cube cannot join to a tile leaves it unfiltered and marked; the others still apply', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await makeChartsDashboard(
+    request,
+    [
+      {
+        tile: 'tile-customers',
+        source: 'customers',
+        measure: 'customers.count',
+        dimension: 'customers.country',
+      },
+    ],
+    [
+      { id: 'f-category', widget: 'checkbox', member: 'products.category' },
+      { id: 'f-country', widget: 'list', member: 'customers.country' },
+    ],
+  );
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const customers = page.locator('[data-tile="tile-customers"]');
+  await customers.getByTestId('toggle-table-view').click();
+  const everyCountry = await customers.getByTestId('table-row').count();
+  expect(everyCountry).toBeGreaterThan(1);
+
+  await filterBar(page).getByRole('checkbox', { name: 'Components' }).check();
+
+  await expect(customers.getByTestId('not-covered')).toHaveText(
+    'Not filtered by Products Category',
+  );
+  await expect(customers.getByTestId('chart-tile')).not.toHaveAttribute('aria-busy', 'true');
+  await expect(customers.getByRole('alert')).toHaveCount(0);
+  await expect(customers.getByTestId('table-row')).toHaveCount(everyCountry);
+
+  // A filter it can take, beside the one it cannot: applied.
+  const country =
+    (await customers.getByTestId('table-row').first().locator('td').first().textContent()) ?? '';
+  await filterBar(page).getByRole('button', { name: country, exact: true }).click();
+  await expect(customers.getByTestId('table-row')).toHaveCount(1);
+  await expect(customers.getByTestId('table-row')).toContainText(country);
+  await expect(customers.getByTestId('not-covered')).toHaveText(
+    'Not filtered by Products Category',
+  );
+  await expect(customers.getByRole('alert')).toHaveCount(0);
+});
+
 test('a view takes a filter on a cube field it offers, by its own name for it', async ({
   page,
   request,

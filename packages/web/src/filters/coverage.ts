@@ -6,19 +6,24 @@ import { chartTilesOf, inScope } from './scope';
  * Whether a filter can reach a tile (AC-079): whether its field can be asked
  * of Cube in the same query as the tile's chart, and by what name.
  *
- * From Cube's `/v1/meta` (docs/research/cube/data-apis.md):
+ * From Cube's `/v1/meta` (docs/research/cube/data-apis.md, and
+ * markings-query-support.md Q4, which corrects it on join components):
  * - a member of the chart's own cube or view reaches it;
- * - between two cubes, the same `connectedComponent` means "there is at least
- *   one join path between them";
  * - a view reaches a cube's member through its own member whose `aliasMember`
  *   is that member — `order_summary.status` for `orders.status` (observed
  *   against Cube v1.7.42) — and nothing else: nothing in the research says a
- *   view's query may take a cube's member.
+ *   view's query may take a cube's member;
+ * - between two cubes, a different `connectedComponent` rules a join out. The
+ *   same one does not rule it in: the component is computed without the
+ *   joins' direction, and Cube joins only along it — the seed's customers and
+ *   products share one and cannot be joined (observed).
  *
  * The answer is the member to filter that chart's query by; `false` when
- * there is none; `undefined` when the model cannot say — it has not arrived,
- * it has no such cube or view, or it gives no join components — so the filter
- * is neither applied nor marked, rather than sent to fail or marked on a guess.
+ * there is none; `undefined` when the model cannot say — the model has not
+ * arrived, or it lacks the cube, or two cubes may or may not join. Such a
+ * filter is applied as it is, and Cube's answer decides: a join it cannot
+ * build comes back as `Can't find join path`, and `FilteredCharts` then
+ * leaves that filter off the tile and marks it.
  */
 export type Reach = (member: string, source: string) => string | false | undefined;
 
@@ -75,9 +80,16 @@ export function reachFrom(meta: unknown): Reach {
     // A field the model no longer has reaches nothing; a view's member is
     // not asked of a cube.
     if (owner === undefined || owner.type === 'view') return false;
-    if (owner.connectedComponent === undefined || target.connectedComponent === undefined)
-      return undefined;
-    return owner.connectedComponent === target.connectedComponent ? member : false;
+    // Different join components: never joined. The same one, or none known,
+    // only fails to rule it out — the component ignores the joins' direction
+    // and Cube does not (T085's review), so Cube's own answer decides.
+    if (
+      owner.connectedComponent !== undefined &&
+      target.connectedComponent !== undefined &&
+      owner.connectedComponent !== target.connectedComponent
+    )
+      return false;
+    return undefined;
   };
 }
 
@@ -85,7 +97,7 @@ export function reachFrom(meta: unknown): Reach {
  * The charts each filter in effect reaches and can filter — each filter as
  * that chart's query names its field — and the ones in its scope that it
  * cannot reach, left unfiltered and marked so (AC-079). A chart the model
- * cannot yet say about is in neither.
+ * cannot say about is filtered as asked, for Cube to answer.
  *
  * By chart, as the dashboard's charts are drawn; a chart shown by two tiles
  * takes the first tile's scope (see `filteredCharts`).
@@ -109,12 +121,12 @@ export function coverageOf(
     for (const each of active) {
       if (!inScope(each.filter, tile)) continue;
       const field = each.filter.member ?? '';
-      const as = reaches(field, chartId);
-      if (typeof as === 'string')
+      const as = reaches(field, chartId) ?? field;
+      if (as === false) (notCovered[chartId] ??= []).push(each);
+      else
         (reached[chartId] ??= []).push(
           as === field ? each : { ...each, filter: { ...each.filter, member: as } },
         );
-      else if (as === false) (notCovered[chartId] ??= []).push(each);
     }
   }
   return { reached, notCovered };

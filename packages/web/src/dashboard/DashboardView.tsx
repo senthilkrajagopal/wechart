@@ -712,7 +712,15 @@ export function DashboardView({
     const failed: Record<string, unknown> = { ...drawn.errors };
     const pending = new Set<string>();
     for (const id of ids) {
-      const { chart: answer, asking } = filtered[id] ?? { chart: undefined, asking: true };
+      const result = filtered[id];
+      const answer = result?.chart;
+      const asking = result?.asking ?? true;
+      // No filter reaching it could be joined to it (AC-079): its own chart,
+      // unfiltered, as drawn.
+      if (result?.unfiltered === true) {
+        if (asking) pending.add(id);
+        continue;
+      }
       // Being asked: what the tile drew stays, marked busy, so it is not taken
       // for the answer to the value now set; a skeleton would unmount the chart
       // and drop a reader's table view.
@@ -746,22 +754,42 @@ export function DashboardView({
   const inEffect = useMemo(() => {
     const setOn = new Map((live.filters ?? []).map((filter) => [filter.id, filter.member ?? '']));
     return Object.fromEntries(
-      Object.entries(reached).map(([chartId, applied]) => [
-        chartId,
-        applied.map(({ filter, value }) => {
-          const field = setOn.get(filter.id) ?? filter.member ?? '';
-          return describeFilter(memberTitle?.(field) ?? field, value);
-        }),
-      ]),
+      Object.entries(reached).map(([chartId, applied]) => {
+        const refused = filtered[chartId]?.uncovered ?? [];
+        return [
+          chartId,
+          applied
+            .filter(({ filter }) => !refused.includes(filter.id))
+            .map(({ filter, value }) => {
+              const field = setOn.get(filter.id) ?? filter.member ?? '';
+              return describeFilter(memberTitle?.(field) ?? field, value);
+            }),
+        ];
+      }),
     );
-  }, [reached, live.filters, memberTitle]);
+  }, [reached, filtered, live.filters, memberTitle]);
+
+  /**
+   * Not covered (AC-079): the filters the model rules out, and those Cube
+   * refused to join to the chart when asked (`FilteredCharts`).
+   */
+  const marked = useMemo(() => {
+    const all: Record<string, ActiveFilter[]> = {};
+    for (const [chartId, filters] of Object.entries(notCovered)) all[chartId] = [...filters];
+    for (const [chartId, applied] of Object.entries(reached)) {
+      const refused = filtered[chartId]?.uncovered ?? [];
+      const more = applied.filter(({ filter }) => refused.includes(filter.id));
+      if (more.length > 0) all[chartId] = [...(all[chartId] ?? []), ...more];
+    }
+    return all;
+  }, [notCovered, reached, filtered]);
 
   const charts: TileCharts = {
     specs: coloured,
     errors: withFiltered.errors,
     loading,
     pending: withFiltered.pending,
-    notCovered,
+    notCovered: marked,
     inEffect,
   };
 
