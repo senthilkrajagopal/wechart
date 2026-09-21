@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatValue, formatterFor, type MemberFormats } from './format';
+import { formatValue, formatterFor, type MemberFormats, type TimeGranularity } from './format';
 
 /**
  * T052 / AC-046: THE SYSTEM SHALL format every value with its member's format
@@ -92,5 +92,72 @@ describe('formats wechart does not render specially', () => {
     // An id is not a quantity: "1,234" misstates order 1234.
     expect(formatValue(1234, 'orders.id', { 'orders.id': 'id' })).toBe('1234');
     expect(formatterFor('orders.id', { 'orders.id': 'id' })('98765')).toBe('98765');
+  });
+});
+
+/**
+ * T206 / AC-188: THE SYSTEM SHALL write a time dimension's values by their
+ * granularity — a year as "2026", a quarter as "Q1 2026", a month as
+ * "Jan 2026", a week as "Week of Jan 5, 2026", a day as "Jan 2, 2026", and an
+ * hour or finer with the time — in axes, labels, tooltips and tables, unless
+ * the member's model format says otherwise.
+ * Fails when: a time value shows as a raw timestamp such as
+ * "2026-01-02T00:00:00.000".
+ *
+ * The values are Cube's as observed (research/cube/data-apis.md, "The values
+ * that come back"): a bucket's start, `YYYY-MM-DDTHH:mm:ss.SSS`, no offset.
+ */
+describe('a time value, by its granularity', () => {
+  const AT = 'orders.ordered_at';
+  const written = (granularity: TimeGranularity, value: unknown) =>
+    formatterFor(AT, {}, { [AT]: granularity })(value);
+
+  it('writes each granularity as AC-188 lists', () => {
+    expect(written('year', '2026-01-01T00:00:00.000')).toBe('2026');
+    expect(written('quarter', '2026-01-01T00:00:00.000')).toBe('Q1 2026');
+    expect(written('quarter', '2026-10-01T00:00:00.000')).toBe('Q4 2026');
+    expect(written('month', '2026-01-01T00:00:00.000')).toBe('Jan 2026');
+    expect(written('week', '2026-01-05T00:00:00.000')).toBe('Week of Jan 5, 2026');
+    expect(written('day', '2026-01-02T00:00:00.000')).toBe('Jan 2, 2026');
+  });
+
+  it('writes an hour or finer with the time', () => {
+    expect(written('hour', '2026-01-02T15:00:00.000')).toBe('Jan 2, 2026, 3:00 PM');
+    expect(written('minute', '2026-01-02T15:04:00.000')).toBe('Jan 2, 2026, 3:04 PM');
+    expect(written('second', '2026-01-02T15:04:05.000')).toBe('Jan 2, 2026, 3:04:05 PM');
+  });
+
+  it('writes the bucket Cube named, whatever the reader’s own time zone', () => {
+    // No offset: the value is already in the query's time zone, so a reader
+    // west of it must not see the day before, nor midnight as 7 PM.
+    expect(written('day', '2026-01-01T00:00:00.000')).toBe('Jan 1, 2026');
+    expect(written('year', '2026-01-01T00:00:00.000')).toBe('2026');
+  });
+
+  it('writes a week that starts in the year before under that year', () => {
+    expect(written('week', '2025-12-29T00:00:00.000')).toBe('Week of Dec 29, 2025');
+  });
+
+  it('is the same through formatValue', () => {
+    expect(formatValue('2026-01-01T00:00:00.000', AT, {}, { [AT]: 'month' })).toBe('Jan 2026');
+  });
+
+  it('leaves a gap empty, and text that is not a time as it came', () => {
+    expect(written('day', null)).toBe('');
+    expect(written('day', 'not a time')).toBe('not a time');
+  });
+
+  it('writes Cube’s `member.granularity` column of the same time the same way', () => {
+    // A grouped result carries the time twice: as the member and as
+    // `member.<granularity>` (research/cube/data-apis.md).
+    expect(formatterFor(`${AT}.month`, {}, { [AT]: 'month' })('2026-01-01T00:00:00.000')).toBe(
+      'Jan 2026',
+    );
+    // A suffix that is not a granularity is some other member.
+    expect(formatterFor(`${AT}.label`, {}, { [AT]: 'month' })('x')).toBe('x');
+  });
+
+  it('does not touch a member with no granularity', () => {
+    expect(formatterFor('orders.status', {}, { [AT]: 'day' })('shipped')).toBe('shipped');
   });
 });

@@ -1897,12 +1897,37 @@ Each task below measures its components' computed styles in `e2e/design-conforma
   - **Full runs:** typecheck and lint clean; 1,452 unit tests and 627 browser runs passed.
   - **Done 2026-09-21.** With T202–T205, every component AC-187 names has a conformance test on the rendered app, so AC-187 is ticked.
 
-- [ ] T206 (AC-188) Write time values by their granularity in axes, labels, tooltips and tables
+- [x] T206 (AC-188) Write time values by their granularity in axes, labels, tooltips and tables
   - Files: `packages/core/src/format.ts`, `packages/core/src/format.test.ts`, `packages/charts/src/axis.ts`, `packages/charts/src/tooltip.ts`, `packages/web/src/tiles/DataTable.tsx`, `e2e/dashboard.spec.ts`
   - Failing test: `format.test.ts`: each granularity writes its value as AC-188 lists; `e2e/dashboard.spec.ts`: the seeded "Orders over time by status" tile's axis shows no raw timestamp (AC-188).
   - Depends on: T195
   - Added 2026-09-21. The screenshots taken for AC-187 showed the seeded time chart's axis as `2026-01-02T00:00:00.000`, and no criterion covered it. The formats in AC-188 are a default the user can change; the model's own format for a member wins.
   - **Also seen, not a formatting matter:** the same seeded chart is a *bar* chart of daily counts over 240 days and three statuses. Its bars are 0 or 1 and less than a pixel wide, so it reads as empty. The seed chose `bar` for its tests; the recommender would not pick it for this shape.
+  - **Built 2026-09-21.** The planned `format.ts` was in `packages/core/src/`, as listed.
+    - **Research, observed first:** each predefined granularity was asked of the running Cube, and what comes back was recorded in `research/cube/data-apis.md` ("The values that come back"). The bucket's start arrives as `YYYY-MM-DDTHH:mm:ss.SSS` with no offset, in the query's time zone. It arrives twice, under `member` and under `member.<granularity>`. Weeks start on Monday. From the installed ECharts source, `research/echarts.md` now records that a category axis's and a legend's formatter are called with the raw name.
+    - **Core:**
+      - `TimeGranularity` and `MemberGranularities` are new types.
+      - `formatterFor` and `formatValue` take the granularities and write a time member by its granularity: "2026", "Q1 2026", "Jan 2026", "Week of Jan 5, 2026", "Jan 2, 2026", and "Jan 2, 2026, 3:04 PM" for an hour or a minute (with seconds for a second).
+      - The value is read as written and formatted in UTC, so a reader in another zone sees the bucket Cube named. The time of day is written out by hand, because Intl's en-US time puts a narrow no-break space before "PM" in newer ICU and a plain space in older.
+      - `granularityOf` also recognises the `member.<granularity>` column.
+      - `RenderSpec.granularities` is filled by `compile` from the chart's time dimensions through `granularitiesOf`. It shares `QUERY_GRANULARITY` (day) with `toCubeQuery`, so the rows' bucket and their labels cannot disagree.
+      - The model's own strftime format for a time member is T201's to honour. Until then the granularity's form stands in, never the raw timestamp.
+    - **Charts** (`charts/src/time.ts`, `timeWriter`): the rows keep their raw values, and the time is written only where a name is shown:
+      - a category axis and its crosshair label, including a horizontal bar's y axis and both heatmap axes;
+      - the tooltip heading, and a series named by a time split or a trellis panel;
+      - the legend (`legend.formatter`);
+      - trellis panel titles and category axes.
+      - A category that isn't time is left exactly as it came, so an id is never grouped (T194).
+    - **Web:** DataTable cells; pivot row and column headers (time members only); and the results drawer. The drawer's result rows go by the chart's granularity (`granularitiesOf` from the editor), and its ungrouped underlying rows are written with their time of day.
+  - **Tests, red first:**
+    - `core/format.test.ts` (8): each granularity; hour, minute and second; the time zone; a week starting in the prior year; `formatValue`; gaps and non-times; the `member.<granularity>` column; a member with no granularity.
+    - `core/compile.test.ts` (1): the granularity matches the query's.
+    - `charts/time-places.test.ts` (20): the axis on 11 chart types, the crosshair, four tooltip cases, the legend by colour and by pie slice, trellis panel titles, and a non-time category left alone.
+    - `DataTable.test.tsx`, `PivotTable.test.tsx` and `ResultsDrawer.test.tsx` (1, 1, 2).
+    - `e2e/dashboard.spec.ts` (1 in each browser): the seeded "Orders over time by status" tile. Its SVG axis text has no raw timestamp and includes "Jan 2, 2026"-style days; in its table view, the `orders.ordered_at` column is all days and no cell is a timestamp.
+  - **Full runs:** typecheck and lint clean. 1,485 unit tests passed. Browsers: 629 passed and 1 failed.
+    - The failure was `search-palette.spec.ts` "typing into the palette…", and it failed again alone (in Safari). It pressed ⌘K before the app had bound the shortcut, then waited on a palette that never opened. That spec's first test already waits for this. The same wait was added, which is not a weaker assertion.
+  - **Done 2026-09-21.**
 
 ## F22. Wiring the marking subsystem (deferred)
 

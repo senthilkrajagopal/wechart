@@ -1033,3 +1033,44 @@ test('a chart following its recommendation draws on the dashboard as it does in 
 
   await expect(tile.getByTestId('chart-canvas')).toHaveAttribute('data-chart-type', inEditor ?? '');
 });
+
+/**
+ * T206 / AC-188: THE SYSTEM SHALL write a time dimension's values by their
+ * granularity … in axes, labels, tooltips and tables.
+ * Fails when: a time value shows as a raw timestamp such as
+ * "2026-01-02T00:00:00.000".
+ *
+ * The seeded "Orders over time by status" asks Cube for days, and its axis
+ * read `2026-01-02T00:00:00.000` until T206. Its SVG's text is read as
+ * drawn, and so is its table view.
+ */
+test('a time axis and a time column are written by their granularity, never as a timestamp', async ({
+  page,
+}) => {
+  await open(page);
+  const tile = page.locator('[data-tile="tile-region"]');
+  const canvas = tile.getByTestId('chart-canvas');
+  await expect(canvas.locator('svg text').first()).toBeVisible();
+
+  const RAW = /\d{4}-\d{2}-\d{2}T\d{2}/;
+  const DAY = /^[A-Z][a-z]{2} \d{1,2}, \d{4}$/;
+  const drawn = await canvas.locator('svg text').allTextContents();
+  expect(drawn.filter((text) => RAW.test(text))).toEqual([]);
+  expect(drawn.some((text) => DAY.test(text))).toBe(true);
+
+  await tile.getByTestId('toggle-table-view').click();
+  await expect(tile.getByTestId('table-row').first()).toBeVisible();
+  // The time's column, found by its header rather than by its place.
+  const headers = await tile.locator('thead th').allTextContents();
+  const at = headers.findIndex((header) => header === 'orders.ordered_at');
+  expect(at).toBeGreaterThanOrEqual(0);
+  const times = await tile
+    .getByTestId('table-row')
+    .locator(`td:nth-child(${String(at + 1)})`)
+    .allTextContents();
+  expect(times.length).toBeGreaterThan(0);
+  expect(times.every((text) => DAY.test(text))).toBe(true);
+  // And no cell anywhere in the table is a raw timestamp.
+  const cells = await tile.getByTestId('table-row').locator('td').allTextContents();
+  expect(cells.filter((text) => RAW.test(text))).toEqual([]);
+});

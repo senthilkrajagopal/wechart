@@ -88,6 +88,27 @@ describe('member formats (AC-046)', () => {
     expect(screen.getByText('1,234')).toBeTruthy();
   });
 
+  it('writes a time value by its granularity, never as Cube’s timestamp (AC-188)', () => {
+    const AT = 'orders.ordered_at';
+    render(
+      <DataTable
+        spec={spec({
+          encoding: { x: [AT], y: [COUNT] },
+          rows: [
+            { [AT]: '2026-01-01T00:00:00.000', [COUNT]: 30 },
+            { [AT]: '2026-02-01T00:00:00.000', [COUNT]: 28 },
+          ],
+          granularities: { [AT]: 'month' },
+        })}
+      />,
+    );
+
+    const firstCells = screen
+      .getAllByTestId('table-row')
+      .map((row) => row.querySelector('td')?.textContent);
+    expect(firstCells).toEqual(['Jan 2026', 'Feb 2026']);
+  });
+
   it('shows a gap as blank rather than as a zero', () => {
     render(<DataTable spec={spec({ rows: [{ [STATUS]: 'paid', [COUNT]: null }], formats: {} })} />);
 

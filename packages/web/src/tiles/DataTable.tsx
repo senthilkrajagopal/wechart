@@ -178,7 +178,9 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking }: DataTableP
                 }}
               >
                 {columns.map((column) => (
-                  <td key={column}>{formatValue(row?.[column], column, spec.formats ?? {})}</td>
+                  <td key={column}>
+                    {formatValue(row?.[column], column, spec.formats ?? {}, spec.granularities)}
+                  </td>
                 ))}
               </tr>
             );

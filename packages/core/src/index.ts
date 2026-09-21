@@ -8,7 +8,9 @@ export {
   UNDERLYING_ROW_LIMIT,
   addToWell,
   emptySpec,
+  granularitiesOf,
   isEmpty,
+  QUERY_GRANULARITY,
   removeFromWell,
   toCubeQuery,
   toUnderlyingQuery,
@@ -57,7 +59,14 @@ export { applyTopN, OTHER_LABEL } from './topN';
 
 export { applySort, type SortBy, type SortDirection, type SortSettings } from './sort';
 
-export { formatValue, formatterFor, type MemberFormats } from './format';
+export {
+  formatValue,
+  formatterFor,
+  granularityOf,
+  type MemberFormats,
+  type MemberGranularities,
+  type TimeGranularity,
+} from './format';
 
 export {
   IMAGE_HEAD_BYTES,

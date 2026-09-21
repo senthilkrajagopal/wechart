@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { chartDocumentOf, type ChartDocument } from './chart-document';
-import { addToWell, emptySpec } from './chart-spec';
+import { chartDocumentOf, toChartSpec, type ChartDocument } from './chart-document';
+import { addToWell, emptySpec, toCubeQuery } from './chart-spec';
 import { compile, defaultEncoding } from './compile';
 
 /**
@@ -136,6 +136,24 @@ describe('compiling a saved document', () => {
     // the palette is a decision about the dashboard, not about one chart.
     expect(spec.palette).toEqual(['#123456']);
     expect(spec.surface).toBe('#fedcba');
+  });
+
+  it('names each time dimension’s granularity, the one its query asked for (AC-188)', () => {
+    const document = documentFor((spec) =>
+      addToWell(addToWell(spec, 'measures', 'orders.count'), 'timeDimensions', 'orders.ordered_at'),
+    );
+    const asked = toCubeQuery(toChartSpec(document)) as {
+      timeDimensions: { dimension: string; granularity: string }[];
+    };
+
+    const compiled = compile(document, { rows: [], chartType: 'line' });
+
+    // Written by the same granularity the rows were bucketed at, so a month
+    // is never labelled as a day.
+    expect(compiled.granularities).toEqual({
+      'orders.ordered_at': asked.timeDimensions[0]?.granularity,
+    });
+    expect(compile(withStatusAndCount, { rows: ROWS, chartType: 'bar' }).granularities).toEqual({});
   });
 });
 

@@ -134,6 +134,43 @@ describe('totals', () => {
   });
 });
 
+describe('headers of time (AC-188)', () => {
+  it('write each time by its granularity, on rows and on columns', () => {
+    const AT = 'orders.ordered_at';
+    const monthly = [
+      { [AT]: '2026-01-01T00:00:00.000', [STATUS]: 'paid', [COUNT]: 1 },
+      { [AT]: '2026-02-01T00:00:00.000', [STATUS]: 'paid', [COUNT]: 2 },
+    ];
+    const { unmount } = render(
+      <PivotTable
+        spec={spec({
+          encoding: { row: [AT], column: [STATUS], y: [COUNT] },
+          rows: monthly,
+          granularities: { [AT]: 'month' },
+        })}
+      />,
+    );
+    expect(screen.getAllByTestId('pivot-row-header').map((header) => header.textContent)).toEqual([
+      'Jan 2026',
+      'Feb 2026',
+    ]);
+    unmount();
+
+    render(
+      <PivotTable
+        spec={spec({
+          encoding: { row: [STATUS], column: [AT], y: [COUNT] },
+          rows: monthly,
+          granularities: { [AT]: 'month' },
+        })}
+      />,
+    );
+    expect(
+      screen.getAllByTestId('pivot-column-header').map((header) => header.textContent),
+    ).toEqual(['Jan 2026', 'Feb 2026']);
+  });
+});
+
 describe('a spec that cannot be pivoted', () => {
   it('says what is missing rather than drawing an empty grid', () => {
     render(<PivotTable spec={spec({ encoding: { y: [COUNT] } })} />);

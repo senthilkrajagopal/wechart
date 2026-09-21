@@ -16,6 +16,7 @@
  */
 
 import type { ChartDefinition, ChartDocument } from './chart-document';
+import { granularitiesOf } from './chart-spec';
 import { CHANNELS, type ChartType, type Encoding, type RenderSpec } from './render-spec';
 import { applySort } from './sort';
 import { applyTopN } from './topN';
@@ -93,6 +94,7 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
       // business interpreting what a chart type does with its own options.
       ...(chart.options === undefined ? {} : { options: chart.options }),
       ...(options.formats === undefined ? {} : { formats: options.formats }),
+      granularities: granularitiesOf(chart.wells.timeDimensions),
       ...(options.palette === undefined ? {} : { palette: options.palette }),
       ...(options.surface === undefined ? {} : { surface: options.surface }),
     }),

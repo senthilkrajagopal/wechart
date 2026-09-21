@@ -21,6 +21,7 @@ import {
 } from '@wechart/core';
 
 import type { EChartsOption } from './theme';
+import { nameWriter } from './time';
 
 /** Types where a shared crosshair reads better than a per-mark hit. */
 const CROSSHAIR_TYPES: readonly ChartType[] = ['line', 'multiLine', 'area', 'stackedArea', 'combo'];
@@ -48,11 +49,12 @@ function scatterTooltip(spec: RenderSpec): EChartsOption {
   const y = memberOn(spec.encoding, 'y') ?? '';
   const formats = spec.formats ?? {};
   const [fx, fy] = [formatterFor(x, formats), formatterFor(y, formats)];
+  const seriesName = nameWriter(spec, memberOn(spec.encoding, 'color'));
 
   const render = (params: Params) => {
     const [across, down] = Array.isArray(params.value) ? params.value : [];
     return [
-      escapeHtml(String(params.seriesName ?? '')),
+      escapeHtml(seriesName(params.seriesName)),
       `${escapeHtml(x)}: ${escapeHtml(fx(across))}`,
       `${escapeHtml(y)}: ${escapeHtml(fy(down))}`,
     ]
@@ -77,10 +79,11 @@ function heatmapTooltip(spec: RenderSpec): EChartsOption {
   const columns = distinctValues(spec.rows, across);
   const rows = distinctValues(spec.rows, down);
   const format = formatterFor(measure, spec.formats ?? {});
+  const [column, row] = [nameWriter(spec, across), nameWriter(spec, down)];
 
   const render = (params: Params) => {
-    const [column, row, value] = Array.isArray(params.value) ? params.value : [];
-    const heading = `${columns[Number(column)] ?? ''} · ${rows[Number(row)] ?? ''}`;
+    const [at, down, value] = Array.isArray(params.value) ? params.value : [];
+    const heading = `${column(columns[Number(at)])} · ${row(rows[Number(down)])}`;
     return [escapeHtml(heading), `${escapeHtml(measure)}: ${escapeHtml(format(value))}`].join(
       '<br/>',
     );
@@ -109,6 +112,16 @@ export function tooltipFor(spec: RenderSpec): EChartsOption {
    * "7,690,000%" (T195).
    */
   const split = memberOn(spec.encoding, 'color') !== undefined;
+  /**
+   * The heading is the category, and a series is named by the member it
+   * splits by — the colour, or a trellis's panel — so a time among them is
+   * written by its granularity, not as Cube's timestamp (AC-188).
+   */
+  const category = nameWriter(spec, memberOn(spec.encoding, 'x'));
+  const seriesName = nameWriter(
+    spec,
+    memberOn(spec.encoding, 'color') ?? memberOn(spec.encoding, 'facet'),
+  );
 
   const render = (params: Params | Params[]) => {
     const rows = Array.isArray(params) ? params : [params];
@@ -117,10 +130,12 @@ export function tooltipFor(spec: RenderSpec): EChartsOption {
     const lines = rows.map((row) => {
       const format = split ? fallback : (formatters[row.seriesIndex ?? 0] ?? fallback);
       const raw = Array.isArray(row.value) ? row.value[1] : row.value;
-      return `${escapeHtml(String(row.seriesName ?? ''))}: ${escapeHtml(format(raw))}`;
+      return `${escapeHtml(seriesName(row.seriesName))}: ${escapeHtml(format(raw))}`;
     });
 
-    return [escapeHtml(String(heading)), ...lines].filter((line) => line !== '').join('<br/>');
+    return [escapeHtml(heading === '' ? '' : category(heading)), ...lines]
+      .filter((line) => line !== '')
+      .join('<br/>');
   };
 
   return {

@@ -1,3 +1,4 @@
+import type { MemberGranularities } from '@wechart/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -57,11 +58,13 @@ function drawer({
   view = 'result' as DrawerView,
   open = true,
   formats = {},
+  granularities = {},
 }: {
   rows?: readonly Record<string, unknown>[];
   view?: DrawerView;
   open?: boolean;
   formats?: Readonly<Record<string, string>>;
+  granularities?: MemberGranularities;
 } = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -76,6 +79,7 @@ function drawer({
         open={open}
         view={view}
         formats={formats}
+        granularities={granularities}
         onOpenChange={vi.fn()}
         onViewChange={vi.fn()}
       />
@@ -103,6 +107,36 @@ describe('its values (AC-046)', () => {
     // A member with no declared format is shown as it came — an id is not a
     // quantity, and "1,234" would misstate it.
     expect(cells).toEqual(['1234', '$76,900.00', '25%']);
+  });
+
+  /**
+   * T206 / AC-188: a time value in a table is written by its granularity,
+   * never as Cube's raw timestamp. The result rows carry it twice, as Cube
+   * sends it — under the member and under `member.granularity`
+   * (research/cube/data-apis.md) — and the underlying rows carry each row's
+   * own time, ungrouped, which is written with the time of day.
+   */
+  const AT = 'orders.ordered_at';
+
+  it('writes a time value by its granularity (AC-188)', () => {
+    drawer({
+      rows: [{ [AT]: '2026-01-02T00:00:00.000', [`${AT}.day`]: '2026-01-02T00:00:00.000' }],
+      granularities: { [AT]: 'day' },
+    });
+
+    const cells = [...screen.getByTestId('drawer-result-rows').querySelectorAll('td')].map(
+      (cell) => cell.textContent,
+    );
+    expect(cells).toEqual(['Jan 2, 2026', 'Jan 2, 2026']);
+  });
+
+  it('writes an ungrouped time value with its time of day (AC-188)', async () => {
+    respondWith([{ [AT]: '2026-01-02T15:04:05.000' }]);
+    drawer({ view: 'underlying', granularities: { [AT]: 'day' } });
+
+    const table = await screen.findByTestId('drawer-underlying-rows');
+    const cells = [...table.querySelectorAll('td')].map((cell) => cell.textContent);
+    expect(cells).toEqual(['Jan 2, 2026, 3:04:05 PM']);
   });
 });
 

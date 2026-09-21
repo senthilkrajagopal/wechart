@@ -56,6 +56,10 @@ test('Escape returns focus to where it came from', async ({ page }) => {
 
 test('typing into the palette does not trigger the shortcut again', async ({ page }) => {
   await page.goto('/explore');
+  // Mounted first, as in the first test: a key pressed before the shortcut's
+  // listener is bound opens nothing, and the test then waits on a palette
+  // that never comes (seen failing intermittently in Chrome and Safari).
+  await expect(page.getByRole('button', { name: /theme/i })).toBeVisible();
   await page.keyboard.press(SHORTCUT);
 
   await page.getByRole('searchbox').fill('k');

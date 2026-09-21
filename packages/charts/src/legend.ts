@@ -14,6 +14,7 @@
 import { distinctValues, memberOn, seriesOf, type ChartType, type RenderSpec } from '@wechart/core';
 
 import type { EChartsOption } from './theme';
+import { timeWriter } from './time';
 
 /** Types whose colour says how much rather than which. */
 const COLOUR_IS_A_SCALE: readonly ChartType[] = ['heatmap'];
@@ -46,6 +47,17 @@ export function seriesCount(spec: RenderSpec): number {
 export function legendFor(spec: RenderSpec): EChartsOption {
   if (seriesCount(spec) < 2) return {};
 
+  /**
+   * An entry names a category or a member of the split, and one of time is
+   * written by its granularity (AC-188). ECharts calls the formatter with the
+   * entry's name and keeps the name itself, so the entry still matches its
+   * series (research/echarts.md).
+   */
+  const named = COLOURED_BY_CATEGORY.includes(spec.chartType)
+    ? memberOn(spec.encoding, 'x')
+    : memberOn(spec.encoding, 'color');
+  const write = timeWriter(spec, named);
+
   return {
     legend: {
       top: 0,
@@ -53,6 +65,7 @@ export function legendFor(spec: RenderSpec): EChartsOption {
       // Toggling visibility from the legend belongs to the interaction modes
       // of AC-070 and AC-071, not to drawing.
       selectedMode: false,
+      ...(write === undefined ? {} : { formatter: (name: string) => write(name) }),
     },
     // Leave room for it, or it sits on top of the plot.
     grid: { top: 32 },

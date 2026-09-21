@@ -1,4 +1,10 @@
-import { formatValue, UNDERLYING_ROW_LIMIT, type MemberFormats } from '@wechart/core';
+import {
+  formatValue,
+  granularityOf,
+  UNDERLYING_ROW_LIMIT,
+  type MemberFormats,
+  type MemberGranularities,
+} from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
 
 import { loadTile } from '../query/loadTile';
@@ -30,6 +36,8 @@ export interface ResultsDrawerProps {
    * criterion names tables among the places a value wears it.
    */
   readonly formats?: MemberFormats;
+  /** Each time member's granularity in the chart's query (AC-188). */
+  readonly granularities?: MemberGranularities;
   readonly onOpenChange: (open: boolean) => void;
   readonly onViewChange: (view: DrawerView) => void;
 }
@@ -42,19 +50,38 @@ const VISIBLE_ROWS = UNDERLYING_ROW_LIMIT;
  * as it came otherwise — a member with no format may be an id, which is not a
  * quantity, and grouping it ("1,234") would misstate it.
  */
-function cellText(value: unknown, member: string, formats: MemberFormats): string {
+function cellText(
+  value: unknown,
+  member: string,
+  formats: MemberFormats,
+  granularities: MemberGranularities,
+): string {
+  // A time value by its granularity, never as Cube's timestamp (AC-188) —
+  // under the member or under the `member.<granularity>` column beside it.
+  if (granularityOf(member, granularities) !== undefined)
+    return formatValue(value, member, formats, granularities);
   return formats[member] === undefined ? String(value ?? '') : formatValue(value, member, formats);
+}
+
+/**
+ * The underlying rows are ungrouped: each carries its own time, not a
+ * bucket's start, so every time member is written with its time of day.
+ */
+function ungrouped(granularities: MemberGranularities): MemberGranularities {
+  return Object.fromEntries(Object.keys(granularities).map((member) => [member, 'second']));
 }
 
 function RowTable({
   rows,
   testId,
   formats,
+  granularities,
   capped = false,
 }: {
   rows: readonly Record<string, unknown>[];
   testId: string;
   formats: MemberFormats;
+  granularities: MemberGranularities;
   /**
    * True when the rows came back from a capped query, so a full page is
    * evidence of more rows rather than of the total.
@@ -98,7 +125,7 @@ function RowTable({
           {shown.map((row, index) => (
             <tr key={index}>
               {columns.map((column) => (
-                <td key={column}>{cellText(row[column], column, formats)}</td>
+                <td key={column}>{cellText(row[column], column, formats, granularities)}</td>
               ))}
             </tr>
           ))}
@@ -115,6 +142,7 @@ export function ResultsDrawer({
   open,
   view,
   formats = {},
+  granularities = {},
   onOpenChange,
   onViewChange,
 }: ResultsDrawerProps) {
@@ -160,7 +188,12 @@ export function ResultsDrawer({
 
           {view === 'result' ? (
             <div role="tabpanel" aria-label="Result rows">
-              <RowTable rows={rows} testId="drawer-result-rows" formats={formats} />
+              <RowTable
+                rows={rows}
+                testId="drawer-result-rows"
+                formats={formats}
+                granularities={granularities}
+              />
             </div>
           ) : null}
 
@@ -175,6 +208,7 @@ export function ResultsDrawer({
                   rows={underlyingRows}
                   testId="drawer-underlying-rows"
                   formats={formats}
+                  granularities={ungrouped(granularities)}
                   capped
                 />
               )}

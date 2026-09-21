@@ -193,6 +193,14 @@ Meaning of each `cache` value ([rest-index]):
   - Predefined values are `second, minute, hour, day, week, month, quarter, year`.
   - Custom granularities are declared in the model with `interval`, `offset?`, `origin?` and `title?`, and appear in meta as `granularities: {name, title}[]`.
   - Leaving out the granularity filters without grouping.
+  - **The values that come back (observed against the running Cube v1.7.42, local docker-compose, 2026-09-21, T206).** `orders.count` was asked with `timeDimensions: [{dimension: 'orders.ordered_at', granularity: g}]` for each predefined `g`, with no `timezone` (so `UTC`). Each row carries the bucket's start twice, under `orders.ordered_at.<g>` and under `orders.ordered_at`, as `YYYY-MM-DDTHH:mm:ss.SSS` with **no offset**, in the query's timezone:
+    - `year` gives `2026-01-01T00:00:00.000`.
+    - `quarter` gives `2026-01-01…`, then `2026-04-01…`.
+    - `month` gives `2026-01-01…`, then `2026-02-01…`.
+    - `week` gives `2025-12-29…`, then `2026-01-05…`. Weeks start on **Monday**, so a week can start in the previous year.
+    - `day` gives `2026-01-02T00:00:00.000`.
+    - `hour`, `minute` and `second` give the same shape, at the bucket's start.
+    - The response `annotation.timeDimensions['orders.ordered_at.<g>'].granularity` is `{name, title, interval}` (for example `{name: 'week', title: 'week', interval: '1 week'}`). The bare `orders.ordered_at` entry has no `granularity`.
 - **`dateRange`:**
   - An absolute range is `[start, end]` in `YYYY-MM-DD` form, padded to the start and end of the day, or `YYYY-MM-DDTHH:mm:ss.SSS` form, local to the query timezone.
   - A relative range is a string such as `today`, `last 6 months`, `from 7 days ago to now` or `from now to 2 weeks from now`, parsed by Chrono.

@@ -4,6 +4,7 @@
  * ECharts, and the renderer reads this rather than the other way round.
  */
 
+import type { MemberGranularities, TimeGranularity } from './format';
 import type { ChartType } from './render-spec';
 
 export type WellName = 'measures' | 'dimensions' | 'timeDimensions';
@@ -76,10 +77,22 @@ export function toCubeQuery(spec: ChartSpec): Record<string, unknown> {
   if (spec.timeDimensions.length > 0) {
     query['timeDimensions'] = [...spec.timeDimensions]
       .sort()
-      .map((dimension) => ({ dimension, granularity: 'day' }));
+      .map((dimension) => ({ dimension, granularity: QUERY_GRANULARITY }));
   }
 
   return query;
+}
+
+/**
+ * The granularity every time dimension is asked at. One constant, because the
+ * rows are bucketed by it and their labels are written by it (AC-188): two
+ * places deciding separately would label months as days.
+ */
+export const QUERY_GRANULARITY: TimeGranularity = 'day';
+
+/** Each time member of the wells, with the granularity its query asks for. */
+export function granularitiesOf(timeDimensions: readonly string[]): MemberGranularities {
+  return Object.fromEntries(timeDimensions.map((member) => [member, QUERY_GRANULARITY]));
 }
 
 /**

@@ -9,6 +9,7 @@
 import { formatterFor, membersOn, type RenderSpec } from '@wechart/core';
 
 import type { EChartsOption } from './theme';
+import { timeWriter } from './time';
 
 export type NumberFormat = 'auto' | 'compact' | 'full' | 'percent' | 'currency';
 
@@ -170,7 +171,38 @@ export function applyAxes(option: EChartsOption, spec: RenderSpec): EChartsOptio
   const bothValues = isValueAxis('xAxis') && isValueAxis('yAxis');
   const xFormat = bothValues ? formatOf(membersOn(spec.encoding, 'x')[0], x) : undefined;
 
-  if (x === undefined && y === undefined && memberFormat === undefined && xFormat === undefined) {
+  /**
+   * A category axis of time is written by its granularity, on its ticks and
+   * on the crosshair's label (AC-188). It carries the x member — down y on a
+   * horizontal bar — except on a heatmap, whose two axes are x and y.
+   */
+  const isCategoryAxis = (key: 'xAxis' | 'yAxis') => {
+    const axis = option[key];
+    return (
+      axis !== undefined && !Array.isArray(axis) && (axis as { type?: unknown }).type === 'category'
+    );
+  };
+  const timeFormatOf = (key: 'xAxis' | 'yAxis', settings: AxisSettings | undefined) => {
+    if (!isCategoryAxis(key) || settings?.numberFormat !== undefined) return undefined;
+    const channel = spec.chartType === 'heatmap' && key === 'yAxis' ? 'y' : 'x';
+    const write = timeWriter(spec, membersOn(spec.encoding, channel)[0]);
+    if (write === undefined) return undefined;
+    return {
+      axisLabel: { formatter: write },
+      axisPointer: { label: { formatter: (params: { value: unknown }) => write(params.value) } },
+    };
+  };
+  const xTime = timeFormatOf('xAxis', x);
+  const yTime = timeFormatOf('yAxis', y);
+
+  if (
+    x === undefined &&
+    y === undefined &&
+    memberFormat === undefined &&
+    xFormat === undefined &&
+    xTime === undefined &&
+    yTime === undefined
+  ) {
     return option;
   }
 
@@ -210,8 +242,8 @@ export function applyAxes(option: EChartsOption, spec: RenderSpec): EChartsOptio
     ...merge(
       'xAxis',
       x,
-      bothValues ? (xFormat ?? {}) : valueKey === 'xAxis' ? (memberFormat ?? {}) : {},
+      bothValues ? (xFormat ?? {}) : valueKey === 'xAxis' ? (memberFormat ?? {}) : (xTime ?? {}),
     ),
-    ...merge('yAxis', y, valueKey === 'yAxis' ? (memberFormat ?? {}) : {}),
+    ...merge('yAxis', y, valueKey === 'yAxis' ? (memberFormat ?? yTime ?? {}) : (yTime ?? {})),
   };
 }

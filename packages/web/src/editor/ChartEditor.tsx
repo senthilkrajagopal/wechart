@@ -5,6 +5,7 @@ import {
   emptySpec,
   isEmpty,
   removeFromWell,
+  granularitiesOf,
   toCubeQuery,
   toUnderlyingQuery,
   type ChartSpec,
@@ -504,6 +505,7 @@ export function ChartEditor({ initial = OPENED_WITH, tile, onChange }: ChartEdit
             query={query}
             underlyingQuery={underlyingQuery}
             formats={formats}
+            granularities={granularitiesOf(spec.timeDimensions)}
             open={drawer.open}
             view={drawer.view}
             onOpenChange={(open) => setDrawer((current) => ({ ...current, open }))}

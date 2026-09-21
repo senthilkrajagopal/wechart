@@ -1,4 +1,4 @@
-import { formatValue, pivot, type RenderSpec } from '@wechart/core';
+import { formatValue, membersOn, pivot, type RenderSpec } from '@wechart/core';
 
 /**
  * The pivot table (AC-037).
@@ -59,6 +59,17 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
   // of amounts reads as money and one of counts does not.
   const show = (value: number | null, measureIndex: number) =>
     formatValue(value, measures[measureIndex] ?? '', spec.formats ?? {});
+  /**
+   * A header of time is written by its granularity (AC-188). Only a time
+   * member's: another header is shown as it came, since running a numeric
+   * dimension through the number formatter would group an id into "1,234".
+   */
+  const headerText = (member: string | undefined, value: string) =>
+    member !== undefined && spec.granularities?.[member] !== undefined
+      ? formatValue(value, member, spec.formats ?? {}, spec.granularities)
+      : value;
+  const rowMembers = membersOn(spec.encoding, 'row');
+  const columnMembers = membersOn(spec.encoding, 'column');
 
   return (
     <div
@@ -79,7 +90,7 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
                   colSpan={run.span * measures.length}
                   data-testid="pivot-column-header"
                 >
-                  {run.value}
+                  {headerText(columnMembers[level], run.value)}
                 </th>
               ))}
               {level === 0 ? (
@@ -111,7 +122,7 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
             <tr key={header.join('\u0000')} data-testid="pivot-row">
               {header.map((value, level) => (
                 <th scope="row" key={level} data-testid="pivot-row-header">
-                  {value}
+                  {headerText(rowMembers[level], value)}
                 </th>
               ))}
               {columnHeaders.map((_, c) =>
