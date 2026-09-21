@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+
 /**
  * Everything the service reads from its environment.
  *
@@ -15,7 +17,16 @@ export interface Config {
    */
   readonly securityContext: Record<string, unknown>;
   readonly port: number;
+  /**
+   * Where the model files are read from to seed wechart's store (T137):
+   * `WECHART_MODEL_DIR`, or by default the repository's `infra/cube/model`,
+   * which docker-compose mounts into Cube.
+   */
+  readonly modelDir: string;
 }
+
+/** `infra/cube/model`, three levels up from `src/` or `dist/` in this package. */
+const DEFAULT_MODEL_DIR = fileURLToPath(new URL('../../../infra/cube/model', import.meta.url));
 
 export class ConfigError extends Error {
   constructor(message: string) {
@@ -40,6 +51,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     cubeApiSecret,
     securityContext: parseSecurityContext(env['WECHART_SECURITY_CONTEXT']),
     port: Number(env['PORT'] ?? 4100),
+    modelDir: env['WECHART_MODEL_DIR'] ?? DEFAULT_MODEL_DIR,
   };
 }
 

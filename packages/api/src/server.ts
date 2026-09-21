@@ -27,7 +27,22 @@ export interface BuildOptions {
   readonly documents?: DocumentWriter;
   /** Images added to dashboards' image tiles (AC-063). */
   readonly images?: ImageStore;
+  /** The Cube model's files (T137, AC-131). */
+  readonly modelFiles?: ModelFileStore;
   readonly logger?: boolean;
+}
+
+/** One model file: its path under the model directory, and its text. */
+export interface ModelFile {
+  readonly path: string;
+  readonly content: string;
+}
+
+/** Where the Cube model's files are kept (T137). */
+export interface ModelFileStore {
+  list(): Promise<readonly ModelFile[]>;
+  /** Stores each file whose path is not stored yet; never writes over one that is. */
+  seed(files: readonly ModelFile[]): Promise<unknown>;
 }
 
 /** Where image tiles' images are kept: bytes, and the type they were accepted as. */
@@ -99,6 +114,7 @@ export function buildServer({
   catalog: cat,
   documents: docs,
   images,
+  modelFiles,
   logger = false,
 }: BuildOptions): FastifyInstance {
   const app = Fastify({ logger });
@@ -126,6 +142,13 @@ export function buildServer({
   app.get('/api/health', () => ({ status: 'ok' }));
 
   app.get('/api/meta', async () => meta.meta());
+
+  /**
+   * The Cube model's files, each with its whole text (T137, AC-131). What a
+   * file defines is read from the text in the Model workspace, by the parser
+   * its editor uses, so the two cannot disagree.
+   */
+  app.get('/api/model/files', async () => ({ files: modelFiles ? await modelFiles.list() : [] }));
 
   /**
    * AC-011: a superseded query is stopped in Cube, not merely ignored in the

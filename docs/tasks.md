@@ -1647,10 +1647,32 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F15. Model editor (Cube YAML)
 
-- [ ] T137 (AC-131) List model files and the objects each defines
+- [x] T137 (AC-131) List model files and the objects each defines
   - Files: `packages/web/src/workspaces/model/FileList.tsx`, `packages/api/src/routes/model.ts`, `packages/web/src/workspaces/model/FileList.test.tsx`
   - Failing test: `FileList.test.tsx`: every cube, view, measure, dimension, segment, hierarchy, join and pre-aggregation a file defines is listed under it (AC-131).
   - Depends on: T010
+  - **Built 2026-09-21, on the store the user chose:** model files in wechart's metadata database, which Cube will read through `repositoryFactory` once publishing lands (T143; `research/cube/spike-model-store-and-quick-calcs.md`).
+    - **API:**
+      - A `model_files` table (migration `1758240004000`) and repo (`repos/model-files.ts`). It lists files in code-point order, so the order doesn't hang on the database's collation.
+      - `GET /api/model/files` returns every file's path and text; the route is in `server.ts` with the others, not a separate `routes/model.ts`.
+    - **Seeding:** at start the store takes in the files under `WECHART_MODEL_DIR`, which defaults to the repository's `infra/cube/model`, the directory docker-compose mounts into Cube (`model/read-dir.ts`).
+      - A file is taken in only where its path isn't stored yet, so a restart never writes over a file changed in wechart.
+      - Only the kinds Cube's own `FileRepository` reads (`.js`, `.yml`, `.yaml`, `.jinja`, `.py`) are taken, named as it names them, relative to the directory (`cubes/orders.yml`), so Cube can later be served the same names.
+      - Until T143 Cube still reads the disk; nothing can be edited yet, so the two cannot differ.
+    - **Web:**
+      - `workspaces/model/objects.ts` reads what a file defines with `yaml` 2.9.1 (now a dependency, per `research/yaml.md`) under `CUBE_PARSE`, Cube's own YAML reading: merges and timestamps as js-yaml resolves them.
+      - A file that won't parse says so with its line. A `.js` or `.py` file says it is code, whose objects Cube makes when it runs (AC-140 is T146's).
+      - `FileList` shows each file as a region named by its path. Under it, each cube or view is a group, with its members listed by kind: measures, dimensions, segments, hierarchies, joins and pre-aggregations.
+      - It is mounted as the Model workspace's content.
+  - **Tests:**
+    - `repos/model-files.test.ts` (3): a seed takes in a new file; it never writes over a stored one; path order.
+    - `model.test.ts` (2): the route serves every file, and none without a store.
+    - `model/read-dir.test.ts` (2): Cube's file kinds, its naming and hidden files; a missing directory reads as nothing rather than failing the service.
+    - `server.test.ts`: `WECHART_MODEL_DIR` and its default.
+    - `objects.test.ts` (4): every member kind AC-131 names; several cubes and a view in one file; an unreadable file's line; code files.
+    - `FileList.test.tsx` (2): every kind, listed under its cube, in the rendered component; an unreadable file's problem, shown on it.
+    - `e2e/model.spec.ts` (1 in each browser): on the real service, `/model` lists the seeded files. `cubes/orders.yml` shows cube `orders` with its measures, dimensions and joins; `customers.yml` and `products.yml` are there; `views/order_summary.yml` shows view `order_summary`.
+      - The seed model declares no segments, hierarchies or pre-aggregations. Those kinds are shown in the same component by `FileList.test.tsx`.
 - [ ] T138 (AC-132) Generate a form for every key Cube's validator accepts, with the validator's own enumerations
   - Files: `packages/web/src/workspaces/model/form/{schema,CubeForm}.tsx`, `packages/web/src/workspaces/model/form/schema.test.ts`
   - Failing test: `schema.test.ts`: every accepted key on a cube or view has a field, and each enumeration offers exactly the validator's allowed values (AC-132).

@@ -211,6 +211,45 @@ main { padding: var(--wc-surface-padding); }
   align-items: start;
 }
 
+/* The Model workspace's files (T137, AC-131): each file a card, and under it
+   the cubes and views it defines, their members grouped by kind. */
+.model-workspace h1 { margin: 0 0 16px; font-size: var(--wc-text-xl-size); line-height: var(--wc-text-xl-line); }
+.model-files { display: grid; gap: 12px; max-width: 960px; }
+.model-file {
+  padding: 12px 16px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+.model-file__path {
+  margin: 0 0 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 600;
+}
+.model-file__problem { margin: 0; color: var(--wc-text-primary); }
+.model-file__note { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+.model-object { padding: 8px 0; border-top: 1px solid var(--wc-border-subtle); }
+.model-object__name { margin: 0 0 4px; font-weight: 600; }
+.model-object__kind {
+  margin-right: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 3px;
+  color: var(--wc-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.model-object__group { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
+.model-object__group-title {
+  flex: 0 0 120px;
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.model-object__group ul { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; }
+
 .explore__tree,
 .explore__contents {
   padding: 8px;

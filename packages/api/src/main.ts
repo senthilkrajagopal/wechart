@@ -5,7 +5,9 @@ import { closeDb, getDb } from './db/client';
 import { migrateToLatest } from './db/migrate';
 import { catalog } from './repos/catalog';
 import { documents } from './repos/documents';
+import { readModelDir } from './model/read-dir';
 import { imageStore } from './repos/images';
+import { modelFileStore } from './repos/model-files';
 import { queryLog } from './repos/query-log';
 import { seedDevData } from './seed';
 import { buildServer } from './server';
@@ -22,12 +24,21 @@ async function main(): Promise<void> {
   const db = getDb();
   if (process.env['WECHART_SEED'] === '1') await seedDevData(db);
 
+  /**
+   * The model's files, seeded from the directory Cube reads (T137): a file
+   * not yet in wechart's store is taken in; one already there is left as it
+   * is, so a restart never writes over an edit.
+   */
+  const modelFiles = modelFileStore(db);
+  await modelFiles.seed(await readModelDir(config.modelDir));
+
   const app = buildServer({
     config,
     queryLog: queryLog(db),
     catalog: catalog(db),
     documents: documents(db),
     images: imageStore(db),
+    modelFiles,
     logger: true,
   });
 

@@ -53,8 +53,16 @@ export interface ImageTable {
   created_at: Generated<Date>;
 }
 
+/** The Cube model's files (T137, AC-131), one row a file, by its path. */
+export interface ModelFileTable {
+  path: string;
+  content: string;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   documents: DocumentTable;
   query_log: QueryLogTable;
   images: ImageTable;
+  model_files: ModelFileTable;
 }

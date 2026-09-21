@@ -17,6 +17,7 @@ const config: Config = {
   cubeApiUrl: 'http://cube.invalid/cubejs-api/v1',
   cubeApiSecret: 'secret',
   securityContext: {},
+  modelDir: '',
 };
 
 function memoryImages(): ImageStore & {

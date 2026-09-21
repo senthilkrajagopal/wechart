@@ -19,6 +19,7 @@ const config = {
   cubeApiSecret: SECRET,
   securityContext: { tenant: 'acme' },
   port: 4100,
+  modelDir: '',
 };
 
 /** A CubeClient whose outbound call is replaced, so no network is touched. */
@@ -941,5 +942,13 @@ describe('configuration', () => {
 
   it('treats an absent security context as no claims, not as an error', () => {
     expect(loadConfig({ CUBE_API_SECRET: 'x' }).securityContext).toEqual({});
+  });
+
+  it('seeds the model from the directory Cube reads, unless told another (T137)', () => {
+    expect(loadConfig({ CUBE_API_SECRET: 'x', WECHART_MODEL_DIR: '/srv/model' }).modelDir).toBe(
+      '/srv/model',
+    );
+    // By default the repository's own, which docker-compose mounts into Cube.
+    expect(loadConfig({ CUBE_API_SECRET: 'x' }).modelDir).toMatch(/[/\\]infra[/\\]cube[/\\]model$/);
   });
 });
