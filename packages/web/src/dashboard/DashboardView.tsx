@@ -179,6 +179,7 @@ function TileBody({
   inEffect,
   editing = false,
   carried,
+  title,
 }: {
   tile: Tile;
   spec: RenderSpec | undefined;
@@ -192,6 +193,8 @@ function TileBody({
   editing?: boolean;
   /** The filter values in effect, which a link tile can pass on (AC-064). */
   carried?: readonly SearchFilter[] | undefined;
+  /** A chart tile's heading: its chart's title (AC-187). */
+  title?: string | undefined;
 }) {
   switch (tile.kind) {
     case 'chart':
@@ -228,6 +231,7 @@ function TileBody({
           spec={spec}
           busy={busy}
           inEffect={inEffect}
+          title={title}
           {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
         />
       );
@@ -267,6 +271,8 @@ interface TileCharts {
   readonly inEffect?: Readonly<Record<string, readonly string[]>>;
   /** The filter values set, as a dashboard's URL carries them — for link tiles (AC-064). */
   readonly carried?: readonly SearchFilter[] | undefined;
+  /** A chart's title, which heads its tile (AC-187). */
+  readonly titleOf?: ((chartId: string) => string | undefined) | undefined;
 }
 
 interface Affordances {
@@ -438,6 +444,7 @@ function Elements({
               inEffect={charts.inEffect?.[chartId]}
               editing={editing}
               carried={charts.carried}
+              title={charts.titleOf?.(chartId)}
             />
           </>
         );
@@ -812,6 +819,7 @@ export function DashboardView({
     notCovered: marked,
     inEffect,
     carried: valuesToSearch(filterValues),
+    titleOf: chartTitleOf,
   };
 
   /**
@@ -989,8 +997,9 @@ export function DashboardView({
         headerActions={(session) => (
           <button
             type="button"
-            className="dashboard__gear"
+            className="dashboard__gear icon-button"
             aria-label="Dashboard settings"
+            title="Dashboard settings"
             /**
              * Not while a save is under way (AC-184, T197). The header is
              * outside the body a save makes inert, and a settings save made now
@@ -1007,7 +1016,21 @@ export function DashboardView({
               setSettingsOpen(true);
             }}
           >
-            ⚙
+            {/* The prototype's gear (AC-187). */}
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
           </button>
         )}
         /**

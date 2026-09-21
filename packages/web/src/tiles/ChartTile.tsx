@@ -47,6 +47,11 @@ export interface ChartTileProps {
    * when the query comes back with no rows (AC-043).
    */
   readonly inEffect?: readonly string[] | undefined;
+  /**
+   * The chart's title, heading the tile as the prototype's `.tile-head` does
+   * (AC-187). Absent where the chart is not on a tile — the editor's preview.
+   */
+  readonly title?: string | undefined;
 }
 
 interface ChartBodyProps {
@@ -86,6 +91,7 @@ export function ChartTile({
   onTableViewChange,
   busy,
   inEffect,
+  title,
 }: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
@@ -101,6 +107,11 @@ export function ChartTile({
   const canSwitch = spec.chartType !== 'table';
   const showingTable = asTable && canSwitch;
 
+  const heading =
+    title === undefined || title.trim() === '' ? null : (
+      <h3 className="tile-head__title">{title}</h3>
+    );
+
   // No rows: said in words, whatever the chart type (AC-043) — not blank
   // axes, and no table switch, since there is no data behind either view.
   if (spec.rows.length === 0) {
@@ -110,6 +121,7 @@ export function ChartTile({
         data-testid="chart-tile"
         aria-busy={busy === true ? true : undefined}
       >
+        {heading === null ? null : <div className="tile-head">{heading}</div>}
         <TileEmpty inEffect={inEffect} />
       </div>
     );
@@ -121,18 +133,24 @@ export function ChartTile({
       data-testid="chart-tile"
       aria-busy={busy === true ? true : undefined}
     >
-      {canSwitch ? (
-        <button
-          type="button"
-          data-testid="toggle-table-view"
-          aria-pressed={showingTable}
-          onClick={() => {
-            setAsTable(!showingTable);
-          }}
-        >
-          {showingTable ? 'Chart view' : 'Table view'}
-        </button>
-      ) : null}
+      {/* The prototype's .tile-head: the chart's title, and the tile's own
+          controls — here the table view, a small ghost button (AC-187). */}
+      <div className="tile-head">
+        {heading}
+        {canSwitch ? (
+          <button
+            type="button"
+            className="btn-ghost btn-sm tile-head__action"
+            data-testid="toggle-table-view"
+            aria-pressed={showingTable}
+            onClick={() => {
+              setAsTable(!showingTable);
+            }}
+          >
+            {showingTable ? 'Chart view' : 'Table view'}
+          </button>
+        ) : null}
+      </div>
 
       {showingTable ? (
         // The same rows the chart drew, not a second query — the drawer at

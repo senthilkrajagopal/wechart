@@ -218,3 +218,134 @@ test.describe('T202: the app bar, workspace navigation, buttons and inputs', () 
     });
   });
 });
+
+test.describe('T203: the dashboard header, page tabs and tiles', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await expect(
+      page.getByRole('heading', { name: 'Company dashboard 01', level: 1 }),
+    ).toBeVisible();
+  });
+
+  test('the header: a 24 px title, a primary Edit with its pencil, and the gear as an icon button', async ({
+    page,
+  }) => {
+    // .dash-head h1 { font-size: 24px; line-height: 32px; font-weight: 600 }
+    const title = page.getByRole('heading', { name: 'Company dashboard 01', level: 1 });
+    expect(await style(title, 'font-size', 'line-height', 'font-weight')).toEqual({
+      'font-size': '24px',
+      'line-height': '32px',
+      'font-weight': '600',
+    });
+
+    // <button class="btn primary" data-edit>${PENCIL} Edit</button>
+    const edit = page.getByRole('button', { name: 'Edit', exact: true });
+    await expect(edit.locator('svg')).toHaveCount(1);
+    expect(await style(edit, 'background-color', 'color', 'height', 'border-radius')).toEqual({
+      'background-color': await token(page, 'accent'),
+      color: await token(page, 'text-on-accent'),
+      height: '32px',
+      'border-radius': '6px',
+    });
+
+    // <button class="iconbtn" data-settings aria-label="Dashboard settings">${GEAR}</button>,
+    // the header's last control.
+    const gear = page.getByRole('button', { name: 'Dashboard settings' });
+    await expect(gear.locator('svg')).toHaveCount(1);
+    expect(await style(gear, 'width', 'height', 'border-radius', 'background-color')).toEqual({
+      width: '32px',
+      height: '32px',
+      'border-radius': '6px',
+      'background-color': 'rgba(0, 0, 0, 0)',
+    });
+    const last = await page
+      .locator('.dashboard__header')
+      .evaluate((header) =>
+        header.querySelector(':scope > :last-child')?.getAttribute('aria-label'),
+      );
+    expect(last).toBe('Dashboard settings');
+  });
+
+  test('page tabs: underlined in the accent when selected, on a subtle rule', async ({ page }) => {
+    // .dash-tabs { gap: 4px; border-bottom: 1px solid var(--border-subtle) }
+    // .dash-tabs button { border: 0; background: none; height: 36px; padding: 0 12px; font-weight: 600;
+    //                     font-size: 13px; color: var(--text-secondary); border-bottom: 2px solid transparent }
+    // .dash-tabs button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--accent) }
+    const tabs = page.getByRole('tablist', { name: 'Pages' });
+    expect(await style(tabs, 'border-bottom-width', 'border-bottom-color')).toEqual({
+      'border-bottom-width': '1px',
+      'border-bottom-color': await token(page, 'border-subtle'),
+    });
+    const selected = tabs.getByRole('tab', { name: 'Overview' });
+    const other = tabs.getByRole('tab', { name: 'Appendix' });
+    expect(
+      await style(
+        selected,
+        'height',
+        'padding-left',
+        'font-size',
+        'font-weight',
+        'color',
+        'border-bottom-width',
+        'border-bottom-color',
+        'border-top-width',
+        'background-color',
+      ),
+    ).toEqual({
+      height: '36px',
+      'padding-left': '12px',
+      'font-size': '13px',
+      'font-weight': '600',
+      color: await token(page, 'text-primary'),
+      'border-bottom-width': '2px',
+      'border-bottom-color': await token(page, 'accent'),
+      'border-top-width': '0px',
+      'background-color': 'rgba(0, 0, 0, 0)',
+    });
+    expect(await style(other, 'color', 'border-bottom-color')).toEqual({
+      color: await token(page, 'text-secondary'),
+      'border-bottom-color': 'rgba(0, 0, 0, 0)',
+    });
+  });
+
+  test('a chart tile: the prototype’s box, headed by its chart’s title', async ({ page }) => {
+    // .tile { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 16px }
+    const tile = page.locator('[data-tile="tile-status"]');
+    expect(
+      await style(
+        tile,
+        'background-color',
+        'border-top-width',
+        'border-top-color',
+        'border-radius',
+        'padding-left',
+      ),
+    ).toEqual({
+      'background-color': await token(page, 'bg-surface'),
+      'border-top-width': '1px',
+      'border-top-color': await token(page, 'border-subtle'),
+      'border-radius': '6px',
+      'padding-left': '16px',
+    });
+
+    // .tile-head h3 { font-size: 14px; line-height: 20px; font-weight: 600 }
+    const heading = tile.getByRole('heading', { name: 'Orders by category and status', level: 3 });
+    expect(await style(heading, 'font-size', 'line-height', 'font-weight', 'color')).toEqual({
+      'font-size': '14px',
+      'line-height': '20px',
+      'font-weight': '600',
+      color: await token(page, 'text-primary'),
+    });
+
+    // The table view: a small ghost button in the head (.btn.ghost.sm).
+    const toggle = tile.getByTestId('toggle-table-view');
+    expect(
+      await style(toggle, 'height', 'font-size', 'background-color', 'border-top-color'),
+    ).toEqual({
+      height: '24px',
+      'font-size': '12px',
+      'background-color': 'rgba(0, 0, 0, 0)',
+      'border-top-color': 'rgba(0, 0, 0, 0)',
+    });
+  });
+});

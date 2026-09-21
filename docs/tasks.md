@@ -1850,10 +1850,22 @@ Each task below measures its components' computed styles in `e2e/design-conforma
       - The Create button was found by a name other tests' items also contain; it is now scoped to its form.
   - **Full runs:** typecheck and lint clean (the existing DataTable warning aside); 1,451 unit tests and 612 browser runs passed. The global button look broke no existing test.
   - **Done 2026-09-21.** AC-187 stays unticked until T203–T205 bring the rest of its components into line.
-- [ ] T203 (AC-187) Draw the dashboard header, page tabs and tiles as the prototype does
+- [x] T203 (AC-187) Draw the dashboard header, page tabs and tiles as the prototype does
   - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/ChartTile.tsx`, `e2e/design-conformance.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts`: the title is 24/32 at weight 600; Edit is a primary button and the gear an icon button; page tabs are underlined; a chart tile is 1 px `border-subtle`, radius 6, padding 16, headed by its chart's title at 14/20 600, with its table view as a small ghost button in the header (AC-187).
   - Depends on: T202
+  - **Built 2026-09-21.** Files as planned, plus `dashboard/edit/EditChrome.tsx` (the header's order and the Edit button).
+    - **Header** (the prototype's `.dash-head`):
+      - The title is 24/32 at 600.
+      - Edit is the primary button with the prototype's pencil.
+      - The settings gear is the prototype's icon button with its gear, and now comes **last** in the header, as the prototype places it. It used to sit just after the title.
+      - The edit bar's buttons take the prototype's 6 px radius, and Save its 600 weight.
+    - **Page tabs** (`.dash-tabs`): 36 px, 13 px at 600, secondary ink, a 2 px accent underline on the selected one, on a 1 px `border-subtle` rule.
+    - **Tiles** (`.tile`, `.tile-head`): the box already matched. A chart tile is now headed by its chart's title (14/20 600, ellipsed), taken from the chart documents T083 made available. The table-view toggle moved into the head as a small ghost button. The head keeps room at the right for the pencil and ⋯ menu, which sit over the tile's corner. The editor's preview has no title and shows the toggle alone.
+  - **Tests, red first:** `e2e/design-conformance.spec.ts` (3 more in each browser): the header's title, Edit and gear (size, fill, icon, last place); the page tabs (height, padding, type, underline, rule, the unselected tab's ink); the chart tile's box, heading and toggle.
+  - **Seen on the screenshot, not in this task:** the seeded "Orders over time by status" draws no lines and prints raw timestamps (`2026-01-02T00:00:00.000`) on its time axis. That is a chart bug (time-dimension formatting and drawing: AC-046, T201), not styling, and is looked at next. The prototype's breadcrumb, "Published" badge, and Preview as / Markings / Schedule buttons belong to features not built yet (navigation context, security preview, markings, schedules).
+  - **Full runs:** typecheck and lint clean (the existing DataTable warning aside); 1,451 unit tests and 621 browser runs passed.
+  - **Done 2026-09-21.** AC-187 stays unticked until T204–T205.
 - [ ] T204 (AC-187) Draw each filter as the prototype's 32 px pill, its scope tag first, its control opening from it
   - Files: `packages/web/src/filters/FilterBar.tsx`, `packages/web/src/filters/widgets/*.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts`: each filter is a 32 px pill with a 6 px radius and a 12 px 600 muted scope tag, and a list, checkbox or range filter opens its control in a popover from the pill; the filter bar sits on the page background with a subtle bottom border (AC-187). The existing filter tests keep passing through the popover.

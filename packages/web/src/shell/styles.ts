@@ -85,7 +85,13 @@ button[type='submit']:hover:not(:disabled):not([aria-disabled='true']),
   background: var(--wc-accent);
   filter: brightness(1.08);
 }
-.btn-primary { min-height: 32px; padding: 0 12px; }
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+}
 .btn-ghost { border-color: transparent; background: none; }
 .btn-sm { min-height: 24px; height: 24px; padding: 0 8px; font-size: var(--wc-text-xs-size); }
 
@@ -268,9 +274,16 @@ main { padding: var(--wc-surface-padding); }
 .dashboard__header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   min-height: 48px;
+}
+/* The prototype's .dash-head h1; what follows it sits at the right. */
+.dashboard__header h1 {
+  margin: 0 auto 0 0;
+  font-size: var(--wc-text-xl-size);
+  line-height: var(--wc-text-xl-line);
+  font-weight: var(--wc-text-xl-weight);
+  letter-spacing: -0.01em;
 }
 
 /* direction.md section 2 makes the canvas and the inspector separate panes,
@@ -342,17 +355,8 @@ main:has(.dashboard) {
 
 /* The settings gear (AC-069). In the header in both view and edit mode, so it
    sits between the title and whatever the mode puts on the right. */
-.dashboard__gear {
-  margin-right: auto;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--wc-border-strong);
-  border-radius: 4px;
-  background: var(--wc-bg-surface);
-  color: var(--wc-text-primary);
-  cursor: pointer;
-}
-.dashboard__gear:hover { background: var(--wc-bg-subtle); }
+/* The settings gear: the prototype's icon button, last in the header. */
+.dashboard__gear { flex: none; }
 
 /* The settings page (AC-069). Full-viewport like the chart editor: it takes
    the place of the dashboard rather than floating over it, so there is one bar
@@ -500,7 +504,8 @@ main:has(.dashboard) {
 }
 
 .edit-bar { display: flex; gap: 8px; }
-.edit-bar button { height: 32px; padding: 0 12px; border: 1px solid var(--wc-border-strong); border-radius: 4px; background: var(--wc-bg-surface); color: var(--wc-text-primary); cursor: pointer; }
+.edit-bar button { height: 32px; padding: 0 12px; border: 1px solid var(--wc-border-strong); border-radius: 6px; background: var(--wc-bg-surface); color: var(--wc-text-primary); cursor: pointer; }
+.edit-bar__save { font-weight: var(--wc-text-sm-strong-weight); }
 /* aria-disabled, not :disabled. The bar keeps disabled buttons focusable (the
    APG toolbar pattern, T059), so they are never :disabled and that rule never
    matched: Undo, Redo and Discard looked active when they had nothing to do,
@@ -679,6 +684,30 @@ main:has(.dashboard) {
   font-size: 12px;
   color: var(--wc-text-secondary);
 }
+/* A tile's head: the prototype's .tile-head — the chart's title, then the
+   tile's own controls. Room is kept at the right for the pencil and the ⋯
+   menu, which sit over the tile's corner. */
+.tile-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  margin-bottom: 8px;
+  padding-right: 48px;
+}
+.tile-head__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--wc-text-sm-size);
+  line-height: var(--wc-text-sm-line);
+  font-weight: var(--wc-text-sm-strong-weight);
+  color: var(--wc-text-primary);
+}
+.tile-head__action { margin-left: auto; }
 /* A chart whose filtered answer is on its way (AC-078): still drawn, dimmed. */
 .chart-tile--busy { opacity: 0.55; transition: opacity 120ms ease-in; }
 /* A filter's scope (direction.md rule 14): a 24 px chip, like the other chips. */
@@ -958,6 +987,33 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 .tile-menu__delete { margin-top: 4px; border-top: 1px solid var(--wc-border-subtle); }
 
 /* Deleting a page tab or a tab (AC-060), beside the strip they belong to. */
+/* Page tabs: the prototype's .dash-tabs — underlined, on a subtle rule. */
+.page-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.page-tabs [role='tab'] {
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--wc-text-secondary);
+  font-size: 13px;
+  font-weight: var(--wc-text-sm-strong-weight);
+}
+.page-tabs [role='tab']:hover:not([aria-selected='true']) {
+  background: none;
+  color: var(--wc-text-primary);
+}
+.page-tabs [role='tab'][aria-selected='true'] {
+  color: var(--wc-text-primary);
+  border-bottom-color: var(--wc-accent);
+}
 .page-tabs__actions { display: flex; gap: 8px; }
 .page-tabs__actions button,
 .tab-group [role='tablist'] button[data-testid^='delete-tab-'] {

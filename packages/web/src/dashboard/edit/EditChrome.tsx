@@ -318,7 +318,6 @@ export function EditChrome<T>({
       >
         <header className="dashboard__header">
           <h1>{title(current)}</h1>
-          {typeof headerActions === 'function' ? headerActions(session) : headerActions}
           {editing ? (
             <EditBar
               changes={changes}
@@ -338,10 +337,22 @@ export function EditChrome<T>({
               }}
             />
           ) : (
-            <button type="button" onClick={start}>
+            // The prototype's primary Edit, with its pencil (AC-187).
+            <button type="button" className="btn-primary" onClick={start}>
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M11.5 2.5l2 2L6 12l-2.8.8L4 10z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                />
+              </svg>
               Edit
             </button>
           )}
+          {/* Last, as the prototype has the settings gear. */}
+          {typeof headerActions === 'function' ? headerActions(session) : headerActions}
         </header>
 
         <div className="dashboard__body" inert={saving} aria-busy={saving}>
