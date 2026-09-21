@@ -257,6 +257,44 @@ describe('creating catalog objects (AC-020)', () => {
     await app.close();
   });
 
+  it('gives a new dashboard its interaction mode and default marking (AC-072)', async () => {
+    /**
+     * T078 / AC-072. Creation is the only place this can be asserted: the
+     * browser defaults a dashboard that has no interactions when it reads one,
+     * so opening a dashboard and finding Markings proves nothing about what
+     * was stored. What is checked here is the stored body.
+     *
+     * A chart created the same way gets none of it — the default belongs to
+     * dashboards, and writing marking definitions onto a chart would be a
+     * quiet lie about what a chart is.
+     */
+    const documents = recordingDocuments();
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind: 'dashboard', title: 'Fresh' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind: 'chart', title: 'Not a dashboard' },
+    });
+
+    const dashboard = documents.created[0]?.body as {
+      settings?: { interactions?: { mode?: string } };
+      markings?: { name: string; isDefault: boolean }[];
+    };
+    expect(dashboard.settings?.interactions?.mode).toBe('markings');
+    expect(dashboard.markings).toHaveLength(1);
+    expect(dashboard.markings?.[0]?.name).toBe('Marking');
+    expect(dashboard.markings?.[0]?.isDefault).toBe(true);
+
+    expect(documents.created[1]?.body).not.toHaveProperty('markings');
+    await app.close();
+  });
+
   it('refuses a kind that is not a catalog object', async () => {
     const documents = recordingDocuments();
     const app = buildServer({ config, documents, cube: stubCube(() => ({})) });

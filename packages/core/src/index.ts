@@ -60,6 +60,17 @@ export { applySort, type SortBy, type SortDirection, type SortSettings } from '.
 export { formatValue, formatterFor, type MemberFormats } from './format';
 
 export {
+  DEFAULT_INTERACTIONS,
+  INTERACTION_MODES,
+  newDashboardBody,
+  type CrossFilterConfig,
+  type InteractionMode,
+  type Interactions,
+  type NewDashboard,
+  type NewDashboardBody,
+} from './dashboard-document';
+
+export {
   MARKING_SLOTS,
   MAX_MARKINGS,
   addMarking,

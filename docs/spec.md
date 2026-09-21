@@ -221,7 +221,7 @@ Traces to: `[docs/inputs §12]`, direction.md §2, rules 13, 32, 56.
       Fails when: switching discards the other mode's configuration, or both modes are active at once.
 - [ ] AC-071 WHEN the interaction mode changes and the settings are saved, THE SYSTEM SHALL clear current marks and cross-filters.
       Fails when: a mark or cross-filter from the previous mode still affects a tile.
-- [ ] AC-072 WHEN a new dashboard is created, THE SYSTEM SHALL set its interaction mode to Markings with one marking named "Marking" as the default (direction.md rule 57).
+- [x] AC-072 WHEN a new dashboard is created, THE SYSTEM SHALL set its interaction mode to Markings with one marking named "Marking" as the default (direction.md rule 57).
       Fails when: a new dashboard starts in cross-filter mode, or without a default marking.
 - [ ] AC-073 WHEN the user leaves the settings page with unsaved changes, THE SYSTEM SHALL ask before discarding them.
       Fails when: unsaved changes are discarded without asking.

@@ -797,12 +797,16 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/dashboard/settings/interactionMode.ts`, `packages/web/src/dashboard/settings/modeSwitch.test.ts`
   - Failing test: `modeSwitch.test.ts`: after saving a mode change, no mark or cross-filter from the previous mode affects any tile (AC-071).
   - Depends on: T076, T090
-- [ ] T078 (AC-072) Default a new dashboard to Markings with one default marking named "Marking"
-  - Files: `packages/web/src/dashboard/model/newDashboard.ts`, `packages/web/src/dashboard/model/newDashboard.test.ts`
+- [x] T078 (AC-072) Default a new dashboard to Markings with one default marking named "Marking"
+  - Files: `packages/core/src/dashboard-document.ts`, `packages/core/src/dashboard-document.test.ts`, `packages/core/src/index.ts`, `packages/api/src/server.ts`, `packages/api/src/server.test.ts`, `packages/web/src/dashboard/settings/interactionMode.ts`
   - Failing test: `newDashboard.test.ts`: a new dashboard's interaction mode is Markings and it carries exactly one marking, named "Marking", flagged default (AC-072).
   - Depends on: T076, T090
   - **Build on `DEFAULT_INTERACTIONS` and `defaultMarkings()`, do not write the default a second time.** T076 already starts a dashboard in Markings mode and T090 already supplies rule 57's single marking named "Marking". A fresh literal here would let the creation-time default and the read-time default drift, so a dashboard would be stored as one thing and read as another.
   - **Tick AC-072 on creation, not on read.** `interactionsOf` applies the same default to *existing* dashboards, which makes AC-072's failing state ("a new dashboard starts without a default marking") unobservable at read time. The test has to exercise whatever creates a dashboard. Nothing demonstrates AC-072 today: mutating the default marking to `{name: 'Untitled', isDefault: false}` leaves the whole suite green.
+  - Done 2026-09-20. AC-072 ticked, **on the stored body at creation**, in `server.test.ts`. **Files differ from the plan above, which has been corrected** — the plan put this in the web package, but a dashboard is created by the API, which is the only creation path the browser and the e2e suite both use.
+  - **The shape and the default moved to `@wechart/core`** (`dashboard-document.ts`), because the API writes them and the browser reads them back. Written separately in the two packages they would be equal today and diverge the day someone changed one, and a dashboard would be stored as one thing and read as another. `interactionMode.ts` re-exports them, so callers in the web package still have one place to import from.
+  - **The warning above was worth writing: it came true under mutation.** Removing `newDashboardBody` from the creation route fails the API test and leaves **all 26 web settings tests green**, because the browser defaults a dashboard that has no interactions. An AC-072 test written in the UI would have passed against a dashboard that stored nothing at all.
+  - **Only a dashboard gets it.** A chart created through the same route gets none of it, and the test asserts that: writing marking definitions onto a chart would be a quiet lie about what a chart is.
 - [ ] T079 (AC-073) Guard against leaving the settings page with unsaved changes
   - Files: `packages/web/src/dashboard/settings/SettingsPage.tsx`, `packages/web/src/dashboard/settings/dirtyGuard.test.ts`
   - Failing test: `dirtyGuard.test.ts`: leaving with a dirty field prompts before discarding, and a clean page leaves silently (AC-073).

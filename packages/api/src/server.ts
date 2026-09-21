@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { newDashboardBody } from '@wechart/core';
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import { CubeClient, CubeError } from './cube/client';
@@ -174,10 +175,27 @@ export function buildServer({
     if (!title) throw new BadRequest('A title is required');
     if (!docs) throw new BadRequest('Persistence is not configured');
 
+    const folderId = body?.folderId ?? 'root';
+    const owner = 'admin';
+
+    /**
+     * A dashboard is created with its interaction mode and its default
+     * marking already in it (AC-072, direction.md rule 57), not left to be
+     * defaulted when something reads it. The browser does default a dashboard
+     * that has none — every dashboard stored before interactions existed —
+     * but relying on that would make the criterion unobservable: every
+     * dashboard would read as Markings whether or not anything was written.
+     *
+     * Only a dashboard. Writing marking definitions onto a chart or a folder
+     * would be a quiet lie about what those are.
+     */
     const created = await docs.create({
       kind,
       id: randomUUID(),
-      body: { title, folderId: body?.folderId ?? 'root', owner: 'admin' },
+      body:
+        kind === 'dashboard'
+          ? { ...newDashboardBody({ title, folderId, owner }) }
+          : { title, folderId, owner },
     });
 
     return reply.status(201).send({
