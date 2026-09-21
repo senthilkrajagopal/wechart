@@ -358,6 +358,21 @@ main:has(.dashboard) {
   font-size: var(--wc-text-xs-size);
   color: var(--wc-text-secondary);
 }
+
+/* The nothing-marked state (AC-109). The message is the default, and it reads
+   as instruction rather than failure: secondary ink, centred in the tile, no
+   error colour. A details tile waiting for a mark is working correctly.
+   Both states fill the tile, so the tile keeps its size in the grid instead of
+   collapsing and shoving its neighbours around every time a mark is cleared. */
+.nothing-marked {
+  display: grid;
+  place-content: center;
+  height: 100%;
+  margin: 0;
+  padding: 16px;
+  color: var(--wc-text-secondary);
+  text-align: center;
+}
 /* Which of the two interaction modes is in effect (AC-070, rule 56). Pushed to
    the end of the nav row, in secondary ink: it reports state rather than
    naming the destination, so it must not compete with the section name. */
