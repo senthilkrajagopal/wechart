@@ -35,6 +35,13 @@ export interface EditSession<T> {
   readonly changes: number;
   readonly change: (next: T) => void;
   /**
+   * A change made to the document as it is when the change lands, not as it
+   * was when it began — for one that finishes later, like an image's upload
+   * (T069's review): made from an earlier render's document, it undid
+   * everything changed while it was on its way.
+   */
+  readonly update: (apply: (current: T) => T) => void;
+  /**
    * Step back one change — the same Undo the edit bar offers, reachable by
    * whoever needs to offer it somewhere else. AC-060 asks for an undo "in a
    * toast **and** through Undo", and two routes to two different histories
@@ -184,6 +191,15 @@ export function EditChrome<T>({
       push(previous, { document: next, changes: previous.present.changes + 1 }),
     );
   };
+  const update = (apply: (current: T) => T) => {
+    if (saving) return;
+    setHistory((previous) =>
+      push(previous, {
+        document: apply(previous.present.document),
+        changes: previous.present.changes + 1,
+      }),
+    );
+  };
 
   /**
    * Leaving edit mode is the second half of AC-065. The session is re-seeded
@@ -227,6 +243,7 @@ export function EditChrome<T>({
     document: current,
     changes,
     change,
+    update,
     // The very same step the edit bar's Undo takes — and, like it, not while
     // a save is under way.
     undo: () => {

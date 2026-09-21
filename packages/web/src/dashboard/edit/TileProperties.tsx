@@ -24,16 +24,28 @@ export function TileProperties({
   dashboardId: string;
   document: DashboardDocument;
   selected: string | null;
-  onChange: (next: DashboardDocument) => void;
+  /**
+   * Apply a change to the dashboard as it is when the change lands — an
+   * image's upload answers later, and anything changed meanwhile must stay.
+   */
+  onChange: (apply: (current: DashboardDocument) => DashboardDocument) => void;
 }) {
   const element = selected === null ? null : elementAt(document, selected);
   if (element === null || !isTile(element)) return <p>Select a tile to see its properties.</p>;
   const change = (patch: Partial<Tile>) => {
-    onChange(changeTile(document, element.id, (tile) => ({ ...tile, ...patch })));
+    onChange((current) => changeTile(current, element.id, (tile) => ({ ...tile, ...patch })));
   };
   switch (element.kind) {
     case 'image':
-      return <ImageProperties dashboardId={dashboardId} tile={element} onChange={change} />;
+      // Keyed, so one tile's refusal or upload does not carry to the next.
+      return (
+        <ImageProperties
+          key={element.id}
+          dashboardId={dashboardId}
+          tile={element}
+          onChange={change}
+        />
+      );
     case 'link':
       return <LinkProperties key={element.id} tile={element} onChange={change} />;
     default:

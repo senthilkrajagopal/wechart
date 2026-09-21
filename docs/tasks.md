@@ -1002,6 +1002,16 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - `e2e/tiles.spec.ts` (2), on the real app: added from the Add panel; a text file and an oversized PNG refused; a real 1×1 PNG uploaded and decoded (`naturalWidth` 1); warned until given alternative text; after save and reload, shown as an image named by it. The server refuses a renamed file sent straight to it, and serves an accepted PNG back byte for byte.
   - **Known:** direction.md says an image tile "has no tile chrome" in view mode. The tile still has its border and padding, which no criterion checks. Images of a deleted tile stay in the table.
   - **Done 2026-09-21. AC-063 ticked** — `e2e/tiles.spec.ts`, with `ImageTile.test.tsx` and both packages' rule tests.
+  - **Cold review: PASS**, with no security defect in upload or serving. Fixed in a follow-up, with tests that were red first:
+    - **bug: an upload that finished late undid what was changed meanwhile.** Its answer was applied to the dashboard from the render in which the file was chosen, so alternative text typed during the upload was lost when it landed. The edit session now has `update`, a change applied to the document as it is when the change lands, and the Properties panel uses it. Test: alt text typed while the upload is held survives it and is saved with the image.
+    - **low: a body past the upload route's limit gave a 500 "Internal error".** Fastify's `FST_ERR_CTP_BODY_TOO_LARGE` now gets a 413 "Images can be at most 2 MB." Test: a 3 MB image sent straight to the API.
+    - **low: one image tile's refusal stayed on screen when another was selected.** The panel is now keyed by tile.
+    - **Recorded, not changed:**
+      - **Unsourced claims.** The security reasoning (`<img>` never runs an SVG's script; what `sandbox` and `nosniff` do) and the file signatures have no source in `docs/research/`.
+      - **"2 MB" is read as 2,000,000 bytes**, which the user has not confirmed. A 2,040,000-byte file reads as about 1.95 MB in binary units but is refused with "this one is 2.0 MB".
+      - **Some valid SVGs are refused:** one starting with a comment or DOCTYPE without an XML declaration, or with `<svg` beyond the first 512 bytes.
+      - **Images outlive their tile:** no cleanup when a tile or dashboard is deleted, and the test reset does not clear them.
+      - **Saving during an upload** saves without the image, and the late answer is then dropped.
 - [x] T070 (AC-064) Open a link tile's target, carrying filters to a dashboard and restricting URLs to http and https
   - Files: `packages/web/src/dashboard/tiles/LinkTile.tsx`, `packages/web/src/dashboard/tiles/LinkTile.test.tsx`
   - Failing test: `LinkTile.test.tsx`: a dashboard target opens with the current filters when the option is on, and a `javascript:` or `file:` URL is refused while http(s) opens in a new tab (AC-064).

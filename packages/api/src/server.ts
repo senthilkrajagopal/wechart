@@ -613,7 +613,21 @@ export function buildServer({
    * reply is built here rather than by passing the error through, so nothing
    * from the service's own environment can ride along with it (AC-007).
    */
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
+    /**
+     * A body past its route's `bodyLimit`: Fastify's own
+     * `FST_ERR_CTP_BODY_TOO_LARGE` (docs/research/api-framework.md, which
+     * finds no documented status for it — so this one is wechart's). Only the
+     * image upload raises its limit, and only an image so large would reach it.
+     */
+    if ((error as { code?: unknown }).code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
+      return reply.status(413).send({
+        error: request.url.endsWith('/images')
+          ? 'Images can be at most 2 MB.'
+          : 'The request is too large.',
+      });
+    }
+
     if (error instanceof CubeError) {
       return reply.status(error.status >= 400 && error.status < 600 ? error.status : 502).send({
         error: error.message,

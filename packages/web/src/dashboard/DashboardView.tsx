@@ -1100,8 +1100,8 @@ export function DashboardView({
               dashboardId={dashboardId}
               document={session.document}
               selected={selected}
-              onChange={(next) => {
-                session.change(next);
+              onChange={(apply) => {
+                session.update(apply);
               }}
             />
           ),

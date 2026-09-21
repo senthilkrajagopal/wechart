@@ -51,14 +51,23 @@ const DOC: DashboardDocument = {
 };
 
 let posted: { contentType: string; data: string }[] = [];
+/** Held uploads' releases, while set. */
+let holding: (() => void)[] | undefined;
 
 beforeEach(() => {
   posted = [];
+  holding = undefined;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input) === '/api/dashboards/d1/images') {
         posted.push(JSON.parse(String(init?.body)) as { contentType: string; data: string });
+        if (holding !== undefined) {
+          const held = holding;
+          await new Promise<void>((release) => {
+            held.push(release);
+          });
+        }
         return new Response(JSON.stringify({ id: 'img-1', contentType: 'image/png', size: 11 }), {
           status: 201,
         });
@@ -137,6 +146,41 @@ describe('an image tile’s properties', () => {
 
     await userEvent.type(within(sidebar).getByLabelText('Alternative text'), 'Company logo');
     expect(within(tile).queryByTestId('image-alt-missing')).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const saved = (onSave.mock.calls[0] as [DashboardDocument])[0];
+    const kept = saved.pages[0]?.items[0] as { imageId?: string; alt?: string };
+    expect([kept.imageId, kept.alt]).toEqual(['img-1', 'Company logo']);
+  });
+
+  /**
+   * Found by T069's review: the upload's answer was applied to the dashboard
+   * as it was when the file was chosen, so anything changed while it was on
+   * its way — alternative text typed meanwhile — was undone when it landed.
+   */
+  it('keep what was changed while the image was on its way', async () => {
+    const onSave = dashboard();
+    const sidebar = await openProperties();
+    holding = [];
+
+    await userEvent.upload(
+      within(sidebar).getByLabelText('Image file'),
+      new File([PNG], 'logo.png', { type: 'image/png' }),
+    );
+    await vi.waitFor(() => {
+      expect(holding).toHaveLength(1);
+    });
+    await userEvent.type(within(sidebar).getByLabelText('Alternative text'), 'Company logo');
+    for (const release of holding) release();
+
+    const tile = document.querySelector('[data-tile="t-img"]') as HTMLElement;
+    await vi.waitFor(() => {
+      expect(tile.querySelector('img')?.getAttribute('src')).toBe('/api/images/img-1');
+    });
+    expect(within(sidebar).getByLabelText('Alternative text')).toHaveProperty(
+      'value',
+      'Company logo',
+    );
 
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     const saved = (onSave.mock.calls[0] as [DashboardDocument])[0];

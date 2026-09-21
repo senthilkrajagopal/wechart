@@ -90,6 +90,24 @@ describe('adding an image to a dashboard', () => {
     expect(images.stored.size).toBe(0);
   });
 
+  /**
+   * T069's review: past the route's body limit, Fastify's own error
+   * (`FST_ERR_CTP_BODY_TOO_LARGE`, docs/research/api-framework.md) reached the
+   * catch-all and came back as a 500 "Internal error".
+   */
+  it('refuses a body past the route’s limit as too large, not as a server error', async () => {
+    const images = memoryImages();
+    const huge = Buffer.concat([PNG, Buffer.alloc(3_000_000)]);
+    const { app, response } = await upload(images, {
+      contentType: 'image/png',
+      data: huge.toString('base64'),
+    });
+    expect(response.statusCode).toBe(413);
+    expect(response.json<{ error: string }>().error).toBe('Images can be at most 2 MB.');
+    expect(images.stored.size).toBe(0);
+    await app.close();
+  });
+
   it('refuses a body that is not an image upload at all', async () => {
     const images = memoryImages();
     const { app, response } = await upload(images, { contentType: 'image/png' });
