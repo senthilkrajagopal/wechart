@@ -1,5 +1,5 @@
 import { IMAGE_HEAD_BYTES, IMAGE_TYPES, imageProblem } from '@wechart/core';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 
 import { webAddressProblem } from '../tiles/LinkTile';
 
@@ -31,7 +31,8 @@ export function TileProperties({
   onChange: (apply: (current: DashboardDocument) => DashboardDocument) => void;
 }) {
   const element = selected === null ? null : elementAt(document, selected);
-  if (element === null || !isTile(element)) return <p>Select a tile to see its properties.</p>;
+  if (element === null || !isTile(element))
+    return <Note>Select a tile to see its properties.</Note>;
   const change = (patch: Partial<Tile>) => {
     onChange((current) => changeTile(current, element.id, (tile) => ({ ...tile, ...patch })));
   };
@@ -49,8 +50,30 @@ export function TileProperties({
     case 'link':
       return <LinkProperties key={element.id} tile={element} onChange={change} />;
     default:
-      return <p>This tile has no properties to set here.</p>;
+      return <Note>This tile has no properties to set here.</Note>;
   }
+}
+
+/** The panel with nothing to set, said in a section of its own. */
+function Note({ children }: { children: string }) {
+  return (
+    <div className="panel-section">
+      <p className="panel-section__note">{children}</p>
+    </div>
+  );
+}
+
+/**
+ * One setting: its label over its control (the prototype's `.field`, AC-187).
+ * The label names the control by `id`, so a reader hears it on the control.
+ */
+function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      {children}
+    </div>
+  );
 }
 
 interface Found {
@@ -119,58 +142,63 @@ function LinkProperties({
   };
 
   return (
-    <div className="tile-properties">
-      <label htmlFor={ids.label}>Label</label>
-      <input
-        id={ids.label}
-        type="text"
-        value={tile.text ?? ''}
-        onChange={(event) => {
-          onChange({ text: event.target.value });
-        }}
-      />
-      <label htmlFor={ids.style}>Style</label>
-      <select
-        id={ids.style}
-        value={tile.link?.style ?? 'button'}
-        onChange={(event) => {
-          const style = event.target.value;
-          link({ style: style === 'primary' ? 'primary' : style === 'text' ? 'text' : 'button' });
-        }}
-      >
-        <option value="button">Button</option>
-        <option value="primary">Primary</option>
-        <option value="text">Text link</option>
-      </select>
-      <label htmlFor={ids.goes}>Goes to</label>
-      <select
-        id={ids.goes}
-        value={goesTo}
-        onChange={(event) => {
-          setGoesTo(event.target.value === 'url' ? 'url' : 'dashboard');
-          setProblem('');
-        }}
-      >
-        <option value="dashboard">A dashboard</option>
-        <option value="url">A web address</option>
-      </select>
+    <div className="panel-section tile-properties">
+      <h3>Link</h3>
+      <Field id={ids.label} label="Label">
+        <input
+          id={ids.label}
+          type="text"
+          value={tile.text ?? ''}
+          onChange={(event) => {
+            onChange({ text: event.target.value });
+          }}
+        />
+      </Field>
+      <Field id={ids.style} label="Style">
+        <select
+          id={ids.style}
+          value={tile.link?.style ?? 'button'}
+          onChange={(event) => {
+            const style = event.target.value;
+            link({ style: style === 'primary' ? 'primary' : style === 'text' ? 'text' : 'button' });
+          }}
+        >
+          <option value="button">Button</option>
+          <option value="primary">Primary</option>
+          <option value="text">Text link</option>
+        </select>
+      </Field>
+      <Field id={ids.goes} label="Goes to">
+        <select
+          id={ids.goes}
+          value={goesTo}
+          onChange={(event) => {
+            setGoesTo(event.target.value === 'url' ? 'url' : 'dashboard');
+            setProblem('');
+          }}
+        >
+          <option value="dashboard">A dashboard</option>
+          <option value="url">A web address</option>
+        </select>
+      </Field>
       {goesTo === 'url' ? (
         <>
-          <label htmlFor={ids.url}>Web address</label>
-          <input
-            id={ids.url}
-            type="url"
-            value={address}
-            placeholder="https://"
-            onChange={(event) => {
-              setAddress(event.target.value);
-            }}
-            onBlur={() => {
-              const refused = webAddressProblem(address);
-              setProblem(refused ?? '');
-              if (refused === undefined) link({ target: { kind: 'url', url: address.trim() } });
-            }}
-          />
+          <Field id={ids.url} label="Web address">
+            <input
+              id={ids.url}
+              type="url"
+              value={address}
+              placeholder="https://"
+              onChange={(event) => {
+                setAddress(event.target.value);
+              }}
+              onBlur={() => {
+                const refused = webAddressProblem(address);
+                setProblem(refused ?? '');
+                if (refused === undefined) link({ target: { kind: 'url', url: address.trim() } });
+              }}
+            />
+          </Field>
           {problem === '' ? null : (
             <p role="alert" className="tile-properties__problem">
               {problem}
@@ -184,15 +212,16 @@ function LinkProperties({
               ? `Opens ${target.title ?? 'a dashboard'}.`
               : 'No dashboard chosen yet.'}
           </p>
-          <label htmlFor={ids.find}>Find a dashboard</label>
-          <input
-            id={ids.find}
-            type="search"
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-            }}
-          />
+          <Field id={ids.find} label="Find a dashboard">
+            <input
+              id={ids.find}
+              type="search"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+              }}
+            />
+          </Field>
           {found.length === 0 ? null : (
             <ul role="listbox" aria-label="Dashboards found" className="tile-properties__found">
               {found.map((item) => (
@@ -302,46 +331,50 @@ function ImageProperties({
   };
 
   return (
-    <div className="tile-properties">
-      <label htmlFor={fileId}>Image file</label>
-      <input
-        id={fileId}
-        type="file"
-        accept={IMAGE_TYPES.join(',')}
-        disabled={sending}
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file !== undefined) void add(file);
-          // The same file chosen again is a change too.
-          event.target.value = '';
-        }}
-      />
+    <div className="panel-section tile-properties">
+      <h3>Image</h3>
+      <Field id={fileId} label="Image file">
+        <input
+          id={fileId}
+          type="file"
+          accept={IMAGE_TYPES.join(',')}
+          disabled={sending}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file !== undefined) void add(file);
+            // The same file chosen again is a change too.
+            event.target.value = '';
+          }}
+        />
+      </Field>
       <p className="tile-properties__hint">PNG, JPEG, WebP, GIF or SVG, at most 2 MB.</p>
       {problem === '' ? null : (
         <p role="alert" className="tile-properties__problem">
           {problem}
         </p>
       )}
-      <label htmlFor={altId}>Alternative text</label>
-      <input
-        id={altId}
-        type="text"
-        value={tile.alt ?? ''}
-        onChange={(event) => {
-          onChange({ alt: event.target.value });
-        }}
-      />
-      <label htmlFor={fitId}>Fit</label>
-      <select
-        id={fitId}
-        value={tile.fit ?? 'contain'}
-        onChange={(event) => {
-          onChange({ fit: event.target.value === 'cover' ? 'cover' : 'contain' });
-        }}
-      >
-        <option value="contain">Fit inside</option>
-        <option value="cover">Fill and crop</option>
-      </select>
+      <Field id={altId} label="Alternative text">
+        <input
+          id={altId}
+          type="text"
+          value={tile.alt ?? ''}
+          onChange={(event) => {
+            onChange({ alt: event.target.value });
+          }}
+        />
+      </Field>
+      <Field id={fitId} label="Fit">
+        <select
+          id={fitId}
+          value={tile.fit ?? 'contain'}
+          onChange={(event) => {
+            onChange({ fit: event.target.value === 'cover' ? 'cover' : 'contain' });
+          }}
+        >
+          <option value="contain">Fit inside</option>
+          <option value="cover">Fill and crop</option>
+        </select>
+      </Field>
     </div>
   );
 }

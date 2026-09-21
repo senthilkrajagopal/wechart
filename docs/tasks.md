@@ -1883,10 +1883,19 @@ Each task below measures its components' computed styles in `e2e/design-conforma
   - **Existing filter tests:** their unit and browser versions now open the pill before using its control, through `openFilter` in the unit tests and `open(pill(…))` in `e2e/filters.spec.ts`. Three browser tests also press Escape before clicking something the open popover lies over (the page tabs, a link tile), as a person would. No assertion was removed or weakened.
   - **Full runs:** typecheck and lint clean. 1,452 unit tests passed. Browsers: 622 passed; the 2 a11y contrast timeouts under full-suite load passed alone (54/54).
   - **Done 2026-09-21.** AC-187 stays unticked until T205.
-- [ ] T205 (AC-187) Draw the edit sidebar's tabs, Add palette and Properties as the prototype does
+- [x] T205 (AC-187) Draw the edit sidebar's tabs, Add palette and Properties as the prototype does
   - Files: `packages/web/src/dashboard/edit/EditSidebar.tsx`, `packages/web/src/dashboard/edit/AddPanel.tsx`, `packages/web/src/dashboard/edit/TileProperties.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts`: the sidebar tabs are 36 px, 12 px 600, underlined in the accent colour when selected; Properties fields have 12/16 600 secondary labels over 32 px inputs, in sections with a 12 px uppercase heading (AC-187).
   - Depends on: T202
+  - **Built 2026-09-21.** `EditSidebar.tsx` needed no change: its tabs already had the classes the styles target.
+    - **Tabs** (the prototype's `.tabs`): 36 px, 0 10 px padding, 12 px at 600, secondary ink. The open panel's tab is in the accent with a 2 px accent underline, on a surface band ruled off by `border-subtle`. They no longer stretch to fill the width.
+    - **Sections and fields:** panels are built from the prototype's sections (`.section`: 12 px padding, a subtle rule, headings in 12/16 600 secondary small capitals) and fields (`.field`: a 12/16 600 secondary label over its control). The panel itself lost its 16 px padding; the sections carry it.
+    - **Add:** two sections, the palette and "Section templates". The destination line is 12 px secondary; each entry's hint is 12 px muted, as the prototype's `.xs.muted`; hover uses `bg-hover`.
+    - **Properties:** a section headed by the tile's kind ("Image", "Link"), with each setting a field (a new `Field` component). The messages "Select a tile…" and "no properties" are notes in a section of their own.
+    - **Kept:** Properties inputs stay at direction.md's 32 px control height, as this task's test states, rather than the prototype's `.input.sm` at 28 px.
+  - **Tests, red first:** `e2e/design-conformance.spec.ts` (1 more in each browser). It first failed on the tab list's missing surface. It checks the tabs, a section heading and its box, a palette entry and its hint, then an image tile's Properties: the "Image" heading, the "Alternative text" label, and its 32 px input.
+  - **Full runs:** typecheck and lint clean; 1,452 unit tests and 627 browser runs passed.
+  - **Done 2026-09-21.** With T202–T205, every component AC-187 names has a conformance test on the rendered app, so AC-187 is ticked.
 
 - [ ] T206 (AC-188) Write time values by their granularity in axes, labels, tooltips and tables
   - Files: `packages/core/src/format.ts`, `packages/core/src/format.test.ts`, `packages/charts/src/axis.ts`, `packages/charts/src/tooltip.ts`, `packages/web/src/tiles/DataTable.tsx`, `e2e/dashboard.spec.ts`

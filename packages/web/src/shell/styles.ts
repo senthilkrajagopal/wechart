@@ -542,26 +542,66 @@ main:has(.dashboard) {
   background: var(--wc-bg-surface);
 }
 
-.edit-sidebar__tabs { display: flex; flex: 0 0 auto; border-bottom: 1px solid var(--wc-border-subtle); }
+/* The prototype's .tabs: 36 px, 12 px at 600, the open panel's tab in the
+   accent with its underline (AC-187). */
+.edit-sidebar__tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 0 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
+}
 .edit-sidebar__tabs button {
-  flex: 1;
-  height: 32px;
+  height: 36px;
+  padding: 0 10px;
   border: 0;
   border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: none;
   color: var(--wc-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
 }
 .edit-sidebar__tabs button[aria-selected='true'] {
-  color: var(--wc-text-primary);
+  color: var(--wc-accent);
   border-bottom-color: var(--wc-accent);
 }
-.edit-sidebar__panel { padding: 16px; flex: 1; min-height: 0; overflow: auto; }
+.edit-sidebar__panel { flex: 1; min-height: 0; overflow: auto; }
+
+/* A panel's sections (the prototype's .section), each headed in small
+   capitals, and its fields (.field): a 12/16 600 label over the control. */
+.panel-section {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.panel-section > h3 {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.panel-section__note { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.field { display: grid; gap: 4px; }
+.field > label {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+}
 
 /* The Add palette (AC-058). Every entry carries its hint, because the
    difference between "Chart" and "Chart from folders" is the whole of
    direction.md's chart-ownership model and a bare name would not convey it. */
-.add-panel__destination { margin: 0 0 8px; color: var(--wc-text-secondary); }
+.add-panel__destination { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .add-panel ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
 .add-panel button {
   width: 100%;
@@ -575,9 +615,9 @@ main:has(.dashboard) {
   text-align: left;
   cursor: pointer;
 }
-.add-panel button:hover { background: var(--wc-bg-subtle); }
+.add-panel button:hover { background: var(--wc-bg-hover); }
 .add-panel__label { font-weight: 600; }
-.add-panel__hint { color: var(--wc-text-secondary); }
+.add-panel__hint { font-size: 12px; line-height: 16px; color: var(--wc-text-muted); }
 /* The four filter kinds, under the Filter entry they came from. */
 .add-panel__choices { margin: 4px 0 0 12px !important; }
 
@@ -731,7 +771,6 @@ button.filter-pill__clear {
   color: var(--wc-text-on-accent);
 }
 .link-tile--text { color: var(--wc-accent); text-decoration: underline; }
-.tile-properties { display: grid; gap: 6px; }
 .tile-properties__found { margin: 0; padding: 0; list-style: none; }
 .tile-properties__found li { padding: 4px 8px; cursor: pointer; }
 .tile-properties__found li:hover,
@@ -792,12 +831,6 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* Section templates, set apart from the palette above them: one click here
    lays out several tiles rather than one (AC-068), and a run of identical
    buttons would not say so. The dashed border is the prototype's. */
-.add-panel__heading {
-  margin: 16px 0 8px;
-  font-size: var(--wc-text-sm-size);
-  font-weight: var(--wc-text-sm-strong-weight);
-  color: var(--wc-text-secondary);
-}
 .add-panel ul[aria-label='Section templates'] button {
   border-style: dashed;
   border-color: var(--wc-border-strong);
@@ -853,7 +886,7 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* AC-059's explanation. Marked out, because it reports something the user did
    not ask for rather than describing what they are about to do. */
 .add-panel__message {
-  margin: 0 0 8px;
+  margin: 0;
   padding: 6px 8px;
   border-left: 2px solid var(--wc-accent);
   background: var(--wc-bg-subtle);

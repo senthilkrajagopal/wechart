@@ -46,63 +46,66 @@ export function AddPanel({
   const [choosingFilter, setChoosingFilter] = useState(false);
 
   return (
+    // In the prototype's sections (AC-187): the palette, then the templates.
     <div className="add-panel">
-      <p className="add-panel__destination" data-testid="add-destination">
-        {/* A filter goes to the filter bar wherever the selection is. */}
-        Adds to {choosingFilter ? 'the filter bar' : destination}.
-      </p>
-
-      {message === undefined || message === '' ? null : (
-        // A live region: the section appears without being asked for, and a
-        // reader who is not looking at the sidebar would otherwise never know.
-        <p className="add-panel__message" role="status" data-testid="add-message">
-          {message}
+      <div className="panel-section">
+        <p className="add-panel__destination" data-testid="add-destination">
+          {/* A filter goes to the filter bar wherever the selection is. */}
+          Adds to {choosingFilter ? 'the filter bar' : destination}.
         </p>
-      )}
 
-      <ul aria-label="Elements to add">
-        {PALETTE.map((entry) => (
-          <li key={entry.id}>
-            <button
-              type="button"
-              data-testid={`add-${entry.id}`}
-              {...(entry.id === 'filter' && onAddFilter !== undefined
-                ? { 'aria-expanded': choosingFilter }
-                : {})}
-              onClick={() => {
-                if (entry.id === 'filter' && onAddFilter !== undefined) {
-                  setChoosingFilter((open) => !open);
-                  return;
-                }
-                onAdd(entry.id);
-              }}
-            >
-              <span className="add-panel__label">{entry.label}</span>
-              <span className="add-panel__hint">{entry.hint}</span>
-            </button>
-            {entry.id === 'filter' && onAddFilter !== undefined && choosingFilter ? (
-              <ul aria-label="Filter widgets" className="add-panel__choices">
-                {FILTER_WIDGETS.map((kind) => (
-                  <li key={kind.widget}>
-                    <button
-                      type="button"
-                      data-testid={`add-filter-${kind.widget}`}
-                      onClick={() => {
-                        onAddFilter(kind.widget);
-                        // Added: the choice is made, so the choices close.
-                        setChoosingFilter(false);
-                      }}
-                    >
-                      <span className="add-panel__label">{kind.label}</span>
-                      <span className="add-panel__hint">{kind.hint}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </li>
-        ))}
-      </ul>
+        {message === undefined || message === '' ? null : (
+          // A live region: the section appears without being asked for, and a
+          // reader who is not looking at the sidebar would otherwise never know.
+          <p className="add-panel__message" role="status" data-testid="add-message">
+            {message}
+          </p>
+        )}
+
+        <ul aria-label="Elements to add">
+          {PALETTE.map((entry) => (
+            <li key={entry.id}>
+              <button
+                type="button"
+                data-testid={`add-${entry.id}`}
+                {...(entry.id === 'filter' && onAddFilter !== undefined
+                  ? { 'aria-expanded': choosingFilter }
+                  : {})}
+                onClick={() => {
+                  if (entry.id === 'filter' && onAddFilter !== undefined) {
+                    setChoosingFilter((open) => !open);
+                    return;
+                  }
+                  onAdd(entry.id);
+                }}
+              >
+                <span className="add-panel__label">{entry.label}</span>
+                <span className="add-panel__hint">{entry.hint}</span>
+              </button>
+              {entry.id === 'filter' && onAddFilter !== undefined && choosingFilter ? (
+                <ul aria-label="Filter widgets" className="add-panel__choices">
+                  {FILTER_WIDGETS.map((kind) => (
+                    <li key={kind.widget}>
+                      <button
+                        type="button"
+                        data-testid={`add-filter-${kind.widget}`}
+                        onClick={() => {
+                          onAddFilter(kind.widget);
+                          // Added: the choice is made, so the choices close.
+                          setChoosingFilter(false);
+                        }}
+                      >
+                        <span className="add-panel__label">{kind.label}</span>
+                        <span className="add-panel__hint">{kind.hint}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </div>
 
       {/**
        * Section templates, below the palette and visibly apart from it
@@ -111,23 +114,25 @@ export function AddPanel({
        * template lays out several at once, and the hint says which several so
        * the click is not a surprise.
        */}
-      <h3 className="add-panel__heading">Section templates</h3>
-      <ul aria-label="Section templates">
-        {SECTION_TEMPLATES.map((template) => (
-          <li key={template.id}>
-            <button
-              type="button"
-              data-testid={`template-${template.id}`}
-              onClick={() => {
-                onAddTemplate(template.id);
-              }}
-            >
-              <span className="add-panel__label">{template.label}</span>
-              <span className="add-panel__hint">{template.hint}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <div className="panel-section">
+        <h3>Section templates</h3>
+        <ul aria-label="Section templates">
+          {SECTION_TEMPLATES.map((template) => (
+            <li key={template.id}>
+              <button
+                type="button"
+                data-testid={`template-${template.id}`}
+                onClick={() => {
+                  onAddTemplate(template.id);
+                }}
+              >
+                <span className="add-panel__label">{template.label}</span>
+                <span className="add-panel__hint">{template.hint}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

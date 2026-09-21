@@ -449,3 +449,156 @@ test.describe('T204: the filter bar', () => {
     await expect(pill.getByRole('checkbox')).toHaveCount(0);
   });
 });
+
+test.describe('T205: the edit sidebar', () => {
+  test('its tabs, Add palette and Properties are the prototype’s', async ({ page, request }) => {
+    const api = 'http://localhost:4100/api';
+    const title = `Sidebar ${String(Date.now())}`;
+    const { id } = (await (
+      await request.post(`${api}/documents`, {
+        data: { kind: 'dashboard', title, folderId: 'root' },
+      })
+    ).json()) as { id: string };
+    await request.put(`${api}/documents/dashboard/${id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          folderId: 'root',
+          owner: 'admin',
+          settings: { width: 'fixed' },
+          pages: [{ id: 'only', title: 'Only', items: [] }],
+        },
+      },
+    });
+    await page.goto(`/explore/dashboards/${id}`);
+    await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+
+    // .tabs { border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface) }
+    expect(
+      await style(
+        sidebar.getByRole('tablist'),
+        'border-bottom-width',
+        'border-bottom-color',
+        'background-color',
+      ),
+    ).toEqual({
+      'border-bottom-width': '1px',
+      'border-bottom-color': await token(page, 'border-subtle'),
+      'background-color': await token(page, 'bg-surface'),
+    });
+    // .tabs button { height: 36px; padding: 0 10px; font-size: 12px; font-weight: 600;
+    //                color: var(--text-secondary); border-bottom: 2px solid transparent }
+    // .tabs button[aria-selected='true'] { color: var(--accent); border-bottom-color: var(--accent) }
+    expect(
+      await style(
+        sidebar.getByRole('tab', { name: 'Add' }),
+        'height',
+        'padding-left',
+        'font-size',
+        'font-weight',
+        'color',
+        'border-bottom-width',
+        'border-bottom-color',
+      ),
+    ).toEqual({
+      height: '36px',
+      'padding-left': '10px',
+      'font-size': '12px',
+      'font-weight': '600',
+      color: await token(page, 'accent'),
+      'border-bottom-width': '2px',
+      'border-bottom-color': await token(page, 'accent'),
+    });
+    expect(await style(sidebar.getByRole('tab', { name: 'Outline' }), 'color')).toEqual({
+      color: await token(page, 'text-secondary'),
+    });
+
+    // .section { padding: 12px; border-bottom: 1px solid var(--border-subtle) }
+    // .section > h3 { font-size: 12px; line-height: 16px; font-weight: 600;
+    //                 color: var(--text-secondary); text-transform: uppercase }
+    const heading = async (name: string) =>
+      style(
+        sidebar.getByRole('heading', { name, level: 3 }),
+        'font-size',
+        'line-height',
+        'font-weight',
+        'color',
+        'text-transform',
+      );
+    const sectionHeading = {
+      'font-size': '12px',
+      'line-height': '16px',
+      'font-weight': '600',
+      color: await token(page, 'text-secondary'),
+      'text-transform': 'uppercase',
+    };
+    expect(await heading('Section templates')).toEqual(sectionHeading);
+    expect(
+      await style(
+        sidebar.getByRole('heading', { name: 'Section templates', level: 3 }).locator('..'),
+        'padding-top',
+        'padding-left',
+        'border-bottom-width',
+        'border-bottom-color',
+      ),
+    ).toEqual({
+      'padding-top': '12px',
+      'padding-left': '12px',
+      'border-bottom-width': '1px',
+      'border-bottom-color': await token(page, 'border-subtle'),
+    });
+
+    // The palette's entries (dashboard.js's .el): a 1 px subtle border, radius 6,
+    // on the surface, the name at 600 and the hint in 12 px muted ink.
+    const image = sidebar.getByTestId('add-image');
+    expect(
+      await style(
+        image,
+        'border-top-width',
+        'border-top-color',
+        'border-radius',
+        'background-color',
+      ),
+    ).toEqual({
+      'border-top-width': '1px',
+      'border-top-color': await token(page, 'border-subtle'),
+      'border-radius': '6px',
+      'background-color': await token(page, 'bg-surface'),
+    });
+    expect(await style(image.locator('.add-panel__hint'), 'font-size', 'color')).toEqual({
+      'font-size': '12px',
+      color: await token(page, 'text-muted'),
+    });
+
+    // Properties: a section headed by the tile's kind; each field's label
+    // (.field > label: 12/16 600, secondary) over its 32 px input.
+    await image.click();
+    await page
+      .locator('[data-tile]')
+      .filter({ has: page.locator('.image-tile') })
+      .click();
+    await sidebar.getByRole('tab', { name: 'Properties' }).click();
+    expect(await heading('Image')).toEqual(sectionHeading);
+    expect(
+      await style(
+        sidebar.locator('label', { hasText: 'Alternative text' }),
+        'font-size',
+        'line-height',
+        'font-weight',
+        'color',
+      ),
+    ).toEqual({
+      'font-size': '12px',
+      'line-height': '16px',
+      'font-weight': '600',
+      color: await token(page, 'text-secondary'),
+    });
+    expect(await style(sidebar.getByLabel('Alternative text'), 'height')).toEqual({
+      height: '32px',
+    });
+  });
+});
