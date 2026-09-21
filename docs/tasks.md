@@ -1815,6 +1815,33 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Depends on: T184
   - Note: two gaps to close here, both recorded at T001. **Edge** only runs where the `msedge` channel is installed and `CI` is set, so AC-180 is demonstrated by the CI run, not by a local one — do not tick AC-180 from a local three-browser pass. **Safari** is covered by Playwright's bundled WebKit, not by the shipped Safari; `docs/research/test-stack.md` records that as a residual gap against "current Safari". Switch the `webServer` from `vite dev` to `vite preview` over a real build first, so the suite exercises the artifact users receive rather than the dev server.
 
+**Design conformance to the prototype (AC-187).** Added 2026-09-21 at the user's request ("align with the ui styles in" the published prototype, which is file-for-file the copy in `docs/design/prototype/`). Screenshots of the running app beside the prototype showed several differences:
+- the app bar has no brand mark, and its workspace links have a pill background instead of the accent underline;
+- the theme control is a text button, not an icon;
+- the dashboard title is larger than the prototype's 24/32;
+- page tabs are boxed buttons, not underlined tabs;
+- the filter bar is full-size controls, not 32 px pills with a scope tag;
+- tiles have no title header, and their "Table view" is a boxed button.
+
+Each task below measures its components' computed styles in `e2e/design-conformance.spec.ts` against the prototype's CSS, citing the rule, with colours compared as tokens rather than hex values.
+
+- [ ] T202 (AC-187) Draw the app bar, workspace navigation, buttons, inputs and selects as the prototype does
+  - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/shell/AppShell.tsx`, `e2e/design-conformance.spec.ts`
+  - Failing test: `e2e/design-conformance.spec.ts`: the app bar is 48 px with the "we" mark, the current workspace is underlined in the accent colour, the theme control is a 32 px icon button, and buttons, inputs and selects measure the prototype's `.btn`, `.btn.primary`, `.input` and `.select` (AC-187).
+  - Depends on: none
+- [ ] T203 (AC-187) Draw the dashboard header, page tabs and tiles as the prototype does
+  - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/ChartTile.tsx`, `e2e/design-conformance.spec.ts`
+  - Failing test: `e2e/design-conformance.spec.ts`: the title is 24/32 at weight 600; Edit is a primary button and the gear an icon button; page tabs are underlined; a chart tile is 1 px `border-subtle`, radius 6, padding 16, headed by its chart's title at 14/20 600, with its table view as a small ghost button in the header (AC-187).
+  - Depends on: T202
+- [ ] T204 (AC-187) Draw each filter as the prototype's 32 px pill, its scope tag first, its control opening from it
+  - Files: `packages/web/src/filters/FilterBar.tsx`, `packages/web/src/filters/widgets/*.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: `e2e/design-conformance.spec.ts`: each filter is a 32 px pill with a 6 px radius and a 12 px 600 muted scope tag, and a list, checkbox or range filter opens its control in a popover from the pill; the filter bar sits on the page background with a subtle bottom border (AC-187). The existing filter tests keep passing through the popover.
+  - Depends on: T202
+- [ ] T205 (AC-187) Draw the edit sidebar's tabs, Add palette and Properties as the prototype does
+  - Files: `packages/web/src/dashboard/edit/EditSidebar.tsx`, `packages/web/src/dashboard/edit/AddPanel.tsx`, `packages/web/src/dashboard/edit/TileProperties.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: `e2e/design-conformance.spec.ts`: the sidebar tabs are 36 px, 12 px 600, underlined in the accent colour when selected; Properties fields have 12/16 600 secondary labels over 32 px inputs, in sections with a 12 px uppercase heading (AC-187).
+  - Depends on: T202
+
 ## F22. Wiring the marking subsystem (deferred)
 
 - [ ] T190 (AC-087, AC-088, AC-089, AC-090, AC-091, AC-092, AC-093, AC-094, AC-095, AC-096, AC-097, AC-098, AC-100, AC-101, AC-102, AC-103, AC-107, AC-108, AC-109) Connect the marking subsystem to the rendering path
@@ -1878,4 +1905,4 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 | AC-044 | T051       | AC-089 | T095 | AC-134 | T140 | AC-179 | T184       |
 | AC-045 | T043       | AC-090 | T096 | AC-135 | T141 | AC-180 | T001, T185 |
 | AC-181 | T187       | AC-182 | T191 | AC-183 | T192 | AC-184 | T197       |
-| AC-185 | T199       | AC-186 | T200 |        |      |        |            |
+| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205 |        |            |

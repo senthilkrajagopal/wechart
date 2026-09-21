@@ -546,6 +546,8 @@ Traces to: `[R3]`, `[R7]`, direction.md rules 1–5, 39, 52.
       Fails when: any of those surfaces scrolls horizontally at that width.
 - [ ] AC-180 THE SYSTEM SHALL work in current Chrome, Edge, Firefox and Safari on desktop (`[R7]`).
       Fails when: any acceptance test in this spec fails in one of those browsers.
+- [ ] AC-187 THE SYSTEM SHALL draw the app bar, workspace navigation, buttons and inputs, the dashboard header and page tabs, the filter bar, tiles, and the edit sidebar with the component styles of the design prototype the user approved (`docs/design/prototype/index.html`, published as "wechart Workbench"; the user, 2026-09-21: "align with the ui styles in" it), in the tokens of direction.md §3–5.
+      Fails when: one of those components' computed height, padding, border width or radius, font size or weight, or colour token differs from the prototype's rule for the same component.
 
 ---
 
@@ -592,7 +594,7 @@ Copied from [requirements.md §7](./requirements.md):
 | Constraint: volumes vary; acceleration must be visible `[R4]`                                 | AC-013, AC-144, AC-147                                                |
 | Constraint: single user, no login `[R4]`                                                      | AC-008, AC-165 … AC-170                                               |
 | Constraint: desktop browsers only `[R7]`                                                      | AC-179, AC-180                                                        |
-| Design direction accepted `[R7]`                                                              | AC-004, AC-005, AC-054, AC-096 … AC-099, AC-176 … AC-178              |
+| Design direction accepted `[R7]`                                                              | AC-004, AC-005, AC-054, AC-096 … AC-099, AC-176 … AC-178, AC-187      |
 | Scope: Explore folders, no Dashboards nav `[docs/inputs §8]`                                  | AC-001, AC-017 … AC-024                                               |
 | Scope: dashboard authoring `[docs/inputs §8, §9]`                                             | AC-053 … AC-068                                                       |
 | Scope: markings, four per dashboard, 1,000 items `[docs/inputs §10–13]`, `[R7]`               | AC-084 … AC-116                                                       |
