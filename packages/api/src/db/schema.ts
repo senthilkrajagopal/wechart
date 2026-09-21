@@ -43,7 +43,18 @@ export interface QueryLogTable {
   created_at: Generated<Date>;
 }
 
+/** Image tiles' images (AC-063), written once, never updated. */
+export interface ImageTable {
+  id: string;
+  dashboard_id: string;
+  content_type: string;
+  bytes: Buffer;
+  size: number;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   documents: DocumentTable;
   query_log: QueryLogTable;
+  images: ImageTable;
 }

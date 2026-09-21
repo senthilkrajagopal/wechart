@@ -34,6 +34,8 @@ import { activeFilters, type ActiveFilter } from '../filters/apply';
 import { coverageOf, type Reach } from '../filters/coverage';
 import { describeFilter } from '../filters/describe';
 import { NotCovered } from '../filters/NotCovered';
+import { TileProperties } from './edit/TileProperties';
+import { ImageTile } from './tiles/ImageTile';
 import { FilterBar } from '../filters/FilterBar';
 import { FilteredCharts, keepLastAnswers, type FilteredResults } from '../filters/FilteredCharts';
 import { newFilter, type FilterValues } from '../filters/model';
@@ -174,6 +176,7 @@ function TileBody({
   loading,
   busy = false,
   inEffect,
+  editing = false,
 }: {
   tile: Tile;
   spec: RenderSpec | undefined;
@@ -183,6 +186,8 @@ function TileBody({
   busy?: boolean;
   /** The filters in effect on it, in words (AC-043). */
   inEffect?: readonly string[] | undefined;
+  /** In edit mode, an image tile flags missing alternative text (AC-063). */
+  editing?: boolean;
 }) {
   switch (tile.kind) {
     case 'chart':
@@ -228,10 +233,12 @@ function TileBody({
       return <h3>{tile.text}</h3>;
     case 'divider':
       return <hr />;
+    case 'image':
+      return <ImageTile tile={tile} editing={editing} />;
     default:
-      // Image, link and filter tiles are AC-063, AC-064 and F8. The tile is
-      // still rendered, because AC-018 fails when a saved tile is missing —
-      // what it holds is the later task's to fill in.
+      // Link and filter tiles are AC-064 and F8. The tile is still rendered,
+      // because AC-018 fails when a saved tile is missing — what it holds is
+      // the later task's to fill in.
       return <p data-testid={`tile-${tile.kind}`}>{tile.text ?? ''}</p>;
   }
 }
@@ -422,6 +429,7 @@ function Elements({
               loading={charts.loading}
               busy={charts.pending?.has(chartId) === true}
               inEffect={charts.inEffect?.[chartId]}
+              editing={editing}
             />
           </>
         );
@@ -1074,6 +1082,16 @@ export function DashboardView({
         }
         panels={(session) => ({
           add: <AddSlot session={session} where={where} />,
+          properties: (
+            <TileProperties
+              dashboardId={dashboardId}
+              document={session.document}
+              selected={selected}
+              onChange={(next) => {
+                session.change(next);
+              }}
+            />
+          ),
         })}
       >
         {(session: EditSession<DashboardDocument>) => (

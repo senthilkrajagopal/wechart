@@ -60,6 +60,14 @@ export { applySort, type SortBy, type SortDirection, type SortSettings } from '.
 export { formatValue, formatterFor, type MemberFormats } from './format';
 
 export {
+  IMAGE_HEAD_BYTES,
+  IMAGE_MAX_BYTES,
+  IMAGE_TYPES,
+  imageProblem,
+  type ImageType,
+} from './images';
+
+export {
   DEFAULT_INTERACTIONS,
   INTERACTION_MODES,
   newDashboardBody,

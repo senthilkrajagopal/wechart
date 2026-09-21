@@ -62,6 +62,15 @@ export interface Tile extends GridTile {
   /** For markdown, header and link tiles. */
   readonly text?: string;
   /**
+   * For an image tile (AC-063): the stored image (`/api/images/<id>`), its
+   * alternative text — flagged on the tile in edit mode until set — and how
+   * it fits the tile: inside it whole, or filling it and cropped
+   * (direction.md §2, "Fit inside or Fill and crop"). Absent fit is inside.
+   */
+  readonly imageId?: string;
+  readonly alt?: string;
+  readonly fit?: 'contain' | 'cover';
+  /**
    * Which marking a chart tile marks with, or absent for "(None)" — a tile
    * that cannot be marked at all (direction.md rule 44). The control that sets
    * it is AC-085's (T091); the field is here because AC-095 has to know which
@@ -281,6 +290,54 @@ export function resizeTile(
     return { ...page, items };
   });
 
+  return touched ? { ...document, pages } : document;
+}
+
+/**
+ * A dashboard with one tile changed — its settings, say (AC-063's image and
+ * alternative text). Like `resizeTile`, only the branch down to the tile is
+ * rebuilt, and the document comes back by identity when no tile matched.
+ */
+export function changeTile(
+  document: DashboardDocument,
+  tileId: string,
+  change: (tile: Tile) => Tile,
+): DashboardDocument {
+  const inItems = (items: readonly Element_[]): readonly Element_[] => {
+    let touched = false;
+    const next = items.map((element): Element_ => {
+      if (isSection(element)) {
+        const inside = inItems(element.items);
+        if (inside === element.items) return element;
+        touched = true;
+        return { ...element, items: inside };
+      }
+      if (isTabGroup(element)) {
+        let inAnyTab = false;
+        const tabs = element.tabs.map((tab) => {
+          const inside = inItems(tab.items);
+          if (inside === tab.items) return tab;
+          inAnyTab = true;
+          return { ...tab, items: inside };
+        });
+        if (!inAnyTab) return element;
+        touched = true;
+        return { ...element, tabs };
+      }
+      if (element.id !== tileId) return element;
+      touched = true;
+      return change(element);
+    });
+    return touched ? next : items;
+  };
+
+  let touched = false;
+  const pages = document.pages.map((page) => {
+    const items = inItems(page.items);
+    if (items === page.items) return page;
+    touched = true;
+    return { ...page, items };
+  });
   return touched ? { ...document, pages } : document;
 }
 

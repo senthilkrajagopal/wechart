@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
-import { ChartDocumentError, newDashboardBody } from '@wechart/core';
+import {
+  ChartDocumentError,
+  IMAGE_HEAD_BYTES,
+  imageProblem,
+  newDashboardBody,
+} from '@wechart/core';
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import { CubeClient, CubeError } from './cube/client';
@@ -20,7 +25,20 @@ export interface BuildOptions {
   readonly queryLog?: QueryLogWriter;
   readonly catalog?: CatalogReader;
   readonly documents?: DocumentWriter;
+  /** Images added to dashboards' image tiles (AC-063). */
+  readonly images?: ImageStore;
   readonly logger?: boolean;
+}
+
+/** Where image tiles' images are kept: bytes, and the type they were accepted as. */
+export interface ImageStore {
+  add(input: {
+    id: string;
+    dashboardId: string;
+    contentType: string;
+    bytes: Buffer;
+  }): Promise<unknown>;
+  get(id: string): Promise<{ contentType: string; bytes: Buffer } | undefined>;
 }
 
 /** The slice of the document repository the server writes through. */
@@ -80,6 +98,7 @@ export function buildServer({
   queryLog: log,
   catalog: cat,
   documents: docs,
+  images,
   logger = false,
 }: BuildOptions): FastifyInstance {
   const app = Fastify({ logger });
@@ -529,6 +548,56 @@ export function buildServer({
   });
 
   // Title search over dashboards and library charts (AC-019).
+  /**
+   * An image for a dashboard's image tile (AC-063): stored only if it is a
+   * PNG, JPEG, WebP, GIF or SVG — judged by its first bytes, not only its
+   * declared type — of at most 2 MB (`imageProblem`, the rule the browser
+   * applies too). Sent as base64 inside JSON, the body this API already
+   * parses; the route's own `bodyLimit` makes room for 2 MB so encoded
+   * (docs/research/api-framework.md), and the size itself is checked here.
+   */
+  app.post(
+    '/api/dashboards/:dashboardId/images',
+    { bodyLimit: 3 * 1024 * 1024 },
+    async (request, reply) => {
+      const { dashboardId } = request.params as { dashboardId: string };
+      const body = request.body as { contentType?: unknown; data?: unknown } | null;
+      if (typeof body?.contentType !== 'string' || typeof body.data !== 'string')
+        return reply.code(400).send({ error: 'Send the image as { contentType, data }.' });
+      if (images === undefined)
+        return reply.code(503).send({ error: 'Images cannot be stored here.' });
+      const bytes = Buffer.from(body.data, 'base64');
+      const problem = imageProblem(
+        body.contentType,
+        bytes.length,
+        bytes.subarray(0, IMAGE_HEAD_BYTES),
+      );
+      if (problem !== undefined) return reply.code(422).send({ error: problem });
+      const id = randomUUID();
+      await images.add({ id, dashboardId, contentType: body.contentType, bytes });
+      return reply.code(201).send({ id, contentType: body.contentType, size: bytes.length });
+    },
+  );
+
+  /**
+   * An image tile's image, as the type it was accepted as. `nosniff` keeps a
+   * browser from reading it as anything else, and the policy keeps an SVG
+   * opened on its own from running script or loading anything: an `<img>`
+   * never runs an SVG's script, but the image's own address could be opened
+   * directly.
+   */
+  app.get('/api/images/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const image = await images?.get(id);
+    if (image === undefined) return reply.code(404).send({ error: 'No such image.' });
+    return reply
+      .header('content-type', image.contentType)
+      .header('x-content-type-options', 'nosniff')
+      .header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+      .header('cache-control', 'private, max-age=31536000, immutable')
+      .send(image.bytes);
+  });
+
   app.get('/api/search', async (request) => {
     const { q } = request.query as { q?: string };
     return cat ? cat.search(q ?? '') : [];

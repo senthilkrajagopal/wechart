@@ -968,10 +968,31 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Depends on: T064, T132
   - **Filters rely on this (T084).** Dashboard filters are applied per chart, and a chart shown by two tiles takes the first tile's scope. That is safe only because no two tiles share a chart. A Duplicate that let the copy share the original's chart would make a filter scoped to one tile change the other, which is AC-077's failing state.
   - **T074 left a seam here.** Section templates insert tiles carrying `Tile.chartType` and no `chartId`, because local charts did not exist when they were built. Once a tile can hold a local chart, the type lives in two places — `Tile.chartType` and the chart document's own — so this needs a precedence rule, and tiles already saved at `schemaVersion: 1` need it to be a rule rather than a migration. `templates.ts` and `needsOf` are where that shows.
-- [ ] T069 (AC-063) Warn on an image tile without alt text and accept only the allowed types and size
+- [x] T069 (AC-063) Warn on an image tile without alt text and accept only the allowed types and size
   - Files: `packages/web/src/dashboard/tiles/ImageTile.tsx`, `packages/api/src/routes/uploads.ts`, `packages/web/src/dashboard/tiles/ImageTile.test.tsx`
   - Failing test: `ImageTile.test.tsx`: a tile without alt text shows a warning in edit mode, and files outside PNG, JPEG, WebP, GIF and SVG or over 2 MB are refused (AC-063).
   - Depends on: T064
+  - **Built 2026-09-21.** Files as planned, except that the routes are in `api/src/server.ts` beside the others rather than in `routes/uploads.ts`. Plus:
+    - core: `images.ts` and its test (the rule);
+    - api: migration `1758240003000_images.cjs`, `db/schema.ts`, `repos/images.ts` and its test, `images.test.ts`, `main.ts`;
+    - web: `dashboard/model/document.ts` (`imageId`, `alt`, `fit` on a tile, and `changeTile`), `dashboard/edit/TileProperties.tsx`, `dashboard/DashboardView.tsx`, `shell/styles.ts`;
+    - `e2e/tiles.spec.ts`;
+    - a route-level `bodyLimit` note in `docs/research/api-framework.md`, fetched from Fastify's docs.
+    - **One rule, in core** (`imageProblem`), used by the browser before sending and by the server before storing:
+      - PNG, JPEG, WebP, GIF or SVG, judged by the file's first bytes as well as its declared type, so a renamed file is refused;
+      - at most 2 MB, read as 2,000,000 bytes: the stricter of the decimal and binary readings, so nothing over 2 MB by either is accepted.
+    - **Stored with the dashboard** (direction.md §2) means its own table in the metadata database, with each row naming its dashboard. The image isn't inlined in the dashboard document, which it would weigh down on every read and every saved version. It is sent as base64 in JSON, the body the API already parses, on a route whose `bodyLimit` makes room for it. The server's own size check gives the message, because Fastify documents no status for an over-limit body.
+    - **Served** as the type it was accepted as, with `nosniff` and `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox`. An SVG can carry script: an `<img>` never runs it, but the image's own address can be opened directly.
+    - **The Properties panel** (the edit sidebar's third tab, empty until now) shows the selected tile's settings. For an image: its file, its alternative text, and Fit inside or Fill and crop. A refused file is named there (`role="alert"`) and never sent. Each keystroke in the alternative text is an undoable change.
+    - **The warning** "⚠ No alternative text" sits on the tile in edit mode until alternative text is set; icon plus label (direction.md rule 3). In view mode there is no warning, and an image with no alternative text is presentational (`alt=""`).
+  - **Tests, red first:**
+    - core `images.test.ts` (4): each type accepted when it is what it says, including SVG after a byte-order mark; other types refused; renamed files refused; 2,000,000 accepted and 2,000,001 refused.
+    - api `images.test.ts` (5): a PNG stored and answered with its id; another type, a renamed file and an oversized one refused with 422 and nothing stored; a malformed body refused; an SVG served as `image/svg+xml` with `nosniff` and the sandboxing policy; an unknown id 404.
+    - `repos/images.test.ts` (2), against the real database: bytes read back exactly.
+    - web `ImageTile.test.tsx` (5): the warning in edit mode, none with alt text or in view mode, the image fitted; through the dashboard, a PDF and a 2,000,001-byte PNG refused with nothing sent, and an accepted PNG added, its alternative text removing the warning, both saved.
+    - `e2e/tiles.spec.ts` (2), on the real app: added from the Add panel; a text file and an oversized PNG refused; a real 1×1 PNG uploaded and decoded (`naturalWidth` 1); warned until given alternative text; after save and reload, shown as an image named by it. The server refuses a renamed file sent straight to it, and serves an accepted PNG back byte for byte.
+  - **Known:** direction.md says an image tile "has no tile chrome" in view mode. The tile still has its border and padding, which no criterion checks. Images of a deleted tile stay in the table.
+  - **Done 2026-09-21. AC-063 ticked** — `e2e/tiles.spec.ts`, with `ImageTile.test.tsx` and both packages' rule tests.
 - [ ] T070 (AC-064) Open a link tile's target, carrying filters to a dashboard and restricting URLs to http and https
   - Files: `packages/web/src/dashboard/tiles/LinkTile.tsx`, `packages/web/src/dashboard/tiles/LinkTile.test.tsx`
   - Failing test: `LinkTile.test.tsx`: a dashboard target opens with the current filters when the option is on, and a `javascript:` or `file:` URL is refused while http(s) opens in a new tab (AC-064).

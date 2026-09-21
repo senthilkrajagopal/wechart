@@ -550,6 +550,27 @@ main:has(.dashboard) {
   border-color: var(--wc-accent);
   color: var(--wc-text-on-accent);
 }
+/* An image tile (AC-063): the image fills the tile, fitted inside or cropped. */
+.image-tile { position: relative; height: 100%; min-height: 64px; }
+.image-tile__image { display: block; width: 100%; height: 100%; }
+.image-tile__image--contain { object-fit: contain; }
+.image-tile__image--cover { object-fit: cover; }
+.image-tile__warning {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--wc-bg-surface);
+  border: 1px solid var(--wc-border-strong);
+  color: var(--wc-text-primary);
+  font-size: 12px;
+}
+.image-tile__empty { margin: 0; color: var(--wc-text-secondary); }
+.tile-properties { display: grid; gap: 6px; }
+.tile-properties__hint { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+.tile-properties__problem { margin: 0; color: var(--wc-text-primary); }
 /* A tile a filter in effect cannot reach (AC-079): said on the tile, in
    secondary ink with an icon-free label, since it is information, not an error. */
 .tile-not-covered {

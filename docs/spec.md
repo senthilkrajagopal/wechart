@@ -201,7 +201,7 @@ Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
       Fails when: the contents are deleted without asking, or "keep" loses a tile.
 - [ ] AC-062 WHEN the user duplicates a chart tile, THE SYSTEM SHALL give the copy its own dashboard-local chart, so editing one tile leaves the other unchanged.
       Fails when: editing the copy changes the original tile.
-- [ ] AC-063 WHEN an image tile has no alternative text, THE SYSTEM SHALL show a warning on the tile in edit mode, and SHALL accept only PNG, JPEG, WebP, GIF and SVG files of at most 2 MB (direction.md rule 42).
+- [x] AC-063 WHEN an image tile has no alternative text, THE SYSTEM SHALL show a warning on the tile in edit mode, and SHALL accept only PNG, JPEG, WebP, GIF and SVG files of at most 2 MB (direction.md rule 42).
       Fails when: a tile without alt text shows no warning, or a file of another type or over 2 MB is accepted.
 - [ ] AC-064 WHEN a link tile targets a dashboard, THE SYSTEM SHALL open that dashboard, carrying the current filters when "pass the current filters" is on; WHEN it targets a URL, THE SYSTEM SHALL accept only http and https and open it in a new tab (direction.md rule 42).
       Fails when: a non-http(s) URL is accepted, or the target dashboard opens without the filters while the option is on.

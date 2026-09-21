@@ -5,6 +5,7 @@ import { closeDb, getDb } from './db/client';
 import { migrateToLatest } from './db/migrate';
 import { catalog } from './repos/catalog';
 import { documents } from './repos/documents';
+import { imageStore } from './repos/images';
 import { queryLog } from './repos/query-log';
 import { seedDevData } from './seed';
 import { buildServer } from './server';
@@ -26,6 +27,7 @@ async function main(): Promise<void> {
     queryLog: queryLog(db),
     catalog: catalog(db),
     documents: documents(db),
+    images: imageStore(db),
     logger: true,
   });
 
