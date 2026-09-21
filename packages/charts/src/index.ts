@@ -16,3 +16,10 @@ export { assignColours, OTHER_COLOUR, type ColourAssignment } from './colorAssig
 export { legendFor, seriesCount } from './legend';
 export { echarts } from './echarts';
 export { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from './theme';
+export {
+  CLICK_SLOP_PX,
+  itemClicks,
+  type ItemClick,
+  type ItemClicks,
+  type ItemEvent,
+} from './interaction/itemClick';
