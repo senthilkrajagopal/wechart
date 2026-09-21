@@ -820,6 +820,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F6. Quick calculations and calculation requests
 
+> **2026-09-21: T053–T055 are deferred for phase 1** (the user: "C. Defer or drop quick calculations for phase 1"; see the status note under F6 in spec.md). Don't start them unless asked. T056–T058, the request flow, are unchanged pending the user's word. T056's dependency on T053 was for the menu that starts a request, and it will need another entry point if the request flow stays.
+
 - [ ] T053 (AC-047) Offer the six quick calculations on a measure
   - Files: `packages/web/src/editor/QuickCalcMenu.tsx`, `packages/web/src/editor/QuickCalcMenu.test.tsx`
   - Failing test: `QuickCalcMenu.test.tsx`: the menu offers % of total, difference from previous period, % difference from previous period, running total, rank and moving average (AC-047).
@@ -1032,9 +1034,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     2. **A malformed stored target failed the whole dashboard.** Examples: a target of `null`, a `url` that isn't a string, a dashboard target with no id, or an unknown kind, saved through the API. `hrefOf` now reads the target as untrusted, and any of these is text, not a link.
     3. **The link followed the text as typed, not the address accepted.** `http:evil.com` parses as `http://evil.com/`, but as an href it resolves against wechart's page. Both the link and what Properties stores now use the parsed `URL.href`.
     4. **Properties could show a different target from the one stored.** Changing "Goes to" now drops a target of the other kind, and Undo brings it back.
-  - **Left, reported to the user:**
-    - The target silently drops a carried value for a field it has no filter on. No criterion or direction.md rule says how carried filters meet a target's different filters, so what the reader is told in that case is the user's call.
-    - The API stores a link target without checking its scheme; only drawing it disarms one. T069 checks images on the server.
+  - **Decided by the user (2026-09-21):** a carried filter the target has no filter for is dropped with nothing said to the reader. The user: "if filters are present in url but not present on the dashboard/chart.. drop silently". That is what `adoptValues` already does, so nothing changes.
+  - **Left, reported to the user:** the API stores a link target without checking its scheme; only drawing it disarms one. T069 checks images on the server.
   - **Full runs:** 765 web unit tests; `tiles.spec.ts` and `filters.spec.ts` passed in every browser (45).
 - [x] T071 (AC-065) Persist the layout, tile settings, dashboard settings and marking definitions on save
   - Files: `packages/api/src/repos/dashboards.ts`, `packages/web/src/dashboard/edit/save.ts`, `packages/web/src/dashboard/edit/save.test.ts`

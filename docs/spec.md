@@ -163,6 +163,19 @@ Traces to: `[docs/inputs §2]`, direction.md §6, rules 4–7, 18–19.
 Purpose: give analysts who do not write SQL the common derived measures, and a path for everything else.
 Traces to: `[R7]`, `[R2]`, `[research/cube/data-modeling.md]`.
 
+> **Status, 2026-09-21: quick calculations deferred for phase 1, at the user's direction.**
+> The options were presented: keep the Cube multi-stage design, compute from
+> extra queries in the browser, or defer. The user replied: "C. Defer or drop
+> quick calculations for phase 1."
+> AC-047, AC-048 and AC-049, and their tasks T053–T055, are not built in phase 1.
+> They stay here, unticked, so they can be taken up again. The spike that proved
+> the design (`research/cube/spike-model-store-and-quick-calcs.md`) is kept.
+> The two semantic questions asked with it (what a running total counts from,
+> and % of total under a filter) are closed with it.
+> The request flow, AC-050 to AC-052, was not part of that answer and is
+> unchanged pending the user's word. It waits on the Model workspace (T137 on)
+> either way.
+
 - [ ] AC-047 WHEN the user opens the menu on a measure in the chart editor, THE SYSTEM SHALL offer % of total, difference from previous period, % difference from previous period, running total, rank and moving average.
       Fails when: any of the six is missing from the menu.
 - [ ] AC-048 WHEN a quick calculation is applied, THE SYSTEM SHALL compute it in Cube as a multi-stage measure rather than in the browser, and the tile SHALL label the measure with the calculation applied.

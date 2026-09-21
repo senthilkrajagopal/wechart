@@ -26,8 +26,9 @@ export interface SearchFilter {
  * Values from the URL, taken onto this dashboard's filters (AC-064). A value
  * set here keeps its filter; one from another dashboard — a link tile passing
  * its filters on — goes to this dashboard's filter on the same field, if that
- * filter can hold it. Anything else is dropped: a value for a field this
- * dashboard does not filter on has nowhere to go.
+ * filter can hold it. Anything else is dropped, and silently: a value for a
+ * field this dashboard does not filter on has nowhere to go, and the reader is
+ * not told (the user's decision, 2026-09-21: "drop silently").
  */
 export function adoptValues(
   filters: readonly DashboardFilter[],
