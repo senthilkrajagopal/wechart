@@ -1,4 +1,4 @@
-import { UNDERLYING_ROW_LIMIT } from '@wechart/core';
+import { formatValue, UNDERLYING_ROW_LIMIT, type MemberFormats } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
 
 import { loadTile } from '../query/loadTile';
@@ -25,6 +25,11 @@ export interface ResultsDrawerProps {
   readonly underlyingQuery: Record<string, unknown>;
   readonly open: boolean;
   readonly view: DrawerView;
+  /**
+   * Each member's number format from the Cube model (AC-046, T195): the
+   * criterion names tables among the places a value wears it.
+   */
+  readonly formats?: MemberFormats;
   readonly onOpenChange: (open: boolean) => void;
   readonly onViewChange: (view: DrawerView) => void;
 }
@@ -32,13 +37,24 @@ export interface ResultsDrawerProps {
 /** How many rows a table draws before it stops and says so. */
 const VISIBLE_ROWS = UNDERLYING_ROW_LIMIT;
 
+/**
+ * A cell as text: in its member's format where the model declares one, and
+ * as it came otherwise — a member with no format may be an id, which is not a
+ * quantity, and grouping it ("1,234") would misstate it.
+ */
+function cellText(value: unknown, member: string, formats: MemberFormats): string {
+  return formats[member] === undefined ? String(value ?? '') : formatValue(value, member, formats);
+}
+
 function RowTable({
   rows,
   testId,
+  formats,
   capped = false,
 }: {
   rows: readonly Record<string, unknown>[];
   testId: string;
+  formats: MemberFormats;
   /**
    * True when the rows came back from a capped query, so a full page is
    * evidence of more rows rather than of the total.
@@ -82,7 +98,7 @@ function RowTable({
           {shown.map((row, index) => (
             <tr key={index}>
               {columns.map((column) => (
-                <td key={column}>{String(row[column] ?? '')}</td>
+                <td key={column}>{cellText(row[column], column, formats)}</td>
               ))}
             </tr>
           ))}
@@ -98,6 +114,7 @@ export function ResultsDrawer({
   underlyingQuery,
   open,
   view,
+  formats = {},
   onOpenChange,
   onViewChange,
 }: ResultsDrawerProps) {
@@ -143,7 +160,7 @@ export function ResultsDrawer({
 
           {view === 'result' ? (
             <div role="tabpanel" aria-label="Result rows">
-              <RowTable rows={rows} testId="drawer-result-rows" />
+              <RowTable rows={rows} testId="drawer-result-rows" formats={formats} />
             </div>
           ) : null}
 
@@ -154,7 +171,12 @@ export function ResultsDrawer({
               ) : underlying.isError ? (
                 <p role="alert">{(underlying.error as Error).message}</p>
               ) : (
-                <RowTable rows={underlyingRows} testId="drawer-underlying-rows" capped />
+                <RowTable
+                  rows={underlyingRows}
+                  testId="drawer-underlying-rows"
+                  formats={formats}
+                  capped
+                />
               )}
             </div>
           ) : null}

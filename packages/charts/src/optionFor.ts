@@ -79,7 +79,9 @@ export function optionFor(spec: RenderSpec): EChartsOption {
   if (isPieType(spec.chartType)) return drawn(pieOption(spec));
   if (isTreemapType(spec.chartType)) return drawn(treemapOption(spec));
   if (isHeatmapType(spec.chartType)) return drawn(heatmapOption(spec));
-  if (isTrellisType(spec.chartType)) return trellisOption(spec);
+  // Its own axes (an array, per panel, formatted by the layout), and no
+  // legend — but a tooltip like every other chart (AC-046, T195).
+  if (isTrellisType(spec.chartType)) return { ...trellisOption(spec), ...tooltipFor(spec) };
   if (isComboType(spec.chartType)) return drawn(comboOption(spec));
 
   // Reached only by the DOM-rendered types — KPI, table and pivot — which

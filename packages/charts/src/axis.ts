@@ -113,8 +113,7 @@ export function applyAxes(option: EChartsOption, spec: RenderSpec): EChartsOptio
    * ids reading "$1,234.00" (T194). Found by the axis's own type rather than
    * by chart type, so a horizontal type added later needs no entry here.
    *
-   * Only where exactly one axis is a value axis. A scatter has two, each its
-   * own measure, which is T195's to format.
+   * A scatter has two value axes, each its own measure — handled below.
    */
   const isValueAxis = (key: 'xAxis' | 'yAxis') => {
     const axis = option[key];
@@ -126,13 +125,54 @@ export function applyAxes(option: EChartsOption, spec: RenderSpec): EChartsOptio
     isValueAxis('xAxis') && !isValueAxis('yAxis') ? 'xAxis' : 'yAxis';
   const valueSettings = valueKey === 'xAxis' ? x : y;
 
-  const measure = membersOn(spec.encoding, 'y')[0];
-  const memberFormat =
-    measure === undefined || valueSettings?.numberFormat !== undefined
-      ? undefined
-      : { axisLabel: { formatter: formatterFor(measure, spec.formats ?? {}) } };
+  /**
+   * The member's formatter for an axis, unless the axis editor sets one — on
+   * its tick labels, and on the label a "cross" pointer puts on it when the
+   * chart is hovered (ECharts calls that label's formatter with the raw axis
+   * value: `component/axisPointer/viewHelper.js`, docs/research/echarts.md).
+   * Without it the crosshair read "4,000" beside ticks reading "$4,000.00".
+   */
+  const formatOf = (member: string | undefined, settings: AxisSettings | undefined) => {
+    if (member === undefined || settings?.numberFormat !== undefined) return undefined;
+    const format = formatterFor(member, spec.formats ?? {});
+    return {
+      axisLabel: { formatter: format },
+      axisPointer: { label: { formatter: (params: { value: unknown }) => format(params.value) } },
+    };
+  };
 
-  if (x === undefined && y === undefined && memberFormat === undefined) return option;
+  /**
+   * The measures on the value axis. They share it when there are several —
+   * direction.md's one-axis rule — and one axis cannot honour two formats:
+   * formatted as the first, a percentage was read against "$0.25" ticks. So
+   * the axis takes a format only when every measure on it declares the same
+   * one; otherwise it wears none, and each measure keeps its own format in
+   * the tooltip (T195, decided rather than asked: the user asked for breadth
+   * over polish).
+   */
+  const measures = membersOn(spec.encoding, 'y');
+  const formats = spec.formats ?? {};
+  const oneFormat = measures.every((member) => formats[member] === formats[measures[0] ?? '']);
+
+  /**
+   * Only on a value axis. A heatmap has none — both its axes are dimensions —
+   * and the fallback to `yAxis` hung its row dimension's formatter there,
+   * grouping the year 2024 into "2,024".
+   */
+  const memberFormat =
+    isValueAxis(valueKey) && oneFormat ? formatOf(measures[0], valueSettings) : undefined;
+
+  /**
+   * Both axes value axes — a scatter, whose x and y are each a measure with
+   * its own format (T195). Each axis wears its own; only one was formatted
+   * before, and with the y measure's format.
+   */
+  const bothValues = isValueAxis('xAxis') && isValueAxis('yAxis');
+  const xFormat = bothValues ? formatOf(membersOn(spec.encoding, 'x')[0], x) : undefined;
+
+  if (x === undefined && y === undefined && memberFormat === undefined && xFormat === undefined) {
+    return option;
+  }
 
   const merge = (
     key: 'xAxis' | 'yAxis',
@@ -143,12 +183,35 @@ export function applyAxes(option: EChartsOption, spec: RenderSpec): EChartsOptio
     // A trellis has an array of axes per panel, which is a different editing
     // problem; a pie or a KPI has none at all.
     if (existing === undefined || Array.isArray(existing)) return {};
-    return { [key]: { ...extra, ...(existing as object), ...axisFragment(settings) } };
+    const fragment = axisFragment(settings);
+    /**
+     * `axisLabel` merged key by key, not replaced: a rotation set in the axis
+     * editor replaced the whole of it, and the member's formatter with it —
+     * rotated labels lost their currency (T195).
+     */
+    const labelOf = (from: unknown) => (from as { axisLabel?: object } | undefined)?.axisLabel;
+    const axisLabel = {
+      ...labelOf(extra),
+      ...labelOf(existing),
+      ...labelOf(fragment),
+    };
+    return {
+      [key]: {
+        ...extra,
+        ...(existing as object),
+        ...fragment,
+        ...(Object.keys(axisLabel).length === 0 ? {} : { axisLabel }),
+      },
+    };
   };
 
   return {
     ...option,
-    ...merge('xAxis', x, valueKey === 'xAxis' ? (memberFormat ?? {}) : {}),
+    ...merge(
+      'xAxis',
+      x,
+      bothValues ? (xFormat ?? {}) : valueKey === 'xAxis' ? (memberFormat ?? {}) : {},
+    ),
     ...merge('yAxis', y, valueKey === 'yAxis' ? (memberFormat ?? {}) : {}),
   };
 }

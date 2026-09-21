@@ -87,4 +87,10 @@ describe('formats wechart does not render specially', () => {
     // nothing to an axis. Refusing to draw would be worse than a number.
     expect(formatValue(42, 'orders.id', { 'orders.id': 'id' })).toBe('42');
   });
+
+  it('leaves an id as it is, never grouped (T195)', () => {
+    // An id is not a quantity: "1,234" misstates order 1234.
+    expect(formatValue(1234, 'orders.id', { 'orders.id': 'id' })).toBe('1234');
+    expect(formatterFor('orders.id', { 'orders.id': 'id' })('98765')).toBe('98765');
+  });
 });

@@ -12,7 +12,7 @@
  * synchronised by default and settable to independent, and that is the shape
  * here.
  */
-import { distinctValues, memberOn, type RenderSpec } from '@wechart/core';
+import { distinctValues, formatterFor, memberOn, type RenderSpec } from '@wechart/core';
 
 import { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 
@@ -114,9 +114,15 @@ export function trellisOption(spec: RenderSpec): EChartsOption {
       gridIndex: index,
       type: 'value' as const,
       ...(shared && sharedMax !== undefined ? { min: 0, max: sharedMax } : {}),
+      // The measure's format on every panel's values (AC-046, T195). A trellis
+      // has an array of axes, which the shared axis settings leave alone, so
+      // it wore none at all.
+      axisLabel: { formatter: formatterFor(measure, spec.formats ?? {}) },
     })),
-    series: panels.map((_, index) => ({
+    series: panels.map((panel, index) => ({
       type: 'bar' as const,
+      // Named for its panel, so the tooltip can say which panel a value is in.
+      name: panel,
       xAxisIndex: index,
       yAxisIndex: index,
       data: series[index] ?? [],

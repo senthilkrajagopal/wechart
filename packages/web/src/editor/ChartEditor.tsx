@@ -503,6 +503,7 @@ export function ChartEditor({ initial = OPENED_WITH, tile, onChange }: ChartEdit
             rows={rows}
             query={query}
             underlyingQuery={underlyingQuery}
+            formats={formats}
             open={drawer.open}
             view={drawer.view}
             onOpenChange={(open) => setDrawer((current) => ({ ...current, open }))}

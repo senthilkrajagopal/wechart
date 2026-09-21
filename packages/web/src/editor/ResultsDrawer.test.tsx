@@ -56,7 +56,13 @@ function drawer({
   rows = RESULT_ROWS,
   view = 'result' as DrawerView,
   open = true,
-}: { rows?: readonly Record<string, unknown>[]; view?: DrawerView; open?: boolean } = {}) {
+  formats = {},
+}: {
+  rows?: readonly Record<string, unknown>[];
+  view?: DrawerView;
+  open?: boolean;
+  formats?: Readonly<Record<string, string>>;
+} = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -69,12 +75,36 @@ function drawer({
         underlyingQuery={UNDERLYING_QUERY}
         open={open}
         view={view}
+        formats={formats}
         onOpenChange={vi.fn()}
         onViewChange={vi.fn()}
       />
     </QueryClientProvider>,
   );
 }
+
+describe('its values (AC-046)', () => {
+  /**
+   * T195. The criterion names tables among the places a value wears its
+   * member's format; the drawer printed every cell raw, so a currency measure
+   * read "76900" beside a chart reading "$76,900.00".
+   */
+  const rows = [{ 'orders.id': '1234', 'orders.total_amount': '76900', 'orders.share': '0.25' }];
+
+  it('writes each value the way its member declares', () => {
+    drawer({
+      rows,
+      formats: { 'orders.total_amount': 'currency', 'orders.share': 'percent' },
+    });
+
+    const cells = [...screen.getByTestId('drawer-result-rows').querySelectorAll('td')].map(
+      (cell) => cell.textContent,
+    );
+    // A member with no declared format is shown as it came — an id is not a
+    // quantity, and "1,234" would misstate it.
+    expect(cells).toEqual(['1234', '$76,900.00', '25%']);
+  });
+});
 
 describe('the three views', () => {
   it('offers all three, and none of them before the drawer is opened', () => {

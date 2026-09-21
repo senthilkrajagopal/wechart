@@ -49,6 +49,8 @@ function forFormat(format: string | undefined): Intl.NumberFormat {
  */
 export function formatValue(value: unknown, member: string, formats: MemberFormats = {}): string {
   if (value === null || value === undefined || value === '') return '';
+  // An id is not a quantity: grouped, order 1234 read "1,234" (T195).
+  if (formats[member] === 'id') return String(value);
 
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return String(value);
@@ -62,9 +64,11 @@ export function formatterFor(
   formats: MemberFormats = {},
 ): (value: unknown) => string {
   const format = forFormat(formats[member]);
+  const isId = formats[member] === 'id';
 
   return (value) => {
     if (value === null || value === undefined || value === '') return '';
+    if (isId) return String(value);
     const numeric = Number(value);
     return Number.isFinite(numeric) ? format.format(numeric) : String(value);
   };

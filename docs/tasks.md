@@ -324,7 +324,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **Proven both ways in the browser.** A currency measure reads as money on a tile's axis and in its table (found by column name, since Cube orders its columns); a count on the same dashboard stays a plain number. Mutations: supplying no formats fails the first; writing every measure as money fails the second ("Expected: 0, Received: 5").
   - **Open question for the user — what a tile shows when the Cube model cannot be loaded.** No criterion covers it. The tile draws unformatted, which is AC-046's failing state shown silently, and for a `percent` measure changes how large the number looks (0.25 against 25%), not only its style. Not presented as decided; recorded in `formatsFrom`'s comment too.
   - **Cold review: FAIL.** Its top finding was mine and careless: inserting this entry, I used T032's line as the anchor and did not put it back, which deleted T032 from the task list and left its notes under this task. Restored and checked against HEAD for any other missing task.
-- [ ] T195 (AC-046) Format values with their member's format in every chart type, and in labels and the results drawer
+- [x] T195 (AC-046) Format values with their member's format in every chart type, and in labels and the results drawer
   - Files: `packages/charts/src/optionFor.ts`, `packages/charts/src/tooltip.ts`, `packages/charts/src/axis.ts`, `packages/charts/src/series/scatter.ts`, `packages/charts/src/series/heatmap.ts`, `packages/charts/src/format-places.test.ts`, `packages/web/src/editor/ResultsDrawer.tsx`
   - Failing test: `format-places.test.ts`: for every chart type, each value axis, tooltip and label shows its member's format (AC-046).
   - Depends on: T194
@@ -334,6 +334,28 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **Scatter** has two value axes, each its own measure; its x axis has no formatter and its tooltip shows only `value[1]`.
     - **Labels.** No renderer shows data labels today (pie, treemap and heatmap set `label.show: false`). Whether "labels" in AC-046 is then vacuous or unmet is a question for the user, not a thing to decide here.
     - **The editor's results drawer** prints raw `String(row[column])`.
+  - **Built 2026-09-21.** Files as planned, plus `packages/charts/src/layout/trellis.ts`, `packages/web/src/editor/ResultsDrawer.test.tsx` and `packages/web/src/editor/ChartEditor.tsx` (which hands the drawer the model's formats); `series/scatter.ts` and `series/heatmap.ts` needed no change — the fixes are in the axis and tooltip code they pass through.
+    - **Scatter:** each of its two value axes wears its own measure's format (`applyAxes`), and its tooltip shows both measures, each its own way.
+    - **Heatmap:** the tooltip shows the cell's measure (`value[2]`, the colour channel's member) formatted, headed by its column and row — it had shown the row's index.
+    - **Trellis:** every panel's value axis carries the measure's format, each panel's series is named for its panel, and it now has a tooltip (`optionFor` adds one; it had none).
+    - **Results drawer:** both tables format a column whose member declares a format and leave the rest as they came — an id with no format is not grouped into "1,234".
+    - **Labels, read without asking** (the user: proceed, don't over-engineer): AC-046's "labels" are the labels charts show — axis labels, formatted on every type — and no renderer shows a value as a data label (pie, treemap and heatmap turn theirs off). A guard test fails if any renderer turns data labels on without a formatter.
+    - KPI, pivot and table tiles already format through `formatValue` (T052/T194).
+  - **Tests, red first:** `format-places.test.ts` — a scatter's two axes and its tooltip, a heatmap's tooltip, a trellis's axes and tooltip (five red, each on the defect T194's review named), and the data-label guard; `ResultsDrawer.test.tsx` — each cell in its member's format. One assertion of mine was wrong before it passed: "no money fractions" matched the currency axis's own "$0.00"; it now excludes the zero. Mutation-verified: the scatter's x axis given the y measure's format fails the axis test.
+  - **Cold review: FAIL** — everything T195 built held and was tested, but AC-046 does not yet hold across every place and chart type. One round, per the user's direction; fixed, each red first:
+    - **The hover crosshair's value label** (line, area, combo) read "4,000": ECharts labels a cross pointer from the axis scale, not `axisLabel.formatter` (source now in `docs/research/echarts.md`). The value axis carries `axisPointer.label.formatter` too.
+    - **Rotating the labels removed the format**: the axis editor's rotation replaced `axisLabel` wholesale. Merged key by key now.
+    - **A colour-split chart with two measures** formatted its tooltip by series index — the second series, which is still the first measure, read "7,690,000%". Split charts format every series as the measure they draw.
+    - **Measures sharing one value axis** wore the first one's format, so a percentage read against "$0.25" ticks. Decided without asking (the user: breadth over polish): the axis takes a format only when every measure on it declares the same one, and otherwise wears none; each measure keeps its format in the tooltip. This replaces the combo note below — it applied to every multi-measure chart.
+    - **A heatmap** hung its row dimension's formatter on a category axis, grouping the year 2024 into "2,024". The member's format goes only on a value axis.
+    - **`format: id`** was grouped ("1,234") in the drawer and the table tile; an id is now shown as it is (`formatValue`, `formatterFor`).
+  - ~~Known, not fixed: a combo chart's measures share one value axis~~ — superseded above.
+  - **AC-046 stays unticked.** What remains is **T201**.
+- [ ] T201 (AC-046) Honour the rest of Cube's format vocabulary, dimension formats on charts, and test every place for every chart type
+  - Files: `packages/core/src/format.ts`, `packages/core/src/format.test.ts`, `packages/web/src/editor/fields.ts`, `packages/charts/src/format-places.test.ts`, `packages/web/src/tiles/Kpi.test.tsx`, `packages/web/src/tiles/PivotTable.test.tsx`, `packages/web/src/editor/ChartEditor.test.tsx`
+  - Failing test: `format.test.ts`: `percent_1`, `currency_0`, `abbr`, `accounting`, a declared currency code and a `custom-numeric` format object each render as Cube documents them; `format-places.test.ts`: every type in `DRAWABLE_TYPES` formats its value axis and tooltip (AC-046).
+  - Depends on: T195
+  - From T195's cold review (findings 5, 7, 8, 9): `format.ts` recognises only `currency` and `percent` exactly — named variants, d3 specifiers, time formats, the currency code and object formats (`editor/fields.ts` drops them) fall back to a plain number (`docs/research/cube/data-modeling.md` lists them); dimension formats reach tables but not chart axes, legends or tooltip headings; KPI and pivot formatting and the editor passing its formats to the drawer have no test; the data-label guard's list is hand-written rather than every drawable type. Minor, recorded: pie, donut and treemap tooltips are headed by ECharts' placeholder series name; the editor's first-row preview prints raw JSON.
   - T052 tested only a vertical bar. Test every chart type from `CHART_TYPES`, so a type added later is covered by default rather than by someone remembering.
 - [x] T032 (AC-034, AC-066) Open the editor from a tile as an overlay, preview at the tile's own size and filling the editor, and return with the tile updated
   - Files: `packages/web/src/editor/PreviewFrame.tsx`, `packages/web/src/editor/PreviewFrame.test.tsx`, `packages/web/src/editor/ChartEditor.tsx`, `packages/web/src/editor/openChart.ts`, `packages/web/src/editor/openChart.test.ts`, `packages/web/src/dashboard/edit/ChartEditorOverlay.tsx`, `packages/web/src/dashboard/edit/chartDrafts.ts`, `packages/web/src/dashboard/edit/chartDrafts.test.ts`, `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/dashboard/edit/EditBar.tsx`, `packages/web/src/dashboard/edit/enterEdit.test.tsx`, `packages/web/src/dashboard/edit/saveBlocked.test.tsx`, `packages/web/src/dashboard/model/document.ts`, `packages/web/src/dashboard/DashboardPage.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/roundTrip.test.ts`, `packages/web/src/dashboard/settings/SettingsPage.test.tsx`, `packages/web/src/shell/styles.ts`, `packages/api/src/seed.ts`, `e2e/editor-preview.spec.ts`, `e2e/dashboard.spec.ts`, `e2e/no-size-fields.spec.ts`, `docs/spec.md`
@@ -1650,7 +1672,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 | AC     | Task       | AC     | Task | AC     | Task | AC     | Task       |
 | ------ | ---------- | ------ | ---- | ------ | ---- | ------ | ---------- |
-| AC-001 | T005       | AC-046 | T052, T194, T195 | AC-091 | T097 | AC-136 | T142       |
+| AC-001 | T005       | AC-046 | T052, T194, T195, T201 | AC-091 | T097 | AC-136 | T142       |
 | AC-002 | T006, T196 | AC-047 | T053 | AC-092 | T098 | AC-137 | T143       |
 | AC-003 | T007, T016 | AC-048 | T055 | AC-093 | T099 | AC-138 | T144       |
 | AC-004 | T002, T008 | AC-049 | T054 | AC-094 | T100 | AC-139 | T145       |
