@@ -41,13 +41,22 @@ export interface DocumentWriter {
   get?(
     kind: 'folder' | 'dashboard' | 'chart',
     id: string,
-  ): Promise<{ id: string; body: Record<string, unknown> } | null>;
+  ): Promise<{ id: string; body: Record<string, unknown>; version?: number } | null>;
   update?(input: {
     kind: 'folder' | 'dashboard' | 'chart';
     id: string;
     body: Record<string, unknown>;
     expectedVersion: number;
   }): Promise<unknown>;
+  /** Several documents, all or nothing, in one transaction (AC-183). */
+  updateTogether?(
+    writes: readonly {
+      kind: 'folder' | 'dashboard' | 'chart';
+      id: string;
+      body: Record<string, unknown>;
+      expectedVersion: number;
+    }[],
+  ): Promise<readonly { id: string; version: number }[]>;
 }
 
 /** The slice of the catalog repository the server exposes. */
@@ -292,6 +301,156 @@ export function buildServer({
       }
       if (failure instanceof Error && failure.name === 'DocumentNotFoundError') {
         return reply.code(404).send({ message: failure.message });
+      }
+      throw failure;
+    }
+  });
+
+  /**
+   * Save a dashboard together with the charts edited from its tiles (T192,
+   * AC-183: the chart document is written "only when the dashboard is
+   * saved").
+   *
+   * One request and one transaction (`updateTogether`), because two requests
+   * have no safe order: charts first leaves them changed if the dashboard then
+   * fails — AC-183's failing state — and dashboard first loses the edit if a
+   * chart then fails. Every document is version-checked, so a chart or the
+   * dashboard changed elsewhere is refused rather than overwritten.
+   *
+   * **Only charts local to this dashboard.** A library chart can be on other
+   * dashboards, and AC-128 requires the editor to say so and offer a local
+   * copy *before* changes spread (T134); a chart local to another dashboard is
+   * that dashboard's to save. The browser holds Save back for both
+   * (`whyUnsaveable`, the same rule); this route refuses them too, so no
+   * *dashboard save* can spread a change. It is not the only way to write a
+   * chart: `PUT /api/documents/:kind/:id` writes any chart, library or not —
+   * the library chart's own save — and AC-128's warning there is T134's too.
+   *
+   * Locality is read before the transaction, and only at the version the
+   * client read (409 otherwise). Any later change to the chart, including
+   * making it a library chart, moves its version, and the version-checked
+   * write inside the transaction then refuses it.
+   */
+  app.put('/api/dashboards/:id', async (request, reply) => {
+    const { id: dashboardId } = request.params as { id: string };
+    const payload = request.body as { dashboard?: unknown; charts?: unknown } | undefined;
+
+    if (!docs?.updateTogether || !docs.get) throw new BadRequest('Persistence is not configured');
+
+    const dashboard = payload?.dashboard as { body?: unknown; version?: unknown } | undefined;
+    if (
+      typeof dashboard !== 'object' ||
+      dashboard === null ||
+      typeof dashboard.body !== 'object' ||
+      dashboard.body === null ||
+      typeof dashboard.version !== 'number'
+    ) {
+      throw new BadRequest('A dashboard body and the version it was read at are required');
+    }
+    if (!Array.isArray(payload?.charts)) throw new BadRequest('charts must be a list');
+
+    const charts = payload.charts as { id?: unknown; body?: unknown; version?: unknown }[];
+    for (const chart of charts) {
+      if (
+        typeof chart.id !== 'string' ||
+        typeof chart.body !== 'object' ||
+        chart.body === null ||
+        typeof chart.version !== 'number'
+      ) {
+        throw new BadRequest('Each chart needs an id, a body and the version it was read at');
+      }
+    }
+    const checked = charts as { id: string; body: Record<string, unknown>; version: number }[];
+
+    for (const chart of checked) {
+      let stored;
+      try {
+        stored = await docs.get('chart', chart.id);
+      } catch (failure) {
+        // As the document GET answers it: a stored chart this build cannot
+        // read is a known condition with a reason, not a server fault.
+        if (failure instanceof ChartDocumentError) {
+          return reply.code(422).send({ error: failure.message });
+        }
+        throw failure;
+      }
+      if (stored === null) return reply.code(404).send({ message: `No such chart: ${chart.id}` });
+      /**
+       * At the version the client read, or not at all. Where the chart
+       * belongs is judged from this read, which is sound only for that
+       * version: at any other, it may have become a library chart since.
+       */
+      if (stored.version !== chart.version) {
+        return reply.code(409).send({
+          message:
+            `This chart changed since you opened it: you are saving over version ` +
+            `${String(chart.version)}, and it is now at version ${String(stored.version)}.`,
+          document: { kind: 'chart', id: chart.id },
+        });
+      }
+      const owner = stored.body['localToDashboardId'];
+      if (owner === undefined) {
+        throw new BadRequest(
+          'A library chart cannot be saved with a dashboard yet: other dashboards can use it too, and they would change without warning.',
+        );
+      }
+      if (owner !== dashboardId) {
+        throw new BadRequest(
+          'This chart belongs to another dashboard, and can only be saved with that one.',
+        );
+      }
+      if (chart.body['localToDashboardId'] !== dashboardId) {
+        throw new BadRequest('A dashboard save cannot move a chart to another dashboard.');
+      }
+    }
+
+    try {
+      const written = await docs.updateTogether([
+        ...checked.map((chart) => ({
+          kind: 'chart' as const,
+          id: chart.id,
+          body: chart.body,
+          expectedVersion: chart.version,
+        })),
+        {
+          kind: 'dashboard' as const,
+          id: dashboardId,
+          body: dashboard.body as Record<string, unknown>,
+          expectedVersion: dashboard.version,
+        },
+      ]);
+
+      // Returned in the order given: the charts, then the dashboard.
+      return {
+        version: written[checked.length]?.version,
+        charts: Object.fromEntries(
+          checked.map((chart, index) => [chart.id, written[index]?.version]),
+        ),
+      };
+    } catch (failure) {
+      if (failure instanceof Error && failure.name === 'StaleDocumentError') {
+        const { kind, id } = failure as Error & { kind?: unknown; id?: unknown };
+        return reply.code(409).send({ message: failure.message, document: { kind, id } });
+      }
+      if (failure instanceof Error && failure.name === 'DocumentNotFoundError') {
+        return reply.code(404).send({ message: failure.message });
+      }
+      if (failure instanceof Error && failure.name === 'DuplicateWriteError') {
+        throw new BadRequest(failure.message);
+      }
+      /**
+       * Two overlapping saves can deadlock, and Postgres aborts one with
+       * 40P01 (docs/research/db-access.md). Answered as a conflict, not a
+       * server fault: the survivor wrote at least one document this save
+       * also touches, so a retry would find it stale. **A default, not a
+       * decision** — retry-versus-conflict is listed as open for the user in
+       * the research doc. Every `updateTogether` locks in (kind, id) order, so
+       * no two writers here should form a cycle to begin with.
+       */
+      if ((failure as { code?: unknown }).code === '40P01') {
+        return reply
+          .code(409)
+          .send({ message: 'Someone else saved part of this dashboard at the same moment.' });
       }
       throw failure;
     }

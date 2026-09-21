@@ -141,8 +141,10 @@ export interface DashboardDocument {
   readonly markings?: readonly Marking[];
   /**
    * Charts edited from a tile during this edit session, by chart id, not yet
-   * written (T032). **Session-only: never saved.** `withoutDrafts` strips
-   * them before any save, and a stored dashboard never carries them.
+   * written (T032). **Never saved as part of the dashboard.** `withoutDrafts`
+   * strips them before any save, and a stored dashboard never carries them;
+   * a save writes each as the chart document it is, beside the dashboard, in
+   * the same transaction (T192, AC-183).
    *
    * On the document rather than beside it because the session's history
    * stores whole documents, so a draft is undone, redone and discarded with
@@ -164,6 +166,14 @@ export interface DashboardDocument {
 export interface ChartDraft {
   readonly document: ChartDocument;
   readonly drawn: { readonly spec: RenderSpec } | { readonly error: unknown };
+  /**
+   * The version the chart was read at from the server — kept through every
+   * reopening of the draft, because it is what the write is checked against
+   * (T192): a chart changed by someone else meanwhile is refused, not
+   * overwritten. Undefined when the server sent none; such a draft cannot be
+   * written safely.
+   */
+  readonly version: number | undefined;
 }
 
 export const DEFAULT_SETTINGS: DashboardSettings = { width: 'fixed' };
@@ -552,3 +562,22 @@ function mapContainers(
 
 /** The first tab of a group: what a dashboard shows before anyone clicks. */
 export const firstTab = (group: TabGroup): Tab | undefined => group.tabs[0];
+
+/**
+ * The charts the dashboard's tiles show, on every page and inside every
+ * section and tab: the charts the page loads, and the only charts a save may
+ * write (T192) — a chart no tile shows any more is not the dashboard's to
+ * write.
+ */
+export function chartIdsOf(document: DashboardDocument): string[] {
+  const ids: string[] = [];
+  const walk = (items: readonly Element_[]) => {
+    for (const element of items) {
+      if (isSection(element)) walk(element.items);
+      else if (isTabGroup(element)) for (const tab of element.tabs) walk(tab.items);
+      else if (element.kind === 'chart' && element.chartId !== undefined) ids.push(element.chartId);
+    }
+  };
+  for (const page of document.pages) walk(page.items);
+  return ids;
+}

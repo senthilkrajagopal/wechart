@@ -1,19 +1,21 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { EditChrome } from './EditChrome';
 
 /**
- * T032. A chart edited from a tile is held in the session and not yet written
- * by a save (that is AC-183, T192). Saving the dashboard regardless dropped the
- * edit in silence: the bar counted it as a change, Save cleared the count, and
- * the tile went back to the saved chart — AC-034's own failing state, reached
- * through Save, with nothing said.
+ * T032, narrowed at T192. Save can be held back, with the reason beside it,
+ * while the document has something a save cannot keep — since T192, a chart
+ * edited from a tile that cannot be written with the dashboard (a library
+ * chart, one local to another dashboard, one with no version). Saving
+ * regardless once dropped such an edit in silence: the bar counted it as a
+ * change, Save cleared the count, and the tile went back to the saved chart —
+ * AC-034's own failing state, reached through Save, with nothing said.
  *
- * So Save can be held back, with the reason beside it, while the document has
- * something a save cannot keep. Nothing is lost that way; the user can Undo the
- * edit, or keep it and keep editing.
+ * Nothing is lost this way; the user can Undo the edit, or keep it and keep
+ * editing. These tests hold for any reason a caller gives; the reasons
+ * themselves are `whyUnsaveable`'s, tested in `chartDrafts.test.ts`.
  */
 interface Doc {
   readonly tiles: readonly string[];
@@ -33,12 +35,33 @@ function Harness({ onSave }: { onSave: (document: Doc) => void }) {
       }
     >
       {(session) => (
-        <button
-          type="button"
-          onClick={() => session.change({ ...session.document, unsaveable: true })}
-        >
-          Edit a chart
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => session.change({ ...session.document, unsaveable: true })}
+          >
+            Edit a chart
+          </button>
+          {/* A save from inside the session — the chart editor's "Save
+              dashboard" (direction.md §2) — handing over the document with
+              its own last change in it. */}
+          <button
+            type="button"
+            onClick={() => {
+              session.save({ ...session.document, tiles: [...session.document.tiles, 'b'] });
+            }}
+          >
+            Add a tile and save
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              session.save({ ...session.document, unsaveable: true });
+            }}
+          >
+            Edit a chart and save
+          </button>
+        </>
       )}
     </EditChrome>
   );
@@ -84,5 +107,42 @@ describe('holding Save back', () => {
 
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByRole('toolbar', { name: 'Dashboard editing' })).toBeTruthy();
+  });
+});
+
+describe('saving from inside the session', () => {
+  it('saves the document it is handed, and leaves edit mode as Save does', async () => {
+    const onSave = vi.fn();
+    render(<Harness onSave={onSave} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add a tile and save' }));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith({ tiles: ['a', 'b'] });
+    expect(screen.queryByRole('toolbar', { name: 'Dashboard editing' })).toBeNull();
+  });
+
+  it('refuses a document that cannot be saved whole, and keeps it as a change', async () => {
+    /**
+     * The same refusal as the bar's Save — this is the other route to saving
+     * that `EditChrome` refuses in its own handler for. And the document is
+     * kept, not dropped: it carries the user's last change, which a refusal
+     * must not lose.
+     */
+    const onSave = vi.fn();
+    render(<Harness onSave={onSave} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit a chart and save' }));
+
+    expect(onSave).not.toHaveBeenCalled();
+    const bar = screen.getByRole('toolbar', { name: 'Dashboard editing' });
+    expect(
+      within(bar)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toContain('Discard (1 change)');
+    expect(save()?.getAttribute('aria-disabled')).toBe('true');
   });
 });

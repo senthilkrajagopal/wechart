@@ -19,6 +19,14 @@ export interface StoredDocument {
   readonly updatedAt: Date;
 }
 
+/** The same document more than once in one `updateTogether`. */
+export class DuplicateWriteError extends Error {
+  constructor() {
+    super('The same document appears more than once in one save.');
+    this.name = 'DuplicateWriteError';
+  }
+}
+
 /**
  * AC-015: the save is refused and the user is told the object changed. The
  * current version travels on the error so the UI can say what it is now,
@@ -110,6 +118,61 @@ export function documents(db: Kysely<Database>) {
 
       if (!current) throw new DocumentNotFoundError(kind, id);
       throw new StaleDocumentError(kind, id, expectedVersion, current.version);
+    },
+
+    /**
+     * Write several documents all-or-nothing, each checked against the version
+     * its caller read (T192, AC-183: a dashboard and the charts edited from
+     * its tiles). Returned in the order given.
+     *
+     * Following docs/research/db-access.md, "Query-time transactions":
+     *
+     * - **One transaction.** A throw inside it rolls back every write already
+     *   made and is rethrown unchanged, so a `StaleDocumentError` still
+     *   reaches the caller as itself and maps to a 409. It must be let out:
+     *   caught in here and returned from, the writes before it would commit.
+     * - **The repo is built from the transaction**, never from `db`: a query
+     *   through `db` runs on another pool connection, outside the
+     *   transaction, where it is neither rolled back nor isolated — and it can
+     *   wait forever on a row this transaction has locked.
+     * - **One write at a time**, never `Promise.all`: rows have been seen to
+     *   persist after a failure under it.
+     * - **Sorted by (kind, id)**, the table's key, so two saves over
+     *   overlapping documents take their row locks in the same order — the
+     *   documented defence against deadlock.
+     * - **READ COMMITTED**, Postgres's default. The version predicate still
+     *   catches a lost race there: the second writer waits for the first's
+     *   lock, then re-checks its WHERE against the committed row and matches
+     *   nothing. A stricter level would turn that case into a raw 40001
+     *   instead of the stale error this relies on.
+     *
+     * The same document twice is refused before anything is written: the
+     * second write would be stale against the first.
+     *
+     * Not to be called on a repo already built from a transaction — Kysely
+     * does not nest them, and throws.
+     */
+    async updateTogether(writes: readonly UpdateInput[]): Promise<StoredDocument[]> {
+      const key = (write: UpdateInput) => `${write.kind}\u0000${write.id}`;
+      if (new Set(writes.map(key)).size !== writes.length) {
+        throw new DuplicateWriteError();
+      }
+
+      const ordered = [...writes].sort((a, b) =>
+        a.kind !== b.kind ? (a.kind < b.kind ? -1 : 1) : a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+      );
+
+      const written = await db
+        .transaction()
+        .setIsolationLevel('read committed')
+        .execute(async (trx) => {
+          const inside = documents(trx);
+          const out = new Map<string, StoredDocument>();
+          for (const write of ordered) out.set(key(write), await inside.update(write));
+          return out;
+        });
+
+      return writes.map((write) => written.get(key(write)) as StoredDocument);
     },
 
     /** Remove an object. Returns false when there was nothing to remove. */

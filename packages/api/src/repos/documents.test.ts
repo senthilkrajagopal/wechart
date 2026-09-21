@@ -236,3 +236,121 @@ describe('a chart saved in an earlier format (AC-181)', () => {
     expect((await repo().get('dashboard', id))?.body).toEqual({ title: 'A dashboard' });
   });
 });
+
+/**
+ * T192 / AC-183: a dashboard and the charts edited from its tiles are written
+ * together, all or nothing, in one transaction
+ * (docs/research/db-access.md, "Query-time transactions"). Two separate writes
+ * have no safe order: charts first leaves them changed if the dashboard then
+ * fails; dashboard first loses the edit if a chart fails.
+ *
+ * Against the real database, because what is being claimed is what Postgres
+ * does inside a transaction — an in-memory double cannot roll anything back.
+ */
+describe('writing several documents together (AC-183)', () => {
+  /** Ids that sort in a known order, so a test can place the failing write last. */
+  const ids = () => {
+    const prefix = randomUUID();
+    return { a: `${prefix}-a`, b: `${prefix}-b`, c: `${prefix}-c` };
+  };
+
+  it('writes every document', async () => {
+    const { a, b } = ids();
+    await repo().create({ kind: 'dashboard', id: a, body: { title: 'a' } });
+    await repo().create({ kind: 'dashboard', id: b, body: { title: 'b' } });
+
+    await repo().updateTogether([
+      { kind: 'dashboard', id: a, body: { title: 'a2' }, expectedVersion: 1 },
+      { kind: 'dashboard', id: b, body: { title: 'b2' }, expectedVersion: 1 },
+    ]);
+
+    expect((await repo().get('dashboard', a))?.body).toEqual({ title: 'a2' });
+    expect((await repo().get('dashboard', b))?.body).toEqual({ title: 'b2' });
+  });
+
+  it('writes none of them when one is stale — the earlier writes are rolled back', async () => {
+    /**
+     * The stale one sorts last, so two writes have really been made by the
+     * time it fails: this tests that they are undone, not that nothing was
+     * attempted.
+     */
+    const { a, b, c } = ids();
+    for (const id of [a, b, c])
+      await repo().create({ kind: 'dashboard', id, body: { title: 'before' } });
+
+    await expect(
+      repo().updateTogether([
+        { kind: 'dashboard', id: a, body: { title: 'after' }, expectedVersion: 1 },
+        { kind: 'dashboard', id: b, body: { title: 'after' }, expectedVersion: 1 },
+        { kind: 'dashboard', id: c, body: { title: 'after' }, expectedVersion: 7 },
+      ]),
+    ).rejects.toBeInstanceOf(StaleDocumentError);
+
+    for (const id of [a, b, c]) {
+      const stored = await repo().get('dashboard', id);
+      expect(stored?.body).toEqual({ title: 'before' });
+      expect(stored?.version).toBe(1);
+    }
+  });
+
+  it('says which document was stale', async () => {
+    // The 409 names it, so the user is told a chart changed rather than the
+    // dashboard, or the other way round.
+    const { a, b } = ids();
+    await repo().create({ kind: 'dashboard', id: a, body: {} });
+    await repo().create({ kind: 'dashboard', id: b, body: {} });
+
+    const failure = await repo()
+      .updateTogether([
+        { kind: 'dashboard', id: a, body: {}, expectedVersion: 1 },
+        { kind: 'dashboard', id: b, body: {}, expectedVersion: 3 },
+      ])
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(StaleDocumentError);
+    expect((failure as StaleDocumentError).id).toBe(b);
+  });
+
+  it('refuses the same document twice, and writes nothing', async () => {
+    // A second write of one document in the same save would be stale against
+    // the first, so the pair is refused outright rather than half-applied.
+    const { a } = ids();
+    await repo().create({ kind: 'dashboard', id: a, body: { title: 'before' } });
+
+    await expect(
+      repo().updateTogether([
+        { kind: 'dashboard', id: a, body: { title: 'one' }, expectedVersion: 1 },
+        { kind: 'dashboard', id: a, body: { title: 'two' }, expectedVersion: 1 },
+      ]),
+    ).rejects.toThrow(/more than once/);
+
+    expect((await repo().get('dashboard', a))?.body).toEqual({ title: 'before' });
+  });
+
+  it('lets exactly one of two racing saves win', async () => {
+    /**
+     * Two sessions both hold version 1 and save at once. Under READ COMMITTED
+     * the second waits on the first's row lock, then re-checks its version
+     * predicate against the committed row and matches nothing (PG 18 §13.2.1).
+     */
+    const { a, b } = ids();
+    await repo().create({ kind: 'dashboard', id: a, body: { title: 'before' } });
+    await repo().create({ kind: 'dashboard', id: b, body: { title: 'before' } });
+
+    const save = (title: string) =>
+      repo().updateTogether([
+        { kind: 'dashboard', id: a, body: { title }, expectedVersion: 1 },
+        { kind: 'dashboard', id: b, body: { title }, expectedVersion: 1 },
+      ]);
+    const outcomes = await Promise.allSettled([save('first'), save('second')]);
+
+    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+    const lost = outcomes.find((outcome) => outcome.status === 'rejected');
+    expect((lost as PromiseRejectedResult).reason).toBeInstanceOf(StaleDocumentError);
+
+    // And the winner's save stands whole, on both documents.
+    const [first, second] = [await repo().get('dashboard', a), await repo().get('dashboard', b)];
+    expect(first?.body).toEqual(second?.body);
+    expect(first?.version).toBe(2);
+  });
+});

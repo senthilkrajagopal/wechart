@@ -101,7 +101,17 @@ export async function loadEditorState(
 export async function loadChart(
   chartId: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ readonly document: ChartDocument; readonly state: EditorState }> {
+): Promise<{
+  readonly document: ChartDocument;
+  readonly state: EditorState;
+  /**
+   * The version the chart was read at, which a write sends back so that a
+   * chart changed by someone else meanwhile is refused rather than overwritten
+   * (T192). Undefined only if the server sent none — and then the edit cannot
+   * be written safely, which the save has to refuse rather than guess.
+   */
+  readonly version: number | undefined;
+}> {
   const response = await fetchImpl(`/api/documents/chart/${encodeURIComponent(chartId)}`);
 
   if (!response.ok) {
@@ -113,9 +123,56 @@ export async function loadChart(
     );
   }
 
-  const stored = (await response.json()) as { readonly body?: unknown };
-  const document = readChartDocument(stored.body);
-  return { document, state: editorStateOf(document) };
+  const stored = (await response.json()) as { readonly body?: unknown; readonly version?: unknown };
+  const document = keepingUnknownFields(stored.body, readChartDocument(stored.body));
+  return {
+    document,
+    state: editorStateOf(document),
+    version: typeof stored.version === 'number' ? stored.version : undefined,
+  };
+}
+
+/**
+ * The chart as read, laid over the body it was read from, so that every field
+ * this build does not know is still on it.
+ *
+ * `readChartDocument` checks the body and gives back only the fields it knows.
+ * That is right for reading, and wrong for a document that will be written
+ * back: the server replaces a chart's body whole, so a field this build does
+ * not model — one a newer build added, say — would be gone after the first
+ * save from a tile (T192). At each level the document nests, only the keys the
+ * reader does not model ride along: one it models and left out was rejected
+ * — a `chartType` that is not a string — and bringing the stored value back
+ * would undo the check. So what was checked is what is used.
+ */
+const MODELLED = {
+  document: ['schemaVersion', 'title', 'owner', 'folderId', 'localToDashboardId', 'chart'],
+  chart: ['source', 'wells', 'chartType', 'encoding', 'options'],
+  source: ['cube'],
+  wells: ['measures', 'dimensions', 'timeDimensions'],
+} as const;
+
+function unmodelled(value: unknown, modelled: readonly string[]): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(([key]) => !modelled.includes(key)),
+  );
+}
+
+function keepingUnknownFields(body: unknown, read: ChartDocument): ChartDocument {
+  const raw = body as Record<string, unknown>;
+  const rawChart = raw['chart'] as Record<string, unknown> | undefined;
+
+  return {
+    ...unmodelled(raw, MODELLED.document),
+    ...read,
+    chart: {
+      ...unmodelled(rawChart, MODELLED.chart),
+      ...read.chart,
+      source: { ...unmodelled(rawChart?.['source'], MODELLED.source), ...read.chart.source },
+      wells: { ...unmodelled(rawChart?.['wells'], MODELLED.wells), ...read.chart.wells },
+    },
+  } as ChartDocument;
 }
 
 /** The server's own explanation, when its error body carries one. */
@@ -147,11 +204,13 @@ async function reasonFrom(response: Response): Promise<string | undefined> {
  * recommended, which must not reopen pinned to the type it left.
  */
 export function chartDocumentWith(loaded: ChartDocument, state: EditorState): ChartDocument {
-  // Every field of the loaded chart first, known to this build or not.
+  // Every field of the loaded chart first, known to this build or not — which
+  // holds because `loadChart` keeps the unknown ones on what it loads.
   const chart: Record<string, unknown> = {
     ...loaded.chart,
     source: { ...loaded.chart.source, cube: state.spec.cube },
     wells: {
+      ...loaded.chart.wells,
       measures: [...state.spec.measures],
       dimensions: [...state.spec.dimensions],
       timeDimensions: [...state.spec.timeDimensions],
@@ -246,9 +305,10 @@ function canonical(value: unknown): string {
  *
  * Not loaded, because `EditorState` has nowhere to hold them: the document's
  * `encoding` overrides, and its title, owner, folder and dashboard ownership.
- * Harmless while the editor only reads. Whatever writes a chart back (T192)
- * must merge onto the loaded document rather than rebuild one from this state,
- * or it drops them — the same shape as the `dashboardOf` data loss at T075.
+ * So a chart is written back by merging onto the loaded document
+ * (`chartDocumentWith`, which T192's save uses), never by rebuilding one from
+ * this state — that would drop them, the same shape as the `dashboardOf` data
+ * loss at T075.
  */
 export function editorStateOf(document: ChartDocument): EditorState {
   const { chartType, ...spec } = toChartSpec(document);

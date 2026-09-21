@@ -169,6 +169,69 @@ describe('opening a chart by id', () => {
     expect(state).toEqual(editorStateOf(saved));
   });
 
+  it('gives back the version the chart was read at', async () => {
+    /**
+     * T192 writes the edit back with this version, so a chart changed by
+     * someone else in the meantime is refused rather than overwritten — as
+     * the dashboard's own save refuses a stale dashboard (409).
+     */
+    const { version } = await loadChart(
+      'seed-chart-status',
+      answering(200, { body: saved, version: 4 }),
+    );
+
+    expect(version).toBe(4);
+  });
+
+  it('keeps every field this build does not know, so writing an edit back loses none', async () => {
+    /**
+     * The server replaces a chart's body whole, and `readChartDocument` keeps
+     * only the fields it knows. Written from that, anything this build does not
+     * model — a field a newer build added, say — would be gone after the first
+     * save from a tile (T192): the `dashboardOf` data loss of T075, one level
+     * down. At every level the document nests: the chart, its source, its
+     * wells.
+     */
+    const stored = {
+      ...saved,
+      futureTop: { kept: true },
+      chart: {
+        ...saved.chart,
+        futureChart: 2,
+        source: { ...saved.chart.source, futureSource: 'x' },
+        wells: { ...saved.chart.wells, futureWell: ['orders.total'] },
+      },
+    };
+    const { document, state } = await loadChart('c1', answering(200, { body: stored }));
+
+    const written = chartDocumentWith(document, { ...state, chartType: { manual: 'pie' } });
+
+    expect(written).toEqual({ ...stored, chart: { ...stored.chart, chartType: 'pie' } });
+  });
+
+  it('does not bring back a known field the reader rejected', () => {
+    /**
+     * Only fields the reader does not model ride along. One it models and
+     * left out — a type that is not a string, an owner that is not a string —
+     * was rejected, and bringing the stored value back undoes the check: a
+     * `chartType: null` made the editor refuse a chart that opened, and drew,
+     * following its recommendation.
+     */
+    const stored = {
+      ...saved,
+      owner: 42,
+      localToDashboardId: null,
+      chart: { ...saved.chart, chartType: null },
+    };
+
+    return loadChart('c1', answering(200, { body: stored })).then(({ document, state }) => {
+      expect('owner' in document).toBe(false);
+      expect('localToDashboardId' in document).toBe(false);
+      expect('chartType' in document.chart).toBe(false);
+      expect(state.chartType).toEqual(FOLLOWING_RECOMMENDATION);
+    });
+  });
+
   it('asks for the chart it was given, escaped', async () => {
     // An id is interpolated into a path, so one containing a slash must not
     // reach a different resource.

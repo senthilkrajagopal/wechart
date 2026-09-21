@@ -30,7 +30,7 @@ const DOC: DashboardDocument = {
 };
 
 const show = (onSave = vi.fn()) => {
-  render(<DashboardView document={DOC} specs={{}} onSave={onSave} />);
+  render(<DashboardView dashboardId="d1" document={DOC} specs={{}} onSave={onSave} />);
   return onSave;
 };
 
@@ -315,6 +315,7 @@ describe('the dashboard settings page', () => {
     const onSave = vi.fn();
     render(
       <DashboardView
+        dashboardId="d1"
         document={{
           ...DOC,
           // Markings sit beside the settings, not inside the mode (AC-065

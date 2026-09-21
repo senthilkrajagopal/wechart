@@ -80,11 +80,46 @@ describe('when the save cannot go through', () => {
   });
 
   it('refuses quietly for nothing else', async () => {
-    const fetchImpl = vi.fn(async () => new Response('{}', { status: 500 }));
+    // The body the server really sends on a fault (AC-007): it says nothing,
+    // so the status is what is shown.
+    const fetchImpl = vi.fn(
+      async () => new Response(JSON.stringify({ error: 'Internal error' }), { status: 500 }),
+    );
 
     await expect(
       saveDashboard({ dashboardId: 'd1', document: DOC, version: 1, fetchImpl }),
     ).rejects.toThrow(/500/);
+  });
+
+  it('passes on the server’s reason for refusing, rather than only its status', async () => {
+    /**
+     * The server says why it refused a chart — a library chart, one belonging
+     * to another dashboard, one deleted meanwhile — and "Could not save: 400"
+     * told the user none of it (T192).
+     */
+    const refusing = (status: number, body: Record<string, string>) =>
+      vi.fn(async () => new Response(JSON.stringify(body), { status }));
+
+    await expect(
+      saveDashboard({
+        dashboardId: 'd1',
+        document: DOC,
+        version: 1,
+        fetchImpl: refusing(400, {
+          error: 'This chart belongs to another dashboard, and can only be saved with that one.',
+        }),
+      }),
+    ).rejects.toThrow(
+      'Could not save: This chart belongs to another dashboard, and can only be saved with that one.',
+    );
+    await expect(
+      saveDashboard({
+        dashboardId: 'd1',
+        document: DOC,
+        version: 1,
+        fetchImpl: refusing(404, { message: 'No such chart: c1' }),
+      }),
+    ).rejects.toThrow('Could not save: No such chart: c1');
   });
 });
 
@@ -111,5 +146,83 @@ describe('the version', () => {
     });
 
     expect(result.version).toBe(7);
+  });
+});
+
+/**
+ * T192 / AC-183: a chart edited from a tile is written only when the
+ * dashboard is saved — and together with it. Two requests have no safe order:
+ * charts first leaves them changed if the dashboard then fails, which is
+ * AC-183's failing state; dashboard first loses the edit if a chart then
+ * fails. So the dashboard and its edited charts go in one request, which the
+ * server writes in one transaction.
+ */
+describe('saving with charts edited from tiles', () => {
+  const edited = {
+    schemaVersion: 1,
+    title: 'Orders',
+    localToDashboardId: 'd1',
+    chart: {
+      source: { cube: 'orders' },
+      wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
+    },
+  };
+
+  it('sends the dashboard and every edited chart in one request, each with its version', async () => {
+    const fetchImpl = ok(3);
+
+    await saveDashboard({
+      dashboardId: 'd1',
+      document: DOC,
+      version: 2,
+      charts: [{ id: 'c1', document: edited, version: 5 }],
+      fetchImpl,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/dashboards/d1');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(String(init.body))).toEqual({
+      dashboard: { body: DOC, version: 2 },
+      charts: [{ id: 'c1', body: edited, version: 5 }],
+    });
+  });
+
+  it('saves exactly as before when no chart was edited', async () => {
+    // The ordinary save is not routed through the new request.
+    const fetchImpl = ok();
+
+    await saveDashboard({
+      dashboardId: 'd1',
+      document: DOC,
+      version: 1,
+      charts: [],
+      fetchImpl,
+    });
+
+    const [url] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/documents/dashboard/d1');
+  });
+
+  it('says it was a chart that changed elsewhere, when that is what the server refused', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ message: 'stale', document: { kind: 'chart', id: 'c1' } }), {
+          status: 409,
+        }),
+    );
+
+    await expect(
+      saveDashboard({
+        dashboardId: 'd1',
+        document: DOC,
+        version: 2,
+        charts: [{ id: 'c1', document: edited, version: 5 }],
+        fetchImpl,
+      }),
+    ).rejects.toThrow(
+      'A chart on this dashboard changed somewhere else while you were editing it.',
+    );
   });
 });

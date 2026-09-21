@@ -42,6 +42,18 @@ export interface EditSession<T> {
    * first").
    */
   readonly edit: () => void;
+  /**
+   * Save this document, as the edit bar's Save saves the session's — for a
+   * save made from inside, such as the chart editor's "Save dashboard"
+   * (direction.md §2: "applies the chart and saves the dashboard"). Handed the
+   * document because the caller's own last change is made in the same step:
+   * `change` followed by a save would save the document from before it.
+   *
+   * Refused on the same terms as Save. A refused document is kept as a change,
+   * not dropped — it carries the caller's change — and the bar then says why
+   * Save is held back.
+   */
+  readonly save: (document: T) => void;
 }
 
 /**
@@ -95,8 +107,9 @@ export interface EditChromeProps<T> {
    * Why the document cannot be saved as it stands, or undefined when it can.
    * While there is a reason, Save is held back with the reason beside it,
    * rather than saving what it can and leaving edit mode — which drops the
-   * rest in silence. A dashboard holding a chart edited from a tile is one
-   * such document until those edits can be written (T032, T192).
+   * rest in silence. A dashboard holding a chart edited from a tile that
+   * cannot be written with it — a library chart, one local to another
+   * dashboard, one with no version — is such a document (T032, T192).
    */
   readonly saveBlocked?: ((document: T) => string | undefined) | undefined;
   readonly children: (session: EditSession<T>) => ReactNode;
@@ -129,14 +142,29 @@ export function EditChrome<T>({
   // Only while editing: view mode has no Save to hold back.
   const blocked = editing ? saveBlocked?.(current) : undefined;
 
+  const change = (next: T) => {
+    setHistory((previous) =>
+      push(previous, { document: next, changes: previous.present.changes + 1 }),
+    );
+  };
+
+  /**
+   * Saving leaves edit mode, which is the second half of AC-065. The session
+   * is re-seeded from what was saved, so the change count starts again at
+   * nothing — otherwise "Discard (4 changes)" would still be offering to undo
+   * work that is now safely stored.
+   */
+  const saveDocument = (document: T) => {
+    onSave(document);
+    setHistory(historyOf<Snapshot<T>>({ document, changes: 0 }));
+    setEditing(false);
+  };
+
   const session: EditSession<T> = {
     editing,
     document: current,
     changes,
-    change: (next) =>
-      setHistory((previous) =>
-        push(previous, { document: next, changes: previous.present.changes + 1 }),
-      ),
+    change,
     // The very same step the edit bar's Undo takes.
     undo: () => {
       setHistory(undo);
@@ -148,6 +176,13 @@ export function EditChrome<T>({
      */
     edit: () => {
       if (!editing) start();
+    },
+    save: (document) => {
+      if (saveBlocked?.(document) !== undefined) {
+        if (document !== current) change(document);
+        return;
+      }
+      saveDocument(document);
     },
   };
 
@@ -212,18 +247,9 @@ export function EditChrome<T>({
               onSave={() => {
                 // Refused here too, not only by the button: nothing that reaches
                 // Save by another route should save a document that cannot be
-                // kept whole.
+                // kept whole. `session.save` is such a route, refused alike.
                 if (blocked !== undefined) return;
-                /**
-                 * Saving leaves edit mode, which is the second half of AC-065.
-                 * The session is re-seeded from what was saved, so the change
-                 * count starts again at nothing — otherwise "Discard (4
-                 * changes)" would still be offering to undo work that is now
-                 * safely stored.
-                 */
-                onSave(current);
-                setHistory(historyOf<Snapshot<T>>({ document: current, changes: 0 }));
-                setEditing(false);
+                saveDocument(current);
               }}
             />
           ) : (

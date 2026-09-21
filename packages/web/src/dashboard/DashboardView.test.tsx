@@ -127,7 +127,7 @@ const withTabGroup: DashboardDocument = {
 };
 
 const view = (document: DashboardDocument = DOC) =>
-  render(<DashboardView document={document} specs={SPECS} onSave={vi.fn()} />);
+  render(<DashboardView dashboardId="d1" document={document} specs={SPECS} onSave={vi.fn()} />);
 
 describe('opening a saved dashboard (AC-018)', () => {
   it('opens in view mode, not in edit mode', () => {
@@ -193,6 +193,7 @@ describe('opening a saved dashboard (AC-018)', () => {
   it('shows what went wrong on a chart whose query failed, not an empty chart', () => {
     render(
       <DashboardView
+        dashboardId="d1"
         document={DOC}
         specs={{ c2: SECOND }}
         errors={{ c1: 'Cube said: no such member orders.nope' }}
@@ -208,14 +209,14 @@ describe('opening a saved dashboard (AC-018)', () => {
   });
 
   it('says a chart is unavailable when there is no chart, which is not an error', () => {
-    render(<DashboardView document={DOC} specs={{}} onSave={vi.fn()} />);
+    render(<DashboardView dashboardId="d1" document={DOC} specs={{}} onSave={vi.fn()} />);
 
     expect(screen.getAllByTestId('tile-missing-chart').length).toBeGreaterThan(0);
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('shows a skeleton while the charts are still on their way', () => {
-    render(<DashboardView document={DOC} specs={{}} loading onSave={vi.fn()} />);
+    render(<DashboardView dashboardId="d1" document={DOC} specs={{}} loading onSave={vi.fn()} />);
 
     // Loading, absent and broken are three states. Treating the first as the
     // second made "this chart is no longer available" the normal appearance of
@@ -226,7 +227,15 @@ describe('opening a saved dashboard (AC-018)', () => {
 
   it('keeps the query on a failed tile, so it can still be diagnosed', () => {
     const failure = new TileLoadError('Cube said no', { measures: ['orders.nope'] }, 400);
-    render(<DashboardView document={DOC} specs={{}} errors={{ c1: failure }} onSave={vi.fn()} />);
+    render(
+      <DashboardView
+        dashboardId="d1"
+        document={DOC}
+        specs={{}}
+        errors={{ c1: failure }}
+        onSave={vi.fn()}
+      />,
+    );
 
     // AC-012 asks for the message *and* a control revealing the query JSON.
     // Flattening the error to its message shows the text and loses the
@@ -278,7 +287,7 @@ describe('opening a saved dashboard (AC-018)', () => {
 
 describe('moving a tile without dragging it (AC-056)', () => {
   const edit = async (document: DashboardDocument = DOC) => {
-    render(<DashboardView document={document} specs={SPECS} onSave={vi.fn()} />);
+    render(<DashboardView dashboardId="d1" document={document} specs={SPECS} onSave={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
   };
 
@@ -424,7 +433,7 @@ describe('moving a tile without dragging it (AC-056)', () => {
 
 describe('adding an element from the sidebar (AC-058)', () => {
   const edit = async () => {
-    render(<DashboardView document={DOC} specs={SPECS} onSave={vi.fn()} />);
+    render(<DashboardView dashboardId="d1" document={DOC} specs={SPECS} onSave={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
   };
 
@@ -518,7 +527,7 @@ describe('adding an element from the sidebar (AC-058)', () => {
 
 describe('an undo for every delete (AC-060)', () => {
   const edit = async () => {
-    render(<DashboardView document={DOC} specs={SPECS} onSave={vi.fn()} />);
+    render(<DashboardView dashboardId="d1" document={DOC} specs={SPECS} onSave={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
   };
 
@@ -570,7 +579,9 @@ describe('an undo for every delete (AC-060)', () => {
   });
 
   it('deletes a page tab and a tab, the two that are not on the grid', async () => {
-    render(<DashboardView document={withTabGroup} specs={SPECS} onSave={vi.fn()} />);
+    render(
+      <DashboardView dashboardId="d1" document={withTabGroup} specs={SPECS} onSave={vi.fn()} />,
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
     // A page tab: neither the Delete key nor a tile's ⋯ menu reaches one.
@@ -613,7 +624,7 @@ describe('an undo for every delete (AC-060)', () => {
 
 describe('asking before a section’s contents go (AC-061)', () => {
   const edit = async () => {
-    render(<DashboardView document={DOC} specs={SPECS} onSave={vi.fn()} />);
+    render(<DashboardView dashboardId="d1" document={DOC} specs={SPECS} onSave={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
   };
 

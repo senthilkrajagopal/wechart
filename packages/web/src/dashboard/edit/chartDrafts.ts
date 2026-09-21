@@ -1,6 +1,7 @@
 import type { RenderSpec } from '@wechart/core';
 
-import type { ChartDraft, DashboardDocument } from '../model/document';
+import { chartIdsOf, type ChartDraft, type DashboardDocument } from '../model/document';
+import type { ChartWrite } from './save';
 
 export type { ChartDraft };
 
@@ -61,6 +62,172 @@ export function drawnWithDrafts(saved: Drawn, dashboard: DashboardDocument): Dra
     }
   }
   return { specs, errors };
+}
+
+/**
+ * The drafts a save acts on: those of charts a tile still shows. A draft
+ * outlives its tile — the session keeps whole documents, so undoing the
+ * deletion brings both back — but a chart no tile shows is not the
+ * dashboard's to write, and its draft must not hold Save back: deleting the
+ * tile is how a user gets rid of a chart edit they cannot save.
+ */
+function draftsInUse(dashboard: DashboardDocument): [string, ChartDraft][] {
+  const shown = new Set(chartIdsOf(dashboard));
+  return Object.entries(dashboard.chartDrafts ?? {}).filter(([id]) => shown.has(id));
+}
+
+/**
+ * Why this chart could not be written with dashboard `dashboardId`, or
+ * undefined when it could — the rule `PUT /api/dashboards/:id` applies too, so
+ * the two agree on what may be written.
+ *
+ * - **A library chart** (local to no dashboard) can be on other dashboards,
+ *   and AC-128 requires the editor to say so, with the count, and offer a
+ *   local copy *before* changes spread (T134, not built yet). "Can be", not
+ *   "is": it may be on this one alone, and the count is AC-128's to show.
+ * - **A chart local to another dashboard** is that dashboard's to save.
+ * - **No version**: it could only be written blind, overwriting whatever
+ *   anyone else saved meanwhile.
+ */
+type Refusal = 'library' | 'elsewhere' | 'blind';
+
+function refusalOf(
+  draft: Pick<ChartDraft, 'document' | 'version'>,
+  dashboardId: string,
+): Refusal | undefined {
+  const owner = draft.document.localToDashboardId;
+  if (owner === undefined) return 'library';
+  if (owner !== dashboardId) return 'elsewhere';
+  if (draft.version === undefined) return 'blind';
+  return undefined;
+}
+
+/**
+ * Why a dashboard holding chart drafts cannot be saved as it stands, or
+ * undefined when it can (T192; used for `EditChrome`'s `saveBlocked`). Only
+ * the drafts of charts a tile still shows count (`draftsInUse`).
+ *
+ * The way out is stated truly: undo is linear, and every change made after a
+ * draft carries it, so undoing back past it undoes those too. Discard is not
+ * offered — it throws away every change in the session.
+ */
+export function whyUnsaveable(
+  dashboard: DashboardDocument,
+  dashboardId: string,
+): string | undefined {
+  switch (
+    worstOf(
+      draftsInUse(dashboard).map(([, draft]) => draft),
+      dashboardId,
+    )
+  ) {
+    case 'library':
+      return 'A library chart changed from its tile can’t be saved from here yet: other dashboards can use it too, and they would change without warning. To save, undo back past that change; anything changed after it is undone too.';
+    case 'elsewhere':
+      return 'A chart that belongs to another dashboard was changed from its tile, and can only be saved with that dashboard. To save, undo back past that change; anything changed after it is undone too.';
+    case 'blind':
+      return 'A chart changed from its tile can’t be saved safely: its version is unknown, so saving could overwrite someone else’s change. To save, undo back past it; anything changed after it is undone too.';
+    case undefined:
+      return undefined;
+  }
+}
+
+/** The refusal to report when several drafts are refused: the one that matters most. */
+const REFUSALS_IN_ORDER: readonly Refusal[] = ['library', 'elsewhere', 'blind'];
+
+function worstOf(
+  drafts: readonly Pick<ChartDraft, 'document' | 'version'>[],
+  dashboardId: string,
+): Refusal | undefined {
+  const found = new Set(drafts.map((draft) => refusalOf(draft, dashboardId)));
+  return REFUSALS_IN_ORDER.find((refusal) => found.has(refusal));
+}
+
+/**
+ * Whether the dashboard could be saved with this chart's edit applied, asked
+ * while the edit is still in the editor — for its "Save dashboard", which
+ * "applies the chart and saves the dashboard" (direction.md §2). `pending` is
+ * undefined when the chart is unchanged, which applies nothing.
+ *
+ * Judged on the same rules as `whyUnsaveable`, with the edit in place of this
+ * chart's earlier draft: the edit replaces it on applying, and carries the
+ * version that draft was read at.
+ *
+ * The reasons for this chart are its own, not `whyUnsaveable`'s. Those tell
+ * someone on the dashboard to undo back past a change; here the change has not
+ * been made yet, and Back keeps it on the dashboard unsaved.
+ */
+export function whyUnsaveableWith(
+  dashboard: DashboardDocument,
+  dashboardId: string,
+  chartId: string,
+  pending: Pick<ChartDraft, 'document' | 'version'> | undefined,
+): string | undefined {
+  const inUse = new Map<string, Pick<ChartDraft, 'document' | 'version'>>(draftsInUse(dashboard));
+  // This chart as Save dashboard would save it: the edit, or with none, the
+  // change made to it earlier in the session.
+  const own = pending ?? inUse.get(chartId);
+  inUse.delete(chartId);
+
+  switch (worstOf(own === undefined ? [] : [own], dashboardId)) {
+    case 'library':
+      return 'This is a library chart — other dashboards can use it too — so a change to it can’t be saved from here yet. Back keeps the change on the dashboard, unsaved.';
+    case 'elsewhere':
+      return 'This chart belongs to another dashboard, so a change to it can only be saved with that dashboard. Back keeps the change on this one, unsaved.';
+    case 'blind':
+      return 'This chart can’t be saved safely: its version is unknown, so saving could overwrite someone else’s change. Back keeps the change on the dashboard, unsaved.';
+    case undefined:
+      break;
+  }
+
+  // Held back by another tile's chart instead: said so, in words that can be
+  // acted on from here — the dashboard's own reason says to undo back past a
+  // change, and the dashboard's Undo cannot be reached under the editor.
+  switch (worstOf([...inUse.values()], dashboardId)) {
+    case 'library':
+      return 'Another tile’s chart was changed, and it is a library chart — other dashboards can use it too — so the dashboard can’t be saved from here yet. Back keeps this change on the dashboard, unsaved.';
+    case 'elsewhere':
+      return 'Another tile’s chart was changed, and it belongs to another dashboard, so this one can’t be saved with it. Back keeps this change on the dashboard, unsaved.';
+    case 'blind':
+      return 'Another tile’s chart was changed, and its version is unknown, so the dashboard can’t be saved safely. Back keeps this change on the dashboard, unsaved.';
+    case undefined:
+      return undefined;
+  }
+}
+
+/**
+ * The charts a dashboard save writes along with it (T192, AC-183): each
+ * drafted chart a tile still shows (`draftsInUse`), with the version it was
+ * read at so a chart changed elsewhere meanwhile is refused rather than
+ * overwritten.
+ *
+ * A draft that cannot be written with dashboard `dashboardId` throws. Save is
+ * already held back for one (`whyUnsaveable`, by the same rule); this is the
+ * second guard, because if the two ever disagreed the failure would be a
+ * silent overwrite of someone else's chart, or a change spread to other
+ * dashboards unannounced.
+ */
+export function chartWritesOf(
+  dashboard: DashboardDocument,
+  dashboardId: string,
+): readonly ChartWrite[] {
+  return draftsInUse(dashboard).map(([id, draft]) => {
+    const refusal = refusalOf(draft, dashboardId);
+    if (refusal === 'library') {
+      throw new Error(`Chart ${id} is a library chart, so it cannot be saved with a dashboard.`);
+    }
+    if (refusal === 'elsewhere') {
+      throw new Error(
+        `Chart ${id} belongs to another dashboard, so it cannot be saved with this one.`,
+      );
+    }
+    if (draft.version === undefined) {
+      throw new Error(
+        `Chart ${id} has no version to be checked against, so it cannot be saved safely.`,
+      );
+    }
+    return { id, document: draft.document, version: draft.version };
+  });
 }
 
 /**

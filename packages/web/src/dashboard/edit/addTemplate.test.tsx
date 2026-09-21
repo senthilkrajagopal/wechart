@@ -33,7 +33,7 @@ const DOC: DashboardDocument = {
 };
 
 const edit = async () => {
-  render(<DashboardView document={DOC} specs={{}} onSave={vi.fn()} />);
+  render(<DashboardView dashboardId="d1" document={DOC} specs={{}} onSave={vi.fn()} />);
   await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
 };
 

@@ -26,7 +26,7 @@ const docWith = (items: DashboardDocument['pages'][number]['items']): DashboardD
 });
 
 const show = (document: DashboardDocument) => {
-  render(<DashboardView document={document} specs={{}} onSave={vi.fn()} />);
+  render(<DashboardView dashboardId="d1" document={document} specs={{}} onSave={vi.fn()} />);
 };
 
 describe('a chart tile with nothing in it', () => {

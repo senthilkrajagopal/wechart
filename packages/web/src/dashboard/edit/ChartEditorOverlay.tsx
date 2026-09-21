@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { ChartEditor } from '../../editor/ChartEditor';
 import {
@@ -27,6 +27,20 @@ export interface ChartEditorOverlayProps {
    * when the chart was not changed.
    */
   readonly onBack: (draft: ChartDraft | undefined) => void;
+  /**
+   * "Save dashboard" (direction.md §2: "applies the chart and saves the
+   * dashboard"): the chart's edit as a draft, or nothing when it was not
+   * changed, to be applied and saved in one step.
+   */
+  readonly onSaveDashboard: (draft: ChartDraft | undefined) => void;
+  /**
+   * Why the dashboard could not be saved with this chart's edit applied, or
+   * undefined when it could. Asked with the edit, or with nothing while the
+   * chart is unchanged.
+   */
+  readonly saveBlocked: (
+    pending: Pick<ChartDraft, 'document' | 'version'> | undefined,
+  ) => string | undefined;
 }
 
 /** Runs a chart's query for its draft — exactly as a dashboard tile runs it. */
@@ -56,6 +70,8 @@ export function ChartEditorOverlay({
   tile,
   draft,
   onBack,
+  onSaveDashboard,
+  saveBlocked,
 }: ChartEditorOverlayProps) {
   /**
    * **A chart already drafted opens on its draft**, not on what is stored.
@@ -66,7 +82,13 @@ export function ChartEditorOverlay({
     () =>
       draft === undefined
         ? undefined
-        : { document: draft.document, state: editorStateOf(draft.document) },
+        : {
+            document: draft.document,
+            state: editorStateOf(draft.document),
+            // The version the chart was first read at, carried through every
+            // reopening: it is what the write is checked against (T192).
+            version: draft.version,
+          },
     [draft],
   );
   const fetched = useQuery({
@@ -86,9 +108,20 @@ export function ChartEditorOverlay({
    * store it would redraw the editor it came from.
    */
   const latest = useRef<EditorState | undefined>(undefined);
-  const onChange = useCallback((state: EditorState) => {
-    latest.current = state;
-  }, []);
+  /**
+   * Whether the chart now differs from how it was opened — judged as Back
+   * judges it — for Save dashboard, which only a *change* to a chart that
+   * cannot be written holds back. A flag, not the state: it flips rarely, so
+   * setting it does not redraw the editor on every change.
+   */
+  const [changed, setChanged] = useState(false);
+  const onChange = useCallback(
+    (state: EditorState) => {
+      latest.current = state;
+      setChanged(opened !== undefined && changesChart(opened.document, opened.state, state));
+    },
+    [opened],
+  );
 
   /**
    * Set while going back. The draft is drawn by running the chart's query,
@@ -98,34 +131,56 @@ export function ChartEditorOverlay({
    */
   const [applying, setApplying] = useState(false);
   const leaving = useRef(false);
-  const back = useCallback(async () => {
-    // Once: a second Back while the draft is being drawn would apply it twice.
-    if (leaving.current) return;
-    leaving.current = true;
+  /**
+   * Leaving the editor, by Back or by Save dashboard: the edit is handed on as
+   * a draft, or nothing when there was none. Both leave the same way so that
+   * what is saved is exactly what Back would have applied.
+   */
+  const leave = useCallback(
+    async (then: (draft: ChartDraft | undefined) => void) => {
+      // Once: a second Back while the draft is being drawn would apply it twice.
+      if (leaving.current) return;
+      leaving.current = true;
 
-    const state = latest.current;
-    /**
-     * Unchanged goes back with nothing — including a chart changed and then
-     * changed back, which `changesChart` judges by what would be written, not
-     * by object identity. Recording it would put "Discard (1 change)" on a
-     * dashboard exactly as it was, and that count is the only thing telling
-     * an editor they have unsaved work.
-     */
-    if (
-      opened === undefined ||
-      state === undefined ||
-      !changesChart(opened.document, opened.state, state)
-    ) {
-      onBack(undefined);
-      return;
-    }
+      const state = latest.current;
+      /**
+       * Unchanged goes back with nothing — including a chart changed and then
+       * changed back, which `changesChart` judges by what would be written, not
+       * by object identity. Recording it would put "Discard (1 change)" on a
+       * dashboard exactly as it was, and that count is the only thing telling
+       * an editor they have unsaved work.
+       */
+      if (
+        opened === undefined ||
+        state === undefined ||
+        !changesChart(opened.document, opened.state, state)
+      ) {
+        then(undefined);
+        return;
+      }
 
-    setApplying(true);
-    const document = chartDocumentWith(opened.document, state);
-    // Drawn by the very function every tile uses, so an emptied chart reads
-    // "no fields yet" rather than the tile keeping its old chart.
-    onBack({ document, drawn: await tileChartOf(document, loadRows) });
-  }, [opened, onBack]);
+      setApplying(true);
+      const document = chartDocumentWith(opened.document, state);
+      // Drawn by the very function every tile uses, so an emptied chart reads
+      // "no fields yet" rather than the tile keeping its old chart.
+      then({ document, drawn: await tileChartOf(document, loadRows), version: opened.version });
+    },
+    [opened],
+  );
+  const back = useCallback(() => leave(onBack), [leave, onBack]);
+
+  /**
+   * Asked with the chart as it was loaded, not as the edit would write it:
+   * what decides is whose chart it is and the version it was read at, and the
+   * edit changes neither — `chartDocumentWith` keeps every field the editor
+   * has no control for, `localToDashboardId` among them.
+   */
+  const blocked = saveBlocked(
+    changed && opened !== undefined
+      ? { document: opened.document, version: opened.version }
+      : undefined,
+  );
+  const blockedId = useId();
 
   /**
    * Focus starts on the way out, so a keyboard user begins inside the overlay.
@@ -190,6 +245,33 @@ export function ChartEditorOverlay({
         <p role="status" data-testid="editor-applying">
           {applying ? 'Applying the change…' : ''}
         </p>
+        {/* Kept mounted with its text changing, as the edit bar's reason is:
+            a live region inserted with its words already in it is announced
+            unreliably. */}
+        <p
+          id={blockedId}
+          role="status"
+          className="chart-editor-overlay__blocked"
+          data-testid="editor-save-blocked"
+        >
+          {blocked ?? ''}
+        </p>
+        {/* aria-disabled, not disabled, as the edit bar's Save: it stays
+            focusable, so the reason it is tied to can be reached from it. The
+            handler is what refuses. */}
+        <button
+          type="button"
+          className="chart-editor-overlay__save"
+          data-testid="editor-save-dashboard"
+          aria-disabled={blocked !== undefined}
+          aria-describedby={blocked === undefined ? undefined : blockedId}
+          onClick={() => {
+            if (blocked !== undefined) return;
+            void leave(onSaveDashboard);
+          }}
+        >
+          Save dashboard
+        </button>
       </header>
       {view.kind === 'loading' ? (
         <p data-testid="editor-loading">Opening the chart…</p>

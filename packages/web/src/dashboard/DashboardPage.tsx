@@ -6,9 +6,9 @@ import { loadTile } from '../query/loadTile';
 import { META_QUERY } from '../query/meta';
 import { formatsFrom, tileChartOf, type TileChart } from './chartSpec';
 import { DashboardView } from './DashboardView';
-import { withoutDrafts } from './edit/chartDrafts';
+import { chartWritesOf, drawnWithDrafts, withoutDrafts } from './edit/chartDrafts';
 import { saveDashboard } from './edit/save';
-import { DEFAULT_SETTINGS, type DashboardDocument } from './model/document';
+import { chartIdsOf, DEFAULT_SETTINGS, type DashboardDocument } from './model/document';
 
 /**
  * The dashboard route (AC-018): load the saved document, load each of its
@@ -157,14 +157,54 @@ function LoadedDashboard({
    * from the document as it was before this save.
    */
   const save = useMutation({
-    mutationFn: (next: DashboardDocument) =>
-      saveDashboard({ dashboardId, document: next, version }),
+    mutationFn: ({
+      next,
+      drafts,
+    }: {
+      next: DashboardDocument;
+      drafts: DashboardDocument['chartDrafts'];
+    }) =>
+      saveDashboard({
+        dashboardId,
+        document: next,
+        version,
+        charts:
+          drafts === undefined ? [] : chartWritesOf({ ...next, chartDrafts: drafts }, dashboardId),
+      }),
+    /**
+     * The tiles keep showing the edited charts while the save is in flight.
+     * Saving leaves edit mode at once, before the server has answered, and
+     * the drafts go with the session — so without this the tiles fell back
+     * to the charts as they were loaded, and the old chart flashed up until
+     * the charts were fetched again.
+     */
+    onMutate: async ({ next, drafts }) => {
+      if (drafts === undefined) return;
+      /**
+       * A load of the charts still running — the last save's re-fetch, with
+       * Cube slow — would otherwise land after this and put that save's
+       * charts back over this one's edits. Cancelled, its result is dropped
+       * and the query reverts (`cancelQueries`, docs/research/data-layer.md).
+       */
+      await queryClient.cancelQueries({ queryKey: ['dashboard-charts', dashboardId] });
+      queryClient.setQueryData<{
+        specs: Record<string, RenderSpec>;
+        errors: Record<string, unknown>;
+      }>(['dashboard-charts', dashboardId], (drawn) =>
+        drawn === undefined
+          ? drawn
+          : (drawnWithDrafts(drawn, { ...next, chartDrafts: drafts }) as typeof drawn),
+      );
+    },
     onSuccess: async () => {
       setSaveFailed('');
       await queryClient.invalidateQueries({ queryKey: ['dashboard', dashboardId] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard-charts', dashboardId] });
     },
-    onError: (failure: Error) => {
+    onError: async (failure: Error) => {
       setSaveFailed(failure.message);
+      // Back to what the server has: the edit shown optimistically was not kept.
+      await queryClient.invalidateQueries({ queryKey: ['dashboard-charts', dashboardId] });
     },
   });
   const charts = useQuery({
@@ -218,6 +258,7 @@ function LoadedDashboard({
          * otherwise be editing a document that is no longer on screen.
          */
         key={dashboardId}
+        dashboardId={dashboardId}
         document={document}
         specs={charts.data?.specs ?? {}}
         formats={formats}
@@ -227,8 +268,8 @@ function LoadedDashboard({
         // the view itself (T032). They used to navigate here, a full page
         // load that ended the edit session — so there was no dashboard to
         // return to with the tile updated, and nothing a Discard could reach.
-        onSave={(next) => {
-          save.mutate(next);
+        onSave={(next, drafts) => {
+          save.mutate({ next, drafts });
         }}
       />
     </>
@@ -263,17 +304,4 @@ async function specFor(chartId: string): Promise<TileChart> {
     const result = (await loadTile({ query })) as { data?: Record<string, unknown>[] };
     return result.data ?? [];
   });
-}
-
-function chartIdsOf(document: DashboardDocument): string[] {
-  const ids: string[] = [];
-  const walk = (items: DashboardDocument['pages'][number]['items']) => {
-    for (const element of items) {
-      if (element.kind === 'section') walk(element.items);
-      else if (element.kind === 'tabs') for (const tab of element.tabs) walk(tab.items);
-      else if (element.kind === 'chart' && element.chartId !== undefined) ids.push(element.chartId);
-    }
-  };
-  for (const page of document.pages) walk(page.items);
-  return ids;
 }

@@ -228,35 +228,10 @@ test('a chart edited once opens on that edit the second time', async ({ page }) 
   await expect(page.getByTestId('chart-type')).toHaveText('stackedBar');
 });
 
-test('Save is held back while a chart edit is waiting, and the edit is kept', async ({ page }) => {
-  /**
-   * A dashboard save cannot keep a chart edited from a tile yet (AC-183,
-   * T192). Saving regardless dropped the edit in silence and put the old
-   * chart back on the tile — AC-034's failing state, reached through Save.
-   */
-  await open(page);
-  await openEditorFromPencil(page);
-  await page.getByLabel('Chart type').selectOption('stackedBar');
-  await page.getByTestId('editor-back').click();
-
-  const save = page
-    .getByRole('toolbar', { name: 'Dashboard editing' })
-    .getByRole('button', { name: 'Save' });
-  await expect(save).toHaveAttribute('aria-disabled', 'true');
-  await expect(page.getByTestId('save-blocked')).toBeVisible();
-
-  // Pressed anyway, as a user can: aria-disabled keeps it focusable and
-  // clickable by design (the toolbar pattern), and Playwright would otherwise
-  // wait for it to become enabled rather than press it.
-  await save.click({ force: true });
-
-  // Still editing, and the edit still on the tile.
-  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
-  await expect(page.locator(TILE).getByTestId('chart-canvas')).toHaveAttribute(
-    'data-chart-type',
-    'stackedBar',
-  );
-});
+// Saving a chart edited from its tile — written with the dashboard for a
+// chart local to it, held back for a shared one — is AC-183's, in
+// chart-save.spec.ts. Those tests make their own dashboards, because saving
+// here would change the seeded chart every other test in this file opens.
 
 test('changing the chart and changing it back records nothing', async ({ page }) => {
   // A new state object with the same content is not a change to the chart.

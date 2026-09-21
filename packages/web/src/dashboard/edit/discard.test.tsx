@@ -59,7 +59,7 @@ const shape = () =>
   }));
 
 const edit = async () => {
-  render(<DashboardView document={DOC} specs={{ c1: SPEC }} onSave={vi.fn()} />);
+  render(<DashboardView dashboardId="d1" document={DOC} specs={{ c1: SPEC }} onSave={vi.fn()} />);
   await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
   return shape();
 };

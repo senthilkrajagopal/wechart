@@ -883,6 +883,25 @@ main:has(.dashboard) {
   color: var(--wc-text-primary);
   cursor: pointer;
 }
+/* Save dashboard (T192, direction.md section 2) wears the edit bar's Save:
+   the same action, reached from inside the editor, and at the far end of the
+   bar as Save is in the dashboard's own. Its reason sits just before it. */
+.chart-editor-overlay__bar .chart-editor-overlay__save {
+  background: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+  border-color: var(--wc-accent);
+}
+.chart-editor-overlay__bar .chart-editor-overlay__save[aria-disabled='true'] {
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-muted);
+  border-color: var(--wc-border-strong);
+  cursor: default;
+}
+.chart-editor-overlay__blocked {
+  margin: 0 0 0 auto;
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-sm-size);
+}
 /* Here the preview takes the flexible column, not the narrow side one: a
    tile at its actual size is often far wider than 280 pixels. The editor
    fills the overlay's height so that Fit has somewhere to grow, and the

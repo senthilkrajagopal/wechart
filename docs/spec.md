@@ -129,7 +129,7 @@ Traces to: `[docs/inputs §2, §3]`, `[R2]`, direction.md §6, rules 8–10, 29�
       Fails when: any of the three views is missing, or shows data from a different query than the chart rendered.
 - [x] AC-182 WHEN the chart editor is opened on an existing chart, THE SYSTEM SHALL load that chart's cube, fields, chart type and axis settings into the editor.
       Fails when: the editor opens with empty wells, or with a chart type other than the one saved.
-- [ ] AC-183 WHEN a chart edited from a dashboard tile is applied, THE SYSTEM SHALL hold the edit in the dashboard's edit session and write the chart document only when the dashboard is saved (direction.md §2 Layout: "Save dashboard (applies the chart and saves the dashboard)").
+- [x] AC-183 WHEN a chart edited from a dashboard tile is applied, THE SYSTEM SHALL hold the edit in the dashboard's edit session and write the chart document only when the dashboard is saved (direction.md §2 Layout: "Save dashboard (applies the chart and saves the dashboard)").
       Fails when: the chart document changes before the dashboard is saved, or the tile does not show the edit before saving.
 
 ## F5. Chart rendering
@@ -209,6 +209,8 @@ Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
       Fails when: any of those is missing after reopening the dashboard.
 - [x] AC-066 WHEN the user discards an edit session, THE SYSTEM SHALL restore the dashboard, its chart specs and its settings to their state when editing began.
       Fails when: any change made during the session survives the discard.
+- [ ] AC-184 IF a dashboard save fails, THEN THE SYSTEM SHALL stay in edit mode with every change made in the session kept, including charts edited from its tiles, and show why the save failed.
+      Fails when: after a failed save the dashboard is out of edit mode, a change made before the save is missing from the dashboard or from Undo, or no reason for the failure is shown.
 - [x] AC-067 WHEN the dashboard re-renders during editing, THE SYSTEM SHALL keep the canvas and sidebar scroll positions (direction.md rule 40).
       Fails when: either scroll position resets after a re-render.
 - [x] AC-068 WHEN the user adds a section template, THE SYSTEM SHALL insert its tiles as empty charts that state what they need, rather than charts bound to sample data.
@@ -576,8 +578,8 @@ Copied from [requirements.md §7](./requirements.md):
 | Users: business consumer `[R2]`                                                               | AC-017 … AC-019, AC-084 … AC-106, AC-121 … AC-125, AC-171 … AC-173    |
 | Users: semantic-layer engineer `[R2]`                                                         | AC-131 … AC-141, AC-142 … AC-148, AC-157 … AC-164                     |
 | Users: platform operator `[R2]`                                                               | AC-149 … AC-156, AC-157 … AC-170                                      |
-| M1: 50 analyses rebuilt and accepted `[R3]`                                                   | AC-037, AC-084 … AC-116 (Spotfire parity behaviours), AC-053 … AC-068 |
-| M2: 80% self-service authoring `[R3]`                                                         | AC-025 … AC-036, AC-047 … AC-052, AC-053 … AC-068, AC-182, AC-183     |
+| M1: 50 analyses rebuilt and accepted `[R3]`                                                   | AC-037, AC-084 … AC-116 (Spotfire parity behaviours), AC-053 … AC-068, AC-184 |
+| M2: 80% self-service authoring `[R3]`                                                         | AC-025 … AC-036, AC-047 … AC-052, AC-053 … AC-068, AC-182 … AC-184    |
 | M3: p95 under 3 s for 10 charts `[R3]`                                                        | AC-174, AC-175, AC-104, AC-105                                        |
 | M4: Spotfire parity checklist `[R3]`                                                          | AC-084 … AC-116                                                       |
 | Constraint: wechart service owns Cube credentials `[R5]`                                      | AC-007, AC-008, AC-164                                                |

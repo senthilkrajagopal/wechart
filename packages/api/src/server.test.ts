@@ -664,6 +664,258 @@ describe('the Cube secret never reaches the browser (AC-007)', () => {
   });
 });
 
+/**
+ * T192 / AC-183: WHEN a chart edited from a dashboard tile is applied, THE
+ * SYSTEM SHALL hold the edit in the dashboard's edit session and write the
+ * chart document only when the dashboard is saved.
+ *
+ * The dashboard and its edited charts arrive in one request and go to the
+ * repo's `updateTogether`, one transaction, all or nothing — which the repo's
+ * own tests prove against the real database. These pin what the route adds.
+ */
+describe('saving a dashboard with the charts edited from its tiles (AC-183)', () => {
+  const chart = (dashboardId?: string) => ({
+    schemaVersion: 1,
+    title: 'Orders',
+    ...(dashboardId === undefined ? { folderId: 'f1' } : { localToDashboardId: dashboardId }),
+    chart: {
+      source: { cube: 'orders' },
+      wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
+    },
+  });
+
+  /**
+   * A store that holds the given charts, each at version 5 unless `versions`
+   * says otherwise, and records what `updateTogether` was asked to write.
+   */
+  function store(
+    stored: Record<string, Record<string, unknown>>,
+    versions: Record<string, number> = {},
+  ) {
+    const written: unknown[] = [];
+    return {
+      written,
+      documents: {
+        create: async (input: { id: string }) => ({ id: input.id }),
+        get: async (kind: string, id: string) =>
+          kind === 'chart' && id in stored
+            ? { id, body: stored[id] as Record<string, unknown>, version: versions[id] ?? 5 }
+            : null,
+        updateTogether: async (writes: readonly { id: string; expectedVersion: number }[]) => {
+          written.push(...writes);
+          return writes.map((write) => ({ id: write.id, version: write.expectedVersion + 1 }));
+        },
+      },
+    };
+  }
+
+  const save = (app: ReturnType<typeof buildServer>, payload: unknown) =>
+    app.inject({
+      method: 'PUT',
+      url: '/api/dashboards/d1',
+      payload: payload as Record<string, unknown>,
+    });
+
+  it('writes the dashboard and its edited charts together, in one call', async () => {
+    const { documents, written } = store({ c1: chart('d1') });
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c1', body: chart('d1'), version: 5 }],
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(written).toEqual([
+      { kind: 'chart', id: 'c1', body: chart('d1'), expectedVersion: 5 },
+      { kind: 'dashboard', id: 'd1', body: { title: 'Revenue' }, expectedVersion: 3 },
+    ]);
+    expect(response.json()).toEqual({ version: 4, charts: { c1: 6 } });
+    await app.close();
+  });
+
+  it('refuses a library chart, and writes nothing', async () => {
+    /**
+     * A library chart can be on other dashboards. AC-128 requires the editor
+     * to say so and offer a local copy *before* changes spread (T134), so it
+     * is not written from a dashboard save — here as well as in the browser,
+     * which already holds Save back for it.
+     */
+    const { documents, written } = store({ c1: chart() });
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c1', body: chart(), version: 5 }],
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatch(/library chart/);
+    expect(written).toEqual([]);
+    await app.close();
+  });
+
+  it('refuses a chart local to another dashboard, and writes nothing', async () => {
+    // That dashboard's to save, not this one's.
+    const { documents, written } = store({ c1: chart('d2') });
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c1', body: chart('d2'), version: 5 }],
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatch(/another dashboard/);
+    expect(written).toEqual([]);
+    await app.close();
+  });
+
+  it('refuses a chart changed since it was read, before trusting where it says it belongs', async () => {
+    /**
+     * Where a chart belongs is read before the transaction. That is sound
+     * only for the version the client read: at any other version the stored
+     * chart may have been made a library chart since, and a client sending a
+     * later version than it read would have its write judged by a locality
+     * nobody checked. So a version mismatch is the conflict it is, at once.
+     */
+    const { documents, written } = store({ c1: chart('d1') }, { c1: 7 });
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c1', body: chart('d1'), version: 5 }],
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().document).toEqual({ kind: 'chart', id: 'c1' });
+    expect(written).toEqual([]);
+    await app.close();
+  });
+
+  it('says a stored chart it cannot read is unreadable, not a server fault', async () => {
+    // As the document GET does (422): a known condition with a reason.
+    const { documents, written } = store({});
+    const app = buildServer({
+      config,
+      documents: {
+        ...documents,
+        get: async () => {
+          throw new ChartDocumentError(
+            'The stored chart is version 9, but this wechart understands only up to 1.',
+          );
+        },
+      },
+      cube: stubCube(() => ({})),
+    });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c1', body: chart('d1'), version: 5 }],
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error).toMatch(/version 9/);
+    expect(written).toEqual([]);
+    await app.close();
+  });
+
+  it('refuses a body that would move a chart off this dashboard', async () => {
+    // The stored chart is local here, but the body sent would make it another
+    // dashboard's — a dashboard save does not re-home charts.
+    const { documents, written } = store({ c1: chart('d1') });
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c1', body: chart('elsewhere'), version: 5 }],
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(written).toEqual([]);
+    await app.close();
+  });
+
+  it('says a chart is missing rather than writing around it', async () => {
+    const { documents, written } = store({});
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'gone', body: chart('d1'), version: 5 }],
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(written).toEqual([]);
+    await app.close();
+  });
+
+  it('answers a stale document with 409, naming which', async () => {
+    const { documents } = store({ c1: chart('d1') });
+    const app = buildServer({
+      config,
+      documents: {
+        ...documents,
+        updateTogether: async () => {
+          const stale = new Error('This chart changed since you opened it.');
+          stale.name = 'StaleDocumentError';
+          Object.assign(stale, { kind: 'chart', id: 'c1' });
+          throw stale;
+        },
+      },
+      cube: stubCube(() => ({})),
+    });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c1', body: chart('d1'), version: 5 }],
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().document).toEqual({ kind: 'chart', id: 'c1' });
+    await app.close();
+  });
+
+  it('answers a deadlock as the same conflict', async () => {
+    /**
+     * Two overlapping saves can deadlock; Postgres aborts one with 40P01
+     * (docs/research/db-access.md). Retrying could only end stale — the
+     * survivor has moved the versions on — so it is answered as the conflict
+     * it is, rather than as a server fault.
+     */
+    const { documents } = store({ c1: chart('d1') });
+    const app = buildServer({
+      config,
+      documents: {
+        ...documents,
+        updateTogether: async () => {
+          throw Object.assign(new Error('deadlock detected'), { code: '40P01' });
+        },
+      },
+      cube: stubCube(() => ({})),
+    });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c1', body: chart('d1'), version: 5 }],
+    });
+
+    expect(response.statusCode).toBe(409);
+    await app.close();
+  });
+
+  it('refuses a request it cannot read', async () => {
+    const { documents, written } = store({});
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await save(app, { dashboard: { body: { title: 'Revenue' } }, charts: [] });
+
+    expect(response.statusCode).toBe(400);
+    expect(written).toEqual([]);
+    await app.close();
+  });
+});
+
 describe('configuration', () => {
   it('refuses to start without a Cube secret', () => {
     expect(() => loadConfig({ CUBE_API_URL: 'http://cube.invalid' })).toThrow(ConfigError);

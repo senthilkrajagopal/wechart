@@ -62,7 +62,7 @@ const sidebar = () => screen.getByTestId('sidebar-scroll');
 
 /** Enter edit mode and scroll both panes away from the top. */
 const scrolled = async () => {
-  render(<DashboardView document={DOC} specs={{ c1: SPEC }} onSave={vi.fn()} />);
+  render(<DashboardView dashboardId="d1" document={DOC} specs={{ c1: SPEC }} onSave={vi.fn()} />);
   await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
   canvas().scrollTop = CANVAS_AT;

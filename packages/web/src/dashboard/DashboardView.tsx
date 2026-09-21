@@ -9,7 +9,13 @@ import { useDashboardColours } from './colours';
 import { AddPanel } from './edit/AddPanel';
 import { withFormats } from './chartSpec';
 import { ChartEditorOverlay } from './edit/ChartEditorOverlay';
-import { drawnWithDrafts, withDraft, withoutDrafts } from './edit/chartDrafts';
+import {
+  drawnWithDrafts,
+  whyUnsaveable,
+  whyUnsaveableWith,
+  withDraft,
+  withoutDrafts,
+} from './edit/chartDrafts';
 import {
   deleteFromDashboard,
   describeDeletion,
@@ -71,6 +77,12 @@ import {
  * that a dashboard-level decision rather than a tile-level one.
  */
 export interface DashboardViewProps {
+  /**
+   * Which dashboard this is. A chart edited from a tile can be saved with the
+   * dashboard only if it is local to *this* one — the server's rule too — and
+   * the document does not carry its own id (T192).
+   */
+  readonly dashboardId: string;
   readonly document: DashboardDocument;
   /** Compiled specs by chart id. The dashboard supplies their colours. */
   readonly specs: Readonly<Record<string, RenderSpec>>;
@@ -93,7 +105,16 @@ export interface DashboardViewProps {
    * Saving the dashboard. Receives it with no chart drafts on it: drafts are
    * the session's, and a save sends the whole document (T032).
    */
-  readonly onSave: (document: DashboardDocument) => void;
+  readonly onSave: (
+    document: DashboardDocument,
+    /**
+     * Charts edited from the dashboard's tiles in this session, to be written
+     * with it all-or-nothing (T192, AC-183). `chartWritesOf` picks the ones a
+     * tile still shows; Save is held back while any of those cannot be
+     * written (`whyUnsaveable`).
+     */
+    drafts?: DashboardDocument['chartDrafts'],
+  ) => void;
 }
 
 function TileBody({
@@ -510,6 +531,7 @@ interface OpenChart {
 let counter = 0;
 
 export function DashboardView({
+  dashboardId,
   document,
   specs,
   errors,
@@ -662,31 +684,25 @@ export function DashboardView({
       title={(shown) => shown.title}
       /**
        * Never with drafts on it. The save sends the whole document, so a draft
-       * left there would be written into the dashboard's own row. Writing the
-       * edited chart itself is AC-183's (T192); until then a dashboard save
-       * does not keep a chart edited from a tile.
+       * left there would be written into the dashboard's own row. The drafts go
+       * beside it, and are written as the chart documents they are, in the
+       * same transaction as the dashboard (AC-183, T192).
        */
       onSave={(next) => {
-        onSave(withoutDrafts(next));
+        // The document without its drafts, and the drafts beside it: the
+        // save writes them as chart documents, never into the dashboard's row.
+        onSave(withoutDrafts(next), next.chartDrafts);
       }}
       /**
-       * Held back while a chart edited from a tile is waiting, because a save
-       * cannot keep it yet (AC-183, T192). Saving anyway dropped the edit in
-       * silence and put the old chart back on the tile — AC-034's failing
-       * state, reached through Save.
-       *
-       * The way out has to be stated truly. Undo is linear, and every change
-       * made after a chart edit carries that edit, so undoing it undoes
-       * everything since, too; "undo that change to save the rest" was true
-       * only when the rest came first. Discard is not offered: it throws away
-       * every change in the session, not only the chart edits. T192 lifts this
-       * for dashboard-local charts.
+       * Held back only while a draft cannot be written with this dashboard: a
+       * library chart (AC-128's warning comes first, T134), a chart local to
+       * another dashboard, or a draft with no version to check. Charts local
+       * to this dashboard are written with it (T192). Saving a draft that
+       * cannot be written would drop it in silence and put the old chart back
+       * on the tile — AC-034's failing state, reached through Save. See
+       * `whyUnsaveable` for the wording and why it names Undo, not Discard.
        */
-      saveBlocked={(shown) =>
-        shown.chartDrafts !== undefined && Object.keys(shown.chartDrafts).length > 0
-          ? 'Charts changed from their tiles can’t be saved yet. To save, undo back past those changes — anything changed after them is undone too.'
-          : undefined
-      }
+      saveBlocked={(shown) => whyUnsaveable(shown, dashboardId)}
       headerActions={
         <button
           type="button"
@@ -749,6 +765,25 @@ export function DashboardView({
               returnFocus.current = editingChart.returnTo;
               setEditingChart(null);
             }}
+            /**
+             * "Save dashboard" (direction.md §2: "applies the chart and saves
+             * the dashboard", T192): the draft Back would apply, saved with
+             * the dashboard in one step through the session — so the same
+             * refusal as the bar's Save applies, and a refused edit is kept
+             * as a change rather than lost.
+             */
+            onSaveDashboard={(draft) => {
+              returnFocus.current = editingChart.returnTo;
+              setEditingChart(null);
+              session.save(
+                draft === undefined
+                  ? session.document
+                  : withDraft(session.document, editingChart.chartId, draft),
+              );
+            }}
+            saveBlocked={(pending) =>
+              whyUnsaveableWith(session.document, dashboardId, editingChart.chartId, pending)
+            }
           />
         )
       }
