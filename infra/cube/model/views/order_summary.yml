@@ -1,0 +1,12 @@
+views:
+  # A view over orders, offering only its own members. A dashboard filter on a
+  # cube's field cannot reach a chart built on it (AC-079), which is what the
+  # browser tests use it for.
+  - name: order_summary
+    title: Order summary
+    description: Orders counted by status.
+    cubes:
+      - join_path: orders
+        includes:
+          - count
+          - status

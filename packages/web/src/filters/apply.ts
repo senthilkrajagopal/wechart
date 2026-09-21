@@ -1,6 +1,6 @@
 import type { DashboardDocument } from '../dashboard/model/document';
 import { valueKeyOf, type DashboardFilter, type FilterValue, type FilterValues } from './model';
-import { chartTilesOf, inScope } from './scope';
+import { coverageOf } from './coverage';
 
 /**
  * What a filter's value does to the tiles (AC-078): which charts it reaches,
@@ -135,17 +135,13 @@ export function withFilters(query: CubeQuery, applied: readonly ActiveFilter[]):
  * By chart, as the dashboard's charts are drawn. A chart shown by two tiles
  * with different scopes takes the first tile's; duplicating a tile gives the
  * copy a chart of its own (AC-062), so only a hand-built dashboard has one.
+ *
+ * Every chart counted as able to take every field; `coverageOf` is the same
+ * with the model asked which can (AC-079).
  */
 export function filteredCharts(
   document: DashboardDocument,
   active: readonly ActiveFilter[],
 ): Record<string, ActiveFilter[]> {
-  const reached: Record<string, ActiveFilter[]> = {};
-  if (active.length === 0) return reached;
-  for (const tile of chartTilesOf(document)) {
-    if (tile.chartId === undefined || tile.chartId in reached) continue;
-    const applied = active.filter((each) => inScope(each.filter, tile));
-    if (applied.length > 0) reached[tile.chartId] = applied;
-  }
-  return reached;
+  return coverageOf(document, active, (member) => member).reached;
 }

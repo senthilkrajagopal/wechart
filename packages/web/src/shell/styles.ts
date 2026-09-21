@@ -550,6 +550,13 @@ main:has(.dashboard) {
   border-color: var(--wc-accent);
   color: var(--wc-text-on-accent);
 }
+/* A tile a filter in effect cannot reach (AC-079): said on the tile, in
+   secondary ink with an icon-free label, since it is information, not an error. */
+.tile-not-covered {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--wc-text-secondary);
+}
 /* A chart whose filtered answer is on its way (AC-078): still drawn, dimmed. */
 .chart-tile--busy { opacity: 0.55; transition: opacity 120ms ease-in; }
 /* A filter's scope (direction.md rule 14): a 24 px chip, like the other chips. */

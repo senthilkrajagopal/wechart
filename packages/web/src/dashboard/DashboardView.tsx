@@ -30,7 +30,9 @@ import { needsOf, templateElements } from './edit/templates';
 import { SettingsPage } from './settings/SettingsPage';
 import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
-import { activeFilters, filteredCharts } from '../filters/apply';
+import { activeFilters, type ActiveFilter } from '../filters/apply';
+import { coverageOf, type Reach } from '../filters/coverage';
+import { NotCovered } from '../filters/NotCovered';
 import { FilterBar } from '../filters/FilterBar';
 import { FilteredCharts, keepLastAnswers, type FilteredResults } from '../filters/FilteredCharts';
 import { newFilter, type FilterValues } from '../filters/model';
@@ -104,6 +106,12 @@ export interface DashboardViewProps {
    * is scoped to it (AC-077), and what a filter re-queries (AC-078).
    */
   readonly documents?: Readonly<Record<string, ChartDocument>> | undefined;
+  /**
+   * Whether a field can reach a cube or view, from the model (AC-079). A tile
+   * a filter cannot reach is left unfiltered and marked. Absent, every field
+   * is taken to reach every chart.
+   */
+  readonly reach?: Reach | undefined;
   /**
    * Each member's number format from the Cube model (AC-046). Applied here,
    * after any chart edited from a tile has replaced its saved spec, so a
@@ -231,6 +239,8 @@ interface TileCharts {
   readonly loading: boolean;
   /** Charts a filter has just reached, whose filtered answer is not yet in (AC-078). */
   readonly pending?: ReadonlySet<string>;
+  /** Charts in a filter's scope that cannot reach its field (AC-079), with those filters. */
+  readonly notCovered?: Readonly<Record<string, readonly ActiveFilter[]>>;
 }
 
 interface Affordances {
@@ -386,6 +396,11 @@ function Elements({
                         affordances.onDelete?.(element.id);
                       },
                     })}
+              />
+            )}
+            {charts.notCovered?.[chartId] === undefined ? null : (
+              <NotCovered
+                members={charts.notCovered[chartId].map((each) => each.filter.member ?? '')}
               />
             )}
             <TileBody
@@ -596,6 +611,7 @@ export function DashboardView({
   errors,
   loading = false,
   documents,
+  reach,
   formats,
   onEditStart,
   editTile,
@@ -650,9 +666,20 @@ export function DashboardView({
    * The charts a filter in effect reaches, each with the filters that reach it
    * (AC-078), and what each draws once filtered — asked by `FilteredCharts`.
    */
-  const reached = useMemo(
-    () => filteredCharts(live, activeFilters(live.filters ?? [], filterValues)),
-    [live, filterValues],
+  /**
+   * And the charts a filter's scope takes in but whose cube or view cannot
+   * reach its field (AC-079): left unfiltered — never asked with a filter
+   * Cube would refuse — and marked. A chart the model cannot yet say about is
+   * neither filtered nor marked.
+   */
+  const { reached, notCovered } = useMemo(
+    () =>
+      coverageOf(live, activeFilters(live.filters ?? [], filterValues), (member, chartId) => {
+        if (reach === undefined) return member;
+        const source = drawn.documents?.[chartId]?.chart.source.cube;
+        return source === undefined ? undefined : reach(member, source);
+      }),
+    [live, filterValues, reach, drawn.documents],
   );
   const [filtered, setFiltered] = useState<FilteredResults>({});
   // A chart being asked again keeps its last answer, busy, meanwhile.
@@ -697,6 +724,7 @@ export function DashboardView({
     errors: withFiltered.errors,
     loading,
     pending: withFiltered.pending,
+    notCovered,
   };
 
   /**

@@ -104,6 +104,59 @@ async function makeTwoTabDashboard(
   return { id, title };
 }
 
+/**
+ * A dashboard of its own with one page, "Overview", and one bar-chart tile per
+ * chart given — each chart local to it, counting `measure` by `dimension` on
+ * `source`, a cube or a view.
+ */
+async function makeChartsDashboard(
+  request: APIRequestContext,
+  charts: readonly { tile: string; source: string; measure: string; dimension: string }[],
+  filters: readonly Record<string, unknown>[],
+) {
+  const { id, title } = await makeDashboard(request);
+  const items = [];
+  for (const each of charts) {
+    const chart = (await (
+      await request.post(`${API}/documents`, {
+        data: { kind: 'chart', title: each.tile, folderId: 'root' },
+      })
+    ).json()) as { id: string };
+    await request.put(`${API}/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: each.tile,
+          owner: 'admin',
+          localToDashboardId: id,
+          chart: {
+            source: { cube: each.source },
+            wells: { measures: [each.measure], dimensions: [each.dimension], timeDimensions: [] },
+            chartType: 'bar',
+          },
+        },
+      },
+    });
+    items.push({ id: each.tile, kind: 'chart', w: 6, h: 40, chartId: chart.id });
+  }
+  await request.put(`${API}/documents/dashboard/${id}`, {
+    data: {
+      version: 2,
+      body: {
+        schemaVersion: 1,
+        title,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [{ id: 'overview', title: 'Overview', items }],
+        filters,
+      },
+    },
+  });
+  return { id, title };
+}
+
 const filterBar = (page: Page) => page.getByRole('region', { name: 'Filters' });
 
 /** The seeded model's title for `orders.ordered_at`. */
@@ -377,6 +430,96 @@ test('the filters in effect are in the URL, and the URL opens with them', async 
     .getByRole('button', { name: `Clear ${ORDERED_AT}` })
     .click();
   await expect.poll(inUrl).toBeNull();
+});
+
+/**
+ * T085 / AC-079: WHEN a filter's member is not reachable from a tile's cube or
+ * view, THE SYSTEM SHALL leave that tile unfiltered and mark it as not covered
+ * by the filter.
+ * Fails when: the tile shows a query error, or is silently left unfiltered
+ * with no indication.
+ *
+ * On the seed model plus its one view, `order_summary` (orders' count and
+ * status only). A filter on products' category reaches the orders cube, which
+ * joins products, but not the view, which does not offer it.
+ */
+test('a tile a filter cannot reach is left unfiltered and marked, with no error', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await makeChartsDashboard(
+    request,
+    [
+      {
+        tile: 'tile-orders',
+        source: 'orders',
+        measure: 'orders.count',
+        dimension: 'orders.status',
+      },
+      {
+        tile: 'tile-summary',
+        source: 'order_summary',
+        measure: 'order_summary.count',
+        dimension: 'order_summary.status',
+      },
+    ],
+    [{ id: 'f-category', widget: 'checkbox', member: 'products.category' }],
+  );
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const orders = page.locator('[data-tile="tile-orders"]');
+  const summary = page.locator('[data-tile="tile-summary"]');
+  await expect(summary.getByTestId('chart-canvas')).toBeVisible();
+
+  const asked: Record<string, unknown>[] = [];
+  page.on('request', (sent) => {
+    if (!sent.url().endsWith('/api/load')) return;
+    const { query } = sent.postDataJSON() as { query: Record<string, unknown> };
+    if (query['measures'] !== undefined) asked.push(query);
+  });
+  await filterBar(page).getByRole('checkbox', { name: 'Components' }).check();
+
+  // The view's tile: not asked with the filter, marked, and no error.
+  await expect(summary.getByTestId('not-covered')).toHaveText('Not filtered by Products Category');
+  await expect(summary.getByRole('alert')).toHaveCount(0);
+  await expect(summary.getByTestId('chart-canvas')).toBeVisible();
+  // The cube's tile: filtered, and not marked.
+  await expect.poll(() => asked.length).toBeGreaterThan(0);
+  expect(asked.map((query) => (query['measures'] as string[])[0])).toEqual(
+    asked.map(() => 'orders.count'),
+  );
+  await expect(orders.getByTestId('not-covered')).toHaveCount(0);
+  await expect(orders.getByTestId('chart-tile')).not.toHaveAttribute('aria-busy', 'true');
+  await expect(orders.getByRole('alert')).toHaveCount(0);
+});
+
+test('a view takes a filter on a cube field it offers, by its own name for it', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await makeChartsDashboard(
+    request,
+    [
+      {
+        tile: 'tile-summary',
+        source: 'order_summary',
+        measure: 'order_summary.count',
+        dimension: 'order_summary.status',
+      },
+    ],
+    [{ id: 'f-status', widget: 'checkbox', member: 'orders.status' }],
+  );
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const summary = page.locator('[data-tile="tile-summary"]');
+  await summary.getByTestId('toggle-table-view').click();
+  await expect(summary.getByTestId('table-row')).toHaveCount(3);
+
+  await filterBar(page).getByRole('checkbox', { name: 'shipped' }).check();
+
+  await expect(summary.getByTestId('table-row')).toHaveCount(1);
+  await expect(summary.getByTestId('table-row')).toContainText('shipped');
+  await expect(summary.getByTestId('not-covered')).toHaveCount(0);
 });
 
 /**

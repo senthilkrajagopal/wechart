@@ -42,7 +42,7 @@ export interface FilterBarProps {
 }
 
 /** Every member of every cube and view, once each. */
-function allMembers(meta: unknown): Member[] {
+export function allMembers(meta: unknown): Member[] {
   const seen = new Map<string, Member>();
   for (const cube of cubesFrom(meta)) {
     for (const member of membersOf(meta, cube.name)) {

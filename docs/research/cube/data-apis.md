@@ -345,6 +345,10 @@ type CubeTimeDimension = BaseCubeDimension & {
 ```
 
 - **`connectedComponent`:** "If the same value is returned for two cubes, then there is at least one join path between them" ([rest-ref]).
+- **Observed against the running Cube v1.7.42 (local docker-compose, 2026-09-21, T085)**, in `/v1/meta` for the seed model plus one view (`infra/cube/model/views/order_summary.yml`, `join_path: orders`, `includes: [count, status]`):
+  - The three joined cubes (`orders` joins `customers` and `products`) each carry `type: 'cube'` and `connectedComponent: 1`.
+  - The view carries `type: 'view'` and **no `connectedComponent`**.
+  - Each view member carries **`aliasMember`, naming the cube member it exposes**: `order_summary.status` → `orders.status` and `order_summary.count` → `orders.count`. The client type lists `aliasMember?` without saying what it holds ([src-core-types]). This observation is the source for wechart reading it as "the view's name for that cube member".
 - **`?onlyViews=true`:** returns views only. It was added to `meta()` in 1.7.14 ([src-gw], [chg-react], [sdk-core-ref]).
 - **`?extended`:** adds `sql`, `fileName`, `refreshKey` and `extends` for cubes; `sql` and `filters` for measures; `sql` and `case` for dimensions; joins; and pre-aggregation references ([src-gw-metaext]). It is not in the docs.
 

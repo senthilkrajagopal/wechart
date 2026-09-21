@@ -251,7 +251,7 @@ Traces to: `[docs/inputs §2]`, direction.md §7, rule 14.
       Fails when: the widget does not show its scope, or a tab-scoped filter changes a tile on another tab.
 - [x] AC-078 WHEN a filter value changes, THE SYSTEM SHALL re-query every tile in its scope and leave tiles outside the scope unchanged.
       Fails when: a tile outside the scope re-queries, or a tile inside it keeps the previous result.
-- [ ] AC-079 WHEN a filter's member is not reachable from a tile's cube or view, THE SYSTEM SHALL leave that tile unfiltered and mark it as not covered by the filter.
+- [x] AC-079 WHEN a filter's member is not reachable from a tile's cube or view, THE SYSTEM SHALL leave that tile unfiltered and mark it as not covered by the filter.
       Fails when: the tile shows a query error, or is silently left unfiltered with no indication.
 - [x] AC-080 WHEN the user clears a filter, THE SYSTEM SHALL return every tile in its scope to the unfiltered result.
       Fails when: any tile still reflects the cleared filter.
