@@ -344,6 +344,20 @@ main:has(.dashboard) {
   background: var(--wc-bg-surface);
 }
 .settings-page__later { color: var(--wc-text-secondary); }
+
+/* "Limit data using markings" (AC-108). The reason sits beside the option it
+   explains, not in a tooltip: a disabled control with no explanation is the
+   most frustrating kind, because the user cannot tell whether it is broken,
+   forbidden, or waiting on something they have not done. */
+.tile-limits { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.tile-limits legend { padding: 0 0 8px; font-weight: var(--wc-text-sm-strong-weight); }
+.tile-limits__row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.tile-limits__reason {
+  flex: 1 1 100%;
+  padding-left: 24px;
+  font-size: var(--wc-text-xs-size);
+  color: var(--wc-text-secondary);
+}
 /* Which of the two interaction modes is in effect (AC-070, rule 56). Pushed to
    the end of the nav row, in secondary ink: it reports state rather than
    naming the destination, so it must not compete with the section name. */

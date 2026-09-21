@@ -311,7 +311,7 @@ Traces to: `[docs/inputs §11]`, direction.md §7a, rules 33, 53, 55.
 
 - [x] AC-107 WHEN a tile is limited by one or more markings, THE SYSTEM SHALL restrict its query to those markings, combined as All markings (AND) or Any marking (OR) according to its setting, and SHALL skip markings that are empty (direction.md rule 33).
       Fails when: a tile limited by two markings with one empty returns no rows, or OR behaves as AND.
-- [ ] AC-108 THE SYSTEM SHALL prevent a tile from being limited by the marking it marks with, and SHALL state the reason where that option is offered (direction.md rule 45).
+- [x] AC-108 THE SYSTEM SHALL prevent a tile from being limited by the marking it marks with, and SHALL state the reason where that option is offered (direction.md rule 45).
       Fails when: a tile can be limited by its own marking.
 - [ ] AC-109 WHEN every marking limiting a tile is empty, THE SYSTEM SHALL show the tile's nothing-marked state: all data, an empty visualization, or a message on an empty background, as set on the tile (direction.md rule 33).
       Fails when: the tile shows a state other than the one configured.
