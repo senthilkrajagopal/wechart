@@ -1010,10 +1010,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/ui/src/tokens.ts`, `packages/ui/src/audit/markingPalette.test.ts`
   - Failing test: `markingPalette.test.ts`: the validator reports every marking colour at ΔE ≥ 15 from each series colour under normal vision and ΔE ≥ 8 under protan and deutan simulation, in both themes (AC-099).
   - Depends on: T002, T102
-- [ ] T106 (AC-100) Mark from the keyboard on a focused tile
-  - Files: `packages/charts/src/interaction/keyboardMarking.ts`, `packages/charts/src/interaction/keyboardMarking.test.ts`
+- [x] T106 (AC-100) Mark from the keyboard on a focused tile
+  - Files: `packages/charts/src/interaction/keyboardMarking.ts`, `packages/charts/src/interaction/keyboardMarking.test.ts`, `packages/charts/src/index.ts`
   - Failing test: `keyboardMarking.test.ts`: arrow keys move between items without changing the marking, Space marks the focused item, Ctrl/⌘+Space toggles it and Shift+arrows extend the marking (AC-100).
   - Depends on: T102
+  - Done 2026-09-20. AC-100 ticked. **All of it is ours**: `docs/research/echarts.md` records that ECharts generates no roles for data items, no focus order and no keyboard interaction, that its documented instance API has no focus or keyboard method, and that its own legend buttons are an open accessibility bug ([#21022]).
+  - **Arrows move focus without marking, and that is a performance contract as well as the APG rule.** direction.md gives the reason: "each marking change re-queries other tiles". Arrowing along fifty categories with marking-follows-focus would fire fifty rounds of queries across every tile using the marking — so "select as you move" would make the keyboard path unusable in a way the mouse path never is. Mutation-verified.
+  - **Tab is not handled**, and there is a test for it. A tile that swallowed Tab would be a keyboard trap, which is the one accessibility failure that makes a page unusable rather than merely awkward. The keys the tile *does* act on report that they were handled, so the page does not also scroll.
+  - **Focus clamps at the ends rather than wrapping.** Wrapping from the last item to the first reads as a jump to anyone not watching the chart, and the live region would announce a category they did not expect.
+  - **Shift-extend runs from the anchor, not the previous position**, so a second Shift-arrow grows or shrinks the same range; measured from the last step it could never shrink.
 - [x] T107 (AC-101) Announce marking changes in a polite live region
   - Files: `packages/web/src/dashboard/markings/LiveRegion.tsx`, `packages/web/src/dashboard/markings/LiveRegion.test.tsx`
   - Failing test: `LiveRegion.test.tsx`: each marking change announces the marking's name, the number of marked items and the source tile (AC-101).

@@ -33,6 +33,12 @@ export {
 export { dragGesture, type DragEvent, type DragGesture } from './interaction/dragOverlay';
 export { stripeFor, type AxisPixels, type Stripe } from './interaction/axisRange';
 export { markFromLegend, type LegendModifiers } from './interaction/legendMark';
+export {
+  keyToMarking,
+  type KeyModifiers,
+  type KeyResult,
+  type KeyboardState,
+} from './interaction/keyboardMarking';
 export { markFromPanel, panelOfTitleClick } from './interaction/panelMark';
 export {
   MARKED_OUTLINE_PX,
