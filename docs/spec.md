@@ -245,7 +245,7 @@ Traces to: `[docs/inputs §12]`, direction.md §2, rules 13, 32, 56.
 Purpose: dashboard, tab and tile filters that combine with everything else.
 Traces to: `[docs/inputs §2]`, direction.md §7, rule 14.
 
-- [ ] AC-076 THE SYSTEM SHALL offer filter widgets for a date range with presets, a list with search, a numeric range, and a checkbox list.
+- [x] AC-076 THE SYSTEM SHALL offer filter widgets for a date range with presets, a list with search, a numeric range, and a checkbox list.
       Fails when: a listed widget type cannot be added to a dashboard.
 - [ ] AC-077 WHEN a filter is added, THE SYSTEM SHALL scope it to the dashboard, a page tab or named tiles, and show its scope on the widget (direction.md rule 14).
       Fails when: the widget does not show its scope, or a tab-scoped filter changes a tile on another tab.

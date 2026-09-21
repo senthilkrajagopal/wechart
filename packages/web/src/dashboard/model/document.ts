@@ -18,6 +18,7 @@
  */
 import type { ChartDocument, ChartType, Marking, RenderSpec } from '@wechart/core';
 
+import type { DashboardFilter } from '../../filters/model';
 import type { GridTile } from '../grid/geometry';
 import type { Interactions } from '../settings/interactionMode';
 
@@ -139,6 +140,12 @@ export interface DashboardDocument {
    * never read without a default marking (AC-084).
    */
   readonly markings?: readonly Marking[];
+  /**
+   * The filter bar's filters, in order (F9, AC-076): each a widget on a
+   * field. Saved with the dashboard; the values they hold are the reader's,
+   * not the dashboard's.
+   */
+  readonly filters?: readonly DashboardFilter[];
   /**
    * Charts edited from a tile during this edit session, by chart id, not yet
    * written (T032). **Never saved as part of the dashboard.** `withoutDrafts`

@@ -495,6 +495,64 @@ main:has(.dashboard) {
 .add-panel button:hover { background: var(--wc-bg-subtle); }
 .add-panel__label { font-weight: 600; }
 .add-panel__hint { color: var(--wc-text-secondary); }
+/* The four filter kinds, under the Filter entry they came from. */
+.add-panel__choices { margin: 4px 0 0 12px !important; }
+
+/* The filter bar (F9; direction.md §2: horizontal, under the title). Controls
+   are 32 px high, direction.md's default control height. */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+  padding: 8px 0 12px;
+}
+.filter-bar__filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.filter-bar__filter select,
+.filter-bar__filter input:not([type='checkbox']) {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+}
+.filter-bar__filter input[type='number'] { width: 7em; }
+.filter-bar__filter > button {
+  height: 32px;
+  min-width: 32px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-secondary);
+  cursor: pointer;
+}
+.filter-widget { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.filter-widget__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 480px;
+  max-height: 96px;
+  overflow: auto;
+}
+.filter-widget__options button {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 14px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  cursor: pointer;
+}
+.filter-widget__options button[aria-pressed='true'] {
+  background: var(--wc-accent);
+  border-color: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+}
+.filter-widget--checkbox { border: 0; margin: 0; padding: 0; }
+.filter-widget--checkbox legend { float: left; margin-right: 8px; color: var(--wc-text-secondary); }
+.filter-widget--checkbox label { margin-right: 10px; white-space: nowrap; }
 /* Section templates, set apart from the palette above them: one click here
    lays out several tiles rather than one (AC-068), and a run of identical
    buttons would not say so. The dashed border is the prototype's. */

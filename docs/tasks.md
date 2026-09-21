@@ -1084,10 +1084,18 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F9. Filters
 
-- [ ] T082 (AC-076) Offer the four filter widget types
+- [x] T082 (AC-076) Offer the four filter widget types
   - Files: `packages/web/src/filters/widgets/{DateRange,ListSearch,NumericRange,CheckboxList}.tsx`, `packages/web/src/filters/widgets/widgets.test.tsx`
   - Failing test: `widgets.test.tsx`: a date range with presets, a searchable list, a numeric range and a checkbox list can each be added to a dashboard (AC-076).
   - Depends on: T064
+  - **Built 2026-09-21.** Files as planned, plus `filters/model.ts` (the filter and value types, the date presets, which fields each widget takes), `filters/widgets/props.ts`, `filters/FilterBar.tsx`, `filters/addFilter.test.tsx`, `dashboard/model/document.ts` (`filters` on the dashboard), `dashboard/edit/AddPanel.tsx`, `dashboard/DashboardView.tsx`, `shell/styles.ts`, `e2e/filters.spec.ts`, and a note in `docs/research/cube/data-apis.md`.
+    - **The filter bar** (direction.md §2: horizontal, under the title) sits above the page and shows each filter's widget; in edit mode each also offers its field — only the fields that widget can filter on: a time dimension for a date range, a number dimension for a numeric range, any other dimension for a list or checkbox list; measures are left out — and a remove button. A list or checkbox list asks Cube for the field's values (one dimension, capped at 1,000).
+    - **Adding**: the Add panel's Filter entry — "Adds to the filter bar", its hint all along — now offers the four kinds and adds one to the filter bar, as one undoable change, instead of inserting a grid tile that did nothing. `newElement('filter')` is kept for the palette's model tests.
+    - **Definitions are saved with the dashboard** (`filters` on the document); **values are the reader's** — held by the view, outside the edit history. Making a value filter anything is T084; the URL is T087.
+    - **The date presets were verified against the running Cube** (v1.7.42): twelve relative ranges, each sent as a `dateRange` and each resolved as expected — "last 7 days" and "last 30 days" end yesterday, "last 12 months" ends last month. Cube 1.7 parses these natively, so this observation (in the research doc) is their source, not the Chrono docs.
+  - **Tests, red first:** `widgets.test.tsx` (seven: every preset offered, a preset and all time reported, two dates, the list narrowed by search, values picked and unpicked, a range with either end open, boxes ticked); `addFilter.test.tsx` (each of the four added from the Add panel, each showing its control once given a field; each widget offered only its kind of field; saved with the dashboard); `e2e/filters.spec.ts` (one of each added on a dashboard of its own, on the seeded model's real fields, saved, and all four there after a reload, in order, a preset then chosen). One test fixture was wrong before it passed: the real model titles a field "Orders Ordered at", and the widgets are labelled with the full title because two fields' short titles are both "Name".
+  - **Full runs:** typecheck clean; lint clean except the existing DataTable warning; 1,344 unit tests and 554 of 555 browser runs passed. The one failure was `renders no text below 12 px at /jobs` (chrome) under the full suite's load — the same test T104's note traces to a browser context that was not handed out in time — and it passed 162 of 162 runs on its own afterwards.
+  - **Done 2026-09-21. AC-076 ticked** — `e2e/filters.spec.ts`.
 - [ ] T083 (AC-077) Scope a filter to the dashboard, a page tab or named tiles, and show its scope
   - Files: `packages/web/src/filters/scope.ts`, `packages/web/src/filters/scope.test.ts`
   - Failing test: `scope.test.ts`: the widget displays its scope, and a tab-scoped filter leaves tiles on other tabs unchanged (AC-077).

@@ -30,6 +30,8 @@ import { needsOf, templateElements } from './edit/templates';
 import { SettingsPage } from './settings/SettingsPage';
 import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
+import { FilterBar } from '../filters/FilterBar';
+import { newFilter, type FilterValues } from '../filters/model';
 import { Canvas, type CanvasProps } from './grid/Canvas';
 import { DRAG_INSTRUCTIONS, DRAG_INSTRUCTIONS_ID, useTileDrag } from './grid/drag';
 import { COLUMNS, ROW_UNIT_PX } from './grid/geometry';
@@ -481,6 +483,17 @@ function AddSlot({
           : `${container}, after ${nameOfTile(document, where.selected ?? '')}`
       }
       message={said}
+      // A filter goes on the filter bar, not the grid (F9, AC-076): one
+      // change, which Undo and Discard reach like any other.
+      onAddFilter={(widget) => {
+        session.change({
+          ...document,
+          filters: [
+            ...(document.filters ?? []),
+            newFilter(widget, `filter-${String(Date.now())}-${String(counter++)}`),
+          ],
+        });
+      }}
       onAdd={(id) => {
         const mint = () => `el-${String(Date.now())}-${String(counter++)}`;
         /**
@@ -708,6 +721,13 @@ export function DashboardView({
    * dashboard, so Undo must not step back through it.
    */
   const [selected, setSelected] = useState<string | null>(null);
+
+  /**
+   * What each filter holds now (F9). The reader's, not the dashboard's: not
+   * in the saved document, and not in the edit history — setting a filter is
+   * reading the dashboard, not changing it.
+   */
+  const [filterValues, setFilterValues] = useState<FilterValues>({});
   const [addTarget, setAddTarget] = useState<string | null>(null);
 
   /**
@@ -882,6 +902,22 @@ export function DashboardView({
             onDrafts={setDrafts}
             saving={session.saving}
             onSaving={setSaving}
+          />
+          <FilterBar
+            filters={session.document.filters ?? []}
+            values={filterValues}
+            onValue={(filterId, value) => {
+              setFilterValues((current) => {
+                const next = { ...current };
+                if (value === undefined) delete next[filterId];
+                else next[filterId] = value;
+                return next;
+              });
+            }}
+            editing={session.editing}
+            onFilters={(next) => {
+              session.change({ ...session.document, filters: next });
+            }}
           />
           <DashboardPages
             session={session}

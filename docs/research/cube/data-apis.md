@@ -196,6 +196,7 @@ Meaning of each `cache` value ([rest-index]):
 - **`dateRange`:**
   - An absolute range is `[start, end]` in `YYYY-MM-DD` form, padded to the start and end of the day, or `YYYY-MM-DDTHH:mm:ss.SSS` form, local to the query timezone.
   - A relative range is a string such as `today`, `last 6 months`, `from 7 days ago to now` or `from now to 2 weeks from now`, parsed by Chrono.
+  - **Observed against the running Cube v1.7.42 (local docker-compose, 2026-09-21, T082)** — each sent as `timeDimensions[].dateRange` on `orders.ordered_at`, and each answered with the range Cube resolved it to (`query.timeDimensions[0].dateRange` in the response), on a Monday, 2026-09-21: `today` → that day; `yesterday` → the day before; `last 7 days` → 09-14 to 09-20 and `last 30 days` → 08-22 to 09-20 (both **end yesterday**, excluding today); `this week` → 09-21 to 09-27 (weeks start Monday); `this month`, `last month`, `this quarter`, `last quarter`, `this year`, `last year` → the calendar period; `last 12 months` → 2025-09-01 to 2026-08-31 (whole months, **ending last month**). Cube 1.7 parses these natively (no JavaScript date parser was found in the image), so this observation, not the Chrono docs, is the source for the presets wechart offers.
 - **`compareDateRange`:** two or more ranges, each in `dateRange` format. The server throws `compareDateRange can only exist for one timeDimension` if more than one time dimension uses it ([src-gw]).
 
 **Filter operators** (documented in [rest-qf]; the client type is `BinaryOperator`/`UnaryOperator` in [src-core-types]):
