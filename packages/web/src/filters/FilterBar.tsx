@@ -251,6 +251,23 @@ function Filters({
                 }}
               />
             )}
+            {/*
+              Clearing puts every tile it reaches back to its unfiltered result
+              (AC-080) in one step, whatever the widget — offered only while
+              there is something to clear.
+            */}
+            {member === undefined || values[key] === undefined ? null : (
+              <button
+                type="button"
+                className="filter-bar__clear"
+                aria-label={`Clear ${member.title}`}
+                onClick={() => {
+                  onValue(key, undefined);
+                }}
+              >
+                Clear
+              </button>
+            )}
           </div>
         );
       })}

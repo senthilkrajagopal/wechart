@@ -1144,10 +1144,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/filters/coverage.ts`, `packages/web/src/filters/coverage.test.ts`
   - Failing test: `coverage.test.ts`: when a filter's member is not reachable from a tile's cube or view, that tile renders unfiltered with a "not covered" label and no query error (AC-079).
   - Depends on: T084
-- [ ] T086 (AC-080) Return every in-scope tile to the unfiltered result when a filter is cleared
+- [x] T086 (AC-080) Return every in-scope tile to the unfiltered result when a filter is cleared
   - Files: `packages/web/src/filters/apply.ts`, `packages/web/src/filters/clear.test.ts`
   - Failing test: `clear.test.ts`: after clearing, no tile in scope reflects the filter (AC-080).
   - Depends on: T084
+  - **Built 2026-09-21.** Files: `filters/FilterBar.tsx`, `filters/clear.test.tsx`, `e2e/filters.spec.ts`. `apply.ts` needed nothing: a filter with no value is not in effect (T084), so its charts are no longer reached. Each chart then draws its own unfiltered result, which was never replaced, and no query is sent.
+    - **A Clear button** ("Clear ‹field›") sits on each filter while it holds a value, in both modes. It clears any widget in one step. Unticking the last value, or choosing "All time", clears it too.
+  - **Tests, red first** (no Clear button): `clear.test.tsx` (two KPI tiles in scope go 240 → 80 → 240 through Clear, the box unticked and nothing left `aria-busy`; Clear offered only while there is a value; unticking the last value returns them too). `e2e/filters.spec.ts`: on the real app, the Sales table goes three rows → one → three through Clear, and the other tab's tile in scope shows all three.
+  - **Done 2026-09-21. AC-080 ticked** — `clear.test.tsx` and `e2e/filters.spec.ts` "clearing a filter returns every tile in its scope to the unfiltered result".
 - [ ] T087 (AC-081) Put active filters in the dashboard URL
   - Files: `packages/web/src/filters/url.ts`, `packages/web/src/filters/url.test.ts`
   - Failing test: `url.test.ts`: opening the produced URL in a fresh session reproduces the same filter values (AC-081).

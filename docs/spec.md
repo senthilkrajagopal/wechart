@@ -253,7 +253,7 @@ Traces to: `[docs/inputs §2]`, direction.md §7, rule 14.
       Fails when: a tile outside the scope re-queries, or a tile inside it keeps the previous result.
 - [ ] AC-079 WHEN a filter's member is not reachable from a tile's cube or view, THE SYSTEM SHALL leave that tile unfiltered and mark it as not covered by the filter.
       Fails when: the tile shows a query error, or is silently left unfiltered with no indication.
-- [ ] AC-080 WHEN the user clears a filter, THE SYSTEM SHALL return every tile in its scope to the unfiltered result.
+- [x] AC-080 WHEN the user clears a filter, THE SYSTEM SHALL return every tile in its scope to the unfiltered result.
       Fails when: any tile still reflects the cleared filter.
 - [ ] AC-081 WHEN filters are active, THE SYSTEM SHALL include them in the dashboard's URL so that opening that URL reproduces them.
       Fails when: opening the URL in a new session produces different filter values.

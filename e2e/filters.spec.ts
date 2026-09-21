@@ -270,3 +270,35 @@ test('a value re-queries the tiles in its scope, and a tab’s filter leaves the
   await expect(operations.getByTestId('table-row')).toHaveCount(3);
   for (const query of asked) expect(query['filters']).toBeDefined();
 });
+
+/**
+ * T086 / AC-080: WHEN the user clears a filter, THE SYSTEM SHALL return every
+ * tile in its scope to the unfiltered result.
+ * Fails when: any tile still reflects the cleared filter.
+ */
+test('clearing a filter returns every tile in its scope to the unfiltered result', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await makeTwoTabDashboard(request, [
+    { id: 'f-status', widget: 'checkbox', member: 'orders.status' },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const sales = page.locator('[data-tile="tile-sales"]');
+  await sales.getByTestId('toggle-table-view').click();
+  await expect(sales.getByTestId('table-row')).toHaveCount(3);
+
+  await filterBar(page).getByRole('checkbox', { name: 'processing' }).check();
+  await expect(sales.getByTestId('table-row')).toHaveCount(1);
+
+  await filterBar(page).getByRole('button', { name: 'Clear Orders Status' }).click();
+
+  await expect(sales.getByTestId('table-row')).toHaveCount(3);
+  await expect(filterBar(page).getByRole('checkbox', { name: 'processing' })).not.toBeChecked();
+  // The other tab's tile, in scope too, is unfiltered as well.
+  await page.getByRole('tab', { name: 'Operations' }).click();
+  const operations = page.locator('[data-tile="tile-operations"]');
+  await operations.getByTestId('toggle-table-view').click();
+  await expect(operations.getByTestId('table-row')).toHaveCount(3);
+});
