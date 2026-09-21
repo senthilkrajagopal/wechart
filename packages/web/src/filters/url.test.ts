@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { valueKeyOf, type FilterValues } from './model';
-import { valuesFromSearch, valuesToSearch } from './url';
+import { adoptValues, valuesFromSearch, valuesToSearch } from './url';
 
 /**
  * T087 / AC-081: WHEN filters are active, THE SYSTEM SHALL include them in the
@@ -64,6 +64,33 @@ describe('filter values in the URL', () => {
         null,
       ]),
     ).toEqual({ [key('ok', 'orders.status')]: { kind: 'values', values: ['a'] } });
+  });
+
+  /**
+   * T070 / AC-064: a link tile passing the current filters to another
+   * dashboard carries them as its own — other filter ids. The dashboard
+   * opening takes each onto its own filter on the same field, where that
+   * filter can hold such a value.
+   */
+  it('from another dashboard, are taken onto this one’s filters on the same fields', () => {
+    const filters = [
+      { id: 'f-mine', widget: 'checkbox', member: 'orders.status' },
+      { id: 'f-when', widget: 'dateRange', member: 'orders.ordered_at' },
+      { id: 'f-amount', widget: 'range', member: 'orders.amount' },
+    ] as const;
+    expect(
+      adoptValues(filters, {
+        [key('f-theirs', 'orders.status')]: { kind: 'values', values: ['shipped'] },
+        [key('f-when', 'orders.ordered_at')]: { kind: 'preset', preset: 'this year' },
+        // No filter here on this field: dropped.
+        [key('f-region', 'orders.region')]: { kind: 'values', values: ['EU'] },
+        // A value this dashboard's filter on the field cannot hold: dropped.
+        [key('f-other', 'orders.amount')]: { kind: 'values', values: ['1'] },
+      }),
+    ).toEqual({
+      [key('f-mine', 'orders.status')]: { kind: 'values', values: ['shipped'] },
+      [key('f-when', 'orders.ordered_at')]: { kind: 'preset', preset: 'this year' },
+    });
   });
 
   it('are none at all when the parameter is not a list', () => {

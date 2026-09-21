@@ -130,3 +130,166 @@ test('the server refuses what the rule refuses, however it is sent', async ({ re
   expect(served.headers()['content-type']).toBe('image/png');
   expect(Buffer.from(await served.body()).equals(PNG)).toBe(true);
 });
+
+/**
+ * T070 / AC-064: WHEN a link tile targets a dashboard, THE SYSTEM SHALL open
+ * that dashboard, carrying the current filters when "pass the current
+ * filters" is on; WHEN it targets a URL, THE SYSTEM SHALL accept only http and
+ * https and open it in a new tab (direction.md rule 42).
+ * Fails when: a non-http(s) URL is accepted, or the target dashboard opens
+ * without the filters while the option is on.
+ */
+async function putDashboard(
+  request: APIRequestContext,
+  id: string,
+  title: string,
+  items: readonly Record<string, unknown>[],
+  filters: readonly Record<string, unknown>[],
+) {
+  await request.put(`${API}/documents/dashboard/${id}`, {
+    data: {
+      version: 2,
+      body: {
+        schemaVersion: 1,
+        title,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [{ id: 'only', title: 'Only', items }],
+        filters,
+      },
+    },
+  });
+}
+
+test('a link tile opens another dashboard carrying the filters, and a web address in a new tab', async ({
+  page,
+  request,
+}) => {
+  const target = await makeDashboard(request);
+  const chart = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'chart', title: 'Orders by status', folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  await request.put(`${API}/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: 'Orders by status',
+        owner: 'admin',
+        localToDashboardId: target.id,
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+          chartType: 'bar',
+        },
+      },
+    },
+  });
+  // The target filters status too — under a filter of its own.
+  await putDashboard(
+    request,
+    target.id,
+    target.title,
+    [{ id: 'tile-orders', kind: 'chart', w: 6, h: 40, chartId: chart.id }],
+    [{ id: 'f-target-status', widget: 'checkbox', member: 'orders.status' }],
+  );
+
+  const source = await makeDashboard(request);
+  await putDashboard(
+    request,
+    source.id,
+    source.title,
+    [
+      {
+        id: 'tile-go',
+        kind: 'link',
+        w: 3,
+        h: 7,
+        text: 'See the orders',
+        link: {
+          style: 'primary',
+          target: {
+            kind: 'dashboard',
+            dashboardId: target.id,
+            title: target.title,
+            passFilters: true,
+          },
+        },
+      },
+      {
+        id: 'tile-web',
+        kind: 'link',
+        w: 3,
+        h: 7,
+        text: 'Read the report',
+        link: { target: { kind: 'url', url: 'https://example.com/report' } },
+      },
+    ],
+    [{ id: 'f-source-status', widget: 'checkbox', member: 'orders.status' }],
+  );
+
+  await page.goto(`/explore/dashboards/${source.id}`);
+  await expect(page.getByRole('heading', { name: source.title })).toBeVisible();
+
+  // The web address: opened in a new tab, telling it nothing of this page.
+  const web = page.getByRole('link', { name: 'Read the report' });
+  await expect(web).toHaveAttribute('href', 'https://example.com/report');
+  await expect(web).toHaveAttribute('target', '_blank');
+  await expect(web).toHaveAttribute('rel', 'noopener noreferrer');
+
+  // The dashboard, with the current filters.
+  await page
+    .getByRole('region', { name: 'Filters' })
+    .getByRole('checkbox', { name: 'shipped' })
+    .check();
+  await page.getByRole('link', { name: 'See the orders' }).click();
+
+  await expect(page.getByRole('heading', { name: target.title })).toBeVisible();
+  const filterBar = page.getByRole('region', { name: 'Filters' });
+  await expect(filterBar.getByRole('checkbox', { name: 'shipped' })).toBeChecked();
+  const orders = page.locator('[data-tile="tile-orders"]');
+  await orders.getByTestId('toggle-table-view').click();
+  await expect(orders.getByTestId('table-row')).toHaveCount(1);
+  await expect(orders.getByTestId('table-row')).toContainText('shipped');
+  // Kept in the target's own terms: its URL names its own filter.
+  await expect
+    .poll(() => {
+      const raw = new URL(page.url()).searchParams.get('filters');
+      return raw === null ? null : (JSON.parse(raw) as { id: string }[]).map((each) => each.id);
+    })
+    .toEqual(['f-target-status']);
+});
+
+test('a link tile refuses a web address that is not http(s)', async ({ page, request }) => {
+  const { id, title } = await makeDashboard(request);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await editWithSidebar(page, 'Add');
+  await page.getByTestId('add-link').click();
+  await page.locator('[data-tile]').filter({ hasText: 'Open dashboard' }).click();
+  await editWithSidebar(page, 'Properties');
+
+  await sidebar(page).getByLabel('Goes to').selectOption('url');
+  const address = sidebar(page).getByLabel('Web address');
+  await address.fill('javascript:alert(document.cookie)');
+  await address.blur();
+  await expect(sidebar(page).getByRole('alert')).toHaveText(
+    'Only http and https addresses can be linked to.',
+  );
+
+  await page
+    .getByRole('toolbar', { name: 'Dashboard editing' })
+    .getByRole('button', { name: 'Save', exact: true })
+    .click();
+  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeHidden();
+  // Not a link to it, and not kept as the target.
+  await expect(page.getByRole('link', { name: 'Open dashboard' })).toHaveCount(0);
+  const stored = (await (await request.get(`${API}/documents/dashboard/${id}`)).json()) as {
+    body: { pages: { items: { link?: unknown }[] }[] };
+  };
+  expect(stored.body.pages[0]?.items[0]?.link).toBeUndefined();
+});

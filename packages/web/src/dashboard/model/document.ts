@@ -70,6 +70,8 @@ export interface Tile extends GridTile {
   readonly imageId?: string;
   readonly alt?: string;
   readonly fit?: 'contain' | 'cover';
+  /** For a link tile (AC-064): where it goes and how it looks; its label is `text`. */
+  readonly link?: LinkSettings;
   /**
    * Which marking a chart tile marks with, or absent for "(None)" — a tile
    * that cannot be marked at all (direction.md rule 44). The control that sets
@@ -83,6 +85,25 @@ export interface Tile extends GridTile {
    * because AC-098 combines them with AND/OR.
    */
   readonly limitedBy?: readonly string[];
+}
+
+/**
+ * A link tile's settings (direction.md §2: "a label; a style of Button,
+ * Primary or Text link; and a target that is either another dashboard
+ * (optionally passing the current filters) or an http(s) URL opened in a new
+ * tab"). No target yet goes nowhere.
+ */
+export interface LinkSettings {
+  readonly style?: 'button' | 'primary' | 'text';
+  readonly target?:
+    | {
+        readonly kind: 'dashboard';
+        readonly dashboardId: string;
+        /** Its title when chosen, to name it in Properties without a lookup. */
+        readonly title?: string;
+        readonly passFilters?: boolean;
+      }
+    | { readonly kind: 'url'; readonly url: string };
 }
 
 export interface Section {

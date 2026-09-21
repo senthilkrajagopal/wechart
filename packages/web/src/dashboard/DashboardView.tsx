@@ -36,10 +36,11 @@ import { describeFilter } from '../filters/describe';
 import { NotCovered } from '../filters/NotCovered';
 import { TileProperties } from './edit/TileProperties';
 import { ImageTile } from './tiles/ImageTile';
+import { LinkTile } from './tiles/LinkTile';
 import { FilterBar } from '../filters/FilterBar';
 import { FilteredCharts, keepLastAnswers, type FilteredResults } from '../filters/FilteredCharts';
 import { newFilter, type FilterValues } from '../filters/model';
-import { sameValues } from '../filters/url';
+import { adoptValues, sameValues, valuesToSearch, type SearchFilter } from '../filters/url';
 import { Canvas, type CanvasProps } from './grid/Canvas';
 import { DRAG_INSTRUCTIONS, DRAG_INSTRUCTIONS_ID, useTileDrag } from './grid/drag';
 import { COLUMNS, ROW_UNIT_PX } from './grid/geometry';
@@ -177,6 +178,7 @@ function TileBody({
   busy = false,
   inEffect,
   editing = false,
+  carried,
 }: {
   tile: Tile;
   spec: RenderSpec | undefined;
@@ -188,6 +190,8 @@ function TileBody({
   inEffect?: readonly string[] | undefined;
   /** In edit mode, an image tile flags missing alternative text (AC-063). */
   editing?: boolean;
+  /** The filter values in effect, which a link tile can pass on (AC-064). */
+  carried?: readonly SearchFilter[] | undefined;
 }) {
   switch (tile.kind) {
     case 'chart':
@@ -235,10 +239,11 @@ function TileBody({
       return <hr />;
     case 'image':
       return <ImageTile tile={tile} editing={editing} />;
+    case 'link':
+      return <LinkTile tile={tile} editing={editing} carried={carried} />;
     default:
-      // Link and filter tiles are AC-064 and F8. The tile is still rendered,
-      // because AC-018 fails when a saved tile is missing — what it holds is
-      // the later task's to fill in.
+      // A filter tile, from before filters went to the filter bar (AC-058).
+      // Still rendered, because AC-018 fails when a saved tile is missing.
       return <p data-testid={`tile-${tile.kind}`}>{tile.text ?? ''}</p>;
   }
 }
@@ -260,6 +265,8 @@ interface TileCharts {
   readonly notCovered?: Readonly<Record<string, readonly ActiveFilter[]>>;
   /** Each filtered chart's filters, in words, for its empty state (AC-043). */
   readonly inEffect?: Readonly<Record<string, readonly string[]>>;
+  /** The filter values set, as a dashboard's URL carries them — for link tiles (AC-064). */
+  readonly carried?: readonly SearchFilter[] | undefined;
 }
 
 interface Affordances {
@@ -430,6 +437,7 @@ function Elements({
               busy={charts.pending?.has(chartId) === true}
               inEffect={charts.inEffect?.[chartId]}
               editing={editing}
+              carried={charts.carried}
             />
           </>
         );
@@ -667,7 +675,11 @@ export function DashboardView({
    * in the saved document, and not in the edit history — setting a filter is
    * reading the dashboard, not changing it.
    */
-  const [filterValues, setFilterValues] = useState<FilterValues>(() => urlFilterValues ?? {});
+  // Values passed on from another dashboard's link tile are taken onto this
+  // one's filters on the same fields (AC-064).
+  const [filterValues, setFilterValues] = useState<FilterValues>(() =>
+    adoptValues(document.filters ?? [], urlFilterValues ?? {}),
+  );
   /**
    * The URL kept saying what the dashboard shows (AC-081): whenever the two
    * differ, the dashboard's values are written. That is each change made here,
@@ -799,6 +811,7 @@ export function DashboardView({
     pending: withFiltered.pending,
     notCovered: marked,
     inEffect,
+    carried: valuesToSearch(filterValues),
   };
 
   /**

@@ -573,7 +573,30 @@ main:has(.dashboard) {
   font-size: 12px;
 }
 .image-tile__empty { margin: 0; color: var(--wc-text-secondary); }
+/* A link tile (AC-064): Button, Primary or Text link (direction.md §2). */
+.link-tile--button,
+.link-tile--primary {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 4px;
+  border: 1px solid var(--wc-border-strong);
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  text-decoration: none;
+}
+.link-tile--primary {
+  background: var(--wc-accent);
+  border-color: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+}
+.link-tile--text { color: var(--wc-accent); text-decoration: underline; }
 .tile-properties { display: grid; gap: 6px; }
+.tile-properties__found { margin: 0; padding: 0; list-style: none; }
+.tile-properties__found li { padding: 4px 8px; cursor: pointer; }
+.tile-properties__found li:hover,
+.tile-properties__found li:focus { background: var(--wc-bg-subtle); }
 .tile-properties__hint { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
 .tile-properties__problem { margin: 0; color: var(--wc-text-primary); }
 /* A tile a filter in effect cannot reach (AC-079): said on the tile, in

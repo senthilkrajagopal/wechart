@@ -35,7 +35,7 @@ function filters(value: FilterValue): boolean {
  * another (T087's review): a date preset on a checkbox list, sent as it was,
  * put a date range on a text field and an error on every tile in scope.
  */
-function fits(widget: DashboardFilter['widget'], value: FilterValue): boolean {
+export function fits(widget: DashboardFilter['widget'], value: FilterValue): boolean {
   switch (widget) {
     case 'dateRange':
       return value.kind === 'preset' || value.kind === 'dates';

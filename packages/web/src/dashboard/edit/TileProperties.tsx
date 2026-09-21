@@ -1,5 +1,7 @@
 import { IMAGE_HEAD_BYTES, IMAGE_TYPES, imageProblem } from '@wechart/core';
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+
+import { webAddressProblem } from '../tiles/LinkTile';
 
 import {
   changeTile,
@@ -32,9 +34,201 @@ export function TileProperties({
   switch (element.kind) {
     case 'image':
       return <ImageProperties dashboardId={dashboardId} tile={element} onChange={change} />;
+    case 'link':
+      return <LinkProperties key={element.id} tile={element} onChange={change} />;
     default:
       return <p>This tile has no properties to set here.</p>;
   }
+}
+
+interface Found {
+  readonly kind: string;
+  readonly id: string;
+  readonly title: string;
+}
+
+/** Dashboards whose titles hold what was typed, from the catalog's search. */
+function useDashboardSearch(text: string): readonly Found[] {
+  const needle = text.trim();
+  // Kept with the text they answer, so an answer to older text never shows.
+  const [found, setFound] = useState<{ needle: string; items: readonly Found[] }>({
+    needle: '',
+    items: [],
+  });
+  useEffect(() => {
+    if (needle === '') return undefined;
+    const aborted = new AbortController();
+    const timer = setTimeout(() => {
+      void fetch(`/api/search?q=${encodeURIComponent(needle)}`, { signal: aborted.signal })
+        .then(async (response) => (response.ok ? ((await response.json()) as Found[]) : []))
+        .then((items) => {
+          setFound({ needle, items: items.filter((item) => item.kind === 'dashboard') });
+        })
+        .catch(() => undefined);
+    }, 150);
+    return () => {
+      clearTimeout(timer);
+      aborted.abort();
+    };
+  }, [needle]);
+  return found.needle === needle && needle !== '' ? found.items : [];
+}
+
+/**
+ * A link tile's settings (AC-064): its label and style, and where it goes —
+ * a dashboard, found by its title, optionally passing the current filters;
+ * or a web address, taken only if it is http(s) (`webAddressProblem`), and
+ * checked when the field is left, so a half-typed address is not refused
+ * mid-word.
+ */
+function LinkProperties({
+  tile,
+  onChange,
+}: {
+  tile: Tile;
+  onChange: (patch: Partial<Tile>) => void;
+}) {
+  const target = tile.link?.target;
+  const [goesTo, setGoesTo] = useState<'dashboard' | 'url'>(target?.kind ?? 'dashboard');
+  const [address, setAddress] = useState(target?.kind === 'url' ? target.url : '');
+  const [problem, setProblem] = useState('');
+  const [search, setSearch] = useState('');
+  const found = useDashboardSearch(search);
+  const ids = {
+    label: useId(),
+    style: useId(),
+    goes: useId(),
+    find: useId(),
+    url: useId(),
+    pass: useId(),
+  };
+  const link = (patch: Partial<NonNullable<Tile['link']>>) => {
+    onChange({ link: { ...tile.link, ...patch } });
+  };
+
+  return (
+    <div className="tile-properties">
+      <label htmlFor={ids.label}>Label</label>
+      <input
+        id={ids.label}
+        type="text"
+        value={tile.text ?? ''}
+        onChange={(event) => {
+          onChange({ text: event.target.value });
+        }}
+      />
+      <label htmlFor={ids.style}>Style</label>
+      <select
+        id={ids.style}
+        value={tile.link?.style ?? 'button'}
+        onChange={(event) => {
+          const style = event.target.value;
+          link({ style: style === 'primary' ? 'primary' : style === 'text' ? 'text' : 'button' });
+        }}
+      >
+        <option value="button">Button</option>
+        <option value="primary">Primary</option>
+        <option value="text">Text link</option>
+      </select>
+      <label htmlFor={ids.goes}>Goes to</label>
+      <select
+        id={ids.goes}
+        value={goesTo}
+        onChange={(event) => {
+          setGoesTo(event.target.value === 'url' ? 'url' : 'dashboard');
+          setProblem('');
+        }}
+      >
+        <option value="dashboard">A dashboard</option>
+        <option value="url">A web address</option>
+      </select>
+      {goesTo === 'url' ? (
+        <>
+          <label htmlFor={ids.url}>Web address</label>
+          <input
+            id={ids.url}
+            type="url"
+            value={address}
+            placeholder="https://"
+            onChange={(event) => {
+              setAddress(event.target.value);
+            }}
+            onBlur={() => {
+              const refused = webAddressProblem(address);
+              setProblem(refused ?? '');
+              if (refused === undefined) link({ target: { kind: 'url', url: address.trim() } });
+            }}
+          />
+          {problem === '' ? null : (
+            <p role="alert" className="tile-properties__problem">
+              {problem}
+            </p>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="tile-properties__hint">
+            {target?.kind === 'dashboard'
+              ? `Opens ${target.title ?? 'a dashboard'}.`
+              : 'No dashboard chosen yet.'}
+          </p>
+          <label htmlFor={ids.find}>Find a dashboard</label>
+          <input
+            id={ids.find}
+            type="search"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+            }}
+          />
+          {found.length === 0 ? null : (
+            <ul role="listbox" aria-label="Dashboards found" className="tile-properties__found">
+              {found.map((item) => (
+                <li
+                  key={item.id}
+                  role="option"
+                  aria-selected={target?.kind === 'dashboard' && target.dashboardId === item.id}
+                  tabIndex={0}
+                  onClick={() => {
+                    link({
+                      target: {
+                        kind: 'dashboard',
+                        dashboardId: item.id,
+                        title: item.title,
+                        passFilters: target?.kind === 'dashboard' && target.passFilters === true,
+                      },
+                    });
+                    setSearch('');
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      event.currentTarget.click();
+                    }
+                  }}
+                >
+                  {item.title}
+                </li>
+              ))}
+            </ul>
+          )}
+          <label className="tile-properties__check">
+            <input
+              id={ids.pass}
+              type="checkbox"
+              checked={target?.kind === 'dashboard' && target.passFilters === true}
+              disabled={target?.kind !== 'dashboard'}
+              onChange={(event) => {
+                if (target?.kind === 'dashboard')
+                  link({ target: { ...target, passFilters: event.target.checked } });
+              }}
+            />
+            Pass the current filters
+          </label>
+        </>
+      )}
+    </div>
+  );
 }
 
 /** Bytes as base64, in chunks: one spread of 2 MB would overflow the call stack. */

@@ -1002,10 +1002,21 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - `e2e/tiles.spec.ts` (2), on the real app: added from the Add panel; a text file and an oversized PNG refused; a real 1×1 PNG uploaded and decoded (`naturalWidth` 1); warned until given alternative text; after save and reload, shown as an image named by it. The server refuses a renamed file sent straight to it, and serves an accepted PNG back byte for byte.
   - **Known:** direction.md says an image tile "has no tile chrome" in view mode. The tile still has its border and padding, which no criterion checks. Images of a deleted tile stay in the table.
   - **Done 2026-09-21. AC-063 ticked** — `e2e/tiles.spec.ts`, with `ImageTile.test.tsx` and both packages' rule tests.
-- [ ] T070 (AC-064) Open a link tile's target, carrying filters to a dashboard and restricting URLs to http and https
+- [x] T070 (AC-064) Open a link tile's target, carrying filters to a dashboard and restricting URLs to http and https
   - Files: `packages/web/src/dashboard/tiles/LinkTile.tsx`, `packages/web/src/dashboard/tiles/LinkTile.test.tsx`
   - Failing test: `LinkTile.test.tsx`: a dashboard target opens with the current filters when the option is on, and a `javascript:` or `file:` URL is refused while http(s) opens in a new tab (AC-064).
   - Depends on: T064, T087
+  - **Built 2026-09-21.** Files as planned, plus: `dashboard/model/document.ts` (`LinkSettings` on a tile); `dashboard/edit/TileProperties.tsx` (the link's Properties); `dashboard/DashboardView.tsx`; `filters/url.ts` (`adoptValues`); `filters/apply.ts` (`fits` exported); `filters/url.test.ts`; `shell/styles.ts`; `e2e/tiles.spec.ts`.
+    - **Settings** (direction.md §2): a label (the tile's text); a style of Button, Primary or Text link; and a target, either a dashboard, found by title with only dashboards offered, with "Pass the current filters", or a web address.
+    - **Web addresses** are taken only if absolute http or https (`webAddressProblem`). Checked when the field is left, so a half-typed address isn't refused mid-word. A refused one is named in the panel and never stored. The tile checks again when drawn, so an address that reached the document another way (a hand edit, an import) is shown as plain text, not a link. Opened in a new tab with `rel="noopener noreferrer"`.
+    - **Passing the filters.** The link carries the filter values as the target's `filters` URL parameter (T087's form). The target's filters have ids of their own, so on opening it takes each value onto its own filter on the same field, where that filter's widget can hold it (`adoptValues`), and writes the URL back in its own terms. A value for a field it doesn't filter on is dropped.
+    - **While editing** a link goes nowhere: clicking selects the tile.
+  - **Tests, red first:**
+    - `LinkTile.test.tsx` (8): http/https accepted; `javascript:` in either case, `file:`, `data:`, `ftp:`, `mailto:`, protocol-relative and bare hosts refused; a web address opens in a new tab with `noopener noreferrer`; a stored `javascript:` target is not a link; a dashboard target carries the filters when told to and not otherwise; no link while editing; through the dashboard's Properties, a `javascript:` address refused and an https one saved; a dashboard found by title (a chart in the results not offered), with the filters passed and the Primary style, saved.
+    - `url.test.ts`: values from another dashboard taken onto this one's filters on the same fields, dropping a field it lacks and a value its widget cannot hold.
+    - `e2e/tiles.spec.ts` (2), on the real app: dashboard A, status "shipped" set, links to dashboard B, which opens with its own status filter ticked, the chart narrowed to one row, and its URL naming its own filter. A's web-address link has the address, `_blank` and `noopener noreferrer`. And in edit mode a `javascript:` address is refused, and after saving nothing is a link and no target is stored.
+  - **Full runs:** typecheck and lint clean (the existing DataTable warning aside); 1,449 unit tests and 600 browser runs passed.
+  - **Done 2026-09-21. AC-064 ticked** — `e2e/tiles.spec.ts`, with `LinkTile.test.tsx` and `url.test.ts`.
 - [x] T071 (AC-065) Persist the layout, tile settings, dashboard settings and marking definitions on save
   - Files: `packages/api/src/repos/dashboards.ts`, `packages/web/src/dashboard/edit/save.ts`, `packages/web/src/dashboard/edit/save.test.ts`
   - Done 2026-09-20. AC-065 ticked, and **all three things T023 left here are closed** — see below.

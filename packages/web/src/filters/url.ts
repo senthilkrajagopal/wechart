@@ -1,4 +1,11 @@
-import { DATE_PRESETS, valueKeyOf, type FilterValue, type FilterValues } from './model';
+import { fits } from './apply';
+import {
+  DATE_PRESETS,
+  valueKeyOf,
+  type DashboardFilter,
+  type FilterValue,
+  type FilterValues,
+} from './model';
 
 /**
  * Filter values in the dashboard's URL (AC-081), so opening the URL reproduces
@@ -13,6 +20,37 @@ export interface SearchFilter {
   readonly id: string;
   readonly member: string;
   readonly value: FilterValue;
+}
+
+/**
+ * Values from the URL, taken onto this dashboard's filters (AC-064). A value
+ * set here keeps its filter; one from another dashboard — a link tile passing
+ * its filters on — goes to this dashboard's filter on the same field, if that
+ * filter can hold it. Anything else is dropped: a value for a field this
+ * dashboard does not filter on has nowhere to go.
+ */
+export function adoptValues(
+  filters: readonly DashboardFilter[],
+  values: FilterValues,
+): FilterValues {
+  const adopted: Record<string, FilterValue> = {};
+  const unclaimed: [member: string, value: FilterValue][] = [];
+  const own = new Set(filters.map(valueKeyOf));
+  for (const [key, value] of Object.entries(values)) {
+    if (own.has(key)) adopted[key] = value;
+    else unclaimed.push([key.slice(key.indexOf(' ') + 1), value]);
+  }
+  for (const filter of filters) {
+    const key = valueKeyOf(filter);
+    if (key in adopted || filter.member === undefined) continue;
+    const at = unclaimed.findIndex(
+      ([member, value]) => member === filter.member && fits(filter.widget, value),
+    );
+    if (at < 0) continue;
+    const [, value] = unclaimed.splice(at, 1)[0] ?? [];
+    if (value !== undefined) adopted[key] = value;
+  }
+  return adopted;
 }
 
 /** Whether two sets of values say the same, whatever order they were set in. */
