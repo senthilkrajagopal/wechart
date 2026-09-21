@@ -244,6 +244,45 @@ describe('number formats (AC-046)', () => {
     });
   });
 
+  it('reads the format Cube means: its d3 specifier, a currency code, a time pattern (T201)', () => {
+    // As Cube v1.7.42 reports them (research/cube/data-modeling.md, "What
+    // `/v1/meta` reports for each format").
+    const meta = {
+      cubes: [
+        {
+          name: 'probe',
+          measures: [
+            {
+              name: 'probe.pct_1',
+              format: { type: 'custom-numeric', value: '.1~%', alias: 'percent_1' },
+              formatDescription: { name: 'percent_1', specifier: '.1~%' },
+            },
+            {
+              name: 'probe.eur',
+              format: 'currency',
+              formatDescription: { name: 'currency', specifier: '$,.2~f', currency: 'EUR' },
+              currency: 'EUR',
+            },
+            // No format declared: Cube's plain number, which is the default.
+            { name: 'probe.plain', formatDescription: { name: 'number', specifier: ',.2~f' } },
+          ],
+          dimensions: [
+            { name: 'probe.ordered', format: { type: 'custom-time', value: '%Y-%m' } },
+            // A number dimension with no format of its own — an id, say — is
+            // left as it is, not grouped by Cube's default.
+            { name: 'probe.id_plain', formatDescription: { name: 'number', specifier: ',.2~f' } },
+          ],
+        },
+      ],
+    };
+
+    expect(formatsFrom(meta)).toEqual({
+      'probe.pct_1': { specifier: '.1~%' },
+      'probe.eur': { specifier: '$,.2~f', currency: 'EUR' },
+      'probe.ordered': { time: '%Y-%m' },
+    });
+  });
+
   it('has none while the model has not arrived', () => {
     expect(formatsFrom(undefined)).toEqual({});
   });

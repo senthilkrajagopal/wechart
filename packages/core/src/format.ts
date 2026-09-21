@@ -6,15 +6,34 @@
  * and follows it everywhere, so the same number never appears as `1234` on an
  * axis and `$1,234.00` in a table of the same chart.
  *
- * Cube's `format` vocabulary is wider than anything a chart can honour:
- * `imageUrl`, `link`, `id` and d3 specifiers are all legal
- * (`research/cube/data-modeling.md`). The ones with a visual meaning here are
- * currency and percent; the rest fall back to a plain grouped number, because
- * refusing to draw would be worse than drawing a number.
+ * A number is written by the d3-format specifier Cube itself reports for its
+ * member — `formatDescription.specifier` in `/v1/meta`, for every named format,
+ * custom specifier and the plain default alike (observed:
+ * research/cube/data-modeling.md, "What `/v1/meta` reports for each format").
+ * The user chose Cube's own formats over wechart's, 2026-09-21 (T201), so a
+ * number reads the same here as in anything else that honours the model.
+ * `imageUrl` and `link` mean nothing to an axis, and fall back to the plain
+ * number, because refusing to draw would be worse than drawing a number.
  */
+import { format as d3Format, formatLocale } from 'd3-format';
+import { timeFormatLocale } from 'd3-time-format';
 
-/** Member name to the `format` string `/v1/meta` reports, where there is one. */
-export type MemberFormats = Readonly<Record<string, string>>;
+/**
+ * A member's format as `/v1/meta` reports it: the d3 specifier Cube means for
+ * a number, the currency code a `$` in it stands for, and a time member's
+ * declared strftime pattern.
+ */
+export interface MemberFormat {
+  readonly specifier?: string;
+  readonly currency?: string;
+  readonly time?: string;
+}
+
+/**
+ * Member name to its format. A string is a format by name — `currency`,
+ * `percent`, `id` — or a d3 specifier, as a spec written by hand gives it.
+ */
+export type MemberFormats = Readonly<Record<string, string | MemberFormat>>;
 
 /** Cube's predefined time granularities (research/cube/data-apis.md). */
 export type TimeGranularity =
@@ -54,27 +73,69 @@ export function granularityOf(
     : undefined;
 }
 
-const CURRENCY = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-});
+/**
+ * The specifiers Cube reports for its base formats, observed, for a format
+ * given by name. What `/v1/meta` sends is used as sent; these only read a
+ * spec written by hand.
+ */
+const NAMED: Readonly<Record<string, string>> = {
+  number: ',.2~f',
+  percent: '.2~%',
+  currency: '$,.2~f',
+  abbr: '.2~s',
+  accounting: '(,.2~f',
+  decimal: ',.2~f',
+  id: '.0f',
+};
 
-const PERCENT = new Intl.NumberFormat('en-US', {
-  style: 'percent',
-  maximumFractionDigits: 2,
-});
+/** Cube's plain number: what a member with no format of its own is written as. */
+const PLAIN = NAMED['number'] ?? ',.2~f';
 
-const PLAIN = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
-
-function forFormat(format: string | undefined): Intl.NumberFormat {
-  switch (format) {
-    case 'currency':
-      return CURRENCY;
-    case 'percent':
-      return PERCENT;
-    default:
-      return PLAIN;
+/**
+ * en-US, as everything else wechart writes, with the hyphen-minus it has
+ * always written rather than d3's U+2212, so a negative copies and searches
+ * as a number. A currency code swaps in its own symbol, which Intl names.
+ */
+function localeFor(currency: string | undefined) {
+  let symbol = '$';
+  if (currency !== undefined && currency !== 'USD') {
+    try {
+      symbol =
+        new Intl.NumberFormat('en-US', { style: 'currency', currency })
+          .formatToParts(0)
+          .find((part) => part.type === 'currency')?.value ?? currency;
+    } catch {
+      symbol = currency;
+    }
   }
+  return formatLocale({
+    decimal: '.',
+    thousands: ',',
+    grouping: [3],
+    currency: [symbol, ''],
+    minus: '-',
+  });
+}
+
+/** Formatters by specifier and currency, made once each. */
+const made = new Map<string, (value: number) => string>();
+
+function numberFormatter(format: string | MemberFormat | undefined): (value: number) => string {
+  const specifier =
+    typeof format === 'string' ? (NAMED[format] ?? format) : (format?.specifier ?? PLAIN);
+  const currency = typeof format === 'string' ? undefined : format?.currency;
+  const key = `${currency ?? ''} ${specifier}`;
+  const known = made.get(key);
+  if (known !== undefined) return known;
+  let write: (value: number) => string;
+  try {
+    write = localeFor(currency).format(specifier);
+  } catch {
+    // Not a specifier d3 can read: Cube's plain number instead.
+    write = d3Format(PLAIN);
+  }
+  made.set(key, write);
+  return write;
 }
 
 /**
@@ -101,11 +162,24 @@ export function formatterFor(
   granularities: MemberGranularities = {},
 ): (value: unknown) => string {
   /**
-   * A time member is written by the granularity it was asked at (AC-188).
-   * The model's own format for a time member is a strftime pattern, which
-   * T201 honours; until then the granularity's form stands in for it rather
-   * than the raw timestamp AC-188 rules out.
+   * A time member's own format from the model wins (AC-188's "unless the
+   * member's model format says otherwise"): a strftime pattern, written by
+   * d3-time-format as Cube's own client writes it (T201). Only one with a
+   * directive — a time dimension's `format: link` arrives as the pattern
+   * "link", which would print that word for every value.
    */
+  const own = formats[member] ?? formats[withoutGranularity(member)];
+  const pattern = typeof own === 'object' ? own.time : undefined;
+  if (pattern !== undefined && /%[^%]/.test(pattern)) {
+    const write = timePattern(pattern);
+    return (value) => {
+      if (value === null || value === undefined || value === '') return '';
+      const date = dateOf(String(value));
+      return date === undefined ? String(value) : write(date);
+    };
+  }
+
+  /** Otherwise a time member is written by the granularity it was asked at. */
   const granularity = granularityOf(member, granularities);
   if (granularity !== undefined) {
     return (value) =>
@@ -114,15 +188,14 @@ export function formatterFor(
         : formatTime(String(value), granularity);
   }
 
-  const format = forFormat(formats[member]);
-  // An id is not a quantity: grouped, order 1234 read "1,234" (T195).
-  const isId = formats[member] === 'id';
+  // An id's specifier is Cube's `.0f`: never grouped, so order 1234 does not
+  // read "1,234" (T195).
+  const write = numberFormatter(formats[member]);
 
   return (value) => {
     if (value === null || value === undefined || value === '') return '';
-    if (isId) return String(value);
     const numeric = Number(value);
-    return Number.isFinite(numeric) ? format.format(numeric) : String(value);
+    return Number.isFinite(numeric) ? write(numeric) : String(value);
   };
 }
 
@@ -146,6 +219,71 @@ const MONTH = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   year: 'numeric',
 });
+
+/** Cube's timestamp as the instant it names, read in UTC; nothing if it is not one. */
+function dateOf(text: string): Date | undefined {
+  const match = STAMP.exec(text);
+  if (match === null) return undefined;
+  const [, year = '', month = '', day = '', hour = '00', minute = '00', second = '00'] = match;
+  return new Date(
+    Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+    ),
+  );
+}
+
+/** The member a `member.<granularity>` column stands beside, or the column itself. */
+function withoutGranularity(column: string): string {
+  const dot = column.lastIndexOf('.');
+  return dot > 0 && GRANULARITY_NAMES.includes(column.slice(dot + 1))
+    ? column.slice(0, dot)
+    : column;
+}
+
+/**
+ * en-US, as everything else wechart writes: a locale of its own rather than
+ * d3-time-format's default, which any importer can replace for all
+ * (research/d3-time-format.md, gotcha 10).
+ */
+const TIME = timeFormatLocale({
+  dateTime: '%x, %X',
+  date: '%-m/%-d/%Y',
+  time: '%-I:%M:%S %p',
+  periods: ['AM', 'PM'],
+  days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+  shortDays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+  months: [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ],
+  shortMonths: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+});
+
+/** Patterns by text, each made once; written in UTC, as the value is read (gotcha 1). */
+const patterns = new Map<string, (date: Date) => string>();
+
+function timePattern(pattern: string): (date: Date) => string {
+  const known = patterns.get(pattern);
+  if (known !== undefined) return known;
+  const write = TIME.utcFormat(pattern);
+  patterns.set(pattern, write);
+  return write;
+}
 
 /** A time value as AC-188 writes its granularity; text that is not a time, as it came. */
 function formatTime(text: string, granularity: TimeGranularity): string {

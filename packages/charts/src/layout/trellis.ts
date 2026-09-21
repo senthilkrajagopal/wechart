@@ -15,7 +15,7 @@
 import { distinctValues, formatterFor, memberOn, type RenderSpec } from '@wechart/core';
 
 import { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
-import { nameWriter, timeWriter } from '../time';
+import { modelWriter, nameWriter } from '../modelWriter';
 
 export function isTrellisType(chartType: string): boolean {
   return chartType === 'trellis';
@@ -98,7 +98,7 @@ export function trellisOption(spec: RenderSpec): EChartsOption {
   // A panel of time is titled, and a category of time labelled, by its
   // granularity (AC-188); each keeps its raw value as its name.
   const panelTitle = nameWriter(spec, facet);
-  const categoryTime = timeWriter(spec, category);
+  const categoryTime = modelWriter(spec, category);
 
   return {
     animation: false,

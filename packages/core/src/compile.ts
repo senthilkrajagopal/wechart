@@ -17,6 +17,7 @@
 
 import type { ChartDefinition, ChartDocument } from './chart-document';
 import { granularitiesOf } from './chart-spec';
+import type { MemberFormats } from './format';
 import { CHANNELS, type ChartType, type Encoding, type RenderSpec } from './render-spec';
 import { applySort } from './sort';
 import { applyTopN } from './topN';
@@ -31,7 +32,7 @@ export interface CompileOptions {
   readonly palette?: readonly string[];
   readonly surface?: string;
   /** What each member declares in the Cube model (AC-046). */
-  readonly formats?: Readonly<Record<string, string>>;
+  readonly formats?: MemberFormats;
 }
 
 /**

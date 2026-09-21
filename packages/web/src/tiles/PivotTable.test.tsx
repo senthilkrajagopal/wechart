@@ -134,6 +134,33 @@ describe('totals', () => {
   });
 });
 
+describe('formats from the model (AC-046, T201)', () => {
+  it('writes each cell in its measure’s format, and a header in its dimension’s', () => {
+    const BAND = 'orders.price_band';
+    render(
+      <PivotTable
+        spec={spec({
+          encoding: { row: [BAND], column: [STATUS], y: [COUNT] },
+          rows: [
+            { [BAND]: 10, [STATUS]: 'paid', [COUNT]: 0.25 },
+            { [BAND]: 20, [STATUS]: 'paid', [COUNT]: 0.5 },
+          ],
+          formats: { [COUNT]: { specifier: '.1~%' }, [BAND]: { specifier: '$,.0f' } },
+        })}
+      />,
+    );
+
+    expect(screen.getAllByTestId('pivot-row-header').map((header) => header.textContent)).toEqual([
+      '$10',
+      '$20',
+    ]);
+    expect(screen.getAllByTestId('pivot-row-total').map((cell) => cell.textContent)).toEqual([
+      '25%',
+      '50%',
+    ]);
+  });
+});
+
 describe('headers of time (AC-188)', () => {
   it('write each time by its granularity, on rows and on columns', () => {
     const AT = 'orders.ordered_at';

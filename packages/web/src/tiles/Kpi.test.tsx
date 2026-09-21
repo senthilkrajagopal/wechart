@@ -28,6 +28,17 @@ describe('a KPI with a value', () => {
     expect(screen.getByTestId('kpi-value').textContent).toBe('1,234');
   });
 
+  it('writes the number in its member’s format from the model (AC-046, T201)', () => {
+    // percent_1, as `/v1/meta` reports it: Cube's specifier `.1~%`.
+    render(
+      <Kpi
+        spec={spec({ rows: [{ [COUNT]: 0.1234 }], formats: { [COUNT]: { specifier: '.1~%' } } })}
+      />,
+    );
+
+    expect(screen.getByTestId('kpi-value').textContent).toBe('12.3%');
+  });
+
   it('names the measure underneath it, so the number means something', () => {
     render(<Kpi spec={spec()} />);
 

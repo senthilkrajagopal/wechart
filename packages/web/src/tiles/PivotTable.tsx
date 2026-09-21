@@ -60,12 +60,13 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
   const show = (value: number | null, measureIndex: number) =>
     formatValue(value, measures[measureIndex] ?? '', spec.formats ?? {});
   /**
-   * A header of time is written by its granularity (AC-188). Only a time
-   * member's: another header is shown as it came, since running a numeric
-   * dimension through the number formatter would group an id into "1,234".
+   * A header the model says how to write: a time by its granularity (AC-188),
+   * or a dimension with a format of its own (AC-046, T201). Any other is shown
+   * as it came, since Cube's plain number would group an id into "1,234".
    */
   const headerText = (member: string | undefined, value: string) =>
-    member !== undefined && spec.granularities?.[member] !== undefined
+    member !== undefined &&
+    (spec.granularities?.[member] !== undefined || spec.formats?.[member] !== undefined)
       ? formatValue(value, member, spec.formats ?? {}, spec.granularities)
       : value;
   const rowMembers = membersOn(spec.encoding, 'row');

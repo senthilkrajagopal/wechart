@@ -4,6 +4,7 @@ import {
   toChartSpec,
   toCubeQuery,
   type ChartDocument,
+  type MemberFormats,
   type RenderSpec,
 } from '@wechart/core';
 
@@ -57,7 +58,7 @@ export type LoadRows = (query: Record<string, unknown>) => Promise<Record<string
  * which for a `percent` measure changes how large the number looks, not only
  * its style. Recorded on T194 as an open question.
  */
-export function formatsFrom(meta: unknown): Readonly<Record<string, string>> {
+export function formatsFrom(meta: unknown): MemberFormats {
   try {
     return formatsOf(meta);
   } catch {
@@ -78,7 +79,7 @@ export function formatsFrom(meta: unknown): Readonly<Record<string, string>> {
  */
 export function withFormats(
   specs: Readonly<Record<string, RenderSpec>>,
-  formats: Readonly<Record<string, string>>,
+  formats: MemberFormats,
 ): Readonly<Record<string, RenderSpec>> {
   return Object.fromEntries(Object.entries(specs).map(([id, spec]) => [id, { ...spec, formats }]));
 }

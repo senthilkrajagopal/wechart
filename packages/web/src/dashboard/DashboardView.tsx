@@ -1,4 +1,4 @@
-import type { ChartDocument, RenderSpec } from '@wechart/core';
+import type { ChartDocument, MemberFormats, RenderSpec } from '@wechart/core';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { TileSize } from '../editor/PreviewFrame';
@@ -124,7 +124,7 @@ export interface DashboardViewProps {
    * after any chart edited from a tile has replaced its saved spec, so a
    * drafted tile is formatted like every other.
    */
-  readonly formats?: Readonly<Record<string, string>> | undefined;
+  readonly formats?: MemberFormats | undefined;
   /**
    * An edit has begun — an edit session, or the settings page opened in view
    * mode — for the page, which checks that edit's save against the version

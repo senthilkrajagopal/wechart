@@ -9,7 +9,7 @@
 import { formatterFor, membersOn, type RenderSpec } from '@wechart/core';
 
 import type { EChartsOption } from './theme';
-import { timeWriter } from './time';
+import { modelWriter } from './modelWriter';
 
 export type NumberFormat = 'auto' | 'compact' | 'full' | 'percent' | 'currency';
 
@@ -153,7 +153,10 @@ export function applyAxes(option: EChartsOption, spec: RenderSpec): EChartsOptio
    */
   const measures = membersOn(spec.encoding, 'y');
   const formats = spec.formats ?? {};
-  const oneFormat = measures.every((member) => formats[member] === formats[measures[0] ?? '']);
+  // Compared by what they say: each member's format read from the model is
+  // an object of its own (T201), so two alike are equal, not identical.
+  const declared = (member: string | undefined) => JSON.stringify(formats[member ?? ''] ?? null);
+  const oneFormat = measures.every((member) => declared(member) === declared(measures[0]));
 
   /**
    * Only on a value axis. A heatmap has none — both its axes are dimensions —
@@ -185,7 +188,7 @@ export function applyAxes(option: EChartsOption, spec: RenderSpec): EChartsOptio
   const timeFormatOf = (key: 'xAxis' | 'yAxis', settings: AxisSettings | undefined) => {
     if (!isCategoryAxis(key) || settings?.numberFormat !== undefined) return undefined;
     const channel = spec.chartType === 'heatmap' && key === 'yAxis' ? 'y' : 'x';
-    const write = timeWriter(spec, membersOn(spec.encoding, channel)[0]);
+    const write = modelWriter(spec, membersOn(spec.encoding, channel)[0]);
     if (write === undefined) return undefined;
     return {
       axisLabel: { formatter: write },

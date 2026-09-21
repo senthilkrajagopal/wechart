@@ -11,7 +11,7 @@
  * Nothing here mentions ECharts (CLAUDE.md), and no colour is chosen here: the
  * palette is handed in, so @wechart/charts never imports the theme.
  */
-import type { MemberGranularities } from './format';
+import type { MemberFormats, MemberGranularities } from './format';
 
 /**
  * Every chart type wechart draws — exactly the list AC-037 names.
@@ -132,7 +132,7 @@ export interface RenderSpec {
    * a table cell and a tooltip of the same chart cannot disagree about how a
    * number is written.
    */
-  readonly formats?: Readonly<Record<string, string>>;
+  readonly formats?: MemberFormats;
   /**
    * Each time member's granularity in the query the rows answer (AC-188), so
    * every place a time value is written can write it by its bucket — "Jan

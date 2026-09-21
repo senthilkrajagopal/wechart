@@ -63,6 +63,7 @@ export {
   formatValue,
   formatterFor,
   granularityOf,
+  type MemberFormat,
   type MemberFormats,
   type MemberGranularities,
   type TimeGranularity,

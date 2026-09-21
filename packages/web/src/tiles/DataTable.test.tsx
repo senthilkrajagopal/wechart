@@ -78,7 +78,8 @@ describe('member formats (AC-046)', () => {
       />,
     );
 
-    expect(screen.getByText('$1,234.50')).toBeTruthy();
+    // Cube's currency format, `$,.2~f` (T201, the user's choice).
+    expect(screen.getByText('$1,234.5')).toBeTruthy();
   });
 
   it('leaves a member with no declared format as a plain number', () => {

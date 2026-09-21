@@ -466,3 +466,24 @@ test('a chart edited from its tile keeps its number format there', async ({ page
       .first(),
   ).toBeVisible();
 });
+
+test('the editor’s results drawer writes a value in its member’s format (AC-046, T201)', async ({
+  page,
+}) => {
+  /**
+   * T195's review: nothing showed the editor passes the model's formats to
+   * its drawer. The seeded revenue chart sums a `currency` measure, which
+   * Cube writes as `$,.2~f`.
+   */
+  await page.goto('/explore/dashboards/seed-dashboard-formats');
+  await expect(
+    page.locator('[data-tile="tile-revenue"]').getByTestId('chart-canvas'),
+  ).toBeVisible();
+  await page.getByTestId('edit-chart-tile-revenue').click();
+  await expect(overlay(page)).toBeVisible();
+
+  await overlay(page).getByRole('button', { name: 'Results' }).click();
+
+  const cells = overlay(page).getByTestId('drawer-result-rows').locator('td');
+  await expect(cells.filter({ hasText: /^\$[\d,]+(\.\d{1,2})?$/ }).first()).toBeVisible();
+});

@@ -7,6 +7,7 @@
  * would bury the one field most charts are built around, so they are their own
  * group here.
  */
+import type { MemberFormat } from '@wechart/core';
 
 export type MemberKind = 'measure' | 'dimension' | 'timeDimension' | 'segment';
 
@@ -96,13 +97,38 @@ export function membersOf(meta: unknown, cubeName: string): Member[] {
  * full (`orders.total_amount`), and a saved chart opened before its cube is
  * selected should still know how to write its numbers.
  */
-export function formatsOf(meta: unknown): Record<string, string> {
-  const formats: Record<string, string> = {};
+export function formatsOf(meta: unknown): Record<string, string | MemberFormat> {
+  const formats: Record<string, string | MemberFormat> = {};
 
   for (const cube of (meta as { cubes?: RawCube[] } | null)?.cubes ?? []) {
     for (const member of [...(cube.measures ?? []), ...(cube.dimensions ?? [])]) {
-      const { name, format } = member as RawMember & { format?: unknown };
-      if (typeof name === 'string' && typeof format === 'string') formats[name] = format;
+      const { name, format, formatDescription, currency } = member as RawMember & {
+        format?: unknown;
+        formatDescription?: { specifier?: unknown; currency?: unknown };
+        currency?: unknown;
+      };
+      /**
+       * Only a member that declares a format. One that does not is written
+       * as Cube's plain number anyway, and a number *dimension* with none —
+       * an id — is left as it came rather than grouped (T195).
+       */
+      if (typeof name !== 'string' || format === undefined || format === null) continue;
+      const time = (format as { type?: unknown; value?: unknown }).type === 'custom-time';
+      const pattern = (format as { value?: unknown }).value;
+      if (time && typeof pattern === 'string') {
+        formats[name] = { time: pattern };
+        continue;
+      }
+      /**
+       * The d3 specifier Cube reports for the format, whether named, custom
+       * or `currency_N` (T201; research/cube/data-modeling.md, "What
+       * `/v1/meta` reports for each format") — Cube's meaning, not a copy.
+       */
+      const specifier = formatDescription?.specifier;
+      const code = formatDescription?.currency ?? currency;
+      if (typeof specifier === 'string')
+        formats[name] = { specifier, ...(typeof code === 'string' ? { currency: code } : {}) };
+      else if (typeof format === 'string') formats[name] = format;
     }
   }
 

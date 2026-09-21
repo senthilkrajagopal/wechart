@@ -14,7 +14,7 @@
 import { distinctValues, memberOn, seriesOf, type ChartType, type RenderSpec } from '@wechart/core';
 
 import type { EChartsOption } from './theme';
-import { timeWriter } from './time';
+import { modelWriter } from './modelWriter';
 
 /** Types whose colour says how much rather than which. */
 const COLOUR_IS_A_SCALE: readonly ChartType[] = ['heatmap'];
@@ -56,7 +56,7 @@ export function legendFor(spec: RenderSpec): EChartsOption {
   const named = COLOURED_BY_CATEGORY.includes(spec.chartType)
     ? memberOn(spec.encoding, 'x')
     : memberOn(spec.encoding, 'color');
-  const write = timeWriter(spec, named);
+  const write = modelWriter(spec, named);
 
   return {
     legend: {

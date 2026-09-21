@@ -21,7 +21,7 @@ import {
 } from '@wechart/core';
 
 import type { EChartsOption } from './theme';
-import { nameWriter } from './time';
+import { nameWriter } from './modelWriter';
 
 /** Types where a shared crosshair reads better than a per-mark hit. */
 const CROSSHAIR_TYPES: readonly ChartType[] = ['line', 'multiLine', 'area', 'stackedArea', 'combo'];

@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from '@wechart/core';
 
-import { optionFor } from './optionFor';
+import { DRAWABLE_TYPES, optionFor } from './optionFor';
 import { tooltipFor } from './tooltip';
 import { labelsOf, renderToSvg } from './testing/renderToSvg';
 
@@ -126,6 +126,8 @@ describe('the axis', () => {
 
     // The categories are shown as they are…
     expect(labels).toContain('1234');
+    // Nor as money, in Cube's currency format ("$1,234", T201) or with pennies.
+    expect(labels).not.toContain('$1,234');
     expect(labels).not.toContain('$1,234.00');
     // …and the values as money.
     expect(labels.some((label) => /^\$[\d,]+/.test(label))).toBe(true);
@@ -154,7 +156,8 @@ describe('found at T195’s review', () => {
       axisPointer: { label: { formatter: (params: { value: unknown }) => string } };
     };
 
-    expect(yAxis.axisPointer.label.formatter({ value: 4000 })).toBe('$4,000.00');
+    // Cube's currency, `$,.2~f`: trailing zeros trimmed (T201, the user's choice).
+    expect(yAxis.axisPointer.label.formatter({ value: 4000 })).toBe('$4,000');
   });
 
   it('keeps the measure’s format when the labels are rotated', () => {
@@ -187,7 +190,7 @@ describe('found at T195’s review', () => {
       seriesIndex: 1,
     });
 
-    expect(text).toBe('paid<br/>east: $76,900.00');
+    expect(text).toBe('paid<br/>east: $76,900');
   });
 
   it('puts no one measure’s format on an axis shared by measures formatted differently', () => {
@@ -271,7 +274,7 @@ describe('the tooltip', () => {
   it('writes the value the way its member declares', () => {
     const text = tooltipOf(spec)({ seriesName: AMOUNT, name: 'paid', value: 1000 });
 
-    expect(text).toContain('$1,000.00');
+    expect(text).toContain('$1,000');
   });
 
   it('escapes what it interpolates, because the formatter returns raw HTML', () => {
@@ -302,20 +305,20 @@ describe('the tooltip', () => {
 
     const text = tooltipOf(heatmap)({ seriesName: '', name: '', value: [1, 1, 250] });
 
-    expect(text).toBe(`refunded · east<br/>${AMOUNT}: $250.00`);
+    expect(text).toBe(`refunded · east<br/>${AMOUNT}: $250`);
   });
 
   it('writes both of a scatter point’s measures, each its own way', () => {
     // Two value axes, two measures: x's format is not y's.
     const text = tooltipOf(scatter)({ seriesName: SHARE, name: '', value: [1000, 0.25] });
 
-    expect(text).toBe(`${SHARE}<br/>${AMOUNT}: $1,000.00<br/>${SHARE}: 25%`);
+    expect(text).toBe(`${SHARE}<br/>${AMOUNT}: $1,000<br/>${SHARE}: 25%`);
   });
 
   it('writes a trellis panel’s value, naming the panel', () => {
     const text = tooltipOf(trellis)({ seriesName: 'west', name: 'paid', value: 1000 });
 
-    expect(text).toBe(`paid<br/>west: $1,000.00`);
+    expect(text).toBe(`paid<br/>west: $1,000`);
   });
 
   it('is absent for the types drawn as DOM, which have their own', () => {
@@ -324,5 +327,114 @@ describe('the tooltip', () => {
     for (const chartType of ['kpi', 'table', 'pivot'] as const) {
       expect(tooltipFor({ ...spec, chartType })).toEqual({});
     }
+  });
+});
+
+/**
+ * T201 / AC-046, for every chart type rather than the ones someone remembered
+ * (T052 tested a vertical bar): each drawable type, given a currency measure,
+ * writes it as money on its value axis and in its tooltip. A type added to
+ * `DRAWABLE_TYPES` is covered without anyone adding it here.
+ */
+const REGION = 'orders.region';
+const ROWS = [
+  { [STATUS]: 'paid', [REGION]: 'west', [AMOUNT]: 1000, [SHARE]: 0.25 },
+  { [STATUS]: 'refunded', [REGION]: 'east', [AMOUNT]: 4000, [SHARE]: 0.75 },
+];
+
+function everyTypeSpec(chartType: (typeof DRAWABLE_TYPES)[number]): RenderSpec {
+  const encoding: RenderSpec['encoding'] =
+    chartType === 'scatter'
+      ? { x: [SHARE], y: [AMOUNT] }
+      : chartType === 'heatmap'
+        ? { x: [STATUS], y: [REGION], color: [AMOUNT] }
+        : chartType === 'trellis'
+          ? { facet: [REGION], x: [STATUS], y: [AMOUNT] }
+          : { x: [STATUS], y: [AMOUNT] };
+  return {
+    chartType,
+    encoding,
+    rows: ROWS,
+    palette: ['#123456', '#654321'],
+    formats: { [AMOUNT]: 'currency', [SHARE]: 'percent' },
+  };
+}
+
+/** Types whose value is a colour or an area, not a position on an axis. */
+const NO_VALUE_AXIS: readonly string[] = ['pie', 'donut', 'treemap', 'heatmap'];
+
+describe('every drawable type', () => {
+  it.each(DRAWABLE_TYPES)('writes a %s’s measure as money in its tooltip', (chartType) => {
+    const value =
+      chartType === 'heatmap' ? [0, 0, 4000] : chartType === 'scatter' ? [0.75, 4000] : 4000;
+    const text = tooltipOf(everyTypeSpec(chartType))({
+      seriesName: AMOUNT,
+      name: 'refunded',
+      value,
+      seriesIndex: 0,
+    });
+
+    expect(text).toContain('$4,000');
+  });
+
+  it.each(DRAWABLE_TYPES.filter((type) => !NO_VALUE_AXIS.includes(type)))(
+    'writes a %s’s value axis as money',
+    (chartType) => {
+      const labels = labelsOf(renderToSvg(optionFor(everyTypeSpec(chartType)))).map(
+        (label) => label.text,
+      );
+
+      expect(labels.some((label) => /^\$[\d,.]+[KkM]?$/.test(label))).toBe(true);
+    },
+  );
+
+  it('shows data labels only with a formatter, on every type', () => {
+    // The guard above, over every type rather than a list kept by hand.
+    for (const chartType of DRAWABLE_TYPES) {
+      const series = optionFor(everyTypeSpec(chartType))['series'] as {
+        label?: { show?: boolean; formatter?: unknown };
+      }[];
+      for (const one of series) {
+        if (one.label?.show === true) expect(typeof one.label.formatter).toBe('function');
+        else expect(one.label?.show ?? false).toBe(false);
+      }
+    }
+  });
+});
+
+/**
+ * T201 / AC-046: a dimension's declared format on a chart, not only in a
+ * table (T195's review found tables alone honoured it). A number dimension
+ * with a format — here a price band as whole dollars — is written that way on
+ * the category axis, in the legend and in the tooltip's heading. One without
+ * a format is left as it came (T194's order ids, above).
+ */
+describe('a dimension’s declared format', () => {
+  const BAND = 'orders.price_band';
+  const banded = (chartType: RenderSpec['chartType'], encoding: RenderSpec['encoding']) =>
+    ({
+      chartType,
+      encoding,
+      rows: [
+        { [BAND]: 10, [STATUS]: 'paid', [AMOUNT]: 1 },
+        { [BAND]: 20, [STATUS]: 'refunded', [AMOUNT]: 2 },
+      ],
+      palette: ['#123456', '#654321'],
+      formats: { [BAND]: { specifier: '$,.0f' } },
+    }) satisfies RenderSpec;
+
+  it('writes its categories on the axis and in the tooltip’s heading', () => {
+    const drawn = banded('bar', { x: [BAND], y: [AMOUNT] });
+
+    expect(labelsOf(renderToSvg(optionFor(drawn))).map((label) => label.text)).toContain('$10');
+    expect(tooltipOf(drawn)({ seriesName: AMOUNT, name: '20', value: 2 })).toBe(
+      `$20<br/>${AMOUNT}: 2`,
+    );
+  });
+
+  it('writes the members of its split in the legend', () => {
+    const drawn = banded('groupedBar', { x: [STATUS], y: [AMOUNT], color: [BAND] });
+
+    expect(labelsOf(renderToSvg(optionFor(drawn))).map((label) => label.text)).toContain('$20');
   });
 });

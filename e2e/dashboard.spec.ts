@@ -986,7 +986,44 @@ test('a dashboard tile writes a currency measure as money, on its axis and in it
 
   // The table, by the measure's own column rather than by position: Cube
   // decides the order of the columns it returns.
-  await expect(await tableValue(tile, 'orders.total_amount')).toHaveText(/^\$[\d,]+\.\d{2}$/);
+  // Cube's own currency format, `$,.2~f`: up to two decimals, trailing zeros
+  // trimmed — the user chose Cube's formats over fixed pennies (T201).
+  await expect(await tableValue(tile, 'orders.total_amount')).toHaveText(/^\$[\d,]+(\.\d{1,2})?$/);
+});
+
+test('a dashboard tile’s tooltip writes a currency measure as money (AC-046, T201)', async ({
+  page,
+}) => {
+  await page.goto('/explore/dashboards/seed-dashboard-formats');
+  const tile = page.locator('[data-tile="tile-revenue"]');
+  const canvas = tile.getByTestId('chart-canvas');
+  await expect(canvas.locator('svg text').first()).toBeVisible();
+
+  // A mark to hover: the largest filled shape the chart drew.
+  const marks = await canvas.locator('svg path').evaluateAll((paths) =>
+    paths
+      .map((path) => {
+        const box = path.getBoundingClientRect();
+        const fill = path.getAttribute('fill') ?? 'none';
+        return {
+          x: box.x + box.width / 2,
+          y: box.y + box.height / 2,
+          area: box.width * box.height,
+          fill,
+        };
+      })
+      .filter((mark) => mark.fill !== 'none' && mark.fill !== 'transparent' && mark.area > 50)
+      .sort((a, b) => b.area - a.area),
+  );
+  const mark = marks[0];
+  expect(mark).toBeDefined();
+
+  // The tooltip's line is "<series>: <value>"; no axis label has the colon.
+  const line = tile.locator('div').filter({ hasText: /: \$[\d,]+(\.\d{1,2})?/ });
+  await expect(line).toHaveCount(0);
+  await page.mouse.move(mark?.x ?? 0, mark?.y ?? 0);
+
+  await expect(line.last()).toBeVisible();
 });
 
 test('a measure with no declared format stays a plain number on a tile', async ({ page }) => {

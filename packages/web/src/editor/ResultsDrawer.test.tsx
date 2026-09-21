@@ -106,7 +106,8 @@ describe('its values (AC-046)', () => {
     );
     // A member with no declared format is shown as it came — an id is not a
     // quantity, and "1,234" would misstate it.
-    expect(cells).toEqual(['1234', '$76,900.00', '25%']);
+    // Cube's currency format, `$,.2~f` (T201, the user's choice).
+    expect(cells).toEqual(['1234', '$76,900', '25%']);
   });
 
   /**

@@ -351,12 +351,50 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **`format: id`** was grouped ("1,234") in the drawer and the table tile; an id is now shown as it is (`formatValue`, `formatterFor`).
   - ~~Known, not fixed: a combo chart's measures share one value axis~~ — superseded above.
   - **AC-046 stays unticked.** What remains is **T201**.
-- [ ] T201 (AC-046) Honour the rest of Cube's format vocabulary, dimension formats on charts, and test every place for every chart type
+- [x] T201 (AC-046) Honour the rest of Cube's format vocabulary, dimension formats on charts, and test every place for every chart type
   - Files: `packages/core/src/format.ts`, `packages/core/src/format.test.ts`, `packages/web/src/editor/fields.ts`, `packages/charts/src/format-places.test.ts`, `packages/web/src/tiles/Kpi.test.tsx`, `packages/web/src/tiles/PivotTable.test.tsx`, `packages/web/src/editor/ChartEditor.test.tsx`
   - Failing test: `format.test.ts`: `percent_1`, `currency_0`, `abbr`, `accounting`, a declared currency code and a `custom-numeric` format object each render as Cube documents them; `format-places.test.ts`: every type in `DRAWABLE_TYPES` formats its value axis and tooltip (AC-046).
   - Depends on: T195
   - From T195's cold review (findings 5, 7, 8, 9): `format.ts` recognises only `currency` and `percent` exactly — named variants, d3 specifiers, time formats, the currency code and object formats (`editor/fields.ts` drops them) fall back to a plain number (`docs/research/cube/data-modeling.md` lists them); dimension formats reach tables but not chart axes, legends or tooltip headings; KPI and pivot formatting and the editor passing its formats to the drawer have no test; the data-label guard's list is hand-written rather than every drawable type. Minor, recorded: pie, donut and treemap tooltips are headed by ECharts' placeholder series name; the editor's first-row preview prints raw JSON.
   - T052 tested only a vertical bar. Test every chart type from `CHART_TYPES`, so a type added later is covered by default rather than by someone remembering.
+  - **Decided by the user, 2026-09-21: Cube's own formats.** The question: Cube's `currency` is `$,.2~f`, which writes $1,234.50 as "$1,234.5", while wechart had always kept the pennies. The user chose "Cube's own format (Recommended)" over keeping the pennies or deferring.
+  - **Built 2026-09-21.**
+    - **Research, observed first.** A throwaway Cube v1.7.42 with one probe member per format showed what `/v1/meta` reports, recorded in `research/cube/data-modeling.md` ("What `/v1/meta` reports for each format"):
+      - every number member's `formatDescription.specifier`, the d3 string Cube means, including `,.2~f` when nothing is declared;
+      - a currency code beside a `$` specifier;
+      - a time pattern as `{type: 'custom-time', value}`.
+    - `d3-format@3.1.2` was already researched (`research/supporting-utilities.md`). `d3-time-format@4.1.0` was researched for this task (`research/d3-time-format.md`) as the library Cube's own client uses for time patterns. Both are pinned in `@wechart/core`.
+    - **Core (`format.ts`):**
+      - A member's format is `{specifier, currency?, time?}` as meta reports it, or a name or specifier written by hand.
+      - Numbers are written with d3-format in an en-US locale, with the hyphen-minus wechart has always used rather than d3's U+2212. A currency code (EUR, GBP…) swaps in its own symbol, named by Intl. An unreadable specifier falls back to Cube's plain number.
+      - A time member's declared pattern wins over its granularity (AC-188's "unless the member's model format says otherwise"). It is written with a private en-US d3-time-format locale in UTC, and the pattern also applies under the `member.<granularity>` column. A pattern with no directive (a time dimension's `format: link` reaches meta as the pattern "link") keeps to the granularity's form.
+    - **Web:**
+      - `formatsOf` now reads what meta reports: the specifier and currency for a member that declares a format, and the pattern for a time member.
+      - A number dimension that declares no format, such as an id, is still left as it came (T195).
+    - **Charts:**
+      - The helper that wrote only time members (`modelWriter`, formerly `time.ts`) now also writes any member with a declared format. So a dimension's format shows on a category axis, a tooltip heading, a legend and a trellis panel title, not only in tables (T195 finding 7).
+      - The one-format-per-axis check compares formats by content, since each read from the model is its own object.
+    - **Pivot headers** follow the same rule.
+  - **Tests, red first where there was a gap:**
+    - `core/format.test.ts`: `percent_1`, `currency_0`, `abbr`, `accounting` (negative in parentheses), `number_3`, `id`, a custom `$,.1f`, EUR and GBP symbols, an unreadable specifier, the minus sign, a declared time pattern (also under `member.day`), six of Cube's documented time-format examples, and the no-directive fallback.
+    - `web/dashboard/chartSpec.test.ts`: `formatsFrom` on the exact meta shape Cube reported.
+    - `charts/format-places.test.ts`:
+      - every type in `DRAWABLE_TYPES` writes a currency measure as money in its tooltip, and on its value axis where it has one (these already held, and are now held for every type, as T052 asked);
+      - the data-label guard runs over `DRAWABLE_TYPES` rather than a list kept by hand;
+      - a dimension's declared format on the axis, tooltip heading and legend (red, then fixed).
+    - `Kpi.test.tsx` (held already, now tested) and `PivotTable.test.tsx` (header red, then fixed).
+    - `e2e/editor-preview.spec.ts`: the editor's results drawer shows the currency measure as money.
+    - `e2e/dashboard.spec.ts`: hovering the formats dashboard's revenue tile shows a tooltip line "…: $…". Before the hover no such line exists, so the axis labels can't satisfy it.
+  - **Expectations changed by the user's decision:** money written with fixed pennies became Cube's `$,.2~f`. The affected assertions were changed from "$1,234.50" to "$1,234.5" and from "$4,000.00" to "$4,000", each saying why:
+    - core `format.test.ts`: 4 assertions, and "keeps its pennies" became "as Cube writes it";
+    - `format-places.test.ts`: 6;
+    - `DataTable.test.tsx` and `ResultsDrawer.test.tsx`: 1 each;
+    - `e2e/dashboard.spec.ts`'s table check: `\.\d{2}` became up to two decimals.
+    - The negative check that an id is never written as money was strengthened to rule out "$1,234" as well.
+  - **Left:**
+    - `imageUrl` and `link` formats have no rendering of their own; they fall back to the plain number or text.
+    - `%n` and `%t` in a time pattern print as the letters, as d3 does (research open question).
+    - `%Z`, `%s` and `%Q` assume the query's timezone is UTC, which is wechart's default.
 - [x] T032 (AC-034, AC-066) Open the editor from a tile as an overlay, preview at the tile's own size and filling the editor, and return with the tile updated
   - Files: `packages/web/src/editor/PreviewFrame.tsx`, `packages/web/src/editor/PreviewFrame.test.tsx`, `packages/web/src/editor/ChartEditor.tsx`, `packages/web/src/editor/openChart.ts`, `packages/web/src/editor/openChart.test.ts`, `packages/web/src/dashboard/edit/ChartEditorOverlay.tsx`, `packages/web/src/dashboard/edit/chartDrafts.ts`, `packages/web/src/dashboard/edit/chartDrafts.test.ts`, `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/dashboard/edit/EditBar.tsx`, `packages/web/src/dashboard/edit/enterEdit.test.tsx`, `packages/web/src/dashboard/edit/saveBlocked.test.tsx`, `packages/web/src/dashboard/model/document.ts`, `packages/web/src/dashboard/DashboardPage.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/roundTrip.test.ts`, `packages/web/src/dashboard/settings/SettingsPage.test.tsx`, `packages/web/src/shell/styles.ts`, `packages/api/src/seed.ts`, `e2e/editor-preview.spec.ts`, `e2e/dashboard.spec.ts`, `e2e/no-size-fields.spec.ts`, `docs/spec.md`
   - Failing test: `e2e/editor-preview.spec.ts`: opened from a tile, the Actual size preview matches the tile's rendered width and height, Fit fills the editor, and Back returns to the dashboard with the tile showing the change (AC-034).

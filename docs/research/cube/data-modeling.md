@@ -256,6 +256,27 @@ The validator also accepts undocumented keys: `shown` (legacy visibility), `rewr
 
 The d3 `%` type multiplies by 100 ([d3-format]).
 
+**What `/v1/meta` reports for each format.** Observed against a throwaway Cube v1.7.42 with a probe model of one measure per format, 2026-09-21, T201.
+- Every **number** member carries `formatDescription: {name, specifier}`. `specifier` is the d3-format string Cube itself means, and it is present even when no `format` is declared:
+
+  | Declared `format`   | `format` in meta                                                   | `formatDescription.specifier` |
+  | ------------------- | ------------------------------------------------------------------ | ----------------------------- |
+  | none (a number)     | absent                                                             | `,.2~f`                       |
+  | `percent`           | `"percent"`                                                        | `.2~%`                        |
+  | `percent_1`         | `{type: 'custom-numeric', value: '.1~%', alias: 'percent_1'}`      | `.1~%`                        |
+  | `currency`          | `"currency"`                                                       | `$,.2~f`                      |
+  | `currency_0`        | `{type: 'custom-numeric', value: '$,.0f', alias: 'currency_0'}`    | `$,.0f`                       |
+  | `abbr`, `abbr_2`    | `{type: 'custom-numeric', value: '.2~s', alias: …}`                | `.2~s` (both)                 |
+  | `accounting`        | `{type: 'custom-numeric', value: '(,.2~f', alias: 'accounting'}`   | `(,.2~f`                      |
+  | `number_3`          | `{…, value: ',.3~f', alias: 'number_3'}`                           | `,.3~f`                       |
+  | `decimal_2`         | `{…, value: ',.2~f', alias: 'decimal_2'}`                          | `,.2~f`                       |
+  | `id`                | `{…, value: '.0f', alias: 'id'}`                                   | `.0f`                         |
+  | `$,.1f` (custom)    | `{type: 'custom-numeric', value: '$,.1f'}`                         | `$,.1f`                       |
+
+- **A `currency` code**, for example `EUR`, keeps the `$` specifier. It is reported as `formatDescription.currency: 'EUR'` and as the member's `currency`, so the symbol is the formatter's locale's to supply.
+- **A time format** such as `%Y-%m` is `format: {type: 'custom-time', value: '%Y-%m'}`, with no `formatDescription`. Time and string members without a format carry neither.
+- **The `~` in the defaults trims insignificant zeros:** `currency` writes 1234.5 as `$1,234.5`, not `$1,234.50`.
+
 ### 6. Dimensions ([r-dimensions], [d-dimensions], [s-validator])
 
 **Types:** `string`, `number`, `boolean`, `time`, `geo` and `switch`.
