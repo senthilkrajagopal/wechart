@@ -70,7 +70,12 @@ export {
   type NewDashboardBody,
 } from './dashboard-document';
 
-export { applyItemClick, isItemMarked, type ClickModifiers } from './markings/apply';
+export {
+  applyItemClick,
+  applyToggleOrAdd,
+  isItemMarked,
+  type ClickModifiers,
+} from './markings/apply';
 
 export {
   EMPTY_PREDICATE,

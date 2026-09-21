@@ -913,8 +913,12 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **A bar is sampled along its length, as the prototype does it.** A rectangle dragged across the middle of a tall bar touches it without enclosing either end, so testing endpoints alone misses the ordinary case of dragging across a chart — mutation-verified. The sampling is an approximation and `BAR_SAMPLES` says so: a shape thinner than the gap between samples can pass through unnoticed.
   - **Ray casting for the lasso, because it is correct for concave shapes**, which is most of why anyone lassos rather than drags a rectangle. There is a C-shaped test whose gap must stay unmarked; a bounding-box implementation would be a rectangle with extra steps.
   - **Once a drag, always a drag**: dragging out and coming back ends as a drag, not a click, or the release would mark whatever happened to sit under it. A rectangle is defined by where it began and ended; a lasso keeps every point visited, so the shape is the path drawn rather than a box around it.
-- [ ] T095 (AC-089) Toggle or add on a Ctrl-drag according to the enclosed items' state
-  - Files: `packages/core/src/markings/apply.ts`, `packages/core/src/markings/toggleOrAdd.test.ts`
+- [x] T095 (AC-089) Toggle or add on a Ctrl-drag according to the enclosed items' state
+  - Files: `packages/core/src/markings/apply.ts`, `packages/core/src/markings/toggleOrAdd.test.ts`, `packages/core/src/index.ts`
+  - Done 2026-09-20. AC-089 ticked. Spotfire's ToggleOrAdd, quoted in `references-markings.md` from the Mods API: it "will behave like toggle if all or no rows in the set are marked, otherwise it is an add operation."
+  - **Two of the three cases are indistinguishable from outside, and that is the trap.** With none marked, toggling marks them all; with some marked, adding marks them all — both end with everything marked. So an implementation that simply toggles each item in turn passes both, and fails only the third, where it unmarks exactly the items the user had already collected: dragging over a group to gather it would scatter half of it. Mutation-verified — `some` in place of `every` empties a partly marked set, and **exactly one test catches it**.
+  - **An empty set does nothing.** It is vacuously both "all marked" and "none marked", so the rule does not decide it; doing nothing is the only answer that does not destroy a marking because someone dragged across blank space.
+  - A shape can enclose two representations of one item, so duplicates are collapsed: marked twice, an item would need two toggles to clear.
   - Failing test: `toggleOrAdd.test.ts`: a Ctrl-drag over an all-marked or all-unmarked set toggles it, and over a partly marked set adds rather than unmarks (AC-089).
   - Depends on: T094
 - [ ] T096 (AC-090) Mark a category from its legend entry, keeping visibility elsewhere

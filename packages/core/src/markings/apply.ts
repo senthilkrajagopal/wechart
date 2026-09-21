@@ -45,6 +45,52 @@ export function applyItemClick(
   return { ...predicate, items: removed ? without : [...predicate.items, item] };
 }
 
+/**
+ * The marking after Ctrl-dragging a shape over a set of items (AC-089).
+ *
+ * Spotfire's ToggleOrAdd, quoted in `references-markings.md` from the Mods
+ * API: it "will behave like toggle if all or no rows in the set are marked,
+ * otherwise it is an add operation."
+ *
+ * **Not a toggle applied to each item in turn**, which is the tempting reading
+ * and is wrong in exactly one case: over a partly marked set, per-item
+ * toggling unmarks the items the user had already collected while marking the
+ * rest. Dragging over a group to gather it would scatter half of it. Two of
+ * the three cases are indistinguishable from outside — with none marked,
+ * toggling marks them all; with some marked, adding marks them all — so only
+ * the all-marked case shows the difference.
+ */
+export function applyToggleOrAdd(
+  predicate: MarkingPredicate,
+  enclosed: readonly MarkedItem[],
+): MarkingPredicate {
+  // An empty set is vacuously both "all marked" and "none marked", so the rule
+  // does not decide it. Doing nothing is the only answer that does not destroy
+  // a marking because someone dragged across blank space.
+  if (enclosed.length === 0) return predicate;
+
+  const allMarked = enclosed.every((item) => isItemMarked(predicate, item));
+  if (allMarked) {
+    return {
+      ...predicate,
+      items: predicate.items.filter((marked) => !enclosed.some((item) => sameItem(marked, item))),
+    };
+  }
+
+  // Add: everything enclosed ends up marked, and nothing already marked comes
+  // off. Ranges stay for the same reason a Ctrl-click keeps them — the
+  // modifier means "and also".
+  const added = enclosed.filter(
+    (item, index) =>
+      !isItemMarked(predicate, item) &&
+      // A shape can enclose two representations of one item; marked twice, it
+      // would need two toggles to clear.
+      enclosed.findIndex((other) => sameItem(other, item)) === index,
+  );
+
+  return { ...predicate, items: [...predicate.items, ...added] };
+}
+
 /** Whether this exact item is one of the marked ones. */
 export function isItemMarked(predicate: MarkingPredicate, item: MarkedItem): boolean {
   return predicate.items.some((marked) => sameItem(marked, item));

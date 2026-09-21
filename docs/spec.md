@@ -267,7 +267,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: a plain click adds to the marking, or a modified click replaces it.
 - [x] AC-088 WHEN the user drags a rectangle, or Alt-drags a lasso, over a tile that marks, THE SYSTEM SHALL mark every item the shape touches, and a press-and-release without movement SHALL be treated as a click, not a selection.
       Fails when: a drag of at least 5 pixels is treated as a click, or a click is treated as an empty selection.
-- [ ] AC-089 WHEN the user Ctrl-drags or ⌘-drags a shape, THE SYSTEM SHALL toggle the enclosed items when all or none of them are marked, and otherwise add them (direction.md rule 47).
+- [x] AC-089 WHEN the user Ctrl-drags or ⌘-drags a shape, THE SYSTEM SHALL toggle the enclosed items when all or none of them are marked, and otherwise add them (direction.md rule 47).
       Fails when: a Ctrl-drag over a partly marked set unmarks items instead of adding them.
 - [ ] AC-090 WHEN the user clicks a legend entry's text in a tile that marks, THE SYSTEM SHALL mark every item of that category, and Ctrl-click or ⌘-click SHALL add further categories; series visibility SHALL be changed elsewhere (direction.md rule 7 of §7a).
       Fails when: a legend click hides the series, or does not mark it.
