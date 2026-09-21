@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Route } from '@playwright/test';
 
 /**
  * T032 / AC-034: WHEN the editor is opened from a dashboard tile, THE SYSTEM
@@ -119,6 +119,48 @@ test.describe('the chart editor in the URL (AC-002)', () => {
       'stackedBar',
     );
     // Still the same edit session, the change in it.
+    await expect(discard(page)).toHaveText('Discard (1 change)');
+  });
+
+  test('the browser’s Back while the change is being applied stays on the dashboard', async ({
+    page,
+  }) => {
+    /**
+     * The editor's own Back on a changed chart draws it before closing
+     * ("Applying the change…"). A browser Back in that moment has already taken
+     * the tile out of the URL, so the editor closing afterwards must not step
+     * back again — that step would leave the dashboard, and the session.
+     */
+    await open(page);
+    await openEditorFromPencil(page);
+    await expect.poll(() => editUrl(page)).toBe('tile-status');
+    await page.getByLabel('Chart type').selectOption('stackedBar');
+
+    const held: Route[] = [];
+    const hold = { on: true };
+    await page.route('**/api/load', async (route) => {
+      if (hold.on) held.push(route);
+      else await route.continue();
+    });
+    await page.getByTestId('editor-back').click();
+    await expect(overlay(page)).toContainText('Applying the change…');
+    await expect.poll(() => held.length).toBeGreaterThan(0);
+
+    await page.goBack();
+    await expect.poll(() => editUrl(page)).toBeNull();
+    hold.on = false;
+    for (const route of held) await route.continue();
+
+    await expect(overlay(page)).toBeHidden();
+    await expect(page.locator(TILE).getByTestId('chart-canvas')).toHaveAttribute(
+      'data-chart-type',
+      'stackedBar',
+    );
+    await expect(discard(page)).toHaveText('Discard (1 change)');
+    // Still here once the editor has closed, and nothing still to come: the
+    // second step back, when it happens, happens as the editor closes.
+    await page.waitForTimeout(500);
+    expect(new URL(page.url()).pathname).toBe(DASHBOARD);
     await expect(discard(page)).toHaveText('Discard (1 change)');
   });
 });

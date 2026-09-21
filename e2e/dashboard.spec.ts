@@ -315,17 +315,18 @@ test('E on a focused tile opens its chart editor', async ({ page }) => {
   // The fourth key. Where it lands is AC-034's business; that it opens the
   // chart editor is this criterion's — so the editor has to have rendered.
   //
-  // Since T032 it opens over the dashboard rather than navigating away, so
-  // the URL no longer changes and is not what this asserts (T196 will give it
-  // an `?edit=`). What replaces it is stronger: the editor is open on *this
-  // tile's* chart. Both seeded charts count orders, so the measure could not
-  // tell them apart; only this one groups by category. Until T191 the editor
-  // opened blank whichever chart it came from.
+  // Since T032 it opens over the dashboard rather than navigating away: the
+  // path stays the dashboard's and, since T196, `?edit=` names the tile. What
+  // matters more is that the editor is open on *this tile's* chart. Both
+  // seeded charts count orders, so the measure could not tell them apart; only
+  // this one groups by category. Until T191 the editor opened blank whichever
+  // chart it came from.
   await expect(page.getByTestId('chart-editor-overlay')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Chart editor' })).toBeVisible();
   await expect(page.getByLabel('Cube or view')).toHaveValue('orders');
   await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
   await expect(page.getByTestId('in-dimensions-products.category')).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get('edit')).toBe('tile-status');
 });
 
 test('the Add panel offers every element type and inserts one', async ({ page }) => {

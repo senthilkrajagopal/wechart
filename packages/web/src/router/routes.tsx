@@ -99,11 +99,21 @@ function DashboardSurface() {
 
   const onEditTile = (tileId: string | undefined) => {
     // Search-only navigations keep the dashboard mounted, and its edit
-    // session with it; the window is not scrolled to the top (research:
-    // router-search-history.md, Q4 and Q8).
+    // session with it (research: router-search-history.md, Q4). Pushes and
+    // replaces here do not scroll the window to the top; a step back does,
+    // and cannot be told not to (Q8) — the dashboard scrolls in its own
+    // canvas, which the router leaves alone.
     if (tileId !== undefined) {
       pushed.current = true;
       void navigate({ search: (prev) => ({ ...prev, edit: tileId }), resetScroll: false });
+      return;
+    }
+    // Decided by the URL as it is now, not as the caller last rendered it: an
+    // editor that finishes closing after the browser's Back finds the tile
+    // already gone, and a step back from there would leave the dashboard.
+    // `history.location` is updated before anyone is told of the popstate (Q5).
+    if (!new URLSearchParams(router.history.location.search).has('edit')) {
+      pushed.current = false;
       return;
     }
     if (pushed.current) {
@@ -130,7 +140,7 @@ const dashboardRoute = createRoute({
   path: '/explore/dashboards/$objectId',
   /**
    * `edit`, the tile whose chart is open in the editor (T196). Always returned,
-   * as undefined when absent or not a tile id: omitted, a malformed value would
+   * as undefined when absent, empty or not a string: omitted, a malformed value would
    * reach the page untyped; thrown, the dashboard and its edit session would
    * be replaced by an error (research: router-search-history.md, Q1).
    */
