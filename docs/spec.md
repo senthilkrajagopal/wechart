@@ -69,7 +69,7 @@ Traces to: `[R5]`, `[R4]`, `[research/cube/data-apis.md]`, `[research/cube/acces
       Fails when: a result with `usedPreAggregations` shows no accelerated indicator, or a source-database result is labelled accelerated.
 - [x] AC-014 WHEN a dashboard, chart, folder, bookmark or setting is saved, THE SYSTEM SHALL store it so that it is present and unchanged after the wechart service restarts.
       Fails when: any saved object is missing or altered after a restart.
-- [ ] AC-015 WHEN two browser sessions edit the same dashboard and the second saves over a newer version, THE SYSTEM SHALL refuse the save and tell the user the dashboard changed.
+- [x] AC-015 WHEN two browser sessions edit the same dashboard and the second saves over a newer version, THE SYSTEM SHALL refuse the save and tell the user the dashboard changed.
       Fails when: the second save silently overwrites the newer version.
 - [x] AC-181 WHEN a saved chart written in an earlier document format is opened, THE SYSTEM SHALL upgrade it to the current format on read and render the same chart, and SHALL refuse to open one whose format is newer than it understands, saying so.
       Fails when: a chart stored in an earlier format opens with a different chart type, different members or an empty query, or a chart from a newer format is opened and silently renders something other than what it describes.
@@ -213,6 +213,8 @@ Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
       Fails when: after a failed save the dashboard is out of edit mode, a change made before the save is missing from the dashboard or from Undo, or no reason for the failure is shown.
 - [ ] AC-185 WHEN the user saves the dashboard settings page in view mode, THE SYSTEM SHALL keep the page open until the save has gone through, and IF the save fails, keep the settings as entered on the page and show why the save failed.
       Fails when: the page closes before the save has gone through, or after a failed save the settings entered are missing from the page or no reason for the failure is shown.
+- [ ] AC-186 IF a dashboard save has had no answer 60 seconds after it was sent, THEN THE SYSTEM SHALL treat it as failed — keeping the edit session as AC-184 requires, or the settings page as AC-185 requires — and say that the save timed out.
+      Fails when: 60 seconds after a save with no answer, "Saving…" is still shown, an edit session it was saving is out of edit mode, or the reason shown does not say the save timed out.
 - [x] AC-067 WHEN the dashboard re-renders during editing, THE SYSTEM SHALL keep the canvas and sidebar scroll positions (direction.md rule 40).
       Fails when: either scroll position resets after a re-render.
 - [x] AC-068 WHEN the user adds a section template, THE SYSTEM SHALL insert its tiles as empty charts that state what they need, rather than charts bound to sample data.
@@ -580,8 +582,8 @@ Copied from [requirements.md §7](./requirements.md):
 | Users: business consumer `[R2]`                                                               | AC-017 … AC-019, AC-084 … AC-106, AC-121 … AC-125, AC-171 … AC-173    |
 | Users: semantic-layer engineer `[R2]`                                                         | AC-131 … AC-141, AC-142 … AC-148, AC-157 … AC-164                     |
 | Users: platform operator `[R2]`                                                               | AC-149 … AC-156, AC-157 … AC-170                                      |
-| M1: 50 analyses rebuilt and accepted `[R3]`                                                   | AC-037, AC-084 … AC-116 (Spotfire parity behaviours), AC-053 … AC-068, AC-184, AC-185 |
-| M2: 80% self-service authoring `[R3]`                                                         | AC-025 … AC-036, AC-047 … AC-052, AC-053 … AC-068, AC-182 … AC-185    |
+| M1: 50 analyses rebuilt and accepted `[R3]`                                                   | AC-037, AC-084 … AC-116 (Spotfire parity behaviours), AC-053 … AC-068, AC-184 … AC-186 |
+| M2: 80% self-service authoring `[R3]`                                                         | AC-025 … AC-036, AC-047 … AC-052, AC-053 … AC-068, AC-182 … AC-186    |
 | M3: p95 under 3 s for 10 charts `[R3]`                                                        | AC-174, AC-175, AC-104, AC-105                                        |
 | M4: Spotfire parity checklist `[R3]`                                                          | AC-084 … AC-116                                                       |
 | Constraint: wechart service owns Cube credentials `[R5]`                                      | AC-007, AC-008, AC-164                                                |

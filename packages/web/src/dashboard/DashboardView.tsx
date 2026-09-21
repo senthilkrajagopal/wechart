@@ -102,6 +102,12 @@ export interface DashboardViewProps {
    */
   readonly formats?: Readonly<Record<string, string>> | undefined;
   /**
+   * An edit has begun — an edit session, or the settings page opened in view
+   * mode — for the page, which checks that edit's save against the version
+   * the dashboard had at this moment (T198, AC-015).
+   */
+  readonly onEditStart?: (() => void) | undefined;
+  /**
    * Saving the dashboard. Receives it with no chart drafts on it: drafts are
    * the session's, and a save sends the whole document (T032).
    */
@@ -542,6 +548,7 @@ export function DashboardView({
   errors,
   loading = false,
   formats,
+  onEditStart,
   onSave,
 }: DashboardViewProps) {
   /**
@@ -725,6 +732,7 @@ export function DashboardView({
        * `whyUnsaveable` for the wording and why it names Undo, not Discard.
        */
       saveBlocked={(shown) => whyUnsaveable(shown, dashboardId)}
+      onStart={onEditStart}
       headerActions={(session) => (
         <button
           type="button"
@@ -738,6 +746,11 @@ export function DashboardView({
            */
           disabled={session.saving}
           onClick={() => {
+            // In view mode the settings page is an edit of its own, begun now
+            // with the dashboard as it stands: its save is checked against
+            // this moment's version (T198, AC-015). While editing, it is part
+            // of the session, which began earlier.
+            if (!session.editing) onEditStart?.();
             setSettingsOpen(true);
           }}
         >

@@ -127,6 +127,12 @@ export interface EditChromeProps<T> {
    * dashboard, one with no version — is such a document (T032, T192).
    */
   readonly saveBlocked?: ((document: T) => string | undefined) | undefined;
+  /**
+   * Editing has begun, from the document as it stands now. For a caller that
+   * has to remember something about that moment the document does not hold —
+   * the version the save will be checked against (T198, AC-015).
+   */
+  readonly onStart?: (() => void) | undefined;
   readonly children: (session: EditSession<T>) => ReactNode;
 }
 
@@ -138,6 +144,7 @@ export function EditChrome<T>({
   overlay,
   headerActions,
   saveBlocked,
+  onStart,
   children,
 }: EditChromeProps<T>) {
   const [editing, setEditing] = useState(false);
@@ -253,6 +260,7 @@ export function EditChrome<T>({
   const start = () => {
     setHistory(historyOf<Snapshot<T>>({ document: current, changes: 0 }));
     setEditing(true);
+    onStart?.();
   };
 
   /**

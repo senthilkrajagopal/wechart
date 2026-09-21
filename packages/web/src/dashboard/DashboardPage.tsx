@@ -178,6 +178,22 @@ function LoadedDashboard({
   const [saveFailed, setSaveFailed] = useState('');
 
   /**
+   * The version the dashboard had when the edit being saved began (T198,
+   * AC-015): an edit session when it starts, or the settings page when it
+   * opens in view mode — each works on the dashboard as it stood then, and
+   * each save is checked against that. Not the version when Save is pressed:
+   * the dashboard can be fetched again while an edit is open — the library
+   * does so on reconnecting once the data is stale (research, "Resolved
+   * since") — bringing in someone else's save, and checked against their
+   * version, the edit went through over their change without a word.
+   *
+   * Set afresh whenever an edit begins, and never cleared: clearing it when a
+   * save succeeded wiped an edit session begun while a view-mode save was
+   * still out, and the session's save then went through over that save.
+   */
+  const [editBase, setEditBase] = useState<number | undefined>(undefined);
+
+  /**
    * Saving (AC-065). The version the session started from travels with it, so
    * a dashboard changed somewhere else is refused rather than overwritten —
    * and on success the cached copy is refreshed, or the next Edit would begin
@@ -188,9 +204,7 @@ function LoadedDashboard({
    * this render. A pending save picks up newer renders' options
    * (docs/research/tanstack-query-mutations.md, gotcha 7), so a save still
    * starting when the user moved to another dashboard could otherwise write
-   * this dashboard's document under that one's id. The version is the
-   * dashboard's when Save is pressed; pinning it to when *Edit* was pressed —
-   * so a re-fetch during the session cannot move it on — is T198 (AC-015).
+   * this dashboard's document under that one's id.
    *
    * `networkMode: 'always'`: with the default, a save made while the browser
    * reports itself offline waits for the connection, neither resolving nor
@@ -341,7 +355,12 @@ function LoadedDashboard({
         // The save's outcome goes back to the session: it leaves edit mode when
         // the save resolves, and keeps every change when it rejects (AC-184).
         // The rejection is the session's to handle; why is shown above.
-        onSave={(next, drafts) => save.mutateAsync({ id: dashboardId, next, drafts, version })}
+        onEditStart={() => {
+          setEditBase(version);
+        }}
+        onSave={(next, drafts) =>
+          save.mutateAsync({ id: dashboardId, next, drafts, version: editBase ?? version })
+        }
       />
     </>
   );
