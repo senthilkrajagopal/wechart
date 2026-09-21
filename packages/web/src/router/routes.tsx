@@ -156,7 +156,7 @@ function DashboardSurface() {
         dashboardId={dashboardId}
         editTile={edit}
         onEditTile={onEditTile}
-        initialFilterValues={valuesFromSearch(filters)}
+        urlFilterValues={valuesFromSearch(filters)}
         onFilterValues={onFilterValues}
       />
     </AppShell>

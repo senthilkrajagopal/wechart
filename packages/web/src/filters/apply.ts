@@ -31,9 +31,27 @@ function filters(value: FilterValue): boolean {
 }
 
 /**
- * The filters in effect: on a field, holding a value that filters. A value is
- * looked up by filter *and* field (`valueKeyOf`), so one held for the field a
- * filter was on before is not in effect on the field it is on now.
+ * Whether a value is one this widget makes. Only a hand-edited URL can hold
+ * another (T087's review): a date preset on a checkbox list, sent as it was,
+ * put a date range on a text field and an error on every tile in scope.
+ */
+function fits(widget: DashboardFilter['widget'], value: FilterValue): boolean {
+  switch (widget) {
+    case 'dateRange':
+      return value.kind === 'preset' || value.kind === 'dates';
+    case 'range':
+      return value.kind === 'range';
+    case 'list':
+    case 'checkbox':
+      return value.kind === 'values';
+  }
+}
+
+/**
+ * The filters in effect: on a field, holding a value of their own kind that
+ * filters. A value is looked up by filter *and* field (`valueKeyOf`), so one
+ * held for the field a filter was on before is not in effect on the field it
+ * is on now.
  */
 export function activeFilters(
   dashboardFilters: readonly DashboardFilter[],
@@ -41,7 +59,10 @@ export function activeFilters(
 ): ActiveFilter[] {
   return dashboardFilters.flatMap((filter) => {
     const value = values[valueKeyOf(filter)];
-    return filter.member !== undefined && value !== undefined && filters(value)
+    return filter.member !== undefined &&
+      value !== undefined &&
+      fits(filter.widget, value) &&
+      filters(value)
       ? [{ filter, value }]
       : [];
   });

@@ -43,6 +43,24 @@ describe('which filters are in effect', () => {
     ).toEqual([]);
   });
 
+  /**
+   * Found by T087's review: a hand-edited URL could give a checkbox filter a
+   * date preset, which was sent to Cube as a date range on a text field — an
+   * error on every tile in scope.
+   */
+  it('not a value of the wrong kind for its widget', () => {
+    expect(
+      activeFilters(
+        [status, amount, ordered],
+        values([
+          [status, { kind: 'preset', preset: 'today' }],
+          [amount, { kind: 'values', values: ['1'] }],
+          [ordered, { kind: 'range', min: 1 }],
+        ]),
+      ),
+    ).toEqual([]);
+  });
+
   it('not a value held for the field the filter was on before', () => {
     const moved = { ...status, member: 'orders.region' };
     expect(

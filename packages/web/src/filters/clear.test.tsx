@@ -80,13 +80,11 @@ beforeEach(() => {
           held.push(release);
         });
       }
-      // 80 orders for each status picked; 240 in all.
-      const picked = (query['filters'] as { values: string[] }[] | undefined)?.[0]?.values;
-      return new Response(
-        JSON.stringify({
-          data: [{ 'orders.count': picked === undefined ? 240 : 80 * picked.length }],
-        }),
-      );
+      // 80 orders of each of three statuses: those every filter keeps count.
+      let kept = ['completed', 'shipped', 'processing'];
+      for (const each of (query['filters'] as { values: string[] }[] | undefined) ?? [])
+        kept = kept.filter((status) => each.values.includes(status));
+      return new Response(JSON.stringify({ data: [{ 'orders.count': 80 * kept.length }] }));
     }),
   );
 });
@@ -95,14 +93,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function dashboard() {
+function dashboard(document: DashboardDocument = DOC) {
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <DashboardView
         dashboardId="d1"
-        document={DOC}
+        document={document}
         specs={{ 'c-kpi': unfiltered, 'c-kpi-2': unfiltered }}
         documents={{ 'c-kpi': kpi, 'c-kpi-2': kpi }}
         onSave={vi.fn()}
@@ -168,6 +166,41 @@ describe('a filter, cleared', () => {
     expect(document.querySelectorAll('[aria-busy="true"]')).toHaveLength(2);
 
     for (const release of holding) release();
+    await vi.waitFor(() => {
+      expect(values()).toEqual(['160', '160']);
+    });
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
+  /**
+   * Found by T086's review: cleared while another filter still reaches the
+   * same tiles, they are asked again — and must end on the answer to the
+   * filter that is left, not keep the cleared one's.
+   */
+  it('leaves the other filters on those tiles in effect', async () => {
+    dashboard({
+      ...DOC,
+      filters: [
+        { id: 'f1', widget: 'checkbox', member: 'orders.status' },
+        { id: 'f2', widget: 'list', member: 'orders.status' },
+      ],
+    });
+    const [boxes, list] = (await within(bar()).findAllByRole('group', { name: /filter \d$/ })) as [
+      HTMLElement,
+      HTMLElement,
+    ];
+    await userEvent.click(await within(boxes).findByRole('checkbox', { name: 'completed' }));
+    await userEvent.click(within(boxes).getByRole('checkbox', { name: 'shipped' }));
+    await vi.waitFor(() => {
+      expect(values()).toEqual(['160', '160']);
+    });
+    await userEvent.click(await within(list).findByRole('button', { name: 'shipped' }));
+    await vi.waitFor(() => {
+      expect(values()).toEqual(['80', '80']);
+    });
+
+    await userEvent.click(within(list).getByRole('button', { name: 'Clear Status' }));
+
     await vi.waitFor(() => {
       expect(values()).toEqual(['160', '160']);
     });

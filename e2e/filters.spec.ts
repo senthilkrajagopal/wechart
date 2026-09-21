@@ -433,6 +433,53 @@ test('the filters in effect are in the URL, and the URL opens with them', async 
 });
 
 /**
+ * Found by T087's review. The filters are written into the URL with replace,
+ * but opening the chart editor pushes an entry (T196, AC-002), and Back leaves
+ * it ahead. Change a filter, go Forward onto that older entry, close the
+ * editor, and the URL held the older filters while the dashboard showed the
+ * newer ones. Opening the chart editor with filters set must keep them in the
+ * URL too.
+ */
+test('the URL keeps the dashboard’s filters through the chart editor, Back and Forward', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await makeTwoTabDashboard(request, [
+    { id: 'f-status', widget: 'checkbox', member: 'orders.status' },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const picked = () => {
+    const raw = new URL(page.url()).searchParams.get('filters');
+    if (raw === null) return null;
+    return (JSON.parse(raw) as { value: { values: string[] } }[]).map((each) => each.value.values);
+  };
+
+  await filterBar(page).getByRole('checkbox', { name: 'shipped' }).check();
+  await expect.poll(picked).toEqual([['shipped']]);
+
+  // Through the editor: open, and close by its own Back.
+  await page.getByTestId('edit-chart-tile-sales').click();
+  await expect(page.getByTestId('chart-editor-overlay')).toBeVisible();
+  await expect.poll(picked).toEqual([['shipped']]);
+  await page.getByTestId('editor-back').click();
+  await expect(page.getByTestId('chart-editor-overlay')).toBeHidden();
+  await expect.poll(picked).toEqual([['shipped']]);
+
+  // A newer value, then Forward onto the editor's entry, which reopens it.
+  await filterBar(page).getByRole('checkbox', { name: 'completed' }).check();
+  await expect.poll(picked).toEqual([['shipped', 'completed']]);
+  await page.goForward();
+  await expect(page.getByTestId('chart-editor-overlay')).toBeVisible();
+  await page.getByTestId('editor-back').click();
+  await expect(page.getByTestId('chart-editor-overlay')).toBeHidden();
+
+  // The URL says what the dashboard shows.
+  await expect(filterBar(page).getByRole('checkbox', { name: 'completed' })).toBeChecked();
+  await expect.poll(picked).toEqual([['shipped', 'completed']]);
+});
+
+/**
  * T085 / AC-079: WHEN a filter's member is not reachable from a tile's cube or
  * view, THE SYSTEM SHALL leave that tile unfiltered and mark it as not covered
  * by the filter.

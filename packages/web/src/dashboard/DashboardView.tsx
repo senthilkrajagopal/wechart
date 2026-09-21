@@ -36,6 +36,7 @@ import { NotCovered } from '../filters/NotCovered';
 import { FilterBar } from '../filters/FilterBar';
 import { FilteredCharts, keepLastAnswers, type FilteredResults } from '../filters/FilteredCharts';
 import { newFilter, type FilterValues } from '../filters/model';
+import { sameValues } from '../filters/url';
 import { Canvas, type CanvasProps } from './grid/Canvas';
 import { DRAG_INSTRUCTIONS, DRAG_INSTRUCTIONS_ID, useTileDrag } from './grid/drag';
 import { COLUMNS, ROW_UNIT_PX } from './grid/geometry';
@@ -132,11 +133,13 @@ export interface DashboardViewProps {
    */
   readonly editTile?: string | undefined;
   /**
-   * The filter values to open with — the URL's (AC-081). Read once, when the
-   * dashboard opens; after that the view holds them and reports each change.
+   * The filter values the URL holds now (AC-081). The dashboard opens with
+   * them; after that it holds its own, and puts them back in the URL whenever
+   * the URL comes to say otherwise — a change made here, or a Back or Forward
+   * onto an entry written before the last change.
    */
-  readonly initialFilterValues?: FilterValues | undefined;
-  /** The filter values changed, for the URL (AC-081). */
+  readonly urlFilterValues?: FilterValues | undefined;
+  /** Put these filter values in the URL (AC-081). */
   readonly onFilterValues?: ((values: FilterValues) => void) | undefined;
   /** Name a tile in the URL as the one open in the editor, or none. */
   readonly onEditTile?: ((tileId: string | undefined) => void) | undefined;
@@ -616,7 +619,7 @@ export function DashboardView({
   onEditStart,
   editTile,
   onEditTile,
-  initialFilterValues,
+  urlFilterValues,
   onFilterValues,
   onSave,
 }: DashboardViewProps) {
@@ -645,17 +648,22 @@ export function DashboardView({
    * in the saved document, and not in the edit history — setting a filter is
    * reading the dashboard, not changing it.
    */
-  const [openedWith] = useState<FilterValues>(() => initialFilterValues ?? {});
-  const [filterValues, setFilterValues] = useState<FilterValues>(openedWith);
+  const [filterValues, setFilterValues] = useState<FilterValues>(() => urlFilterValues ?? {});
   /**
-   * Each change reported for the URL (AC-081) — not the values it opened
-   * with, which came from there. From an effect, after the change is in:
-   * reported from inside the state update it would run twice under
-   * StrictMode.
+   * The URL kept saying what the dashboard shows (AC-081): whenever the two
+   * differ, the dashboard's values are written. That is each change made here,
+   * and also a Back or Forward onto an older entry. The editor pushes one
+   * (T196) and filters replace, so going Forward onto it brought back the
+   * filters from before the last change, and closing the editor left them in
+   * the URL (T087's review).
+   *
+   * From an effect, after the change is in: from inside the state update it
+   * would run twice under StrictMode.
    */
   useEffect(() => {
-    if (filterValues !== openedWith) onFilterValues?.(filterValues);
-  }, [filterValues, openedWith, onFilterValues]);
+    if (urlFilterValues === undefined || onFilterValues === undefined) return;
+    if (!sameValues(urlFilterValues, filterValues)) onFilterValues(filterValues);
+  }, [urlFilterValues, filterValues, onFilterValues]);
   /**
    * The dashboard as the session has it, mirrored up (`SessionMirror`): its
    * filters and scopes may be edits not yet saved, and a filter set while

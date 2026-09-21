@@ -120,9 +120,9 @@ export interface DashboardPageProps {
   readonly editTile?: string | undefined;
   /** Put a tile in the URL as the one open in the editor, or none (T196). */
   readonly onEditTile?: ((tileId: string | undefined) => void) | undefined;
-  /** The filter values the URL opened the dashboard with (AC-081). */
-  readonly initialFilterValues?: FilterValues | undefined;
-  /** The filter values changed: put them in the URL (AC-081). */
+  /** The filter values the URL holds now (AC-081). */
+  readonly urlFilterValues?: FilterValues | undefined;
+  /** Put these filter values in the URL (AC-081). */
   readonly onFilterValues?: ((values: FilterValues) => void) | undefined;
 }
 
@@ -130,7 +130,7 @@ export function DashboardPage({
   dashboardId,
   editTile,
   onEditTile,
-  initialFilterValues,
+  urlFilterValues,
   onFilterValues,
 }: DashboardPageProps) {
   const saved = useQuery({
@@ -176,7 +176,7 @@ export function DashboardPage({
       version={saved.data?.version ?? 1}
       editTile={editTile}
       onEditTile={onEditTile}
-      initialFilterValues={initialFilterValues}
+      urlFilterValues={urlFilterValues}
       onFilterValues={onFilterValues}
     />
   );
@@ -193,7 +193,7 @@ function LoadedDashboard({
   version,
   editTile,
   onEditTile,
-  initialFilterValues,
+  urlFilterValues,
   onFilterValues,
 }: {
   document: DashboardDocument;
@@ -201,7 +201,7 @@ function LoadedDashboard({
   version: number;
   editTile: string | undefined;
   onEditTile: ((tileId: string | undefined) => void) | undefined;
-  initialFilterValues: FilterValues | undefined;
+  urlFilterValues: FilterValues | undefined;
   onFilterValues: ((values: FilterValues) => void) | undefined;
 }) {
   const queryClient = useQueryClient();
@@ -394,7 +394,7 @@ function LoadedDashboard({
         // The rejection is the session's to handle; why is shown above.
         editTile={editTile}
         onEditTile={onEditTile}
-        initialFilterValues={initialFilterValues}
+        urlFilterValues={urlFilterValues}
         onFilterValues={onFilterValues}
         onEditStart={() => {
           setEditBase(version);

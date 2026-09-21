@@ -15,6 +15,13 @@ export interface SearchFilter {
   readonly value: FilterValue;
 }
 
+/** Whether two sets of values say the same, whatever order they were set in. */
+export function sameValues(a: FilterValues, b: FilterValues): boolean {
+  const canonical = (values: FilterValues) =>
+    JSON.stringify(Object.entries(values).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)));
+  return canonical(a) === canonical(b);
+}
+
 /** The values as the URL carries them, or nothing when none is set. */
 export function valuesToSearch(values: FilterValues): SearchFilter[] | undefined {
   const entries = Object.entries(values).flatMap(([key, value]) => {
