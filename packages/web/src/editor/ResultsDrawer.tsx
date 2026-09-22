@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { loadTile } from '../query/loadTile';
 import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
+import { StateLine } from '../shell/StatusIcon';
 import { AccelerationPanel } from './AccelerationPanel';
 
 /**
@@ -109,9 +110,9 @@ function RowTable({
   return (
     <>
       {note === null ? null : (
-        <p data-testid={`${testId}-truncated`} role="status">
+        <StateLine kind="warn" testId={`${testId}-truncated`}>
           {note}
-        </p>
+        </StateLine>
       )}
       <table data-testid={testId}>
         <thead>
@@ -204,11 +205,11 @@ export function ResultsDrawer({
           {view === 'underlying' ? (
             <div role="tabpanel" aria-label="Underlying rows">
               {underlying.isPending ? (
-                <p>Loading…</p>
+                <StateLine kind="run">Loading…</StateLine>
               ) : underlying.isError ? (
                 // A scope the context lacks, said as that (T176, AC-170).
                 missingScopeOf(underlying.error) === undefined ? (
-                  <p role="alert">{(underlying.error as Error).message}</p>
+                  <StateLine kind="err">{(underlying.error as Error).message}</StateLine>
                 ) : (
                   <ScopeUnavailable
                     scope={missingScopeOf(underlying.error) ?? 'data'}

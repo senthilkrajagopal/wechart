@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { parse, stringify } from 'yaml';
 
+import { StatusIcon } from '../../../shell/StatusIcon';
 import { CUBE_PARSE } from '../objects';
 import { IndexColumns } from '../preagg/IndexEditor';
 import { SCHEMA, type Field, type ObjectSchema } from './schema';
@@ -353,6 +354,7 @@ function YamlControl({
       />
       {problem === null ? null : (
         <span id={problemId} role="alert" className="model-field__problem">
+          <StatusIcon kind="err" />
           Not YAML yet: {problem}
         </span>
       )}

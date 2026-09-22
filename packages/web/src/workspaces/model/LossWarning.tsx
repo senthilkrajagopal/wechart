@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { StatusIcon } from '../../shell/StatusIcon';
 import type { Loss } from './lossCheck';
 
 /** The way the warning names one thing: a comment by its first line. */
@@ -44,10 +45,7 @@ export function LossWarning({
   }, []);
   return (
     <div ref={bar} className="model-editor__warnbar" role="alert">
-      <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-        <path d="M8 1.5l7 12.5H1z" fill="var(--wc-status-warning-icon)" />
-        <path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" strokeWidth="1.6" />
-      </svg>
+      <StatusIcon kind="warn" />
       <span className="model-editor__warnbar-text">
         This edit would drop {listOf(lost.map(nameOf))}. The YAML keeps them while you edit there.
       </span>

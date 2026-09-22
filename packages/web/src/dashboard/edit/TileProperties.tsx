@@ -1,6 +1,7 @@
 import { IMAGE_HEAD_BYTES, IMAGE_TYPES, imageProblem } from '@wechart/core';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 
+import { StateLine } from '../../shell/StatusIcon';
 import { webAddressProblem } from '../tiles/LinkTile';
 
 import {
@@ -250,9 +251,9 @@ function LinkProperties({
             />
           </Field>
           {problem === '' ? null : (
-            <p role="alert" className="tile-properties__problem">
+            <StateLine kind="err" className="tile-properties__problem">
               {problem}
-            </p>
+            </StateLine>
           )}
         </>
       ) : (
@@ -398,10 +399,12 @@ function ImageProperties({
         />
       </Field>
       <p className="tile-properties__hint">PNG, JPEG, WebP, GIF or SVG, at most 2 MB.</p>
+      {/* Under way, in words with its icon, not only by the field fading (T183, AC-177). */}
+      {sending ? <StateLine kind="run">Uploading the image…</StateLine> : null}
       {problem === '' ? null : (
-        <p role="alert" className="tile-properties__problem">
+        <StateLine kind="err" className="tile-properties__problem">
           {problem}
-        </p>
+        </StateLine>
       )}
       <Field id={altId} label="Alternative text">
         <input

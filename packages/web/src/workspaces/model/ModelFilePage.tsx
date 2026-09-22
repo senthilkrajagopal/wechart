@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { META_QUERY } from '../../query/meta';
+import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { MODEL_FILES_QUERY } from './FileList';
@@ -298,12 +299,12 @@ function FileEditor({ path, content }: { path: string; content: string }) {
       {/* The prototype's editor head (model.js): the file's one action. */}
       <div className="model-editor__head">
         {outcome === null ? null : (
-          <p
+          <StateLine
+            kind={outcome.ok ? 'ok' : 'err'}
             className={`model-editor__outcome${outcome.ok ? '' : ' model-editor__outcome--failed'}`}
-            role={outcome.ok ? 'status' : 'alert'}
           >
             {outcome.text}
-          </p>
+          </StateLine>
         )}
         <button
           ref={saveButton}
@@ -314,7 +315,15 @@ function FileEditor({ path, content }: { path: string; content: string }) {
             void publish();
           }}
         >
-          {publishing ? 'Saving…' : 'Save & reload Cube'}
+          {publishing ? (
+            // Under way, with its icon as well as its word (T183, AC-177).
+            <>
+              <StatusIcon kind="run" />
+              Saving…
+            </>
+          ) : (
+            'Save & reload Cube'
+          )}
         </button>
       </div>
       <div
@@ -351,6 +360,7 @@ function FileEditor({ path, content }: { path: string; content: string }) {
         )}
         {refused === null ? null : (
           <p className="model-editor__warnbar" role="alert">
+            <StatusIcon kind="warn" />
             <span className="model-editor__warnbar-text">
               This edit can’t be written into the file: {refused}.
             </span>
@@ -368,17 +378,7 @@ function FileEditor({ path, content }: { path: string; content: string }) {
         {first === undefined ? null : (
           // The prototype's read-only veil (model.js), over the forms.
           <p className="model-editor__veil" role="status">
-            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-              <rect
-                x="1.5"
-                y="1.5"
-                width="13"
-                height="13"
-                rx="3"
-                fill="var(--wc-status-error-icon)"
-              />
-              <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="#fff" strokeWidth="1.8" />
-            </svg>
+            <StatusIcon kind="err" />
             <span>
               The YAML doesn’t parse (line {first.line}).{' '}
               {cubes.length + views.length > 0
@@ -508,11 +508,11 @@ export function ModelFilePage({ path }: { path: string }) {
         {path}
       </h1>
       {files.isPending ? (
-        <p>Reading the model…</p>
+        <StateLine kind="run">Reading the model…</StateLine>
       ) : files.isError ? (
-        <p role="alert">{files.error.message}</p>
+        <StateLine kind="err">{files.error.message}</StateLine>
       ) : file === undefined ? (
-        <p role="alert">There is no model file {path}.</p>
+        <StateLine kind="err">There is no model file {path}.</StateLine>
       ) : (
         <FileBody path={file.path} content={file.content} />
       )}

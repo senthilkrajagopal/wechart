@@ -1,4 +1,5 @@
 import { NEEDED_BY, SCOPES, useScopes, type ScopeState } from '../../query/scopes';
+import { StateLine } from '../../shell/StatusIcon';
 import { Status, type StateKind } from '../jobs/StateBadge';
 
 const SAID: Record<ScopeState, [StateKind, string]> = {
@@ -13,8 +14,9 @@ const SAID: Record<ScopeState, [StateKind, string]> = {
  */
 export function Scopes() {
   const scopes = useScopes();
-  if (scopes.isPending) return <p>Asking Cube which API scopes wechart has…</p>;
-  if (scopes.isError) return <p role="alert">{scopes.error.message}</p>;
+  if (scopes.isPending)
+    return <StateLine kind="run">Asking Cube which API scopes wechart has…</StateLine>;
+  if (scopes.isError) return <StateLine kind="err">{scopes.error.message}</StateLine>;
   return (
     <table className="query-log" aria-label="Cube API scopes">
       <thead>

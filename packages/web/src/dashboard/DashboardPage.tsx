@@ -9,6 +9,7 @@ import { reachFrom } from '../filters/coverage';
 import { allMembers } from '../filters/FilterBar';
 import type { FilterValues } from '../filters/model';
 import { formatsFrom, tileChartOf, type TileChart } from './chartSpec';
+import { StateLine } from '../shell/StatusIcon';
 import { DashboardView } from './DashboardView';
 import { chartWritesOf, drawnWithDrafts, withoutDrafts } from './edit/chartDrafts';
 import { saveDashboard } from './edit/save';
@@ -166,7 +167,12 @@ export function DashboardPage({
 
   const document = saved.data?.document;
 
-  if (saved.isPending) return <p data-testid="dashboard-loading">Loading…</p>;
+  if (saved.isPending)
+    return (
+      <StateLine kind="run" testId="dashboard-loading">
+        Loading…
+      </StateLine>
+    );
   /**
    * The error only when there is no dashboard to show. A fetch that fails
    * after one has loaded — the library fetches again on its own, on
@@ -176,9 +182,9 @@ export function DashboardPage({
    */
   if (document === undefined)
     return (
-      <p role="alert" data-testid="dashboard-error">
+      <StateLine kind="err" testId="dashboard-error">
         {(saved.error as Error | null)?.message ?? 'This dashboard could not be opened.'}
-      </p>
+      </StateLine>
     );
 
   return (
@@ -467,9 +473,9 @@ function LoadedDashboard({
       {saveFailed === '' ? null : (
         // Why the save failed (AC-184). The session is still open beneath it,
         // every change kept, for another try or another course.
-        <p role="alert" data-testid="save-failed">
+        <StateLine kind="err" testId="save-failed">
           {saveFailed}
-        </p>
+        </StateLine>
       )}
       <DashboardView
         /**

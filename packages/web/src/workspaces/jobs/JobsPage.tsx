@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 
+import { StateLine } from '../../shell/StatusIcon';
 import { BuildPanel } from './BuildPanel';
 import { Health } from './Health';
 import { QueryLog, type QueryRecord } from './QueryLog';
@@ -28,8 +29,8 @@ function Queries() {
     },
     refetchOnMount: 'always',
   });
-  if (records.isPending) return <p>Reading the query log…</p>;
-  if (records.isError) return <p role="alert">{records.error.message}</p>;
+  if (records.isPending) return <StateLine kind="run">Reading the query log…</StateLine>;
+  if (records.isError) return <StateLine kind="err">{records.error.message}</StateLine>;
   return <QueryLog records={records.data} />;
 }
 

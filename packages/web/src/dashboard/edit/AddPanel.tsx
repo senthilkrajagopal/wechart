@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { FILTER_WIDGETS, type FilterWidget } from '../../filters/model';
+import { StateLine } from '../../shell/StatusIcon';
 import { PALETTE, type PaletteId } from '../model/insert';
 import { SECTION_TEMPLATES, type TemplateId } from './templates';
 
@@ -57,9 +58,9 @@ export function AddPanel({
         {message === undefined || message === '' ? null : (
           // A live region: the section appears without being asked for, and a
           // reader who is not looking at the sidebar would otherwise never know.
-          <p className="add-panel__message" role="status" data-testid="add-message">
+          <StateLine kind="ok" className="add-panel__message" testId="add-message">
             {message}
-          </p>
+          </StateLine>
         )}
 
         <ul aria-label="Elements to add">

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
+import { StateLine } from '../shell/StatusIcon';
 import { RollupOnlyWarning } from './RollupOnlyWarning';
 
 /**
@@ -37,16 +38,21 @@ export function AccelerationPanel({ query }: { query: Record<string, unknown> })
     queryFn: ({ signal }) => askAcceleration(query, signal),
   });
 
-  if (answer.isPending) return <p className="acceleration-panel">Asking Cube…</p>;
+  if (answer.isPending)
+    return (
+      <StateLine kind="run" className="acceleration-panel">
+        Asking Cube…
+      </StateLine>
+    );
   // A scope wechart's context lacks, said as that (T176, AC-170).
   const lacking = answer.isError ? missingScopeOf(answer.error) : undefined;
   if (lacking !== undefined)
     return <ScopeUnavailable scope={lacking} what="Whether a rollup serves this chart" />;
   if (answer.isError)
     return (
-      <p className="acceleration-panel" role="alert">
+      <StateLine kind="err" className="acceleration-panel">
         {answer.error.message}
-      </p>
+      </StateLine>
     );
 
   const { matched, miss } = answer.data;

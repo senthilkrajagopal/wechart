@@ -28,7 +28,10 @@ export function TileUnavailable({ member }: { member: string }) {
   return (
     <div className="tile-empty" data-testid="tile-unavailable">
       <p>
-        <span aria-hidden="true">⊘</span> Not available to this security context
+        <span data-icon="unavailable" aria-hidden="true">
+          ⊘
+        </span>{' '}
+        Not available to this security context
       </p>
       <p>
         Cube refuses it <code>{member}</code>, and may refuse other fields this chart uses.

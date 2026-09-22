@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { META_QUERY } from '../query/meta';
 import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
+import { StateLine } from '../shell/StatusIcon';
 import { GROUP_LABELS, cubesFrom, groupMembers, membersOf, type Member } from './fields';
 
 /**
@@ -49,12 +50,12 @@ export function FieldList({
   // data-layer.md, "Refetch on mount"). wechart's own cache answers it.
   const meta = useQuery({ ...META_QUERY, refetchOnMount: 'always' });
 
-  if (meta.isPending) return <p>Loading the model…</p>;
+  if (meta.isPending) return <StateLine kind="run">Loading the model…</StateLine>;
   if (meta.isError) {
     // A scope the context lacks, said as that (T176, AC-170).
     const lacking = missingScopeOf(meta.error);
     return lacking === undefined ? (
-      <p role="alert">{(meta.error as Error).message}</p>
+      <StateLine kind="err">{(meta.error as Error).message}</StateLine>
     ) : (
       <ScopeUnavailable scope={lacking} what="The model’s fields" />
     );

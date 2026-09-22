@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 
 import { wechartClaimIn } from '../../query/securityPreview';
+import { StatusIcon } from '../../shell/StatusIcon';
 
 type Read = { context: Record<string, unknown> } | { problem: string };
 
@@ -102,6 +103,8 @@ export function ContextPreview({ groups }: { groups: readonly string[] }) {
         />
         {'problem' in read ? (
           <span id={ids.note} className="context-preview__problem">
+            {/* A validation, with its icon (T183, AC-177). */}
+            <StatusIcon kind="err" />
             {read.problem}
           </span>
         ) : (

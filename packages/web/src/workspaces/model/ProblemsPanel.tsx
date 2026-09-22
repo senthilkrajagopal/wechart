@@ -1,18 +1,17 @@
+import { StatusIcon } from '../../shell/StatusIcon';
 import type { Problem } from './problems';
 
-/** The prototype's status glyphs (ui.js, STATUS_SVG): error and ok. */
+/**
+ * The prototype's status glyphs (ui.js, STATUS_SVG): error, the shared one
+ * (T183, AC-177), and ok, in the success colour of its own.
+ */
 function ErrorGlyph() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-      <rect x="1.5" y="1.5" width="13" height="13" rx="3" fill="var(--wc-status-error-icon)" />
-      <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="#fff" strokeWidth="1.8" />
-    </svg>
-  );
+  return <StatusIcon kind="err" />;
 }
 
 function OkGlyph() {
   return (
-    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" data-icon="ok">
       <circle cx="8" cy="8" r="7" fill="var(--wc-status-success-icon)" />
       <path
         d="M4.5 8.2l2.2 2.2 4.8-4.8"

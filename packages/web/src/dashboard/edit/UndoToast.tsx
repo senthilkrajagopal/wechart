@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 
+import { StatusIcon } from '../../shell/StatusIcon';
+
 /**
  * The toast that offers an undo right after a delete (AC-060, direction.md
  * rule 38).
@@ -41,6 +43,8 @@ export function UndoToast({ message, onUndo, onDismiss, afterMs = TOAST_MS }: Un
 
   return (
     <div className="undo-toast" role="status" data-testid="undo-toast">
+      {/* What was done, with its icon (direction.md rule 3). */}
+      <StatusIcon kind="ok" />
       <span>{message}</span>
       <button type="button" onClick={onUndo}>
         Undo

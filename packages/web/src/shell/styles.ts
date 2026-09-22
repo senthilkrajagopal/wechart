@@ -770,6 +770,30 @@ fieldset.model-field > legend {
 .status--err { color: var(--wc-status-error); }
 .status--run { color: var(--wc-accent); }
 .status--idle { color: var(--wc-text-secondary); }
+/* A line of state — loading, failed, done, a warning — with its icon (T183,
+   AC-177; direction.md rule 3): the icon at the words' first line, the words
+   wrapping beside it in the line's own colour, the icon in its state's. */
+.state-line { display: flex; gap: 6px; align-items: flex-start; }
+.state-line > span { min-width: 0; overflow-wrap: anywhere; }
+svg[data-icon] { flex: none; }
+.state-line > svg[data-icon] { margin-top: 1px; }
+.state-line > svg[data-icon='ok'] { color: var(--wc-status-success); }
+.state-line > svg[data-icon='run'] { color: var(--wc-accent); }
+.state-line > svg[data-icon='idle'] { color: var(--wc-text-secondary); }
+/* An icon set in a line of words, rather than beside a block of them. */
+.tile-no-rows__headline > svg[data-icon],
+.model-field__problem > svg[data-icon],
+.context-preview__problem > svg[data-icon],
+.filter-widget__cut > svg[data-icon],
+.tile-not-covered > svg[data-icon],
+.well__reason > svg[data-icon],
+.tile-export-note > svg[data-icon] {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+/* On the toast's inverted ground: the disc in the toast's ink, the check in
+   its ground, so it keeps the words' contrast in either theme. */
+.undo-toast > svg[data-icon='ok'] path { stroke: var(--wc-text-primary); }
 
 /* The selected row is marked by more than the focus ring, so the selection is
    still visible when focus moves into a control inside the row. */
@@ -983,11 +1007,15 @@ main:has(.dashboard) {
    naming the destination, so it must not compete with the section name. */
 .settings-page__nav button { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .settings-page__activity {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
   font-size: var(--wc-text-xs-size);
   color: var(--wc-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+.settings-page__activity > svg[data-icon='ok'] { color: var(--wc-status-success); }
 /* direction.md calls these radio cards, so they are cards: the whole option is
    the target, not a 13px circle beside it. */
 .settings-modes { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; max-width: 520px; }
@@ -1019,6 +1047,12 @@ main:has(.dashboard) {
 .edit-bar { display: flex; gap: 8px; }
 .edit-bar button { height: 32px; padding: 0 12px; border: 1px solid var(--wc-border-strong); border-radius: 6px; background: var(--wc-bg-surface); color: var(--wc-text-primary); cursor: pointer; }
 .edit-bar__save { font-weight: var(--wc-text-sm-strong-weight); }
+/* "Saving…" with its icon (T183, AC-177), here and on the model's Save. */
+.edit-bar__save > svg[data-icon],
+.model-editor__head button > svg[data-icon] {
+  margin-right: 6px;
+  vertical-align: -2px;
+}
 /* aria-disabled, not :disabled. The bar keeps disabled buttons focusable (the
    APG toolbar pattern, T059), so they are never :disabled and that rule never
    matched: Undo, Redo and Discard looked active when they had nothing to do,
@@ -1371,7 +1405,19 @@ button.filter-pill__clear {
 }
 .tile-head__action { margin-left: auto; }
 /* A chart whose filtered answer is on its way (AC-078): still drawn, dimmed. */
-.chart-tile--busy { opacity: 0.55; transition: opacity 120ms ease-in; }
+/* What is drawn fades while it is asked again; the head — the title, and the
+   "Updating…" that says so — keeps its contrast (T183's review, AC-005). */
+.chart-tile--busy > :not(.tile-head) { opacity: 0.55; transition: opacity 120ms ease-in; }
+/* Said in the head, as well as by the fade (T183, AC-177). */
+.tile-busy {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--wc-text-secondary);
+}
+.tile-busy > svg[data-icon] { color: var(--wc-accent); }
 .filter-bar__tiles { flex-basis: 100%; border: 0; margin: 0; padding: 0; }
 .filter-bar__tiles legend { color: var(--wc-text-secondary); }
 .filter-bar__tiles label { margin-right: 10px; white-space: nowrap; }

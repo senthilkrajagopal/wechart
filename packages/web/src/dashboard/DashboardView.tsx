@@ -70,6 +70,7 @@ import {
 } from '../filters/FilteredCharts';
 import { newFilter, type FilterValues } from '../filters/model';
 import { adoptValues, sameValues, type SearchFilter } from '../filters/url';
+import { StateLine } from '../shell/StatusIcon';
 import { Canvas, type CanvasProps } from './grid/Canvas';
 import { DRAG_INSTRUCTIONS, DRAG_INSTRUCTIONS_ID, useTileDrag } from './grid/drag';
 import { COLUMNS, ROW_UNIT_PX } from './grid/geometry';
@@ -304,7 +305,10 @@ function TileBody({
        */
       if (loading) return <TileSkeleton chartType="bar" />;
       return spec === undefined ? (
-        <p data-testid="tile-missing-chart">This chart is no longer available.</p>
+        // A state, with its icon (T183, AC-177).
+        <StateLine kind="warn" role="status" testId="tile-missing-chart">
+          This chart is no longer available.
+        </StateLine>
       ) : (
         <ChartTile
           spec={spec}
@@ -634,7 +638,10 @@ function Elements({
               spec={charts.specs[chartId]}
               error={charts.errors[chartId]}
               loading={charts.loading}
-              busy={charts.pending?.has(chartId) === true}
+              // Asked again by a filter, or refreshed: either way, said (T183's review).
+              busy={
+                charts.pending?.has(chartId) === true || charts.refreshing?.has(chartId) === true
+              }
               inEffect={charts.inEffect?.[chartId]}
               editing={editing}
               carried={charts.carried}

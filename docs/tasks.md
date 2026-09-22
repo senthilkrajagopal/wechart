@@ -2776,10 +2776,30 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/ui/src/focus.css.ts`, `packages/web/src/workspaces/model/YamlEditor.tsx`, `e2e/keyboard-coverage.spec.ts`
   - Failing test: `e2e/keyboard-coverage.spec.ts`: navigation, authoring, marking, filtering and every dialog are reachable from the keyboard, focus is visible on every control and is visually distinct from the marking outline, and the code editor shows its Tab-escape hint so it is not a keyboard trap (AC-176).
   - Depends on: T063, T106, T139
-- [ ] T183 (AC-177) Pair every status, validation and job state with an icon and a text label
+- [x] T183 (AC-177) Pair every status, validation and job state with an icon and a text label
   - Files: `packages/ui/src/StatusBadge.tsx`, `e2e/status-labels.spec.ts`
   - Failing test: `e2e/status-labels.spec.ts`: across every workspace, no status, validation or job state is conveyed by colour alone (AC-177).
   - Depends on: T158
+  - **Built 2026-09-22** (the planned `packages/ui/src/StatusBadge.tsx` is `packages/web/src/shell/StatusIcon.tsx`):
+    - `StatusIcon` is the prototype's `STATUS_SVG` icons (ok, run, idle, warn, err), moved out of `workspaces/jobs/StateBadge.tsx` so every state uses them.
+    - `StateLine` is a line of state: an icon and words, an alert for `err` and a status otherwise. With no words it stays mounted and empty, so kept-mounted live regions keep working.
+    - **Converted:** the loading, failure, warning and validation lines of Explore, the library chart page, dashboards (open, save failure, editor overlay, edit bar reason, Add panel message, tile properties), the chart editor (field list, results drawer, acceleration panel, well refusals), Jobs (build panel, query log, health), Model (file list, file page, publish outcome, warn bars, veil, Problems panel) and Security (scopes, policies, generated SQL, context preview).
+    - **Icons added:** the preview banner, the undo toast, the export note (its icon follows whether the result was cut short), the "Saving…" buttons, Settings' Active/Inactive, an empty tile's headline, a value list cut short, "Not filtered by…", and a tile being asked again. The last now says "Updating…" in its head and fades only its body, so the words keep their contrast. Pending actions that only faded a button now say so: uploading an image, starting a build, adding a chart to a dashboard, deleting it, and creating an item. Every "Asking Cube…" is drawn as under way (`run`).
+    - **Left as it is:** the Accelerated badge shows ⚡ and the data's age ("16m"), with "Accelerated · built …" as its accessible text and tooltip. That is the prototype's form, chosen in T014's review so a half-width tile keeps its title; it is not colour alone.
+    - **Tests:**
+      - `e2e/status-labels.spec.ts` checks every visible alert, status, `.status`, `[data-state]` and `.state-line` for both a state icon (`[data-icon]`) and words, so a state drawn without words is caught too. It sweeps eight surfaces, the security preview among them, as each opens, loads and fails, and through a dashboard save that fails, a deletion's toast, a download's note and a publish Cube refuses.
+      - `shell/StatusIcon.test.tsx` covers the states the seeded model can't produce.
+      - `tiles/tileBusy.test.tsx` covers a tile being asked again, and `dashboard/refreshTile.test.tsx` a tile being refreshed.
+    - AC-177 ticked on those tests. The whole e2e suite passes (906) in all three browsers.
+    - **Cold review (one round), verdict FAIL. Fixed:**
+      - **States shown by a fade alone:** a refreshed tile, an image upload, starting a build, adding a chart to a dashboard, deleting one, and creating an item. Each now says so with a `run` icon.
+      - **The sweep couldn't fail on colour alone.** It skipped any element with no words, looked only after the page settled, accepted any picture as an icon, and left most new icons untested. It now checks for words too, sweeps while loading, accepts only a state icon (`[data-icon]`; the Problems panel, veil and loss warning now draw the shared icons), covers the preview, deletion and download states, and gains the unit tests above.
+      - **"Updating…" inside the faded tile failed AA contrast.** Only the tile's body fades now.
+      - **Word-only lines now carry icons:** the acceleration panel's "Asking Cube…", the generated SQL's model line, a build with no job, a cut-short value list, a missing chart, a refused drop, and "Not filtered by…" (with an `idle` icon, because it is information, not an error).
+      - **One icon for asking:** every "Asking Cube…" is `run`, the job states and Cube health included.
+      - **The undo toast's check** now keeps the words' contrast in both themes.
+      - **This record's file name.**
+    - **Outside AC-177, and noted:** Explore's rename and move failures, a failed folder-tree load, and the search palette's loading and errors show nothing at all. That is a missing state rather than one drawn in colour alone.
 - [x] T184 (AC-179) Render dashboards, the chart editor and the model editor without horizontal scrolling at 1,280 px
   - Files: `packages/web/src/**/*.css.ts`, `e2e/no-horizontal-scroll.spec.ts`
   - Failing test: `e2e/no-horizontal-scroll.spec.ts`: at a 1,280 px viewport none of the three surfaces scrolls horizontally (AC-179).

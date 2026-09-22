@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { StateLine } from '../../shell/StatusIcon';
+
 /**
  * A library chart's page (AC-022): every dashboard that uses it, and a way to
  * add it to another.
@@ -90,7 +92,7 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
       <p data-testid="selected-object">{chartId}</p>
 
       <h2>Used by</h2>
-      {using.isPending ? <p>Loading…</p> : null}
+      {using.isPending ? <StateLine kind="run">Loading…</StateLine> : null}
       {using.isSuccess ? (
         using.data.length === 0 ? (
           <p data-testid="used-by-none">No dashboard uses this chart yet.</p>
@@ -128,14 +130,17 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
       >
         Add to dashboard
       </button>
+      {/* Under way, in words with its icon, not only by the button fading (AC-177). */}
+      {addToDashboard.isPending ? <StateLine kind="run">Adding it…</StateLine> : null}
       {addToDashboard.isError ? (
-        <p role="alert">{(addToDashboard.error as Error).message}</p>
+        <StateLine kind="err">{(addToDashboard.error as Error).message}</StateLine>
       ) : null}
 
       <h2>Delete</h2>
       <button type="button" onClick={() => remove.mutate(false)} disabled={remove.isPending}>
         Delete chart
       </button>
+      {remove.isPending ? <StateLine kind="run">Deleting it…</StateLine> : null}
 
       {blockedBy ? (
         <div role="alertdialog" aria-labelledby="delete-heading" className="confirm">
@@ -160,7 +165,7 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
         </div>
       ) : null}
 
-      {remove.isError ? <p role="alert">{(remove.error as Error).message}</p> : null}
+      {remove.isError ? <StateLine kind="err">{(remove.error as Error).message}</StateLine> : null}
     </section>
   );
 }

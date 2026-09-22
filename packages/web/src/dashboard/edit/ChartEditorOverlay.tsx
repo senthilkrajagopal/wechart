@@ -12,6 +12,7 @@ import {
 } from '../../editor/openChart';
 import type { TileSize } from '../../editor/PreviewFrame';
 import { loadTile } from '../../query/loadTile';
+import { StateLine } from '../../shell/StatusIcon';
 import { tileChartOf } from '../chartSpec';
 import type { ChartDraft } from './chartDrafts';
 
@@ -268,20 +269,20 @@ export function ChartEditorOverlay({
         {/* Mounted from the start and only its text changing: a live region
             that appears with its words already in it is announced
             unreliably. */}
-        <p role="status" data-testid="editor-applying">
+        <StateLine kind="run" testId="editor-applying">
           {applying ? 'Applying the change…' : ''}
-        </p>
+        </StateLine>
         {/* Kept mounted with its text changing, as the edit bar's reason is:
             a live region inserted with its words already in it is announced
             unreliably. */}
-        <p
+        <StateLine
+          kind="warn"
           id={blockedId}
-          role="status"
           className="chart-editor-overlay__blocked"
-          data-testid="editor-save-blocked"
+          testId="editor-save-blocked"
         >
           {blocked ?? ''}
-        </p>
+        </StateLine>
         {/* aria-disabled, not disabled, as the edit bar's Save: it stays
             focusable, so the reason it is tied to can be reached from it. The
             handler is what refuses. */}
@@ -300,11 +301,13 @@ export function ChartEditorOverlay({
         </button>
       </header>
       {view.kind === 'loading' ? (
-        <p data-testid="editor-loading">Opening the chart…</p>
+        <StateLine kind="run" testId="editor-loading">
+          Opening the chart…
+        </StateLine>
       ) : view.kind === 'error' ? (
-        <p role="alert" data-testid="editor-load-error">
+        <StateLine kind="err" testId="editor-load-error">
           {view.message}
-        </p>
+        </StateLine>
       ) : (
         <div className="chart-editor-overlay__body" inert={applying} aria-busy={applying}>
           <ChartEditor key={chartId} initial={view.initial} tile={tile} onChange={onChange} />

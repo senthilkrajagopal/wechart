@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { DashboardDocument } from '../model/document';
 import { isDirty } from './dirtyGuard';
+import { StatusIcon } from '../../shell/StatusIcon';
 import { interactionsOf, labelOf, setMode, type InteractionMode } from './interactionMode';
 
 /**
@@ -217,7 +218,11 @@ export function SettingsPage({ document, onCancel, onSave }: SettingsPageProps) 
                     it follows the radio immediately rather than after a save
                     (AC-070, direction.md rule 56). */}
                 {mode === undefined ? null : (
-                  <span className="settings-page__activity">{labelOf(interactions, mode)}</span>
+                  <span className="settings-page__activity">
+                    {/* Its icon as well as its word (T183, AC-177). */}
+                    <StatusIcon kind={labelOf(interactions, mode) === 'Active' ? 'ok' : 'idle'} />
+                    {labelOf(interactions, mode)}
+                  </span>
                 )}
               </button>
             );

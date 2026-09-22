@@ -74,7 +74,8 @@ export function AuthWarning({ pollMs = 30_000 }: { pollMs?: number }) {
   return (
     <div key="said" className="auth-check" role="status" data-testid="cube-auth">
       <Status
-        kind="warn"
+        // Asking is under way, not a warning (T183, AC-177); not knowing is one.
+        kind={known === undefined ? 'run' : 'warn'}
         label={
           known === undefined
             ? 'Asking Cube whether it refuses requests without a valid token…'

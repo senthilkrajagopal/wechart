@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { MODEL_FILES_QUERY } from '../model/FileList';
 import { AuthWarning } from './AuthWarning';
 import { ContextPreview } from './ContextPreview';
@@ -49,9 +50,9 @@ export function SecurityPage() {
             not put up again — and announced again — when they arrive. */}
         <AuthWarning />
         {files.isPending ? (
-          <p>Reading the model…</p>
+          <StateLine kind="run">Reading the model…</StateLine>
         ) : files.isError ? (
-          <p role="alert">{files.error.message}</p>
+          <StateLine kind="err">{files.error.message}</StateLine>
         ) : (
           <PolicyList rows={rows} open={open} unread={unread} />
         )}
@@ -112,14 +113,20 @@ function PolicyList({
         </table>
       )}
       {open.length === 0 ? null : (
-        <p data-testid="policies-open">
-          No access_policy, so open to every security context: {open.join(', ')}.
+        // Warnings, with their icon (T183, AC-177); not live regions, being
+        // what the page says as it opens.
+        <p data-testid="policies-open" className="state-line">
+          <StatusIcon kind="warn" />
+          <span>No access_policy, so open to every security context: {open.join(', ')}.</span>
         </p>
       )}
       {unread.length === 0 ? null : (
         // Their policies are not listed here, and are said not to be.
-        <p data-testid="policies-unread">
-          Not read here: {unread.join('; ')}. Any policies in these files are not listed.
+        <p data-testid="policies-unread" className="state-line">
+          <StatusIcon kind="warn" />
+          <span>
+            Not read here: {unread.join('; ')}. Any policies in these files are not listed.
+          </span>
         </p>
       )}
     </>

@@ -296,6 +296,34 @@ describe('what served a filtered tile’s answer', () => {
  * to rebuild it. Cube answers a refresh from the rollup as last built, so its
  * as-of time need not move (research/cube/refresh-jobs-caching.md).
  */
+/**
+ * T183 / AC-177: a tile being refreshed says so in words with an icon, as a
+ * tile a filter is asking again does — not only by its ↻ fading (T183's
+ * review).
+ */
+describe('a tile being refreshed', () => {
+  it('says it is updating while its chart is asked again', () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <DashboardView
+          dashboardId="d1"
+          document={DOC}
+          specs={{ 'c-status': spec('orders.status'), 'c-region': spec('orders.region') }}
+          documents={{
+            'c-status': chart('By status', 'orders.status'),
+            'c-region': chart('By region', 'orders.region'),
+          }}
+          onRefresh={vi.fn()}
+          refreshing={new Set(['c-region'])}
+          onSave={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    expect(within(tile('t-region')).getByTestId('tile-busy').textContent).toBe('Updating…');
+    expect(within(tile('t-status')).queryByTestId('tile-busy')).toBeNull();
+  });
+});
+
 describe('refreshing a tile a pre-aggregation serves', () => {
   it('says the data is the pre-aggregation’s as last built, and where to rebuild it', async () => {
     servedByRollup = true;

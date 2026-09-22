@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { StateLine } from '../../shell/StatusIcon';
+
 /**
  * Creating a folder, dashboard or chart in the selected folder (AC-020).
  *
@@ -70,6 +72,8 @@ export function CreateMenu({ folderId, onCreate, busy = false }: CreateMenuProps
       <button type="button" onClick={() => setKind(null)}>
         Cancel
       </button>
+      {/* Under way, in words with its icon, not only by Create fading (T183, AC-177). */}
+      {busy ? <StateLine kind="run">Creating it…</StateLine> : null}
     </form>
   );
 }

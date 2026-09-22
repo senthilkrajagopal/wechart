@@ -1,6 +1,8 @@
 import { csvOf, exportNoteOf, rowsText, type RenderSpec } from '@wechart/core';
 import { useEffect, useRef, useState } from 'react';
 
+import { StatusIcon, type StateKind } from '../shell/StatusIcon';
+
 /** A file name from a chart's title: the characters file systems refuse replaced. */
 export function csvFileName(title: string): string {
   const name = title.replace(/[/\\?%*:|"<>]/g, '-').trim();
@@ -66,7 +68,7 @@ export function TileViewMenu({
    * they are the whole result — said once Cube has counted, and never claimed
    * whole before then.
    */
-  const [note, setNote] = useState<string | undefined>(undefined);
+  const [note, setNote] = useState<{ kind: StateKind; text: string } | undefined>(undefined);
   const noteRef = useRef<HTMLParagraphElement>(null);
   // It lies over the tile, so it goes on Escape or a press anywhere but on it.
   const noted = note !== undefined;
@@ -95,7 +97,10 @@ export function TileViewMenu({
   const download = () => {
     const written = spec.rows.length;
     save(csvFileName(title), `${BYTE_ORDER_MARK}${csvOf(spec)}`);
-    setNote(`Downloaded ${rowsText(written)}. Asking Cube whether any were cut short…`);
+    setNote({
+      kind: 'run',
+      text: `Downloaded ${rowsText(written)}. Asking Cube whether any were cut short…`,
+    });
     counting.current?.abort();
     const mine = new AbortController();
     counting.current = mine;
@@ -104,7 +109,9 @@ export function TileViewMenu({
       .then((counted) => {
         if (mine.signal.aborted) return;
         // Said even if the note was put away meanwhile: a truncation is news.
-        setNote(exportNoteOf({ written, returned: counted?.returned, total: counted?.total }).text);
+        const said = exportNoteOf({ written, returned: counted?.returned, total: counted?.total });
+        // Whole: done. Cut short, or not known to be whole: a warning (AC-177).
+        setNote({ kind: said.truncated === false ? 'ok' : 'warn', text: said.text });
       });
   };
   const trigger = useRef<HTMLButtonElement>(null);
@@ -172,7 +179,14 @@ export function TileViewMenu({
         className={note === undefined ? 'visually-hidden' : 'tile-export-note'}
         role="status"
       >
-        {note ?? ''}
+        {note === undefined ? (
+          ''
+        ) : (
+          <>
+            <StatusIcon kind={note.kind} />
+            {note.text}
+          </>
+        )}
       </p>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { StateLine } from '../../shell/StatusIcon';
 import { CreateMenu, type CreatableKind } from './CreateMenu';
 import { FolderContents, type CatalogItem } from './FolderContents';
 import { FolderTree, type FolderNode } from './FolderTree';
@@ -107,10 +108,14 @@ export function ExplorePage() {
           busy={create.isPending}
           onCreate={(kind, title) => create.mutateAsync({ kind, title }).then(() => undefined)}
         />
-        {create.isError ? <p role="alert">{(create.error as Error).message}</p> : null}
-        {contents.isPending ? <p>Loading…</p> : null}
+        {create.isError ? (
+          <StateLine kind="err">{(create.error as Error).message}</StateLine>
+        ) : null}
+        {contents.isPending ? <StateLine kind="run">Loading…</StateLine> : null}
         {contents.isError ? (
-          <p role="alert">Could not load this folder: {(contents.error as Error).message}</p>
+          <StateLine kind="err">
+            Could not load this folder: {(contents.error as Error).message}
+          </StateLine>
         ) : null}
         {contents.isSuccess ? (
           <FolderContents

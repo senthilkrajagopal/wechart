@@ -27,8 +27,8 @@ describe('a job’s state', () => {
     ['pre_agg_not_found', 'err', 'Pre-aggregation not found'],
     // A raw queue state Cube passes through, as it is.
     ['toProcess', 'idle', 'toProcess'],
-    // Before Cube has answered at all.
-    ['', 'idle', 'Asking Cube…'],
+    // Before Cube has answered at all: asking, under way (T183's review).
+    ['', 'run', 'Asking Cube…'],
   ])('%s reads %s, “%s”', (status, kind, label) => {
     expect(stateOf(status)).toEqual({ kind, label });
   });

@@ -17,6 +17,7 @@ import type { FilterValues } from '../filters/model';
 import { valuesFromSearch, valuesToSearch, type SearchFilter } from '../filters/url';
 import { previewClaimsOf } from '../query/securityPreview';
 import { AppShell } from '../shell/AppShell';
+import { StateLine } from '../shell/StatusIcon';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { JobsPage } from '../workspaces/jobs/JobsPage';
 import { SecurityPage } from '../workspaces/security/SecurityPage';
@@ -247,11 +248,13 @@ function ChartEditorSurface() {
       <h1>Chart editor</h1>
       <p data-testid="selected-object">{chartId}</p>
       {view.kind === 'loading' ? (
-        <p data-testid="editor-loading">Opening the chart…</p>
+        <StateLine kind="run" testId="editor-loading">
+          Opening the chart…
+        </StateLine>
       ) : view.kind === 'error' ? (
-        <p role="alert" data-testid="editor-load-error">
+        <StateLine kind="err" testId="editor-load-error">
           {view.message}
-        </p>
+        </StateLine>
       ) : (
         // Keyed by chart id: the editor reads `initial` once, to seed its
         // history, so a different chart has to be a different editor.

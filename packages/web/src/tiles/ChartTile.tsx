@@ -3,6 +3,7 @@ import type { ChartType, RenderSpec } from '@wechart/core';
 import { useState } from 'react';
 
 import type { AnswerMeta } from '../query/answerMeta';
+import { StateLine, StatusIcon } from '../shell/StatusIcon';
 import { AccelerationBadge } from './AccelerationBadge';
 import { ChartCanvas } from './ChartCanvas';
 import { DataAsOf } from './DataAsOf';
@@ -89,9 +90,9 @@ function ChartBody({ spec, height }: ChartBodyProps) {
   if (!isDrawable(spec.chartType)) {
     // Saying so beats drawing something the spec never asked for.
     return (
-      <p data-testid="chart-not-drawable" role="status">
+      <StateLine kind="warn" testId="chart-not-drawable">
         {spec.chartType} charts are not drawn yet.
-      </p>
+      </StateLine>
     );
   }
 
@@ -127,14 +128,23 @@ export function ChartTile({
     title === undefined || title.trim() === '' ? null : (
       <h3 className="tile-head__title">{title}</h3>
     );
-  // Where the answer came from, then when its data is from.
+  // Where the answer came from, then when its data is from — and, while it is
+  // being asked again, that it is: in words with its icon, not only by the
+  // fade (T183, AC-177). No live region: every tile a filter reaches is asked
+  // at once, and `aria-busy` already says it of each.
   const dataAsOf = (
     <>
+      {busy === true ? (
+        <span className="tile-busy" data-testid="tile-busy">
+          <StatusIcon kind="run" />
+          Updating…
+        </span>
+      ) : null}
       {served === undefined ? null : <AccelerationBadge result={served} />}
       {asOf === undefined ? null : <DataAsOf at={asOf} />}
     </>
   );
-  const saysOfData = served !== undefined || asOf !== undefined;
+  const saysOfData = busy === true || served !== undefined || asOf !== undefined;
 
   // No rows: said in words, whatever the chart type (AC-043) — not blank
   // axes, and no table switch, since there is no data behind either view.

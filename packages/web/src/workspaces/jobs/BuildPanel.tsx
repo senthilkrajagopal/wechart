@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 
 import { missingScopeOf, ScopeUnavailable, useScopes } from '../../query/scopes';
+import { StateLine } from '../../shell/StatusIcon';
 import { StateBadge } from './StateBadge';
 
 /**
@@ -69,10 +70,12 @@ function BuildJobs({
     <li className="build-jobs">
       <span className="build-jobs__id">{id}</span>
       {tokens.length === 0 ? (
-        <p data-testid="build-empty">Cube started no job: no partition of {id} was built.</p>
+        <StateLine kind="warn" testId="build-empty">
+          Cube started no job: no partition of {id} was built.
+        </StateLine>
       ) : null}
       {!jobs.isError ? null : missingScopeOf(jobs.error) === undefined ? (
-        <p role="alert">{jobs.error.message}</p>
+        <StateLine kind="err">{jobs.error.message}</StateLine>
       ) : (
         // Refused its scope since the build started (T176, AC-170).
         <ScopeUnavailable
@@ -143,11 +146,11 @@ export function BuildPanel({ pollMs = 1500 }: { pollMs?: number }) {
    */
   if (scopes.data?.jobs === 'missing' || missingScopeOf(start.error) === 'jobs')
     return <ScopeUnavailable scope="jobs" what="Building pre-aggregations" />;
-  if (buildable.isPending) return <p>Reading the pre-aggregations…</p>;
+  if (buildable.isPending) return <StateLine kind="run">Reading the pre-aggregations…</StateLine>;
   if (buildable.isError) {
     const lacking = missingScopeOf(buildable.error);
     return lacking === undefined ? (
-      <p role="alert">{buildable.error.message}</p>
+      <StateLine kind="err">{buildable.error.message}</StateLine>
     ) : (
       <ScopeUnavailable scope={lacking} what="Listing pre-aggregations" />
     );
@@ -194,7 +197,9 @@ export function BuildPanel({ pollMs = 1500 }: { pollMs?: number }) {
           </tbody>
         </table>
       )}
-      {start.isError ? <p role="alert">{start.error.message}</p> : null}
+      {/* Starting, in words with its icon, not only by the buttons fading (AC-177). */}
+      {start.isPending ? <StateLine kind="run">Asking Cube to start the build…</StateLine> : null}
+      {start.isError ? <StateLine kind="err">{start.error.message}</StateLine> : null}
       {builds.length === 0 ? null : (
         <section aria-label="Builds">
           <h2 className="build-panel__head">Builds</h2>

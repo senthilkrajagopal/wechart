@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { StateLine } from '../../shell/StatusIcon';
 import { objectsOf, type FileObjects, type MemberKind, type ModelObject } from './objects';
 
 /**
@@ -73,12 +74,17 @@ function ObjectEntry({ object }: { object: ModelObject }) {
 export function FileList() {
   const files = useQuery(MODEL_FILES_QUERY);
 
-  if (files.isPending) return <p className="model-files__note">Reading the model…</p>;
+  if (files.isPending)
+    return (
+      <StateLine kind="run" className="model-files__note">
+        Reading the model…
+      </StateLine>
+    );
   if (files.isError)
     return (
-      <p role="alert" className="model-files__note">
+      <StateLine kind="err" className="model-files__note">
         {files.error.message}
-      </p>
+      </StateLine>
     );
 
   if (files.data.length === 0)
@@ -96,9 +102,9 @@ export function FileList() {
               <a href={`/model/files/${encodeURIComponent(file.path)}`}>{file.path}</a>
             </h2>
             {read.problem === undefined ? null : (
-              <p role="alert" className="model-file__problem">
+              <StateLine kind="err" className="model-file__problem">
                 {read.problem}
-              </p>
+              </StateLine>
             )}
             {read.code === undefined ? null : (
               <p className="model-file__note">{codeNoteOf(file.path, read.code)}</p>

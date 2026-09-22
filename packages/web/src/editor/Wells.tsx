@@ -1,5 +1,6 @@
 import type { ChartSpec, WellName } from '@wechart/core';
 
+import { StatusIcon } from '../shell/StatusIcon';
 import type { Member } from './fields';
 
 /**
@@ -83,6 +84,8 @@ export function Wells({ spec, available, onAdd, onRemove, dragging = null }: Wel
                 id={`well-${well.name}-reason`}
                 data-testid={`reason-${well.name}`}
               >
+                {/* A refused drop, with its icon (T183, AC-177). */}
+                <StatusIcon kind="err" />
                 {refusal}
               </p>
             ) : null}

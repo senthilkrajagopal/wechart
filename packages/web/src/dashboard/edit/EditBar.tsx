@@ -1,5 +1,7 @@
 import { useId, useRef, useState } from 'react';
 
+import { StateLine, StatusIcon } from '../../shell/StatusIcon';
+
 /**
  * The dashboard edit bar (AC-053, direction.md section 2).
  *
@@ -159,7 +161,15 @@ export function EditBar({
               : { 'aria-label': control.label, title: control.label })}
           >
             {control.icon === undefined ? (
-              control.label
+              control.id === 'save' && saving ? (
+                // Under way, said with its icon as well as its word (T183, AC-177).
+                <>
+                  <StatusIcon kind="run" />
+                  {control.label}
+                </>
+              ) : (
+                control.label
+              )
             ) : (
               <span aria-hidden="true">{control.icon}</span>
             )}
@@ -172,9 +182,9 @@ export function EditBar({
           appears together with its words is announced unreliably, and
           someone returning from the chart editor, with focus on a tile,
           would otherwise not learn that Save is now held back. */}
-      <p id={reasonId} className="edit-bar__blocked" data-testid="save-blocked" role="status">
+      <StateLine kind="warn" id={reasonId} className="edit-bar__blocked" testId="save-blocked">
         {saveBlocked ?? ''}
-      </p>
+      </StateLine>
     </>
   );
 }

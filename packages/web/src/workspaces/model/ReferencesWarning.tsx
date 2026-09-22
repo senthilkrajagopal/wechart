@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 
+import { StatusIcon } from '../../shell/StatusIcon';
+
 /**
  * The charts and dashboards using members a save changes, listed before it
  * goes to Cube (T147, AC-141), each a link to where it is — in a new tab, so
@@ -70,6 +72,8 @@ export function ReferencesWarning({
   const { charts, dashboards } = found;
   return (
     <div ref={bar} className="model-editor__warnbar model-references" role="alert">
+      {/* A warning, with its icon (direction.md rule 3). */}
+      <StatusIcon kind="warn" />
       <div className="model-editor__warnbar-text">
         <p className="model-references__lead">
           This save changes members that {count(charts.length, 'chart')} and{' '}

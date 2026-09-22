@@ -44,12 +44,11 @@ export function Health({ pollMs = 10_000 }: { pollMs?: number }) {
   const known = health.isError ? undefined : health.data;
   const cubeSaid = known === undefined ? undefined : CUBE[known.cube];
   const workerSaid = known === undefined ? undefined : WORKER[known.worker];
+  // Asking is under way, drawn so (T183's review); not knowing is a warning.
+  const asking = known === undefined && !health.isError;
   const [cubeKind, cubeLabel] =
     cubeSaid ??
-    ([
-      'warn',
-      known === undefined && !health.isError ? 'Asking Cube…' : 'Cube health unknown',
-    ] as const);
+    (asking ? (['run', 'Asking Cube…'] as const) : (['warn', 'Cube health unknown'] as const));
   const [workerKind, workerLabel] = workerSaid ?? (['warn', 'Refresh worker unknown'] as const);
   return (
     <div className="jobs-health" role="status" aria-label="Cube">

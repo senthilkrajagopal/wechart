@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { META_QUERY } from '../query/meta';
+import { StatusIcon } from '../shell/StatusIcon';
 import { allMembers } from './FilterBar';
 
 /**
@@ -18,6 +19,9 @@ export function NotCovered({ members }: { members: readonly string[] }) {
       data-testid="not-covered"
       title="This chart's cube or view has no path to that field in the model, so the filter cannot apply to it."
     >
+      {/* A state of the tile, so with an icon (T183, AC-177): information's,
+          not an error's. */}
+      <StatusIcon kind="idle" />
       Not filtered by {names.join(', ')}
     </p>
   );
