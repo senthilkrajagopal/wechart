@@ -37,20 +37,25 @@ const spec = (rows: RenderSpec['rows']): RenderSpec => ({
 
 describe('when a chart’s data is from', () => {
   it('is in the tile head, to the second, with the exact time as its datetime', () => {
+    // Today's data: the tile reads the real clock, and data from another day
+    // names its day too (below) — so the fixture's time is today's, not a
+    // fixed date that stops being today (it did, the day after it was written).
+    const at = new Date();
+    at.setHours(10, 32, 18, 0);
     render(
       <ChartTile
         title="Orders"
         spec={spec([{ 'orders.status': 'shipped', 'orders.count': 3 }])}
-        asOf="2026-09-21T10:32:18.000Z"
+        asOf={at.toISOString()}
       />,
     );
 
     const head = screen.getByTestId('chart-tile').querySelector('.tile-head');
     const asOf = within(head as HTMLElement).getByTestId('data-as-of');
     expect(asOf.tagName).toBe('TIME');
-    expect(asOf.getAttribute('datetime')).toBe('2026-09-21T10:32:18.000Z');
+    expect(asOf.getAttribute('datetime')).toBe(at.toISOString());
     expect(asOf.textContent).toBe(
-      `Data as of ${new Date('2026-09-21T10:32:18.000Z').toLocaleTimeString(undefined, {
+      `Data as of ${at.toLocaleTimeString(undefined, {
         hour: 'numeric',
         minute: '2-digit',
         second: '2-digit',
