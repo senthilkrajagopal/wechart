@@ -2380,10 +2380,24 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Failing test: `queue.test.ts`: every queued build appears with its pre-aggregation, partition, state and token, and cancelling removes it from the queue (AC-151).
   - Depends on: T155
   - **Deferred by the user, 2026-09-21** ("defer both as per recommendation"). Not to be started unless the user asks. Listing Cube's queue and cancelling an entry both need the same undocumented or unauthenticated sources as T151 (spec F17 status note).
-- [ ] T158 (AC-152) Pair every job and schedule state with an icon and a text label
+- [x] T158 (AC-152) Pair every job and schedule state with an icon and a text label
   - Files: `packages/web/src/workspaces/jobs/StateBadge.tsx`, `packages/web/src/workspaces/jobs/StateBadge.test.tsx`
   - Failing test: `StateBadge.test.tsx`: every job and schedule state renders an icon and a text label, and none is conveyed by colour alone (AC-152).
-  - Depends on: T157
+  - Depends on: T157. T157 is deferred; this needed only T155's jobs.
+  - **Done 2026-09-22.** Files as built: `workspaces/jobs/StateBadge.tsx` (`stateOf`, `StateBadge`) and its test; `BuildPanel.tsx` shows each job's state with it; `shell/styles.ts` (the prototype's `.status`); `e2e/jobs.spec.ts`.
+    - **Which states.** Every state Cube's jobs API reports (`research/cube/refresh-jobs-caching.md` §B):
+      - Scheduled: waiting.
+      - Processing: running.
+      - Done: ok.
+      - Missing partition: failed. The research's "the job has failed".
+      - `failure: <message>`: "Failed: <message>".
+      - Not found: warning. Cube keeps a job's record for 24 hours.
+      - Pre-aggregation not found: failed.
+      - Any raw queue state it passes through: shown as written, waiting.
+      - "Asking Cube…" before the first answer.
+    - **How.** Each state wears one of the prototype's five status icons (`prototype/ui.js`, `STATUS_SVG`). The icon is hidden from a screen reader, which reads the words. Its colour is the status token's, and never the only sign. The raw state is kept in `data-state`.
+    - **Schedules** are deferred (AC-153 to AC-155; spec F17), so there are none to show. The query log's states already paired an icon with words (T015).
+    - AC-152 ticked. `StateBadge.test.tsx` checks every state's words, and that its icon is of its kind, a different drawing for each kind, and hidden from a screen reader. `e2e/jobs.spec.ts`, against the real Cube in all three browsers, shows the seed rollup's build job as "Done" with the ok icon.
 - [ ] T159 (AC-153) Create a cron schedule, show the next runs and run it at those times
   - Files: `packages/api/src/scheduler/{schedules,worker}.ts`, `packages/web/src/workspaces/schedules/ScheduleForm.tsx`, `packages/api/src/scheduler/schedules.test.ts`
   - Failing test: `schedules.test.ts`: the next runs shown match the cron expression, and with a fake clock a due run starts (AC-153). Runs on pg-boss per `docs/research/scheduler.md`.

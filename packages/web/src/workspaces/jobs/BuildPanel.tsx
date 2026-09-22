@@ -1,6 +1,8 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 
+import { StateBadge } from './StateBadge';
+
 /**
  * Building a pre-aggregation (T155, AC-149), as the prototype's Jobs page lists
  * them: every pre-aggregation Cube compiled, each with Build. A build is
@@ -75,7 +77,8 @@ function BuildJobs({
           return (
             <li key={token} data-testid={`job-${token}`} className="build-jobs__job">
               <code data-testid="job-token">{token}</code>
-              <span data-testid="job-state">{job?.status ?? 'asking Cube…'}</span>
+              {/* Its icon and its words (T158, AC-152); "Asking Cube…" until the first answer. */}
+              <StateBadge status={job?.status ?? ''} />
               {job?.table === undefined ? null : (
                 <code className="build-jobs__table" data-testid="job-table">
                   {job.table}

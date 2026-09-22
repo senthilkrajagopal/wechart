@@ -659,6 +659,21 @@ fieldset.model-field > legend {
 .build-jobs__job { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; font-size: 12px; }
 .build-jobs__table { color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 .build-panel__note { margin: 8px 0 0; color: var(--wc-text-secondary); font-size: 12px; }
+/* A job's state (T158, AC-152): the prototype's .status — its icon, its words. */
+.status {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.status svg { flex: none; }
+.status--ok { color: var(--wc-status-success); }
+.status--warn { color: var(--wc-status-warning); }
+.status--err { color: var(--wc-status-error); }
+.status--run { color: var(--wc-accent); }
+.status--idle { color: var(--wc-text-secondary); }
 
 /* The selected row is marked by more than the focus ring, so the selection is
    still visible when focus moves into a control inside the row. */

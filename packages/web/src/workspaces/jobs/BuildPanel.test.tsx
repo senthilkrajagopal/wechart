@@ -87,9 +87,11 @@ describe('building a pre-aggregation', () => {
 
     const job = await screen.findByTestId('job-78f5612');
     expect(within(job).getByTestId('job-token').textContent).toBe('78f5612');
+    // The state as Cube reports it, and in words with its icon (T158).
     await vi.waitFor(() => {
-      expect(within(job).getByTestId('job-state').textContent).toBe('done');
+      expect(within(job).getByTestId('job-state').getAttribute('data-state')).toBe('done');
     });
+    expect(within(job).getByTestId('job-state').textContent).toBe('Done');
     expect(within(job).getByTestId('job-table').textContent).toBe('prod_pre_aggregations.t_2026');
 
     // Done is final: no more asking.
@@ -108,7 +110,7 @@ describe('building a pre-aggregation', () => {
         await screen.findByRole('button', { name: 'Build monthly_orders.by_status_month' }),
       );
       await vi.waitFor(() => {
-        expect(screen.getByTestId('job-state').textContent).toBe(final);
+        expect(screen.getByTestId('job-state').getAttribute('data-state')).toBe(final);
       });
       const asked = statusAsks();
       await new Promise((resolve) => setTimeout(resolve, 80));
@@ -136,9 +138,11 @@ describe('building a pre-aggregation', () => {
     );
 
     await vi.waitFor(() => {
-      expect(within(screen.getByTestId('job-bbb222')).getByTestId('job-state').textContent).toBe(
-        'done',
-      );
+      expect(
+        within(screen.getByTestId('job-bbb222'))
+          .getByTestId('job-state')
+          .getAttribute('data-state'),
+      ).toBe('done');
     });
   });
 
@@ -174,7 +178,7 @@ describe('the Jobs workspace (T155’s review)', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Pre-aggregations' }));
 
     await vi.waitFor(() => {
-      expect(screen.getByTestId('job-state').textContent).toBe('done');
+      expect(screen.getByTestId('job-state').getAttribute('data-state')).toBe('done');
     });
     expect(statusAsks()).toBe(4);
   });

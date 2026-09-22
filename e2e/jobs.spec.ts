@@ -50,7 +50,12 @@ test('building a pre-aggregation shows its job token and follows it to done', as
   const token = (await job.getByTestId('job-token').textContent()) ?? '';
   expect(token).toMatch(/^[0-9a-f]{16,}$/);
   // Followed while Cube builds it, to its end — a build takes a second or two.
-  await expect(job.getByTestId('job-state')).toHaveText('done', { timeout: 30_000 });
+  await expect(job.getByTestId('job-state')).toHaveAttribute('data-state', 'done', {
+    timeout: 30_000,
+  });
+  // T158 / AC-152: in words, with its icon — never colour alone.
+  await expect(job.getByTestId('job-state')).toHaveText('Done');
+  await expect(job.getByTestId('job-state').locator('svg[data-icon="ok"]')).toHaveCount(1);
   await expect(job.getByTestId('job-table')).toContainText(
     'prod_pre_aggregations.monthly_orders_by_status_month',
   );

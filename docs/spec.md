@@ -507,7 +507,7 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
       Fails when: a build older than 24 hours is missing from the history.
 - [ ] AC-151 THE SYSTEM SHALL show the build queue with each entry's pre-aggregation, partition, state and token, and allow cancelling a queued entry.
       Fails when: a queued build is missing, or cancelling leaves it queued.
-- [ ] AC-152 THE SYSTEM SHALL show every job and schedule with an icon and a text label for its state, never colour alone (direction.md rule 22).
+- [x] AC-152 THE SYSTEM SHALL show every job and schedule with an icon and a text label for its state, never colour alone (direction.md rule 22).
       Fails when: a state is conveyed only by colour.
 - [ ] AC-153 WHEN the user creates a schedule for a pre-aggregation build or a cache warm-up, THE SYSTEM SHALL accept a cron expression, show the next runs it implies, and run it at those times.
       Fails when: the next runs shown do not match the expression, or a due run does not start.
