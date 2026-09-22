@@ -1,7 +1,8 @@
 import { useId, useState } from 'react';
 import { parse, stringify } from 'yaml';
 
-import { SCHEMA, type Field, type SectionId } from './schema';
+import { CUBE_PARSE } from '../objects';
+import { SCHEMA, type Field, type ObjectSchema } from './schema';
 
 /**
  * The model editor's form (T138, AC-132; direction.md §7b), generated from
@@ -38,14 +39,117 @@ function write(value: Value, key: string, next: unknown): Value {
 /** A YAML field's text: the value as YAML, or nothing for no value. */
 const yamlOf = (value: unknown) => (value === undefined ? '' : stringify(value).trimEnd());
 
+const isPlain = (value: unknown): value is Value =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** The object a `list` or `object` field holds: its section, or the fields written inline. */
+export function schemaOf(field: Field): ObjectSchema {
+  if (field.of !== undefined) return SCHEMA[field.of];
+  return { title: field.label, plural: field.label, fields: field.fields ?? [] };
+}
+
+/** A list's name: "Measures", "Access policies", "Cubes in the view". */
+function pluralOf(schema: ObjectSchema): string {
+  if (schema.plural !== undefined) return schema.plural;
+  return /[^aeiou]y$/.test(schema.title) ? `${schema.title.slice(0, -1)}ies` : `${schema.title}s`;
+}
+
+/**
+ * Whether a value is of the shape its field edits. One that isn't — a format
+ * written as `{type: link, label}`, a date Cube reads as a timestamp — is
+ * edited as YAML instead, rather than shown empty and written over.
+ */
+function fits(field: Field, value: unknown): boolean {
+  if (value === undefined) return true;
+  switch (field.kind) {
+    case 'identifier':
+    case 'text':
+    case 'reference':
+    case 'format':
+      return typeof value === 'string' || typeof value === 'number';
+    case 'sql':
+    case 'enum':
+      return typeof value === 'string';
+    case 'boolean':
+      return typeof value === 'boolean';
+    case 'flag':
+      return typeof value === 'boolean' || typeof value === 'string';
+    case 'number':
+      return typeof value === 'number';
+    case 'references':
+      return (
+        typeof value === 'string' ||
+        (Array.isArray(value) && value.every((each) => typeof each === 'string'))
+      );
+    case 'list':
+      return Array.isArray(value) && value.every(isPlain);
+    case 'object':
+      return isPlain(value);
+    case 'yaml':
+      return true;
+  }
+}
+
+/** The names a references field's text holds. */
+const namesOf = (text: string) =>
+  text
+    .split(',')
+    .map((name) => name.trim())
+    .filter((name) => name !== '');
+
+/**
+ * Member references, typed as `a, b`. What is typed is kept as typed while it
+ * still reads as the value — so the comma of `a,` stays — and the value is
+ * shown afresh when it changes from elsewhere.
+ */
+function ReferencesControl({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: unknown;
+  onChange: (next: unknown) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const names = Array.isArray(value)
+    ? (value as string[])
+    : typeof value === 'string'
+      ? [value]
+      : [];
+  const shown =
+    draft !== null && JSON.stringify(namesOf(draft)) === JSON.stringify(names)
+      ? draft
+      : names.join(', ');
+  return (
+    <input
+      id={id}
+      type="text"
+      placeholder="member, member"
+      value={shown}
+      onChange={(event) => {
+        setDraft(event.target.value);
+        const next = namesOf(event.target.value);
+        onChange(next.length === 0 ? undefined : next);
+      }}
+      onBlur={() => {
+        setDraft(null);
+      }}
+    />
+  );
+}
+
 function Control({
   field,
   value,
+  owner,
   onChange,
   id,
 }: {
   field: Field;
   value: unknown;
+  /** The object the field is a key of: some options depend on its other keys. */
+  owner: Value;
   onChange: (next: unknown) => void;
   id: string;
 }) {
@@ -65,24 +169,46 @@ function Control({
           }}
         />
       );
-    case 'enum':
+    case 'enum': {
+      // Only what the validator takes here (`rank` only when multi-stage).
+      const offered = (field.options ?? []).filter((option) => {
+        const needs = field.onlyWith?.[option];
+        return needs === undefined || read(owner, needs.key) === needs.value;
+      });
+      const aliases = field.aliases ?? [];
+      const current = typeof value === 'string' ? value : '';
+      const asWritten = current !== '' && !offered.includes(current) && !aliases.includes(current);
       return (
         <select
           id={id}
-          value={typeof value === 'string' ? value : ''}
+          value={current}
           onChange={(event) => {
             text(event.target.value);
           }}
         >
           <option value="">(not set)</option>
-          {(field.options ?? []).map((option) => (
+          {offered.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
           ))}
+          {aliases.length === 0 ? null : (
+            <optgroup label="Also accepted">
+              {aliases.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {/* Shown as the file has it, not as "(not set)"; not offered otherwise. */}
+          {asWritten ? <option value={current}>{`${current} (as written)`}</option> : null}
         </select>
       );
-    case 'boolean':
+    }
+    case 'boolean': {
+      // Some keys take only `true` (row_level.allow_all).
+      const offered = field.options ?? ['true', 'false'];
       return (
         <select
           id={id}
@@ -93,10 +219,17 @@ function Control({
           }}
         >
           <option value="">(not set)</option>
-          <option value="true">true</option>
-          <option value="false">false</option>
+          {offered.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+          {value === false && !offered.includes('false') ? (
+            <option value="false">false (as written)</option>
+          ) : null}
         </select>
       );
+    }
     case 'flag': {
       // A boolean, or an expression Cube evaluates (J·EXPR).
       const expression = typeof value === 'string';
@@ -139,21 +272,7 @@ function Control({
       );
     }
     case 'references':
-      return (
-        <input
-          id={id}
-          type="text"
-          placeholder="member, member"
-          value={Array.isArray(value) ? value.join(', ') : typeof value === 'string' ? value : ''}
-          onChange={(event) => {
-            const names = event.target.value
-              .split(',')
-              .map((name) => name.trim())
-              .filter((name) => name !== '');
-            onChange(names.length === 0 ? undefined : names);
-          }}
-        />
-      );
+      return <ReferencesControl id={id} value={value} onChange={onChange} />;
     case 'number':
       return (
         <input
@@ -188,8 +307,9 @@ function Control({
 
 /**
  * A value the form does not break into fields — `meta`, a list of filters —
- * edited as YAML, and taken only once it parses; until then the text stays
- * as typed and the value as it was.
+ * edited as YAML, read as Cube reads it (`CUBE_PARSE`), and taken only once
+ * it parses; until then the text stays as typed, the value as it was, and
+ * the field says why.
  */
 function YamlControl({
   id,
@@ -201,25 +321,38 @@ function YamlControl({
   onChange: (next: unknown) => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const problemId = useId();
   return (
-    <textarea
-      id={id}
-      className="model-field__yaml"
-      rows={2}
-      value={draft ?? yamlOf(value)}
-      onChange={(event) => {
-        setDraft(event.target.value);
-      }}
-      onBlur={() => {
-        if (draft === null) return;
-        try {
-          onChange(draft.trim() === '' ? undefined : (parse(draft) as unknown));
-          setDraft(null);
-        } catch {
-          // Kept as typed; the YAML view will say what is wrong (T141).
-        }
-      }}
-    />
+    <>
+      <textarea
+        id={id}
+        className="model-field__yaml"
+        rows={2}
+        value={draft ?? yamlOf(value)}
+        aria-invalid={problem === null ? undefined : true}
+        aria-describedby={problem === null ? undefined : problemId}
+        onChange={(event) => {
+          setDraft(event.target.value);
+        }}
+        onBlur={() => {
+          if (draft === null) return;
+          try {
+            onChange(draft.trim() === '' ? undefined : (parse(draft, CUBE_PARSE) as unknown));
+            setDraft(null);
+            setProblem(null);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setProblem(message.split('\n')[0] ?? message);
+          }
+        }}
+      />
+      {problem === null ? null : (
+        <span id={problemId} role="alert" className="model-field__problem">
+          Not YAML yet: {problem}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -237,15 +370,16 @@ function FieldRow({
   const change = (next: unknown) => {
     onChange(write(value, field.key, next));
   };
+  const shaped = fits(field, own);
 
   // A list or object the schema describes is its own set of fields.
-  if (field.of !== undefined && field.kind === 'object') {
+  if (shaped && field.kind === 'object' && field.of !== undefined) {
     const inner = (own ?? {}) as Value;
     return (
       <fieldset className="model-field model-field--object">
         <legend>{field.label}</legend>
         <ObjectForm
-          section={field.of}
+          schema={schemaOf(field)}
           value={inner}
           onChange={(next) => {
             change(Object.keys(next).length === 0 ? undefined : next);
@@ -254,12 +388,12 @@ function FieldRow({
       </fieldset>
     );
   }
-  if (field.of !== undefined && field.kind === 'list') {
+  if (shaped && field.kind === 'list' && (field.of !== undefined || field.fields !== undefined)) {
     return (
       <fieldset className="model-field model-field--list">
         <legend>{field.label}</legend>
         <MemberList
-          section={field.of}
+          schema={schemaOf(field)}
           items={Array.isArray(own) ? (own as Value[]) : []}
           onChange={change}
         />
@@ -270,25 +404,29 @@ function FieldRow({
   return (
     <div className="field model-field" data-key={field.key}>
       <label htmlFor={id}>{field.label}</label>
-      <Control field={field} value={own} onChange={change} id={id} />
+      {shaped ? (
+        <Control field={field} value={own} owner={value} onChange={change} id={id} />
+      ) : (
+        <YamlControl id={id} value={own} onChange={change} />
+      )}
     </div>
   );
 }
 
 /** Every field of an object, its legacy keys set apart in a group of their own. */
 export function ObjectForm({
-  section,
+  schema,
   value,
   onChange,
   only,
 }: {
-  section: SectionId;
+  schema: ObjectSchema;
   value: Value;
   onChange: (next: Value) => void;
   /** Which fields to show; all by default. */
   only?: (field: Field) => boolean;
 }) {
-  const fields = SCHEMA[section].fields.filter((field) => only?.(field) ?? true);
+  const fields = schema.fields.filter((field) => only?.(field) ?? true);
   const current = fields.filter((field) => field.legacy !== true);
   const legacy = fields.filter((field) => field.legacy === true);
   return (
@@ -308,45 +446,84 @@ export function ObjectForm({
   );
 }
 
+/** A new member's name, `segment_1`, the first not taken; none for an object without one. */
+function newItem(schema: ObjectSchema, items: readonly Value[]): Value {
+  if (!schema.fields.some((field) => field.key === 'name')) return {};
+  const stem = schema.title.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  const taken = new Set(items.map((item) => item['name']));
+  let n = 1;
+  while (taken.has(`${stem}_${String(n)}`)) n += 1;
+  return { name: `${stem}_${String(n)}` };
+}
+
 /**
  * A list of members — each a row showing its name and type, which expands in
- * place into every field it has (direction.md §7b, "Rows").
+ * place into every field it has (direction.md §7b, "Rows") — with a member
+ * added at its end, or one removed.
  */
 export function MemberList({
-  section,
+  schema,
   items,
   onChange,
 }: {
-  section: SectionId;
+  schema: ObjectSchema;
   items: readonly Value[];
   onChange: (next: Value[] | undefined) => void;
 }) {
-  const title = SCHEMA[section].title;
+  const { title } = schema;
+  const noun = title.charAt(0).toLowerCase() + title.slice(1);
   return (
-    <ul className="model-members" aria-label={`${title}s`}>
-      {items.map((item, index) => {
-        const name =
-          typeof item['name'] === 'string' ? item['name'] : `${title} ${String(index + 1)}`;
-        const type = typeof item['type'] === 'string' ? item['type'] : undefined;
-        return (
-          // Positions, not names: a member's name is one of the fields it edits.
-          <li key={index}>
-            <details className="model-member">
-              <summary>
-                <span className="model-member__name">{name}</span>
-                {type === undefined ? null : <span className="model-member__type">{type}</span>}
-              </summary>
-              <ObjectForm
-                section={section}
-                value={item}
-                onChange={(next) => {
-                  onChange(items.map((each, at) => (at === index ? next : each)));
+    <div className="model-members-block">
+      <ul className="model-members" aria-label={pluralOf(schema)}>
+        {items.map((entry, index) => {
+          // A `-` with nothing after it yet is a member with no keys, not a crash.
+          const item = isPlain(entry) ? entry : {};
+          const name =
+            typeof item['name'] === 'string' ? item['name'] : `${title} ${String(index + 1)}`;
+          const type = typeof item['type'] === 'string' ? item['type'] : undefined;
+          return (
+            // Positions, not names: a member's name is one of the fields it edits.
+            <li key={index} className="model-members__item">
+              <details className="model-member">
+                <summary>
+                  <span className="model-member__name">{name}</span>
+                  {type === undefined ? null : <span className="model-member__type">{type}</span>}
+                </summary>
+                <ObjectForm
+                  schema={schema}
+                  value={item}
+                  onChange={(next) => {
+                    onChange(items.map((each, at) => (at === index ? next : each)));
+                  }}
+                />
+              </details>
+              <button
+                type="button"
+                className="btn-sm model-members__remove"
+                aria-label={`Remove ${noun} ${name}`}
+                title={`Remove ${noun} ${name}`}
+                onClick={() => {
+                  const rest = items.filter((_, at) => at !== index);
+                  onChange(rest.length === 0 ? undefined : rest);
                 }}
-              />
-            </details>
-          </li>
-        );
-      })}
-    </ul>
+              >
+                Remove
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {/* The prototype's "+ measure" (model.js, `data-addroot`). */}
+      <button
+        type="button"
+        className="btn-sm model-members__add"
+        aria-label={`Add ${noun}`}
+        onClick={() => {
+          onChange([...items, newItem(schema, items)]);
+        }}
+      >
+        + {noun}
+      </button>
+    </div>
   );
 }

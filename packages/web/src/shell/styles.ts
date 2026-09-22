@@ -409,6 +409,17 @@ fieldset.model-field > legend {
 }
 .model-member[open] > summary { margin-bottom: 8px; }
 .model-member__name { font-weight: 600; }
+/* A member's row with its Remove beside it, and the list's "+ measure" under
+   it, as the prototype's .formbar. */
+.model-members-block { display: grid; gap: 6px; justify-items: start; }
+.model-members-block > .model-members { width: 100%; }
+.model-members__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: start;
+}
+.model-field__problem { color: var(--wc-status-error); font-size: 12px; }
 .model-member__type {
   margin-left: 8px;
   color: var(--wc-text-secondary);

@@ -55,9 +55,9 @@ function rows(): Row[] {
     const keys = named.map((key, index) =>
       key.startsWith('.') ? `${(named[index - 1] ?? '').split('.')[0] ?? ''}${key}` : key,
     );
-    const enumeration = cells
-      .map((cell) => /enum: ((?:`[^`]+`(?:, )?)+)/.exec(cell)?.[1])
-      .find(Boolean);
+    // Every value the cell names after "enum:", its legacy and camelCase
+    // forms too ("…; legacy `belongs_to`, …"): each is one Joi accepts.
+    const enumeration = cells.map((cell) => /enum: ([^|]+)/.exec(cell)?.[1]).find(Boolean);
     found.push({
       section,
       keys,
@@ -91,11 +91,76 @@ describe('the model form’s schema', () => {
         ? []
         : keys
             .map((key) => SCHEMA[section as SectionId]?.fields.find((field) => field.key === key))
-            .filter((field) => JSON.stringify(field?.options) !== JSON.stringify(options))
-            .map((field) => `${section} ${field?.key ?? '?'}: ${JSON.stringify(field?.options)}`),
+            .map((field) => ({
+              field,
+              offered: [...(field?.options ?? []), ...(field?.aliases ?? [])],
+            }))
+            .filter(({ offered }) => JSON.stringify(offered) !== JSON.stringify(options))
+            .map(
+              ({ field, offered }) => `${section} ${field?.key ?? '?'}: ${JSON.stringify(offered)}`,
+            ),
     );
 
     expect(wrong).toEqual([]);
+  });
+
+  it('reads every value of an enumeration, so a relationship’s legacy forms are checked too', () => {
+    const relationship = rows().find(
+      (row) => row.section === 'Y.5' && row.keys.includes('relationship'),
+    );
+
+    expect(relationship?.options).toHaveLength(12);
+  });
+
+  it('offers the multi-stage measure types only on a multi-stage measure (§Y.17)', () => {
+    const type = SCHEMA['Y.7'].fields.find((field) => field.key === 'type');
+
+    expect(type?.onlyWith).toEqual({
+      number_agg: { key: 'multi_stage', value: true },
+      rank: { key: 'multi_stage', value: true },
+    });
+  });
+
+  it('offers only `true` for a row-level policy’s allow_all (Y.14)', () => {
+    const allowAll = SCHEMA['Y.14'].fields.find((field) => field.key === 'row_level.allow_all');
+
+    expect(allowAll?.options).toEqual(['true']);
+  });
+
+  it('gives the lists written inside a key’s type their own fields, enumerations as the research lists them', () => {
+    const itemsOf = (section: SectionId, key: string) =>
+      Object.fromEntries(
+        (SCHEMA[section].fields.find((field) => field.key === key)?.fields ?? []).map((field) => [
+          field.key,
+          field.options ?? field.kind,
+        ]),
+      );
+    const operators = [
+      ...(/\*\*Filter operators:\*\* ([^.]+)\./.exec(research)?.[1] ?? '').matchAll(/`([^`]+)`/g),
+    ].map((match) => match[1]);
+
+    // Y.7: "list of `{sql (required), dir: asc or desc}`".
+    expect(itemsOf('Y.7', 'order_by')).toEqual({ sql: 'sql', dir: ['asc', 'desc'] });
+    // Y.13: "named list of `{columns (references), type: regular or aggregate}`".
+    expect(itemsOf('Y.13', 'indexes')).toEqual({
+      name: 'identifier',
+      columns: 'references',
+      type: ['regular', 'aggregate'],
+    });
+    // Y.13: "list of `{dimension (reference), granularity}`".
+    expect(itemsOf('Y.13', 'time_dimensions')).toEqual({
+      dimension: 'reference',
+      granularity: 'text',
+    });
+    // Y.14: `conditions` is "list of `{if: expression}`", and the filter rows.
+    expect(itemsOf('Y.14', 'conditions')).toEqual({ if: 'text' });
+    expect(itemsOf('Y.14', 'row_level.filters')).toEqual({
+      member: 'reference',
+      operator: [...operators, 'measureFilter'],
+      values: 'yaml',
+      or: 'yaml',
+      and: 'yaml',
+    });
   });
 
   it('offers the filter operators Y.16 lists, and no other', () => {

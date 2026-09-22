@@ -40,8 +40,20 @@ export interface Field {
   readonly kind: FieldKind;
   /** The validator's allowed values, for an enumeration. */
   readonly options?: readonly string[];
+  /**
+   * Values the validator also takes that the docs call legacy or write in
+   * camelCase (`has_many`, `manyToOne`): offered apart, after the options.
+   */
+  readonly aliases?: readonly string[];
+  /** Options the validator takes only when another key of the object has a value. */
+  readonly onlyWith?: Readonly<Record<string, { readonly key: string; readonly value: unknown }>>;
   /** The object a `list` or `object` holds, by its section. */
   readonly of?: SectionId;
+  /**
+   * The object a `list` holds when the research writes it inside the key's
+   * type (`list of {sql, dir: asc or desc}`) rather than as a section.
+   */
+  readonly fields?: readonly Field[];
   /** Accepted by the validator but undocumented or legacy (research: "legacy"). */
   readonly legacy?: boolean;
 }
@@ -74,6 +86,8 @@ export type SectionId =
 
 export interface ObjectSchema {
   readonly title: string;
+  /** A list of them, where adding "s" or "ies" would not say it ("Cubes in the view"). */
+  readonly plural?: string;
   readonly fields: readonly Field[];
 }
 
@@ -184,7 +198,21 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       // The validator also takes the legacy `belongs_to`, `has_many`,
       // `has_one` and camelCase spellings; the form offers the three the
       // docs use, and never one Cube rejects.
-      f('relationship', 'enum', { options: ['many_to_one', 'one_to_many', 'one_to_one'] }),
+      f('relationship', 'enum', {
+        options: ['many_to_one', 'one_to_many', 'one_to_one'],
+        // Y.5: "legacy `belongs_to`, `has_many`, `has_one`; camelCase forms …".
+        aliases: [
+          'belongs_to',
+          'has_many',
+          'has_one',
+          'manyToOne',
+          'oneToMany',
+          'oneToOne',
+          'belongsTo',
+          'hasMany',
+          'hasOne',
+        ],
+      }),
       f('sql', 'sql'),
     ],
   },
@@ -265,7 +293,14 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
     title: 'Measure',
     fields: [
       f('name', 'identifier'),
-      f('type', 'enum', { options: MEASURE_TYPES }),
+      f('type', 'enum', {
+        options: MEASURE_TYPES,
+        // §Y.17: Joi takes these two only with `multi_stage: true`.
+        onlyWith: {
+          number_agg: { key: 'multi_stage', value: true },
+          rank: { key: 'multi_stage', value: true },
+        },
+      }),
       f('sql', 'sql'),
       f('title', 'text'),
       f('description', 'text'),
@@ -285,7 +320,10 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       f('add_group_by', 'references'),
       f('filter', 'object', { of: 'Y.7d' }),
       f('case', 'object', { of: 'Y.6c' }),
-      f('order_by', 'yaml'),
+      // "list of `{sql (required), dir: asc or desc}`".
+      f('order_by', 'list', {
+        fields: [f('sql', 'sql'), f('dir', 'enum', { options: ['asc', 'desc'] })],
+      }),
       legacy('cumulative', 'boolean'),
       legacy('drill_filters'),
       legacy('aliases'),
@@ -381,6 +419,7 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
   },
   'Y.10a': {
     title: 'Cube in the view',
+    plural: 'Cubes in the view',
     fields: [
       f('join_path', 'text'),
       f('includes', 'yaml'),
@@ -436,7 +475,10 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       f('segments', 'references'),
       f('time_dimension', 'reference'),
       f('granularity', 'text'),
-      f('time_dimensions', 'yaml'),
+      // "list of `{dimension (reference), granularity}`".
+      f('time_dimensions', 'list', {
+        fields: [f('dimension', 'reference'), f('granularity', 'text')],
+      }),
       f('rollups', 'references'),
       f('partition_granularity', 'enum', {
         options: ['hour', 'day', 'week', 'month', 'quarter', 'year'],
@@ -447,7 +489,14 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       f('build_range_end', 'yaml'),
       f('refresh_range_start', 'yaml'),
       f('refresh_range_end', 'yaml'),
-      f('indexes', 'yaml'),
+      // "named list of `{columns (references), type: regular or aggregate}`".
+      f('indexes', 'list', {
+        fields: [
+          f('name', 'identifier'),
+          f('columns', 'references'),
+          f('type', 'enum', { options: ['regular', 'aggregate'] }),
+        ],
+      }),
       f('allow_non_strict_date_range_match', 'boolean'),
       f('use_original_sql_pre_aggregations', 'flag'),
       f('external', 'flag'),
@@ -455,7 +504,10 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       f('union_with_source_data', 'flag'),
       f('unique_key_columns', 'yaml'),
       f('stream_offset', 'enum', { options: ['earliest', 'latest'] }),
-      f('output_column_types', 'yaml'),
+      // "list of `{member (reference), type (string)}`".
+      f('output_column_types', 'list', {
+        fields: [f('member', 'reference'), f('type', 'text')],
+      }),
       f('sql_alias', 'text'),
       f('max_pre_aggregations', 'number'),
       legacy('time_dimension_reference', 'reference'),
@@ -470,13 +522,25 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
     fields: [
       f('group', 'text'),
       f('groups', 'yaml'),
-      f('conditions', 'yaml'),
+      // "list of `{if: expression}`".
+      f('conditions', 'list', { fields: [f('if', 'text')] }),
       f('member_level.includes', 'yaml'),
       f('member_level.excludes', 'yaml'),
       f('member_masking.includes', 'yaml'),
       f('member_masking.excludes', 'yaml'),
-      f('row_level.filters', 'yaml'),
-      f('row_level.allow_all', 'boolean'),
+      // The filter rows under the table: member, operator (Y.16 with
+      // `measureFilter`), values, and nested `or` / `and`.
+      f('row_level.filters', 'list', {
+        fields: [
+          f('member', 'reference'),
+          f('operator', 'enum', { options: [...OPERATORS, 'measureFilter'] }),
+          f('values', 'yaml'),
+          f('or', 'yaml'),
+          f('and', 'yaml'),
+        ],
+      }),
+      // "Only `true` is valid".
+      f('row_level.allow_all', 'boolean', { options: ['true'] }),
     ],
   },
 };

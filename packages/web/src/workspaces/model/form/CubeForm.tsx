@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from 'react';
 
-import { MemberList, ObjectForm } from './ObjectForm';
+import { MemberList, ObjectForm, schemaOf } from './ObjectForm';
 import { SCHEMA, type Field, type SectionId } from './schema';
 
 /**
@@ -109,14 +109,16 @@ export function CubeForm({
         <fieldset className="model-form__lock" disabled={readOnly}>
           {open === 'general' ? (
             <ObjectForm
-              section={section}
+              schema={SCHEMA[section]}
               value={value}
               onChange={onChange}
               only={(field) => !listed.has(field.key)}
             />
           ) : (
             <MemberList
-              section={fieldOf(open)?.of ?? 'Y.6'}
+              schema={schemaOf(
+                fieldOf(open) ?? { key: open, label: open, kind: 'list', of: 'Y.6' },
+              )}
               items={Array.isArray(value[open]) ? (value[open] as Value[]) : []}
               onChange={(items) => {
                 const next = { ...value };

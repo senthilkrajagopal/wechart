@@ -1746,6 +1746,43 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - Measures opens `total_amount`: its type is `sum` among exactly the measure types, and its format is `currency`.
       - Joins opens `customers`: `many_to_one`, among exactly the three.
   - The test-integrity hook flagged one edit to `CubeForm.test.tsx`, a new, uncommitted file, as weakening a matcher. That edit only scoped the queries so a nested object's same-named field is not found; the matchers were `toBeTruthy` and `toEqual` before and after.
+  - **Cold review (one round, 2026-09-21), verdict FAIL. Fixed in the review commit:**
+    - **The measure Type offered `number_agg` and `rank` on every measure.** Joi takes them only with `multi_stage: true` (§Y.17), which was AC-132's Fails-when on the real surface.
+      - A field's `onlyWith` now names such options. They are offered only when the measure is multi-stage.
+      - **Three tests were wrong, and pinned the defect.** They have been corrected to the validator's values:
+        - `CubeForm.test.tsx`'s `count` measure;
+        - the e2e's `total_amount`;
+        - `schema.test.ts`, which now checks `onlyWith`.
+      - A new test covers a multi-stage `rank` measure, offered all thirteen.
+    - **`row_level.allow_all` offered `false`**, which the research says is never valid. It now offers only `true`.
+    - **A join's relationship offered 3 of the validator's 12 values**, so a valid `has_many` showed as "(not set)".
+      - The three documented values come first. The legacy and camelCase ones (research Y.5) follow in an "Also accepted" group.
+      - **The test's own reader was also wrong:** it stopped at the first `;` of an enum cell and so checked only three. It now reads every value in the cell, and a test pins the twelve.
+    - **A value the form doesn't offer**, such as `countDistinct`, now shows as "countDistinct (as written)" instead of "(not set)".
+    - **A value of another shape than its field** is now edited as YAML instead of shown empty and written over. Examples are a `format: {type: link, label}`, or a date that `CUBE_PARSE` reads as a timestamp.
+    - **Reference fields swallowed the comma**, so a second name couldn't be typed. Found with a stateful harness; the old `vi.fn()` never re-rendered.
+      - What's typed is now kept while it still reads as the value.
+      - The value is shown fresh when it changes from elsewhere.
+    - **Lists written inside a key's type now have fields of their own**, with the research's enumerations:
+      - `order_by` (sql, dir);
+      - `indexes` (name, columns, type);
+      - `time_dimensions`;
+      - `output_column_types`;
+      - `conditions`;
+      - row-level filter rows (member, operator including `measureFilter`, values, or, and).
+    - **Keys of lists the file doesn't have yet were unreachable**, because a list could only edit members it already had. Every list now adds a member ("+ segment", named `segment_1`, the first free name) and removes one ("Remove segment segment_1").
+    - **A YAML field that doesn't parse** kept the text but said nothing. It now shows "Not YAML yet: …" and is marked invalid, and it reads with `CUBE_PARSE` as the file does.
+    - **Lists are named in the plural:** "Access policies" and "Cubes in the view", where the code used to write "Access policys" and "Cube in the views".
+    - **A `null` member**, such as a bare `-` in the YAML, is a member with no keys, not a crash. This was part of T139's H1 finding.
+    - Tests: 5 in `schema.test.ts` and 9 in `CubeForm.test.tsx`, each seen red first. The e2e is corrected as above.
+  - **Left from the review:**
+    - **Included members** (Y.10b) are still edited as YAML. `includes` is `"*"` or a list mixing names and objects, so its items have no one shape to give fields to.
+    - **A file's `view_groups`** (Y.12) get no form. They are outside "a cube or a view".
+    - **For the user:** the Non-goals exclude the advanced pre-aggregation types, but AC-132's "exactly" means the Type still offers `rollup_join`, `rollup_lambda` and `original_sql`. The spec disagrees with itself here.
+    - **Design only, no AC:**
+      - member pickers for reference fields (direction.md §7b);
+      - rows' SQL preview and badges;
+      - fields that follow a member's shape, such as a `switch` dimension.
 - [x] T139 (AC-133) Synchronise the form and the YAML view in both directions
   - Files: `packages/web/src/workspaces/model/{YamlEditor,sync}.tsx`, `packages/web/src/workspaces/model/sync.test.ts`
   - Failing test: `sync.test.ts`: a form edit updates the YAML within one render, and a valid YAML edit updates the form within 500 ms (AC-133). Monaco is driven as a controlled editor per `docs/research/code-editor.md`; parsing uses `yaml` with Cube's own options.

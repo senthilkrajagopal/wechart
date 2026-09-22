@@ -160,8 +160,8 @@ test('a model file opens on a form for its cube, its enumerations the validatorâ
     'max',
     'count_distinct',
     'count_distinct_approx',
-    'number_agg',
-    'rank',
+    // Not `number_agg` or `rank`: Joi takes those only on a multi-stage
+    // measure (research Â§Y.17), and total_amount is not one.
   ]);
   await expect(measure.locator('[data-key="format"]').getByRole('textbox')).toHaveValue('currency');
 
@@ -174,5 +174,19 @@ test('a model file opens on a form for its cube, its enumerations the validatorâ
   await expect(relationship).toHaveValue('many_to_one');
   expect(
     (await relationship.locator('option').allTextContents()).filter((o) => o !== '(not set)'),
-  ).toEqual(['many_to_one', 'one_to_many', 'one_to_one']);
+  ).toEqual([
+    'many_to_one',
+    'one_to_many',
+    'one_to_one',
+    // Also accepted by the validator (research Y.5), offered apart.
+    'belongs_to',
+    'has_many',
+    'has_one',
+    'manyToOne',
+    'oneToMany',
+    'oneToOne',
+    'belongsTo',
+    'hasMany',
+    'hasOne',
+  ]);
 });
