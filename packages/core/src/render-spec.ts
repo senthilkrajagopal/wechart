@@ -139,6 +139,11 @@ export interface RenderSpec {
    * 2026" for a month — rather than as Cube's raw timestamp.
    */
   readonly granularities?: MemberGranularities;
+  /**
+   * The chart's measures (T179, AC-173), whichever channel draws them: an
+   * export writes each one's raw number beside its formatted value.
+   */
+  readonly measures?: readonly string[];
   /** The colour the chart is drawn on, used for the gap between marks. */
   readonly surface?: string;
   /**

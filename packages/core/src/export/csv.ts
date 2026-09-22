@@ -41,17 +41,35 @@ function guarded(raw: unknown, written: string): string {
  */
 export function csvOf(spec: RenderSpec): string {
   const columns = tableColumnsOf(spec.rows);
+  const measures = new Set(spec.measures ?? []);
   const write = columns.map((member) =>
     formatterFor(member, spec.formats ?? {}, spec.granularities ?? {}),
   );
+  // A measure's raw number beside its formatted value (T179, AC-173).
+  const heads = columns.flatMap((member) =>
+    measures.has(member) ? [member, `${member} (raw)`] : [member],
+  );
   const records = spec.rows.map((row) =>
-    columns.map((member, index) => {
+    columns.flatMap((member, index) => {
       const raw = row[member];
-      const written = write[index]?.(raw) ?? '';
-      return guarded(raw, written);
+      const written = guarded(raw, write[index]?.(raw) ?? '');
+      return measures.has(member) ? [written, rawNumberOf(raw)] : [written];
     }),
   );
-  return Papa.unparse([columns, ...records], { newline: '\r\n', escapeFormulae: false });
+  return Papa.unparse([heads, ...records], { newline: '\r\n', escapeFormulae: false });
+}
+
+/**
+ * A measure's value as the number Cube gave (a JSON string, research/cube/
+ * data-apis.md) or folding made — written as it is, for a spreadsheet to read
+ * as a number; anything else, nothing, since it is not one.
+ */
+function rawNumberOf(raw: unknown): string {
+  // A sum folding made carries binary noise (0.1 + 0.2 is 0.30000000000000004):
+  // fifteen significant digits, all a double holds exactly, write it as 0.3.
+  if (typeof raw === 'number')
+    return Number.isFinite(raw) ? String(Number(raw.toPrecision(15))) : '';
+  return typeof raw === 'string' && NUMBER.test(raw) ? raw : '';
 }
 
 const count = (rows: number) => `${rows.toLocaleString('en-US')} ${rows === 1 ? 'row' : 'rows'}`;

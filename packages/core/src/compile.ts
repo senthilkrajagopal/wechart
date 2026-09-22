@@ -96,6 +96,7 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
       ...(chart.options === undefined ? {} : { options: chart.options }),
       ...(options.formats === undefined ? {} : { formats: options.formats }),
       granularities: granularitiesOf(chart.wells.timeDimensions),
+      measures: [...chart.wells.measures],
       ...(options.palette === undefined ? {} : { palette: options.palette }),
       ...(options.surface === undefined ? {} : { surface: options.surface }),
     }),

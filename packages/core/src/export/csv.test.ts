@@ -133,3 +133,59 @@ describe('a chart’s CSV', () => {
     expect(lines(csvOf(spec))[1]).toBe('a,"-$1,234.5"');
   });
 });
+
+/**
+ * T179 / AC-173: THE SYSTEM SHALL format exported values with their member
+ * formats, and SHALL write raw numeric values for measures so the file can be
+ * re-analysed.
+ * Fails when: a measure is exported only as a formatted string.
+ *
+ * Each measure's column as the table writes it, then its raw number beside
+ * it, headed "<member> (raw)": the displayed columns all kept (AC-171), and
+ * the number as Cube gave it, for a spreadsheet to sum.
+ */
+describe('a measure in a chart’s CSV', () => {
+  const spec: RenderSpec = {
+    chartType: 'bar',
+    encoding: { x: ['orders.ordered_at.month'], y: ['orders.total', 'orders.count'] },
+    measures: ['orders.total', 'orders.count'],
+    rows: [
+      {
+        'orders.ordered_at.month': '2026-01-01T00:00:00.000',
+        'orders.total': '1234.5',
+        'orders.count': '12000',
+      },
+      {
+        'orders.ordered_at.month': '2026-02-01T00:00:00.000',
+        'orders.total': '-7',
+        'orders.count': null,
+      },
+    ],
+    formats: { 'orders.total': 'currency' },
+    granularities: { 'orders.ordered_at.month': 'month' },
+  };
+
+  it('is written formatted, with its raw number beside it', () => {
+    expect(lines(csvOf(spec))).toEqual([
+      'orders.ordered_at.month,orders.total,orders.total (raw),orders.count,orders.count (raw)',
+      'Jan 2026,"$1,234.5",1234.5,"12,000",12000',
+      // A negative number is a number, not a formula; no value, no number.
+      'Feb 2026,-$7,-7,,',
+    ]);
+  });
+
+  it('writes a folded "Other" sum without floating-point noise (T179’s review)', () => {
+    const folded: RenderSpec = {
+      chartType: 'bar',
+      encoding: { x: ['orders.status'], y: ['orders.rate'] },
+      measures: ['orders.rate'],
+      // As top-N folding sums them: 0.1 + 0.2 in binary floating point.
+      rows: [{ 'orders.status': 'Other (2)', 'orders.rate': 0.1 + 0.2 }],
+    };
+    expect(lines(csvOf(folded))[1]).toBe('Other (2),0.3,0.3');
+  });
+
+  it('adds no raw column for a dimension', () => {
+    expect(lines(csvOf(spec))[0]).not.toContain('orders.ordered_at.month (raw)');
+  });
+});

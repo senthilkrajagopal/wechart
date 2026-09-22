@@ -2698,10 +2698,19 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - `e2e/export.spec.ts`, "a download says how many rows it holds, and whether Cube cut them short": the real page and Cube. Past the limit, Cube's real answer has its `total` raised at the network, since the sample data is far under 10,000 rows.
       - `TileViewMenu.test.tsx`: each case, and the stale count.
     - When the marked-rows export (T120) lands, it must carry the same note.
-- [ ] T179 (AC-173) Export formatted values alongside raw numerics for measures
+- [x] T179 (AC-173) Export formatted values alongside raw numerics for measures
   - Files: `packages/core/src/export/csv.ts`, `packages/core/src/export/format.test.ts`
   - Failing test: `format.test.ts`: values carry their member formats and every measure also appears as a raw number (AC-173).
   - Depends on: T177, T052
+  - **Done 2026-09-22.** Files as built:
+    - `core/src/render-spec.ts`: `measures`, the chart's measures, whatever channel draws them.
+    - `core/src/compile.ts`: sets `measures` from `chart.wells.measures`.
+    - `core/src/export/csv.ts`: `csvOf` and `rawNumberOf`. Tested in `csv.test.ts` and `compile.test.ts`; there is no `format.test.ts`.
+    - `e2e/export.spec.ts`.
+    - **What the file holds.** Each measure's column as the table writes it, by its model format. Right after it comes a column headed `<member> (raw)`, holding the number as Cube gave it (a numeric string) or as top-N folding summed it. It is empty where the value isn't a number. Dimensions get no raw column. The ` (raw)` header wording is my choice; the spec names none.
+    - **A reading of AC-171 this rests on.** AC-171's "columns match what the tile shows" now means every displayed column, plus a raw column beside each measure. AC-173 forces that: a displayed measure is formatted, and the raw number has to go somewhere. AC-171's Fails-when, which is an excluded row or an omitted displayed column, still holds.
+    - AC-173 ticked. `csv.test.ts` compares whole CSVs, and `e2e/export.spec.ts`, "a tile's CSV writes each measure formatted, and its raw number beside it", runs against the real Cube in all three browsers. It checks that a `(raw)` column follows each measure, that each raw value is a plain number matching its formatted one, and that `total_amount` is written in its currency format. The AC-171 test still compares the displayed columns exactly, with the raw ones set aside.
+    - **Cold review (one round), verdict PASS. Fixed:** a folded "Other" sum's raw value carried floating-point noise (`0.30000000000000004`); it is now written to 15 significant digits. The record also now lists the files as built and the two choices above.
 
 ## F21. Performance, accessibility and design conformance
 

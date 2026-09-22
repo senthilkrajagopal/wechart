@@ -583,7 +583,7 @@ Traces to: `[R6]`, direction.md §7c.
       Fails when: the CSV contains rows the tile excluded, or omits a displayed column.
 - [x] AC-172 WHEN an export exceeds the row limit Cube returns, THE SYSTEM SHALL say how many rows were exported and that the result was truncated.
       Fails when: a truncated export claims to be complete.
-- [ ] AC-173 THE SYSTEM SHALL format exported values with their member formats, and SHALL write raw numeric values for measures so the file can be re-analysed.
+- [x] AC-173 THE SYSTEM SHALL format exported values with their member formats, and SHALL write raw numeric values for measures so the file can be re-analysed.
       Fails when: a measure is exported only as a formatted string.
 
 ## F21. Performance, accessibility and design conformance

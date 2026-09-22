@@ -28,8 +28,9 @@ async function ordersDashboard(request: APIRequestContext) {
           source: { cube: 'orders' },
           // Three dimensions: more than the chart's channels place, so the
           // table shows a column no channel does (T177's review).
+          // Two measures, one with a currency format (T179, AC-173).
           wells: {
-            measures: ['orders.count'],
+            measures: ['orders.count', 'orders.total_amount'],
             dimensions: ['orders.status', 'customers.name', 'products.name'],
             timeDimensions: [],
           },
@@ -103,15 +104,61 @@ test('a tile’s CSV has the rows and columns the tile shows, its filter applied
   const file = await readFile(await download.path(), 'utf8');
   // The mark that tells a spreadsheet it is UTF-8, then the CSV.
   expect(file.startsWith('﻿')).toBe(true);
-  const [head, ...rows] = records(file.slice(1));
+  const [head = [], ...rows] = records(file.slice(1));
 
   // Every column the table heads — the third dimension, on no chart channel,
   // among them (T177's review) — and every row, each as the table writes it.
-  expect(head).toEqual(shown.head);
+  // Each measure's raw number beside it is T179's, below; set aside here.
+  const raw = new Set(head.flatMap((name, index) => (name.endsWith(' (raw)') ? [index] : [])));
+  const shownOf = (record: readonly string[]) => record.filter((_, index) => !raw.has(index));
+  expect(shownOf(head)).toEqual(shown.head);
   expect(head).toContain('products.name');
-  expect(rows).toEqual(shown.rows);
+  expect(rows.map(shownOf)).toEqual(shown.rows);
   // The filter's exclusions stay excluded.
   expect(file).not.toContain('completed');
+});
+
+/**
+ * T179 / AC-173: THE SYSTEM SHALL format exported values with their member
+ * formats, and SHALL write raw numeric values for measures so the file can be
+ * re-analysed.
+ * Fails when: a measure is exported only as a formatted string.
+ *
+ * Against the real Cube: each measure's column as the table writes it —
+ * `total_amount` in its model's currency format — and its raw number beside
+ * it, the number that formatted value writes.
+ */
+test('a tile’s CSV writes each measure formatted, and its raw number beside it', async ({
+  page,
+  request,
+}) => {
+  const id = await ordersDashboard(request);
+  await page.goto(`/explore/dashboards/${id}`);
+  const tile = page.locator('[data-tile="tile-orders"]');
+  await expect(tile.getByRole('table')).toContainText('shipped', { timeout: 15_000 });
+
+  await tile.getByRole('button', { name: 'Actions for Orders by status' }).click();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    tile.getByRole('button', { name: 'Download CSV' }).click(),
+  ]);
+  const [head = [], ...rows] = records((await readFile(await download.path(), 'utf8')).slice(1));
+
+  for (const measure of ['orders.count', 'orders.total_amount']) {
+    const at = head.indexOf(measure);
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(head[at + 1]).toBe(`${measure} (raw)`);
+    for (const row of rows) {
+      const [written = '', number = ''] = row.slice(at, at + 2);
+      // A plain number, and the one the formatted value writes.
+      expect(number).toMatch(/^-?\d+(\.\d+)?$/);
+      expect(Number(written.replace(/[$,]/g, ''))).toBeCloseTo(Number(number), 2);
+    }
+  }
+  // Formatted by the model's own format: `total_amount` is currency.
+  expect(rows[0]?.[head.indexOf('orders.total_amount')]).toMatch(/^-?\$[\d,]+(\.\d+)?$/);
+  // No raw column for a dimension.
+  expect(head).not.toContain('orders.status (raw)');
 });
 
 /**

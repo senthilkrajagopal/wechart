@@ -155,6 +155,17 @@ describe('compiling a saved document', () => {
     });
     expect(compile(withStatusAndCount, { rows: ROWS, chartType: 'bar' }).granularities).toEqual({});
   });
+
+  /**
+   * T179 / AC-173: an export writes each measure's raw number as well as its
+   * formatted value, so the spec says which of its members are measures —
+   * whichever channel draws them.
+   */
+  it('names its measures, as the wells hold them (AC-173)', () => {
+    expect(compile(withStatusAndCount, { rows: ROWS, chartType: 'bar' }).measures).toEqual([
+      'orders.count',
+    ]);
+  });
 });
 
 describe('an encoding the user overrode', () => {
