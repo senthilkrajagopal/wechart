@@ -711,6 +711,14 @@ test('a local copy of a shared chart takes the tile and the edits so far, and le
   );
   await expect(editor(page).getByRole('button', { name: 'Make a local copy' })).toHaveCount(0);
   await expect(page.getByTestId('chart-type')).toHaveText('stackedBar');
+  // Focus on what was done, not dropped to the page (T135's review).
+  await expect(editor(page).getByTestId('local-copy-made')).toBeFocused();
+  // The editor's history goes on through the copy: Undo reaches the edit
+  // made before it, and Redo brings it back (AC-035; T135's review).
+  await editor(page).getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.getByTestId('chart-type')).toHaveText('bar');
+  await editor(page).getByRole('button', { name: 'Redo', exact: true }).click();
+  await expect(page.getByTestId('chart-type')).toHaveText('stackedBar');
 
   await page.getByTestId('editor-back').click();
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');

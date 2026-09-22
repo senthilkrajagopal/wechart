@@ -99,7 +99,49 @@ describe('making a local copy of a shared chart', () => {
     expect(detached.pages[0]?.items[1]).toEqual(DASHBOARD.pages[0]?.items[1]);
   });
 
-  it('leaves a tile that is not a shared chart’s as it is', () => {
+  /**
+   * T135's review: another tile here showing the same shared chart shows it
+   * as stored once the copy is made — the edits of this session went with the
+   * copy, and the shared chart is written as it was: not at all.
+   */
+  it('leaves another tile showing the shared chart on the chart as stored', () => {
+    const twice: DashboardDocument = {
+      ...DASHBOARD,
+      pages: [
+        {
+          id: 'p1',
+          title: 'Page 1',
+          items: [
+            { id: 't1', kind: 'chart', chartId: 'shared', w: 6, h: 40 },
+            { id: 't3', kind: 'chart', chartId: 'shared', w: 6, h: 40 },
+          ],
+        },
+      ],
+    };
+    const edited = withDraft(twice, 'shared', {
+      document: EDITED,
+      drawn: { spec: LINE },
+      version: 4,
+    });
+
+    const detached = detach(edited, 't1', {
+      dashboardId: 'd1',
+      copyId: 'copy',
+      edited: { document: EDITED, drawn: { spec: LINE } },
+    });
+
+    expect(detached.pages[0]?.items[1]).toEqual({
+      id: 't3',
+      kind: 'chart',
+      chartId: 'shared',
+      w: 6,
+      h: 40,
+    });
+    expect(detached.chartDrafts?.['shared']).toBeUndefined();
+    expect(chartWritesOf(detached, 'd1').map((write) => write.id)).toEqual(['copy']);
+  });
+
+  it('leaves the dashboard as it is for a tile it cannot find', () => {
     const local = withDraft(DASHBOARD, 'other', {
       document: { ...SHARED, localToDashboardId: 'd1' },
       drawn: { spec: LINE },

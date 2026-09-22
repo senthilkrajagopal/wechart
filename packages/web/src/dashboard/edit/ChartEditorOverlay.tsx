@@ -196,14 +196,31 @@ export function ChartEditorOverlay({
    */
   const [copied, setCopied] = useState(false);
   const makeLocalCopy = useCallback(async () => {
-    if (opened === undefined || onMakeLocalCopy === undefined || applying) return;
+    /**
+     * One thing at a time: while the copy is drawn, Back, Esc, the browser's
+     * Back and Save dashboard wait (`leave` sees the same guard) — either
+     * finishing second would write over the other, the shared chart included
+     * (T135's review).
+     */
+    if (opened === undefined || onMakeLocalCopy === undefined || leaving.current) return;
+    leaving.current = true;
     setApplying(true);
-    const document = chartDocumentWith(opened.document, latest.current ?? opened.state);
-    const drawn = await tileChartOf(document, loadRows);
-    setApplying(false);
-    setCopied(true);
-    onMakeLocalCopy({ document, drawn });
-  }, [opened, onMakeLocalCopy, applying]);
+    try {
+      const document = chartDocumentWith(opened.document, latest.current ?? opened.state);
+      const drawn = await tileChartOf(document, loadRows);
+      setCopied(true);
+      onMakeLocalCopy({ document, drawn });
+    } finally {
+      leaving.current = false;
+      setApplying(false);
+    }
+  }, [opened, onMakeLocalCopy]);
+  /** Focus on what was done, once said: the button pressed has gone with the offer. */
+  const copiedNote = useRef<HTMLDivElement>(null);
+  const localNow = opened?.document.localToDashboardId !== undefined;
+  useEffect(() => {
+    if (copied && localNow) copiedNote.current?.focus();
+  }, [copied, localNow]);
 
   /**
    * The browser's Back (T196). Opened from a tile, the editor puts the tile in
@@ -344,10 +361,17 @@ export function ChartEditorOverlay({
         />
       )}
       {/* The prototype's note once copied: whose it is now, and the shared chart as it was. */}
-      {copied && opened?.document.localToDashboardId !== undefined ? (
-        <StateLine kind="ok" className="shared-chart-notice" testId="local-copy-made">
-          Local copy · only on this dashboard. The shared chart is unchanged.
-        </StateLine>
+      {copied && localNow ? (
+        <div
+          ref={copiedNote}
+          tabIndex={-1}
+          className="shared-chart-notice"
+          data-testid="local-copy-made"
+        >
+          <StateLine kind="ok">
+            Local copy · only on this dashboard. The shared chart is unchanged.
+          </StateLine>
+        </div>
       ) : null}
       {view.kind === 'loading' ? (
         <StateLine kind="run" testId="editor-loading">
@@ -359,7 +383,14 @@ export function ChartEditorOverlay({
         </StateLine>
       ) : (
         <div className="chart-editor-overlay__body" inert={applying} aria-busy={applying}>
-          <ChartEditor key={chartId} initial={view.initial} tile={tile} onChange={onChange} />
+          {/* Keyed by the tile, so the editor — its Undo history (AC-035) —
+              goes on through a local copy's new chart id (T135's review). */}
+          <ChartEditor
+            key={tileId ?? chartId}
+            initial={view.initial}
+            tile={tile}
+            onChange={onChange}
+          />
         </div>
       )}
     </div>

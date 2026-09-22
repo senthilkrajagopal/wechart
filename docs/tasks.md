@@ -1767,6 +1767,11 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - A library chart used by two dashboards is opened from a tile. The notice says it is on 2 dashboards, and a type change is made before the copy.
       - After the copy, the editor keeps the edit and the offer is gone. Saved, the tile's chart is a new one, local to the dashboard, with the edit.
       - The library chart is stored as it was, and the other dashboard still draws it so.
+    - **Cold review (one round), verdict FAIL. Fixed:**
+      - **The editor's history broke at the copy** (AC-035 regressed). The editor was keyed by chart id, so the copy's new id remounted it, and Undo and Discard lost every edit made before the copy. It is keyed by its tile now. The e2e undoes and redoes through the copy.
+      - **A race could still write the shared chart.** While the copy was drawn, Back, Esc, the browser's Back and Save dashboard were live, and whichever finished second overwrote the other. The copy and leaving now take the same guard, and the copy is applied to the session as it is when it lands (`session.update`).
+      - **Focus** now goes to the "Local copy…" line once shown, instead of dropping to the page with the pressed button.
+      - **Tests:** another tile on the dashboard showing the same shared chart shows it as stored after the copy. The edits went with the copy, and the shared chart is not written. That behaviour is now tested and stated here. A misnamed test is renamed.
 - [x] T136 (AC-130) Change no other dashboard when a local chart is edited
   - Files: `packages/web/src/editor/applyChanges.ts`, `e2e/local-chart-isolation.spec.ts`
   - Failing test: `e2e/local-chart-isolation.spec.ts`: editing a local chart leaves a second dashboard's rendering unchanged (AC-130).

@@ -1505,8 +1505,10 @@ export function DashboardView({
               // repointed to a copy with the edits so far, the editor on it.
               onMakeLocalCopy={(edited) => {
                 const copyId = mintChartId();
-                session.change(
-                  detach(session.document, editingChart.tileId, { dashboardId, copyId, edited }),
+                // Onto the session as it is when the copy lands, not as it was
+                // when this was made (T135's review).
+                session.update((current) =>
+                  detach(current, editingChart.tileId, { dashboardId, copyId, edited }),
                 );
                 setEditingChart({ ...editingChart, chartId: copyId });
               }}
