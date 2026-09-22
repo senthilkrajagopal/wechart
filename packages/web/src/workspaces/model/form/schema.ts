@@ -500,6 +500,8 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
           f('name', 'identifier'),
           f('columns', 'ordered-references'),
           f('type', 'enum', { options: ['regular', 'aggregate'] }),
+          // "… or `{sql}`": an index on an expression, instead of columns.
+          f('sql', 'sql'),
         ],
       }),
       f('allow_non_strict_date_range_match', 'boolean'),

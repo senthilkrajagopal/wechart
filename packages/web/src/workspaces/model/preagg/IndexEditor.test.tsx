@@ -94,6 +94,31 @@ describe('an index on a rollup', () => {
     expect(indexOf(value())?.['columns']).toEqual(['region', 'count']);
   });
 
+  it('keeps focus on the column moved, so a keyboard can move it again, and says where it went', async () => {
+    const { columns, value } = await openIndex();
+    await userEvent.type(screen.getByLabelText('Add a column'), 'count');
+    await userEvent.click(screen.getByRole('button', { name: 'Add column' }));
+
+    within(columns).getByRole('button', { name: 'Move count up' }).focus();
+    await userEvent.keyboard('{Enter}');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Move count up');
+    await userEvent.keyboard('{Enter}');
+
+    expect(indexOf(value())?.['columns']).toEqual(['count', 'status', 'region']);
+    // At the top it can go no higher: focus moves to the way it can still go.
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Move count down');
+    expect(screen.getByRole('status').textContent).toBe('count moved to position 1 of 3.');
+  });
+
+  it('adds a column only once', async () => {
+    await openIndex();
+    await userEvent.type(screen.getByLabelText('Add a column'), 'status');
+
+    expect((screen.getByRole('button', { name: 'Add column' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
   it('writes an aggregate index as `type: aggregate`', async () => {
     const { value } = await openIndex();
 

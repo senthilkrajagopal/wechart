@@ -105,6 +105,45 @@ describe('a form edit, written into the file', () => {
 
     expect(next).toBe(commented.replace('      - name: count\n        type: count\n', ''));
   });
+
+  it('moves list items with their comments and anchors when the form reorders them', () => {
+    /**
+     * T152's review: an index's columns moved into a new order were written
+     * value by value, so a comment on the first column stayed first and named
+     * the column now there — and an anchored item re-pointed its aliases.
+     */
+    const indexed = `cubes:
+  - name: orders
+    sql_table: public.orders
+    pre_aggregations:
+      - name: main
+        indexes:
+          - name: by_status
+            columns:
+              - status # most selective first
+              - &region region
+              - customer_id
+`;
+    const cube = modelOf(indexed).model?.cubes?.[0] as Record<string, unknown>;
+    const [main] = cube['pre_aggregations'] as Record<string, unknown>[];
+    const [index] = (main as Record<string, unknown>)['indexes'] as Record<string, unknown>[];
+    const moved = {
+      ...cube,
+      pre_aggregations: [
+        {
+          ...main,
+          indexes: [{ ...index, columns: ['customer_id', 'status', 'region'] }],
+        },
+      ],
+    };
+
+    expect(withObject(indexed, 'cubes', 0, moved)).toBe(
+      indexed.replace(
+        '              - status # most selective first\n              - &region region\n              - customer_id\n',
+        '              - customer_id\n              - status # most selective first\n              - &region region\n',
+      ),
+    );
+  });
 });
 
 describe('the file, read for the form', () => {

@@ -141,13 +141,15 @@ describe('the model form’s schema', () => {
 
     // Y.7: "list of `{sql (required), dir: asc or desc}`".
     expect(itemsOf('Y.7', 'order_by')).toEqual({ sql: 'sql', dir: ['asc', 'desc'] });
-    // Y.13: "named list of `{columns (references), type: regular or aggregate}`".
-    // References whose order is the index's sort order, edited as rows that
-    // move (T152, AC-146).
+    // Y.13: "named list of `{columns (references), type: regular or aggregate}`
+    // or `{sql}`" (data-modeling.md). References whose order is the index's
+    // sort order, edited as rows that move (T152, AC-146); and an index on SQL
+    // instead, which the form hid (T152's review).
     expect(itemsOf('Y.13', 'indexes')).toEqual({
       name: 'identifier',
       columns: 'ordered-references',
       type: ['regular', 'aggregate'],
+      sql: 'sql',
     });
     // Y.13: "list of `{dimension (reference), granularity}`".
     expect(itemsOf('Y.13', 'time_dimensions')).toEqual({

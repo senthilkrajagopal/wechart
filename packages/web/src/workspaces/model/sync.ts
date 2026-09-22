@@ -41,6 +41,24 @@ const isPlain = (value: unknown): value is Value =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /**
+ * Where each of `after`'s items was in `before`, when `after` is `before`'s
+ * items in another order and nothing else; otherwise undefined.
+ */
+function reorderOf(before: readonly unknown[], after: readonly unknown[]): number[] | undefined {
+  if (before.length !== after.length) return undefined;
+  const taken = new Set<number>();
+  const order: number[] = [];
+  for (const item of after) {
+    const text = JSON.stringify(item);
+    const from = before.findIndex((each, at) => !taken.has(at) && JSON.stringify(each) === text);
+    if (from === -1) return undefined;
+    taken.add(from);
+    order.push(from);
+  }
+  return order.some((from, at) => from !== at) ? order : undefined;
+}
+
+/**
  * The document changed from `before` to `after` at `path`, key by key: a key
  * unchanged is left alone — its node, its comments — and only what differs
  * is set or deleted.
@@ -61,6 +79,16 @@ function applyChange(
     return;
   }
   if (Array.isArray(before) && Array.isArray(after) && isSeq(node)) {
+    // The same items in another order — an index's columns moved (T152):
+    // the item nodes are moved, each with its comments and anchor, rather
+    // than each value written over whatever node sits at its place
+    // (research/yaml.md, a sequence's `items`; T152's review).
+    const order = reorderOf(before, after);
+    if (order !== undefined) {
+      const nodes = [...node.items];
+      node.items = order.map((from) => nodes[from]);
+      return;
+    }
     // Item by item where they line up, and a member added at the end is
     // added there, so the items kept keep their comments.
     if (after.length >= before.length) {

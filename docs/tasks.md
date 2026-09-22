@@ -2301,6 +2301,12 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - `shell/styles.ts`;
     - `e2e/preaggregations.spec.ts`.
     - **Why rows that move.** An index's column order is its sort order in Cube Store, so the columns are no longer a "member, member" text to retype. Each is a row with ↑, ↓ and ×; the first can't go up and the last can't go down. A column is added by name, and the columns are written in the order shown. Whether an index is aggregate stays the index's own Type (`regular` or `aggregate`), written as `type: aggregate`.
+    - **Cold review (one round, 2026-09-21), verdict PASS. Defects fixed:**
+      - **Focus follows the column moved.** Rows are positions, so the button pressed had been left naming, and moving, the column that took its place. A keyboard user couldn't move a column twice. Focus now follows the column, and at the top or bottom it goes to the direction still open. The move is announced politely ("count moved to position 1 of 3.").
+      - **Reordering moves the YAML items, not their values.** `sync.ts` now sees a list whose items are the same in another order, and moves the item nodes. A comment or an anchor goes with its column rather than staying at its place (`research/yaml.md`, a sequence's `items`).
+      - **An index on SQL** (Cube's `{sql}` form, `research/cube/data-modeling.md`) now shows its SQL in the form, instead of an empty column list.
+      - **A column is added only once.**
+      - Left as found: column names are free text rather than a member picker (direction.md's pickers, a deviation T138's references control already has). Removing the last column removes `columns`, which Cube then refuses at publish.
     - AC-146 ticked. `e2e/preaggregations.spec.ts` runs on a cube file of the browser's own, with a rollup indexed on `status, customer_id`, in all three browsers, against the real Cube. Moving `customer_id` up and setting Type to aggregate shows `customer_id, status` in the form and `type: aggregate` in the YAML. After "Save & reload Cube" reports Published, the stored file has the columns in that order and `type: aggregate`.
 - [x] T153 (AC-147) Warn on a chart that would fail under rollup-only mode
   - Files: `packages/web/src/editor/AccelerationPanel.tsx`, `packages/api/src/cube/rollupOnly.test.ts`
