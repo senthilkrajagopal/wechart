@@ -8,6 +8,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 
 import { loadTile } from '../query/loadTile';
+import { AccelerationPanel } from './AccelerationPanel';
 
 /**
  * The results drawer (AC-036): the result rows, the rows underneath them, and
@@ -22,7 +23,7 @@ import { loadTile } from '../query/loadTile';
  * lost every time the user emptied a well or switched cube, reopening the
  * drawer closed under someone who had opened it.
  */
-export type DrawerView = 'result' | 'underlying' | 'query';
+export type DrawerView = 'result' | 'underlying' | 'query' | 'acceleration';
 
 export interface ResultsDrawerProps {
   readonly rows: readonly Record<string, unknown>[];
@@ -171,6 +172,8 @@ export function ResultsDrawer({
                 ['result', 'Result rows'],
                 ['underlying', 'Underlying rows'],
                 ['query', 'Query'],
+                // Whether a pre-aggregation serves the chart (T150, AC-144).
+                ['acceleration', 'Acceleration'],
               ] as [DrawerView, string][]
             ).map(([id, label]) => (
               <button
@@ -218,6 +221,13 @@ export function ResultsDrawer({
           {view === 'query' ? (
             <div role="tabpanel" aria-label="Query">
               <pre data-testid="drawer-query">{JSON.stringify(query, null, 2)}</pre>
+            </div>
+          ) : null}
+
+          {/* Asked only while shown, as the underlying rows are. */}
+          {view === 'acceleration' ? (
+            <div role="tabpanel" aria-label="Acceleration">
+              <AccelerationPanel query={query} />
             </div>
           ) : null}
         </div>

@@ -945,6 +945,133 @@ describe('saving a dashboard with the charts edited from its tiles (AC-183)', ()
   });
 });
 
+/**
+ * T150 / AC-144: WHEN the user opens a chart's acceleration panel, THE SYSTEM
+ * SHALL say whether the chart's query matches a pre-aggregation, and when it
+ * does not, name the member that prevents the match.
+ * Fails when: the panel reports a match that Cube does not use, or names no
+ * reason for a miss.
+ *
+ * The match is Cube's own word (`/v1/sql`); the reason, read from its dry run
+ * against the rollups it compiled (`preaggMatch.ts`). Cube's answers here are
+ * the shapes the local Cube gave (research/cube/pre-aggregations.md).
+ */
+describe('whether a query is served from a rollup (AC-144)', () => {
+  const query = { measures: ['monthly_orders.count'], dimensions: ['monthly_orders.id'] };
+
+  function cubeAnswering(used: unknown[]) {
+    const asked: string[] = [];
+    const cube = new CubeClient({
+      apiUrl: config.cubeApiUrl,
+      apiSecret: SECRET,
+      securityContext: config.securityContext,
+      fetchImpl: (async (url: string) => {
+        const { pathname, searchParams } = new URL(url);
+        asked.push(`${pathname}?${[...searchParams.keys()].join('&')}`);
+        expect(JSON.parse(searchParams.get('query') ?? 'null')).toEqual(
+          pathname.endsWith('/v1/meta') ? null : query,
+        );
+        if (pathname.endsWith('/v1/sql'))
+          return new Response(
+            JSON.stringify({ sql: { external: used.length > 0, preAggregations: used } }),
+          );
+        if (pathname.endsWith('/v1/dry-run'))
+          return new Response(
+            JSON.stringify({
+              transformedQueries: [
+                {
+                  leafMeasures: ['monthly_orders.count'],
+                  measureToLeafMeasures: {
+                    'monthly_orders.count': [
+                      { measure: 'monthly_orders.count', additive: true, type: 'count' },
+                    ],
+                  },
+                  ownedDimensions: ['monthly_orders.id'],
+                  ownedTimeDimensionsWithRollupGranularity: [],
+                },
+              ],
+            }),
+          );
+        return new Response(
+          JSON.stringify({
+            cubes: [
+              {
+                name: 'monthly_orders',
+                preAggregations: [
+                  {
+                    name: 'by_status_month',
+                    type: 'rollup',
+                    measureReferences: '[count, total_amount]',
+                    dimensionReferences: '[status]',
+                    timeDimensionReference: 'ordered_at',
+                    granularity: 'month',
+                  },
+                ],
+              },
+            ],
+          }),
+        );
+      }) as typeof fetch,
+    });
+    return { cube, asked };
+  }
+
+  it('reports the rollup Cube says it will use, and asks nothing more', async () => {
+    const { cube, asked } = cubeAnswering([
+      { preAggregationId: 'monthly_orders.by_status_month', tableName: 'prod_pre_aggregations.x' },
+    ]);
+    const app = buildServer({ config, cube });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/acceleration',
+      payload: { query },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ matched: 'monthly_orders.by_status_month' });
+    expect(asked).toEqual(['/cubejs-api/v1/sql?query']);
+    await app.close();
+  });
+
+  it('on a miss, names the member that stops the nearest rollup', async () => {
+    const { cube, asked } = cubeAnswering([]);
+    const app = buildServer({ config, cube });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/acceleration',
+      payload: { query },
+    });
+
+    expect(response.json()).toEqual({
+      matched: null,
+      miss: {
+        rollup: 'monthly_orders.by_status_month',
+        member: 'monthly_orders.id',
+        reason: 'monthly_orders.id is not one of the rollup’s dimensions.',
+      },
+    });
+    expect(asked.sort()).toEqual([
+      '/cubejs-api/v1/dry-run?query',
+      '/cubejs-api/v1/meta?extended',
+      '/cubejs-api/v1/sql?query',
+    ]);
+    await app.close();
+  });
+
+  it('refuses a request with no query', async () => {
+    const { cube, asked } = cubeAnswering([]);
+    const app = buildServer({ config, cube });
+
+    const response = await app.inject({ method: 'POST', url: '/api/acceleration', payload: {} });
+
+    expect(response.statusCode).toBe(400);
+    expect(asked).toEqual([]);
+    await app.close();
+  });
+});
+
 describe('configuration', () => {
   it('refuses to start without a Cube secret', () => {
     expect(() => loadConfig({ CUBE_API_URL: 'http://cube.invalid' })).toThrow(ConfigError);

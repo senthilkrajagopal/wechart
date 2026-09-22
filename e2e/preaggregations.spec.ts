@@ -158,3 +158,69 @@ test('a rollup edit Cube refuses is not published', async ({ page }, testInfo) =
   await expect(problem.locator('.model-problems__where')).toHaveText(path);
   expect(await storedFile(page, path)).toContain('granularity: month');
 });
+
+/**
+ * T150 / AC-144: WHEN the user opens a chart's acceleration panel, THE SYSTEM
+ * SHALL say whether the chart's query matches a pre-aggregation, and when it
+ * does not, name the member that prevents the match.
+ * Fails when: the panel reports a match that Cube does not use, or names no
+ * reason for a miss.
+ *
+ * In the chart editor, against the real Cube and the seed rollup: the match
+ * the panel reports is the one Cube serves the chart from (`/api/load`'s
+ * `usedPreAggregations`), and a miss names its member.
+ */
+test('a chart’s acceleration panel says which rollup serves it, and what stops one', async ({
+  page,
+}) => {
+  const served = async (query: Record<string, unknown>) =>
+    Object.values(
+      (
+        (await (await page.request.post('/api/load', { data: { query } })).json()) as {
+          usedPreAggregations?: Record<string, { preAggregationId?: string }>;
+        }
+      ).usedPreAggregations ?? {},
+    ).map((each) => each.preAggregationId);
+  const byStatus = { measures: ['monthly_orders.count'], dimensions: ['monthly_orders.status'] };
+  // The refresh worker builds the rollup a little after Cube starts.
+  await expect(async () => {
+    expect(await served(byStatus)).toEqual(['monthly_orders.by_status_month']);
+  }).toPass({ timeout: 90_000, intervals: [2_000] });
+
+  await page.goto('/explore/charts/seed-chart-empty/edit');
+  await page.getByLabel('Cube or view').selectOption({ value: 'monthly_orders' });
+  await page.getByTestId('add-measures').selectOption('monthly_orders.count');
+  await page.getByTestId('add-dimensions').selectOption('monthly_orders.status');
+  await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
+  await page.getByRole('button', { name: 'Results', exact: true }).click();
+  await page.getByTestId('drawer-tab-acceleration').click();
+
+  // The rollup Cube serves the chart from, and no other.
+  await expect(page.getByTestId('acceleration-matched')).toHaveText(
+    'Served from the pre-aggregation monthly_orders.by_status_month.',
+  );
+
+  // The time, asked by day (every time field is, `QUERY_GRANULARITY`): finer
+  // than the rollup's month — a miss, and the member named.
+  await page.getByTestId('add-timeDimensions').selectOption('monthly_orders.ordered_at');
+  await expect(page.getByTestId('acceleration-member')).toHaveText('monthly_orders.ordered_at');
+  await expect(page.getByTestId('acceleration-miss')).toContainText(
+    'the nearest is monthly_orders.by_status_month. Stopped by monthly_orders.ordered_at: ' +
+      'monthly_orders.ordered_at is grouped by day, and the rollup keeps it by month.',
+  );
+  // And Cube does answer that chart from the database.
+  expect(
+    await served({
+      measures: ['monthly_orders.count'],
+      dimensions: ['monthly_orders.status'],
+      timeDimensions: [{ dimension: 'monthly_orders.ordered_at', granularity: 'day' }],
+    }),
+  ).toEqual([]);
+
+  // A cube with no rollups says so.
+  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await expect(page.getByTestId('acceleration-miss')).toHaveText(
+    'Not served from a pre-aggregation. Stopped by orders.count: orders has no pre-aggregations.',
+  );
+});

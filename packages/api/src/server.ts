@@ -10,6 +10,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 
 import { CACHE_POLICIES, CubeClient, CubeError, type CachePolicy } from './cube/client';
 import { MetaCache } from './cube/meta-cache';
+import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
 import type { Config } from './config';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, type ReferenceDocument } from './model/references';
@@ -232,6 +233,31 @@ export function buildServer({
       });
       throw error;
     }
+  });
+
+  /**
+   * Whether a chart's query is served from a rollup, and when it is not, the
+   * member that stops the nearest one (T150, AC-144). The match is Cube's own
+   * word — `/v1/sql` names the pre-aggregations it will use — so the panel
+   * never reports one Cube does not use; the reason is worked out from its
+   * dry run against the rollups it compiled (`preaggMatch.ts`).
+   */
+  app.post('/api/acceleration', async (request) => {
+    const body = request.body as { query?: Record<string, unknown> } | undefined;
+    if (!body?.query) throw new BadRequest();
+    const query = body.query;
+    const planned = (await client.sql(query)) as {
+      sql?: { preAggregations?: { preAggregationId?: unknown }[] };
+    } | null;
+    const used = (planned?.sql?.preAggregations ?? [])
+      .map((each) => each.preAggregationId)
+      .find((id): id is string => typeof id === 'string');
+    if (used !== undefined) return { matched: used };
+
+    const [dryRun, compiled] = await Promise.all([client.dryRun(query), client.metaExtended()]);
+    const transformed =
+      (dryRun as { transformedQueries?: Transformed[] } | null)?.transformedQueries?.[0] ?? {};
+    return { matched: null, miss: missOf(transformed, query, rollupsFrom(compiled)) };
   });
 
   // Explore's folder tree and contents (AC-017).

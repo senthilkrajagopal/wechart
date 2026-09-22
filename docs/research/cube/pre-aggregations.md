@@ -308,6 +308,16 @@ Client types [src-client-types]:
     - a `partition_granularity` with no time dimension.
 
   Mistakes in the second list surface only when the rollup is built or matched, not at publish.
+- **Whether a query would use a rollup, and what Cube matches on: `/v1/sql`, `/v1/dry-run`, `/v1/meta?extended=true`.** Each was asked with `?query=` (GET, the signed token) against the seed rollup `monthly_orders.by_status_month` (`count`, `total_amount` by `status`, `ordered_at` by month):
+  - **`/v1/sql` → `sql.preAggregations`** lists what Cube will use, each with `preAggregationId` (`monthly_orders.by_status_month`), plus `sql.external: true`. It is `[]` with `external: false` when nothing matches. Seen empty for: `monthly_orders.count` by `ordered_at` **day**, which is finer than the rollup's month; `monthly_orders.count` by `monthly_orders.id`, which isn't in the rollup; and `orders.count` by status, on a cube with no rollups. Seen matching for count by status with no time dimension.
+  - **`/v1/dry-run` → `transformedQueries[0]`** holds the facts the matcher uses (§2):
+    - `leafMeasures`, `leafMeasureAdditive`, and `measureToLeafMeasures`: `{ "<measure>": [{ measure, additive, type }] }`, where `orders.average_amount` is `additive: false`.
+    - `ownedDimensions`, and `ownedTimeDimensionsWithRollupGranularity`: `[["monthly_orders.ordered_at","day"]]`.
+    - `granularityHierarchies`: `{ "<member>.<granularity>": [the granularities that can serve it] }`, for example `"orders.ordered_at.week": ["week","day","hour","minute","second"]` and `"…month": ["month","day","hour","minute","second"]`.
+    - `allFiltersWithinSelectedDimensions`, `filterDimensionsSingleValueEqual`, `hasMultipliedMeasures`, `hasCumulativeMeasures`.
+  - **`/v1/meta?extended=true` → each cube's `preAggregations`**: the compiled rollups, as Cube runs them.
+    - Members are given as the reference functions' text: `measureReferences: "[count, total_amount]"`, `dimensionReferences: "[status]"`, `timeDimensionReference: "ordered_at"`.
+    - Also `granularity`, `partitionGranularity`, `type`, `name`, and `indexes: { byStatus: { type: "regular" } }` (camelCased, with no columns).
 - **`scheduledRefreshContexts` entries fail one at a time.** A context whose model couldn't be read (a store that was down, or one answering 404) logged `Refresh Scheduler Error` with that `securityContext`. The rollup for the context that could be read was still built.
 
 **`/v1/pre-aggregations/jobs` (cross-reference only).** This is the documented trigger and status API. Statuses are `scheduled`, `processing`, `missing_partition` and `done`, and status responses include the physical `table` [ref-rest]. The build-jobs and refresh-worker researcher owns it. Related changes: 1.7.29 made job status "per-entry and data-source aware", and 1.7.11 passes the job's data source when checking queue status [changelog].

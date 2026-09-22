@@ -2249,10 +2249,25 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - Setting the granularity to `day` puts `granularity: day` in the file's YAML and the rollup's listed facts at once. The stored model still says `month` until it is saved. After "Save & reload Cube" reports Published, the stored file says `day`.
       - Clearing the granularity is refused. Cube's reason, "(preAggregations.by_status.granularity) is required", is placed on the file, and the stored file keeps `month`.
     - **What the same validation doesn't catch.** Cube's compile lets an unknown member in a rollup through: a measure, dimension, time dimension or index column the cube doesn't have. So does a granularity that isn't one, and a partition with no time dimension. These fail only when the rollup is built or matched. Probed through the publish endpoint and recorded in `research/cube/pre-aggregations.md`, "Observed locally". The AC asks for the same validation as any model change, and that is what a rollup gets. Checking a rollup's references in wechart itself would be a new requirement, and is a question for the user.
-- [ ] T150 (AC-144) Say whether a chart's query matches a pre-aggregation, and name the member that prevents it
+- [x] T150 (AC-144) Say whether a chart's query matches a pre-aggregation, and name the member that prevents it
   - Files: `packages/web/src/editor/AccelerationPanel.tsx`, `packages/api/src/cube/preaggMatch.ts`, `packages/api/src/cube/preaggMatch.test.ts`
   - Failing test: `preaggMatch.test.ts`: a matching query reports the rollup Cube actually uses, and a non-matching one names the member that blocks the match (AC-144).
   - Depends on: T014, T148
+  - **Done 2026-09-21.** Files as built:
+    - API: `cube/preaggMatch.ts` (`rollupsFrom`, `missOf`) and its test; `cube/client.ts` (`sql`, `dryRun`, `metaExtended`); `server.ts` (`POST /api/acceleration`), tested in `server.test.ts`.
+    - Web: `editor/AccelerationPanel.tsx` and its test; `editor/ResultsDrawer.tsx` (an "Acceleration" tab, asked only while shown).
+    - e2e: `e2e/preaggregations.spec.ts`.
+  - **Whether it matches is Cube's word.** `/v1/sql` plans the query without running it and names the pre-aggregations it would use, by `preAggregationId`. The panel reports that and nothing else. So it can't report a match Cube doesn't use, which is the first half of the Fails-when.
+  - **Why it misses** is worked out from what Cube matches on: the dry run's transformed query, against the rollups Cube compiled (`/v1/meta?extended=true`). It follows the matcher's additive rules (`research/cube/pre-aggregations.md` §2):
+    - every leaf measure, dimension and filtered member must be in the rollup;
+    - each time dimension must be the rollup's, at a granularity Cube's own `granularityHierarchies` says the rollup's can make;
+    - a measure that doesn't add up needs a rollup grouped exactly as the query.
+
+    The rollup reported is the one with the fewest members missing, and the member named is the first that stops it. A cube with no rollups says so, naming the chart's first measure. If every member is in the nearest rollup and Cube still didn't use it, the panel says so, naming the time dimension. That points at the date range or the time zone, which the rules above don't cover. So a miss always names a member. The shapes of all three answers were observed on the local Cube, and are recorded under "Observed locally".
+  - AC-144 ticked, on the real Cube in all three browsers (`e2e/preaggregations.spec.ts`):
+    - The seed cube's count by status reads "Served from the pre-aggregation monthly_orders.by_status_month.", and `/api/load` confirms Cube serves that chart from that rollup.
+    - Adding `ordered_at`, which every chart asks by day, reads a miss: the nearest rollup, and `monthly_orders.ordered_at` "is grouped by day, and the rollup keeps it by month". `/api/load` confirms Cube answers it from the database.
+    - A chart on `orders` reads "orders has no pre-aggregations".
 - [ ] T151 (AC-145) List a rollup's partitions and rebuild the selected ones
   - Files: `packages/web/src/workspaces/model/preagg/Partitions.tsx`, `packages/api/src/routes/preagg.ts`, `packages/api/src/routes/partitions.test.ts`
   - Failing test: `partitions.test.ts`: every partition is listed with its build state and last build time, and a rebuild targets exactly the selected partitions (AC-145).

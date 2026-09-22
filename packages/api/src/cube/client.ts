@@ -82,6 +82,29 @@ export class CubeClient {
   }
 
   /**
+   * `/v1/sql`: the SQL Cube would run for a query, without running it — and
+   * the pre-aggregations it would use (T150; research/cube/pre-aggregations.md
+   * §4 and "Observed locally").
+   */
+  async sql(query: Record<string, unknown>): Promise<unknown> {
+    return this.#request(`/v1/sql?query=${encodeURIComponent(JSON.stringify(query))}`, {
+      method: 'GET',
+    });
+  }
+
+  /** `/v1/dry-run`: the query as Cube's matcher sees it (its transformed query). */
+  async dryRun(query: Record<string, unknown>): Promise<unknown> {
+    return this.#request(`/v1/dry-run?query=${encodeURIComponent(JSON.stringify(query))}`, {
+      method: 'GET',
+    });
+  }
+
+  /** `/v1/meta?extended=true`: the model as compiled, its pre-aggregations included. */
+  async metaExtended(): Promise<unknown> {
+    return this.#request('/v1/meta?extended=true', { method: 'GET' });
+  }
+
+  /**
    * `DELETE /v1/running-query/{requestId}`: stop a query Cube is still running
    * (AC-011). Without this a superseded query holds one of the queue's two
    * default slots until its orphan timeout.
