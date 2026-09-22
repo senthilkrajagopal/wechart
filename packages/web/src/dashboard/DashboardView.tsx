@@ -38,7 +38,12 @@ import { PageTabsProperties, TileProperties } from './edit/TileProperties';
 import { ImageTile } from './tiles/ImageTile';
 import { LinkTile } from './tiles/LinkTile';
 import { FilterBar } from '../filters/FilterBar';
-import { FilteredCharts, keepLastAnswers, type FilteredResults } from '../filters/FilteredCharts';
+import {
+  FilteredCharts,
+  keepLastAnswers,
+  type FilteredChartsHandle,
+  type FilteredResults,
+} from '../filters/FilteredCharts';
 import { newFilter, type FilterValues } from '../filters/model';
 import { adoptValues, sameValues, type SearchFilter } from '../filters/url';
 import { Canvas, type CanvasProps } from './grid/Canvas';
@@ -108,10 +113,19 @@ export interface DashboardViewProps {
   readonly loading?: boolean;
   /** When each chart's data is from: Cube's `lastRefreshTime`, by chart id (T154, AC-148). */
   readonly asOf?: Readonly<Record<string, string>> | undefined;
-  /** Ask a chart's data again, past Cube's cache (AC-148). */
+  /**
+   * Ask a chart's unfiltered data again, past Cube's cache (AC-148). A tile a
+   * filter reaches is refreshed here instead: what it draws is its filtered
+   * answer.
+   */
   readonly onRefresh?: ((chartId: string) => void) | undefined;
   /** The charts whose refresh is on its way. */
   readonly refreshing?: ReadonlySet<string> | undefined;
+  /**
+   * False while the dashboard's charts are being loaded: a refresh begun then
+   * would be overwritten by the older load landing after it (T154's review).
+   */
+  readonly refreshable?: boolean | undefined;
   /**
    * The saved chart documents, by chart id: what names a tile when a filter
    * is scoped to it (AC-077), and what a filter re-queries (AC-078).
@@ -288,6 +302,7 @@ interface TileCharts {
   /** Ask a chart's data again, past Cube's cache; in view mode. */
   readonly onRefresh?: ((chartId: string) => void) | undefined;
   readonly refreshing?: ReadonlySet<string> | undefined;
+  readonly refreshable?: boolean | undefined;
 }
 
 interface Affordances {
@@ -438,7 +453,13 @@ function Elements({
                 className="tile-refresh"
                 aria-label={`Refresh ${charts.titleOf?.(chartId) ?? element.text ?? element.kind}`}
                 title="Refresh now: ask Cube again, past its cache"
-                disabled={affordances.charts.refreshing?.has(chartId) === true}
+                // Not while this chart or the dashboard's charts are being
+                // asked: an answer landing after the refresh would undo it.
+                disabled={
+                  affordances.charts.refreshable === false ||
+                  affordances.charts.refreshing?.has(chartId) === true ||
+                  affordances.charts.pending?.has(chartId) === true
+                }
                 onClick={() => {
                   affordances.charts.onRefresh?.(chartId);
                 }}
@@ -684,6 +705,7 @@ export function DashboardView({
   asOf,
   onRefresh,
   refreshing,
+  refreshable,
   documents,
   reach,
   memberTitle,
@@ -772,9 +794,12 @@ export function DashboardView({
   }, []);
   const withFiltered = useMemo(() => {
     const ids = Object.keys(reached).filter((id) => drawn.documents?.[id] !== undefined);
-    if (ids.length === 0) return { ...drawn, pending: new Set<string>() };
+    if (ids.length === 0) return { ...drawn, asOf, pending: new Set<string>() };
     const shown: Record<string, RenderSpec> = { ...drawn.specs };
     const failed: Record<string, unknown> = { ...drawn.errors };
+    // A filtered answer's data is from when that answer says, not the
+    // unfiltered one's (T154's review).
+    const from: Record<string, string> = { ...asOf };
     const pending = new Set<string>();
     for (const id of ids) {
       const result = filtered[id];
@@ -798,9 +823,34 @@ export function DashboardView({
         failed[id] = answer.error;
         delete shown[id];
       }
+      if (result?.asOf === undefined) delete from[id];
+      else from[id] = result.asOf;
     }
-    return { specs: shown, errors: failed, pending };
-  }, [drawn, reached, filtered]);
+    return { specs: shown, errors: failed, asOf: from, pending };
+  }, [drawn, reached, filtered, asOf]);
+
+  /**
+   * "Refresh now" on a tile (T154, AC-148) asks again what the tile draws: a
+   * tile a filter reaches draws its filtered answer, which `FilteredCharts`
+   * asks again; any other tile, its chart as loaded, which the page does.
+   */
+  const filteredCharts = useRef<FilteredChartsHandle>(null);
+  const [refreshingFiltered, setRefreshingFiltered] = useState<ReadonlySet<string>>(new Set());
+  const refreshTile = (chartId: string) => {
+    const handle = filteredCharts.current;
+    if (handle === null || !handle.isFiltered(chartId) || filtered[chartId]?.unfiltered === true) {
+      onRefresh?.(chartId);
+      return;
+    }
+    setRefreshingFiltered((now) => new Set([...now, chartId]));
+    handle
+      .refresh(chartId)
+      // A failed answer is the tile's to show, as any filtered answer's is.
+      .catch(() => undefined)
+      .finally(() => {
+        setRefreshingFiltered((now) => new Set([...now].filter((id) => id !== chartId)));
+      });
+  };
 
   // Formatted after the drafts and filters are in, so those tiles are too.
   const formatted = useMemo(
@@ -874,9 +924,10 @@ export function DashboardView({
     inEffect,
     carried,
     titleOf: chartTitleOf,
-    asOf,
-    onRefresh,
-    refreshing,
+    asOf: withFiltered.asOf,
+    ...(onRefresh === undefined ? {} : { onRefresh: refreshTile }),
+    refreshing: new Set([...(refreshing ?? []), ...refreshingFiltered]),
+    refreshable: refreshable !== false && !loading,
   };
 
   /**
@@ -1024,7 +1075,12 @@ export function DashboardView({
   return (
     <>
       {Object.keys(reached).length === 0 ? null : (
-        <FilteredCharts reached={reached} documents={drawn.documents} onResults={onFiltered} />
+        <FilteredCharts
+          ref={filteredCharts}
+          reached={reached}
+          documents={drawn.documents}
+          onResults={onFiltered}
+        />
       )}
       <EditChrome
         document={document}

@@ -35,6 +35,8 @@ export interface Drawn {
    * edited. What filters re-query (F9), and what names a tile.
    */
   readonly documents?: Readonly<Record<string, ChartDocument>> | undefined;
+  /** When each chart's data is from, by chart id (T154, AC-148). */
+  readonly asOf?: Readonly<Record<string, string>> | undefined;
 }
 
 /**
@@ -58,8 +60,11 @@ export function drawnWithDrafts(saved: Drawn, dashboard: DashboardDocument): Dra
   const specs: Record<string, RenderSpec> = { ...saved.specs };
   const errors: Record<string, unknown> = { ...saved.errors };
   const documents: Record<string, ChartDocument> = { ...saved.documents };
+  // A drafted chart's answer came from the editor, at a time not known here.
+  const asOf: Record<string, string> = { ...saved.asOf };
   for (const [chartId, draft] of Object.entries(drafts)) {
     documents[chartId] = draft.document;
+    delete asOf[chartId];
     if ('spec' in draft.drawn) {
       specs[chartId] = draft.drawn.spec;
       delete errors[chartId];
@@ -68,7 +73,7 @@ export function drawnWithDrafts(saved: Drawn, dashboard: DashboardDocument): Dra
       delete specs[chartId];
     }
   }
-  return { specs, errors, documents };
+  return { specs, errors, documents, asOf };
 }
 
 /**

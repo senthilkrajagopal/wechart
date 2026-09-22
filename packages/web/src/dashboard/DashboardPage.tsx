@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { readChartDocument, type ChartDocument, type RenderSpec } from '@wechart/core';
 
 import { loadTile } from '../query/loadTile';
@@ -104,6 +104,8 @@ interface DrawnCharts {
   errors: Record<string, unknown>;
   /** Each chart's document as read, which filters re-query and tiles are named by (F9). */
   documents: Record<string, ChartDocument>;
+  /** When each chart's data is from: Cube's `lastRefreshTime` (T154, AC-148). */
+  asOf: Record<string, string>;
 }
 
 /** A save, whole: nothing it needs is read from the render it started in. */
@@ -207,6 +209,13 @@ function LoadedDashboard({
 }) {
   const queryClient = useQueryClient();
   const [saveFailed, setSaveFailed] = useState('');
+  /**
+   * Moved on each time the charts are loaded afresh or a save writes them. A
+   * tile's refresh (T154) answers for the charts as they were when it was
+   * asked, so one overtaken by either drops its answer rather than put older
+   * charts back over newer ones (T154's review).
+   */
+  const chartsGeneration = useRef(0);
 
   /**
    * The version the dashboard had when the edit being saved began (T198,
@@ -275,6 +284,8 @@ function LoadedDashboard({
        */
       const before = queryClient.getQueryData<DrawnCharts>(['dashboard-charts', id]);
       if (before === undefined) return undefined;
+      // A refresh still out answers for the charts as they were: overtaken.
+      chartsGeneration.current += 1;
       queryClient.setQueryData<DrawnCharts>(
         ['dashboard-charts', id],
         drawnWithDrafts(before, { ...next, chartDrafts: drafts }) as DrawnCharts,
@@ -324,7 +335,9 @@ function LoadedDashboard({
   });
   const charts = useQuery({
     queryKey: ['dashboard-charts', dashboardId],
-    queryFn: async () => {
+    queryFn: async (): Promise<DrawnCharts> => {
+      // A refresh still out was asked before this load: overtaken by it.
+      chartsGeneration.current += 1;
       const entries = await Promise.all(
         chartIdsOf(document).map(async (id) => [id, await specFor(id)] as const),
       );
@@ -355,9 +368,13 @@ function LoadedDashboard({
   const [refreshing, setRefreshing] = useState<ReadonlySet<string>>(new Set());
   const refresh = async (chartId: string) => {
     setRefreshing((now) => new Set([...now, chartId]));
+    const began = chartsGeneration.current;
     try {
-      const { chart, asOf: at } = await specFor(chartId, 'no-cache');
-      queryClient.setQueryData<typeof charts.data>(['dashboard-charts', dashboardId], (before) => {
+      const { chart, document: read, asOf: at } = await specFor(chartId, 'no-cache');
+      // The charts were loaded again, or saved, while this was out: what
+      // they hold now is newer than what this asked (T154's review).
+      if (chartsGeneration.current !== began) return;
+      queryClient.setQueryData<DrawnCharts>(['dashboard-charts', dashboardId], (before) => {
         if (before === undefined) return before;
         const specs = { ...before.specs };
         const errors = { ...before.errors };
@@ -368,9 +385,13 @@ function LoadedDashboard({
           errors[chartId] = chart.error;
           delete specs[chartId];
         }
+        // The chart as read now: what names the tile, and what filters ask.
+        const documents = { ...before.documents };
+        if (read !== undefined) documents[chartId] = read;
         const asOf = { ...before.asOf };
-        if (at !== undefined) asOf[chartId] = at;
-        return { ...before, specs, errors, asOf };
+        if (at === undefined) delete asOf[chartId];
+        else asOf[chartId] = at;
+        return { specs, errors, documents, asOf };
       });
     } finally {
       setRefreshing((now) => new Set([...now].filter((id) => id !== chartId)));
@@ -430,6 +451,7 @@ function LoadedDashboard({
           void refresh(chartId);
         }}
         refreshing={refreshing}
+        refreshable={!charts.isFetching}
         // E and a tile's pencil open the chart editor over the dashboard, in
         // the view itself (T032). They used to navigate here, a full page
         // load that ended the edit session — so there was no dashboard to

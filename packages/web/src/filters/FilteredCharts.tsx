@@ -1,6 +1,6 @@
 import type { ChartDocument } from '@wechart/core';
-import { useQueries } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useImperativeHandle, type Ref } from 'react';
 
 import { tileChartOf, type TileChart } from '../dashboard/chartSpec';
 import { loadTile } from '../query/loadTile';
@@ -16,15 +16,26 @@ import { withFilters, type ActiveFilter } from './apply';
  *   off its query, and to be marked on its tile.
  * - `unfiltered`: every filter reaching it was one of those, so it draws its
  *   own unfiltered chart.
+ * - `asOf`: when the filtered answer's data is from — Cube's
+ *   `lastRefreshTime` (T154, AC-148).
  */
 export interface FilteredResult {
   readonly chart: TileChart | undefined;
   readonly asking: boolean;
   readonly uncovered: readonly string[];
   readonly unfiltered: boolean;
+  readonly asOf?: string | undefined;
 }
 
 export type FilteredResults = Readonly<Record<string, FilteredResult>>;
+
+/** What the dashboard can ask of its filtered charts. */
+export interface FilteredChartsHandle {
+  /** Whether a filter in effect is asked with this chart. */
+  isFiltered(chartId: string): boolean;
+  /** Ask its filtered answer again, past Cube's cache (T154, AC-148). */
+  refresh(chartId: string): Promise<void>;
+}
 
 /**
  * New results over the ones before: a chart still being asked keeps the
@@ -37,13 +48,15 @@ export function keepLastAnswers(
   results: FilteredResults,
 ): FilteredResults {
   return Object.fromEntries(
-    Object.entries(results).map(([chartId, result]) => [
-      chartId,
-      {
-        ...result,
-        chart: result.unfiltered ? undefined : (result.chart ?? before[chartId]?.chart),
-      },
-    ]),
+    Object.entries(results).map(([chartId, result]) => {
+      if (result.unfiltered) return [chartId, { ...result, chart: undefined, asOf: undefined }];
+      // The answer kept, and when its data is from with it.
+      const kept = result.chart === undefined ? before[chartId] : undefined;
+      return [
+        chartId,
+        kept === undefined ? result : { ...result, chart: kept.chart, asOf: kept.asOf },
+      ];
+    }),
   );
 }
 
@@ -68,30 +81,55 @@ function refusedJoin(error: unknown): string[] | undefined {
 const cubeOf = (member: string | undefined) => (member ?? '').split('.')[0] ?? '';
 
 /**
+ * One chart's filtered answer in the query cache. Shared with "Refresh now"
+ * (T154), which asks it again under the same key, so the tile — drawing from
+ * this entry — shows what the refresh brought back.
+ */
+export function filteredQueryKey(
+  chartId: string,
+  document: ChartDocument,
+  applied: readonly ActiveFilter[],
+): readonly unknown[] {
+  return [
+    'filtered-chart',
+    chartId,
+    document,
+    applied.map(({ filter, value }) => [filter.member, value]),
+  ];
+}
+
+/**
  * One chart, filtered: asked with every filter reaching it. A filter the model
  * could not rule out may still name a cube Cube cannot join to the chart's —
  * then Cube refuses the whole query. Each filter on a refused cube is left
  * off and reported, and the rest are asked again; so one such filter neither
  * breaks the tile nor takes the others with it.
  */
-async function filteredChart(
+export async function filteredChart(
   document: ChartDocument,
   applied: readonly ActiveFilter[],
   signal: AbortSignal,
-): Promise<{ chart: TileChart | undefined; uncovered: string[] }> {
+  /** `no-cache` for a tile's "Refresh now" (T154, AC-148). */
+  cache?: 'no-cache',
+): Promise<{ chart: TileChart | undefined; uncovered: string[]; asOf?: string }> {
   const source = document.chart.source.cube;
   let asked = [...applied];
   const uncovered: string[] = [];
   while (asked.length > 0) {
     const current = asked;
+    let asOf: string | undefined;
     const chart = await tileChartOf(document, async (query) => {
-      const result = (await loadTile({ query: withFilters(query, current), signal })) as {
-        data?: Record<string, unknown>[];
-      };
+      const result = (await loadTile({
+        query: withFilters(query, current),
+        signal,
+        ...(cache === undefined ? {} : { cache }),
+      })) as { data?: Record<string, unknown>[]; lastRefreshTime?: unknown };
+      if (typeof result.lastRefreshTime === 'string') asOf = result.lastRefreshTime;
       return result.data ?? [];
     });
     const refused = 'error' in chart ? refusedJoin(chart.error) : undefined;
-    if (refused === undefined) return { chart, uncovered };
+    if (refused === undefined)
+      return asOf === undefined ? { chart, uncovered } : { chart, uncovered, asOf };
     // The filters on a cube Cube named, other than the chart's own; if it
     // named none of them, every filter, since one of them has to be the cause.
     const named = current.filter(({ filter }) => {
@@ -126,24 +164,49 @@ export function FilteredCharts({
   reached,
   documents,
   onResults,
+  ref,
 }: {
   reached: Readonly<Record<string, readonly ActiveFilter[]>>;
   documents: Readonly<Record<string, ChartDocument>> | undefined;
   onResults: (results: FilteredResults) => void;
+  /** For "Refresh now" on a filtered tile (T154). */
+  ref?: Ref<FilteredChartsHandle>;
 }) {
   const charts = Object.entries(reached).flatMap(([chartId, applied]) => {
     const document = documents?.[chartId];
     return document === undefined ? [] : [{ chartId, document, applied }];
   });
 
+  /**
+   * A filtered tile draws this chart's filtered answer, so that is what its
+   * refresh asks again: past Cube's cache, into the same cache entry, where
+   * the tile picks it up. `fetchQuery` with `staleTime: 0` always fetches,
+   * and runs the query function it is given for that fetch; the query's own
+   * observer puts its options back on its next render
+   * (docs/research/data-layer.md, "Asking one query again, differently").
+   */
+  const queryClient = useQueryClient();
+  useImperativeHandle(
+    ref,
+    () => ({
+      isFiltered: (chartId) => charts.some((each) => each.chartId === chartId),
+      refresh: async (chartId) => {
+        const found = charts.find((each) => each.chartId === chartId);
+        if (found === undefined) return;
+        const { document, applied } = found;
+        await queryClient.fetchQuery({
+          queryKey: filteredQueryKey(chartId, document, applied),
+          queryFn: ({ signal }) => filteredChart(document, applied, signal, 'no-cache'),
+          staleTime: 0,
+        });
+      },
+    }),
+    [charts, queryClient],
+  );
+
   const answers = useQueries({
     queries: charts.map(({ chartId, document, applied }) => ({
-      queryKey: [
-        'filtered-chart',
-        chartId,
-        document,
-        applied.map(({ filter, value }) => [filter.member, value]),
-      ],
+      queryKey: filteredQueryKey(chartId, document, applied),
       queryFn: ({ signal }: { signal: AbortSignal }) => filteredChart(document, applied, signal),
     })),
   });
@@ -156,15 +219,17 @@ export function FilteredCharts({
       asking: answer?.isFetching ?? true,
       uncovered: answer?.data?.uncovered ?? [],
       unfiltered: answer?.data !== undefined && answer.data.chart === undefined,
+      asOf: answer?.data?.asOf,
     };
   });
   // Compared by content: `useQueries` hands back new objects every render.
   const reported = JSON.stringify(
-    Object.entries(results).map(([chartId, { chart, asking, uncovered, unfiltered }]) => [
+    Object.entries(results).map(([chartId, { chart, asking, uncovered, unfiltered, asOf }]) => [
       chartId,
       asking,
       uncovered,
       unfiltered,
+      asOf,
       chart === undefined ? null : 'spec' in chart ? chart.spec : String(chart.error),
     ]),
   );

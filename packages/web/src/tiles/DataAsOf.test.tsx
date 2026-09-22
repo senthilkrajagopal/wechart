@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChartTile } from './ChartTile';
+import { DataAsOf } from './DataAsOf';
 
 // A drawn chart's canvas watches its own size, which jsdom cannot.
 beforeEach(() => {
@@ -62,6 +63,28 @@ describe('when a chart’s data is from', () => {
 
     expect(screen.getByTestId('data-as-of').getAttribute('datetime')).toBe(
       '2026-09-21T10:32:18.000Z',
+    );
+  });
+
+  it('names the day too when the data is not from today', () => {
+    /**
+     * A result Cube kept since yesterday, or a tab left open overnight: the
+     * time alone would read as today's (T154's review).
+     */
+    const at = new Date(2026, 8, 20, 22, 32, 18);
+    render(<DataAsOf at={at.toISOString()} now={new Date(2026, 8, 21, 9, 0, 0)} />);
+
+    expect(screen.getByTestId('data-as-of').textContent).toBe(
+      `Data as of ${at.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+      })}`,
+    );
+    expect(screen.getByTestId('data-as-of').textContent).toContain(
+      at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
     );
   });
 

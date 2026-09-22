@@ -296,6 +296,7 @@ Worker behavior:
     - `must-revalidate`: "If refresh keys are up-to-date, returns cached value. If expired, always waits for fresh value from the data source, even if slow."
     - `no-cache`: "Skips refresh key checks. Always returns fresh data from the data source, regardless of cache or query performance."
   - **So "refresh now" is `no-cache`.** `must-revalidate` still returns the cached result while the refresh key holds, which is 10 s by default for Postgres. The browser tests saw the same `lastRefreshTime` come back.
+  - `no-cache` skips the result cache, not a pre-aggregation. A rollup-served answer is read from the rollup again, and its `lastRefreshTime` stays at the build time (observed locally; see `pre-aggregations.md`, "Observed locally"). Only a rebuild moves it.
 - **Freshness in `/v1/load` responses:**
   - Always present: `lastRefreshTime` (ISO), `external` (served from Cube Store), `dataSource`, `dbType`, `extDbType`, `slowQuery`, `total`.
   - `usedPreAggregations` is keyed by table and limited to `{ preAggregationId, lastUpdatedAt, type }`. It is absent when no pre-aggregation was used ([doc-rest-ref][], [src-gateway][]).

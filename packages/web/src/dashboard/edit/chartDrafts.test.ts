@@ -112,6 +112,21 @@ describe('what the tiles draw', () => {
   it('draws everything as saved when nothing is drafted', () => {
     expect(drawnWithDrafts(saved, dashboard)).toBe(saved);
   });
+
+  it('keeps when every other chart’s data is from, and drops the drafted one’s', () => {
+    /**
+     * T154 / AC-148: a save with drafts writes this into the page's charts
+     * until they are fetched again, and it lost every tile's data-as-of time
+     * (T154's review). A drafted chart's answer came from the editor, whose
+     * time is not known here.
+     */
+    const drawn = drawnWithDrafts(
+      { ...saved, asOf: { c1: '2026-09-21T10:00:01.000Z', c2: '2026-09-21T10:00:02.000Z' } },
+      withDraft(dashboard, 'c1', drawing('hbar')),
+    );
+
+    expect(drawn.asOf).toEqual({ c2: '2026-09-21T10:00:02.000Z' });
+  });
 });
 
 /** Dashboard `d1`, showing these charts on its tiles. */

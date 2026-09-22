@@ -2249,6 +2249,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **Past which cache.** wechart's own answer is dropped and put back with the new one, and Cube is asked with `cache: 'no-cache'`, which "Skips refresh key checks. Always returns fresh data" (`research/cube/refresh-jobs-caching.md`). The first build sent `must-revalidate`, and the e2e caught it: Cube returned its cached result with the same `lastRefreshTime`, because that value revalidates only when the refresh key has changed. The research doc and `data-layer.md` now quote all four values.
     - **What the user sees.** In view mode each chart tile has a ↻ "Refresh <chart title>" button beside the pencil. The head shows "Data as of h:mm:ss" as the prototype's `.badge`, where its tiles carry their data's age. It is not drawn over the chart, where it covered axis labels. Edit mode has no refresh, because an edit has its own drafts.
     - AC-148 ticked: `e2e/refresh.spec.ts` shows the `datetime` moving on after Refresh, and that every `/api/load` body carries `cache: 'no-cache'`.
+    - **Review fixes (2026-09-21):**
+      - **A tile a filter reaches** draws its filtered answer, so Refresh asks that again. `FilteredCharts` exposes a handle whose `refresh` runs `fetchQuery` under the tile's own filtered key with `no-cache`, and the tile's time is the filtered answer's own. Before the fix, it re-asked the unfiltered chart, left the filtered answer on screen, and moved the time forward anyway. Tested in `dashboard/refreshTile.test.tsx` and in a second case in `e2e/refresh.spec.ts`, against the real Cube.
+      - **Races with the dashboard's own load.** ↻ is disabled while the charts, or this chart's filtered answer, are being asked. A refresh overtaken by a newer load or a save drops its answer: `chartsGeneration` in `DashboardPage` moves on at each load and each save that writes drafts. Tested in `dashboard/refreshPage.test.tsx`.
+      - **A refresh reads the chart as it is now.** Its document replaces the one held, so the tile's name and its filters follow a change saved elsewhere (`refreshPage.test.tsx`).
+      - **A save with drafts keeps the other tiles' times** (`drawnWithDrafts`, tested in `chartDrafts.test.ts`).
+      - **Data not from today names its day** (`DataAsOf.test.tsx`).
+      - **Left as found:** a refresh can't be cancelled, and it holds no abort signal. The dashboard's own load has the same gap.
+    - **On a tile served from a pre-aggregation**, Refresh reads the rollup again, and the time stays at the rollup's build time. `no-cache` skips Cube's result cache, not a pre-aggregation (observed locally; `research/cube/pre-aggregations.md`, "Observed locally"). That time is true, but it doesn't move. Whether Refresh there should also rebuild the rollup is a question for the user.
 
 ## F17. Jobs, builds and scheduling
 
