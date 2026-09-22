@@ -565,7 +565,7 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rule 21; `[research/c
       Fails when: the tile shows a raw Cube error.
 - [x] AC-168 THE SYSTEM SHALL show the generated SQL and the effective filters for a chart under the previewed context.
       Fails when: the SQL shown omits the row-level filters the policy adds.
-- [ ] AC-169 IF Cube would accept unauthenticated requests, because authentication checks are not enforced, THEN THE SYSTEM SHALL show a persistent warning in the Security workspace.
+- [x] AC-169 IF Cube would accept unauthenticated requests, because authentication checks are not enforced, THEN THE SYSTEM SHALL show a persistent warning in the Security workspace.
       Fails when: no warning is shown while Cube accepts an unauthenticated request.
 - [ ] AC-170 THE SYSTEM SHALL show which API scopes the configured context has, and mark a screen as unavailable when its scope is missing.
       Fails when: a screen fails with an error instead of reporting the missing scope.

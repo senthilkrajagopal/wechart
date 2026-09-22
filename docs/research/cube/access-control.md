@@ -267,6 +267,15 @@ The seed view `infra/cube/model/views/secured_orders.yml` declares three policie
 - **`total_amount` for `auditors`:** 200, with the value masked to `null`.
 - **`total_amount` for `sales`:** the same hidden-member 500, since the member is excluded.
 - **The hidden-member message names one member.** `secured_orders.count` by `secured_orders.status` under `{ groups: ["sales"] }`, where both are hidden, answers "You requested hidden member: 'secured_orders.count'" only (T173's e2e test).
+- **Unauthenticated requests to the compose Cube (production mode):**
+  - `GET /v1/meta`, and `GET /v1/load` with no query, with no header: **403** `{"error":"Authorization header isn't set"}`.
+  - With `Authorization: not-a-token`, or `Bearer not.a.token`: **403** `{"error":"Invalid token"}`.
+  - These are the two refusals [ref-rest] documents.
+  - A Cube not enforcing auth lets such a request in as the empty context `{}` (Gotchas, "Auth is not enforced outside `NODE_ENV=production`"). The endpoint then goes on:
+    - it asserts the scope: 403 "API scope is missing: …" if `{}` lacks it;
+    - then it reads the request: `/v1/load` with no query answers 400 "Query param is required".
+
+    Either answer proves the request got past auth (research/cube/api-scope-probes.md). A 403 alone does not.
 - **`GET /v1/sql` for the same query under `{ groups: ["sales"], is_employee: true }`:** 200. `sql.sql` is `[text, params]`. The text carries the policy's row-level filter, `WHERE ("orders".status = $1)`, with params `["shipped"]`. The response also carries `sql.dataSource`, `sql.preAggregations` and `sql.aliasNameToMember`.
 
 ### Member visibility: `public`

@@ -2547,10 +2547,24 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - e2e: `e2e/security.spec.ts`.
     - Not sourced: the multi-statement shape of `/v1/sql` (an array), which `/api/acceleration` already assumes.
     - AC-168 ticked on `e2e/security.spec.ts`, "a previewed tile shows Cube's SQL as the context, with the row filter its policy adds" (Chrome, Firefox, Safari against the compose Cube).
-- [ ] T175 (AC-169) Warn persistently when Cube would accept unauthenticated requests
+- [x] T175 (AC-169) Warn persistently when Cube would accept unauthenticated requests
   - Files: `packages/api/src/cube/authCheck.ts`, `packages/web/src/workspaces/security/AuthWarning.tsx`, `packages/api/src/cube/authCheck.test.ts`
   - Failing test: `authCheck.test.ts`: when an unauthenticated probe succeeds, the Security workspace shows a persistent warning (AC-169).
   - Depends on: T171
+  - **Done 2026-09-22.** Files as built:
+    - API: `cube/authCheck.ts` and its test, and `GET /api/cube-auth` in `server.ts`.
+    - Web: `workspaces/security/AuthWarning.tsx` and its test; `workspaces/security/SecurityPage.tsx` and its test; `shell/styles.ts`.
+    - e2e: `e2e/cube-auth.spec.ts`.
+    - The probe is `GET /v1/load` with no query, with no token and with a bad one. Cube's words decide:
+      - refused at the door (403 "Authorization header isn't set" or "Invalid token");
+      - let in (403 "API scope is missing: …", or 400 "Query param is required");
+      - unknown (anything else, redirects included).
+    - The warning says what an unsigned request is let in as (the empty context) and what makes Cube refuse it. It is shown however the model's files fare. Only a definite refusal takes it down.
+    - AC-169 ticked on three tests together:
+      - `e2e/cube-auth.spec.ts`, "…warns, and keeps warning, while Cube accepts unsigned requests": the real page, with the API's `open` answer given at the network.
+      - `authCheck.test.ts`, "reads a Cube that lets unsigned requests in as open, over the network": the real API against a real server that lets them in.
+      - `e2e/cube-auth.spec.ts`, "…says Cube refuses unsigned requests, probing the real Cube": page, API and the compose Cube end to end.
+    - No accepting Cube runs beside the suite, since the compose Cube is in production mode.
 - [ ] T176 (AC-170) Show the configured context's API scopes and mark screens whose scope is missing
   - Files: `packages/web/src/workspaces/security/Scopes.tsx`, `packages/web/src/workspaces/security/scopes.test.ts`
   - Failing test: `scopes.test.ts`: the granted scopes are listed, and a screen whose scope is absent reports it as unavailable instead of failing with an error (AC-170).

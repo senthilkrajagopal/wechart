@@ -665,6 +665,17 @@ fieldset.model-field > legend {
 /* The Security workspace (T171): its policies' table, and the note on phase 2. */
 .security-workspace { display: grid; gap: 12px; align-content: start; min-width: 0; }
 .security-workspace__note { margin: 0; color: var(--wc-text-secondary); }
+/* Whether Cube refuses unsigned requests (T175, AC-169): a status line when
+   it does, and while it does not, the prototype's .warnbar in the error
+   colour — its icon and words, and what makes Cube refuse them. */
+.auth-check { display: grid; gap: 4px; }
+.auth-check--open {
+  padding: 8px 12px;
+  border: 1px solid var(--wc-status-error);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--wc-status-error) 8%, var(--wc-bg-surface));
+}
+.auth-check p { margin: 0; color: var(--wc-text-primary); font-size: 13px; }
 /* The policies, and beside them the prototype's right pane, "Preview a
    security context" (T172); stacked when there is no room for both. */
 .security-layout {

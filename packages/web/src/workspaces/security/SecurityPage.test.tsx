@@ -50,6 +50,8 @@ function page() {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
+      // Whether Cube refuses unsigned requests (T175), asked beside the files.
+      if (String(input) === '/api/cube-auth') return Response.json({ auth: 'enforced' });
       expect(String(input)).toBe('/api/model/files');
       return new Response(JSON.stringify({ files: FILES }));
     }),
@@ -112,5 +114,38 @@ describe('the Security workspace’s policies', () => {
     expect(screen.getByTestId('policies-unread').textContent).toBe(
       'Not read here: cubes/legacy.js (JavaScript). Any policies in these files are not listed.',
     );
+  });
+
+  /**
+   * T175 / AC-169, from its review: the warning that Cube lets unsigned
+   * requests in stands whatever becomes of the model's files.
+   */
+  it('warns that Cube lets unsigned requests in even when the model cannot be read', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input) === '/api/cube-auth'
+          ? Response.json({ auth: 'open', accepted: ['no token'] })
+          : Response.json({ error: 'down' }, { status: 500 }),
+      ),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <SecurityPage />
+      </QueryClientProvider>,
+    );
+
+    const warning = await vi.waitFor(() => {
+      const found = screen
+        .getAllByRole('alert')
+        .find((alert) => alert.getAttribute('data-testid') === 'cube-auth');
+      if (found === undefined) throw new Error('No warning yet');
+      return found;
+    });
+    expect(warning.textContent).toContain('Cube lets in requests with no token.');
+    // And the model's failure is said beside it.
+    expect(await screen.findByText('The model files could not be read (500).')).toBeTruthy();
   });
 });

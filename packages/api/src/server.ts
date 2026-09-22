@@ -15,6 +15,7 @@ import {
   previewClaimsOf,
   type CachePolicy,
 } from './cube/client';
+import { authCheckOf } from './cube/authCheck';
 import { healthOf, originOf } from './cube/health';
 import { MetaCache } from './cube/meta-cache';
 import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
@@ -40,7 +41,10 @@ export interface BuildOptions {
   readonly images?: ImageStore;
   /** The Cube model's files (T137, AC-131). */
   readonly modelFiles?: ModelFileStore;
-  /** How Cube's health probes are asked (T162); `fetch` unless a test says. */
+  /**
+   * How Cube's unauthenticated probes — its health (T162), whether it
+   * enforces auth (T175) — are asked; `fetch` unless a test says.
+   */
   readonly healthFetch?: typeof fetch;
   readonly logger?: boolean;
 }
@@ -151,6 +155,12 @@ export function buildServer({
       healthFetch,
     ),
   );
+  /**
+   * Whether Cube answers requests nobody signed (T175, AC-169): asked as
+   * anyone could ask it, with no token and with a bad one — never with
+   * wechart's.
+   */
+  app.get('/api/cube-auth', async () => authCheckOf(config.cubeApiUrl, healthFetch));
   const client =
     cube ??
     new CubeClient({
