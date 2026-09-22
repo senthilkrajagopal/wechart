@@ -6,17 +6,15 @@ import { expect, type APIRequestContext } from '@playwright/test';
  * one file write over each other's change: a test that publishes uses its
  * own file, not the seed model's.
  */
-export async function ownCubeFile(request: APIRequestContext, cube: string): Promise<string> {
+export async function ownCubeFile(
+  request: APIRequestContext,
+  cube: string,
+  /** The file's text, when the test needs more than a count on products. */
+  content = `cubes:\n  - name: ${cube}\n    sql_table: public.products\n\n    measures:\n      - name: count\n        type: count\n`,
+): Promise<string> {
   const path = `cubes/${cube}.yml`;
   const response = await request.post('/api/model/publish', {
-    data: {
-      files: [
-        {
-          path,
-          content: `cubes:\n  - name: ${cube}\n    sql_table: public.products\n\n    measures:\n      - name: count\n        type: count\n`,
-        },
-      ],
-    },
+    data: { files: [{ path, content }] },
   });
   expect(response.status()).toBe(200);
   return path;

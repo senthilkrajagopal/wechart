@@ -297,6 +297,17 @@ Client types [src-client-types]:
 - **An API instance with no refresh worker refuses queries a rollup would serve until the rollup is built.** `/v1/load` answered HTTP 400: "No pre-aggregation partitions were built yet for the pre-aggregation serving this query and this API instance wasn't set up to build pre-aggregations. Please make sure your refresh worker is configured correctly, running, …". It does not fall back to the source database, and asking again does not help.
 - **With a second instance running `CUBEJS_REFRESH_WORKER=true` on the same model and Cube Store**, the same query was served from the rollup after 24–30 s. The answer was HTTP 200 with `external: true` and `usedPreAggregations: { "prod_pre_aggregations.<cube>_<rollup>": { preAggregationId: "<cube>.<rollup>", lastUpdatedAt: <epoch ms>, type: "rollup" } }`, as §4 above describes.
 - **`lastRefreshTime` on a rollup-served answer is the rollup's build time, and `cache: 'no-cache'` doesn't move it.** Asked with `no-cache` twice, and then plainly, the query read the rollup each time with the same `lastRefreshTime` and `lastUpdatedAt`. `no-cache` skips Cube's result cache, not the pre-aggregation.
+- **What Cube's compile refuses in a rollup, and what it lets through.** Each variant below was published through wechart's publish endpoint, which has Cube compile it as a draft (T142).
+  - **Refused (HTTP 422, attributed to the file):**
+    - a `time_dimension` with no `granularity`: "(preAggregations.<name>.granularity) is required";
+    - a `rollup_lambda` with no `rollups`: "(preAggregations.<name>.rollups) is required";
+    - an unknown key: "does not match any of the allowed types".
+  - **Compiled and published:**
+    - a measure, dimension, time dimension or index column the cube doesn't have;
+    - a granularity that isn't one (`fortnight`);
+    - a `partition_granularity` with no time dimension.
+
+  Mistakes in the second list surface only when the rollup is built or matched, not at publish.
 - **`scheduledRefreshContexts` entries fail one at a time.** A context whose model couldn't be read (a store that was down, or one answering 404) logged `Refresh Scheduler Error` with that `securityContext`. The rollup for the context that could be read was still built.
 
 **`/v1/pre-aggregations/jobs` (cross-reference only).** This is the documented trigger and status API. Statuses are `scheduled`, `processing`, `missing_partition` and `done`, and status responses include the physical `table` [ref-rest]. The build-jobs and refresh-worker researcher owns it. Related changes: 1.7.29 made job status "per-entry and data-source aware", and 1.7.11 passes the job's data source when checking queue status [changelog].
