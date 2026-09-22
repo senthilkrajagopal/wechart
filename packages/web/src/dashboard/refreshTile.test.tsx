@@ -288,3 +288,55 @@ describe('what served a filtered tile’s answer', () => {
     expect(badgeOn('t-region').textContent).toMatch(/Live/);
   });
 });
+
+/**
+ * T154 / AC-148, as reworded at the user's decision (2026-09-22): WHEN a
+ * pre-aggregation serves the chart, THE SYSTEM SHALL say that its data is as
+ * of that pre-aggregation's last build, and name the Jobs workspace as where
+ * to rebuild it. Cube answers a refresh from the rollup as last built, so its
+ * as-of time need not move (research/cube/refresh-jobs-caching.md).
+ */
+describe('refreshing a tile a pre-aggregation serves', () => {
+  it('says the data is the pre-aggregation’s as last built, and where to rebuild it', async () => {
+    servedByRollup = true;
+    dashboard();
+    await openFilter();
+    await userEvent.click(
+      await within(screen.getByRole('region', { name: 'Filters' })).findByRole('checkbox', {
+        name: 'completed',
+      }),
+    );
+    // The filtered answer drawn — a rollup's — and still nothing said, since
+    // no refresh was asked for (T154's review: waited for, not assumed).
+    await vi.waitFor(() => {
+      expect(within(tile('t-status')).getByTestId('acceleration').textContent).toMatch(
+        /Accelerated/,
+      );
+    });
+    expect(within(tile('t-status')).queryByTestId('rollup-refresh-note')).toBeNull();
+
+    await userEvent.click(
+      within(tile('t-status')).getByRole('button', { name: 'Refresh By status' }),
+    );
+
+    const note = await within(tile('t-status')).findByTestId('rollup-refresh-note');
+    expect(note.textContent).toContain('orders.by_status');
+    expect(note.textContent).toContain('as of its last build');
+    expect(within(note).getByRole('link', { name: 'Jobs' }).getAttribute('href')).toBe('/jobs');
+    // An icon with the words (AC-177).
+    expect(note.querySelector('[data-icon]')).not.toBeNull();
+
+    // Put away.
+    await userEvent.click(within(note).getByRole('button', { name: 'Dismiss' }));
+    expect(within(tile('t-status')).queryByTestId('rollup-refresh-note')).toBeNull();
+  });
+
+  it('says nothing of the kind for a tile the database answered', async () => {
+    const onRefresh = dashboard();
+    await userEvent.click(
+      within(tile('t-region')).getByRole('button', { name: 'Refresh By region' }),
+    );
+    expect(onRefresh).toHaveBeenCalledWith('c-region');
+    expect(within(tile('t-region')).queryByTestId('rollup-refresh-note')).toBeNull();
+  });
+});

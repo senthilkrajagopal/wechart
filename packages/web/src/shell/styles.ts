@@ -1304,6 +1304,33 @@ button.filter-pill__clear {
   font-size: 12px;
   color: var(--wc-text-secondary);
 }
+/* After a refresh a pre-aggregation answered (T154, AC-148): in the tile's
+   flow like the note above, so it covers nothing, with the accelerated icon
+   beside the words and a dismiss at the end. */
+.tile-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  margin: 0 0 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-subtle);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-primary);
+}
+.tile-note code { font-size: 11px; overflow-wrap: anywhere; }
+.tile-note a { color: var(--wc-accent); }
+.tile-note button {
+  margin-left: auto;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--wc-text-secondary);
+  cursor: pointer;
+}
 /* A tile's head: the prototype's .tile-head — the chart's title, then the
    tile's own controls. Room is kept at the right for the pencil and the ⋯
    menu, which sit over the tile's corner. */

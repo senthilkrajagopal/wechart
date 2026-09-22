@@ -23,6 +23,8 @@ import { SecurityPreview } from '../query/securityPreview';
 import { ChartTile } from '../tiles/ChartTile';
 import { TileError } from '../tiles/TileError';
 import { hiddenMemberOf, TileUnavailable } from '../tiles/TileUnavailable';
+import { accelerationOf } from '../tiles/AccelerationBadge';
+import { RollupRefreshNote } from '../tiles/RollupRefreshNote';
 import { TileSkeleton } from '../tiles/TileSkeleton';
 import { useDashboardColours } from './colours';
 import { AddPanel } from './edit/AddPanel';
@@ -355,6 +357,9 @@ interface TileCharts {
   readonly typeOf?: ((chartId: string) => ChartType | undefined) | undefined;
   /** What Cube said of each chart's answer (T154, T014). */
   readonly answered?: Readonly<Record<string, AnswerMeta>> | undefined;
+  /** Charts refreshed this session, whose answer may have come from a pre-aggregation (T154). */
+  readonly refreshedFromRollup?: ReadonlySet<string> | undefined;
+  readonly onDismissRollupNote?: ((chartId: string) => void) | undefined;
   /** Ask a chart's data again, past Cube's cache; in view mode. */
   readonly onRefresh?: ((chartId: string) => void) | undefined;
   readonly refreshing?: ReadonlySet<string> | undefined;
@@ -596,6 +601,17 @@ function Elements({
             {charts.notCovered?.[chartId] === undefined ? null : (
               <NotCovered
                 members={charts.notCovered[chartId].map((each) => each.filter.member ?? '')}
+              />
+            )}
+            {/* After a refresh, if a pre-aggregation answered it (T154, AC-148):
+                in view mode, as Refresh is — its Jobs link would leave an edit. */}
+            {affordances.editing ||
+            charts.refreshedFromRollup?.has(chartId) !== true ||
+            !accelerationOf(charts.answered?.[chartId]).accelerated ? null : (
+              <RollupRefreshNote
+                preAggregation={accelerationOf(charts.answered?.[chartId]).preAggregation ?? ''}
+                builtAt={accelerationOf(charts.answered?.[chartId]).lastUpdatedAt}
+                onDismiss={() => charts.onDismissRollupNote?.(chartId)}
               />
             )}
             <TileBody
@@ -987,7 +1003,14 @@ export function DashboardView({
   const [refreshingFiltered, setRefreshingFiltered] = useState<ReadonlySet<string>>(new Set());
   /** The chart whose SQL as the previewed context is open (T174). */
   const [sqlFor, setSqlFor] = useState<{ chartId: string; tileId: string } | undefined>(undefined);
+  /**
+   * The charts a refresh was asked for (T154, AC-148): once its answer is in,
+   * one a pre-aggregation served says so — Cube read it from the rollup as
+   * last built — until the note is put away.
+   */
+  const [refreshedFromRollup, setRefreshedFromRollup] = useState<ReadonlySet<string>>(new Set());
   const refreshTile = (chartId: string) => {
+    setRefreshedFromRollup((now) => new Set([...now, chartId]));
     const handle = filteredCharts.current;
     if (handle === null || !handle.isFiltered(chartId) || filtered[chartId]?.unfiltered === true) {
       onRefresh?.(chartId);
@@ -1078,6 +1101,10 @@ export function DashboardView({
     typeOf: (chartId: string) => drawn.documents?.[chartId]?.chart.chartType,
     answered: withFiltered.answered,
     ...(onRefresh === undefined ? {} : { onRefresh: refreshTile }),
+    refreshedFromRollup,
+    onDismissRollupNote: (chartId: string) => {
+      setRefreshedFromRollup((now) => new Set([...now].filter((id) => id !== chartId)));
+    },
     refreshing: new Set([...(refreshing ?? []), ...refreshingFiltered]),
     refreshable: refreshable !== false && !loading,
     /**

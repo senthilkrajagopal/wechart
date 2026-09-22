@@ -476,8 +476,9 @@ Traces to: `[R4]`, `[docs/inputs §1]`, direction.md §7c; `[research/cube/pre-a
       Fails when: the column order cannot be changed, or an aggregate index is written as a regular one.
 - [x] AC-147 IF a query would fail under rollup-only mode, THEN THE SYSTEM SHALL warn on the chart that it depends on the source database.
       Fails when: such a chart shows no warning.
-- [x] AC-148 WHEN the user asks to refresh a chart's data, THE SYSTEM SHALL re-query Cube bypassing wechart's cached result and show the new data-as-of time.
-      Fails when: the previous result is shown again with an unchanged timestamp.
+- [x] AC-148 WHEN the user asks to refresh a chart's data, THE SYSTEM SHALL re-query Cube bypassing wechart's cached result and show the new data-as-of time; and WHEN a pre-aggregation serves the chart, THE SYSTEM SHALL say that its data is as of that pre-aggregation's last build, and name the Jobs workspace as where to rebuild it.
+      Fails when: a chart the database serves shows its previous result again with an unchanged timestamp after a refresh; or a refreshed chart a pre-aggregation serves shows no message naming that pre-aggregation, saying its data is as of the last build, and linking to the Jobs workspace.
+      > Reworded 2026-09-22 at the user's decision: Cube answers a refresh of a rollup-served chart from the rollup as last built, so its data-as-of time need not move (research/cube/refresh-jobs-caching.md). The refresh says so rather than rebuilding it.
 
 ## F17. Jobs, builds and scheduling
 

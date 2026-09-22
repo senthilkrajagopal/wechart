@@ -120,3 +120,38 @@ test('a tile served from a pre-aggregation says so with its age, and one from th
   await expect(live).not.toHaveText(/Accelerated/);
   await expect(live.locator('[data-icon="live"]')).toHaveCount(1);
 });
+
+/**
+ * T154 / AC-148, as reworded at the user's decision (2026-09-22): a refresh
+ * Cube answers from a rollup is the rollup's data as last built — `no-cache`
+ * does not rebuild it (research/cube/refresh-jobs-caching.md) — so the tile
+ * says so, and names Jobs as where it is rebuilt; a tile the database
+ * answered says nothing of the kind.
+ */
+test('refreshing a tile a pre-aggregation serves says its data is as of the last build, and where to rebuild it', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardOn(request, ['monthly_orders', 'orders']);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const accelerated = page.locator('[data-tile="tile-monthly_orders"]');
+  const live = page.locator('[data-tile="tile-orders"]');
+  await expect(accelerated.getByTestId('acceleration')).toHaveText(/Accelerated/);
+  await expect(live.getByTestId('acceleration')).toHaveText(/Live/);
+
+  await accelerated.hover();
+  await accelerated.getByRole('button', { name: /^Refresh / }).click();
+  await live.hover();
+  await live.getByRole('button', { name: /^Refresh / }).click();
+
+  const note = accelerated.getByTestId('rollup-refresh-note');
+  await expect(note).toContainText('monthly_orders.by_status_month');
+  await expect(note).toContainText('as of its last build');
+  await expect(note.locator('[data-icon]')).toHaveCount(1);
+  await expect(note.getByRole('link', { name: 'Jobs' })).toHaveAttribute('href', '/jobs');
+  await expect(live.getByTestId('rollup-refresh-note')).toHaveCount(0);
+
+  await note.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(note).toHaveCount(0);
+});
