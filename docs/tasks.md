@@ -1754,10 +1754,67 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/workspaces/model/lossCheck.ts`, `packages/web/src/workspaces/model/lossCheck.test.ts`
   - Failing test: `lossCheck.test.ts`: a file with comments and anchors produces a warning naming each before the change is applied, and no comment disappears silently (AC-134).
   - Depends on: T139
-- [ ] T141 (AC-135) List parse problems with file and line, and hold the form read-only until it parses
+- [x] T141 (AC-135) List parse problems with file and line, and hold the form read-only until it parses
   - Files: `packages/web/src/workspaces/model/Problems.tsx`, `packages/web/src/workspaces/model/problems.test.ts`
   - Failing test: `problems.test.ts`: unparseable YAML lists each problem with its file and line and the form is not editable; a parsing file re-enables it (AC-135).
   - Depends on: T139
+  - **Built 2026-09-21.**
+    - **Files as built:**
+      - `problems.ts` finds the problems.
+      - The panel is `ProblemsPanel.tsx`, not `Problems.tsx`. macOS resolves imports without regard to case, so `./Problems` and `./problems` would name the same module.
+    - **The problems (`problemsOf`):**
+      - They come from `yaml`'s own errors, parsed with Cube's options (`CUBE_PARSE`).
+      - Each has the file's path, its line and column, the message, and its place in the text.
+      - The message is its first line, less the "at line N, column M:" that `prettyErrors` adds. The panel gives the place beside it.
+    - **What the page shows (`ModelFilePage`), as the prototype draws it:**
+      - **Problems panel** (`model.js`'s `.problems` and `.prob`), beneath the YAML:
+        - a header, "Problems · N errors";
+        - then a row per problem: the error glyph, the message, and `path:line`.
+        - With no problems it reads "No problems in <path>".
+        - Picking a problem puts the editor's cursor at it and scrolls there (direction.md §7b, "Each problem links to a line").
+      - **Editor marks.** The editor marks each problem from the same list, with `setDiagnostics` and `lintGutter` (research/code-editor.md, "Diagnostics"), so the text and the marks cannot drift.
+      - **The read-only veil** (`model.js`'s `.readonly-veil`), over the forms: "The YAML doesn't parse (line N). The form is read-only until the code is fixed."
+    - **The form held read-only (`CubeForm`'s `readOnly`):**
+      - Each panel is held in a disabled `<fieldset>`. Every control in the form is native, so that locks them all.
+      - The tabs and the members' `<details>` summaries are not controls, so the form can still be browsed.
+      - The fields take the subtle ground and secondary ink, not the buttons' half opacity, because the form is read while the YAML is mended.
+    - **When the problems are found:**
+      - They are found again after every 300 ms pause, not only when the text differs from the last that parsed. Otherwise text put back as it was would keep its old problems.
+      - A file that doesn't parse when it is opened now opens too, with its problems listed, where it had shown only an alert.
+    - **The lock while the form catches up.** The form is also read-only while it is behind the typed text, for the 300 ms pause.
+      - A form edit in that window would be written from the text before the typing, and so over it.
+      - This lock isn't shown as locked: it is brief, and it would flash with every burst of typing.
+    - **Research:** `code-editor.md` now sources `scrollIntoView` and `focus()` for going to a problem. It also records the `cm-lintRange-error` class, as observed in the browser tests.
+  - **Tests, red first:**
+    - `problems.test.ts` (4): none for a file that parses; each names file, line and column; the line it is on; the message said once.
+    - `ProblemsPanel.test.tsx` (3): the header's count, and each row's `path:line` and message; picking one; none.
+    - `CubeForm.test.tsx` (2 more):
+      - read-only disables every control on General and on an opened member, and takes no edit;
+      - the form is editable again once it isn't read-only.
+      - Checked red by switching the lock off: 17 controls stayed enabled.
+      - One existing test finds each key's row by its exact DOM path, so that path now includes the panel's lock. The assertion is unchanged.
+    - `e2e/model.spec.ts` (1 more in each browser), on the real file:
+      - `: x` typed at the end of line 3 lists one problem, `cubes/orders.yml:3`, with its message, and shows the veil naming line 3.
+      - Title is disabled, and so is every control of an opened measure.
+      - The editor marks one range.
+      - Picking the problem from another line, then deleting three characters, mends line 3. With the jump turned off, this check failed as it should.
+      - After the mend, the panel reads "No problems", the veil is gone, Title is editable, and SQL table is `public.orders` again.
+  - **Found, not in this task:** the YAML's syntax colours come from CodeMirror's `defaultHighlightStyle`, a light-theme style. In dark mode, keys are dark blue on the dark ground. This belongs to T139's surface and is left to its review.
+  - **Cold review (one round), verdict FAIL. Fixed:**
+    - **An alias to no anchor crashed the page and lost the typing** (for example, a pause at `<<: *ba`).
+      - `yaml` reports it only from `toJS()`, never in `doc.errors` (research/yaml.md, new gotcha).
+      - `problemsOf` now reads the values too, and places the throw at the first alias that resolves to nothing. Its messages are "Unresolved alias …", and for a merge source, "Merge sources must be maps or map aliases".
+      - `modelOf` catches the same throw, so a file opened in that state no longer crashes on its first render.
+      - Tests: 2 in `problems.test.ts` and 1 in `sync.test.ts`, each seen red first.
+    - AC-135 is ticked in this commit, now that the tests pass.
+    - **A file broken when opened has no form**, so the notice now says "Its form shows once the code is fixed" instead of calling the form read-only.
+    - **`FileEditor` is keyed by the file's path**, so another file's page doesn't inherit this one's text.
+    - **Smaller fixes:**
+      - `YamlEditor`'s default `problems` is one constant array, not a new one every render.
+      - The e2e now checks the editor's one mark is on line 3.
+  - **Left from the review:**
+    - **Jinja files:** a Jinja-templated file that doesn't parse as YAML now opens in the editor, where it used to show an alert. The fix is the same as T137's review finding: detect Jinja before parsing and hold the file read-only. It lands in that fix, the next commit.
+    - **The brief lock** while the form catches up with typing has no AC of its own. It is recorded above.
 - [ ] T142 (AC-136) Validate against Cube before publishing and refuse what Cube rejects
   - Files: `packages/api/src/routes/model.ts`, `packages/api/src/model/validate.ts`, `packages/api/src/model/validate.test.ts`
   - Failing test: `validate.test.ts`: an invalid model is not published and Cube's error is attributed to the file it came from (AC-136).

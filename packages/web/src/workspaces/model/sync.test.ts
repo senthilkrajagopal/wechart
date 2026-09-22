@@ -82,4 +82,11 @@ describe('the file, read for the form', () => {
     expect(read.model).toBeUndefined();
     expect(read.problem).toMatch(/line \d+/);
   });
+
+  it('gives no model, and does not throw, for an alias to no anchor (T141)', () => {
+    const read = modelOf('cubes:\n  - name: a\n    sql_table: *ba\n');
+
+    expect(read.model).toBeUndefined();
+    expect(read.problem).toBe('Unresolved alias (the anchor must be set before the alias): ba');
+  });
 });

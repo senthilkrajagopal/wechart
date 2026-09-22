@@ -66,6 +66,67 @@ test('the form and the YAML view each show what the other edits', async ({ page 
   await expect(yaml).toContainText('title: Orders ledger');
 });
 
+/**
+ * T141 / AC-135: IF the YAML fails to parse, THEN THE SYSTEM SHALL name the
+ * file and line in a problems list and keep the form read-only until it
+ * parses (direction.md rule 28).
+ * Fails when: the form stays editable on unparseable YAML, or the problem
+ * names no line.
+ */
+test('YAML that does not parse is listed by file and line, and holds the form read-only', async ({
+  page,
+}) => {
+  await page.goto('/model/files/cubes%2Forders.yml');
+  const form = page.getByRole('region', { name: 'Cube orders' });
+  const problems = page.getByRole('region', { name: 'Problems' });
+  const title = form.getByLabel('Title', { exact: true });
+  await expect(problems).toContainText('No problems in cubes/orders.yml');
+  await expect(title).toBeEditable();
+
+  // Line 3 of the seeded file: `sql_table: public.orders`, made a nested mapping.
+  await page.locator('.cm-line', { hasText: 'sql_table: public.orders' }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(': x');
+
+  const problem = problems.getByRole('listitem');
+  await expect(problem).toHaveCount(1);
+  await expect(problem.locator('.model-problems__where')).toHaveText('cubes/orders.yml:3');
+  await expect(problem).toContainText('Nested mappings are not allowed in compact mappings');
+  await expect(page.getByRole('status').filter({ hasText: 'read-only' })).toContainText('line 3');
+  // Every field locked, not only the one shown: a member's too.
+  await expect(title).toBeDisabled();
+  await form.getByRole('tab', { name: /^Measures/ }).click();
+  await form.locator('.model-member__name', { hasText: /^total_amount$/ }).click();
+  await expect(
+    form.getByRole('tabpanel').locator('input, select, textarea').first(),
+  ).toBeDisabled();
+  expect(
+    await form
+      .getByRole('tabpanel')
+      .locator('input:enabled, select:enabled, textarea:enabled')
+      .count(),
+  ).toBe(0);
+  // The editor marks it where it is: the one mark is on line 3.
+  await expect(page.locator('.cm-lintRange-error')).toHaveCount(1);
+  await expect(
+    page
+      .locator('.cm-line', { hasText: 'sql_table: public.orders: x' })
+      .locator('.cm-lintRange-error'),
+  ).toHaveCount(1);
+
+  // Picking the problem puts the cursor on its line — from another line, so
+  // the mend below lands only if it did — and mending it frees the form.
+  await page.locator('.cm-line', { hasText: 'description: One row' }).click();
+  await problem.getByRole('button').click();
+  await page.keyboard.press('End');
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press('Backspace');
+  await expect(problems).toContainText('No problems in cubes/orders.yml');
+  await expect(page.getByRole('status').filter({ hasText: 'read-only' })).toHaveCount(0);
+  await form.getByRole('tab', { name: 'General' }).click();
+  await expect(title).toBeEditable();
+  await expect(form.getByLabel('SQL table', { exact: true })).toHaveValue('public.orders');
+});
+
 test('a model file opens on a form for its cube, its enumerations the validator’s own', async ({
   page,
 }) => {

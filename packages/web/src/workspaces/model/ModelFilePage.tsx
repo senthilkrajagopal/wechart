@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { MODEL_FILES_QUERY } from './FileList';
 import { objectsOf } from './objects';
 import { CubeForm } from './form/CubeForm';
+import { problemsOf, type Problem } from './problems';
+import { ProblemsPanel } from './ProblemsPanel';
 import { modelOf, withObject } from './sync';
 import { YamlEditor } from './YamlEditor';
 
@@ -17,22 +19,30 @@ type Value = Record<string, unknown>;
 /** direction.md §7b: "Code edits re-parse after a 300 ms pause" — inside AC-133's 500. */
 export const YAML_PAUSE_MS = 300;
 
+const NONE: readonly Problem[] = [];
+
 function FileEditor({ path, content }: { path: string; content: string }) {
   /** The YAML view's text, as typed. */
   const [text, setText] = useState(content);
   /** The text the form reads: the last that parsed, once typing paused. */
   const [read, setRead] = useState(content);
+  /** What stops `text` parsing, as of the last pause (T141, AC-135). */
+  const [problems, setProblems] = useState(() => {
+    const found = problemsOf(path, content);
+    return found.length === 0 ? NONE : found;
+  });
 
   useEffect(() => {
-    if (text === read) return undefined;
     const timer = setTimeout(() => {
-      // Only a text that parses reaches the form (T141 says what is wrong).
-      if (modelOf(text).model !== undefined) setRead(text);
+      // Only a text that parses reaches the form; what stops one is listed.
+      const found = problemsOf(path, text);
+      setProblems(found.length === 0 ? NONE : found);
+      if (found.length === 0 && text !== read) setRead(text);
     }, YAML_PAUSE_MS);
     return () => {
       clearTimeout(timer);
     };
-  }, [text, read]);
+  }, [path, text, read]);
 
   const model = useMemo(() => modelOf(read).model ?? {}, [read]);
 
@@ -43,15 +53,52 @@ function FileEditor({ path, content }: { path: string; content: string }) {
     setRead(written);
   };
 
+  /**
+   * Read-only while the text does not parse (direction.md rule 28), and while
+   * the form is behind what was typed: an edit then would be written over
+   * the typing, from the text before it.
+   */
+  const readOnly = problems.length > 0 || text !== read;
+  /** Where a picked problem sends the editor's cursor. */
+  const [goTo, setGoTo] = useState<{ at: number }>();
+  const [first] = problems;
+
   return (
     <div className="model-editor">
-      <div className="model-editor__form">
+      <div
+        // Shown locked only for a parse error: the lock while typing catches up is brief.
+        className={`model-editor__form${first === undefined ? '' : ' model-editor__form--frozen'}`}
+      >
+        {first === undefined ? null : (
+          // The prototype's read-only veil (model.js), over the forms.
+          <p className="model-editor__veil" role="status">
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+              <rect
+                x="1.5"
+                y="1.5"
+                width="13"
+                height="13"
+                rx="3"
+                fill="var(--wc-status-error-icon)"
+              />
+              <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="#fff" strokeWidth="1.8" />
+            </svg>
+            <span>
+              The YAML doesn’t parse (line {first.line}).{' '}
+              {(model.cubes ?? []).length + (model.views ?? []).length > 0
+                ? 'The form is read-only until the code is fixed.'
+                : // Broken when it was opened: there is no form yet to hold.
+                  'Its form shows once the code is fixed.'}
+            </span>
+          </p>
+        )}
         {(model.cubes ?? []).map((cube, index) => (
           <CubeForm
             // The cube's place in the file: its name is a field it edits.
             key={`cube ${String(index)}`}
             kind="cube"
             value={cube}
+            readOnly={readOnly}
             onChange={(next) => {
               edit('cubes', index, next);
             }}
@@ -62,6 +109,7 @@ function FileEditor({ path, content }: { path: string; content: string }) {
             key={`view ${String(index)}`}
             kind="view"
             value={view}
+            readOnly={readOnly}
             onChange={(next) => {
               edit('views', index, next);
             }}
@@ -69,7 +117,20 @@ function FileEditor({ path, content }: { path: string; content: string }) {
         ))}
       </div>
       <div className="model-editor__yaml">
-        <YamlEditor value={text} onChange={setText} label={`${path}, as YAML`} />
+        <YamlEditor
+          value={text}
+          onChange={setText}
+          label={`${path}, as YAML`}
+          problems={problems}
+          goTo={goTo}
+        />
+        <ProblemsPanel
+          path={path}
+          problems={problems}
+          onPick={(problem) => {
+            setGoTo({ at: problem.from });
+          }}
+        />
       </div>
     </div>
   );
@@ -79,8 +140,9 @@ function FileBody({ path, content }: { path: string; content: string }) {
   const read = useMemo(() => objectsOf(path, content), [path, content]);
   if (read.code !== undefined)
     return <p>{read.code} code: its cubes and views are made when Cube runs it.</p>;
-  if (read.problem !== undefined) return <p role="alert">{read.problem}</p>;
-  return <FileEditor path={path} content={content} />;
+  // A file that does not parse opens too: its problems are listed, to be fixed.
+  // Keyed by the file: another file is another text, not this one's state.
+  return <FileEditor key={path} path={path} content={content} />;
 }
 
 export function ModelFilePage({ path }: { path: string }) {

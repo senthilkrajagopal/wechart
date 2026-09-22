@@ -29,7 +29,12 @@ export function modelOf(text: string): { model?: FileModel; problem?: string } {
     const first = error.message.split('\n')[0] ?? error.message;
     return { problem: line === undefined ? first : `line ${String(line)}: ${first}` };
   }
-  return { model: (document.toJS() ?? {}) as FileModel };
+  try {
+    return { model: (document.toJS() ?? {}) as FileModel };
+  } catch (error) {
+    // Some problems show only in reading the values: an alias to no anchor (T141).
+    return { problem: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 const isPlain = (value: unknown): value is Value =>

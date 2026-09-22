@@ -34,10 +34,16 @@ export function CubeForm({
   kind,
   value,
   onChange,
+  readOnly = false,
 }: {
   kind: 'cube' | 'view';
   value: Value;
   onChange: (next: Value) => void;
+  /**
+   * While the YAML does not parse (T141, AC-135): every field is locked, and
+   * the tabs and members can still be browsed.
+   */
+  readOnly?: boolean;
 }) {
   const section: SectionId = kind === 'cube' ? 'Y.3' : 'Y.10';
   const tabs = [['general', 'General'], ...TABS[kind]] as const;
@@ -98,25 +104,29 @@ export function CubeForm({
         aria-labelledby={`${base}-${open}`}
         className="model-form__panel"
       >
-        {open === 'general' ? (
-          <ObjectForm
-            section={section}
-            value={value}
-            onChange={onChange}
-            only={(field) => !listed.has(field.key)}
-          />
-        ) : (
-          <MemberList
-            section={fieldOf(open)?.of ?? 'Y.6'}
-            items={Array.isArray(value[open]) ? (value[open] as Value[]) : []}
-            onChange={(items) => {
-              const next = { ...value };
-              if (items === undefined || items.length === 0) delete next[open];
-              else next[open] = items;
-              onChange(next);
-            }}
-          />
-        )}
+        {/* Every control is native, so one disabled fieldset locks them all;
+            the members' summaries are not controls and still open. */}
+        <fieldset className="model-form__lock" disabled={readOnly}>
+          {open === 'general' ? (
+            <ObjectForm
+              section={section}
+              value={value}
+              onChange={onChange}
+              only={(field) => !listed.has(field.key)}
+            />
+          ) : (
+            <MemberList
+              section={fieldOf(open)?.of ?? 'Y.6'}
+              items={Array.isArray(value[open]) ? (value[open] as Value[]) : []}
+              onChange={(items) => {
+                const next = { ...value };
+                if (items === undefined || items.length === 0) delete next[open];
+                else next[open] = items;
+                onChange(next);
+              }}
+            />
+          )}
+        </fieldset>
       </div>
     </section>
   );

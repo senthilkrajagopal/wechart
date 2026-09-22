@@ -432,7 +432,7 @@ Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[researc
       Fails when: either view still shows the previous value after that point.
 - [ ] AC-134 IF switching from code to form would lose information, such as comments or anchors, THEN THE SYSTEM SHALL warn and name what would be lost before applying the change (direction.md rule 20).
       Fails when: comments disappear from a file with no warning.
-- [ ] AC-135 IF the YAML fails to parse, THEN THE SYSTEM SHALL name the file and line in a problems list and keep the form read-only until it parses (direction.md rule 28).
+- [x] AC-135 IF the YAML fails to parse, THEN THE SYSTEM SHALL name the file and line in a problems list and keep the form read-only until it parses (direction.md rule 28).
       Fails when: the form stays editable on unparseable YAML, or the problem names no line.
 - [ ] AC-136 WHEN the user saves model changes, THE SYSTEM SHALL validate them against Cube before publishing and refuse to publish a model Cube rejects, showing Cube's error per file.
       Fails when: an invalid model is published, or the error is not attributed to a file.

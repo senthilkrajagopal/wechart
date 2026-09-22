@@ -58,7 +58,8 @@ describe('a cube’s form', () => {
     const general = within(form).getByRole('tabpanel');
     for (const field of SCHEMA['Y.3'].fields.filter((each) => !lists.includes(each.key))) {
       const row = general.querySelector(
-        `:scope > .model-form__fields > [data-key="${field.key}"], :scope > .model-form__fields > details > [data-key="${field.key}"]`,
+        // Under the panel's lock (T141), which holds everything the panel shows.
+        `:scope > .model-form__lock > .model-form__fields > [data-key="${field.key}"], :scope > .model-form__lock > .model-form__fields > details > [data-key="${field.key}"]`,
       );
       const found =
         field.kind === 'object'
@@ -105,6 +106,49 @@ describe('a cube’s form', () => {
   it('hands back the cube with the one key changed', async () => {
     const onChange = vi.fn();
     render(<CubeForm kind="cube" value={ORDERS} onChange={onChange} />);
+
+    await userEvent.type(screen.getByLabelText('Title', { exact: true }), 'O');
+
+    expect(onChange).toHaveBeenLastCalledWith({ ...ORDERS, title: 'O' });
+  });
+});
+
+/**
+ * T141 / AC-135: IF the YAML fails to parse, THEN THE SYSTEM SHALL … keep the
+ * form read-only until it parses.
+ * Fails when: the form stays editable on unparseable YAML.
+ */
+describe('a form held read-only', () => {
+  const controlsOf = (panel: HTMLElement) => [
+    ...panel.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+      'input, select, textarea',
+    ),
+  ];
+
+  it('has every control disabled, on General and on a member, and takes no edit', async () => {
+    const onChange = vi.fn();
+    render(<CubeForm kind="cube" value={ORDERS} onChange={onChange} readOnly />);
+
+    const general = screen.getByRole('tabpanel');
+    expect(controlsOf(general).length).toBeGreaterThan(0);
+    expect(controlsOf(general).filter((control) => !control.matches(':disabled'))).toEqual([]);
+    await userEvent.type(screen.getByLabelText('Title', { exact: true }), 'O');
+    expect(onChange).not.toHaveBeenCalled();
+
+    // The tabs and the members still open, to be read.
+    await userEvent.click(screen.getByRole('tab', { name: /^Measures/ }));
+    await userEvent.click(screen.getByText('count', { selector: '.model-member__name' }));
+    const measures = screen.getByRole('tabpanel');
+    expect(controlsOf(measures).length).toBeGreaterThan(0);
+    expect(controlsOf(measures).filter((control) => !control.matches(':disabled'))).toEqual([]);
+  });
+
+  it('is editable again once it is not read-only', async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <CubeForm kind="cube" value={ORDERS} onChange={onChange} readOnly />,
+    );
+    rerender(<CubeForm kind="cube" value={ORDERS} onChange={onChange} />);
 
     await userEvent.type(screen.getByLabelText('Title', { exact: true }), 'O');
 

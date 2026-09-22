@@ -1,9 +1,15 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { yaml } from '@codemirror/lang-yaml';
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { lintGutter, setDiagnostics } from '@codemirror/lint';
 import { Annotation, EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
 import { useEffect, useRef } from 'react';
+
+import type { Problem } from './problems';
+
+/** No problems: one array, so leaving out `problems` does not redo the marks each render. */
+const NONE: readonly Problem[] = [];
 
 /** Marks a change that came in through `value`, so it is not handed back out. */
 const FROM_VALUE = Annotation.define<boolean>();
@@ -20,10 +26,16 @@ export function YamlEditor({
   value,
   onChange,
   label,
+  problems = NONE,
+  goTo,
 }: {
   value: string;
   onChange: (next: string) => void;
   label: string;
+  /** What stops the text parsing, underlined where it is (T141, AC-135). */
+  problems?: readonly Problem[];
+  /** A place to put the cursor, and show: a new object each time it is asked for. */
+  goTo?: { readonly at: number } | undefined;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -41,6 +53,7 @@ export function YamlEditor({
         doc: value,
         extensions: [
           lineNumbers(),
+          lintGutter(),
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           yaml(),
@@ -75,6 +88,36 @@ export function YamlEditor({
       annotations: FROM_VALUE.of(true),
     });
   }, [value]);
+
+  /**
+   * The problems as the editor's own diagnostics — a squiggle and a gutter
+   * mark — from the same list the problems panel shows, so the two cannot
+   * drift (research/code-editor.md, "Diagnostics").
+   */
+  useEffect(() => {
+    const editor = view.current;
+    if (editor === null) return;
+    const length = editor.state.doc.length;
+    editor.dispatch(
+      setDiagnostics(
+        editor.state,
+        problems.map((problem) => ({
+          from: Math.min(problem.from, length),
+          to: Math.min(Math.max(problem.to, problem.from + 1), length),
+          severity: 'error' as const,
+          message: problem.message,
+        })),
+      ),
+    );
+  }, [problems]);
+
+  useEffect(() => {
+    const editor = view.current;
+    if (editor === null || goTo === undefined) return;
+    const at = Math.min(goTo.at, editor.state.doc.length);
+    editor.dispatch({ selection: { anchor: at }, scrollIntoView: true });
+    editor.focus();
+  }, [goTo]);
 
   return <div ref={host} className="yaml-editor" data-testid="yaml-editor" />;
 }

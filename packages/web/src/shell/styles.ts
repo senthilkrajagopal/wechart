@@ -277,6 +277,76 @@ main { padding: var(--wc-surface-padding); }
   border-right: 1px solid var(--wc-border-subtle);
 }
 .yaml-editor .cm-focused { outline: 2px solid var(--wc-accent); }
+/* The YAML leaves room for the Problems panel beneath it. */
+.model-editor__yaml .yaml-editor .cm-editor { max-height: calc(100vh - 330px); }
+
+/* Problems (T141, AC-135), the prototype's .problems and .prob: a header as a
+   selected tab, then a row a problem, 28 px, glyph · message · file:line. */
+.model-problems {
+  max-height: 150px;
+  margin-top: 8px;
+  overflow: auto;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+}
+.model-problems__head {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  margin: 0 0 0 8px;
+  padding: 0 10px;
+  border-bottom: 2px solid var(--wc-accent);
+  color: var(--wc-accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.model-problems__list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--wc-border-subtle); }
+.model-problems__row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 2px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  border-radius: 0;
+  background: none;
+  color: var(--wc-text-primary);
+  font-size: 12px;
+  font-weight: 400;
+  text-align: left;
+}
+p.model-problems__row { border-top: 1px solid var(--wc-border-subtle); border-bottom: 0; }
+button.model-problems__row { cursor: pointer; }
+.model-problems__where {
+  color: var(--wc-text-muted);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+/* The prototype's .readonly-veil: the form is read-only, and why. */
+.model-editor__veil {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  color: var(--wc-status-error);
+  font-size: 13px;
+}
+.model-form__lock { min-width: 0; margin: 0; padding: 0; border: 0; }
+/* Locked, and still read: the subtle ground and secondary ink, not the
+   buttons' half opacity — the form is read while the YAML is mended. Only
+   while it does not parse; the lock while typing catches up is not shown. */
+.model-editor__form--frozen .model-form__lock:disabled
+  :is(input:not([type='checkbox']):not([type='radio']):not([type='file']), select, textarea) {
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  cursor: not-allowed;
+}
 .model-file-page__path {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 16px !important;
