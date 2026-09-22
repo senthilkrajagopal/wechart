@@ -2710,7 +2710,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - Cube's result cache is not bypassed. Under its default 10-second refresh key most opens are served from it, and the browsers share it.
     - **Not demonstrated:**
       - Production-sized warehouse volumes (M3).
-      - A cold-cache p95. Whether AC-174 means a cold open is a question put to the user.
+      - A cold-cache p95. The user ruled on 2026-09-22 that AC-174 is measured as users see it, Cube's cache included, so no cold reading is needed.
     - The budget held on the first run; no red phase was seen.
     - AC-174 ticked under these conditions.
 - [ ] T181 (AC-175) Meet the 3-second p95 for a marking change on a 10-chart dashboard
