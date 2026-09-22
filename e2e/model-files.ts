@@ -1,6 +1,15 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 
 /**
+ * How long a test waits for a publish's outcome. The API has Cube compile the
+ * whole model as a draft before anything is published (T142), and Cube's own
+ * log timed those compiles at 2.7–7.4 s while the suite ran in parallel
+ * (`"duration"` on "Compiling schema", 2026-09-22), past the 5 s an
+ * assertion waits by default.
+ */
+export const PUBLISHED = { timeout: 20_000 };
+
+/**
  * A cube file of this browser's own, published through the API (T142). The
  * browsers run at once, and each publish writes a whole file, so two editing
  * one file write over each other's change: a test that publishes uses its

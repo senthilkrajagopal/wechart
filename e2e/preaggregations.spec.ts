@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { ownCubeFile } from './model-files';
+import { ownCubeFile, PUBLISHED } from './model-files';
 
 /**
  * F16 — pre-aggregations, on the sample model's accelerated cube,
@@ -126,6 +126,7 @@ test('a rollup edited in its form is YAML in its file, and published as any mode
   await page.getByRole('button', { name: 'Save & reload Cube' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Published' })).toHaveText(
     'Published. Cube is reading the new model.',
+    PUBLISHED,
   );
   const stored = await storedFile(page, path);
   expect(stored).toContain('granularity: day');
@@ -150,7 +151,9 @@ test('a rollup edit Cube refuses is not published', async ({ page }, testInfo) =
   );
   await page.getByRole('button', { name: 'Save & reload Cube' }).click();
 
-  await expect(page.getByRole('alert').filter({ hasText: 'Cube refused the model' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'Cube refused the model' })).toBeVisible(
+    PUBLISHED,
+  );
   const problem = page
     .getByRole('region', { name: 'Problems' })
     .getByRole('listitem')
@@ -204,6 +207,7 @@ test('an index’s columns are moved into order, and an aggregate one is written
   await page.getByRole('button', { name: 'Save & reload Cube' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Published' })).toHaveText(
     'Published. Cube is reading the new model.',
+    PUBLISHED,
   );
   // The file, in the order moved into, the index marked aggregate.
   expect(await storedFile(page, path)).toContain(

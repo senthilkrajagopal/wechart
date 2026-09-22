@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { ownCubeFile } from './model-files';
+import { ownCubeFile, PUBLISHED } from './model-files';
 
 /**
  * T143 / AC-137: WHEN a valid model is published, THE SYSTEM SHALL make the
@@ -48,7 +48,7 @@ test('a measure published in the Model workspace is in the chart builder’s fie
   await own('type').getByLabel('Type', { exact: true }).selectOption('count');
   await own('name').getByLabel('Name', { exact: true }).fill('published');
   await page.getByRole('button', { name: 'Save & reload Cube' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Published' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Published' })).toBeVisible(PUBLISHED);
 
   // The chart builder, which reads the model from Cube's /v1/meta through wechart.
   await page.goto('/explore/charts/seed-chart-empty/edit');

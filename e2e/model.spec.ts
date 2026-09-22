@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { ownCubeFile } from './model-files';
+import { ownCubeFile, PUBLISHED } from './model-files';
 
 /**
  * T137 / AC-131: WHEN the user opens the Model workspace, THE SYSTEM SHALL
@@ -157,7 +157,9 @@ test('a model change Cube refuses is not published, and Cube’s reason is on it
   await own('sql').getByLabel('SQL', { exact: true }).fill('{no_such_member}');
 
   await save.click();
-  await expect(page.getByRole('alert').filter({ hasText: 'Cube refused the model' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'Cube refused the model' })).toBeVisible(
+    PUBLISHED,
+  );
   const problem = page
     .getByRole('region', { name: 'Problems' })
     .getByRole('listitem')
@@ -193,6 +195,7 @@ test('a model change Cube compiles is published, and Cube serves it', async ({
 
   await expect(page.getByRole('status').filter({ hasText: 'Published' })).toHaveText(
     'Published. Cube is reading the new model.',
+    PUBLISHED,
   );
   await expect(page.getByRole('button', { name: 'Save & reload Cube' })).toBeDisabled();
   const stored = (await (await page.request.get('/api/model/files')).json()) as {

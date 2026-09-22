@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { ownCubeFile } from './model-files';
+import { ownCubeFile, PUBLISHED } from './model-files';
 
 /**
  * T168 / AC-162: WHEN the user assigns a cube to a data source, THE SYSTEM
@@ -30,6 +30,7 @@ test('a cube assigned to a data source has it in its model file, published', asy
   await page.getByRole('button', { name: 'Save & reload Cube' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Published' })).toHaveText(
     'Published. Cube is reading the new model.',
+    PUBLISHED,
   );
   // In the model file wechart serves Cube — the model itself.
   const files = (await (await page.request.get('/api/model/files')).json()) as {
