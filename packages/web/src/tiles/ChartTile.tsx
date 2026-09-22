@@ -3,6 +3,7 @@ import type { ChartType, RenderSpec } from '@wechart/core';
 import { useState } from 'react';
 
 import { ChartCanvas } from './ChartCanvas';
+import { DataAsOf } from './DataAsOf';
 import { DataTable } from './DataTable';
 import { Kpi } from './Kpi';
 import { PivotTable } from './PivotTable';
@@ -52,6 +53,11 @@ export interface ChartTileProps {
    * (AC-187). Absent where the chart is not on a tile — the editor's preview.
    */
   readonly title?: string | undefined;
+  /**
+   * When the data is from — Cube's `lastRefreshTime` — shown in the head
+   * (T154, AC-148). Absent where Cube gave none.
+   */
+  readonly asOf?: string | undefined;
 }
 
 interface ChartBodyProps {
@@ -92,6 +98,7 @@ export function ChartTile({
   busy,
   inEffect,
   title,
+  asOf,
 }: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
@@ -111,6 +118,7 @@ export function ChartTile({
     title === undefined || title.trim() === '' ? null : (
       <h3 className="tile-head__title">{title}</h3>
     );
+  const dataAsOf = asOf === undefined ? null : <DataAsOf at={asOf} />;
 
   // No rows: said in words, whatever the chart type (AC-043) — not blank
   // axes, and no table switch, since there is no data behind either view.
@@ -121,7 +129,12 @@ export function ChartTile({
         data-testid="chart-tile"
         aria-busy={busy === true ? true : undefined}
       >
-        {heading === null ? null : <div className="tile-head">{heading}</div>}
+        {heading === null && dataAsOf === null ? null : (
+          <div className="tile-head">
+            {heading}
+            {dataAsOf}
+          </div>
+        )}
         <TileEmpty inEffect={inEffect} />
       </div>
     );
@@ -137,6 +150,7 @@ export function ChartTile({
           controls — here the table view, a small ghost button (AC-187). */}
       <div className="tile-head">
         {heading}
+        {dataAsOf}
         {canSwitch ? (
           <button
             type="button"

@@ -19,7 +19,15 @@ import { expect, test, type Page } from '@playwright/test';
  */
 const THEMES = ['light', 'dark'] as const;
 // A model file's page too: its YAML is text, in the editor's own colours (T139's review).
-const SURFACES = ['/explore', '/jobs', '/model', '/model/files/cubes%2Forders.yml', '/security'];
+// And a dashboard being read: its tiles' heads carry text (T154's data-as-of badge).
+const SURFACES = [
+  '/explore',
+  '/explore/dashboards/seed-root-dashboard-1',
+  '/jobs',
+  '/model',
+  '/model/files/cubes%2Forders.yml',
+  '/security',
+];
 
 const MIN_FONT_SIZE_PX = 12;
 

@@ -2238,10 +2238,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/editor/AccelerationPanel.tsx`, `packages/api/src/cube/rollupOnly.test.ts`
   - Failing test: `rollupOnly.test.ts`: a chart whose query has no matching rollup carries a warning that it depends on the source database (AC-147).
   - Depends on: T150
-- [ ] T154 (AC-148) Refresh a chart past wechart's cached result and show the new data-as-of time
+- [x] T154 (AC-148) Refresh a chart past wechart's cached result and show the new data-as-of time
   - Files: `packages/web/src/tiles/refresh.ts`, `packages/web/src/tiles/refresh.test.ts`
   - Failing test: `refresh.test.ts`: "Refresh now" re-queries Cube bypassing the cached result and the displayed as-of time advances (AC-148).
   - Depends on: T012, T014
+  - **Done 2026-09-21.** Files as built:
+    - API: `cube/client.ts` (`CACHE_POLICIES`, `load(query, cache?)`) and `server.ts` (`/api/load` passes `cache` on, and refuses a value that is not one of Cube's own four with a 400), tested in `server.test.ts`.
+    - Web: `query/loadTile.ts` (`cache?: 'no-cache'`) and its test; `tiles/DataAsOf.tsx` and `ChartTile.tsx` (`asOf`), tested in `tiles/DataAsOf.test.tsx`; `dashboard/DashboardPage.tsx` (keeps each chart's `lastRefreshTime`, and `refresh(chartId)` re-asks that one chart); `dashboard/DashboardView.tsx` (the ↻ button); `shell/styles.ts`.
+    - e2e: `e2e/refresh.spec.ts` on the seed dashboard against the real Cube in all three browsers, and the seed dashboard added to `e2e/a11y-tokens.spec.ts`.
+    - **Past which cache.** wechart's own answer is dropped and put back with the new one, and Cube is asked with `cache: 'no-cache'`, which "Skips refresh key checks. Always returns fresh data" (`research/cube/refresh-jobs-caching.md`). The first build sent `must-revalidate`, and the e2e caught it: Cube returned its cached result with the same `lastRefreshTime`, because that value revalidates only when the refresh key has changed. The research doc and `data-layer.md` now quote all four values.
+    - **What the user sees.** In view mode each chart tile has a ↻ "Refresh <chart title>" button beside the pencil. The head shows "Data as of h:mm:ss" as the prototype's `.badge`, where its tiles carry their data's age. It is not drawn over the chart, where it covered axis labels. Edit mode has no refresh, because an edit has its own drafts.
+    - AC-148 ticked: `e2e/refresh.spec.ts` shows the `datetime` moving on after Refresh, and that every `/api/load` body carries `cache: 'no-cache'`.
 
 ## F17. Jobs, builds and scheduling
 

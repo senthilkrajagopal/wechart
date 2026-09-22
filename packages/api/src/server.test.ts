@@ -64,6 +64,34 @@ describe('the API answers for Cube (AC-007)', () => {
     await app.close();
   });
 
+  it('asks Cube past its cache when told to, and only in Cube’s own terms (T154, AC-148)', async () => {
+    const bodies: unknown[] = [];
+    const cube = new CubeClient({
+      apiUrl: config.cubeApiUrl,
+      apiSecret: SECRET,
+      securityContext: config.securityContext,
+      fetchImpl: (async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)));
+        return new Response('{"data":[]}');
+      }) as typeof fetch,
+    });
+    const app = buildServer({ config, cube });
+    const load = (payload: Record<string, unknown>) =>
+      app.inject({ method: 'POST', url: '/api/load', payload });
+
+    await load({ query: { measures: ['Orders.count'] }, cache: 'no-cache' });
+    await load({ query: { measures: ['Orders.count'] } });
+    const refused = await load({ query: { measures: ['Orders.count'] }, cache: 'whenever' });
+
+    // research/cube/refresh-jobs-caching.md: `cache` on /v1/load, and its four values.
+    expect(bodies).toEqual([
+      { query: { measures: ['Orders.count'] }, cache: 'no-cache' },
+      { query: { measures: ['Orders.count'] } },
+    ]);
+    expect(refused.statusCode).toBe(400);
+    await app.close();
+  });
+
   it('refuses a load with no query rather than passing it to Cube', async () => {
     let reached = false;
     const app = buildServer({

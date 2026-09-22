@@ -106,6 +106,12 @@ export interface DashboardViewProps {
   readonly errors?: Readonly<Record<string, unknown>>;
   /** The charts are still on their way, so tiles show a skeleton (AC-042). */
   readonly loading?: boolean;
+  /** When each chart's data is from: Cube's `lastRefreshTime`, by chart id (T154, AC-148). */
+  readonly asOf?: Readonly<Record<string, string>> | undefined;
+  /** Ask a chart's data again, past Cube's cache (AC-148). */
+  readonly onRefresh?: ((chartId: string) => void) | undefined;
+  /** The charts whose refresh is on its way. */
+  readonly refreshing?: ReadonlySet<string> | undefined;
   /**
    * The saved chart documents, by chart id: what names a tile when a filter
    * is scoped to it (AC-077), and what a filter re-queries (AC-078).
@@ -180,6 +186,7 @@ function TileBody({
   editing = false,
   carried,
   title,
+  asOf,
 }: {
   tile: Tile;
   spec: RenderSpec | undefined;
@@ -195,6 +202,8 @@ function TileBody({
   carried?: readonly SearchFilter[] | undefined;
   /** A chart tile's heading: its chart's title (AC-187). */
   title?: string | undefined;
+  /** When its data is from, Cube's `lastRefreshTime` (T154, AC-148). */
+  asOf?: string | undefined;
 }) {
   switch (tile.kind) {
     case 'chart':
@@ -232,6 +241,7 @@ function TileBody({
           busy={busy}
           inEffect={inEffect}
           title={title}
+          asOf={asOf}
           {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
         />
       );
@@ -273,6 +283,11 @@ interface TileCharts {
   readonly carried?: readonly SearchFilter[] | undefined;
   /** A chart's title, which heads its tile (AC-187). */
   readonly titleOf?: ((chartId: string) => string | undefined) | undefined;
+  /** When each chart's data is from (T154, AC-148). */
+  readonly asOf?: Readonly<Record<string, string>> | undefined;
+  /** Ask a chart's data again, past Cube's cache; in view mode. */
+  readonly onRefresh?: ((chartId: string) => void) | undefined;
+  readonly refreshing?: ReadonlySet<string> | undefined;
 }
 
 interface Affordances {
@@ -412,6 +427,25 @@ function Elements({
                 ✎
               </button>
             )}
+            {/* Asking a chart again (T154, AC-148): for reading a dashboard,
+                so in view mode; editing one has its own drafts. */}
+            {element.kind !== 'chart' ||
+            element.chartId === undefined ||
+            affordances.editing ||
+            affordances.charts.onRefresh === undefined ? null : (
+              <button
+                type="button"
+                className="tile-refresh"
+                aria-label={`Refresh ${charts.titleOf?.(chartId) ?? element.text ?? element.kind}`}
+                title="Refresh now: ask Cube again, past its cache"
+                disabled={affordances.charts.refreshing?.has(chartId) === true}
+                onClick={() => {
+                  affordances.charts.onRefresh?.(chartId);
+                }}
+              >
+                ↻
+              </button>
+            )}
             {affordances.moveTo === undefined ? null : (
               <MoveToMenu
                 tileId={element.id}
@@ -445,6 +479,7 @@ function Elements({
               editing={editing}
               carried={charts.carried}
               title={charts.titleOf?.(chartId)}
+              asOf={charts.asOf?.[chartId]}
             />
           </>
         );
@@ -646,6 +681,9 @@ export function DashboardView({
   specs,
   errors,
   loading = false,
+  asOf,
+  onRefresh,
+  refreshing,
   documents,
   reach,
   memberTitle,
@@ -836,6 +874,9 @@ export function DashboardView({
     inEffect,
     carried,
     titleOf: chartTitleOf,
+    asOf,
+    onRefresh,
+    refreshing,
   };
 
   /**

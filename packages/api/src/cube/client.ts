@@ -36,6 +36,15 @@ export class CubeError extends Error {
 
 const DEFAULT_TTL_SECONDS = 60 * 5;
 
+/** The values of `/v1/load`'s `cache` (research/cube/refresh-jobs-caching.md). */
+export const CACHE_POLICIES = [
+  'stale-if-slow',
+  'stale-while-revalidate',
+  'must-revalidate',
+  'no-cache',
+] as const;
+export type CachePolicy = (typeof CACHE_POLICIES)[number];
+
 export class CubeClient {
   readonly #apiUrl: string;
   readonly #apiSecret: string;
@@ -59,11 +68,15 @@ export class CubeClient {
     return this.#request('/v1/meta', { method: 'GET' }, context);
   }
 
-  /** `/v1/load`: run a query. */
-  async load(query: Record<string, unknown>): Promise<unknown> {
+  /**
+   * `/v1/load`: run a query. `cache` is Cube's own per-request policy —
+   * `no-cache` skips refresh key checks and asks the source (research/cube/
+   * refresh-jobs-caching.md); left out, Cube's default.
+   */
+  async load(query: Record<string, unknown>, cache?: CachePolicy): Promise<unknown> {
     return this.#request('/v1/load', {
       method: 'POST',
-      body: JSON.stringify({ query }),
+      body: JSON.stringify(cache === undefined ? { query } : { query, cache }),
       headers: { 'content-type': 'application/json' },
     });
   }

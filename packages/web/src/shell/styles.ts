@@ -1704,7 +1704,47 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 }
 .grid-tile:hover .tile-pencil,
 .tile-pencil:focus-visible { opacity: 1; }
+/* "Refresh now" (T154, AC-148): the pencil's twin, left of it, in view mode. */
+.tile-refresh {
+  position: absolute;
+  top: 13px;
+  right: 72px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--wc-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+}
+.grid-tile:hover .tile-refresh,
+.tile-refresh:focus-visible,
+.tile-refresh:disabled { opacity: 1; }
+/* With "Refresh now" there, the head keeps room for three corner controls:
+   26 + 2 + 26 + 2 + 26, and its 8 px gap. */
+.grid-tile:has(.tile-refresh) .tile-head { padding-right: 90px; }
+/* When the chart's data is from (T154): the prototype's .badge in the tile
+   head, where its tiles carry their data's age. */
+.tile-as-of {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
 @media (hover: none) {
+  .tile-refresh,
   .tile-pencil { opacity: 1; }
 }
 

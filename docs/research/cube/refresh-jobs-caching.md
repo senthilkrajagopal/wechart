@@ -290,6 +290,12 @@ Worker behavior:
 - **Refresh key checks:** `CUBEJS_REFRESH_KEY_LOCAL_TIME=true` checks `every`-based keys against Cube's own clock instead of querying the DB ([doc-env][]). `queryCacheOptions.refreshKeyRenewalThreshold` and `backgroundRenew` are tuning knobs ([doc-config][]).
 - **Per-request cache control:** the `cache` parameter on `/v1/load` (GET query or POST body) and `/v1/cubesql`. Values are `stale-if-slow` (default), `stale-while-revalidate`, `must-revalidate` and `no-cache` ([doc-rest][], [doc-rest-ref][], [src-gateway][]). In client-core it is `LoadMethodOptions.cache: CacheMode` ([src-client-types][]).
   - `renewQuery` was removed in 1.7.0. `cache: 'must-revalidate'` replaces `renewQuery: true` ([deprecation][], [changelog][]).
+  - **What each value does** (added 2026-09-21 for T154, quoted from the REST API page's cache control section, [docs.cube.dev/reference/core-data-apis/rest-api](https://docs.cube.dev/reference/core-data-apis/rest-api)):
+    - `stale-if-slow`: "If refresh keys are up-to-date, returns cached value. If expired, tries to return fresh value from the data source. If the data source query is slow (hits `Continue wait`), returns stale value from cache."
+    - `stale-while-revalidate`: "If refresh keys are up-to-date, returns cached value. If expired, returns stale data from cache and updates cache in background."
+    - `must-revalidate`: "If refresh keys are up-to-date, returns cached value. If expired, always waits for fresh value from the data source, even if slow."
+    - `no-cache`: "Skips refresh key checks. Always returns fresh data from the data source, regardless of cache or query performance."
+  - **So "refresh now" is `no-cache`.** `must-revalidate` still returns the cached result while the refresh key holds, which is 10 s by default for Postgres. The browser tests saw the same `lastRefreshTime` come back.
 - **Freshness in `/v1/load` responses:**
   - Always present: `lastRefreshTime` (ISO), `external` (served from Cube Store), `dataSource`, `dbType`, `extDbType`, `slowQuery`, `total`.
   - `usedPreAggregations` is keyed by table and limited to `{ preAggregationId, lastUpdatedAt, type }`. It is absent when no pre-aggregation was used ([doc-rest-ref][], [src-gateway][]).

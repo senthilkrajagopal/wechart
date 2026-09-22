@@ -8,7 +8,7 @@ import {
 } from '@wechart/core';
 import Fastify, { type FastifyInstance } from 'fastify';
 
-import { CubeClient, CubeError } from './cube/client';
+import { CACHE_POLICIES, CubeClient, CubeError, type CachePolicy } from './cube/client';
 import { MetaCache } from './cube/meta-cache';
 import type { Config } from './config';
 import { registerModelPublishing } from './model/publish';
@@ -200,14 +200,19 @@ export function buildServer({
    * workspace to find.
    */
   app.post('/api/load', async (request) => {
-    const body = request.body as { query?: Record<string, unknown> } | undefined;
+    const body = request.body as { query?: Record<string, unknown>; cache?: unknown } | undefined;
     if (!body?.query) throw new BadRequest();
+    // Cube's own cache policy, and only its own values: `no-cache` for a
+    // tile's "Refresh now" (T154, AC-148).
+    const cache = body.cache;
+    if (cache !== undefined && !CACHE_POLICIES.includes(cache as CachePolicy))
+      throw new BadRequest();
 
     const requestId = String(request.headers['x-request-id'] ?? 'unknown');
     const startedAt = performance.now();
 
     try {
-      const result = await client.load(body.query);
+      const result = await client.load(body.query, cache as CachePolicy | undefined);
       const { accelerated, preAggregation } = accelerationOf(result);
       await record({
         requestId,

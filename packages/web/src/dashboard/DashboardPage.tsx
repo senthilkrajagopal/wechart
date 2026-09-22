@@ -335,14 +335,47 @@ function LoadedDashboard({
       const specs: Record<string, RenderSpec> = {};
       const errors: Record<string, unknown> = {};
       const documents: Record<string, ChartDocument> = {};
-      for (const [id, { chart, document: read }] of entries) {
+      const asOf: Record<string, string> = {};
+      for (const [id, { chart, document: read, asOf: at }] of entries) {
         if ('spec' in chart) specs[id] = chart.spec;
         else errors[id] = chart.error;
         if (read !== undefined) documents[id] = read;
+        if (at !== undefined) asOf[id] = at;
       }
-      return { specs, errors, documents };
+      return { specs, errors, documents, asOf };
     },
   });
+
+  /**
+   * "Refresh now" on one tile (T154, AC-148): its chart asked again, past
+   * wechart's cached answer and Cube's (`no-cache`, which "Skips refresh key
+   * checks"; `must-revalidate` would serve Cube's cache while its key holds), and put back in
+   * place — the other tiles are not asked again.
+   */
+  const [refreshing, setRefreshing] = useState<ReadonlySet<string>>(new Set());
+  const refresh = async (chartId: string) => {
+    setRefreshing((now) => new Set([...now, chartId]));
+    try {
+      const { chart, asOf: at } = await specFor(chartId, 'no-cache');
+      queryClient.setQueryData<typeof charts.data>(['dashboard-charts', dashboardId], (before) => {
+        if (before === undefined) return before;
+        const specs = { ...before.specs };
+        const errors = { ...before.errors };
+        if ('spec' in chart) {
+          specs[chartId] = chart.spec;
+          delete errors[chartId];
+        } else {
+          errors[chartId] = chart.error;
+          delete specs[chartId];
+        }
+        const asOf = { ...before.asOf };
+        if (at !== undefined) asOf[chartId] = at;
+        return { ...before, specs, errors, asOf };
+      });
+    } finally {
+      setRefreshing((now) => new Set([...now].filter((id) => id !== chartId)));
+    }
+  };
 
   /**
    * Number formats from the Cube model (AC-046, T194), applied as the tiles
@@ -392,6 +425,11 @@ function LoadedDashboard({
         formats={formats}
         errors={charts.data?.errors ?? {}}
         loading={charts.isPending}
+        asOf={charts.data?.asOf}
+        onRefresh={(chartId) => {
+          void refresh(chartId);
+        }}
+        refreshing={refreshing}
         // E and a tile's pencil open the chart editor over the dashboard, in
         // the view itself (T032). They used to navigate here, a full page
         // load that ended the edit session — so there was no dashboard to
@@ -424,7 +462,9 @@ function LoadedDashboard({
  */
 async function specFor(
   chartId: string,
-): Promise<{ chart: TileChart; document: ChartDocument | undefined }> {
+  /** `no-cache` for a tile's "Refresh now": asked past Cube's cache (T154, AC-148). */
+  cache?: 'no-cache',
+): Promise<{ chart: TileChart; document: ChartDocument | undefined; asOf?: string }> {
   let document;
   try {
     const stored = await getJson<StoredDocument>(
@@ -440,9 +480,16 @@ async function specFor(
 
   // AC-012: a failed query reaches the tile as the thrown value, so that a
   // TileLoadError still carries its query and the tile can offer it.
+  // When the data is from: Cube's `lastRefreshTime`, on every /v1/load answer
+  // (research/cube/refresh-jobs-caching.md).
+  let asOf: string | undefined;
   const chart = await tileChartOf(document, async (query) => {
-    const result = (await loadTile({ query })) as { data?: Record<string, unknown>[] };
+    const result = (await loadTile({ query, ...(cache === undefined ? {} : { cache }) })) as {
+      data?: Record<string, unknown>[];
+      lastRefreshTime?: unknown;
+    };
+    if (typeof result.lastRefreshTime === 'string') asOf = result.lastRefreshTime;
     return result.data ?? [];
   });
-  return { chart, document };
+  return asOf === undefined ? { chart, document } : { chart, document, asOf };
 }

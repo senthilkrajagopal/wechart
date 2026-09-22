@@ -39,6 +39,12 @@ export interface LoadTileOptions {
   /** Test seam: called after each "Continue wait", before the next request. */
   readonly onPoll?: (attempt: number) => void;
   readonly requestId?: string;
+  /**
+   * Cube's own cache policy for this query: `no-cache` "Skips refresh key
+   * checks. Always returns fresh data", for a tile's "Refresh now" (T154,
+   * AC-148; research/cube/refresh-jobs-caching.md). Left out, Cube's default.
+   */
+  readonly cache?: 'no-cache';
 }
 
 export async function loadTile({
@@ -49,6 +55,7 @@ export async function loadTile({
   maxPolls = DEFAULT_MAX_POLLS,
   onPoll,
   requestId = newRequestId(),
+  cache,
 }: LoadTileOptions): Promise<unknown> {
   let started = false;
 
@@ -85,7 +92,7 @@ export async function loadTile({
       const response = await fetchImpl('/api/load', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-request-id': requestId },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify(cache === undefined ? { query } : { query, cache }),
         ...(signal ? { signal } : {}),
       });
 

@@ -120,3 +120,27 @@ describe('long-polling a slow query (AC-010)', () => {
     expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1);
   });
 });
+
+/**
+ * T154 / AC-148: WHEN the user asks to refresh a chart's data, THE SYSTEM
+ * SHALL re-query Cube bypassing wechart's cached result and show the new
+ * data-as-of time.
+ */
+describe('asking past the cache', () => {
+  it('sends Cube’s cache policy when given one, and nothing when not', async () => {
+    const { impl, calls } = fetchReturning(
+      { body: { data: [], lastRefreshTime: '2026-09-21T10:00:00.000Z' } },
+      { body: { data: [] } },
+    );
+
+    const answer = await loadTile({ query, fetchImpl: impl, cache: 'no-cache' });
+    await loadTile({ query, fetchImpl: impl });
+
+    expect(calls.map((call) => JSON.parse(String(call.body)) as unknown)).toEqual([
+      { query, cache: 'no-cache' },
+      { query },
+    ]);
+    // Cube's answer whole: its `lastRefreshTime` is the data's as-of time.
+    expect(answer).toEqual({ data: [], lastRefreshTime: '2026-09-21T10:00:00.000Z' });
+  });
+});
