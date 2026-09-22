@@ -22,7 +22,8 @@ test('opens from every workspace with focus in the input', async ({ page }) => {
 
     const palette = page.getByRole('dialog', { name: /search/i });
     await expect(palette).toBeVisible();
-    await expect(page.getByRole('searchbox')).toBeFocused();
+    // The palette's own: Security has a search box of its own (T172's "Find a dashboard").
+    await expect(palette.getByRole('searchbox')).toBeFocused();
 
     await page.keyboard.press('Escape');
     await expect(palette).toBeHidden();
