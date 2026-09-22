@@ -51,6 +51,10 @@ test('the Security workspace lists every access policy the model declares, as de
     'total_amount',
     'views/secured_orders.yml',
   ]);
-  // The rest of the sample model has no policies: open, and said to be.
-  await expect(page.getByTestId('policies-open')).toContainText('orders');
+  // The rest of the sample model has no policies: open, and said to be — the
+  // cube `orders` among them, and not the secured view (T171's review).
+  const open = (await page.getByTestId('policies-open').textContent()) ?? '';
+  const named = (open.split(': ')[1] ?? '').replace(/\.$/, '').split(', ');
+  expect(named).toContain('orders');
+  expect(named).not.toContain('secured_orders');
 });

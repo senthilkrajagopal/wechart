@@ -123,6 +123,77 @@ describe('the access policies a file declares', () => {
     expect(membersText(read.policies[0]?.memberLevel)).toBe('status, except all');
   });
 
+  /**
+   * Found by T171's review. Cube reads snake_case and camelCase keys alike
+   * (research/cube/data-modeling.md, "Formatting and aliases"), so a policy
+   * written in camelCase is still a policy.
+   */
+  it('reads a policy written with camelCase keys', () => {
+    const read = policiesOf(
+      'cubes/c.yml',
+      `cubes:
+  - name: c
+    accessPolicy:
+      - group: managers
+        memberLevel:
+          includes: '*'
+        rowLevel:
+          allowAll: true
+      - group: auditors
+        memberLevel:
+          includes: [count]
+        memberMasking:
+          includes: [amount]
+`,
+    );
+    expect(read.open).toEqual([]);
+    expect(read.policies.map((policy) => membersText(policy.memberLevel))).toEqual([
+      'all',
+      'count',
+    ]);
+    expect(rowsText(read.policies[0]?.rowLevel)).toBe('all rows');
+    expect(maskingText(read.policies[1]?.memberMasking)).toBe('amount');
+  });
+
+  it('reads an empty member level as all members, as Cube does', () => {
+    // research/cube/access-control.md: "`member_level: {}` is treated as
+    // `includes: '*'`", and so is one that only excludes.
+    expect(membersText({})).toBe('all');
+    expect(membersText({ excludes: ['amount'] })).toBe('all except amount');
+  });
+
+  it('says what a masking rule that only excludes declares, as written', () => {
+    // No source says what masking excludes on its own mean, so it is not read
+    // as "all except": it is said as written.
+    expect(maskingText({ excludes: ['amount'] })).toBe('excludes amount');
+    expect(maskingText({})).toBe('none declared');
+  });
+
+  it('keeps a condition that is not text, and says when no row filter is listed', () => {
+    const read = policiesOf(
+      'cubes/c.yml',
+      `cubes:
+  - name: c
+    access_policy:
+      - group: sales
+        conditions:
+          - if: true
+        row_level:
+          filters: []
+`,
+    );
+    expect(conditionsText(read.policies[0]!.conditions)).toBe('true');
+    expect(rowsText(read.policies[0]?.rowLevel)).toBe('no filters listed');
+  });
+
+  it('reads a filter written with dimension, and keeps a value holding a comma whole', () => {
+    expect(
+      rowsText({
+        filters: [{ dimension: 'region', operator: 'equals', values: ['North, East', 'South'] }],
+      }),
+    ).toBe('region equals "North, East", South');
+  });
+
   it('names a file whose policies it cannot read, rather than leaving them out silently', () => {
     expect(policiesOf('cubes/c.js', 'cube(`c`, {})')).toEqual({
       policies: [],
