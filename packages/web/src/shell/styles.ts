@@ -461,6 +461,9 @@ button.model-problems__row { cursor: pointer; }
   font-size: 12px;
 }
 .rollup-only-warning__icon::before { content: '⚠'; color: var(--wc-status-warning); }
+/* Beside the editor's result: what served it, and the warning if nothing did. */
+.result-source { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 8px; }
+.result-source .rollup-only-warning { margin: 0; }
 /* What uses the members a save changes (T147): two short lists in the bar. */
 .model-references__lead { margin: 0 0 6px; }
 .model-references__head { margin: 6px 0 2px; font-size: 12px; font-weight: 600; }

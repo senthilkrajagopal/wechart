@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { RollupOnlyWarning } from './RollupOnlyWarning';
+
 /**
  * A chart's acceleration panel (T150, AC-144): whether Cube serves the chart's
  * query from a pre-aggregation, and when it does not, the member that stops
@@ -67,16 +69,8 @@ export function AccelerationPanel({ query }: { query: Record<string, unknown> })
           </>
         )}
       </p>
-      {/*
-        T153 / AC-147: under rollup-only mode Cube refuses a query no
-        pre-aggregation serves, rather than falling back to the database
-        (research/cube/pre-aggregations.md §2, "No match"). A miss is exactly
-        such a chart. An icon beside the words, never colour alone.
-      */}
-      <p className="rollup-only-warning" role="status" data-testid="rollup-only-warning">
-        <span className="rollup-only-warning__icon" data-icon="warning" aria-hidden="true" />
-        Depends on the source database: in rollup-only mode, Cube would refuse this chart.
-      </p>
+      {/* A miss is a chart rollup-only mode would refuse (T153, AC-147). */}
+      <RollupOnlyWarning />
     </>
   );
 }

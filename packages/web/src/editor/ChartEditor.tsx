@@ -26,8 +26,11 @@ import {
 import type { AxesSettings, AxisSettings } from '@wechart/charts';
 
 import { AxisPanel } from './AxisPanel';
+import { answerMetaOf } from '../query/answerMeta';
 import { loadTile } from '../query/loadTile';
+import { AccelerationBadge, accelerationOf } from '../tiles/AccelerationBadge';
 import { ChartTile } from '../tiles/ChartTile';
+import { RollupOnlyWarning } from './RollupOnlyWarning';
 import { TileError } from '../tiles/TileError';
 import { TileSkeleton } from '../tiles/TileSkeleton';
 import { ResultsDrawer, type DrawerView } from './ResultsDrawer';
@@ -232,6 +235,9 @@ export function ChartEditor({ initial = OPENED_WITH, tile, onChange }: ChartEdit
     queryFn: ({ signal }) => loadTile({ query, signal }),
     enabled: !isEmpty(spec),
   });
+
+  // What Cube said of the answer besides its rows: what served it (T153).
+  const served = useMemo(() => answerMetaOf(result.data), [result.data]);
 
   // Memoised: a fresh array each render would defeat every memo below it, so
   // the signature — and with it the recommendation — would be recomputed on
@@ -470,6 +476,17 @@ export function ChartEditor({ initial = OPENED_WITH, tile, onChange }: ChartEdit
         ) : (
           <>
             <p data-testid="result-row-count">{rows.length} rows</p>
+            {/*
+              Where this answer came from, as the prototype's editor badges
+              it, and — when no pre-aggregation served it — the warning that
+              rollup-only mode would refuse the chart, on the chart itself
+              (T153, AC-147; its panel says the same). Read from the answer
+              the chart drew, so the two cannot disagree.
+            */}
+            <div className="result-source" data-testid="result-source">
+              <AccelerationBadge result={served} />
+              {accelerationOf(served).accelerated ? null : <RollupOnlyWarning />}
+            </div>
             <pre data-testid="result-first-row">{JSON.stringify(rows[0] ?? null)}</pre>
             {shownType === null || missing.length > 0 ? null : (
               // Only once the fields can actually produce the chosen type.

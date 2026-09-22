@@ -1097,20 +1097,59 @@ describe('whether a query is served from a rollup (AC-144)', () => {
     await app.close();
   });
 
-  it('reads a plan Cube gives as a list, one per query it runs', async () => {
-    const cube = new CubeClient({
+  /**
+   * A plan Cube gives as a list, one per query it runs, matches only if every
+   * query does: "all-or-nothing" (research/cube/pre-aggregations.md §2,
+   * "Multi-fact and multi-stage queries"). T150 first reported the first
+   * query's rollup as the match — a test that was wrong (T153's review).
+   */
+  function planning(plans: unknown, reasons: 'answer' | 'fail' = 'answer') {
+    return new CubeClient({
       apiUrl: config.cubeApiUrl,
       apiSecret: SECRET,
       securityContext: config.securityContext,
-      fetchImpl: (async () =>
-        new Response(
-          JSON.stringify([
-            { sql: { preAggregations: [] } },
-            { sql: { preAggregations: [{ preAggregationId: 'monthly_orders.by_status_month' }] } },
-          ]),
-        )) as unknown as typeof fetch,
+      fetchImpl: (async (url: string) => {
+        const { pathname } = new URL(url);
+        if (pathname.endsWith('/v1/sql')) return new Response(JSON.stringify(plans));
+        if (reasons === 'fail')
+          return new Response(JSON.stringify({ error: 'Continue wait' }), { status: 500 });
+        return new Response(
+          JSON.stringify(
+            pathname.endsWith('/v1/dry-run') ? { transformedQueries: [{}] } : { cubes: [] },
+          ),
+        );
+      }) as unknown as typeof fetch,
     });
-    const app = buildServer({ config, cube });
+  }
+  const used = {
+    sql: { preAggregations: [{ preAggregationId: 'monthly_orders.by_status_month' }] },
+  };
+
+  it('matches a plan of several queries only if a rollup serves every one', async () => {
+    const every = buildServer({ config, cube: planning([used, used]) });
+    const one = buildServer({ config, cube: planning([{ sql: { preAggregations: [] } }, used]) });
+
+    const all = await every.inject({
+      method: 'POST',
+      url: '/api/acceleration',
+      payload: { query },
+    });
+    const partly = await one.inject({
+      method: 'POST',
+      url: '/api/acceleration',
+      payload: { query },
+    });
+
+    expect(all.json()).toEqual({ matched: 'monthly_orders.by_status_month' });
+    expect((partly.json() as { matched: unknown }).matched).toBeNull();
+    await every.close();
+    await one.close();
+  });
+
+  it('still says a query is not served when working out why fails (T153’s review)', async () => {
+    // The miss is Cube's plan; the reason is extra. Without it the chart is
+    // still one rollup-only mode would refuse, and must still say so.
+    const app = buildServer({ config, cube: planning({ sql: { preAggregations: [] } }, 'fail') });
 
     const response = await app.inject({
       method: 'POST',
@@ -1118,7 +1157,8 @@ describe('whether a query is served from a rollup (AC-144)', () => {
       payload: { query },
     });
 
-    expect(response.json()).toEqual({ matched: 'monthly_orders.by_status_month' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ matched: null });
     await app.close();
   });
 });

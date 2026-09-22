@@ -304,21 +304,30 @@ test('a chart no rollup serves is warned of depending on the source database', a
   await page.goto('/explore/charts/seed-chart-empty/edit');
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
   await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByRole('button', { name: 'Results', exact: true }).click();
-  await page.getByTestId('drawer-tab-acceleration').click();
 
-  const warning = page.getByTestId('rollup-only-warning');
+  // On the chart itself, beside its result — nothing to open first (T153's
+  // review: "warn on the chart").
+  const onChart = page.getByTestId('result-source');
+  const warning = onChart.getByTestId('rollup-only-warning');
   await expect(warning).toHaveText(
     'Depends on the source database: in rollup-only mode, Cube would refuse this chart.',
     cube,
   );
   await expect(warning).toHaveAttribute('role', 'status');
   await expect(warning.locator('[data-icon="warning"]')).toHaveCount(1);
+  await expect(onChart.getByTestId('acceleration')).toContainText('Live');
+  // And in its acceleration panel.
+  await page.getByRole('button', { name: 'Results', exact: true }).click();
+  await page.getByTestId('drawer-tab-acceleration').click();
+  await expect(
+    page.getByRole('tabpanel', { name: 'Acceleration' }).getByTestId('rollup-only-warning'),
+  ).toBeVisible(cube);
 
-  // A chart the rollup serves: no warning.
+  // A chart the rollup serves: no warning, on the chart or in the panel.
   await page.getByLabel('Cube or view').selectOption({ value: 'monthly_orders' });
   await page.getByTestId('add-measures').selectOption('monthly_orders.count');
   await page.getByTestId('add-dimensions').selectOption('monthly_orders.status');
   await expect(page.getByTestId('acceleration-matched')).toBeVisible(cube);
-  await expect(warning).toHaveCount(0);
+  await expect(onChart.getByTestId('acceleration')).toContainText('Accelerated', cube);
+  await expect(page.getByTestId('rollup-only-warning')).toHaveCount(0);
 });

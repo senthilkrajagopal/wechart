@@ -248,22 +248,32 @@ export function buildServer({
     const body = request.body as { query?: Record<string, unknown> } | undefined;
     if (!body?.query) throw new BadRequest();
     const query = body.query;
-    // One plan, or — for a query Cube runs as several — one per query.
+    // One plan, or — for a query Cube runs as several — one per query; a
+    // match only if a rollup serves every one, Cube's matching being
+    // all-or-nothing (research/cube/pre-aggregations.md §2).
     const planned = await client.sql(query);
-    const used = (Array.isArray(planned) ? planned : [planned])
-      .flatMap(
-        (plan) =>
-          (plan as { sql?: { preAggregations?: { preAggregationId?: unknown }[] } } | null)?.sql
-            ?.preAggregations ?? [],
+    const usedBy = (Array.isArray(planned) ? planned : [planned]).map((plan) =>
+      (
+        (plan as { sql?: { preAggregations?: { preAggregationId?: unknown }[] } } | null)?.sql
+          ?.preAggregations ?? []
       )
-      .map((each) => each.preAggregationId)
-      .find((id): id is string => typeof id === 'string');
-    if (used !== undefined) return { matched: used };
+        .map((each) => each.preAggregationId)
+        .find((id): id is string => typeof id === 'string'),
+    );
+    const used = usedBy[0];
+    if (used !== undefined && usedBy.every((id) => id !== undefined)) return { matched: used };
 
-    const [dryRun, compiled] = await Promise.all([client.dryRun(query), client.metaExtended()]);
-    const transformed =
-      (dryRun as { transformedQueries?: Transformed[] } | null)?.transformedQueries?.[0] ?? {};
-    return { matched: null, miss: missOf(transformed, query, rollupsFrom(compiled)) };
+    // Why not is extra: the miss is Cube's plan, and holds without a reason —
+    // a chart rollup-only mode would refuse still says so (T153's review).
+    try {
+      const [dryRun, compiled] = await Promise.all([client.dryRun(query), client.metaExtended()]);
+      const transformed =
+        (dryRun as { transformedQueries?: Transformed[] } | null)?.transformedQueries?.[0] ?? {};
+      return { matched: null, miss: missOf(transformed, query, rollupsFrom(compiled)) };
+    } catch (failure) {
+      request.log.warn({ failure }, 'why a query is not served from a rollup could not be read');
+      return { matched: null };
+    }
   });
 
   // Explore's folder tree and contents (AC-017).

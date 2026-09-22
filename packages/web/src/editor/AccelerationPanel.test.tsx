@@ -97,6 +97,27 @@ describe('a chart’s acceleration panel', () => {
     );
   });
 
+  it('warns on every miss: one with a nearest rollup, and one Cube could not explain', async () => {
+    answering({
+      matched: null,
+      miss: {
+        rollup: 'monthly_orders.by_status_month',
+        member: 'monthly_orders.ordered_at',
+        reason: 'monthly_orders.ordered_at is grouped by day, and the rollup keeps it by month.',
+      },
+    });
+    expect(await screen.findByTestId('rollup-only-warning')).toBeTruthy();
+  });
+
+  it('warns when Cube planned no rollup but could not say why', async () => {
+    answering({ matched: null });
+
+    expect((await screen.findByTestId('acceleration-miss')).textContent).toBe(
+      'Not served from a pre-aggregation.',
+    );
+    expect(screen.getByTestId('rollup-only-warning')).toBeTruthy();
+  });
+
   it('gives no such warning to a chart a rollup serves', async () => {
     answering({ matched: 'monthly_orders.by_status_month' });
 
