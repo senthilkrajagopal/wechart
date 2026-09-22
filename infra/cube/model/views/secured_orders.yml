@@ -1,0 +1,49 @@
+views:
+  # The sample's secured view (F19): the access policies the Security
+  # workspace lists, and a security context preview applies. A view of its
+  # own, so nothing else the sample model answers is behind a policy — a cube
+  # or view with policies denies every group none of them names
+  # (docs/research/cube/access-control.md, "Default deny").
+  - name: secured_orders
+    title: Secured orders
+    description: Orders, as each group of the sample's users may see them.
+    cubes:
+      - join_path: orders
+        includes:
+          - count
+          - total_amount
+          - status
+          - ordered_at
+    access_policy:
+      # Managers: everything.
+      - group: managers
+        member_level:
+          includes: '*'
+        row_level:
+          allow_all: true
+      # Sales: shipped orders only, and not the money — while employed.
+      - group: sales
+        conditions:
+          - if: '{ securityContext.is_employee }'
+        member_level:
+          includes: '*'
+          excludes:
+            - total_amount
+        row_level:
+          filters:
+            - member: status
+              operator: equals
+              values:
+                - shipped
+      # Auditors: every row, with the amounts masked.
+      - groups:
+          - auditors
+          - finance
+        member_level:
+          includes:
+            - count
+            - status
+            - ordered_at
+        member_masking:
+          includes:
+            - total_amount

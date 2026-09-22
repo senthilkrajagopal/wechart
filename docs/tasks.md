@@ -2482,10 +2482,27 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F19. Security: policies and context preview
 
-- [ ] T171 (AC-165) List every access policy as declared
+- [x] T171 (AC-165) List every access policy as declared
   - Files: `packages/web/src/workspaces/security/PolicyList.tsx`, `packages/api/src/routes/security.ts`, `packages/web/src/workspaces/security/PolicyList.test.tsx`
   - Failing test: `PolicyList.test.tsx`: every policy appears with its role, member-level rules, row-level filters, conditions and masking, as the model declares them (AC-165).
   - Depends on: T005, T137
+  - **Done 2026-09-22.** Files as built:
+    - Web: `workspaces/security/policies.ts` (`policiesOf`, and each part in words) and its test; `workspaces/security/SecurityPage.tsx` and its test; `router/routes.tsx` (`/security`, empty until now); `shell/styles.ts`.
+    - The seed view `infra/cube/model/views/secured_orders.yml`.
+    - e2e: `e2e/security.spec.ts`.
+    - No API route was needed: the policies are read from the model files the Model workspace already fetches, since Cube's metadata doesn't return them (`research/cube/access-control.md`, "`/v1/meta?extended`").
+    - **As declared.** Each cube's and view's `access_policy` entries, in the research's shape ("Data model: `access_policy` on cubes and views"). In the prototype's table, one row per policy:
+      - the object;
+      - its group or groups (the AC's "role": Cube renamed roles to groups in 1.7.0; `*` reads "any group");
+      - members: "all", "all except x", or the list;
+      - rows: "all rows", or the filters in words through `and` and `or`, and "all rows (none declared)" when there's no `row_level`, which is Cube's default;
+      - each condition's `if`;
+      - the masked members;
+      - the file it's declared in.
+
+      Cubes and views with no policy are named as open to every security context. A file whose policies can't be read (code, a Jinja template, or YAML that doesn't parse) is named, so nothing is left out silently.
+    - **The seed view** `secured_orders` declares three policies between them using every part the criterion names: managers see all; sales see shipped orders without `total_amount`, while `securityContext.is_employee`; auditors and finance get members with `total_amount` masked. Cube compiled it through the publish check. It is a view of its own, since a cube or view with policies denies every group none of them names, and nothing else in the sample should change.
+    - AC-165 ticked. `e2e/security.spec.ts`, in all three browsers, reads all three of the seed view's policies from the Security page, cell by cell, and the open objects. The accessibility audit of `/security` now covers the table.
 - [ ] T172 (AC-166) Preview a dashboard under an edited security context, with a persistent banner
   - Files: `packages/web/src/workspaces/security/ContextPreview.tsx`, `packages/api/src/cube/security-context.ts`, `e2e/context-preview.spec.ts`
   - Failing test: `e2e/context-preview.spec.ts`: the dashboard's queries carry the edited context and a persistent banner names the context in effect (AC-166).

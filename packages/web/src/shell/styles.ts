@@ -662,6 +662,9 @@ fieldset.model-field > legend {
 .build-jobs__job { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; font-size: 12px; }
 .build-jobs__table { color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 .build-panel__note { margin: 8px 0 0; color: var(--wc-text-secondary); font-size: 12px; }
+/* The Security workspace (T171): its policies' table, and the note on phase 2. */
+.security-workspace { display: grid; gap: 12px; }
+.security-workspace__note { margin: 0; color: var(--wc-text-secondary); }
 /* A job's state (T158, AC-152): the prototype's .status — its icon, its words. */
 .status {
   display: inline-flex;

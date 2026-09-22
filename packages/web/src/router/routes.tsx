@@ -18,6 +18,7 @@ import { valuesFromSearch, valuesToSearch, type SearchFilter } from '../filters/
 import { AppShell } from '../shell/AppShell';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { JobsPage } from '../workspaces/jobs/JobsPage';
+import { SecurityPage } from '../workspaces/security/SecurityPage';
 import { FileList } from '../workspaces/model/FileList';
 import { ModelFilePage } from '../workspaces/model/ModelFilePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
@@ -59,6 +60,8 @@ const WORKSPACE_CONTENT: Partial<Record<string, () => React.ReactNode>> = {
   explore: () => <ExplorePage />,
   // The queries wechart has issued (AC-016), which T015 built and never mounted.
   jobs: () => <JobsPage />,
+  // The model's access policies, as declared (T171, AC-165).
+  security: () => <SecurityPage />,
   // The model's files and what each defines (T137, AC-131).
   model: () => (
     <div className="model-workspace">

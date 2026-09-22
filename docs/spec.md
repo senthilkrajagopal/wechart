@@ -557,7 +557,7 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
 Purpose: see what Cube's access policies do, and preview a dashboard as a security context. Users and groups are phase 2.
 Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rule 21; `[research/cube/access-control.md]`.
 
-- [ ] AC-165 THE SYSTEM SHALL list every access policy in the model with its role, member-level rules, row-level filters, conditions and masking, as declared.
+- [x] AC-165 THE SYSTEM SHALL list every access policy in the model with its role, member-level rules, row-level filters, conditions and masking, as declared.
       Fails when: a declared policy or rule is missing from the listing.
 - [ ] AC-166 WHEN the user edits a security context and previews a dashboard, THE SYSTEM SHALL run that dashboard's queries with the edited context and show a persistent banner naming the context in effect (direction.md rule 21).
       Fails when: the queries use the default context, or no banner is shown.
