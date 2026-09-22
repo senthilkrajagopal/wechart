@@ -148,3 +148,5 @@ export {
   type Marking,
   type MarkingSlot,
 } from './markings/model';
+
+export { csvOf, tableColumnsOf } from './export/csv';

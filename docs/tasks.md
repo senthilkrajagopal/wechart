@@ -2597,10 +2597,25 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F20. Export
 
-- [ ] T177 (AC-171) Export a CSV matching what the tile shows
+- [x] T177 (AC-171) Export a CSV matching what the tile shows
   - Files: `packages/core/src/export/csv.ts`, `packages/core/src/export/csv.test.ts`
   - Failing test: `csv.test.ts`: the CSV's rows and columns equal the tile's, with the applied filters and marking limits, for both a chart and a marked-rows view (AC-171).
   - Depends on: T120
+  - **Done 2026-09-22, for charts only.** Files as built:
+    - Core: `export/csv.ts` and its test (`csvOf`, `tableColumnsOf`); `index.ts`. `papaparse` 5.7.0 does the quoting, as research recommends. research/supporting-utilities.md §3 now records what its 5.7.0 source does.
+    - Web:
+      - `dashboard/TileViewMenu.tsx` and its test: the prototype's view-mode ⋯ › Download CSV.
+      - `dashboard/DashboardView.tsx`.
+      - `tiles/DataTable.tsx`, which now takes its columns from `tableColumnsOf`.
+      - `dashboard/DashboardView.test.tsx`: a test renamed.
+    - e2e: `e2e/export.spec.ts`.
+    - **What "what the tile shows" is taken to mean:** the tile's table — what a table tile draws, and every chart's Table view (AC-178). That is every row the tile holds (already filtered, folded to its top N and sorted), a column for every key the rows carry in their order, and each value as the table writes it.
+      - Not a chart's marks: a pie drops null values, a KPI shows one row, and a pivot or trellis draws only what its channels place. Its table shows every row, and the CSV follows the table.
+    - A byte-order mark is prepended for spreadsheets.
+    - The formula guard applies only to values Cube gave as text. A number, and the formatter's text for one, is left as written.
+    - Download is held back while a newer answer (filter or refresh) is on its way.
+    - Demonstrated by `e2e/export.spec.ts` on Chrome, Firefox and Safari: a filtered table tile of three dimensions, the third on no chart channel, parsed and compared to its table cell by cell.
+    - Started ahead of T120, which is deferred with markings. **AC-171 is not ticked:** its marked-rows trigger and "marking limits" need T120 and T190. Tick it when those land, with an export test on a marked-rows view.
 - [ ] T178 (AC-172) State the exported row count and that a result was truncated
   - Files: `packages/core/src/export/csv.ts`, `packages/core/src/export/truncation.test.ts`
   - Failing test: `truncation.test.ts`: an export past Cube's row limit reports how many rows were written and that it is truncated (AC-172).

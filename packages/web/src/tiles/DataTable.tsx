@@ -3,6 +3,7 @@ import {
   markRowClick,
   matchesPredicate,
   rowsMarkable,
+  tableColumnsOf,
   type MarkingPredicate,
   type RenderSpec,
 } from '@wechart/core';
@@ -117,7 +118,8 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking }: DataTableP
     );
   }
 
-  const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  // The columns its CSV heads too (T177): one definition for both.
+  const columns = tableColumnsOf(rows);
   const drawn = virtualizer.getVirtualItems();
   const first = drawn.at(0);
   const last = drawn.at(-1);

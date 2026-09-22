@@ -378,7 +378,9 @@ describe('moving a tile without dragging it (AC-056)', () => {
     );
   });
 
-  it('offers no tile menu in view mode', () => {
+  // View mode has its own menu (T177, Download CSV); the editing one — Move
+  // to, Delete — is not offered there.
+  it('offers no editing tile menu in view mode', () => {
     view();
 
     expect(screen.queryByTestId('tile-menu-t1')).toBeNull();

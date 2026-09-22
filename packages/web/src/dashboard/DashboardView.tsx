@@ -45,6 +45,7 @@ import { EditChrome, type EditSession } from './edit/EditChrome';
 import { MoveToMenu } from './edit/MoveToMenu';
 import { needsOf, templateElements } from './edit/templates';
 import { PreviewBanner } from './PreviewBanner';
+import { TileViewMenu } from './TileViewMenu';
 import { SettingsPage } from './settings/SettingsPage';
 import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
@@ -522,6 +523,24 @@ function Elements({
               >
                 SQL
               </button>
+            )}
+            {/* The ⋯ menu in view mode (T177, AC-171): the prototype's
+                "Download CSV", for a chart with something drawn. */}
+            {affordances.editing ||
+            element.kind !== 'chart' ||
+            element.chartId === undefined ||
+            charts.specs[chartId] === undefined ? null : (
+              <TileViewMenu
+                tileId={element.id}
+                title={charts.titleOf?.(chartId) ?? element.text ?? 'chart'}
+                spec={charts.specs[chartId]}
+                // Not while a newer answer is on its way, as for Refresh.
+                asking={
+                  charts.pending?.has(chartId) === true ||
+                  charts.refreshing?.has(chartId) === true ||
+                  charts.refreshable === false
+                }
+              />
             )}
             {affordances.moveTo === undefined ? null : (
               <MoveToMenu
