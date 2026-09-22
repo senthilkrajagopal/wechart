@@ -81,8 +81,22 @@ describe('reading a dashboard for editing', () => {
 
     const read = dashboardOf(old);
 
-    expect(read.pages).toEqual([]);
+    // One empty page, not none: a dashboard with no page had nowhere for
+    // anything added to go (found adding a chart to a new dashboard, T132).
+    expect(read.pages).toEqual([{ id: 'page-1', title: 'Page 1', items: [] }]);
     expect(read.schemaVersion).toBe(1);
     expect(read.settings).toBeDefined();
+  });
+
+  it('gives a dashboard created with no pages one to add to', () => {
+    // `newDashboardBody` creates `pages: []`, as Explore's New dashboard does.
+    const made = {
+      id: 'd4',
+      kind: 'dashboard' as const,
+      version: 1,
+      body: { title: 'New', pages: [] },
+    };
+
+    expect(dashboardOf(made).pages).toEqual([{ id: 'page-1', title: 'Page 1', items: [] }]);
   });
 });

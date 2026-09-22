@@ -1002,6 +1002,10 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/dashboard/edit/{AddPanel.tsx,EditChrome.tsx}`, `packages/web/src/dashboard/model/{insert.ts,insert.test.ts,document.ts}`, `packages/web/src/dashboard/{DashboardView.tsx,DashboardView.test.tsx}`, `packages/web/src/dashboard/grid/Canvas.tsx`, `packages/web/src/shell/styles.ts`, `e2e/dashboard.spec.ts`
   - Failing test: `insert.test.ts`: all ten types are offered and each lands after the selection or in the chosen slot; `DashboardView.test.tsx` and `e2e/dashboard.spec.ts`: the same through the interface (AC-058).
   - Depends on: T059
+  - **Fixed 2026-09-22 (found under T132):** a dashboard as created, `newDashboardBody` with `pages: []`, took nothing added to it. The insertion point was a page that did not exist.
+    - `dashboardOf` now opens a dashboard with no pages on one empty page, saved with it once anything is added.
+    - `roundTrip.test.ts`'s old-dashboard case had pinned `pages: []` and now expects the one page.
+    - e2e: `e2e/new-dashboard.spec.ts`.
   - Done 2026-09-20. AC-058 ticked.
   - **A third of this criterion was nearly shipped.** `insertionPoint` handled "after the selection or into the chosen + Add slot" as a pure function while the interface only ever appended to the open page: there was no selection state and no slot rendered. Selecting a tile, and a `＋ Add here` slot on every container, are what make the other two positions reachable — and the panel says in words where the next element will land, because that rule is invisible otherwise and an insert landing elsewhere is the criterion's own failing state.
   - Selection follows **focus** as well as clicks. Reaching a tile by Tab and reaching it by mouse have to leave the next insert in the same place, or the keyboard and the pointer disagree about where "after the selection" is.

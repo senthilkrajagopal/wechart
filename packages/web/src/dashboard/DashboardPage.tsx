@@ -94,10 +94,15 @@ export function dashboardOf(stored: StoredDocument): DashboardDocument {
     ...body,
     schemaVersion: body.schemaVersion ?? 1,
     title: typeof body.title === 'string' ? body.title : 'Dashboard',
-    pages: body.pages ?? [],
+    // At least one page: with none, there is nowhere for anything added to
+    // go — a new dashboard (created with `pages: []`) took no tile at all.
+    pages: body.pages !== undefined && body.pages.length > 0 ? body.pages : [FIRST_PAGE],
     settings: body.settings ?? DEFAULT_SETTINGS,
   });
 }
+
+/** The page a dashboard with none opens with, empty; saved with it once anything is added. */
+const FIRST_PAGE = { id: 'page-1', title: 'Page 1', items: [] } as const;
 
 /** Each chart's drawn spec, or why it could not be drawn — the charts query's data. */
 interface DrawnCharts {
