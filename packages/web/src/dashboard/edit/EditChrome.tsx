@@ -140,6 +140,12 @@ export interface EditChromeProps<T> {
    * the version the save will be checked against (T198, AC-015).
    */
   readonly onStart?: (() => void) | undefined;
+  /**
+   * No way into edit mode: no Edit, and `edit()` does nothing — for a
+   * dashboard previewed as a security context (T172), whose editing would
+   * ask as wechart under a banner saying otherwise.
+   */
+  readonly readOnly?: boolean | undefined;
   readonly children: (session: EditSession<T>) => ReactNode;
 }
 
@@ -152,6 +158,7 @@ export function EditChrome<T>({
   headerActions,
   saveBlocked,
   onStart,
+  readOnly = false,
   children,
 }: EditChromeProps<T>) {
   const [editing, setEditing] = useState(false);
@@ -255,7 +262,7 @@ export function EditChrome<T>({
      * every change so far would stay applied and stop being discardable.
      */
     edit: () => {
-      if (!editing) start();
+      if (!editing && !readOnly) start();
     },
     /**
      * The document is recorded as a change first, then saved: if the save is
@@ -336,7 +343,7 @@ export function EditChrome<T>({
                 saveDocument(current);
               }}
             />
-          ) : (
+          ) : readOnly ? null : (
             // The prototype's primary Edit, with its pencil (AC-187).
             <button type="button" className="btn-primary" onClick={start}>
               <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">

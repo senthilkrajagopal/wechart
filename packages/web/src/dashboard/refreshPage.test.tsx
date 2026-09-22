@@ -173,4 +173,33 @@ describe('refreshing a tile, on the page', () => {
     expect(within(tile).getByRole('heading', { name: 'Orders by status' })).toBeTruthy();
     expect(within(tile).getByRole('button', { name: 'Refresh Orders by status' })).toBeTruthy();
   });
+
+  /**
+   * T172 / AC-166, from its review: previewed as a security context, the
+   * dashboard's own load of its charts and a tile's refresh are both asked
+   * as it.
+   */
+  it('asks as a previewed security context, the charts’ load and the refresh alike', async () => {
+    const context = { groups: ['sales'] };
+    answerAt(1);
+    render(
+      <QueryClientProvider client={newClient()}>
+        <DashboardPage dashboardId="d1" preview={context} />
+      </QueryClientProvider>,
+    );
+    await vi.waitFor(() => {
+      expect(asOf()).toBe(timeOf(1));
+    });
+
+    answerAt(2);
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh By status' }));
+    await vi.waitFor(() => {
+      expect(asOf()).toBe(timeOf(2));
+    });
+
+    expect(loads).toEqual([
+      expect.objectContaining({ context }),
+      expect.objectContaining({ context, cache: 'no-cache' }),
+    ]);
+  });
 });

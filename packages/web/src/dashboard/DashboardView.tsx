@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import type { TileSize } from '../editor/PreviewFrame';
 import type { AnswerMeta } from '../query/answerMeta';
+import { SecurityPreview } from '../query/securityPreview';
 import { ChartTile } from '../tiles/ChartTile';
 import { TileError } from '../tiles/TileError';
 import { TileSkeleton } from '../tiles/TileSkeleton';
@@ -28,6 +29,7 @@ import { UndoToast } from './edit/UndoToast';
 import { EditChrome, type EditSession } from './edit/EditChrome';
 import { MoveToMenu } from './edit/MoveToMenu';
 import { needsOf, templateElements } from './edit/templates';
+import { PreviewBanner } from './PreviewBanner';
 import { SettingsPage } from './settings/SettingsPage';
 import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
@@ -130,6 +132,13 @@ export interface DashboardViewProps {
    * would be overwritten by the older load landing after it (T154's review).
    */
   readonly refreshable?: boolean | undefined;
+  /**
+   * A previewed security context (T172, AC-166): the filtered charts and the
+   * filters' own values are asked as it too, and a banner names it for as
+   * long as it is in effect (direction.md rule 21).
+   */
+  readonly preview?: Readonly<Record<string, unknown>> | undefined;
+  readonly onExitPreview?: (() => void) | undefined;
   /**
    * The saved chart documents, by chart id: what names a tile when a filter
    * is scoped to it (AC-077), and what a filter re-queries (AC-078).
@@ -711,6 +720,8 @@ export function DashboardView({
   onRefresh,
   refreshing,
   refreshable,
+  preview,
+  onExitPreview,
   documents,
   reach,
   memberTitle,
@@ -1078,13 +1089,15 @@ export function DashboardView({
   };
 
   return (
-    <>
+    <SecurityPreview.Provider value={preview}>
+      {preview === undefined ? null : <PreviewBanner context={preview} onExit={onExitPreview} />}
       {Object.keys(reached).length === 0 ? null : (
         <FilteredCharts
           ref={filteredCharts}
           reached={reached}
           documents={drawn.documents}
           onResults={onFiltered}
+          context={preview}
         />
       )}
       <EditChrome
@@ -1113,6 +1126,7 @@ export function DashboardView({
          * `whyUnsaveable` for the wording and why it names Undo, not Discard.
          */
         saveBlocked={(shown) => whyUnsaveable(shown, dashboardId)}
+        readOnly={preview !== undefined}
         onStart={onEditStart}
         headerActions={(session) => (
           <button
@@ -1309,7 +1323,9 @@ export function DashboardView({
               }
               session={session}
               charts={charts}
-              onEditChart={openEditor}
+              // Not while previewing a security context: the editor asks as
+              // wechart (T172's review), so a preview is read, not edited.
+              onEditChart={preview === undefined ? openEditor : undefined}
               editTile={editTile}
               editorOpenFor={editingChart?.tileId}
               where={where}
@@ -1324,7 +1340,7 @@ export function DashboardView({
           </>
         )}
       </EditChrome>
-    </>
+    </SecurityPreview.Provider>
   );
 }
 

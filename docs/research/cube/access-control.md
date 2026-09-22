@@ -252,6 +252,21 @@ access_policy:
           values: ['{ securityContext.country }']
 ```
 
+### Observed locally (2026-09-22, compose Cube 1.7.42, the seed view `secured_orders`)
+
+The seed view `infra/cube/model/views/secured_orders.yml` declares three policies:
+- `managers`: all members, `allow_all`;
+- `sales`: all but `total_amount`, rows where status is shipped, and a condition on `securityContext.is_employee`;
+- `auditors`/`finance`: `count`, `status` and `ordered_at`, with `total_amount` masked.
+
+`contextToGroups` in `infra/cube/cube.js` returns the context's `groups`. `/v1/load` was asked for `secured_orders.count` by status under each context:
+- **`{}`, no groups:** HTTP **500**, `"Error: You requested hidden member: 'secured_orders.count'. Please make it visible using \`public: true\`. …"`. The policies' default deny reads as a hidden member, not a 403.
+- **`{ groups: ["managers"] }`:** all three statuses.
+- **`{ groups: ["sales"], is_employee: true }`:** only `shipped`, the row-level filter.
+- **`{ groups: ["sales"] }`:** the same 500 hidden-member error. The condition fails, so no policy grants anything.
+- **`total_amount` for `auditors`:** 200, with the value masked to `null`.
+- **`total_amount` for `sales`:** the same hidden-member 500, since the member is excluded.
+
 ### Member visibility: `public`
 
 - `public: false` on a cube, view, dimension, measure, segment, or hierarchy means it "cannot be queried through the API". The default is `true`. [ref-cube] [ref-dims] [doc-mls]

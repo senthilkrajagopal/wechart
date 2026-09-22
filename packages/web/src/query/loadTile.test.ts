@@ -144,3 +144,22 @@ describe('asking past the cache', () => {
     expect(answer).toEqual({ data: [], lastRefreshTime: '2026-09-21T10:00:00.000Z' });
   });
 });
+
+/**
+ * T172 / AC-166: WHEN the user edits a security context and previews a
+ * dashboard, THE SYSTEM SHALL run that dashboard's queries with the edited
+ * context.
+ */
+describe('asking as a previewed security context', () => {
+  it('sends the context with the query, and none when there is no preview', async () => {
+    const { impl, calls } = fetchReturning({ body: { data: [] } }, { body: { data: [] } });
+
+    await loadTile({ query, fetchImpl: impl, context: { groups: ['sales'] } });
+    await loadTile({ query, fetchImpl: impl });
+
+    expect(calls.map((call) => JSON.parse(String(call.body)) as unknown)).toEqual([
+      { query, context: { groups: ['sales'] } },
+      { query },
+    ]);
+  });
+});

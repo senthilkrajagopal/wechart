@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DashboardDocument } from '../dashboard/model/document';
 import { cubesFrom, membersOf, type Member } from '../editor/fields';
 import { loadTile } from '../query/loadTile';
 import { META_QUERY } from '../query/meta';
+import { SecurityPreview } from '../query/securityPreview';
 import { summaryOf } from './describe';
 import {
   FILTER_WIDGETS,
@@ -73,8 +74,10 @@ function useOptions(member: Member, search: string, needed: boolean) {
   // Cube matches `contains` only on a string dimension; any other type is
   // searched among the values already here.
   const asked = member.type === 'string' ? search.trim() : '';
+  // Under a previewed security context, the values it may see (T172).
+  const context = useContext(SecurityPreview);
   return useQuery<Options>({
-    queryKey: ['filter-options', member.name, asked],
+    queryKey: ['filter-options', member.name, asked, context ?? null],
     enabled: needed,
     // The previous values stay listed while a search is asked.
     placeholderData: (previous) => previous,
@@ -90,6 +93,7 @@ function useOptions(member: Member, search: string, needed: boolean) {
         },
         // A search overtaken by the next is cancelled on Cube too (AC-011).
         signal,
+        ...(context === undefined ? {} : { context }),
       })) as { data?: Record<string, unknown>[] };
       const rows = result.data ?? [];
       const values = rows

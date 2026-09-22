@@ -103,6 +103,16 @@ module.exports = {
     return draft === undefined ? versionOf(store) : `draft_${draft}`;
   },
 
+  // The groups access policies match against: the security context's own
+  // `groups`, each a string. Unset, every context's group set is empty, so only
+  // `group: "*"` policies apply (docs/research/cube/access-control.md,
+  // `contextToGroups`) — and a context preview (T172, AC-166) could show
+  // nothing a group grants.
+  contextToGroups: ({ securityContext }) =>
+    securityContext && Array.isArray(securityContext.groups)
+      ? securityContext.groups.filter((group) => typeof group === 'string')
+      : [],
+
   // wechart alone signs Cube's tokens (it alone holds CUBEJS_API_SECRET), and
   // asks Cube to build pre-aggregations through the jobs API (T155, AC-149) —
   // which answers 403 "API scope is missing: jobs" without this scope. The

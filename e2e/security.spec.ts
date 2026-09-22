@@ -1,4 +1,61 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
+
+const API = 'http://localhost:4100/api';
+
+/** A dashboard of its own, with one table chart of the secured view's count by status. */
+async function securedDashboard(request: APIRequestContext) {
+  const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const title = `Secured ${unique}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, { data: { kind: 'dashboard', title, folderId: 'root' } })
+  ).json()) as { id: string };
+  const chart = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'chart', title: 'Secured by status', folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  await request.put(`${API}/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: 'Secured by status',
+        owner: 'admin',
+        localToDashboardId: dashboard.id,
+        chart: {
+          source: { cube: 'secured_orders' },
+          wells: {
+            measures: ['secured_orders.count'],
+            dimensions: ['secured_orders.status'],
+            timeDimensions: [],
+          },
+          chartType: 'table',
+        },
+      },
+    },
+  });
+  await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            // Taller than the window, so the canvas scrolls under the banner.
+            items: [{ id: 'tile-secured', kind: 'chart', w: 6, h: 200, chartId: chart.id }],
+          },
+        ],
+      },
+    },
+  });
+  return { id: dashboard.id, title };
+}
 
 /**
  * F19 — security: policies and context preview.
@@ -57,4 +114,57 @@ test('the Security workspace lists every access policy the model declares, as de
   const named = (open.split(': ')[1] ?? '').replace(/\.$/, '').split(', ');
   expect(named).toContain('orders');
   expect(named).not.toContain('secured_orders');
+});
+
+/**
+ * T172 / AC-166: WHEN the user edits a security context and previews a
+ * dashboard, THE SYSTEM SHALL run that dashboard's queries with the edited
+ * context and show a persistent banner naming the context in effect
+ * (direction.md rule 21).
+ * Fails when: the queries use the default context, or no banner is shown.
+ *
+ * Against the real Cube, whose policies on the secured view give the sales
+ * group shipped orders only while it is employed (research/cube/
+ * access-control.md, "Observed locally").
+ */
+test('a dashboard previewed as an edited security context runs as it, under a banner', async ({
+  page,
+  request,
+}) => {
+  const { title } = await securedDashboard(request);
+  await page.goto('/security');
+  const preview = page.getByRole('region', { name: 'Preview a security context' });
+  const context = preview.getByLabel('Security context (JSON)');
+  await context.fill('{"groups": ["sales"], "is_employee": true}');
+  await preview.getByLabel('Find a dashboard').fill(title);
+
+  const asked: { context?: unknown }[] = [];
+  page.on('request', (sent) => {
+    if (sent.url().endsWith('/api/load'))
+      asked.push(JSON.parse(sent.postData() ?? '{}') as { context?: unknown });
+  });
+  await preview.getByRole('link', { name: `Preview ${title}` }).click();
+
+  // Named, and staying named.
+  const banner = page.getByTestId('preview-banner');
+  await expect(banner).toContainText('Previewing as {"groups":["sales"],"is_employee":true}');
+  // The sales group's rows: shipped only.
+  const tile = page.locator('[data-tile="tile-secured"]');
+  await expect(tile.getByRole('table')).toContainText('shipped', { timeout: 15_000 });
+  await expect(tile.getByRole('table')).not.toContainText('completed');
+  expect(asked.length).toBeGreaterThan(0);
+  for (const body of asked) expect(body.context).toEqual({ groups: ['sales'], is_employee: true });
+  // Persistent: still in view once the dashboard has scrolled.
+  const canvas = page.locator('.dashboard__canvas');
+  await tile.hover();
+  await page.mouse.wheel(0, 600);
+  await expect.poll(() => canvas.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect(banner).toBeInViewport();
+
+  // Leaving the preview: wechart's own context again, which no policy grants.
+  asked.length = 0;
+  await banner.getByRole('link', { name: 'Exit preview' }).click();
+  await expect(banner).toHaveCount(0);
+  await expect(tile.getByRole('alert')).toBeVisible({ timeout: 15_000 });
+  for (const body of asked) expect(body.context).toBeUndefined();
 });

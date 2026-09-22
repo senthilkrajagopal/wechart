@@ -90,12 +90,15 @@ export function filteredQueryKey(
   chartId: string,
   document: ChartDocument,
   applied: readonly ActiveFilter[],
+  /** The security context asked as, when previewing one (T172). */
+  context?: Readonly<Record<string, unknown>>,
 ): readonly unknown[] {
   return [
     'filtered-chart',
     chartId,
     document,
     applied.map(({ filter, value }) => [filter.member, value]),
+    context ?? null,
   ];
 }
 
@@ -112,6 +115,8 @@ export async function filteredChart(
   signal: AbortSignal,
   /** `no-cache` for a tile's "Refresh now" (T154, AC-148). */
   cache?: 'no-cache',
+  /** A previewed security context, asked as (T172, AC-166). */
+  context?: Readonly<Record<string, unknown>>,
 ): Promise<{ chart: TileChart | undefined; uncovered: string[]; answered?: AnswerMeta }> {
   const source = document.chart.source.cube;
   let asked = [...applied];
@@ -124,6 +129,7 @@ export async function filteredChart(
         query: withFilters(query, current),
         signal,
         ...(cache === undefined ? {} : { cache }),
+        ...(context === undefined ? {} : { context }),
       })) as { data?: Record<string, unknown>[] };
       answered = answerMetaOf(result);
       return result.data ?? [];
@@ -166,12 +172,15 @@ export function FilteredCharts({
   documents,
   onResults,
   ref,
+  context,
 }: {
   reached: Readonly<Record<string, readonly ActiveFilter[]>>;
   documents: Readonly<Record<string, ChartDocument>> | undefined;
   onResults: (results: FilteredResults) => void;
   /** For "Refresh now" on a filtered tile (T154). */
   ref?: Ref<FilteredChartsHandle>;
+  /** A previewed security context, every filtered chart asked as (T172). */
+  context?: Readonly<Record<string, unknown>> | undefined;
 }) {
   const charts = Object.entries(reached).flatMap(([chartId, applied]) => {
     const document = documents?.[chartId];
@@ -196,19 +205,20 @@ export function FilteredCharts({
         if (found === undefined) return;
         const { document, applied } = found;
         await queryClient.fetchQuery({
-          queryKey: filteredQueryKey(chartId, document, applied),
-          queryFn: ({ signal }) => filteredChart(document, applied, signal, 'no-cache'),
+          queryKey: filteredQueryKey(chartId, document, applied, context),
+          queryFn: ({ signal }) => filteredChart(document, applied, signal, 'no-cache', context),
           staleTime: 0,
         });
       },
     }),
-    [charts, queryClient],
+    [charts, queryClient, context],
   );
 
   const answers = useQueries({
     queries: charts.map(({ chartId, document, applied }) => ({
-      queryKey: filteredQueryKey(chartId, document, applied),
-      queryFn: ({ signal }: { signal: AbortSignal }) => filteredChart(document, applied, signal),
+      queryKey: filteredQueryKey(chartId, document, applied, context),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        filteredChart(document, applied, signal, undefined, context),
     })),
   });
 

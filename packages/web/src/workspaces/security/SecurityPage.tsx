@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { MODEL_FILES_QUERY } from '../model/FileList';
+import { ContextPreview } from './ContextPreview';
 import {
   conditionsText,
   groupsText,
@@ -16,7 +17,8 @@ import {
  * declared (T171, AC-165), as the prototype's Security page lists them — one
  * row each, naming the file it is declared in — then the cubes and views with
  * none, which are open to every security context. Policies are authored in
- * the Model workspace; users and groups come in phase 2.
+ * the Model workspace; users and groups come in phase 2. Beside them, the
+ * prototype's right pane: a security context to preview dashboards as (T172).
  */
 export function SecurityPage() {
   // The files as the Model workspace reads them: fresh on each visit.
@@ -36,55 +38,61 @@ export function SecurityPage() {
     if (read.problem !== undefined) unread.push(`${file.path} (${read.problem})`);
   }
 
+  // The groups the policies name, to write a previewed context against.
+  const groups = [...new Set(rows.flatMap(({ policy }) => policy.groups))];
+
   return (
-    <div className="security-workspace">
-      <h1>Access policies</h1>
-      <p className="security-workspace__note">
-        Users and groups come in phase 2. In phase 1, policies are authored in the model, and a
-        security context&rsquo;s groups decide which apply.
-      </p>
-      {rows.length === 0 ? (
-        <p>The model declares no access policies.</p>
-      ) : (
-        <table className="query-log" aria-label="Access policies">
-          <thead>
-            <tr>
-              <th scope="col">Cube / view</th>
-              <th scope="col">Group</th>
-              <th scope="col">Members</th>
-              <th scope="col">Rows</th>
-              <th scope="col">Conditions</th>
-              <th scope="col">Masked</th>
-              <th scope="col">Source</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ policy, path }, index) => (
-              // Positions: one object may declare several policies for one group.
-              <tr key={`${path}:${String(index)}`}>
-                <td className="query-log__query">{policy.object}</td>
-                <td className="query-log__query">{groupsText(policy)}</td>
-                <td>{membersText(policy.memberLevel)}</td>
-                <td>{rowsText(policy.rowLevel)}</td>
-                <td className="query-log__query">{conditionsText(policy.conditions)}</td>
-                <td>{maskingText(policy.memberMasking)}</td>
-                <td className="query-log__query">{path}</td>
+    <div className="security-layout">
+      <div className="security-workspace">
+        <h1>Access policies</h1>
+        <p className="security-workspace__note">
+          Users and groups come in phase 2. In phase 1, policies are authored in the model, and a
+          security context&rsquo;s groups decide which apply.
+        </p>
+        {rows.length === 0 ? (
+          <p>The model declares no access policies.</p>
+        ) : (
+          <table className="query-log" aria-label="Access policies">
+            <thead>
+              <tr>
+                <th scope="col">Cube / view</th>
+                <th scope="col">Group</th>
+                <th scope="col">Members</th>
+                <th scope="col">Rows</th>
+                <th scope="col">Conditions</th>
+                <th scope="col">Masked</th>
+                <th scope="col">Source</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {open.length === 0 ? null : (
-        <p data-testid="policies-open">
-          No access_policy, so open to every security context: {open.join(', ')}.
-        </p>
-      )}
-      {unread.length === 0 ? null : (
-        // Their policies are not listed here, and are said not to be.
-        <p data-testid="policies-unread">
-          Not read here: {unread.join('; ')}. Any policies in these files are not listed.
-        </p>
-      )}
+            </thead>
+            <tbody>
+              {rows.map(({ policy, path }, index) => (
+                // Positions: one object may declare several policies for one group.
+                <tr key={`${path}:${String(index)}`}>
+                  <td className="query-log__query">{policy.object}</td>
+                  <td className="query-log__query">{groupsText(policy)}</td>
+                  <td>{membersText(policy.memberLevel)}</td>
+                  <td>{rowsText(policy.rowLevel)}</td>
+                  <td className="query-log__query">{conditionsText(policy.conditions)}</td>
+                  <td>{maskingText(policy.memberMasking)}</td>
+                  <td className="query-log__query">{path}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {open.length === 0 ? null : (
+          <p data-testid="policies-open">
+            No access_policy, so open to every security context: {open.join(', ')}.
+          </p>
+        )}
+        {unread.length === 0 ? null : (
+          // Their policies are not listed here, and are said not to be.
+          <p data-testid="policies-unread">
+            Not read here: {unread.join('; ')}. Any policies in these files are not listed.
+          </p>
+        )}
+      </div>
+      <ContextPreview groups={groups} />
     </div>
   );
 }

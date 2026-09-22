@@ -663,8 +663,49 @@ fieldset.model-field > legend {
 .build-jobs__table { color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 .build-panel__note { margin: 8px 0 0; color: var(--wc-text-secondary); font-size: 12px; }
 /* The Security workspace (T171): its policies' table, and the note on phase 2. */
-.security-workspace { display: grid; gap: 12px; }
+.security-workspace { display: grid; gap: 12px; align-content: start; min-width: 0; }
 .security-workspace__note { margin: 0; color: var(--wc-text-secondary); }
+/* The policies, and beside them the prototype's right pane, "Preview a
+   security context" (T172); stacked when there is no room for both. */
+.security-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1100px) { .security-layout { grid-template-columns: minmax(0, 1fr); } }
+.context-preview {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+.context-preview h2 { margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
+.context-preview textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.context-preview__note { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.context-preview__problem { font-size: 12px; line-height: 16px; color: var(--wc-status-error); }
+.context-preview__found { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+/* A dashboard previewed as a security context (T172, AC-166): the prototype's
+   .viewas bar, pinned while the page scrolls (direction.md rule 21). */
+.preview-banner {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--wc-crossfilter);
+  background: color-mix(in srgb, var(--wc-crossfilter) 12%, var(--wc-bg-surface));
+  color: var(--wc-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+.preview-banner code { overflow-wrap: anywhere; font-weight: 400; }
+.preview-banner a { margin-left: auto; color: var(--wc-text-primary); }
 /* A job's state (T158, AC-152): the prototype's .status — its icon, its words. */
 .status {
   display: inline-flex;

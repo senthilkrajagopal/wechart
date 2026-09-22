@@ -64,6 +64,77 @@ describe('the API answers for Cube (AC-007)', () => {
     await app.close();
   });
 
+  /**
+   * T172 / AC-166: WHEN the user edits a security context and previews a
+   * dashboard, THE SYSTEM SHALL run that dashboard's queries with the edited
+   * context.
+   *
+   * The preview is signed as itself, in place of the configured context —
+   * whose other claims would otherwise apply unnamed (T172's review) — with
+   * wechart's own claims (its store, a draft) and the token's times kept
+   * wechart's.
+   */
+  it('signs a load as a preview context, keeping only wechart’s own claims (T172)', async () => {
+    const payloads: Record<string, unknown>[] = [];
+    const cube = new CubeClient({
+      apiUrl: config.cubeApiUrl,
+      apiSecret: SECRET,
+      securityContext: { tenant: 'acme', wechartStore: 'http://store' },
+      fetchImpl: (async (_url: string, init: RequestInit) => {
+        const token = new Headers(init.headers).get('authorization')?.replace('Bearer ', '') ?? '';
+        payloads.push(
+          JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString()) as Record<
+            string,
+            unknown
+          >,
+        );
+        return new Response('{"data":[]}');
+      }) as typeof fetch,
+    });
+    const app = buildServer({ config, cube });
+    const load = (payload: Record<string, unknown>) =>
+      app.inject({ method: 'POST', url: '/api/load', payload });
+
+    const before = Math.floor(Date.now() / 1000);
+    await load({
+      query: { measures: ['secured_orders.count'] },
+      context: {
+        groups: ['sales'],
+        is_employee: true,
+        sub: 'rep-7',
+        wechartStore: 'http://elsewhere',
+        wechartDraft: 'x',
+        exp: 1,
+        nbf: 9_999_999_999,
+        iss: 'someone',
+      },
+    });
+    await load({ query: { measures: ['secured_orders.count'] } });
+    const refused = await Promise.all(
+      [['not', 'an', 'object'], null, 'sales'].map((context) =>
+        load({ query: { measures: ['x.y'] }, context }),
+      ),
+    );
+
+    // The preview as itself: none of the configured context's claims (no
+    // `tenant`), wechart's own store, and the token's times wechart's.
+    const { iat, exp, ...claims } = payloads[0] ?? {};
+    expect(claims).toEqual({
+      groups: ['sales'],
+      is_employee: true,
+      sub: 'rep-7',
+      wechartStore: 'http://store',
+    });
+    expect(iat).toBeGreaterThanOrEqual(before);
+    expect(exp).toBeGreaterThan(before);
+    // Without a preview, wechart's own context and nothing more.
+    expect(payloads[1]).toMatchObject({ tenant: 'acme', wechartStore: 'http://store' });
+    expect(payloads[1]?.['groups']).toBeUndefined();
+    expect(refused.map((response) => response.statusCode)).toEqual([400, 400, 400]);
+    expect(payloads).toHaveLength(2);
+    await app.close();
+  });
+
   it('asks Cube past its cache when told to, and only in Cube’s own terms (T154, AC-148)', async () => {
     const bodies: unknown[] = [];
     const cube = new CubeClient({

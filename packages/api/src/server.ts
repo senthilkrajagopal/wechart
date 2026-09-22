@@ -8,7 +8,13 @@ import {
 } from '@wechart/core';
 import Fastify, { type FastifyInstance } from 'fastify';
 
-import { CACHE_POLICIES, CubeClient, CubeError, type CachePolicy } from './cube/client';
+import {
+  CACHE_POLICIES,
+  CubeClient,
+  CubeError,
+  previewClaimsOf,
+  type CachePolicy,
+} from './cube/client';
 import { healthOf, originOf } from './cube/health';
 import { MetaCache } from './cube/meta-cache';
 import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
@@ -222,19 +228,23 @@ export function buildServer({
    * workspace to find.
    */
   app.post('/api/load', async (request) => {
-    const body = request.body as { query?: Record<string, unknown>; cache?: unknown } | undefined;
+    const body = request.body as
+      { query?: Record<string, unknown>; cache?: unknown; context?: unknown } | undefined;
     if (!body?.query) throw new BadRequest();
     // Cube's own cache policy, and only its own values: `no-cache` for a
     // tile's "Refresh now" (T154, AC-148).
     const cache = body.cache;
     if (cache !== undefined && !CACHE_POLICIES.includes(cache as CachePolicy))
       throw new BadRequest();
+    // A previewed security context (T172, AC-166): its claims, never wechart's.
+    const context = body.context === undefined ? undefined : previewClaimsOf(body.context);
+    if (context === null) throw new BadRequest('A preview context is a JSON object.');
 
     const requestId = String(request.headers['x-request-id'] ?? 'unknown');
     const startedAt = performance.now();
 
     try {
-      const result = await client.load(body.query, cache as CachePolicy | undefined);
+      const result = await client.load(body.query, cache as CachePolicy | undefined, context);
       const { accelerated, preAggregation } = accelerationOf(result);
       await record({
         requestId,

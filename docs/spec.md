@@ -559,7 +559,7 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rule 21; `[research/c
 
 - [x] AC-165 THE SYSTEM SHALL list every access policy in the model with its role, member-level rules, row-level filters, conditions and masking, as declared.
       Fails when: a declared policy or rule is missing from the listing.
-- [ ] AC-166 WHEN the user edits a security context and previews a dashboard, THE SYSTEM SHALL run that dashboard's queries with the edited context and show a persistent banner naming the context in effect (direction.md rule 21).
+- [x] AC-166 WHEN the user edits a security context and previews a dashboard, THE SYSTEM SHALL run that dashboard's queries with the edited context and show a persistent banner naming the context in effect (direction.md rule 21).
       Fails when: the queries use the default context, or no banner is shown.
 - [ ] AC-167 WHEN a preview context hides a member a chart uses, THE SYSTEM SHALL show that tile as unavailable to the context rather than as an error.
       Fails when: the tile shows a raw Cube error.

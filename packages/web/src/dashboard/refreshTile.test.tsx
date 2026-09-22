@@ -74,8 +74,8 @@ const spec = (dimension: string): RenderSpec => ({
   rows: [{ [dimension]: 'a', 'orders.count': 1 }],
 });
 
-/** Every chart query sent, with the cache policy it was sent with. */
-let asked: { query: Record<string, unknown>; cache?: string }[] = [];
+/** Every chart query sent, with the cache policy and context it was sent with. */
+let asked: { query: Record<string, unknown>; cache?: string; context?: unknown }[] = [];
 /** Each chart answer is a second later than the one before it. */
 let clock = 0;
 const timeOf = (second: number) => new Date(Date.UTC(2026, 8, 21, 10, 0, second)).toISOString();
@@ -109,6 +109,7 @@ beforeEach(() => {
       const body = JSON.parse(String(init?.body)) as {
         query: Record<string, unknown>;
         cache?: string;
+        context?: unknown;
       };
       // The filter's own values: a query with no measure.
       if (body.query['measures'] === undefined)
@@ -134,7 +135,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function dashboard(onRefresh = vi.fn()) {
+function dashboard(onRefresh = vi.fn(), preview?: Record<string, unknown>) {
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -154,6 +155,7 @@ function dashboard(onRefresh = vi.fn()) {
         }}
         onRefresh={onRefresh}
         onSave={vi.fn()}
+        {...(preview === undefined ? {} : { preview })}
       />
     </QueryClientProvider>,
   );
@@ -199,8 +201,43 @@ describe('refreshing a tile a filter reaches', () => {
     expect(onRefresh).not.toHaveBeenCalled();
   });
 
+  /**
+   * T172 / AC-166, from its review: a previewed dashboard's filtered tiles
+   * are asked as the context, and so is their refresh; and a preview is read,
+   * not edited, since the editor asks as wechart.
+   */
+  it('asks as a previewed security context, refresh included, and offers no editing', async () => {
+    const context = { groups: ['sales'], is_employee: true };
+    dashboard(vi.fn(), context);
+    // No way into editing: no Edit, and no pencil on a tile.
+    expect(screen.queryByRole('button', { name: /^Edit$/ })).toBeNull();
+    expect(within(tile('t-status')).queryByRole('button', { name: /^Edit / })).toBeNull();
+
+    await openFilter();
+    await userEvent.click(
+      await within(screen.getByRole('region', { name: 'Filters' })).findByRole('checkbox', {
+        name: 'completed',
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(asked).toHaveLength(1);
+    });
+    await userEvent.click(
+      within(tile('t-status')).getByRole('button', { name: 'Refresh By status' }),
+    );
+    await vi.waitFor(() => {
+      expect(asked).toHaveLength(2);
+    });
+
+    expect(asked.map((body) => body.context)).toEqual([context, context]);
+    expect(asked[1]?.cache).toBe('no-cache');
+  });
+
   it('leaves a tile no filter reaches to the dashboard’s own refresh', async () => {
     const onRefresh = dashboard();
+    // Not previewing: the ways into editing are there (the preview test's control).
+    expect(screen.getByRole('button', { name: /^Edit$/ })).toBeTruthy();
+    expect(within(tile('t-status')).getByRole('button', { name: /^Edit / })).toBeTruthy();
     await openFilter();
     await userEvent.click(
       await within(screen.getByRole('region', { name: 'Filters' })).findByRole('checkbox', {

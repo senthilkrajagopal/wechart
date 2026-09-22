@@ -128,6 +128,13 @@ export interface DashboardPageProps {
   readonly urlFilterValues?: FilterValues | undefined;
   /** Put these filter values in the URL (AC-081). */
   readonly onFilterValues?: ((values: FilterValues) => void) | undefined;
+  /**
+   * A security context previewed from the Security workspace (T172, AC-166):
+   * every query this dashboard asks is signed with its claims.
+   */
+  readonly preview?: Readonly<Record<string, unknown>> | undefined;
+  /** Leave the preview: the dashboard as wechart itself asks. */
+  readonly onExitPreview?: (() => void) | undefined;
 }
 
 export function DashboardPage({
@@ -136,6 +143,8 @@ export function DashboardPage({
   onEditTile,
   urlFilterValues,
   onFilterValues,
+  preview,
+  onExitPreview,
 }: DashboardPageProps) {
   const saved = useQuery({
     queryKey: ['dashboard', dashboardId],
@@ -172,9 +181,12 @@ export function DashboardPage({
       /**
        * Keyed by the dashboard, as the view below is: what the page holds
        * for one dashboard — why its save failed, the save itself — must not
-       * be shown over the next one opened (T197).
+       * be shown over the next one opened (T197). And by the security
+       * context previewed (T172's review): the answers it keeps drawing while
+       * newer ones are asked — a filtered tile's, a filter's values — must
+       * not be one context's under another's banner, or under none.
        */
-      key={dashboardId}
+      key={`${dashboardId}:${JSON.stringify(preview ?? null)}`}
       document={document}
       dashboardId={dashboardId}
       version={saved.data?.version ?? 1}
@@ -182,6 +194,8 @@ export function DashboardPage({
       onEditTile={onEditTile}
       urlFilterValues={urlFilterValues}
       onFilterValues={onFilterValues}
+      preview={preview}
+      onExitPreview={onExitPreview}
     />
   );
 }
@@ -199,6 +213,8 @@ function LoadedDashboard({
   onEditTile,
   urlFilterValues,
   onFilterValues,
+  preview,
+  onExitPreview,
 }: {
   document: DashboardDocument;
   dashboardId: string;
@@ -207,8 +223,16 @@ function LoadedDashboard({
   onEditTile: ((tileId: string | undefined) => void) | undefined;
   urlFilterValues: FilterValues | undefined;
   onFilterValues: ((values: FilterValues) => void) | undefined;
+  preview: Readonly<Record<string, unknown>> | undefined;
+  onExitPreview: (() => void) | undefined;
 }) {
   const queryClient = useQueryClient();
+  /**
+   * The charts' place in the query cache: keyed by the context they were
+   * asked as too, so a preview (T172) never draws answers Cube gave wechart's
+   * own context, nor the reverse.
+   */
+  const chartsKeyOf = (id: string) => ['dashboard-charts', id, preview ?? null] as const;
   const [saveFailed, setSaveFailed] = useState('');
   /**
    * Moved on each time the charts are loaded afresh or a save writes them. A
@@ -283,12 +307,12 @@ function LoadedDashboard({
        * is kept, so a save that fails can put the cache back as it was
        * (`onError`).
        */
-      const before = queryClient.getQueryData<DrawnCharts>(['dashboard-charts', id]);
+      const before = queryClient.getQueryData<DrawnCharts>(chartsKeyOf(id));
       if (before === undefined) return undefined;
       // A refresh still out answers for the charts as they were: overtaken.
       chartsGeneration.current += 1;
       queryClient.setQueryData<DrawnCharts>(
-        ['dashboard-charts', id],
+        chartsKeyOf(id),
         drawnWithDrafts(before, { ...next, chartDrafts: drafts }) as DrawnCharts,
       );
       return { before };
@@ -330,17 +354,19 @@ function LoadedDashboard({
        * waited for, it kept the session locked at "Saving…" beside a message
        * saying the save had failed.
        */
-      queryClient.setQueryData(['dashboard-charts', id], written.before);
+      queryClient.setQueryData(chartsKeyOf(id), written.before);
       void queryClient.invalidateQueries({ queryKey: ['dashboard-charts', id] });
     },
   });
   const charts = useQuery({
-    queryKey: ['dashboard-charts', dashboardId],
+    queryKey: chartsKeyOf(dashboardId),
     queryFn: async (): Promise<DrawnCharts> => {
       // A refresh still out was asked before this load: overtaken by it.
       chartsGeneration.current += 1;
       const entries = await Promise.all(
-        chartIdsOf(document).map(async (id) => [id, await specFor(id)] as const),
+        chartIdsOf(document).map(
+          async (id) => [id, await specFor(id, undefined, preview)] as const,
+        ),
       );
 
       // Split rather than collapsed: a chart that drew and a chart that failed
@@ -371,11 +397,11 @@ function LoadedDashboard({
     setRefreshing((now) => new Set([...now, chartId]));
     const began = chartsGeneration.current;
     try {
-      const { chart, document: read, answered: meta } = await specFor(chartId, 'no-cache');
+      const { chart, document: read, answered: meta } = await specFor(chartId, 'no-cache', preview);
       // The charts were loaded again, or saved, while this was out: what
       // they hold now is newer than what this asked (T154's review).
       if (chartsGeneration.current !== began) return;
-      queryClient.setQueryData<DrawnCharts>(['dashboard-charts', dashboardId], (before) => {
+      queryClient.setQueryData<DrawnCharts>(chartsKeyOf(dashboardId), (before) => {
         if (before === undefined) return before;
         const specs = { ...before.specs };
         const errors = { ...before.errors };
@@ -453,6 +479,8 @@ function LoadedDashboard({
         }}
         refreshing={refreshing}
         refreshable={!charts.isFetching}
+        preview={preview}
+        onExitPreview={onExitPreview}
         // E and a tile's pencil open the chart editor over the dashboard, in
         // the view itself (T032). They used to navigate here, a full page
         // load that ended the edit session — so there was no dashboard to
@@ -487,6 +515,8 @@ async function specFor(
   chartId: string,
   /** `no-cache` for a tile's "Refresh now": asked past Cube's cache (T154, AC-148). */
   cache?: 'no-cache',
+  /** A previewed security context, asked as (T172, AC-166). */
+  context?: Readonly<Record<string, unknown>>,
 ): Promise<{ chart: TileChart; document: ChartDocument | undefined; answered?: AnswerMeta }> {
   let document;
   try {
@@ -507,9 +537,11 @@ async function specFor(
   // whether a pre-aggregation served it (T154, T014).
   let answered: AnswerMeta | undefined;
   const chart = await tileChartOf(document, async (query) => {
-    const result = (await loadTile({ query, ...(cache === undefined ? {} : { cache }) })) as {
-      data?: Record<string, unknown>[];
-    };
+    const result = (await loadTile({
+      query,
+      ...(cache === undefined ? {} : { cache }),
+      ...(context === undefined ? {} : { context }),
+    })) as { data?: Record<string, unknown>[] };
     answered = answerMetaOf(result);
     return result.data ?? [];
   });

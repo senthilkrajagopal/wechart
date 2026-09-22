@@ -45,6 +45,11 @@ export interface LoadTileOptions {
    * AC-148; research/cube/refresh-jobs-caching.md). Left out, Cube's default.
    */
   readonly cache?: 'no-cache';
+  /**
+   * A previewed security context, whose claims the API signs this query with
+   * (T172, AC-166). Left out, wechart's own.
+   */
+  readonly context?: Readonly<Record<string, unknown>> | undefined;
 }
 
 export async function loadTile({
@@ -56,6 +61,7 @@ export async function loadTile({
   onPoll,
   requestId = newRequestId(),
   cache,
+  context,
 }: LoadTileOptions): Promise<unknown> {
   let started = false;
 
@@ -92,7 +98,11 @@ export async function loadTile({
       const response = await fetchImpl('/api/load', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-request-id': requestId },
-        body: JSON.stringify(cache === undefined ? { query } : { query, cache }),
+        body: JSON.stringify({
+          query,
+          ...(cache === undefined ? {} : { cache }),
+          ...(context === undefined ? {} : { context }),
+        }),
         ...(signal ? { signal } : {}),
       });
 

@@ -2503,10 +2503,22 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       Cubes and views with no policy are named as open to every security context. A file whose policies can't be read (code, a Jinja template, or YAML that doesn't parse) is named, so nothing is left out silently.
     - **The seed view** `secured_orders` declares three policies between them using every part the criterion names: managers see all; sales see shipped orders without `total_amount`, while `securityContext.is_employee`; auditors and finance get members with `total_amount` masked. Cube compiled it through the publish check. It is a view of its own, since a cube or view with policies denies every group none of them names, and nothing else in the sample should change.
     - AC-165 ticked. `e2e/security.spec.ts`, in all three browsers, reads all three of the seed view's policies from the Security page, cell by cell, and the open objects. The accessibility audit of `/security` now covers the table.
-- [ ] T172 (AC-166) Preview a dashboard under an edited security context, with a persistent banner
+- [x] T172 (AC-166) Preview a dashboard under an edited security context, with a persistent banner
   - Files: `packages/web/src/workspaces/security/ContextPreview.tsx`, `packages/api/src/cube/security-context.ts`, `e2e/context-preview.spec.ts`
   - Failing test: `e2e/context-preview.spec.ts`: the dashboard's queries carry the edited context and a persistent banner names the context in effect (AC-166).
   - Depends on: T171, T023
+  - **Done 2026-09-22.** Files as built:
+    - Web: `workspaces/security/ContextPreview.tsx` and its test (the Security page's "Preview a security context" pane: the context as JSON, read or refused, and links to each dashboard found under it); `workspaces/security/SecurityPage.tsx`; `dashboard/PreviewBanner.tsx`; `query/securityPreview.ts` (the context, for a filter's own values); `router/routes.tsx` (the dashboard's `preview` parameter); `dashboard/DashboardPage.tsx`, `dashboard/DashboardView.tsx`, `filters/FilteredCharts.tsx`, `filters/FilterBar.tsx` and `query/loadTile.ts` (every query asked as the context); `filters/previewOptions.test.tsx`; `shell/styles.ts`.
+    - API: `/api/load` takes a `context` in `server.ts`, less wechart's own claims, rather than a separate `cube/security-context.ts`.
+    - Cube: `contextToGroups` in `infra/cube/cube.js`, without which no group a context names matches a policy (`research/cube/access-control.md`, "Observed locally").
+    - e2e: the test is in `e2e/security.spec.ts`, beside T171's.
+    - From the review:
+      - A preview is signed as itself, in place of the configured context, keeping only wechart's `wechart…` claims (`cube/client.ts`, `previewClaimsOf`).
+      - A preview arriving by its address is stripped to what runs, so the banner names only that.
+      - A previewed dashboard offers no way into editing (no Edit, no pencil, no E), because the editor asks as wechart.
+      - Changing the previewed context remounts the dashboard, so no context's answer is drawn under another's banner.
+      - Tests cover filtered tiles and both refresh paths.
+    - AC-166 ticked on `e2e/security.spec.ts`, "a dashboard previewed as an edited security context runs as it, under a banner" (Chrome, Firefox, Safari against the compose Cube).
 - [ ] T173 (AC-167) Show a tile as unavailable to the context when the context hides a member it uses
   - Files: `packages/web/src/tiles/TileUnavailable.tsx`, `packages/web/src/tiles/TileUnavailable.test.tsx`
   - Failing test: `TileUnavailable.test.tsx`: a member hidden by the previewed context renders the unavailable state rather than a raw Cube error (AC-167).

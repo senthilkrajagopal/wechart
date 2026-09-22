@@ -15,6 +15,7 @@ import { ChartEditor } from '../editor/ChartEditor';
 import { editorViewOf, loadEditorState } from '../editor/openChart';
 import type { FilterValues } from '../filters/model';
 import { valuesFromSearch, valuesToSearch, type SearchFilter } from '../filters/url';
+import { previewClaimsOf } from '../query/securityPreview';
 import { AppShell } from '../shell/AppShell';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { JobsPage } from '../workspaces/jobs/JobsPage';
@@ -91,9 +92,13 @@ const workspaceRoutes = WORKSPACES.map((workspace) =>
 function DashboardSurface() {
   const params = useParams({ strict: false }) as { objectId?: string };
   const dashboardId = decodeURIComponent(params.objectId ?? '');
-  const { edit, filters } = dashboardRoute.useSearch();
+  const { edit, filters, preview } = dashboardRoute.useSearch();
   const navigate = dashboardRoute.useNavigate();
   const router = useRouter();
+  /** Leaving a security context preview (T172): the dashboard as wechart asks. */
+  const onExitPreview = useCallback(() => {
+    void navigate({ search: (prev) => ({ ...prev, preview: undefined }) });
+  }, [navigate]);
 
   /**
    * Whether the `edit` entry in history is ours — pushed when the editor was
@@ -162,6 +167,7 @@ function DashboardSurface() {
         onEditTile={onEditTile}
         urlFilterValues={valuesFromSearch(filters)}
         onFilterValues={onFilterValues}
+        {...(preview === undefined ? {} : { preview, onExitPreview })}
       />
     </AppShell>
   );
@@ -178,10 +184,18 @@ const dashboardRoute = createRoute({
    */
   validateSearch: (
     search: Record<string, unknown>,
-  ): { edit?: string | undefined; filters?: SearchFilter[] | undefined } => ({
+  ): {
+    edit?: string | undefined;
+    filters?: SearchFilter[] | undefined;
+    preview?: Record<string, unknown> | undefined;
+  } => ({
     edit: typeof search['edit'] === 'string' && search['edit'] !== '' ? search['edit'] : undefined,
     // The filters in effect (AC-081), each checked; none is no parameter.
     filters: valuesToSearch(valuesFromSearch(search['filters'])),
+    // A security context previewed from the Security workspace (T172,
+    // AC-166): a JSON object, as it runs — less the claims wechart sets
+    // itself — or no preview at all.
+    preview: previewClaimsOf(search['preview']),
   }),
   component: DashboardSurface,
 });

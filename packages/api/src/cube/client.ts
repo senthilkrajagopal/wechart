@@ -73,12 +73,22 @@ export class CubeClient {
    * `no-cache` skips refresh key checks and asks the source (research/cube/
    * refresh-jobs-caching.md); left out, Cube's default.
    */
-  async load(query: Record<string, unknown>, cache?: CachePolicy): Promise<unknown> {
-    return this.#request('/v1/load', {
-      method: 'POST',
-      body: JSON.stringify(cache === undefined ? { query } : { query, cache }),
-      headers: { 'content-type': 'application/json' },
-    });
+  async load(
+    query: Record<string, unknown>,
+    cache?: CachePolicy,
+    /** A previewed security context, asked as in place of wechart's (T172). */
+    preview?: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.#request(
+      '/v1/load',
+      {
+        method: 'POST',
+        body: JSON.stringify(cache === undefined ? { query } : { query, cache }),
+        headers: { 'content-type': 'application/json' },
+      },
+      undefined,
+      preview,
+    );
   }
 
   /**
@@ -150,13 +160,14 @@ export class CubeClient {
     path: string,
     init: RequestInit,
     context?: Record<string, unknown>,
+    preview?: Record<string, unknown>,
   ): Promise<unknown> {
     const response = await this.#fetch(`${this.#apiUrl}${path}`, {
       ...init,
       headers: {
         ...init.headers,
         // AC-008: every request, not only the first.
-        authorization: `Bearer ${this.#token(context)}`,
+        authorization: `Bearer ${this.#token(context, preview)}`,
       },
     });
 
@@ -178,12 +189,19 @@ export class CubeClient {
    * with a JWT library: it is three base64url segments and an HMAC, and this
    * keeps the secret from travelling through another dependency.
    */
-  #token(context?: Record<string, unknown>): string {
+  #token(context?: Record<string, unknown>, preview?: Record<string, unknown>): string {
     const issuedAt = Math.floor(Date.now() / 1000);
     const header = { alg: 'HS256', typ: 'JWT' };
     const payload = {
-      ...this.#securityContext,
-      ...context,
+      /**
+       * A previewed context (T172) is asked as itself, in place of the
+       * configured one — a configured claim it did not name would otherwise
+       * apply unseen — keeping only what is wechart's alone: which model
+       * Cube compiles (`wechart…`), set after it so it cannot be named.
+       */
+      ...(preview === undefined
+        ? { ...this.#securityContext, ...context }
+        : { ...previewClaimsOf(preview), ...wechartClaimsOf(this.#securityContext) }),
       iat: issuedAt,
       exp: issuedAt + this.#ttl,
     };
@@ -193,6 +211,32 @@ export class CubeClient {
 
     return `${unsigned}.${signature}`;
   }
+}
+
+/**
+ * The claims that say whether a token is valid — when, by whom, for whom —
+ * which are wechart's to set, never a previewed context's.
+ */
+const TOKEN_CLAIMS = new Set(['iat', 'exp', 'nbf', 'iss', 'aud']);
+
+/** wechart's own claims: which model store and draft Cube compiles. */
+const isWechartClaim = (key: string) => key.startsWith('wechart');
+
+/**
+ * A previewed security context's claims (T172, AC-166): an object's, less
+ * wechart's own and the token's. Null when it is not an object.
+ */
+export function previewClaimsOf(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(
+      ([key]) => !isWechartClaim(key) && !TOKEN_CLAIMS.has(key),
+    ),
+  );
+}
+
+function wechartClaimsOf(context: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(context).filter(([key]) => isWechartClaim(key)));
 }
 
 function base64Url(value: string): string {
