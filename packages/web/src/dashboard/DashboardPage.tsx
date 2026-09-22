@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
 import { readChartDocument, type ChartDocument, type RenderSpec } from '@wechart/core';
 
+import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
 import { loadTile } from '../query/loadTile';
 import { META_QUERY } from '../query/meta';
 import { reachFrom } from '../filters/coverage';
@@ -104,8 +105,8 @@ interface DrawnCharts {
   errors: Record<string, unknown>;
   /** Each chart's document as read, which filters re-query and tiles are named by (F9). */
   documents: Record<string, ChartDocument>;
-  /** When each chart's data is from: Cube's `lastRefreshTime` (T154, AC-148). */
-  asOf: Record<string, string>;
+  /** What Cube said of each chart's answer: when from, and from what (T154, T014). */
+  answered: Record<string, AnswerMeta>;
 }
 
 /** A save, whole: nothing it needs is read from the render it started in. */
@@ -348,14 +349,14 @@ function LoadedDashboard({
       const specs: Record<string, RenderSpec> = {};
       const errors: Record<string, unknown> = {};
       const documents: Record<string, ChartDocument> = {};
-      const asOf: Record<string, string> = {};
-      for (const [id, { chart, document: read, asOf: at }] of entries) {
+      const answered: Record<string, AnswerMeta> = {};
+      for (const [id, { chart, document: read, answered: meta }] of entries) {
         if ('spec' in chart) specs[id] = chart.spec;
         else errors[id] = chart.error;
         if (read !== undefined) documents[id] = read;
-        if (at !== undefined) asOf[id] = at;
+        if (meta !== undefined) answered[id] = meta;
       }
-      return { specs, errors, documents, asOf };
+      return { specs, errors, documents, answered };
     },
   });
 
@@ -370,7 +371,7 @@ function LoadedDashboard({
     setRefreshing((now) => new Set([...now, chartId]));
     const began = chartsGeneration.current;
     try {
-      const { chart, document: read, asOf: at } = await specFor(chartId, 'no-cache');
+      const { chart, document: read, answered: meta } = await specFor(chartId, 'no-cache');
       // The charts were loaded again, or saved, while this was out: what
       // they hold now is newer than what this asked (T154's review).
       if (chartsGeneration.current !== began) return;
@@ -388,10 +389,10 @@ function LoadedDashboard({
         // The chart as read now: what names the tile, and what filters ask.
         const documents = { ...before.documents };
         if (read !== undefined) documents[chartId] = read;
-        const asOf = { ...before.asOf };
-        if (at === undefined) delete asOf[chartId];
-        else asOf[chartId] = at;
-        return { specs, errors, documents, asOf };
+        const answered = { ...before.answered };
+        if (meta === undefined) delete answered[chartId];
+        else answered[chartId] = meta;
+        return { specs, errors, documents, answered };
       });
     } finally {
       setRefreshing((now) => new Set([...now].filter((id) => id !== chartId)));
@@ -446,7 +447,7 @@ function LoadedDashboard({
         formats={formats}
         errors={charts.data?.errors ?? {}}
         loading={charts.isPending}
-        asOf={charts.data?.asOf}
+        answered={charts.data?.answered}
         onRefresh={(chartId) => {
           void refresh(chartId);
         }}
@@ -486,7 +487,7 @@ async function specFor(
   chartId: string,
   /** `no-cache` for a tile's "Refresh now": asked past Cube's cache (T154, AC-148). */
   cache?: 'no-cache',
-): Promise<{ chart: TileChart; document: ChartDocument | undefined; asOf?: string }> {
+): Promise<{ chart: TileChart; document: ChartDocument | undefined; answered?: AnswerMeta }> {
   let document;
   try {
     const stored = await getJson<StoredDocument>(
@@ -502,16 +503,15 @@ async function specFor(
 
   // AC-012: a failed query reaches the tile as the thrown value, so that a
   // TileLoadError still carries its query and the tile can offer it.
-  // When the data is from: Cube's `lastRefreshTime`, on every /v1/load answer
-  // (research/cube/refresh-jobs-caching.md).
-  let asOf: string | undefined;
+  // What Cube says of its answer besides the rows: when the data is from, and
+  // whether a pre-aggregation served it (T154, T014).
+  let answered: AnswerMeta | undefined;
   const chart = await tileChartOf(document, async (query) => {
     const result = (await loadTile({ query, ...(cache === undefined ? {} : { cache }) })) as {
       data?: Record<string, unknown>[];
-      lastRefreshTime?: unknown;
     };
-    if (typeof result.lastRefreshTime === 'string') asOf = result.lastRefreshTime;
+    answered = answerMetaOf(result);
     return result.data ?? [];
   });
-  return asOf === undefined ? { chart, document } : { chart, document, asOf };
+  return answered === undefined ? { chart, document } : { chart, document, answered };
 }

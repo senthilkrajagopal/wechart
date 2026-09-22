@@ -124,6 +124,18 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Depends on: T011
   - Done 2026-09-19. AC-013 ticked. Both directions are asserted, because both mislead: labelling everything "live" hides that a number is an hour old, and labelling everything "accelerated" claims a freshness guarantee that is not there (requirements §4 — volumes vary widely, so the UI has to say which queries are accelerated).
   - Cube sends `usedPreAggregations` **with no entries** for a source-database query, so its presence proves nothing; only a non-empty set means accelerated. A test pins that case, since checking for the key alone would label every tile accelerated.
+  - **Put on the real tiles (2026-09-21).** The badge was ticked from its component test, but nothing rendered it: no tile imported `AccelerationBadge`. Found while building T154, whose data-as-of badge sits in the same head. Files:
+    - Web:
+      - `query/answerMeta.ts` (`answerMetaOf`) and its test. What Cube says of an answer besides its rows is `lastRefreshTime` and `usedPreAggregations`. It is carried as one `answered` record wherever the answer goes, replacing T154's `asOf`: the page's load, a refresh, a filtered answer, and a save with drafts.
+      - `ChartTile.tsx` (`served`) draws the badge in the head, before the data-as-of time.
+      - `AccelerationBadge.tsx` names the pre-aggregation by the model's `preAggregationId`, not its Cube Store table.
+      - `shell/styles.ts`: the prototype's `.badge`, in the success colour when accelerated.
+    - The Cube stack:
+      - `docker-compose.yml`: a `cube-refresh-worker` service with the same image and configuration as the API instance, plus `CUBEJS_REFRESH_WORKER=true`.
+      - `infra/cube/cube.js`: `scheduledRefreshContexts`, covering the mounted model and each trusted store's.
+      - A seed cube, `infra/cube/model/cubes/monthly_orders.yml`. It has a rollup of count and total by status and month, partitioned by year, with an index on status. It is a cube of its own with no joins, so nothing else the sample model answers changes. It gives F16 a rollup to list, rebuild and index.
+    - **Why the worker.** Observed locally: in production mode, a Cube API instance with no refresh worker answers HTTP 400 to any query a rollup would serve until the rollup is built ("this API instance wasn't set up to build pre-aggregations"). With the worker, the rollup was built 24–30 s after start. Recorded in `research/cube/pre-aggregations.md`, "Observed locally".
+    - AC-013 stays ticked, now on the real surface: `e2e/acceleration.spec.ts`, against the real Cube in all three browsers. A `monthly_orders` tile reads "Accelerated · built … ago", with its icon and the rollup's model name. An `orders` tile reads "Live" and not "Accelerated". The test first waits for the worker to have built the rollup.
 - [x] T015 (AC-016) Record every query wechart issues and list the records in the Jobs workspace
   - Files: `packages/api/src/repos/query-log.ts`, `packages/api/src/repos/query-log.test.ts`, `packages/api/src/db/migrations/1758240001000_query-log.cjs`, `packages/api/src/db/schema.ts`, `packages/api/src/server.ts`, `packages/api/src/server.test.ts`, `packages/web/src/workspaces/jobs/QueryLog.tsx`, `packages/web/src/workspaces/jobs/QueryLog.test.tsx`
   - Failing test: `query-log.test.ts`: rendering a chart produces one record holding the Cube request, the duration and the acceleration flag, and the Jobs endpoint returns it (AC-016).

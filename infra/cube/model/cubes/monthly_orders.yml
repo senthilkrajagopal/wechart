@@ -1,0 +1,47 @@
+cubes:
+  # The sample's accelerated cube: orders by status and month, answered from a
+  # rollup Cube Store keeps rather than from Postgres (AC-013). Its own cube,
+  # with no joins, so what the rest of the sample model answers — and how — is
+  # unchanged. The compose stack's refresh worker builds the rollup; until it
+  # has, Cube refuses the queries it would serve
+  # (docs/research/cube/pre-aggregations.md, "Observed locally").
+  - name: monthly_orders
+    sql_table: public.orders
+    description: Orders by status and month, served from a pre-aggregation.
+
+    dimensions:
+      - name: id
+        sql: id
+        type: number
+        primary_key: true
+      - name: status
+        sql: status
+        type: string
+      - name: ordered_at
+        sql: ordered_at
+        type: time
+
+    measures:
+      - name: count
+        type: count
+      - name: total_amount
+        sql: amount
+        type: sum
+        format: currency
+
+    pre_aggregations:
+      - name: by_status_month
+        measures:
+          - count
+          - total_amount
+        dimensions:
+          - status
+        time_dimension: ordered_at
+        granularity: month
+        partition_granularity: year
+        refresh_key:
+          every: 1 hour
+        indexes:
+          - name: by_status
+            columns:
+              - status

@@ -1,0 +1,27 @@
+/**
+ * What Cube says about an answer besides its rows, as a tile shows it: when
+ * its data is from — `lastRefreshTime` (T154, AC-148) — and the
+ * pre-aggregations that served it — `usedPreAggregations`, absent when the
+ * database did (T014, AC-013; research/cube/pre-aggregations.md §4).
+ *
+ * Carried with a chart's answer wherever the answer goes — loaded, filtered,
+ * refreshed — so the two can't disagree about which answer they describe.
+ */
+export interface AnswerMeta {
+  readonly lastRefreshTime?: string;
+  readonly usedPreAggregations?: Readonly<Record<string, unknown>>;
+}
+
+export function answerMetaOf(result: unknown): AnswerMeta {
+  if (typeof result !== 'object' || result === null) return {};
+  const { lastRefreshTime, usedPreAggregations } = result as {
+    lastRefreshTime?: unknown;
+    usedPreAggregations?: unknown;
+  };
+  return {
+    ...(typeof lastRefreshTime === 'string' ? { lastRefreshTime } : {}),
+    ...(typeof usedPreAggregations === 'object' && usedPreAggregations !== null
+      ? { usedPreAggregations: usedPreAggregations as Record<string, unknown> }
+      : {}),
+  };
+}

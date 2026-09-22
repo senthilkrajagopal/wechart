@@ -47,6 +47,24 @@ describe('reading acceleration from a Cube result (AC-013)', () => {
       '2026-09-19T11:20:00.000Z',
     );
   });
+
+  it('names the pre-aggregation as the model does, not by its table', () => {
+    // As Cube v1.7.42 answers outside dev mode: keyed by the table, with the
+    // model's own name alongside (research/cube/pre-aggregations.md §4,
+    // "Observed locally").
+    const served = {
+      usedPreAggregations: {
+        'prod_pre_aggregations.monthly_orders_by_status_month': {
+          preAggregationId: 'monthly_orders.by_status_month',
+          lastUpdatedAt: 1789816800000,
+          type: 'rollup',
+        },
+      },
+    };
+
+    expect(accelerationOf(served).preAggregation).toBe('monthly_orders.by_status_month');
+    expect(accelerationOf(accelerated).preAggregation).toBe('orders.main');
+  });
 });
 
 describe('the badge (AC-013)', () => {

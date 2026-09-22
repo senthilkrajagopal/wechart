@@ -102,4 +102,15 @@ module.exports = {
     const draft = draftOf(context);
     return draft === undefined ? versionOf(store) : `draft_${draft}`;
   },
+
+  // What the refresh worker builds rollups for: the mounted model, and each
+  // trusted store's — the model Cube answers wechart from. Without this the
+  // worker's security context is undefined and it builds the mounted model
+  // alone, so a rollup published to a store would never be built
+  // (docs/research/cube/refresh-jobs-caching.md, `scheduledRefreshContexts`).
+  // Drafts are never built: they are compiled to be checked, not served.
+  scheduledRefreshContexts: async () => [
+    { securityContext: {} },
+    ...STORES.map((store) => ({ securityContext: { wechartStore: store } })),
+  ],
 };

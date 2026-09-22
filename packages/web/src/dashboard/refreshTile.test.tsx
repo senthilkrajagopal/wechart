@@ -136,7 +136,10 @@ function dashboard(onRefresh = vi.fn()) {
           'c-region': chart('By region', 'orders.region'),
         }}
         // The unfiltered answers' time, from the dashboard's own load.
-        asOf={{ 'c-status': timeOf(0), 'c-region': timeOf(0) }}
+        answered={{
+          'c-status': { lastRefreshTime: timeOf(0) },
+          'c-region': { lastRefreshTime: timeOf(0) },
+        }}
         onRefresh={onRefresh}
         onSave={vi.fn()}
       />

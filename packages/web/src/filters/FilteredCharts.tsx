@@ -3,6 +3,7 @@ import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useImperativeHandle, type Ref } from 'react';
 
 import { tileChartOf, type TileChart } from '../dashboard/chartSpec';
+import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
 import { loadTile } from '../query/loadTile';
 import { withFilters, type ActiveFilter } from './apply';
 
@@ -16,15 +17,15 @@ import { withFilters, type ActiveFilter } from './apply';
  *   off its query, and to be marked on its tile.
  * - `unfiltered`: every filter reaching it was one of those, so it draws its
  *   own unfiltered chart.
- * - `asOf`: when the filtered answer's data is from — Cube's
- *   `lastRefreshTime` (T154, AC-148).
+ * - `answered`: what Cube said of the filtered answer — when its data is
+ *   from, and whether a pre-aggregation served it (T154, T014).
  */
 export interface FilteredResult {
   readonly chart: TileChart | undefined;
   readonly asking: boolean;
   readonly uncovered: readonly string[];
   readonly unfiltered: boolean;
-  readonly asOf?: string | undefined;
+  readonly answered?: AnswerMeta | undefined;
 }
 
 export type FilteredResults = Readonly<Record<string, FilteredResult>>;
@@ -49,12 +50,12 @@ export function keepLastAnswers(
 ): FilteredResults {
   return Object.fromEntries(
     Object.entries(results).map(([chartId, result]) => {
-      if (result.unfiltered) return [chartId, { ...result, chart: undefined, asOf: undefined }];
-      // The answer kept, and when its data is from with it.
+      if (result.unfiltered) return [chartId, { ...result, chart: undefined, answered: undefined }];
+      // The answer kept, and what Cube said of it with it.
       const kept = result.chart === undefined ? before[chartId] : undefined;
       return [
         chartId,
-        kept === undefined ? result : { ...result, chart: kept.chart, asOf: kept.asOf },
+        kept === undefined ? result : { ...result, chart: kept.chart, answered: kept.answered },
       ];
     }),
   );
@@ -111,25 +112,25 @@ export async function filteredChart(
   signal: AbortSignal,
   /** `no-cache` for a tile's "Refresh now" (T154, AC-148). */
   cache?: 'no-cache',
-): Promise<{ chart: TileChart | undefined; uncovered: string[]; asOf?: string }> {
+): Promise<{ chart: TileChart | undefined; uncovered: string[]; answered?: AnswerMeta }> {
   const source = document.chart.source.cube;
   let asked = [...applied];
   const uncovered: string[] = [];
   while (asked.length > 0) {
     const current = asked;
-    let asOf: string | undefined;
+    let answered: AnswerMeta | undefined;
     const chart = await tileChartOf(document, async (query) => {
       const result = (await loadTile({
         query: withFilters(query, current),
         signal,
         ...(cache === undefined ? {} : { cache }),
-      })) as { data?: Record<string, unknown>[]; lastRefreshTime?: unknown };
-      if (typeof result.lastRefreshTime === 'string') asOf = result.lastRefreshTime;
+      })) as { data?: Record<string, unknown>[] };
+      answered = answerMetaOf(result);
       return result.data ?? [];
     });
     const refused = 'error' in chart ? refusedJoin(chart.error) : undefined;
     if (refused === undefined)
-      return asOf === undefined ? { chart, uncovered } : { chart, uncovered, asOf };
+      return answered === undefined ? { chart, uncovered } : { chart, uncovered, answered };
     // The filters on a cube Cube named, other than the chart's own; if it
     // named none of them, every filter, since one of them has to be the cause.
     const named = current.filter(({ filter }) => {
@@ -219,17 +220,17 @@ export function FilteredCharts({
       asking: answer?.isFetching ?? true,
       uncovered: answer?.data?.uncovered ?? [],
       unfiltered: answer?.data !== undefined && answer.data.chart === undefined,
-      asOf: answer?.data?.asOf,
+      answered: answer?.data?.answered,
     };
   });
   // Compared by content: `useQueries` hands back new objects every render.
   const reported = JSON.stringify(
-    Object.entries(results).map(([chartId, { chart, asking, uncovered, unfiltered, asOf }]) => [
+    Object.entries(results).map(([chartId, { chart, asking, uncovered, unfiltered, answered }]) => [
       chartId,
       asking,
       uncovered,
       unfiltered,
-      asOf,
+      answered,
       chart === undefined ? null : 'spec' in chart ? chart.spec : String(chart.error),
     ]),
   );

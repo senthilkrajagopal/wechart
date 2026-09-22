@@ -1729,8 +1729,10 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* With "Refresh now" there, the head keeps room for three corner controls:
    26 + 2 + 26 + 2 + 26, and its 8 px gap. */
 .grid-tile:has(.tile-refresh) .tile-head { padding-right: 90px; }
-/* When the chart's data is from (T154): the prototype's .badge in the tile
-   head, where its tiles carry their data's age. */
+/* Where the chart's answer came from (T014, AC-013) and when its data is from
+   (T154): the prototype's .badge in the tile head, where its tiles carry their
+   data's age — "ok"-coloured when a pre-aggregation served it. */
+.acceleration,
 .tile-as-of {
   display: inline-flex;
   flex: none;
@@ -1743,6 +1745,8 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   font-size: 12px;
   white-space: nowrap;
 }
+.acceleration { gap: 4px; }
+.acceleration--accelerated { color: var(--wc-status-success); }
 @media (hover: none) {
   .tile-refresh,
   .tile-pencil { opacity: 1; }

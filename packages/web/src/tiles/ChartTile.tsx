@@ -2,6 +2,8 @@ import { isDrawable } from '@wechart/charts';
 import type { ChartType, RenderSpec } from '@wechart/core';
 import { useState } from 'react';
 
+import type { AnswerMeta } from '../query/answerMeta';
+import { AccelerationBadge } from './AccelerationBadge';
 import { ChartCanvas } from './ChartCanvas';
 import { DataAsOf } from './DataAsOf';
 import { DataTable } from './DataTable';
@@ -58,6 +60,12 @@ export interface ChartTileProps {
    * (T154, AC-148). Absent where Cube gave none.
    */
   readonly asOf?: string | undefined;
+  /**
+   * What Cube said of the answer — whether a pre-aggregation served it — for
+   * the accelerated or live badge in the head (T014, AC-013). Absent where
+   * the answer is not Cube's own, as a draft's in the editor is not.
+   */
+  readonly served?: AnswerMeta | undefined;
 }
 
 interface ChartBodyProps {
@@ -99,6 +107,7 @@ export function ChartTile({
   inEffect,
   title,
   asOf,
+  served,
 }: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
@@ -118,7 +127,14 @@ export function ChartTile({
     title === undefined || title.trim() === '' ? null : (
       <h3 className="tile-head__title">{title}</h3>
     );
-  const dataAsOf = asOf === undefined ? null : <DataAsOf at={asOf} />;
+  // Where the answer came from, then when its data is from.
+  const dataAsOf = (
+    <>
+      {served === undefined ? null : <AccelerationBadge result={served} />}
+      {asOf === undefined ? null : <DataAsOf at={asOf} />}
+    </>
+  );
+  const saysOfData = served !== undefined || asOf !== undefined;
 
   // No rows: said in words, whatever the chart type (AC-043) — not blank
   // axes, and no table switch, since there is no data behind either view.
@@ -129,7 +145,7 @@ export function ChartTile({
         data-testid="chart-tile"
         aria-busy={busy === true ? true : undefined}
       >
-        {heading === null && dataAsOf === null ? null : (
+        {heading === null && !saysOfData ? null : (
           <div className="tile-head">
             {heading}
             {dataAsOf}

@@ -121,11 +121,17 @@ describe('what the tiles draw', () => {
      * time is not known here.
      */
     const drawn = drawnWithDrafts(
-      { ...saved, asOf: { c1: '2026-09-21T10:00:01.000Z', c2: '2026-09-21T10:00:02.000Z' } },
+      {
+        ...saved,
+        answered: {
+          c1: { lastRefreshTime: '2026-09-21T10:00:01.000Z' },
+          c2: { lastRefreshTime: '2026-09-21T10:00:02.000Z' },
+        },
+      },
       withDraft(dashboard, 'c1', drawing('hbar')),
     );
 
-    expect(drawn.asOf).toEqual({ c2: '2026-09-21T10:00:02.000Z' });
+    expect(drawn.answered).toEqual({ c2: { lastRefreshTime: '2026-09-21T10:00:02.000Z' } });
   });
 });
 

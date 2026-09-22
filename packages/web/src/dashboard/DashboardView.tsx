@@ -2,6 +2,7 @@ import type { ChartDocument, MemberFormats, RenderSpec } from '@wechart/core';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { TileSize } from '../editor/PreviewFrame';
+import type { AnswerMeta } from '../query/answerMeta';
 import { ChartTile } from '../tiles/ChartTile';
 import { TileError } from '../tiles/TileError';
 import { TileSkeleton } from '../tiles/TileSkeleton';
@@ -111,8 +112,11 @@ export interface DashboardViewProps {
   readonly errors?: Readonly<Record<string, unknown>>;
   /** The charts are still on their way, so tiles show a skeleton (AC-042). */
   readonly loading?: boolean;
-  /** When each chart's data is from: Cube's `lastRefreshTime`, by chart id (T154, AC-148). */
-  readonly asOf?: Readonly<Record<string, string>> | undefined;
+  /**
+   * What Cube said of each chart's answer, by chart id: when its data is
+   * from (T154, AC-148), and whether a pre-aggregation served it (T014, AC-013).
+   */
+  readonly answered?: Readonly<Record<string, AnswerMeta>> | undefined;
   /**
    * Ask a chart's unfiltered data again, past Cube's cache (AC-148). A tile a
    * filter reaches is refreshed here instead: what it draws is its filtered
@@ -200,7 +204,7 @@ function TileBody({
   editing = false,
   carried,
   title,
-  asOf,
+  answered,
 }: {
   tile: Tile;
   spec: RenderSpec | undefined;
@@ -216,8 +220,8 @@ function TileBody({
   carried?: readonly SearchFilter[] | undefined;
   /** A chart tile's heading: its chart's title (AC-187). */
   title?: string | undefined;
-  /** When its data is from, Cube's `lastRefreshTime` (T154, AC-148). */
-  asOf?: string | undefined;
+  /** What Cube said of its answer: when from, and from what (T154, T014). */
+  answered?: AnswerMeta | undefined;
 }) {
   switch (tile.kind) {
     case 'chart':
@@ -255,7 +259,8 @@ function TileBody({
           busy={busy}
           inEffect={inEffect}
           title={title}
-          asOf={asOf}
+          asOf={answered?.lastRefreshTime}
+          served={answered}
           {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
         />
       );
@@ -297,8 +302,8 @@ interface TileCharts {
   readonly carried?: readonly SearchFilter[] | undefined;
   /** A chart's title, which heads its tile (AC-187). */
   readonly titleOf?: ((chartId: string) => string | undefined) | undefined;
-  /** When each chart's data is from (T154, AC-148). */
-  readonly asOf?: Readonly<Record<string, string>> | undefined;
+  /** What Cube said of each chart's answer (T154, T014). */
+  readonly answered?: Readonly<Record<string, AnswerMeta>> | undefined;
   /** Ask a chart's data again, past Cube's cache; in view mode. */
   readonly onRefresh?: ((chartId: string) => void) | undefined;
   readonly refreshing?: ReadonlySet<string> | undefined;
@@ -500,7 +505,7 @@ function Elements({
               editing={editing}
               carried={charts.carried}
               title={charts.titleOf?.(chartId)}
-              asOf={charts.asOf?.[chartId]}
+              answered={charts.answered?.[chartId]}
             />
           </>
         );
@@ -702,7 +707,7 @@ export function DashboardView({
   specs,
   errors,
   loading = false,
-  asOf,
+  answered,
   onRefresh,
   refreshing,
   refreshable,
@@ -730,10 +735,10 @@ export function DashboardView({
   const drawn = useMemo(
     () =>
       drawnWithDrafts(
-        { specs, errors: errors ?? {}, documents },
+        { specs, errors: errors ?? {}, documents, answered },
         { ...document, ...(drafts === undefined ? {} : { chartDrafts: drafts }) },
       ),
-    [specs, errors, documents, document, drafts],
+    [specs, errors, documents, answered, document, drafts],
   );
   const chartTitleOf = (chartId: string) => drawn.documents?.[chartId]?.title;
 
@@ -794,12 +799,12 @@ export function DashboardView({
   }, []);
   const withFiltered = useMemo(() => {
     const ids = Object.keys(reached).filter((id) => drawn.documents?.[id] !== undefined);
-    if (ids.length === 0) return { ...drawn, asOf, pending: new Set<string>() };
+    if (ids.length === 0) return { ...drawn, pending: new Set<string>() };
     const shown: Record<string, RenderSpec> = { ...drawn.specs };
     const failed: Record<string, unknown> = { ...drawn.errors };
-    // A filtered answer's data is from when that answer says, not the
-    // unfiltered one's (T154's review).
-    const from: Record<string, string> = { ...asOf };
+    // What Cube said of a filtered answer, not of the unfiltered one: when its
+    // data is from (T154's review), and what served it.
+    const said: Record<string, AnswerMeta> = { ...drawn.answered };
     const pending = new Set<string>();
     for (const id of ids) {
       const result = filtered[id];
@@ -823,11 +828,11 @@ export function DashboardView({
         failed[id] = answer.error;
         delete shown[id];
       }
-      if (result?.asOf === undefined) delete from[id];
-      else from[id] = result.asOf;
+      if (result?.answered === undefined) delete said[id];
+      else said[id] = result.answered;
     }
-    return { specs: shown, errors: failed, asOf: from, pending };
-  }, [drawn, reached, filtered, asOf]);
+    return { specs: shown, errors: failed, answered: said, pending };
+  }, [drawn, reached, filtered]);
 
   /**
    * "Refresh now" on a tile (T154, AC-148) asks again what the tile draws: a
@@ -924,7 +929,7 @@ export function DashboardView({
     inEffect,
     carried,
     titleOf: chartTitleOf,
-    asOf: withFiltered.asOf,
+    answered: withFiltered.answered,
     ...(onRefresh === undefined ? {} : { onRefresh: refreshTile }),
     refreshing: new Set([...(refreshing ?? []), ...refreshingFiltered]),
     refreshable: refreshable !== false && !loading,

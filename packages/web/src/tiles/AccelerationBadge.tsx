@@ -16,6 +16,8 @@ export interface Acceleration {
 
 interface PreAggregationInfo {
   readonly lastUpdatedAt?: number;
+  /** The model's name for it, "stable across rebuilds" (research/cube/pre-aggregations.md §4). */
+  readonly preAggregationId?: string;
 }
 
 /**
@@ -35,11 +37,13 @@ export function accelerationOf(result: unknown): Acceleration {
 
   if (!first) return { accelerated: false, lastUpdatedAt: null, preAggregation: null };
 
-  const [name, info] = first;
+  // Keyed by its table in Cube Store; named as the model names it where Cube
+  // says so, which is what a reader can find in the model.
+  const [table, info] = first;
   return {
     accelerated: true,
     lastUpdatedAt: typeof info.lastUpdatedAt === 'number' ? new Date(info.lastUpdatedAt) : null,
-    preAggregation: name,
+    preAggregation: typeof info.preAggregationId === 'string' ? info.preAggregationId : table,
   };
 }
 

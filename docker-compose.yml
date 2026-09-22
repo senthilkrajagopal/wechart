@@ -64,12 +64,12 @@ services:
   cube:
     image: cubejs/cube:v1.7.42
     container_name: wechart-cube
-    depends_on:
+    depends_on: &cube-depends-on
       sample-db:
         condition: service_healthy
       cubestore:
         condition: service_started
-    environment:
+    environment: &cube-environment
       CUBEJS_DB_TYPE: postgres
       CUBEJS_DB_HOST: sample-db
       CUBEJS_DB_PORT: '5432'
@@ -95,15 +95,30 @@ services:
       WECHART_MODEL_STORES: ${WECHART_MODEL_STORES:-http://host.docker.internal:4100,http://host.docker.internal:4200}
       # Presented to wechart's store to read the model; the API holds the same.
       WECHART_MODEL_KEY: ${WECHART_MODEL_KEY:-dev-model-key}
-    extra_hosts:
+    extra_hosts: &cube-extra-hosts
       # The API runs on the host in development; Docker Desktop names it so
       # already, and this does on Linux.
       - 'host.docker.internal:host-gateway'
     ports:
       - '54000:4000'
-    volumes:
+    volumes: &cube-volumes
       - ./infra/cube/cube.js:/cube/conf/cube.js:ro
       - ./infra/cube/model:/cube/conf/model:ro
+
+  # Cube's refresh worker: the same image and configuration, told only to
+  # build and refresh pre-aggregations. The API instance above is in
+  # production mode and builds none itself — a query a rollup would serve is
+  # refused until this has built it (docs/research/cube/refresh-jobs-caching.md,
+  # "Topology"; pre-aggregations.md, "Observed locally").
+  cube-refresh-worker:
+    image: cubejs/cube:v1.7.42
+    container_name: wechart-cube-refresh-worker
+    depends_on: *cube-depends-on
+    environment:
+      <<: *cube-environment
+      CUBEJS_REFRESH_WORKER: 'true'
+    extra_hosts: *cube-extra-hosts
+    volumes: *cube-volumes
 
 volumes:
   wechart-meta-data:
