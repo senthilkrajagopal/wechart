@@ -9,9 +9,12 @@ export async function referencesTo(
   members: readonly string[],
 ): Promise<MemberReferences | undefined> {
   try {
-    const response = await fetch(
-      `/api/model/references?members=${encodeURIComponent(members.join(','))}`,
-    );
+    // In the body: a wide cube's names would outgrow a URL.
+    const response = await fetch('/api/model/references', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ members }),
+    });
     if (!response.ok) return undefined;
     return (await response.json()) as MemberReferences;
   } catch {

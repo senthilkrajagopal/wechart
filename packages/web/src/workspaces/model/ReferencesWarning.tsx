@@ -2,8 +2,9 @@ import { useEffect, useRef } from 'react';
 
 /**
  * The charts and dashboards using members a save changes, listed before it
- * goes to Cube (T147, AC-141), each a link to where it is, with the members
- * it uses — and the save made only if the user says so.
+ * goes to Cube (T147, AC-141), each a link to where it is — in a new tab, so
+ * the unsaved change stays here — with the members it uses; and the save
+ * made only if the user says so.
  */
 export interface MemberReferences {
   readonly charts: readonly {
@@ -22,6 +23,25 @@ export interface MemberReferences {
 
 const count = (n: number, one: string) => `${String(n)} ${one}${n === 1 ? '' : 's'}`;
 
+function Item({
+  href,
+  title,
+  members,
+}: {
+  href: string;
+  title: string;
+  members: readonly string[];
+}) {
+  return (
+    <li>
+      <a href={href} target="_blank" rel="noopener">
+        {title}
+      </a>
+      <span className="model-references__members"> — uses {members.join(', ')}</span>
+    </li>
+  );
+}
+
 export function ReferencesWarning({
   found,
   onSave,
@@ -33,13 +53,20 @@ export function ReferencesWarning({
 }) {
   const bar = useRef<HTMLDivElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
-  // On the choice that changes nothing, and in view.
+  // On the choice that changes nothing, and in view; Escape takes it too.
   useEffect(() => {
     const element = bar.current;
     if (element !== null && typeof element.scrollIntoView === 'function')
       element.scrollIntoView({ block: 'nearest' });
     cancel.current?.focus();
-  }, []);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCancel();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onCancel]);
   const { charts, dashboards } = found;
   return (
     <div ref={bar} className="model-editor__warnbar model-references" role="alert">
@@ -50,37 +77,35 @@ export function ReferencesWarning({
         </p>
         {charts.length === 0 ? null : (
           <>
-            <h3 className="model-references__head">Charts</h3>
+            <h2 className="model-references__head">Charts</h2>
             <ul aria-label="Charts" className="model-references__list">
               {charts.map((chart) => (
-                <li key={chart.id}>
-                  {/* A chart kept on its dashboard opens there. */}
-                  <a
-                    href={
-                      chart.dashboardId === null
-                        ? `/explore/charts/${encodeURIComponent(chart.id)}`
-                        : `/explore/dashboards/${encodeURIComponent(chart.dashboardId)}`
-                    }
-                  >
-                    {chart.title ?? chart.id}
-                  </a>{' '}
-                  <span className="model-references__members">{chart.members.join(', ')}</span>
-                </li>
+                <Item
+                  key={chart.id}
+                  // A chart kept on its dashboard opens there.
+                  href={
+                    chart.dashboardId === null
+                      ? `/explore/charts/${encodeURIComponent(chart.id)}`
+                      : `/explore/dashboards/${encodeURIComponent(chart.dashboardId)}`
+                  }
+                  title={chart.title ?? chart.id}
+                  members={chart.members}
+                />
               ))}
             </ul>
           </>
         )}
         {dashboards.length === 0 ? null : (
           <>
-            <h3 className="model-references__head">Dashboards</h3>
+            <h2 className="model-references__head">Dashboards</h2>
             <ul aria-label="Dashboards" className="model-references__list">
               {dashboards.map((dashboard) => (
-                <li key={dashboard.id}>
-                  <a href={`/explore/dashboards/${encodeURIComponent(dashboard.id)}`}>
-                    {dashboard.title ?? dashboard.id}
-                  </a>{' '}
-                  <span className="model-references__members">{dashboard.members.join(', ')}</span>
-                </li>
+                <Item
+                  key={dashboard.id}
+                  href={`/explore/dashboards/${encodeURIComponent(dashboard.id)}`}
+                  title={dashboard.title ?? dashboard.id}
+                  members={dashboard.members}
+                />
               ))}
             </ul>
           </>

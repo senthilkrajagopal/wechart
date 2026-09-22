@@ -96,7 +96,13 @@ function FileEditor({ path, content }: { path: string; content: string }) {
   /** A form edit that can't be written at all, and why. */
   const [refused, setRefused] = useState<string | null>(null);
   /** What uses the members a save edits, shown until the user saves anyway or cancels (T147). */
-  const [references, setReferences] = useState<MemberReferences | null>(null);
+  const [references, setReferences] = useState<{
+    found: MemberReferences;
+    /** The text they were found for: what "Save anyway" saves. */
+    text: string;
+  } | null>(null);
+  /** Where the focus goes back to when the warning closes. */
+  const saveButton = useRef<HTMLButtonElement>(null);
 
   const apply = (written: string) => {
     setText(written);
@@ -194,12 +200,19 @@ function FileEditor({ path, content }: { path: string; content: string }) {
    * Publish this file — after listing the charts and dashboards that use the
    * members the save edits, if any do, and only once the user says so (AC-141).
    */
-  const publish = async (told = false) => {
-    const sent = text;
+  const publish = async (checked?: string) => {
+    // Saved anyway: exactly the text that was checked, not what is here now.
+    const sent = checked ?? text;
     setPublishing(true);
     setOutcome(null);
-    if (!told) {
-      const edited = editedMembersOf(saved, sent);
+    if (checked === undefined) {
+      // Across the whole model: a view in another file exposes a cube's
+      // member by a name of its own (T147's review).
+      const others = (allFiles.data ?? []).filter((file) => file.path !== path);
+      const edited = editedMembersOf(
+        [...others, { path, content: saved }],
+        [...others, { path, content: sent }],
+      );
       if (edited.length > 0) {
         const found = await referencesTo(edited);
         if (found === undefined) {
@@ -212,7 +225,7 @@ function FileEditor({ path, content }: { path: string; content: string }) {
         }
         if (found.charts.length + found.dashboards.length > 0) {
           setPublishing(false);
-          setReferences(found);
+          setReferences({ found, text: sent });
           return;
         }
       }
@@ -247,6 +260,7 @@ function FileEditor({ path, content }: { path: string; content: string }) {
           </p>
         )}
         <button
+          ref={saveButton}
           type="button"
           className="btn-sm btn-primary"
           disabled={!canPublish}
@@ -263,13 +277,17 @@ function FileEditor({ path, content }: { path: string; content: string }) {
       >
         {references === null ? null : (
           <ReferencesWarning
-            found={references}
+            found={references.found}
             onSave={() => {
+              const { text: checked } = references;
               setReferences(null);
-              void publish(true);
+              saveButton.current?.focus();
+              // Changed since it was checked: checked again, not saved unchecked.
+              void publish(checked === text ? checked : undefined);
             }}
             onCancel={() => {
               setReferences(null);
+              saveButton.current?.focus();
             }}
           />
         )}

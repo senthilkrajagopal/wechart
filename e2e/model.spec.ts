@@ -305,13 +305,25 @@ test('a save that edits a member charts use lists them first, and saves only if 
   await page.getByRole('button', { name: 'Save & reload Cube' }).click();
 
   const warning = page.getByRole('alert').filter({ hasText: 'This save changes members that' });
-  await expect(warning.getByRole('list', { name: 'Charts' })).toContainText(
-    'Orders by category and status',
+  // The seed charts on orders.count, each a link to it, saying what it uses.
+  const charts = warning.getByRole('list', { name: 'Charts' }).getByRole('listitem');
+  await expect(charts.filter({ hasText: 'Orders by category and status' })).toHaveText(
+    'Orders by category and status — uses orders.count',
   );
+  await expect(charts.filter({ hasText: 'Orders over time by status' })).toHaveText(
+    'Orders over time by status — uses orders.count',
+  );
+  // Kept on its dashboard, it opens there.
   await expect(
     warning.getByRole('link', { name: 'Orders by category and status' }),
-  ).toHaveAttribute('href', /^\/explore\/(charts|dashboards)\//);
-  await expect(warning).toContainText('orders.count');
+  ).toHaveAttribute('href', '/explore/dashboards/seed-root-dashboard-1');
+  // And the dashboard drawing it on a tile.
+  await expect(
+    warning
+      .getByRole('list', { name: 'Dashboards' })
+      .getByRole('listitem')
+      .filter({ hasText: 'Company dashboard 01' }),
+  ).toHaveText('Company dashboard 01 — uses orders.count');
   // Nothing saved yet: the stored file is as it was.
   const stored = async () =>
     (

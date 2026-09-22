@@ -68,14 +68,14 @@ export function referencesOf(
   const dashboards = documents
     .filter((document) => document.kind === 'dashboard')
     .map((document) => {
-      const held = (document.body as { charts?: unknown } | null)?.charts;
+      // The charts it draws: every one its body names — a tile's `chartId`,
+      // in a section or a tab, on any page, or its `charts` list — and its
+      // own local charts (T147's review: tiles are what draw).
+      const drawn = namedIn(document.body, [...byId.keys()]);
       const through = [
-        ...(Array.isArray(held) ? held : []),
+        ...drawn,
         ...charts.filter((chart) => chart.dashboardId === document.id).map((chart) => chart.id),
-      ].filter(
-        (id, at, all): id is string =>
-          typeof id === 'string' && byId.has(id) && all.indexOf(id) === at,
-      );
+      ].filter((id, at, all) => all.indexOf(id) === at);
       const own = namedIn(document.body, members);
       const named = new Set([...own, ...through.flatMap((id) => byId.get(id)?.members ?? [])]);
       return {

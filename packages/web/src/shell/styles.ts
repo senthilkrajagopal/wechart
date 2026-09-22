@@ -447,6 +447,12 @@ button.model-problems__row { cursor: pointer; }
   font-size: 12px;
 }
 .model-editor__warnbar-text { flex: 1; min-width: 240px; }
+/* What uses the members a save changes (T147): two short lists in the bar. */
+.model-references__lead { margin: 0 0 6px; }
+.model-references__head { margin: 6px 0 2px; font-size: 12px; font-weight: 600; }
+.model-references__list { margin: 0; padding-left: 18px; }
+.model-references__list a { color: var(--wc-accent); }
+.model-references__members { color: var(--wc-text-secondary); }
 /* The prototype's .readonly-veil: the form is read-only, and why. */
 .model-editor__veil {
   display: flex;

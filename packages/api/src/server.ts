@@ -165,12 +165,13 @@ export function buildServer({
 
   /**
    * The charts and dashboards that use the members an edit changes, listed
-   * before it is saved (T147, AC-141): `?members=orders.count,orders.status`.
+   * before it is saved (T147, AC-141): `{ members: ['orders.count', …] }`, in
+   * the body, since a wide cube's names would outgrow a URL.
    */
-  app.get('/api/model/references', async (request) => {
-    const asked = (request.query as { members?: unknown }).members;
-    const members = (typeof asked === 'string' ? asked : '')
-      .split(',')
+  app.post('/api/model/references', async (request) => {
+    const asked = (request.body as { members?: unknown } | undefined)?.members;
+    const members = (Array.isArray(asked) ? (asked as unknown[]) : [])
+      .filter((member): member is string => typeof member === 'string')
       .map((member) => member.trim())
       .filter((member) => member !== '');
     if (members.length === 0) return { charts: [], dashboards: [] };

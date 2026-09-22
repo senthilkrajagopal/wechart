@@ -13,16 +13,18 @@ import { referencesOf } from './references';
  * filters — so every string in a body is read, rather than one shape of it;
  * and a dashboard uses what its charts use.
  */
+// As stored: a chart's wells and filters; a dashboard's pages of tiles, a
+// tile naming its chart, sections holding more (seed.ts; T147's review).
 const DOCUMENTS = [
   {
     kind: 'chart',
     id: 'c-revenue',
     title: 'Revenue by status',
     body: {
-      query: {
+      wells: {
         measures: ['orders.total_amount'],
         dimensions: ['orders.status'],
-        timeDimensions: [{ dimension: 'orders.ordered_at', granularity: 'month' }],
+        timeDimensions: ['orders.ordered_at.month'],
       },
     },
     localToDashboardId: null,
@@ -32,10 +34,8 @@ const DOCUMENTS = [
     id: 'c-count',
     title: 'Orders',
     body: {
-      query: {
-        measures: ['orders.count'],
-        filters: [{ member: 'orders.status', operator: 'set' }],
-      },
+      wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
+      filters: [{ member: 'orders.status', operator: 'set' }],
     },
     localToDashboardId: null,
   },
@@ -43,21 +43,38 @@ const DOCUMENTS = [
     kind: 'chart',
     id: 'c-local',
     title: 'Customers here',
-    body: { query: { measures: ['customers.count'] } },
+    body: { wells: { measures: ['customers.count'], dimensions: [], timeDimensions: [] } },
     localToDashboardId: 'd-ops',
   },
   {
     kind: 'dashboard',
     id: 'd-sales',
     title: 'Sales',
-    body: { charts: ['c-revenue'], filters: [] },
+    body: {
+      pages: [
+        {
+          id: 'p1',
+          items: [
+            {
+              id: 'sec',
+              kind: 'section',
+              items: [{ id: 't1', kind: 'chart', chartId: 'c-revenue' }],
+            },
+          ],
+        },
+      ],
+      filters: [],
+    },
     localToDashboardId: null,
   },
   {
     kind: 'dashboard',
     id: 'd-ops',
     title: 'Operations',
-    body: { charts: ['c-local'], filters: [{ member: 'orders.status', values: ['shipped'] }] },
+    body: {
+      pages: [{ id: 'p1', items: [{ id: 't1', kind: 'chart', chartId: 'c-local' }] }],
+      filters: [{ member: 'orders.status', values: ['shipped'] }],
+    },
     localToDashboardId: null,
   },
   { kind: 'folder', id: 'f', title: 'orders.status', body: {}, localToDashboardId: null },
@@ -125,9 +142,11 @@ describe('the route', () => {
   it('answers for the members asked about, from every chart and dashboard', async () => {
     const app = buildServer({ config, catalog });
 
+    // In the body: a wide cube's names would outgrow a URL (T147's review).
     const response = await app.inject({
-      method: 'GET',
-      url: '/api/model/references?members=orders.count,customers.count',
+      method: 'POST',
+      url: '/api/model/references',
+      payload: { members: ['orders.count', 'customers.count'] },
     });
 
     expect(response.statusCode).toBe(200);
@@ -151,7 +170,11 @@ describe('the route', () => {
   it('answers nothing for no members', async () => {
     const app = buildServer({ config, catalog });
 
-    const response = await app.inject({ method: 'GET', url: '/api/model/references' });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/model/references',
+      payload: { members: [] },
+    });
 
     expect(response.json()).toEqual({ charts: [], dashboards: [] });
     await app.close();

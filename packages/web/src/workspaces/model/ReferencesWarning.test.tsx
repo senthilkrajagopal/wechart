@@ -39,7 +39,30 @@ describe('the warning before a save that edits members in use', () => {
     expect(dashboards.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
       ['Operations', '/explore/dashboards/d-ops'],
     ]);
-    expect(warning.textContent).toContain('orders.count');
+    // Each says in words what it uses.
+    expect(
+      within(screen.getByRole('list', { name: 'Charts' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Orders — uses orders.count', 'Customers here — uses orders.count']);
+  });
+
+  it('opens what it lists in a new tab, so the unsaved change stays here', () => {
+    render(<ReferencesWarning found={FOUND} onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    for (const link of screen.getAllByRole('link')) {
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener');
+    }
+  });
+
+  it('cancels on Escape', async () => {
+    const onCancel = vi.fn();
+    render(<ReferencesWarning found={FOUND} onSave={vi.fn()} onCancel={onCancel} />);
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
   it('saves only when told, and waits on the choice that changes nothing', async () => {

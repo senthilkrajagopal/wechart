@@ -2198,6 +2198,19 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - `e2e/model.spec.ts` (1 in each browser), on the seed data:
       - `orders.count`'s title changed, then Save: the warning lists "Orders by category and status" as a link, and names `orders.count`.
       - The stored file is unchanged before and after Cancel. Cancelled, so the shared model isn't changed for the other tests.
+  - **Cold review (one round), verdict FAIL. Fixed in a follow-up commit:**
+    - **Charts on a view member exposing the edited cube member weren't listed**, including the seed's `order_summary`. So were a view's members under a `prefix` or through `"*"`, and an extending cube's.
+      - The members a save edits are now worked out across the whole model: every file, with this one before and after.
+      - Views are resolved by alias, prefix, `"*"` and `excludes` (research Y.10a), and `extends` is followed.
+      - A view's or child's member carries the definition of the one it takes, so a change to `orders.count` is a change to `order_summary.count` too.
+    - **"Save anyway" published whatever was in the YAML by then**, which could be unchecked text. It now publishes exactly the text that was checked, and if the text has changed it checks again.
+    - **Dashboards were found through `body.charts`,** not the page tiles that draw charts. A dashboard now holds every chart whose id its body names anywhere, plus its own local charts. The test fixtures use the stored shapes: a chart's `wells`, a dashboard's `pages` of tiles.
+    - **The e2e was too loose.** It now checks two charts' exact entries, the local chart's link to its dashboard, and "Company dashboard 01", reached through its tile.
+    - **Following a link lost the unsaved change.** Links now open in a new tab.
+    - **Members went in a query string.** They are now in a POST body, since a wide cube's names would outgrow a URL.
+    - **Accessibility:** Escape cancels, the focus goes back to Save, the heading is at the right level, each item says "— uses …", and the lists have styles.
+    - **A doc comment sat over the wrong method.** Moved back.
+  - **Left from the review:** the check runs in the page, not in the publish API. That is enough for phase 1's single user.
 
 ## F16. Pre-aggregations
 

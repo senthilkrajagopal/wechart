@@ -68,12 +68,6 @@ export function catalog(db: Kysely<Database>) {
       return rows.map(toItem);
     },
 
-    /**
-     * The dashboards that use a library chart (AC-021, AC-022, AC-023).
-     *
-     * A dashboard refers to a chart by id in `body.charts`, so this survives
-     * the chart being renamed or moved — which is exactly what AC-021 asks for.
-     */
     /** Every chart and dashboard with its body, for what uses a member (T147, AC-141). */
     async referenceDocuments() {
       const rows = await db
@@ -92,6 +86,12 @@ export function catalog(db: Kysely<Database>) {
       }));
     },
 
+    /**
+     * The dashboards that use a library chart (AC-021, AC-022, AC-023).
+     *
+     * A dashboard refers to a chart by id in `body.charts`, so this survives
+     * the chart being renamed or moved — which is exactly what AC-021 asks for.
+     */
     async dashboardsUsing(chartId: string): Promise<CatalogItem[]> {
       const rows = await selectItems()
         .where('kind', '=', 'dashboard')

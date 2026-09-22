@@ -413,7 +413,20 @@ describe('what uses a member (T147, AC-141)', () => {
     await repo().create({
       kind: 'dashboard',
       id: dashboardId,
-      body: { title: 'Holds both', folderId: ROOT_FOLDER_ID, charts: [libraryId, localId] },
+      // As a dashboard is stored: its tiles name their charts.
+      body: {
+        title: 'Holds both',
+        folderId: ROOT_FOLDER_ID,
+        pages: [
+          {
+            id: 'p',
+            items: [
+              { id: 't1', kind: 'chart', chartId: libraryId },
+              { id: 't2', kind: 'chart', chartId: localId },
+            ],
+          },
+        ],
+      },
     });
 
     const found = referencesOf(await cat().referenceDocuments(), [member]);
