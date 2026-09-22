@@ -191,19 +191,29 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
   await page.getByLabel('Cube or view').selectOption({ value: 'monthly_orders' });
   await page.getByTestId('add-measures').selectOption('monthly_orders.count');
   await page.getByTestId('add-dimensions').selectOption('monthly_orders.status');
-  await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
+  /**
+   * Waited for longer than the default: the other browsers publish cube files
+   * of their own at the same time, and Cube compiles the store's model again
+   * after each — so a query just after one can take several seconds.
+   */
+  const cube = { timeout: 30_000 };
+  await expect(page.getByTestId('result-row-count')).toHaveText('3 rows', cube);
   await page.getByRole('button', { name: 'Results', exact: true }).click();
   await page.getByTestId('drawer-tab-acceleration').click();
 
   // The rollup Cube serves the chart from, and no other.
   await expect(page.getByTestId('acceleration-matched')).toHaveText(
     'Served from the pre-aggregation monthly_orders.by_status_month.',
+    cube,
   );
 
   // The time, asked by day (every time field is, `QUERY_GRANULARITY`): finer
   // than the rollup's month — a miss, and the member named.
   await page.getByTestId('add-timeDimensions').selectOption('monthly_orders.ordered_at');
-  await expect(page.getByTestId('acceleration-member')).toHaveText('monthly_orders.ordered_at');
+  await expect(page.getByTestId('acceleration-member')).toHaveText(
+    'monthly_orders.ordered_at',
+    cube,
+  );
   await expect(page.getByTestId('acceleration-miss')).toContainText(
     'the nearest is monthly_orders.by_status_month. Stopped by monthly_orders.ordered_at: ' +
       'monthly_orders.ordered_at is grouped by day, and the rollup keeps it by month.',
@@ -222,5 +232,6 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
   await page.getByTestId('add-measures').selectOption('orders.count');
   await expect(page.getByTestId('acceleration-miss')).toHaveText(
     'Not served from a pre-aggregation. Stopped by orders.count: orders has no pre-aggregations.',
+    cube,
   );
 });
