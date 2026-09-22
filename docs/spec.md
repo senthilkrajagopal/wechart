@@ -438,7 +438,7 @@ Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[researc
       Fails when: an invalid model is published, or the error is not attributed to a file.
 - [x] AC-137 WHEN a valid model is published, THE SYSTEM SHALL make the new members available to the chart builder without restarting Cube.
       Fails when: a published member is missing from the field list while Cube reports the new schema version.
-- [ ] AC-138 WHEN the user opens the join editor for a cube, THE SYSTEM SHALL show the join graph with each relationship's direction and let the user add a join by choosing the target cube, the relationship and the condition.
+- [x] AC-138 WHEN the user opens the join editor for a cube, THE SYSTEM SHALL show the join graph with each relationship's direction and let the user add a join by choosing the target cube, the relationship and the condition.
       Fails when: the diagram omits a declared join, or shows a direction the model does not declare.
 - [ ] AC-139 WHEN the user generates cubes from a data source, THE SYSTEM SHALL browse that connection's schemas and tables and create a cube per selected table with its columns mapped to dimensions and a count measure (`[R7]`).
       Fails when: a selected table produces no cube, or a column is dropped without saying so.

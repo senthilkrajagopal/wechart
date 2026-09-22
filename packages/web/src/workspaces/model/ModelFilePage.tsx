@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { codeNoteOf, MODEL_FILES_QUERY } from './FileList';
 import { objectsOf } from './objects';
 import { CubeForm } from './form/CubeForm';
+import { JoinEditor } from './JoinEditor';
+import { joinGraphOf } from './joinGraph';
 import { lossOf, type Loss } from './lossCheck';
 import { LossWarning } from './LossWarning';
 import { problemsOf, type Problem } from './problems';
@@ -103,18 +105,26 @@ function FileEditor({ path, content }: { path: string; content: string }) {
    * the same render — unless it would drop a comment, an anchor or an alias,
    * which is named first and applied only if the user says so.
    */
-  const edit = (list: 'cubes' | 'views', index: number, next: Value) => {
+  const edit = (
+    list: 'cubes' | 'views',
+    index: number,
+    next: Value,
+  ): 'applied' | 'held' | 'refused' => {
     let written: string;
     try {
       written = withObject(read, list, index, next);
     } catch (error) {
       // An anchor removed that an alias still uses: there's no file to write.
       setRefused(error instanceof Error ? error.message : String(error));
-      return;
+      return 'refused';
     }
     const lost = lossOf(read, written);
-    if (lost.length > 0) setPending({ written, lost });
-    else apply(written);
+    if (lost.length > 0) {
+      setPending({ written, lost });
+      return 'held';
+    }
+    apply(written);
+    return 'applied';
   };
 
   /**
@@ -127,6 +137,37 @@ function FileEditor({ path, content }: { path: string; content: string }) {
   /** Where a picked problem sends the editor's cursor. */
   const [goTo, setGoTo] = useState<{ at: number }>();
   const [first] = problems;
+
+  /** The right pane: the YAML, or the join diagram (T144). */
+  const [view, setView] = useState<'yaml' | 'joins'>('yaml');
+  const allFiles = useQuery(MODEL_FILES_QUERY);
+  /**
+   * The model's join graph, with this file as the form has it now (AC-138):
+   * worked out only while the diagram shows, the other files once each.
+   */
+  const others = useMemo(
+    () =>
+      view === 'joins'
+        ? joinGraphOf((allFiles.data ?? []).filter((file) => file.path !== path))
+        : undefined,
+    [view, allFiles.data, path],
+  );
+  const graph = useMemo(() => {
+    if (others === undefined) return undefined;
+    const own = joinGraphOf([{ path, content: read }]);
+    const cubesHere = [...others.cubes, ...own.cubes];
+    const joins = [...others.joins, ...own.joins];
+    const defined = new Set(cubesHere.map((each) => each.name));
+    return {
+      cubes: cubesHere,
+      joins,
+      missing: [...new Set(joins.map((join) => join.to))].filter((to) => !defined.has(to)),
+    };
+  }, [others, path, read]);
+  /** This file's cubes, any of which a join can be added to. */
+  const cubeNames = cubes
+    .map(({ value }) => value['name'])
+    .filter((name): name is string => typeof name === 'string');
 
   /** The text last published, or as it was read from the store (T142). */
   const [saved, setSaved] = useState(content);
@@ -263,23 +304,68 @@ function FileEditor({ path, content }: { path: string; content: string }) {
         ))}
       </div>
       <div className="model-editor__yaml">
-        <YamlEditor
-          value={text}
-          onChange={(next) => {
-            // Typing in the YAML answers a held or refused form edit: it was of the text before.
-            setPending(null);
-            setRefused(null);
-            setText(next);
-          }}
-          label={`${path}, as YAML`}
-          problems={problems}
-          goTo={goTo}
-        />
+        {/* The prototype's right-pane toggle (model.js): the YAML, or the join diagram. */}
+        <div className="seg model-editor__view" role="group" aria-label="Right pane view">
+          <button
+            type="button"
+            aria-pressed={view === 'yaml'}
+            onClick={() => {
+              setView('yaml');
+            }}
+          >
+            YAML
+          </button>
+          <button
+            type="button"
+            aria-pressed={view === 'joins'}
+            onClick={() => {
+              setView('joins');
+            }}
+          >
+            Join diagram
+          </button>
+        </div>
+        {view === 'joins' && graph !== undefined ? (
+          <JoinEditor
+            graph={graph}
+            cube={cubeNames[0]}
+            cubes={cubeNames}
+            // Locked as the form is (AC-135): an edit then would be written over the typing.
+            readOnly={readOnly}
+            onAdd={(name, join) => {
+              const entry = cubes.find(({ value }) => value['name'] === name);
+              if (entry === undefined) return false;
+              const joins = Array.isArray(entry.value['joins'])
+                ? (entry.value['joins'] as unknown[])
+                : [];
+              return (
+                edit('cubes', entry.at, { ...entry.value, joins: [...joins, join] }) === 'applied'
+              );
+            }}
+          />
+        ) : null}
+        {/* Hidden, not gone, while the diagram shows: its undo history stays. */}
+        <div hidden={view !== 'yaml'}>
+          <YamlEditor
+            value={text}
+            onChange={(next) => {
+              // Typing in the YAML answers a held or refused form edit: it was of the text before.
+              setPending(null);
+              setRefused(null);
+              setText(next);
+            }}
+            label={`${path}, as YAML`}
+            problems={problems}
+            goTo={goTo}
+          />
+        </div>
         <ProblemsPanel
           path={path}
           problems={problems}
           cubeProblems={cubeProblems}
           onPick={(problem) => {
+            // To the YAML, where the problem is (the prototype's click does too).
+            setView('yaml');
             setGoTo({ at: problem.from });
           }}
         />

@@ -264,6 +264,83 @@ main { padding: var(--wc-surface-padding); }
   align-items: start;
 }
 .model-editor__yaml { position: sticky; top: 0; }
+/* The prototype's .seg: a two-way toggle, the pressed side in the accent. */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.seg button {
+  min-height: 0;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-left: 1px solid var(--wc-border-subtle);
+  border-radius: 0;
+  background: var(--wc-bg-surface);
+  font-size: 12px;
+}
+.seg button:first-child { border-left: 0; }
+.seg button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--wc-accent) 12%, var(--wc-bg-surface));
+  color: var(--wc-accent);
+  font-weight: 600;
+}
+.model-editor__view { margin-bottom: 8px; }
+/* The join diagram (T144, AC-138): the prototype's boxes and arrows, in SVG
+   from the tokens. */
+.join-editor { display: grid; gap: 12px; }
+.join-editor__canvas {
+  overflow: auto;
+  max-height: calc(100vh - 480px);
+  min-height: 160px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+  background: var(--wc-bg-page);
+}
+/* At its own size, the pane scrolling to it: shrunk, its text would fall
+   below the 12 px floor (AC-004). */
+.join-editor__diagram { display: block; margin: 0 auto; }
+.join-editor__cube rect {
+  fill: var(--wc-bg-surface);
+  stroke: var(--wc-border-strong);
+  stroke-width: 1;
+}
+.join-editor__cube[data-current='true'] rect { stroke: var(--wc-accent); stroke-width: 2; }
+.join-editor__cube[data-missing='true'] rect { stroke-dasharray: 4 3; }
+.join-editor__name {
+  fill: var(--wc-text-primary);
+  font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.join-editor__holds { fill: var(--wc-text-secondary); font-size: 12px; }
+.join-editor__edge { fill: none; stroke: var(--wc-text-secondary); stroke-width: 1.5; }
+/* Under each arrow, in the ground: where one crosses a box, it stays readable. */
+.join-editor__halo { fill: none; stroke: var(--wc-bg-page); stroke-width: 5; }
+.join-editor__arrow { fill: var(--wc-text-secondary); }
+.join-editor__relationship {
+  fill: var(--wc-text-secondary);
+  font-size: 12px;
+  paint-order: stroke;
+  stroke: var(--wc-bg-page);
+  stroke-width: 4px;
+}
+.join-editor__list { margin: 0; padding-left: 18px; font-size: 12px; color: var(--wc-text-secondary); }
+.join-editor__list a { color: var(--wc-accent); }
+/* The form's fields sit in one fieldset, so the page's lock reaches them all. */
+.join-editor__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  align-items: end;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.join-editor__condition { grid-column: 1 / -1; }
+.join-editor__add input, .join-editor__add select { width: 100%; height: 28px; font-size: 12px; }
+.join-editor__add button { justify-self: start; }
 /* The prototype's editor head: the file's one action, and how it went (T142). */
 .model-editor__head {
   grid-column: 1 / -1;

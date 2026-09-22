@@ -2061,10 +2061,66 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **A builder left open and never reopened** doesn't update itself, since metadata isn't pushed. Reopening it, or any new builder, shows the new members.
     - **Several API instances on one store:** only the publishing one lets go of its cache. The others serve their cached model for up to AC-009's 60 seconds. The compose setup runs one API per store.
     - **Cost:** the version Cube asks for on each request is worked out from every stored file. A stored revision bumped on each write would be one lookup, and would matter for AC-174 if the model grows.
-- [ ] T144 (AC-138) Show the join graph and add a join from the editor
+- [x] T144 (AC-138) Show the join graph and add a join from the editor
   - Files: `packages/web/src/workspaces/model/JoinEditor.tsx`, `packages/web/src/workspaces/model/JoinEditor.test.tsx`
   - Failing test: `JoinEditor.test.tsx`: every declared join appears with the direction the model declares, and adding one takes a target cube, a relationship and a condition (AC-138).
   - Depends on: T138
+  - **Built 2026-09-21.** Files as built:
+    - `joinGraph.ts` and its test;
+    - `JoinEditor.tsx` and its test;
+    - `ModelFilePage.tsx` (the prototype's "YAML / Join diagram" toggle in the right pane);
+    - `styles.ts` (`.seg`, `.join-editor`);
+    - `e2e/model.spec.ts`.
+    - **The graph (`joinGraphOf`).** Every cube of every plain YAML file, and every join, from the cube declaring it to the cube it names (research Y.5).
+      - This file counts as the form has it now, so a join just added shows at once.
+      - A cube named by a join but defined in no plain YAML file is drawn dashed: "not in plain YAML".
+      - It is worked out only while the diagram shows.
+    - **The diagram.** SVG from the tokens, not the prototype's ECharts graph, whose `graph` series `research/echarts.md` doesn't cover. It is a picture (`role="img"`) with nothing in it to tab to.
+      - **Boxes:** the prototype's, "name / N dims · M measures", the cube being edited outlined in the accent.
+      - **Layout:** on a circle whose neighbours are further apart than a box's diagonal, so no two boxes meet at any count, the cube being edited at the top. It is drawn at its own size and the pane scrolls, since shrinking it would put its text under 12 px.
+      - **Arrows:** each is a curve bending to its own right, as the prototype's curved edges do, so two cubes joining each other show two arrows and two labels. They are drawn over the boxes on a halo of the ground, so a crossing never hides one. A join of a cube to itself is a loop.
+      - **The joins in words:** "orders → customers, many to one", each cube with a file a link to it.
+    - **Adding a join** to a cube of this file, any of them where there are several ("Joins for"):
+      - It takes a target cube (not itself, and not one it already joins: one join per target, Y.5), a relationship (the three the docs use) and a condition.
+      - It goes through the form's edit, so the YAML shows it, and a loss is warned of first (T140).
+      - The form is locked with the page (AC-135). It clears only once the join has gone in.
+    - Picking a problem while the diagram shows goes back to the YAML, as the prototype's click does.
+  - **Tests, red first:**
+    - `joinGraph.test.ts` (4).
+    - `JoinEditor.test.tsx` (11):
+      - every cube, marked, and a picture with nothing to tab to;
+      - each join's path starting on its declaring cube and ending, arrowed, on its target;
+      - two cubes joining each other: paths and labels apart;
+      - no two boxes overlapping, at 14 cubes;
+      - a loop for a self-join;
+      - the joins in words, with links;
+      - adding;
+      - kept when not added;
+      - nothing without all three, or with a condition of spaces;
+      - read-only;
+      - any cube of the file.
+    - `e2e/model.spec.ts` (1 in each browser), on the real files:
+      - `orders`' two joins, each path ending on its target's box, arrowed;
+      - the list;
+      - a join added to the browser's own cube shows in the diagram, the list and the YAML.
+  - **Cold review (one round), verdict FAIL. Fixed:**
+    - A join through a third box could read as one the model doesn't declare.
+    - Boxes overlapped at around ten cubes.
+    - Two cubes joining each other showed one label.
+    - The add form ignored the read-only lock.
+    - Only the file's first cube could be given a join.
+    - The graph was parsed on every edit.
+    - The diagram's links sat inside `role="img"`.
+    - Picking a problem while the diagram showed did nothing visible.
+    - A self-join wasn't drawn.
+    - "In no file" was wrong for a cube defined in code.
+    - React keys could repeat.
+    - The form cleared even when the join didn't go in.
+  - **Left from the review:**
+    - Clicking a box doesn't open its file; the list's links do.
+    - There's no zoom or pan: the pane scrolls.
+    - Leaving through a link doesn't warn of unpublished edits, as elsewhere. The user has ruled out hardening save edge cases.
+    - Joins declared in JavaScript or Jinja files aren't drawn: those files are read-only and aren't read as YAML.
 - [ ] T145 (AC-139) Generate cubes from a data source's tables
   - **Deferred 2026-09-21 with F18**, under the user's rule "for requirements that dont work with cube defer". It depends on T165, the connection test. Reading a source's tables goes through Cube's drivers called from wechart's server, as a test does, and not through a Cube API: `research/cube-capabilities.md` §6 has "Schema and table browsing: Core (driver methods; dev-only route)".
   - Files: `packages/api/src/model/generate.ts`, `packages/web/src/workspaces/model/GenerateCubes.tsx`, `packages/api/src/model/generate.test.ts`

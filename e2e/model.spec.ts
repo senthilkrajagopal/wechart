@@ -208,6 +208,78 @@ test('a model change Cube compiles is published, and Cube serves it', async ({
 });
 
 /**
+ * T144 / AC-138: WHEN the user opens the join editor for a cube, THE SYSTEM
+ * SHALL show the join graph with each relationship's direction and let the
+ * user add a join by choosing the target cube, the relationship and the
+ * condition.
+ * Fails when: the diagram omits a declared join, or shows a direction the
+ * model does not declare.
+ */
+test('the join diagram draws each declared join its way, and adds one', async ({
+  page,
+}, testInfo) => {
+  // The seed model: orders declares its joins to customers and products.
+  await page.goto('/model/files/cubes%2Forders.yml');
+  await page
+    .getByRole('group', { name: 'Right pane view' })
+    .getByRole('button', { name: 'Join diagram' })
+    .click();
+  const diagram = page.getByRole('img', { name: /^Join diagram/ });
+  for (const to of ['customers', 'products']) {
+    const edge = diagram.locator(`[data-join="orders→${to}"]`);
+    await expect(edge).toHaveText('many to one');
+    // It ends on the named cube's box, where the arrowhead is — not on orders'.
+    // Its path, `M x y Q cx cy x2 y2`: where it ends is the last point.
+    const line = edge.locator('.join-editor__edge');
+    const d = (await line.getAttribute('d')) ?? '';
+    const [x2, y2] = (d.match(/-?\d+(?:\.\d+)?/g) ?? []).slice(-2);
+    const box = diagram.locator(`[data-cube="${to}"] rect`);
+    const [x, y, w, h] = await Promise.all(
+      ['x', 'y', 'width', 'height'].map((key) => box.getAttribute(key)),
+    );
+    expect(Number(x2)).toBeGreaterThanOrEqual(Number(x) - 1);
+    expect(Number(x2)).toBeLessThanOrEqual(Number(x) + Number(w) + 1);
+    expect(Number(y2)).toBeGreaterThanOrEqual(Number(y) - 1);
+    expect(Number(y2)).toBeLessThanOrEqual(Number(y) + Number(h) + 1);
+    await expect(line).toHaveAttribute('marker-end', 'url(#join-arrow)');
+  }
+  const joins = page.getByRole('list', { name: 'Joins' });
+  await expect(joins).toContainText('orders → customers, many to one');
+  await expect(joins).toContainText('orders → products, many to one');
+
+  // Adding one, on a cube file of this browser's own: target, relationship, condition.
+  const cube = `e2e_joins_${testInfo.project.name}`;
+  const path = await ownCubeFile(page.request, cube);
+  await page.goto(`/model/files/${encodeURIComponent(path)}`);
+  await page
+    .getByRole('group', { name: 'Right pane view' })
+    .getByRole('button', { name: 'Join diagram' })
+    .click();
+  const add = page.getByRole('form', { name: `Add a join to ${cube}` });
+  await add.getByLabel('Target cube', { exact: true }).selectOption('customers');
+  await add.getByLabel('Relationship', { exact: true }).selectOption('many_to_one');
+  await add.getByLabel('Condition', { exact: true }).fill('{CUBE}.id = {customers}.id');
+  await add.getByRole('button', { name: 'Add join' }).click();
+
+  await expect(page.getByRole('list', { name: 'Joins' })).toContainText(
+    `${cube} → customers, many to one`,
+  );
+  await expect(
+    page.getByRole('img', { name: /^Join diagram/ }).locator(`[data-join="${cube}→customers"]`),
+  ).toBeVisible();
+  // And in the file: the form's edit, written into the YAML.
+  await page
+    .getByRole('group', { name: 'Right pane view' })
+    .getByRole('button', { name: 'YAML' })
+    .click();
+  const yaml = page.getByRole('textbox', { name: `${path}, as YAML` });
+  await expect(yaml).toContainText('- name: customers');
+  // `yaml` quotes a new string with braces in double quotes.
+  await expect(yaml).toContainText('sql: "{CUBE}.id = {customers}.id"');
+  await expect(yaml).toContainText('relationship: many_to_one');
+});
+
+/**
  * T141 / AC-135: IF the YAML fails to parse, THEN THE SYSTEM SHALL name the
  * file and line in a problems list and keep the form read-only until it
  * parses (direction.md rule 28).
