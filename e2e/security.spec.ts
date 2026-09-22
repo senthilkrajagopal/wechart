@@ -168,3 +168,34 @@ test('a dashboard previewed as an edited security context runs as it, under a ba
   await expect(tile.getByRole('alert')).toBeVisible({ timeout: 15_000 });
   for (const body of asked) expect(body.context).toBeUndefined();
 });
+
+/**
+ * T173 / AC-167: WHEN a preview context hides a member a chart uses, THE
+ * SYSTEM SHALL show that tile as unavailable to the context rather than as an
+ * error.
+ * Fails when: the tile shows a raw Cube error.
+ *
+ * The sales group without `is_employee` fails the sales policy's condition,
+ * so no policy grants it the secured view's members, and Cube answers the
+ * tile's query as a hidden member (research/cube/access-control.md,
+ * "Observed locally").
+ */
+test('a tile whose member the previewed context is not given reads as unavailable to it', async ({
+  page,
+  request,
+}) => {
+  const { id } = await securedDashboard(request);
+  await page.goto(
+    `/explore/dashboards/${id}?preview=${encodeURIComponent(JSON.stringify({ groups: ['sales'] }))}`,
+  );
+
+  const tile = page.locator('[data-tile="tile-secured"]');
+  const unavailable = tile.getByTestId('tile-unavailable');
+  await expect(unavailable).toContainText('Not available to this security context', {
+    timeout: 15_000,
+  });
+  await expect(unavailable).toContainText('secured_orders.count');
+  // Neither Cube's advice nor a failure.
+  await expect(tile).not.toContainText('Please make it visible');
+  await expect(tile.getByRole('alert')).toHaveCount(0);
+});

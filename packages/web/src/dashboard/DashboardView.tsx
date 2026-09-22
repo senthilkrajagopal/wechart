@@ -1,11 +1,20 @@
 import type { ChartDocument, MemberFormats, RenderSpec } from '@wechart/core';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
 import type { TileSize } from '../editor/PreviewFrame';
 import type { AnswerMeta } from '../query/answerMeta';
 import { SecurityPreview } from '../query/securityPreview';
 import { ChartTile } from '../tiles/ChartTile';
 import { TileError } from '../tiles/TileError';
+import { hiddenMemberOf, TileUnavailable } from '../tiles/TileUnavailable';
 import { TileSkeleton } from '../tiles/TileSkeleton';
 import { useDashboardColours } from './colours';
 import { AddPanel } from './edit/AddPanel';
@@ -232,6 +241,10 @@ function TileBody({
   /** What Cube said of its answer: when from, and from what (T154, T014). */
   answered?: AnswerMeta | undefined;
 }) {
+  // Previewed as a security context, a member it is not given is a state of
+  // the context, not a failure of the chart (T173, AC-167).
+  const preview = useContext(SecurityPreview);
+  const hidden = preview === undefined ? undefined : hiddenMemberOf(error);
   switch (tile.kind) {
     case 'chart':
       /**
@@ -251,6 +264,7 @@ function TileBody({
           </div>
         );
       }
+      if (hidden !== undefined) return <TileUnavailable member={hidden} />;
       if (error !== undefined) return <TileError error={error} />;
       /**
        * Loading, absent and broken are three states, not two. Collapsing the

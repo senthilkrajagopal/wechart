@@ -2519,10 +2519,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - Changing the previewed context remounts the dashboard, so no context's answer is drawn under another's banner.
       - Tests cover filtered tiles and both refresh paths.
     - AC-166 ticked on `e2e/security.spec.ts`, "a dashboard previewed as an edited security context runs as it, under a banner" (Chrome, Firefox, Safari against the compose Cube).
-- [ ] T173 (AC-167) Show a tile as unavailable to the context when the context hides a member it uses
+- [x] T173 (AC-167) Show a tile as unavailable to the context when the context hides a member it uses
   - Files: `packages/web/src/tiles/TileUnavailable.tsx`, `packages/web/src/tiles/TileUnavailable.test.tsx`
   - Failing test: `TileUnavailable.test.tsx`: a member hidden by the previewed context renders the unavailable state rather than a raw Cube error (AC-167).
   - Depends on: T172
+  - **Done 2026-09-22.** Files as built:
+    - `tiles/TileUnavailable.tsx` and its test.
+    - `tiles/tileUnavailableOnDashboard.test.tsx`, covering the tile under a preview and outside one.
+    - `dashboard/DashboardView.tsx`: every chart tile's error, filtered or not, meets in `TileBody`.
+    - e2e: `e2e/security.spec.ts`.
+    - It names the one member Cube names, and says there may be more. Cube words a member that is `public: false` for everyone the same way, so under a preview that also reads as unavailable. Outside a preview, Cube's message shows.
+    - AC-167 ticked on `e2e/security.spec.ts`, "a tile whose member the previewed context is not given reads as unavailable to it" (Chrome, Firefox, Safari against the compose Cube).
 - [ ] T174 (AC-168) Show the generated SQL and the effective filters under the previewed context
   - Files: `packages/web/src/workspaces/security/GeneratedSql.tsx`, `packages/web/src/workspaces/security/GeneratedSql.test.tsx`
   - Failing test: `GeneratedSql.test.tsx`: the SQL shown includes the row-level filters the policy adds, and the effective filters are listed beside it (AC-168). Rendered read-only in Monaco.
