@@ -280,6 +280,40 @@ test('the join diagram draws each declared join its way, and adds one', async ({
 });
 
 /**
+ * T146 / AC-140: WHEN a model file uses Jinja, Python or JavaScript
+ * generation, THE SYSTEM SHALL open it read-only in the code view and say
+ * why it cannot be edited as a form.
+ * Fails when: such a file opens in an editable form, or gives no reason.
+ *
+ * On the seed model's own template, `cubes/product_catalog.yml`, which Cube
+ * renders and compiles.
+ */
+test('a Jinja template opens read-only in the code view, with the reason', async ({ page }) => {
+  await page.goto('/model/files/cubes%2Fproduct_catalog.yml');
+
+  await expect(page.getByRole('note')).toContainText(
+    'Jinja template: Cube renders it before reading its cubes and views',
+  );
+  await expect(page.getByRole('note')).toContainText('It opens read-only here');
+  const code = page.getByRole('textbox', { name: 'cubes/product_catalog.yml, read-only' });
+  await expect(code).toContainText('{%- set table = "public.products" %}');
+  await expect(code).toHaveAttribute('aria-readonly', 'true');
+  await expect(code).not.toHaveAttribute('contenteditable', 'true');
+  // No form, nothing to save, and typing changes nothing.
+  await expect(page.getByRole('region', { name: /^Cube / })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Save & reload Cube' })).toHaveCount(0);
+  await code.click();
+  await page.keyboard.type('xyz');
+  await expect(code).not.toContainText('xyz');
+
+  // And Cube renders it: its cube is in the model.
+  const meta = (await (await page.request.get('/api/meta')).json()) as {
+    cubes: { name: string }[];
+  };
+  expect(meta.cubes.map((cube) => cube.name)).toContain('product_catalog');
+});
+
+/**
  * T141 / AC-135: IF the YAML fails to parse, THEN THE SYSTEM SHALL name the
  * file and line in a problems list and keep the form read-only until it
  * parses (direction.md rule 28).

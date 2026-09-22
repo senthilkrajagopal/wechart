@@ -80,6 +80,8 @@ export function YamlEditor({
   label,
   problems = NONE,
   goTo,
+  readOnly = false,
+  language = 'yaml',
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -88,6 +90,14 @@ export function YamlEditor({
   problems?: readonly Problem[];
   /** A place to put the cursor, and show: a new object each time it is asked for. */
   goTo?: { readonly at: number } | undefined;
+  /**
+   * Shown, selectable and read, but taking no edit (T146, AC-140):
+   * `EditorState.readOnly` and `EditorView.editable` (research/code-editor.md,
+   * "Read-only + decorations"). Fixed for the editor's life.
+   */
+  readOnly?: boolean;
+  /** YAML is highlighted; code wechart has no grammar for is shown plain. */
+  language?: 'yaml' | 'plain';
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -108,10 +118,14 @@ export function YamlEditor({
           lintGutter(),
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
-          yaml(),
+          language === 'yaml' ? yaml() : [],
           syntaxHighlighting(TOKEN_HIGHLIGHT),
           TOKEN_THEME,
-          EditorView.contentAttributes.of({ 'aria-label': label }),
+          readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [],
+          EditorView.contentAttributes.of({
+            'aria-label': label,
+            ...(readOnly ? { 'aria-readonly': 'true' } : {}),
+          }),
           EditorView.updateListener.of((update) => {
             // Only what the user typed: a change dispatched from `value` is
             // marked, and not handed back.

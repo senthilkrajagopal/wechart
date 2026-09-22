@@ -1,0 +1,11 @@
+# A dynamic model: Cube renders the Jinja below before it reads the YAML.
+# wechart shows such a file read-only, with the reason (AC-140), and publishes
+# none (T142): a template runs inside Cube.
+{%- set table = "public.products" %}
+cubes:
+  - name: product_catalog
+    sql_table: {{ table }}
+
+    measures:
+      - name: count
+        type: count

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { META_QUERY } from '../../query/meta';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { codeNoteOf, MODEL_FILES_QUERY } from './FileList';
+import { MODEL_FILES_QUERY } from './FileList';
 import { objectsOf } from './objects';
 import { CubeForm } from './form/CubeForm';
 import { JoinEditor } from './JoinEditor';
@@ -12,6 +12,7 @@ import { lossOf, type Loss } from './lossCheck';
 import { LossWarning } from './LossWarning';
 import { problemsOf, type Problem } from './problems';
 import { ProblemsPanel, type CubeProblem } from './ProblemsPanel';
+import { ReadOnlyFile } from './ReadOnlyFile';
 import { publishModel } from './publish';
 import { modelOf, withObject } from './sync';
 import { YamlEditor } from './YamlEditor';
@@ -376,9 +377,9 @@ function FileEditor({ path, content }: { path: string; content: string }) {
 
 function FileBody({ path, content }: { path: string; content: string }) {
   const read = useMemo(() => objectsOf(path, content), [path, content]);
-  // Held read-only, with the reason; its text in a read-only editor is T146.
+  // Code or a template: its text in the code view, read-only, with the reason (T146, AC-140).
   if (read.code !== undefined)
-    return <p className="model-files__note">{codeNoteOf(path, read.code)}</p>;
+    return <ReadOnlyFile key={path} path={path} content={content} code={read.code} />;
   // A file that does not parse opens too: its problems are listed, to be fixed.
   // Keyed by the file: another file is another text, not this one's state.
   return <FileEditor key={path} path={path} content={content} />;

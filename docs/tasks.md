@@ -2126,10 +2126,34 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/api/src/model/generate.ts`, `packages/web/src/workspaces/model/GenerateCubes.tsx`, `packages/api/src/model/generate.test.ts`
   - Failing test: `generate.test.ts`: each selected table produces a cube whose columns map to dimensions plus a count measure, and any dropped column is reported (AC-139).
   - Depends on: T142, T165
-- [ ] T146 (AC-140) Open Jinja, Python and JavaScript model files read-only with a reason
+- [x] T146 (AC-140) Open Jinja, Python and JavaScript model files read-only with a reason
   - Files: `packages/web/src/workspaces/model/dynamicFiles.ts`, `packages/web/src/workspaces/model/dynamicFiles.test.ts`
   - Failing test: `dynamicFiles.test.ts`: a file containing `{{`, `{%` or `{#`, or a `.py`/`.js` model file, opens read-only in the code view with a stated reason and no editable form (AC-140).
   - Depends on: T139
+  - **Built 2026-09-21.** Files as built:
+    - `ReadOnlyFile.tsx` and its test;
+    - `YamlEditor.tsx` (a read-only mode);
+    - `ModelFilePage.tsx`;
+    - the seed template `infra/cube/model/cubes/product_catalog.yml`;
+    - `e2e/model.spec.ts`.
+    - There is no `dynamicFiles.ts`: telling a template or code file apart is `objectsOf`'s `code` (T137's review).
+    - **The file page:**
+      - A `.js`, `.py` or `.jinja` file, or YAML matching Cube's Jinja test, opens in the code view read-only: `EditorState.readOnly` and `EditorView.editable` false (research/code-editor.md), marked `aria-readonly`.
+      - It has no form and no Save.
+      - YAML and Jinja are highlighted. JavaScript and Python are shown plain, as wechart has no grammar for them.
+    - **The reason**, above it, as a note: what Cube does with such a file (T137's words), then "It opens read-only here: the form edits plain YAML, and wechart publishes no templates" (or "code"), ", which Cube would run". The publish refuses them (T142).
+    - **The seed template.** A small Jinja template in the seed model, `product_catalog.yml`, which `{%- set %}`s its table, shows the sample warehouse a dynamic model. It gives this a real surface: publishing can't make one.
+  - **Tests, red first:**
+    - `ReadOnlyFile.test.tsx` (2):
+      - a template's reason;
+      - its text in a read-only editor, not `contenteditable` and `aria-readonly`, with no form and no control;
+      - the reasons for JavaScript and Python.
+    - `e2e/model.spec.ts` (1 in each browser), on the seed template:
+      - the reason;
+      - its text, read-only;
+      - no form and no Save;
+      - typing changes nothing;
+      - Cube renders it, since `product_catalog` is in the model.
 - [ ] T147 (AC-141) List the charts and dashboards that reference a member before saving an edit to it
   - Files: `packages/api/src/model/references.ts`, `packages/api/src/model/references.test.ts`
   - Failing test: `references.test.ts`: editing a member lists every chart and dashboard referencing it before the save proceeds (AC-141).
