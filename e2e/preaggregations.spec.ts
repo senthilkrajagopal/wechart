@@ -160,6 +160,59 @@ test('a rollup edit Cube refuses is not published', async ({ page }, testInfo) =
 });
 
 /**
+ * T152 / AC-146: WHEN the user defines an index on a rollup, THE SYSTEM SHALL
+ * let the columns be ordered and mark aggregate indexes as such.
+ * Fails when: the column order cannot be changed, or an aggregate index is
+ * written as a regular one.
+ *
+ * On a cube file of this browser's own with an indexed rollup, against the
+ * real Cube: the order and the type are what the file says, and Cube compiles
+ * it.
+ */
+test('an index’s columns are moved into order, and an aggregate one is written so', async ({
+  page,
+}, testInfo) => {
+  const cube = `e2e_index_${testInfo.project.name}`;
+  const content = withRollup(cube)
+    .replace(
+      '      - name: status\n        sql: status\n        type: string\n',
+      '      - name: status\n        sql: status\n        type: string\n' +
+        '      - name: customer_id\n        sql: customer_id\n        type: number\n',
+    )
+    .replace(
+      '        dimensions:\n          - status\n',
+      '        dimensions:\n          - status\n          - customer_id\n' +
+        '        indexes:\n          - name: by_customer\n            columns:\n' +
+        '              - status\n              - customer_id\n',
+    );
+  const path = await ownCubeFile(page.request, cube, content);
+  await page.goto(`/model/files/${encodeURIComponent(path)}`);
+  const yaml = page.getByRole('textbox', { name: `${path}, as YAML` });
+  const { rollup } = await openRollup(page, cube);
+  await rollup.locator('.model-member__name', { hasText: /^by_customer$/ }).click();
+  const index = rollup.locator('.model-member').filter({
+    has: page.locator(':scope > summary .model-member__name', { hasText: /^by_customer$/ }),
+  });
+  const columns = index.getByRole('list', { name: 'Columns' });
+  await expect(columns.locator('.ordered-references__name')).toHaveText(['status', 'customer_id']);
+
+  await columns.getByRole('button', { name: 'Move customer_id up' }).click();
+  await index.getByLabel('Type', { exact: true }).selectOption('aggregate');
+
+  await expect(columns.locator('.ordered-references__name')).toHaveText(['customer_id', 'status']);
+  await expect(yaml).toContainText('type: aggregate');
+  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Published' })).toHaveText(
+    'Published. Cube is reading the new model.',
+  );
+  // The file, in the order moved into, the index marked aggregate.
+  expect(await storedFile(page, path)).toContain(
+    '        indexes:\n          - name: by_customer\n            columns:\n' +
+      '              - customer_id\n              - status\n            type: aggregate\n',
+  );
+});
+
+/**
  * T150 / AC-144: WHEN the user opens a chart's acceleration panel, THE SYSTEM
  * SHALL say whether the chart's query matches a pre-aggregation, and when it
  * does not, name the member that prevents the match.

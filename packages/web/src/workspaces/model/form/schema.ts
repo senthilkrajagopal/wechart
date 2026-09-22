@@ -25,6 +25,11 @@ export type FieldKind =
   /** A member, cube or view named without braces (J·REF). */
   | 'reference'
   | 'references'
+  /**
+   * Members whose order matters — an index's columns, its sort order (T152,
+   * AC-146) — edited as rows that move up and down.
+   */
+  | 'ordered-references'
   /** A format: a named format or a d3 specifier. */
   | 'format'
   /** A list of objects the schema describes, edited as rows. */
@@ -493,7 +498,7 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       f('indexes', 'list', {
         fields: [
           f('name', 'identifier'),
-          f('columns', 'references'),
+          f('columns', 'ordered-references'),
           f('type', 'enum', { options: ['regular', 'aggregate'] }),
         ],
       }),

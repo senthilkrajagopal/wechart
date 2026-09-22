@@ -558,6 +558,13 @@ fieldset.model-field > legend {
   line-height: 16px;
 }
 .rollup-facts > div { display: contents; }
+/* An index's columns, in their order, each moved by its own ↑ ↓ (T152). */
+.ordered-references { display: grid; gap: 6px; }
+.ordered-references__list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.ordered-references__row { display: flex; align-items: center; gap: 4px; }
+.ordered-references__name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ordered-references__add { display: flex; gap: 4px; }
+.ordered-references__add input { flex: 1; min-width: 0; }
 .rollup-facts dt { color: var(--wc-text-muted); }
 .rollup-facts dd { margin: 0; color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 .model-field__problem { color: var(--wc-status-error); font-size: 12px; }

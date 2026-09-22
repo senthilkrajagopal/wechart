@@ -2280,10 +2280,18 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/workspaces/model/preagg/Partitions.tsx`, `packages/api/src/routes/preagg.ts`, `packages/api/src/routes/partitions.test.ts`
   - Failing test: `partitions.test.ts`: every partition is listed with its build state and last build time, and a rebuild targets exactly the selected partitions (AC-145).
   - Depends on: T148
-- [ ] T152 (AC-146) Define an index with ordered columns and an aggregate flag
+- [x] T152 (AC-146) Define an index with ordered columns and an aggregate flag
   - Files: `packages/web/src/workspaces/model/preagg/IndexEditor.tsx`, `packages/web/src/workspaces/model/preagg/IndexEditor.test.tsx`
   - Failing test: `IndexEditor.test.tsx`: column order can be changed and is preserved in the written YAML, and an aggregate index is written as `type: aggregate` (AC-146).
   - Depends on: T149
+  - **Done 2026-09-21.** Files as built:
+    - `preagg/IndexEditor.tsx` (`IndexColumns`) and its test;
+    - `form/schema.ts`: a new field kind, `ordered-references`, now the kind of an index's `columns`. `schema.test.ts` pins it, noting that the research's "columns (references)" still holds: they are references whose order matters;
+    - `form/ObjectForm.tsx` (its control);
+    - `shell/styles.ts`;
+    - `e2e/preaggregations.spec.ts`.
+    - **Why rows that move.** An index's column order is its sort order in Cube Store, so the columns are no longer a "member, member" text to retype. Each is a row with ↑, ↓ and ×; the first can't go up and the last can't go down. A column is added by name, and the columns are written in the order shown. Whether an index is aggregate stays the index's own Type (`regular` or `aggregate`), written as `type: aggregate`.
+    - AC-146 ticked. `e2e/preaggregations.spec.ts` runs on a cube file of the browser's own, with a rollup indexed on `status, customer_id`, in all three browsers, against the real Cube. Moving `customer_id` up and setting Type to aggregate shows `customer_id, status` in the form and `type: aggregate` in the YAML. After "Save & reload Cube" reports Published, the stored file has the columns in that order and `type: aggregate`.
 - [ ] T153 (AC-147) Warn on a chart that would fail under rollup-only mode
   - Files: `packages/web/src/editor/AccelerationPanel.tsx`, `packages/api/src/cube/rollupOnly.test.ts`
   - Failing test: `rollupOnly.test.ts`: a chart whose query has no matching rollup carries a warning that it depends on the source database (AC-147).

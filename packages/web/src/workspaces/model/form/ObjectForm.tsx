@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { parse, stringify } from 'yaml';
 
 import { CUBE_PARSE } from '../objects';
+import { IndexColumns } from '../preagg/IndexEditor';
 import { SCHEMA, type Field, type ObjectSchema } from './schema';
 
 /**
@@ -77,6 +78,7 @@ function fits(field: Field, value: unknown): boolean {
     case 'number':
       return typeof value === 'number';
     case 'references':
+    case 'ordered-references':
       return (
         typeof value === 'string' ||
         (Array.isArray(value) && value.every((each) => typeof each === 'string'))
@@ -273,6 +275,8 @@ function Control({
     }
     case 'references':
       return <ReferencesControl id={id} value={value} onChange={onChange} />;
+    case 'ordered-references':
+      return <IndexColumns id={id} value={value} onChange={onChange} />;
     case 'number':
       return (
         <input

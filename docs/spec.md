@@ -461,7 +461,7 @@ Traces to: `[R4]`, `[docs/inputs §1]`, direction.md §7c; `[research/cube/pre-a
       Fails when: the panel reports a match that Cube does not use, or names no reason for a miss.
 - [ ] AC-145 WHEN a rollup is partitioned, THE SYSTEM SHALL list its partitions with their build state and last build time, and allow a rebuild of selected partitions.
       Fails when: a partition is missing, or a rebuild applies to partitions the user did not select.
-- [ ] AC-146 WHEN the user defines an index on a rollup, THE SYSTEM SHALL let the columns be ordered and mark aggregate indexes as such.
+- [x] AC-146 WHEN the user defines an index on a rollup, THE SYSTEM SHALL let the columns be ordered and mark aggregate indexes as such.
       Fails when: the column order cannot be changed, or an aggregate index is written as a regular one.
 - [ ] AC-147 IF a query would fail under rollup-only mode, THEN THE SYSTEM SHALL warn on the chart that it depends on the source database.
       Fails when: such a chart shows no warning.
