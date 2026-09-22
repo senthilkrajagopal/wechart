@@ -36,6 +36,12 @@ export interface Config {
    * its mounted directory, and nothing can be published.
    */
   readonly cubeStoreUrl?: string;
+  /**
+   * The refresh worker's address — `CUBE_WORKER_URL`, for example
+   * `http://localhost:54001` — whose own `/readyz` and `/livez` say its state
+   * (T162, AC-156). Without it the worker is shown as not watched.
+   */
+  readonly cubeWorkerUrl?: string;
 }
 
 /** `infra/cube/model`, three levels up from `src/` or `dist/` in this package. */
@@ -76,6 +82,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ...(env['WECHART_CUBE_STORE_URL']
       ? { cubeStoreUrl: env['WECHART_CUBE_STORE_URL'].replace(/\/$/, '') }
       : {}),
+    ...(env['CUBE_WORKER_URL'] ? { cubeWorkerUrl: env['CUBE_WORKER_URL'].replace(/\/$/, '') } : {}),
   };
 }
 

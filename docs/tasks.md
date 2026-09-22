@@ -2410,10 +2410,25 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/api/src/scheduler/suspend.ts`, `packages/api/src/scheduler/suspend.test.ts`
   - Failing test: `suspend.test.ts`: after the configured number of consecutive failures the schedule stops running, says so, and a Resume action restarts it (AC-155).
   - Depends on: T159
-- [ ] T162 (AC-156) Show the refresh worker's state and the Cube deployment's health
+- [x] T162 (AC-156) Show the refresh worker's state and the Cube deployment's health
   - Files: `packages/web/src/workspaces/jobs/Health.tsx`, `packages/api/src/cube/health.ts`, `packages/api/src/cube/health.test.ts`
   - Failing test: `health.test.ts`: an unhealthy reply from Cube's health endpoint marks the deployment down, and the refresh worker's state is shown (AC-156).
   - Depends on: T158
+  - **Done 2026-09-22.** Files as built:
+    - API: `cube/health.ts` (`healthOf`, `originOf`) and its test; `config.ts` (`CUBE_WORKER_URL`); `server.ts` (`GET /api/cube-health`, separate from `/api/health`, which is this API's own).
+    - Web: `workspaces/jobs/Health.tsx` and its test; `StateBadge.tsx` (a general `Status`, which the job badge now uses); `JobsPage.tsx` (the header); `shell/styles.ts`.
+    - Stack: `docker-compose.yml` publishes the refresh worker's port as 54001, and `playwright.config.ts` gives the e2e API `CUBE_WORKER_URL`.
+    - e2e: `e2e/jobs.spec.ts`.
+    - **From Cube's own probes.** `/readyz` and `/livez` need no auth, sit outside the API's base path, and answer `HEALTH` or `DOWN` (`research/cube/refresh-jobs-caching.md` §F).
+      - The API instance is probed at its origin. The refresh worker, observed to answer its own probes, is probed at `CUBE_WORKER_URL`.
+      - Each reads healthy only if both its probes say `HEALTH`. A `DOWN`, a non-200, an error, or no answer within 3 s reads down.
+      - Without `CUBE_WORKER_URL` the worker reads "not watched", never "running".
+    - **In the Jobs header**, as the prototype's "Refresh worker running" badge: "Cube healthy" or "Cube down", and "Refresh worker running", "down" or "not watched". Each is an icon and words, asked again every 10 s while the page is open.
+      - A health that can't be read reads "unknown", not the last answer. The query kept that answer after a later ask failed, and it would have gone on saying healthy.
+    - AC-156 ticked:
+      - `e2e/jobs.spec.ts`, in all three browsers: on the real stack the header reads "Cube healthy" (ok icon) and "Refresh worker running", and the API's own answer agrees. With the API answering down, the header reads "Cube down" (failed icon) and "Refresh worker down".
+      - `cube/health.test.ts`: Cube not ready, not live, unreachable, or 200 without `HEALTH` all read down.
+      - `Health.test.tsx`: the header moves from healthy to down while open.
 
 ## F18. Data sources and connections
 

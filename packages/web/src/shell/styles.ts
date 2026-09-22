@@ -650,6 +650,9 @@ fieldset.model-field > legend {
 .query-log__empty { color: var(--wc-text-secondary); }
 /* The Jobs workspace's tabs, and its pre-aggregations with their builds (T155). */
 .jobs-workspace__tabs { margin-bottom: 12px; }
+/* Its header: the title, then Cube's health and the refresh worker's (T162). */
+.jobs-workspace__head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.jobs-health { display: flex; flex-wrap: wrap; gap: 12px; }
 .build-panel { display: grid; gap: 12px; }
 .build-panel__head { margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
 .build-panel__builds,

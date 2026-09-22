@@ -83,6 +83,8 @@ export default defineConfig({
         // reaches it — one of the stores it is told to trust.
         WECHART_MODEL_KEY: 'dev-model-key',
         WECHART_CUBE_STORE_URL: 'http://host.docker.internal:4100',
+        // The compose refresh worker's own health probes (T162, AC-156).
+        CUBE_WORKER_URL: 'http://localhost:54001',
       },
     },
     {

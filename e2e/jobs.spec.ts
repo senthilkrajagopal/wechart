@@ -66,3 +66,37 @@ test('building a pre-aggregation shows its job token and follows it to done', as
   ).json()) as { status: string }[];
   expect(answered.map((each) => each.status)).toEqual(['done']);
 });
+
+/**
+ * T162 / AC-156: THE SYSTEM SHALL show the refresh worker's state and the
+ * Cube deployment's health, and mark the deployment as down when Cube's
+ * health endpoint does not report healthy.
+ * Fails when: the indicator stays healthy while Cube reports otherwise.
+ *
+ * On the real stack, whose Cube and refresh worker both answer their probes
+ * healthy; then with the API answering that Cube is down — the browser's
+ * only source for it — the header says so. (That the API calls anything but
+ * Cube's HEALTH down is `packages/api/src/cube/health.test.ts`'s.)
+ */
+test('the Jobs header shows Cube’s health and the refresh worker’s, and a deployment down', async ({
+  page,
+}) => {
+  await page.goto('/jobs');
+  const cube = page.getByTestId('cube-health');
+  const worker = page.getByTestId('worker-health');
+  await expect(cube).toHaveText('Cube healthy', { timeout: 15_000 });
+  await expect(cube.locator('svg[data-icon="ok"]')).toHaveCount(1);
+  await expect(worker).toHaveText('Refresh worker running');
+  expect(await (await page.request.get('/api/cube-health')).json()).toEqual({
+    cube: 'healthy',
+    worker: 'healthy',
+  });
+
+  await page.route('**/api/cube-health', (route) =>
+    route.fulfill({ json: { cube: 'down', worker: 'down' } }),
+  );
+  await page.reload();
+  await expect(cube).toHaveText('Cube down');
+  await expect(cube.locator('svg[data-icon="err"]')).toHaveCount(1);
+  await expect(worker).toHaveText('Refresh worker down');
+});

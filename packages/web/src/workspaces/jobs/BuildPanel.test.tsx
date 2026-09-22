@@ -33,6 +33,9 @@ function api(states: string[], tokens: string[], leftOut: string[] = []) {
       asked.push(url);
       if (url === '/api/preaggregations') return new Response(JSON.stringify(BUILDABLE));
       if (url === '/api/jobs/queries') return new Response(JSON.stringify([]));
+      // The Jobs header's own ask (T162), answered and not counted.
+      if (url === '/api/cube-health')
+        return new Response(JSON.stringify({ cube: 'healthy', worker: 'healthy' }));
       if (url === '/api/builds') {
         expect(JSON.parse(String(init?.body))).toEqual({
           preAggregation: 'monthly_orders.by_status_month',

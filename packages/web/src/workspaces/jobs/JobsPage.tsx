@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 
 import { BuildPanel } from './BuildPanel';
+import { Health } from './Health';
 import { QueryLog, type QueryRecord } from './QueryLog';
 
 /**
@@ -44,7 +45,11 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
   const base = useId();
   return (
     <div className="jobs-workspace">
-      <h1>Jobs</h1>
+      <div className="jobs-workspace__head">
+        <h1>Jobs</h1>
+        {/* Cube's health and the refresh worker's state (T162, AC-156). */}
+        <Health />
+      </div>
       <div role="tablist" aria-label="Jobs" className="edit-sidebar__tabs jobs-workspace__tabs">
         {TABS.map(([key, label], index) => (
           <button

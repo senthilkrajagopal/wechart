@@ -93,12 +93,28 @@ function Icon({ kind }: { kind: StateKind }) {
   }
 }
 
-export function StateBadge({ status }: { status: string }) {
-  const { kind, label } = stateOf(status);
+/** Any state as the prototype's `.status`: its icon, its words. */
+export function Status({
+  kind,
+  label,
+  testId,
+  state,
+}: {
+  kind: StateKind;
+  label: string;
+  testId: string;
+  /** The state as its source gave it, kept for a reader of the page. */
+  state?: string;
+}) {
   return (
-    <span className={`status status--${kind}`} data-testid="job-state" data-state={status}>
+    <span className={`status status--${kind}`} data-testid={testId} data-state={state}>
       <Icon kind={kind} />
       {label}
     </span>
   );
+}
+
+export function StateBadge({ status }: { status: string }) {
+  const { kind, label } = stateOf(status);
+  return <Status kind={kind} label={label} testId="job-state" state={status} />;
 }

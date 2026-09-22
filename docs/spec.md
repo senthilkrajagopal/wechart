@@ -515,7 +515,7 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
       Fails when: a `refresh_key` schedule is editable in wechart, or is unlabelled.
 - [ ] AC-155 IF a scheduled build fails repeatedly, THEN THE SYSTEM SHALL suspend the schedule after the configured number of consecutive failures, say so on the schedule, and offer Resume.
       Fails when: the schedule keeps running after the limit, or offers no Resume.
-- [ ] AC-156 THE SYSTEM SHALL show the refresh worker's state and the Cube deployment's health, and mark the deployment as down when Cube's health endpoint does not report healthy.
+- [x] AC-156 THE SYSTEM SHALL show the refresh worker's state and the Cube deployment's health, and mark the deployment as down when Cube's health endpoint does not report healthy.
       Fails when: the indicator stays healthy while Cube reports otherwise.
 
 ## F18. Data sources and connections

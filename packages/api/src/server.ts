@@ -9,6 +9,7 @@ import {
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import { CACHE_POLICIES, CubeClient, CubeError, type CachePolicy } from './cube/client';
+import { healthOf, originOf } from './cube/health';
 import { MetaCache } from './cube/meta-cache';
 import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
 import { registerBuilds } from './jobs/build';
@@ -33,6 +34,8 @@ export interface BuildOptions {
   readonly images?: ImageStore;
   /** The Cube model's files (T137, AC-131). */
   readonly modelFiles?: ModelFileStore;
+  /** How Cube's health probes are asked (T162); `fetch` unless a test says. */
+  readonly healthFetch?: typeof fetch;
   readonly logger?: boolean;
 }
 
@@ -123,9 +126,25 @@ export function buildServer({
   documents: docs,
   images,
   modelFiles,
+  healthFetch,
   logger = false,
 }: BuildOptions): FastifyInstance {
   const app = Fastify({ logger });
+
+  /**
+   * The Cube deployment's health and the refresh worker's state (T162,
+   * AC-156), each from its own probes. Not `/api/health`, which is this API's
+   * own, and which a deployment checks without asking Cube anything.
+   */
+  app.get('/api/cube-health', async () =>
+    healthOf(
+      {
+        cube: originOf(config.cubeApiUrl),
+        ...(config.cubeWorkerUrl === undefined ? {} : { worker: config.cubeWorkerUrl }),
+      },
+      healthFetch,
+    ),
+  );
   const client =
     cube ??
     new CubeClient({

@@ -118,6 +118,10 @@ services:
       <<: *cube-environment
       CUBEJS_REFRESH_WORKER: 'true'
     extra_hosts: *cube-extra-hosts
+    # Its own /readyz and /livez, which say its state — wechart's
+    # CUBE_WORKER_URL (T162, AC-156; research/cube/refresh-jobs-caching.md §F).
+    ports:
+      - '54001:4000'
     volumes: *cube-volumes
 
 volumes:
