@@ -158,12 +158,12 @@ const showing = (...chartIds: string[]): DashboardDocument => ({
  * too (`PUT /api/dashboards/:id` refuses anything else with a 400), so the
  * two agree on what may be written.
  *
- * A chart local to this dashboard is written with it. A library chart can be
- * on other dashboards, and AC-128 requires the editor to say so, with the
- * count, and offer a local copy *before* changes spread — T134, not built yet
- * — so its draft keeps Save held back. So does a chart local to another
- * dashboard, and a draft with no version: it could only be written blind,
- * overwriting whatever anyone else saved meanwhile.
+ * A chart local to this dashboard is written with it. So is a library chart:
+ * the editor says it is shared, and on how many dashboards, and offers a
+ * local copy (T134, AC-128) — kept, it is saved everywhere it is used (the
+ * user's decision, 2026-09-22). A chart local to another dashboard keeps Save
+ * held back, and so does a draft with no version: it could only be written
+ * blind, overwriting whatever anyone else saved meanwhile.
  */
 describe('whether a dashboard with drafts can be saved', () => {
   const onTiles = showing('c1', 'c2');
@@ -179,15 +179,16 @@ describe('whether a dashboard with drafts can be saved', () => {
     expect(whyUnsaveable(withDraft(onTiles, 'c1', local), 'd1')).toBeUndefined();
   });
 
-  it('cannot be saved while a library chart is drafted, and says so truly', () => {
-    const reason = whyUnsaveable(withDraft(withDraft(onTiles, 'c1', local), 'c2', library), 'd1');
+  it('can be saved with a library chart drafted, writing it everywhere (T134, the user’s decision)', () => {
+    const drafted = withDraft(withDraft(onTiles, 'c1', local), 'c2', library);
 
-    expect(reason).toMatch(/library chart/);
-    // "Can be", not "is": a library chart may be on this dashboard alone, and
-    // the count is AC-128's to show (T134).
-    expect(reason).toMatch(/other dashboards can use it too/);
-    // Stated truly: undo is linear, so later changes go with it.
-    expect(reason).toMatch(/undone too/);
+    expect(whyUnsaveable(drafted, 'd1')).toBeUndefined();
+    expect(chartWritesOf(drafted, 'd1')).toEqual([
+      { id: 'c1', document: local.document, version: local.version },
+      { id: 'c2', document: library.document, version: library.version },
+    ]);
+    // Nor does the editor's own Save dashboard hold it back.
+    expect(whyUnsaveableWith(drafted, 'd1', 'c2', undefined)).toBeUndefined();
   });
 
   /**
@@ -221,10 +222,10 @@ describe('whether a dashboard with drafts can be saved', () => {
       }),
     ).toBeUndefined();
 
-    // Not a chart another dashboard's: that stays refused.
-    expect(whyUnsaveable(withDraft(onTiles, 'c2', { ...library, wasLocalTo: 'd2' }), 'd1')).toMatch(
-      /library chart/,
-    );
+    // The mark lets no chart of another dashboard's through: that stays refused.
+    expect(
+      whyUnsaveable(withDraft(onTiles, 'c2', { ...elsewhere, wasLocalTo: 'd1' }), 'd1'),
+    ).toMatch(/another dashboard/);
   });
 
   it('cannot be saved while a chart local to another dashboard is drafted', () => {
@@ -243,7 +244,7 @@ describe('whether a dashboard with drafts can be saved', () => {
      * save. Its draft must not go on holding Save back — and the advice to
      * undo back past it would bring the tile back.
      */
-    const tileDeleted = withDraft(showing('c1'), 'c2', library);
+    const tileDeleted = withDraft(showing('c1'), 'c2', elsewhere);
 
     expect(whyUnsaveable(tileDeleted, 'd1')).toBeUndefined();
   });
@@ -273,8 +274,8 @@ describe('whether a dashboard with drafts can be saved', () => {
       ],
     } as DashboardDocument;
 
-    expect(whyUnsaveable(withDraft(nested, 'c1', library), 'd1')).toMatch(/library chart/);
-    expect(whyUnsaveable(withDraft(nested, 'c2', library), 'd1')).toMatch(/library chart/);
+    expect(whyUnsaveable(withDraft(nested, 'c1', elsewhere), 'd1')).toMatch(/another dashboard/);
+    expect(whyUnsaveable(withDraft(nested, 'c2', elsewhere), 'd1')).toMatch(/another dashboard/);
   });
 });
 
@@ -289,11 +290,12 @@ describe('whether the editor’s Save dashboard can save', () => {
   const library = { document: { ...chart, folderId: 'f1' }, version: 3 };
   const elsewhere = { document: { ...chart, localToDashboardId: 'd2' }, version: 3 };
 
-  it('is held back by an edit to a library chart, before it is applied', () => {
-    const reason = whyUnsaveableWith(onTiles, 'd1', 'c1', library);
-
-    expect(reason).toMatch(/library chart/);
-    expect(reason).toMatch(/other dashboards can use it too/);
+  it('is not held back by an edit to a library chart: saved everywhere (T134, the user’s decision)', () => {
+    expect(whyUnsaveableWith(onTiles, 'd1', 'c1', library)).toBeUndefined();
+    // With its version, as any chart's, so a change made elsewhere meanwhile is refused.
+    expect(whyUnsaveableWith(onTiles, 'd1', 'c1', { ...library, version: undefined })).toMatch(
+      /safely/,
+    );
   });
 
   it('is held back by an edit to a chart local to another dashboard', () => {
@@ -316,22 +318,22 @@ describe('whether the editor’s Save dashboard can save', () => {
      * says to undo back past the change, and the dashboard's Undo cannot be
      * reached under the editor.
      */
-    const holdingLibrary = withDraft(onTiles, 'c2', { ...drawing('bar'), ...library });
+    const holdingElsewhere = withDraft(onTiles, 'c2', { ...drawing('bar'), ...elsewhere });
 
-    const reason = whyUnsaveableWith(holdingLibrary, 'd1', 'c1', undefined);
+    const reason = whyUnsaveableWith(holdingElsewhere, 'd1', 'c1', undefined);
 
     expect(reason).toMatch(/Another tile’s chart/);
-    expect(reason).toMatch(/library chart/);
+    expect(reason).toMatch(/another dashboard/);
     expect(reason).toMatch(/Back keeps this change on the dashboard/);
     expect(whyUnsaveableWith(onTiles, 'd1', 'c1', undefined)).toBeUndefined();
   });
 
   it('names this chart when its own earlier change holds the save back', () => {
-    // Unchanged now, but changed earlier in the session, as a library chart.
-    const changedEarlier = withDraft(onTiles, 'c1', { ...drawing('bar'), ...library });
+    // Unchanged now, but changed earlier in the session, as another dashboard's chart.
+    const changedEarlier = withDraft(onTiles, 'c1', { ...drawing('bar'), ...elsewhere });
 
     expect(whyUnsaveableWith(changedEarlier, 'd1', 'c1', undefined)).toMatch(
-      /This is a library chart/,
+      /This chart belongs to another dashboard/,
     );
   });
 
@@ -395,7 +397,7 @@ describe('the chart writes a save sends', () => {
     expect(() => chartWritesOf(blind, 'd1')).toThrow(/version/);
   });
 
-  it('refuses to build a write for a library chart or another dashboard’s', () => {
+  it('builds a library chart’s write (T134), and refuses another dashboard’s', () => {
     const libraryDraft = withDraft(showing('c1'), 'c1', { ...drawing('bar'), version: 4 });
     const elsewhereDraft = withDraft(showing('c1'), 'c1', {
       ...drawing('bar'),
@@ -403,7 +405,7 @@ describe('the chart writes a save sends', () => {
       version: 4,
     });
 
-    expect(() => chartWritesOf(libraryDraft, 'd1')).toThrow(/library chart/);
+    expect(chartWritesOf(libraryDraft, 'd1')).toEqual([{ id: 'c1', document: chart, version: 4 }]);
     expect(() => chartWritesOf(elsewhereDraft, 'd1')).toThrow(/another dashboard/);
   });
 });

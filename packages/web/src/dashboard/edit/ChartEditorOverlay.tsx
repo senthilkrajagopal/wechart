@@ -11,6 +11,7 @@ import {
   type EditorState,
 } from '../../editor/openChart';
 import type { TileSize } from '../../editor/PreviewFrame';
+import { SharedChartNotice } from '../../editor/SharedChartNotice';
 import { loadTile } from '../../query/loadTile';
 import { StateLine } from '../../shell/StatusIcon';
 import { tileChartOf } from '../chartSpec';
@@ -300,6 +301,14 @@ export function ChartEditorOverlay({
           Save dashboard
         </button>
       </header>
+      {/* A library chart: shared, and on how many dashboards, before a change
+          spreads (T134, AC-128) — not one this dashboard is saving to a
+          folder in the session, which is its own until saved (T133). */}
+      {opened === undefined ||
+      opened.document.localToDashboardId !== undefined ||
+      draft?.wasLocalTo !== undefined ? null : (
+        <SharedChartNotice chartId={chartId} folderId={opened.document.folderId} />
+      )}
       {view.kind === 'loading' ? (
         <StateLine kind="run" testId="editor-loading">
           Opening the chart…

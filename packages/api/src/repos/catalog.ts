@@ -87,15 +87,23 @@ export function catalog(db: Kysely<Database>) {
     },
 
     /**
-     * The dashboards that use a library chart (AC-021, AC-022, AC-023).
+     * The dashboards that use a library chart (AC-021, AC-022, AC-023,
+     * AC-128).
      *
-     * A dashboard refers to a chart by id in `body.charts`, so this survives
-     * the chart being renamed or moved — which is exactly what AC-021 asks for.
+     * A dashboard refers to a chart by id, so this survives the chart being
+     * renamed or moved — which is exactly what AC-021 asks for: in the
+     * `body.charts` list a chart added from its own page writes, or on any
+     * tile, however deep in sections and tabs (T134) — `.**` in strict mode,
+     * as PostgreSQL recommends (research/db-access.md). By the list alone, a
+     * chart shown on two dashboards' tiles read as on none.
      */
     async dashboardsUsing(chartId: string): Promise<CatalogItem[]> {
       const rows = await selectItems()
         .where('kind', '=', 'dashboard')
-        .where(sql<boolean>`body -> 'charts' @> ${JSON.stringify([chartId])}::jsonb`)
+        .where(
+          sql<boolean>`(body -> 'charts' @> ${JSON.stringify([chartId])}::jsonb
+            or jsonb_path_exists(body, 'strict $.** ? (@.chartId == $id)', jsonb_build_object('id', ${chartId}::text), true))`,
+        )
         .orderBy('title', 'asc')
         .execute();
 

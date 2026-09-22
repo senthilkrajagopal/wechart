@@ -1876,6 +1876,16 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
    as the settings page is: its own bar in place of the dashboard's, and the
    editor filling what is left. */
 .chart-editor-overlay { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 16px; }
+/* A library chart's editor note (T134, AC-128): the prototype's under-bar
+   line, shared and on how many dashboards, with its Make a local copy. */
+.shared-chart-notice {
+  flex: none;
+  align-items: center;
+  margin: -8px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+.shared-chart-notice button { margin-left: auto; }
 .chart-editor-overlay__bar { display: flex; align-items: center; gap: 16px; min-height: 48px; }
 .chart-editor-overlay__bar h1 {
   margin: 0;

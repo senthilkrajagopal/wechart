@@ -267,49 +267,76 @@ test('the editor’s Save dashboard applies the chart and saves the dashboard', 
   await expect(page.getByRole('heading', { name: 'New heading' })).toBeVisible();
 });
 
-test('the editor’s Save dashboard is held back by a change to a library chart, saying why', async ({
+/** A second dashboard showing the same chart: a library chart's other user. */
+async function alsoOn(request: APIRequestContext, chartId: string) {
+  const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title: `Also ${unique}`, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: `Also ${unique}`,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [{ id: 'tile-save', kind: 'chart', w: 6, h: 40, chartId }],
+          },
+        ],
+      },
+    },
+  });
+  return dashboard.id;
+}
+
+/**
+ * T134 / AC-128: WHEN a library chart is opened for editing from a dashboard,
+ * THE SYSTEM SHALL state that it is shared and on how many dashboards, and
+ * offer to make a local copy before changes spread (direction.md rule 41).
+ * Fails when: the editor gives no shared indication for a library chart used
+ * by more than one dashboard.
+ *
+ * And kept, the change spreads: saved everywhere the chart is used (the
+ * user's decision, 2026-09-22), no longer held back as at T192.
+ */
+test('the editor says a library chart is shared and on how many dashboards, and its Save dashboard saves it everywhere', async ({
   page,
   request,
 }) => {
   const { dashboardId, chartId } = await makeDashboard(request, true);
+  const other = await alsoOn(request, chartId);
   await page.goto(`/explore/dashboards/${dashboardId}`);
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'bar');
   await page.getByTestId('edit-chart-tile-save').click();
 
-  // Only a *change* to it holds Save back: opened and left as it is, a library
-  // chart applies nothing, so the dashboard's other changes can still be saved.
-  await expect(saveDashboard(page)).toHaveAttribute('aria-disabled', 'false');
+  const notice = editor(page).locator('.shared-chart-notice');
+  await expect(notice).toHaveText(/Shared chart · on 2 dashboards · edits change all of them/);
+  await expect(notice.locator('[data-icon="warn"]')).toHaveCount(1);
 
   await page.getByLabel('Chart type').selectOption('stackedBar');
-
-  await expect(saveDashboard(page)).toHaveAttribute('aria-disabled', 'true');
-  const reason = editor(page).getByTestId('editor-save-blocked');
-  await expect(reason).toContainText(/library chart/);
-  await expect(reason).toContainText(/other dashboards can use it too/);
-  await expect(saveDashboard(page)).toHaveAttribute(
-    'aria-describedby',
-    (await reason.getAttribute('id')) ?? 'no id',
-  );
-
-  /**
-   * Pressed anyway: nothing is applied or saved, and the editor stays open and
-   * live. Checked only after a later change has been drawn, so the press has
-   * certainly been handled — leaving takes a moment (the edit's query runs
-   * first), and the editor still being there straight after a press that
-   * *had* started leaving would prove nothing.
-   */
-  await saveDashboard(page).click({ force: true });
-  await page.getByLabel('Chart type').selectOption('bar');
-  await expect(page.getByTestId('chart-type')).toHaveText('bar');
-  await expect(editor(page).getByTestId('editor-applying')).toHaveText('');
-  await expect(editor(page)).toBeVisible();
-  // Unwritten — though this alone could not tell: the server refuses a
-  // library chart too (400). The client's own hold is what the rest checks.
-  expect(await storedType(request, chartId)).toBe('bar');
-
-  // Changed back, the chart applies nothing, so Save dashboard is free again.
   await expect(saveDashboard(page)).toHaveAttribute('aria-disabled', 'false');
   await expect(editor(page).getByTestId('editor-save-blocked')).toHaveText('');
+  await saveDashboard(page).click();
+
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+  await expect(page.getByTestId('save-failed')).toHaveCount(0);
+  await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
+  await expect.poll(() => storedType(request, chartId)).toBe('stackedBar');
+  // Still the shared chart, in its folder: changed, not taken over.
+  const after = await stored(request, chartId);
+  expect(after.body['localToDashboardId']).toBeUndefined();
+  expect(after.body['folderId']).toBe('root');
+  // The other dashboard that uses it draws it changed.
+  await page.goto(`/explore/dashboards/${other}`);
+  await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
 });
 
 test('a chart load still running from the last save does not put that chart back over the next', async ({
@@ -655,41 +682,37 @@ test.describe('a save that fails keeps the session (AC-184)', () => {
   });
 });
 
-test('a library chart edited from its tile keeps Save held back, saying why', async ({
+test('a library chart edited from its tile is saved with the dashboard, for every dashboard that uses it', async ({
   page,
   request,
 }) => {
   /**
-   * A library chart can be on other dashboards. AC-128 requires the editor to
-   * say so, with the count, and offer a local copy *before* changes spread
-   * (T134); until then it is not written from a dashboard save.
+   * A library chart can be on other dashboards. The editor says so, with the
+   * count, and offers a local copy first (T134, AC-128); kept, the edit is
+   * saved everywhere, at the user's decision (2026-09-22). No longer held
+   * back, as it was at T192.
    */
   const { dashboardId, chartId } = await makeDashboard(request, true);
+  const other = await alsoOn(request, chartId);
   await page.goto(`/explore/dashboards/${dashboardId}`);
   await editToStacked(page);
 
   const save = barButton(page, 'Save');
-  await expect(save).toHaveAttribute('aria-disabled', 'true');
-  await expect(page.getByTestId('save-blocked')).toContainText(/library chart/);
-  await expect(page.getByTestId('save-blocked')).toContainText(/other dashboards can use it too/);
+  await expect(save).toHaveAttribute('aria-disabled', 'false');
+  await expect(page.getByTestId('save-blocked')).toHaveText('');
 
-  // Pressed anyway, as a user can: aria-disabled keeps it focusable and
-  // clickable by design (the toolbar pattern), and Playwright would otherwise
-  // wait for it to become enabled rather than press it. Saving regardless
-  // dropped the edit in silence and put the old chart back on the tile —
-  // AC-034's failing state, reached through Save.
-  await save.click({ force: true });
-
-  // Still editing, with the edit on the tile and in the session's history:
-  // Undo takes the tile back and Redo returns it. Pressing them — rather
-  // than looking once for the bar — is only possible if the press left the
-  // session as it was.
-  await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
+  // An edit of the session like any other: Undo takes the tile back, Redo returns it.
   await barButton(page, 'Undo').click();
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'bar');
   await barButton(page, 'Redo').click();
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
-  // Unwritten — though this alone could not tell: the server refuses a
-  // library chart too (400). The client's own hold is what the rest checks.
-  expect(await storedType(request, chartId)).toBe('bar');
+
+  await save.click();
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+  await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
+  await expect.poll(() => storedType(request, chartId)).toBe('stackedBar');
+  // Still shared: the other dashboard that uses it draws it changed.
+  expect((await stored(request, chartId)).body['localToDashboardId']).toBeUndefined();
+  await page.goto(`/explore/dashboards/${other}`);
+  await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
 });

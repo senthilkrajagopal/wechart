@@ -1086,12 +1086,12 @@ describe('saving a dashboard with the charts edited from its tiles (AC-183)', ()
     await app.close();
   });
 
-  it('refuses a library chart, and writes nothing', async () => {
+  it('writes a library chart edited from a tile, for every dashboard that uses it (T134)', async () => {
     /**
-     * A library chart can be on other dashboards. AC-128 requires the editor
-     * to say so and offer a local copy *before* changes spread (T134), so it
-     * is not written from a dashboard save — here as well as in the browser,
-     * which already holds Save back for it.
+     * A library chart can be on other dashboards. The editor says so, with
+     * the count, and offers a local copy first (AC-128); kept, the edit is
+     * saved everywhere — the user's decision (2026-09-22) — at the version it
+     * was read at, as any chart's.
      */
     const { documents, written } = store({ c1: chart() });
     const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
@@ -1101,8 +1101,25 @@ describe('saving a dashboard with the charts edited from its tiles (AC-183)', ()
       charts: [{ id: 'c1', body: chart(), version: 5 }],
     });
 
+    expect(response.statusCode).toBe(200);
+    expect(written).toEqual([
+      { kind: 'chart', id: 'c1', body: chart(), expectedVersion: 5 },
+      { kind: 'dashboard', id: 'd1', body: { title: 'Revenue' }, expectedVersion: 3 },
+    ]);
+    await app.close();
+  });
+
+  it('refuses to make a library chart this dashboard’s own: a local copy is a new chart (T134)', async () => {
+    const { documents, written } = store({ c1: chart() });
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c1', body: chart('d1'), version: 5 }],
+    });
+
     expect(response.statusCode).toBe(400);
-    expect(response.json().error).toMatch(/library chart/);
+    expect(response.json().error).toMatch(/local copy/);
     expect(written).toEqual([]);
     await app.close();
   });

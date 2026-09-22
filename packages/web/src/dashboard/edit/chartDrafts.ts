@@ -104,27 +104,23 @@ function draftsInUse(dashboard: DashboardDocument): [string, ChartDraft][] {
  * undefined when it could — the rule `PUT /api/dashboards/:id` applies too, so
  * the two agree on what may be written.
  *
- * - **A library chart** (local to no dashboard) can be on other dashboards,
- *   and AC-128 requires the editor to say so, with the count, and offer a
- *   local copy *before* changes spread (T134, not built yet). "Can be", not
- *   "is": it may be on this one alone, and the count is AC-128's to show.
+ * - **A library chart** (local to no dashboard) is written, and so changes
+ *   every dashboard that uses it: the editor has said it is shared, and on
+ *   how many, and offered a local copy first (T134, AC-128) — saved
+ *   everywhere, at the user's decision (2026-09-22). So is this dashboard's
+ *   own chart saved to a folder in the session (T133).
  * - **A chart local to another dashboard** is that dashboard's to save.
  * - **No version**: it could only be written blind, overwriting whatever
  *   anyone else saved meanwhile.
  */
-type Refusal = 'library' | 'elsewhere' | 'blind';
+type Refusal = 'elsewhere' | 'blind';
 
 function refusalOf(
   draft: Pick<ChartDraft, 'document' | 'version' | 'wasLocalTo'>,
   dashboardId: string,
 ): Refusal | undefined {
   const owner = draft.document.localToDashboardId;
-  // This dashboard's own chart, saved to a folder in the session (T133): written
-  // with it, becoming a library chart then.
-  if (owner === undefined && draft.wasLocalTo === dashboardId)
-    return draft.version === undefined ? 'blind' : undefined;
-  if (owner === undefined) return 'library';
-  if (owner !== dashboardId) return 'elsewhere';
+  if (owner !== undefined && owner !== dashboardId) return 'elsewhere';
   if (draft.version === undefined) return 'blind';
   return undefined;
 }
@@ -148,8 +144,6 @@ export function whyUnsaveable(
       dashboardId,
     )
   ) {
-    case 'library':
-      return 'A library chart changed from its tile can’t be saved from here yet: other dashboards can use it too, and they would change without warning. To save, undo back past that change; anything changed after it is undone too.';
     case 'elsewhere':
       return 'A chart that belongs to another dashboard was changed from its tile, and can only be saved with that dashboard. To save, undo back past that change; anything changed after it is undone too.';
     case 'blind':
@@ -160,7 +154,7 @@ export function whyUnsaveable(
 }
 
 /** The refusal to report when several drafts are refused: the one that matters most. */
-const REFUSALS_IN_ORDER: readonly Refusal[] = ['library', 'elsewhere', 'blind'];
+const REFUSALS_IN_ORDER: readonly Refusal[] = ['elsewhere', 'blind'];
 
 function worstOf(
   drafts: readonly Pick<ChartDraft, 'document' | 'version' | 'wasLocalTo'>[],
@@ -207,8 +201,6 @@ export function whyUnsaveableWith(
   inUse.delete(chartId);
 
   switch (worstOf(own === undefined ? [] : [own], dashboardId)) {
-    case 'library':
-      return 'This is a library chart — other dashboards can use it too — so a change to it can’t be saved from here yet. Back keeps the change on the dashboard, unsaved.';
     case 'elsewhere':
       return 'This chart belongs to another dashboard, so a change to it can only be saved with that dashboard. Back keeps the change on this one, unsaved.';
     case 'blind':
@@ -221,8 +213,6 @@ export function whyUnsaveableWith(
   // acted on from here — the dashboard's own reason says to undo back past a
   // change, and the dashboard's Undo cannot be reached under the editor.
   switch (worstOf([...inUse.values()], dashboardId)) {
-    case 'library':
-      return 'Another tile’s chart was changed, and it is a library chart — other dashboards can use it too — so the dashboard can’t be saved from here yet. Back keeps this change on the dashboard, unsaved.';
     case 'elsewhere':
       return 'Another tile’s chart was changed, and it belongs to another dashboard, so this one can’t be saved with it. Back keeps this change on the dashboard, unsaved.';
     case 'blind':
@@ -250,9 +240,6 @@ export function chartWritesOf(
 ): readonly ChartWrite[] {
   return draftsInUse(dashboard).map(([id, draft]) => {
     const refusal = refusalOf(draft, dashboardId);
-    if (refusal === 'library') {
-      throw new Error(`Chart ${id} is a library chart, so it cannot be saved with a dashboard.`);
-    }
     if (refusal === 'elsewhere') {
       throw new Error(
         `Chart ${id} belongs to another dashboard, so it cannot be saved with this one.`,

@@ -507,16 +507,14 @@ export function buildServer({
    * chart then fails. Every document is version-checked, so a chart or the
    * dashboard changed elsewhere is refused rather than overwritten.
    *
-   * **Only this dashboard's own charts:** those local to it, and those it is
-   * saving to a folder (T133, AC-127) — sent back as library charts, or made
-   * new straight into one. A library chart already stored can be on other
-   * dashboards, and AC-128 requires the editor to say so and offer a local
-   * copy *before* changes spread (T134); a chart local to another dashboard is
-   * that dashboard's to save. The browser holds Save back for both
-   * (`whyUnsaveable`, the same rule); this route refuses them too, so no
-   * *dashboard save* can spread a change. It is not the only way to write a
-   * chart: `PUT /api/documents/:kind/:id` writes any chart, library or not —
-   * the library chart's own save — and AC-128's warning there is T134's too.
+   * **Which charts:** those local to this dashboard, those it is saving to a
+   * folder (T133, AC-127) — sent back as library charts, or made new straight
+   * into one — and library charts, saved everywhere they are used once the
+   * editor has said they are shared and offered a local copy (T134, AC-128;
+   * the user's decision). Never a chart local to another dashboard, which is
+   * that dashboard's to save, nor a library chart made local, which would
+   * take it from the others. The browser holds Save back by the same rule
+   * (`whyUnsaveable`). `PUT /api/documents/:kind/:id` also writes any chart.
    *
    * Locality is read before the transaction, and only at the version the
    * client read (409 otherwise). Any later change to the chart, including
@@ -608,10 +606,19 @@ export function buildServer({
         });
       }
       const owner = stored.body['localToDashboardId'];
+      /**
+       * A library chart edited from a tile is saved everywhere it is used,
+       * after the editor has said it is shared and offered a local copy
+       * (T134, AC-128; the user's decision, 2026-09-22). It stays a library
+       * chart: making it this dashboard's own would take it from the others —
+       * a local copy is a new chart.
+       */
       if (owner === undefined) {
-        throw new BadRequest(
-          'A library chart cannot be saved with a dashboard yet: other dashboards can use it too, and they would change without warning.',
-        );
+        if (chart.body['localToDashboardId'] !== undefined)
+          throw new BadRequest(
+            'A shared chart stays shared: make a local copy of it for this dashboard instead.',
+          );
+        continue;
       }
       if (owner !== dashboardId) {
         throw new BadRequest(

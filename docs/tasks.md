@@ -1736,6 +1736,22 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Depends on: T133
   - **Inherits a hold from T192 (2026-09-21).** A library chart edited from a dashboard tile is held in the session but never written: Save is held back for it with a reason (`whyUnsaveable` and `whyUnsaveableWith` in `packages/web/src/dashboard/edit/chartDrafts.ts`, the rule `refusalOf`), and `PUT /api/dashboards/:id` refuses it with a 400 (`packages/api/src/server.ts`). Once this task shows the count and offers the local copy, decide with the user what saving a library chart from a tile then does, lift or keep both holds together — the client and the server apply one rule and must go on agreeing — and re-check AC-183 for library charts: at T192 it is demonstrated for charts local to the dashboard only. The generic `PUT /api/documents/:kind/:id` writes any chart already; it is the library chart's own save, and AC-128's warning belongs there too.
   - **Decided by the user, 2026-09-22:** a shared chart edited from a tile is saved everywhere, after the shared warning; the save is refused if the chart changed meanwhile. Lift both holds here. T133 has already relaxed both for one case: a chart this dashboard is saving to a folder (`wasLocalTo`), or making new straight into one.
+  - **Built 2026-09-22 (the offer lands with T135; AC-128 is ticked there).** Files:
+    - `editor/SharedChartNotice.tsx` and its test.
+    - `dashboard/edit/ChartEditorOverlay.tsx` (the notice under the editor's bar).
+    - `dashboard/edit/chartDrafts.ts` and its test (the hold lifted).
+    - API: `server.ts` and `server.test.ts` (the hold lifted); `repos/catalog.ts` (`dashboardsUsing`) and its test.
+    - `shell/styles.ts` (`.shared-chart-notice`).
+    - `e2e/chart-save.spec.ts` (the two hold tests rewritten).
+    - Research: `research/db-access.md` (`jsonb_path_exists`, `.**`).
+    - **The notice.** A library chart opened from a tile reads "Shared chart · on N dashboards · edits change all of them" as a warning, or "Shared chart from <folder> · no other dashboard uses it yet" when no other dashboard uses it (the prototype's editor note). It says so while it asks. If the count can't be read, it still says the chart is shared and that edits change every dashboard using it. A chart this dashboard is saving to a folder gets no notice: it is the dashboard's own until saved.
+    - **The holds, lifted together.**
+      - The client no longer refuses a library chart (`refusalOf`).
+      - The route writes a stored library chart at the version it was read at, and refuses only making it local ("a local copy is a new chart").
+      - Still refused: a chart local to another dashboard, and a draft with no version.
+      - AC-183 now covers library charts too: `e2e/chart-save.spec.ts` saves one from the editor's Save dashboard and from the bar's Save, and both the stored chart and a second dashboard that uses it show the change.
+    - **A fix the count needed.** `dashboardsUsing` read only the `body.charts` list, which a chart added from its own page writes, but tiles don't. A library chart shown on two dashboards' tiles read as on none: wrong here, and in the library chart page's list and its delete protection (AC-022, AC-023). It now also finds a tile's `chartId` at any depth (`jsonb_path_exists` with `strict $.**`, checked against PostgreSQL 18's docs and the local database).
+    - **Tests changed at the user's decision.** The tests that pinned T192's hold on library charts, in `chartDrafts.test.ts`, `server.test.ts` and `e2e/chart-save.spec.ts`, now assert the opposite: saved everywhere, still a library chart, and the other dashboard changed. Tests that used a library draft only as an example of an unsaveable one now use another dashboard's chart, which is still refused.
 - [ ] T135 (AC-129) Repoint the tile to a local copy, keeping edits and leaving the shared chart untouched
   - Files: `packages/web/src/editor/detach.ts`, `packages/web/src/editor/detach.test.ts`
   - Failing test: `detach.test.ts`: after detaching, the tile uses the copy with the edits made so far, and the shared chart is unchanged (AC-129).

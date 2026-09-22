@@ -54,6 +54,11 @@ export const db = new Kysely<DB>({ dialect: new PostgresDialect({ pool }) });
 - Reading nested rows as JSON without N+1: `import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres'` wraps `JSON_AGG`/`TO_JSON` ([relations recipe](https://kysely.dev/docs/recipes/relations)).
 - Partial updates: Postgres subscripting, e.g. `UPDATE t SET jsonb_field['a']['b'] = '1'` ([PG 17 JSON types](https://www.postgresql.org/docs/17/datatype-json.html)). Note the same page's warning: "any update acquires a row-level lock on the whole row… Consider limiting JSON documents to a manageable size". For a whole-dashboard save we replace the document anyway; for AC-015 that is also the safer semantic.
 - Indexing: GIN `jsonb_ops` (default; supports `?`, `?|`, `?&`, `@>`, `@?`, `@@`) vs `jsonb_path_ops` ("usually much smaller", faster, but no key-exists operators), plus expression indexes such as `CREATE INDEX … USING GIN ((jdoc -> 'tags'))` ([PG 17 JSON types](https://www.postgresql.org/docs/17/datatype-json.html)).
+- **Finding a value at any depth: `jsonb_path_exists` with the `.**` accessor** ([PG 18 JSON functions](https://www.postgresql.org/docs/18/functions-json.html), §9.16.1 Table 9.51 and §9.16.2).
+  - `jsonb_path_exists(target, path [, vars [, silent]])` "Checks whether the JSON path returns any item". `vars` "must be a JSON object, and its fields provide named values to be substituted into the jsonpath expression". `silent` true "suppresses the same errors as the `@?` and `@@` operators do".
+  - A filter `? (condition)`, with `@` for the item considered, keeps only the items that satisfy it.
+  - The `.**` accessor selects every level of the hierarchy. The docs "recommend using the `.**` accessor only in strict mode", because lax mode's array unwrapping selects some items twice.
+  - **Observed locally (2026-09-22, PostgreSQL 18.6):** `jsonb_path_exists(body, 'strict $.** ? (@.chartId == $id)', jsonb_build_object('id', 'seed-chart-status'), true)` found the seed dashboard whose tile shows that chart. `body -> 'charts' @> '["seed-chart-status"]'` found none, because tiles in pages hold the chart id and the old `charts` list doesn't.
 
 ### Optimistic concurrency — AC-015
 

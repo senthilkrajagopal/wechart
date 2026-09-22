@@ -152,6 +152,60 @@ describe('references survive a rename or move (AC-021)', () => {
     expect(using.map((item) => item.id)).toContain(dashboardId);
   });
 
+  /**
+   * T134 / AC-128 (and AC-022, AC-023): a dashboard uses a chart where a tile
+   * shows it — on a page, in a section, in a tab — not only through the
+   * `charts` list, which tiles do not write. Counted by the list alone, a
+   * library chart on two dashboards read as on none.
+   */
+  it('finds the dashboards whose tiles show a chart, at any depth', async () => {
+    const chartId = randomUUID();
+    await repo().create({ kind: 'chart', id: chartId, body: { title: 'Tiled', folderId: 'root' } });
+    const onPage = randomUUID();
+    const inTab = randomUUID();
+    const neither = randomUUID();
+    await repo().create({
+      kind: 'dashboard',
+      id: onPage,
+      body: {
+        title: 'On a page',
+        pages: [{ id: 'p', items: [{ id: 't', kind: 'chart', chartId }] }],
+      },
+    });
+    await repo().create({
+      kind: 'dashboard',
+      id: inTab,
+      body: {
+        title: 'In a tab',
+        pages: [
+          {
+            id: 'p',
+            items: [
+              {
+                id: 's',
+                kind: 'section',
+                items: [
+                  { id: 'g', kind: 'tabs', tabs: [{ id: 'a', items: [{ id: 't', chartId }] }] },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    await repo().create({
+      kind: 'dashboard',
+      id: neither,
+      body: { title: 'Neither', pages: [{ id: 'p', items: [{ id: 't', chartId: 'other' }] }] },
+    });
+
+    const using = (await cat().dashboardsUsing(chartId)).map((item) => item.id);
+
+    expect(using).toContain(onPage);
+    expect(using).toContain(inTab);
+    expect(using).not.toContain(neither);
+  });
+
   it('keeps the reference working after the chart is moved to another folder', async () => {
     const { chartId, dashboardId } = await chartUsedByDashboard();
     const to = await folder('Reference target');
