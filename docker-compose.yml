@@ -120,8 +120,10 @@ services:
     extra_hosts: *cube-extra-hosts
     # Its own /readyz and /livez, which say its state — wechart's
     # CUBE_WORKER_URL (T162, AC-156; research/cube/refresh-jobs-caching.md §F).
+    # On this machine only: the API runs on the host, and the worker serves
+    # Cube's whole REST API there too, not just its probes (T162's review).
     ports:
-      - '54001:4000'
+      - '127.0.0.1:54001:4000'
     volumes: *cube-volumes
 
 volumes:

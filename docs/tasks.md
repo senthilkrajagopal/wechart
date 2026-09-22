@@ -2434,6 +2434,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - `e2e/jobs.spec.ts`, in all three browsers: on the real stack the header reads "Cube healthy" (ok icon) and "Refresh worker running", and the API's own answer agrees. With the API answering down, the header reads "Cube down" (failed icon) and "Refresh worker down".
       - `cube/health.test.ts`: Cube not ready, not live, unreachable, or 200 without `HEALTH` all read down.
       - `Health.test.tsx`: the header moves from healthy to down while open.
+    - **Cold review (one round, 2026-09-22), verdict PASS. Fixed:**
+      - **The probe's time limit is tested**, against a real server that takes the request and never answers: down, within the limit. Also against real servers answering `DOWN`, a 503 that still says `HEALTH` (down), and `HEALTH` (healthy). The limit can be set in a test.
+      - **The e2e leaves the page open** and waits for the header's own poll to read down, rather than reloading.
+      - **An answer the page doesn't know** (a new state, or none) reads "unknown", rather than breaking the page.
+      - **`CUBE_WORKER_URL` must be an http(s) URL**, or the API refuses to start. Otherwise every probe fails, and the worker reads down forever.
+      - **The worker's port is published on 127.0.0.1 only**, since it serves Cube's whole REST API, not just its probes.
+      - The research's UNVERIFIED note on the worker's probes now points to the observation.
+      - Left as found: behind a proxy that adds a path prefix, the probes at Cube's origin would 404 and read down (safe, never a false healthy). "Refresh worker running" means its process and connections are up, not that its builds succeed.
 
 ## F18. Data sources and connections
 

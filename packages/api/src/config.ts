@@ -65,6 +65,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   }
 
+  // Not an http(s) URL, every probe of it fails, and the worker reads down
+  // forever — the same as a real outage (T162's review).
+  const worker = env['CUBE_WORKER_URL'];
+  if (worker !== undefined && worker !== '' && !/^https?:\/\/[^/]/.test(worker)) {
+    throw new ConfigError(
+      `CUBE_WORKER_URL is not an http(s) URL: "${worker}". wechart reads the refresh ` +
+        'worker’s state from its /readyz and /livez there.',
+    );
+  }
+
   if (env['WECHART_CUBE_STORE_URL'] && !env['WECHART_MODEL_KEY']) {
     throw new ConfigError(
       'WECHART_CUBE_STORE_URL is set without WECHART_MODEL_KEY. Cube reads the model from this ' +

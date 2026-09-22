@@ -1,6 +1,9 @@
+import { createServer, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import { describe, expect, it } from 'vitest';
 
-import { loadConfig } from '../config';
+import { ConfigError, loadConfig } from '../config';
 import { buildServer } from '../server';
 import { healthOf } from './health';
 
@@ -72,7 +75,62 @@ describe('the Cube deployment’s health', () => {
   });
 });
 
+/** A real server on a free port, answering as `answer` does — or never. */
+async function serving(
+  answer: ((response: ServerResponse) => void) | 'never',
+): Promise<{ base: string; close: () => Promise<void> }> {
+  const server = createServer((_request, response) => {
+    if (answer !== 'never') answer(response);
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    base: `http://127.0.0.1:${String(port)}`,
+    close: () =>
+      new Promise((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  };
+}
+
+describe('Cube’s probes, over the wire (T162’s review)', () => {
+  it('reads a Cube that takes the request and never answers as down, within its time', async () => {
+    const hung = await serving('never');
+    const started = Date.now();
+
+    const health = await healthOf({ cube: hung.base }, fetch, 200);
+
+    expect(health.cube).toBe('down');
+    expect(Date.now() - started).toBeLessThan(2000);
+    await hung.close();
+  });
+
+  it('reads DOWN, and a non-200 even saying HEALTH, as down', async () => {
+    const down = await serving((response) => {
+      response.writeHead(500, { 'content-type': 'application/json' }).end('{"health":"DOWN"}');
+    });
+    const odd = await serving((response) => {
+      response.writeHead(503, { 'content-type': 'application/json' }).end('{"health":"HEALTH"}');
+    });
+    const healthy = await serving((response) => {
+      response.writeHead(200, { 'content-type': 'application/json' }).end('{"health":"HEALTH"}');
+    });
+
+    expect((await healthOf({ cube: down.base }, fetch, 1000)).cube).toBe('down');
+    expect((await healthOf({ cube: odd.base }, fetch, 1000)).cube).toBe('down');
+    expect((await healthOf({ cube: healthy.base }, fetch, 1000)).cube).toBe('healthy');
+    await Promise.all([down.close(), odd.close(), healthy.close()]);
+  });
+});
+
 describe('asking the API for Cube’s health', () => {
+  it('refuses a worker address that is not an http(s) URL, rather than reading it down forever', () => {
+    expect(() =>
+      loadConfig({ CUBE_API_SECRET: 's', CUBE_WORKER_URL: 'cube-refresh-worker:4000' }),
+    ).toThrow(ConfigError);
+  });
+
   it('probes the Cube API’s own origin, not its base path, and the worker it is told of', async () => {
     const config = loadConfig({
       CUBE_API_SECRET: 's',

@@ -39,14 +39,18 @@ export function Health({ pollMs = 10_000 }: { pollMs?: number }) {
   });
 
   // Not read — asked and not yet answered, or unanswerable — is not healthy;
-  // nor is a last answer kept after a later ask failed.
+  // nor is a last answer kept after a later ask failed, nor one naming a
+  // state this page does not know (T162's review).
   const known = health.isError ? undefined : health.data;
+  const cubeSaid = known === undefined ? undefined : CUBE[known.cube];
+  const workerSaid = known === undefined ? undefined : WORKER[known.worker];
   const [cubeKind, cubeLabel] =
-    known === undefined
-      ? (['warn', health.isError ? 'Cube health unknown' : 'Asking Cube…'] as const)
-      : CUBE[known.cube];
-  const [workerKind, workerLabel] =
-    known === undefined ? (['warn', 'Refresh worker unknown'] as const) : WORKER[known.worker];
+    cubeSaid ??
+    ([
+      'warn',
+      known === undefined && !health.isError ? 'Asking Cube…' : 'Cube health unknown',
+    ] as const);
+  const [workerKind, workerLabel] = workerSaid ?? (['warn', 'Refresh worker unknown'] as const);
   return (
     <div className="jobs-health" role="status" aria-label="Cube">
       <Status kind={cubeKind} label={cubeLabel} testId="cube-health" />

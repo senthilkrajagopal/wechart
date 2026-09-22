@@ -19,9 +19,10 @@ export interface CubeHealth {
 /** Long enough for a busy Cube, short enough that a hung one reads as down. */
 const PROBE_TIMEOUT_MS = 3000;
 
-async function probe(url: string, fetchImpl: typeof fetch): Promise<boolean> {
+async function probe(url: string, fetchImpl: typeof fetch, timeoutMs: number): Promise<boolean> {
   try {
-    const response = await fetchImpl(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+    // One deadline for connecting, the answer and its body.
+    const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) });
     const body = (await response.json().catch(() => null)) as { health?: unknown } | null;
     return response.ok && body?.health === 'HEALTH';
   } catch {
@@ -29,10 +30,10 @@ async function probe(url: string, fetchImpl: typeof fetch): Promise<boolean> {
   }
 }
 
-async function instance(base: string, fetchImpl: typeof fetch): Promise<Health> {
+async function instance(base: string, fetchImpl: typeof fetch, timeoutMs: number): Promise<Health> {
   const [ready, live] = await Promise.all([
-    probe(`${base}/readyz`, fetchImpl),
-    probe(`${base}/livez`, fetchImpl),
+    probe(`${base}/readyz`, fetchImpl, timeoutMs),
+    probe(`${base}/livez`, fetchImpl, timeoutMs),
   ]);
   return ready && live ? 'healthy' : 'down';
 }
@@ -40,12 +41,14 @@ async function instance(base: string, fetchImpl: typeof fetch): Promise<Health> 
 export async function healthOf(
   bases: { cube: string; worker?: string },
   fetchImpl: typeof fetch = fetch,
+  /** How long a probe may take before it reads down; shorter in tests. */
+  timeoutMs = PROBE_TIMEOUT_MS,
 ): Promise<CubeHealth> {
   const [cube, worker] = await Promise.all([
-    instance(bases.cube, fetchImpl),
+    instance(bases.cube, fetchImpl, timeoutMs),
     bases.worker === undefined
       ? Promise.resolve('unwatched' as const)
-      : instance(bases.worker, fetchImpl),
+      : instance(bases.worker, fetchImpl, timeoutMs),
   ]);
   return { cube, worker };
 }

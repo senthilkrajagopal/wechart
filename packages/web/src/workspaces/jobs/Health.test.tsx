@@ -95,7 +95,17 @@ describe('Cube’s health, in the Jobs header', () => {
     });
   });
 
-  it('marks the deployment down when its health cannot be read at all', async () => {
+  it('reads an answer it does not know as unknown, rather than breaking the page', async () => {
+    // A state the API may one day add, or a body with none (T162's review).
+    answering({ cube: 'degraded', worker: null });
+
+    await vi.waitFor(() => {
+      expect(badge('cube-health').textContent).toBe('Cube health unknown');
+    });
+    expect(badge('worker-health').textContent).toBe('Refresh worker unknown');
+  });
+
+  it('says its health is unknown when it cannot be read at all', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response('', { status: 502 })),

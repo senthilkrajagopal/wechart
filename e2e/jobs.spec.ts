@@ -92,11 +92,12 @@ test('the Jobs header shows Cube’s health and the refresh worker’s, and a de
     worker: 'healthy',
   });
 
+  // The page left open, as the header asks again on its own every 10 s — not
+  // reloaded, which would prove only a first answer (T162's review).
   await page.route('**/api/cube-health', (route) =>
     route.fulfill({ json: { cube: 'down', worker: 'down' } }),
   );
-  await page.reload();
-  await expect(cube).toHaveText('Cube down');
+  await expect(cube).toHaveText('Cube down', { timeout: 15_000 });
   await expect(cube.locator('svg[data-icon="err"]')).toHaveCount(1);
   await expect(worker).toHaveText('Refresh worker down');
 });
