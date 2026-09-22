@@ -436,7 +436,7 @@ Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[researc
       Fails when: the form stays editable on unparseable YAML, or the problem names no line.
 - [x] AC-136 WHEN the user saves model changes, THE SYSTEM SHALL validate them against Cube before publishing and refuse to publish a model Cube rejects, showing Cube's error per file.
       Fails when: an invalid model is published, or the error is not attributed to a file.
-- [ ] AC-137 WHEN a valid model is published, THE SYSTEM SHALL make the new members available to the chart builder without restarting Cube.
+- [x] AC-137 WHEN a valid model is published, THE SYSTEM SHALL make the new members available to the chart builder without restarting Cube.
       Fails when: a published member is missing from the field list while Cube reports the new schema version.
 - [ ] AC-138 WHEN the user opens the join editor for a cube, THE SYSTEM SHALL show the join graph with each relationship's direction and let the user add a join by choosing the target cube, the relationship and the condition.
       Fails when: the diagram omits a declared join, or shows a direction the model does not declare.

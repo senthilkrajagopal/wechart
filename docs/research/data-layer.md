@@ -147,6 +147,11 @@ The loop keeps one `useQuery` in `fetchStatus: 'fetching'` for the whole long po
 - `invalidateQueries` marks matching queries stale — "This stale state overrides any `staleTime` configurations" — and refetches those currently rendered ([invalidation]). Matching is **prefix** by default; `exact: true` narrows it; `predicate` is "used as a final filter on all matching queries" ([filters], [invalidation]).
 - Source semantics: `invalidateQueries` invalidates all matches then delegates to `refetchQueries` with `type: filters?.refetchType ?? filters?.type ?? 'active'`; `refetchType: 'none'` skips the refetch ([src-qc]).
 - **Model change** → `queryClient.invalidateQueries({ queryKey: ['tile'] })`, or `removeQueries` if the cached shape is no longer valid (it deletes entries outright, no options beyond filters) ([src-qc]). Put the model/schema version into the key prefix so a change cannot serve a stale entry at all.
+- **Refetch on mount (T143, read in the installed 5.103.1 on 2026-09-21).** Per `@tanstack/query-core`'s type declarations, `refetchOnMount?: boolean | 'always' | fn`, default `true`:
+  - `true`: "the query will refetch on mount if the data is stale".
+  - `false`: it "will disable additional instances of a query to trigger background refetch".
+  - `'always'`: "the query will always refetch on mount (except when `staleTime: 'static'` is used)".
+  - It is set per observer, so one component can ask for fresh data while others sharing the key keep the app's `staleTime`. The chart builder's field list uses it, so a builder opened after a publish, in any tab, reads the model afresh (AC-137). So does the Jobs page's query log (AC-016).
 - **Refresh now for one tile** → `refetch()` from that `useQuery`, or `queryClient.refetchQueries({ queryKey: ['tile', tileId] })`; `cancelRefetch` defaults to `true`, so the in-flight load is cancelled first ([src-qc]) and our `DELETE /v1/running-query` fires. Force Cube past its cache by also setting `cache: 'must-revalidate'` in the request body ([data-apis]).
 
 ### 6. Devtools, SSR, licence, maintenance

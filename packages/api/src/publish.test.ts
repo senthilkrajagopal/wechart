@@ -209,6 +209,30 @@ describe('publishing model changes', () => {
     await app.close();
   });
 
+  it('lets go of the metadata cache after the files are written, not before (T143)', async () => {
+    // Let go first, and a fetch in between would cache the old model for a minute.
+    const order: string[] = [];
+    const store = memory([ORDERS]);
+    const write = store.write;
+    store.write = async (files) => {
+      order.push('write');
+      await write(files);
+    };
+    const metaCache = new MetaCache({ fetchMeta: async () => ({}) });
+    vi.spyOn(metaCache, 'invalidate').mockImplementation(() => {
+      order.push('invalidate');
+    });
+    const holder: { app?: FastifyInstance } = {};
+    const { cube } = cubeReading(holder, () => ({ cubes: [] }));
+    const app = buildServer({ config, modelFiles: store, cube, metaCache });
+    holder.app = app;
+
+    await publish(app, [edited]);
+
+    expect(order).toEqual(['write', 'invalidate']);
+    await app.close();
+  });
+
   it('says Cube could not be asked, rather than publishing unchecked', async () => {
     const store = memory([ORDERS]);
     const holder: { app?: FastifyInstance } = {};

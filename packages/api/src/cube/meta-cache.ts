@@ -34,6 +34,8 @@ export class MetaCache {
 
   #entry: Entry | null = null;
   #inFlight: Promise<unknown> | null = null;
+  /** Bumped by `invalidate`: a fetch begun before it answers only those who waited on it. */
+  #generation = 0;
 
   constructor(options: MetaCacheOptions) {
     this.#fetchMeta = options.fetchMeta;
@@ -57,20 +59,27 @@ export class MetaCache {
    * Drop the entry now. Used when wechart itself publishes a model (T142/T143):
    * a model the user just published must not look stale to them, and waiting
    * out the bound would be the wrong answer to "did my change take effect?".
+   *
+   * A fetch already in flight is let go of too: it began before the change,
+   * so it is neither handed to a later caller nor kept (T143's finding —
+   * another page asking just before a publish hid it for a minute).
    */
   invalidate(): void {
     this.#entry = null;
+    this.#inFlight = null;
+    this.#generation += 1;
   }
 
   async #refresh(): Promise<unknown> {
+    const generation = this.#generation;
     try {
       const value = await this.#fetchMeta();
-      this.#entry = { value, fetchedAt: this.#now() };
+      if (generation === this.#generation) this.#entry = { value, fetchedAt: this.#now() };
       return value;
     } finally {
       // Cleared whether the fetch resolved or threw, so a failure is never
-      // cached and the next caller tries again.
-      this.#inFlight = null;
+      // cached and the next caller tries again — unless a newer fetch holds it.
+      if (generation === this.#generation) this.#inFlight = null;
     }
   }
 }

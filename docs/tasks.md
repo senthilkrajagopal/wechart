@@ -2030,10 +2030,37 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **`scheduledRefreshContexts`** isn't defined. Refresh runs against the directory's model. Nothing needs it until pre-aggregations (F16), which must define it.
     - **Two publishes to different files at once** are each compiled against the live model without the other. The user has ruled that concurrent changes may overwrite.
     - **Cube's problems stay listed** until the next save, labelled "Cube:" as from it.
-- [ ] T143 (AC-137) Make published members available to the chart builder without restarting Cube
+- [x] T143 (AC-137) Make published members available to the chart builder without restarting Cube
   - Files: `packages/api/src/cube/meta-cache.ts`, `e2e/publish-model.spec.ts`
   - Failing test: `e2e/publish-model.spec.ts`: after publishing, the new member appears in the chart builder's field list once Cube reports the new schema version, with no restart (AC-137).
   - Depends on: T142, T024
+  - **Built 2026-09-21.** T142 carries the mechanism: Cube asks wechart's store for the model's version on every request, and recompiles when it changes. There is no restart. T143 is what a publish must reach, all the way to the field list.
+    - **Cube's side.** `cube.js` no longer keeps a store's version for a second; its comment credits T143, though the change landed in T142's commit.
+      - The e2e showed a publish missed by a request inside that second. wechart then cached Cube's old model for its minute.
+      - The version is now asked every time.
+    - **wechart's cache (`meta-cache.ts`).** `invalidate()` now also lets go of a fetch already in flight, through a generation count. A fetch begun before a publish still answers the callers that waited on it, but it is neither handed to later callers nor kept.
+      - This was found the same way: another browser's page asked for the model just before a publish, and its fetch landed after.
+      - The cache is let go of after the files are written, not before.
+    - **The browser.** The chart builder's field list reads the model afresh each time it opens (`refetchOnMount: 'always'`, research/data-layer.md).
+      - So a builder opened after a publish in any tab has the new members. The app's five-minute `staleTime` had kept another tab's copy.
+      - The tab that published also refetches its metadata (T142).
+  - **Tests, red first:**
+    - `meta-cache.test.ts` (1 more): a fetch in flight on invalidate is neither served after it nor kept. It failed before the generation count.
+    - `publish.test.ts` (1 more): the cache is let go of after the write.
+    - `e2e/publish-model.spec.ts` (1 in each browser), on the real Cube:
+      - Setup: a cube file of the browser's own, whose model wechart has cached, is confirmed without the member. A second tab opens the builder on that cube.
+      - "Save & reload Cube" publishes a measure `published` through the Model workspace.
+      - The builder, opened again, lists it.
+      - The second tab, reopening the builder within the app with its model already cached, lists it too. It failed before the field list refetched on opening.
+      - wechart's `/api/meta` has it.
+  - **Cold review (one round), verdict FAIL. Fixed:**
+    - Another tab kept its old field list for up to five minutes.
+    - The e2e didn't fill wechart's cache before publishing, and didn't cover a tab with the model already cached.
+    - The order of write and invalidate was untested.
+  - **Left from the review:**
+    - **A builder left open and never reopened** doesn't update itself, since metadata isn't pushed. Reopening it, or any new builder, shows the new members.
+    - **Several API instances on one store:** only the publishing one lets go of its cache. The others serve their cached model for up to AC-009's 60 seconds. The compose setup runs one API per store.
+    - **Cost:** the version Cube asks for on each request is worked out from every stored file. A stored revision bumped on each write would be one lookup, and would matter for AC-174 if the model grows.
 - [ ] T144 (AC-138) Show the join graph and add a join from the editor
   - Files: `packages/web/src/workspaces/model/JoinEditor.tsx`, `packages/web/src/workspaces/model/JoinEditor.test.tsx`
   - Failing test: `JoinEditor.test.tsx`: every declared join appears with the direction the model declares, and adding one takes a target cube, a relationship and a condition (AC-138).

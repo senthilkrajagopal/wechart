@@ -101,6 +101,36 @@ describe('metadata freshness (AC-009)', () => {
     expect(f.calls).toBe(2);
   });
 
+  it('lets go of a fetch in flight on invalidate: its old model is neither served after nor kept (T143)', async () => {
+    // Another page asked for the model just before the publish; its fetch
+    // finishes after. Handing it to the next caller, and keeping it for a
+    // minute, would hide the publish (AC-137).
+    let model = 'old-model';
+    let release: () => void = () => undefined;
+    let calls = 0;
+    const cache = new MetaCache({
+      fetchMeta: async () => {
+        calls += 1;
+        const seen = model;
+        if (calls === 1) await new Promise<void>((resolve) => (release = resolve));
+        return { cubes: [{ name: seen }] };
+      },
+      now: () => 0,
+    });
+
+    const before = cache.meta();
+    model = 'new-model';
+    cache.invalidate();
+    const after = cache.meta();
+    release();
+
+    expect(nameIn(await before)).toBe('old-model');
+    expect(nameIn(await after)).toBe('new-model');
+    // And the next caller has the new one from the cache, not the old.
+    expect(nameIn(await cache.meta())).toBe('new-model');
+    expect(calls).toBe(2);
+  });
+
   it('shares one in-flight fetch between concurrent callers', async () => {
     const f = fixture();
 

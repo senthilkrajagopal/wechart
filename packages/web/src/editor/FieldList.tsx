@@ -42,8 +42,11 @@ export function FieldList({
     onCubeChange?.(next);
   };
 
-  // One definition of the model query for every caller (see META_QUERY).
-  const meta = useQuery(META_QUERY);
+  // One definition of the model query for every caller (see META_QUERY),
+  // read afresh each time a builder opens: a model published since — in
+  // this tab or another — is in its field list (AC-137; research/
+  // data-layer.md, "Refetch on mount"). wechart's own cache answers it.
+  const meta = useQuery({ ...META_QUERY, refetchOnMount: 'always' });
 
   if (meta.isPending) return <p>Loading the model…</p>;
   if (meta.isError) {
