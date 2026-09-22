@@ -335,6 +335,21 @@ button.model-problems__row { cursor: pointer; }
   font-size: 11px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+/* The prototype's .warnbar (T140, AC-134): a form edit that would lose
+   something, named, with Apply anyway and Keep the file. */
+.model-editor__warnbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--wc-status-warning-icon) 16%, var(--wc-bg-surface));
+  color: var(--wc-text-primary);
+  font-size: 12px;
+}
+.model-editor__warnbar-text { flex: 1; min-width: 240px; }
 /* The prototype's .readonly-veil: the form is read-only, and why. */
 .model-editor__veil {
   display: flex;

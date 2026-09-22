@@ -69,6 +69,62 @@ test('the form and the YAML view each show what the other edits', async ({ page 
 });
 
 /**
+ * T140 / AC-134: IF switching from code to form would lose information, such
+ * as comments or anchors, THEN THE SYSTEM SHALL warn and name what would be
+ * lost before applying the change (direction.md rule 20).
+ * Fails when: comments disappear from a file with no warning.
+ *
+ * On the real file: the `id` dimension's `public: true` carries the comment
+ * about Cube hiding primary keys. Clearing Public removes the key, and the
+ * comment with it.
+ */
+test('a form edit that would drop a comment names it first, and waits to be told', async ({
+  page,
+}) => {
+  await page.goto('/model/files/cubes%2Forders.yml');
+  const form = page.getByRole('region', { name: 'Cube orders' });
+  const yaml = page.locator('.yaml-editor .cm-scroller');
+  const comment = '# Cube hides primary keys from metadata unless told otherwise.';
+  await form.getByRole('tab', { name: /^Dimensions/ }).click();
+  await form.locator('.model-member__name', { hasText: /^id$/ }).click();
+  const publicField = form
+    .getByRole('listitem')
+    .filter({ has: page.locator('.model-member__name', { hasText: /^id$/ }) })
+    .locator('[data-key="public"]')
+    .getByLabel('Public', { exact: true });
+  await expect(publicField).toHaveValue('true');
+
+  // Warned, and nothing applied yet: the comment is still in the file.
+  await publicField.selectOption('');
+  const warning = page.getByRole('alert').filter({ hasText: 'This edit would drop' });
+  await expect(warning).toContainText(
+    // Named by its first line, of four.
+    'This edit would drop the comment “Cube hides primary keys from metadata unless told otherwise. This one …”.',
+  );
+  await expect(yaml).toContainText(comment);
+  await expect(publicField).toHaveValue('true');
+  await expect(publicField).toBeDisabled();
+  // The focus is on the choice that loses nothing, not lost with the locked field.
+  await expect(warning.getByRole('button', { name: 'Keep the file' })).toBeFocused();
+
+  // Kept: the file as it was, and the form free again.
+  await warning.getByRole('button', { name: 'Keep the file' }).click();
+  await expect(warning).toHaveCount(0);
+  await expect(yaml).toContainText(comment);
+  await expect(publicField).toBeEnabled();
+
+  // Applied anyway: the key and its comment go.
+  await publicField.selectOption('');
+  await page.getByRole('alert').getByRole('button', { name: 'Apply anyway' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'This edit would drop' })).toHaveCount(0);
+  await expect(publicField).toHaveValue('');
+  await yaml.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await expect(yaml).not.toContainText('Cube hides primary keys');
+});
+
+/**
  * T141 / AC-135: IF the YAML fails to parse, THEN THE SYSTEM SHALL name the
  * file and line in a problems list and keep the form read-only until it
  * parses (direction.md rule 28).

@@ -1847,10 +1847,55 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **Left from the review:**
     - **Clearing a field removes its key**, and a comment written on it goes too. Typing into the field again adds the key back at the end of its object. The comment's loss is what T140's warning names before the edit is applied.
     - **A `timestamp` value** the form doesn't touch still comes back in `toISOString` form when the file is written.
-- [ ] T140 (AC-134) Warn and name what a code-to-form switch would lose
+- [x] T140 (AC-134) Warn and name what a code-to-form switch would lose
   - Files: `packages/web/src/workspaces/model/lossCheck.ts`, `packages/web/src/workspaces/model/lossCheck.test.ts`
   - Failing test: `lossCheck.test.ts`: a file with comments and anchors produces a warning naming each before the change is applied, and no comment disappears silently (AC-134).
   - Depends on: T139
+  - **Built 2026-09-21.** As built, the files are:
+    - `lossCheck.ts` and its test;
+    - `LossWarning.tsx` and its test;
+    - `ModelFilePage.tsx`;
+    - `styles.ts` (`.model-editor__warnbar`);
+    - `e2e/model.spec.ts`.
+    - **The check runs on each edit, not on the file.** Here the form and the YAML are both on screen, and a form edit is written into the file in place (T139), which keeps every comment and anchor it doesn't touch.
+      - So there is no "switch" to warn about, and most edits lose nothing.
+      - Each form edit is checked before it's applied. `lossOf` compares the file before and after it, collecting each node's `commentBefore` and `comment`, its `anchor`, and each alias's `source` (research/yaml.md, "Comments and anchors").
+      - What `after` no longer has is named. Comments are counted line by line, so a block `yaml` writes back split or merged isn't a false loss. A comment is named by its first line.
+    - **This departs from the prototype and direction.md §7b.** The prototype makes the whole form read-only for a file with comments, until "Edit in form anyway", because its form rewrote the file. Here nothing is held for an edit that loses nothing.
+    - **When an edit would lose something**, it is held. The form is read-only meanwhile, and the prototype's warnbar names what would go:
+      - It reads, for example: "This edit would drop the comment “Cube hides primary keys … This one …”. The YAML keeps them while you edit there."
+      - "Apply anyway" writes the edit.
+      - "Keep the file" leaves the file as it was.
+      - Typing in the YAML drops the held edit, since it was made against the text before.
+      - The bar scrolls into view and puts the focus on "Keep the file", because locking the form drops the focus from the field that was being edited.
+      - **AC-134 wins over AC-133 here:** such an edit reaches the YAML when it's applied, not in the same render.
+    - **An edit that can't be written at all** is refused with `yaml`'s reason. An example is removing an anchor that an alias still uses, where writing the file throws. It isn't applied, and the refusal clears on the next edit or on typing in the YAML.
+  - **Tests, red first:**
+    - `lossCheck.test.ts` (9):
+      - an edit that keeps everything loses nothing;
+      - a comment on a removed key;
+      - an alias written over, and a comment written after it;
+      - an anchor on a removed key;
+      - a member added to an anchored list loses nothing;
+      - a comment inside a removed member;
+      - a comment the file has twice and keeps once;
+      - lines kept however they're grouped.
+    - `LossWarning.test.tsx` (4): each thing named; a many-line comment by its first line; focus and scroll; Apply and Keep.
+    - `e2e/model.spec.ts` (1 more in each browser), on the real `orders.yml`: clearing the `id` dimension's Public, whose key carries the comment about Cube hiding primary keys:
+      - The warning names that comment. The file still has it, the field still reads true and is locked, and the focus is on "Keep the file".
+      - "Keep the file" leaves the file as it was and frees the form.
+      - "Apply anyway" removes the key and its comment.
+  - **Cold review (one round), verdict FAIL. Fixed:**
+    - A comment written after an alias went with it unnamed. `yaml` puts it on the alias node, which the check skipped. Test added.
+    - No test showed an anchor's loss being named, and one test's title claimed it did. The title is corrected and an anchor test added.
+    - The warning could be off-screen, with no focus. It now scrolls into view and takes the focus.
+    - The refusal message could go stale. It now clears.
+    - Whole-block comparison could warn falsely. Comments are now counted by line.
+    - A CSS comment sat over the wrong rule. Moved back.
+  - **Left from the review:**
+    - Explicit tags aren't listed as losses. A form edit keeps a value's type, so none is lost in practice.
+    - The warnbar's colours show only after an edit, so the rendered contrast audit never meets them. It's text-primary on a 16 % warning tint of the surface, in both themes.
+    - **For the user:** a form edit to the cube that owns an anchor, such as `orders.dimensions: &shared`, is written in place. So every alias of it (`returns`) changes too, as editing the YAML there would, and no warning says so.
 - [x] T141 (AC-135) List parse problems with file and line, and hold the form read-only until it parses
   - Files: `packages/web/src/workspaces/model/Problems.tsx`, `packages/web/src/workspaces/model/problems.test.ts`
   - Failing test: `problems.test.ts`: unparseable YAML lists each problem with its file and line and the form is not editable; a parsing file re-enables it (AC-135).
