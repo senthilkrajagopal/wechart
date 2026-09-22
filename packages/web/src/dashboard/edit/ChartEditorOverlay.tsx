@@ -20,6 +20,8 @@ import type { ChartDraft } from './chartDrafts';
 export interface ChartEditorOverlayProps {
   readonly chartId: string;
   readonly dashboardTitle: string;
+  /** The dashboard it is opened over, counted among a shared chart's users (T134). */
+  readonly dashboardId?: string | undefined;
   /** The tile it was opened from, as measured on the dashboard. */
   readonly tile: TileSize | undefined;
   /** This chart's draft from earlier in the session, if it has one. */
@@ -83,6 +85,7 @@ async function loadRows(query: Record<string, unknown>) {
 export function ChartEditorOverlay({
   chartId,
   dashboardTitle,
+  dashboardId = '',
   tile,
   draft,
   onBack,
@@ -350,6 +353,7 @@ export function ChartEditorOverlay({
       draft?.wasLocalTo !== undefined ? null : (
         <SharedChartNotice
           chartId={chartId}
+          dashboardId={dashboardId}
           folderId={opened.document.folderId}
           onMakeLocalCopy={
             onMakeLocalCopy === undefined

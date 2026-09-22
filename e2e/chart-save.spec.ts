@@ -324,6 +324,8 @@ test('the editor says a library chart is shared and on how many dashboards, and 
   await page.getByLabel('Chart type').selectOption('stackedBar');
   await expect(saveDashboard(page)).toHaveAttribute('aria-disabled', 'false');
   await expect(editor(page).getByTestId('editor-save-blocked')).toHaveText('');
+  // Nothing written until saved (AC-183; T134's review).
+  expect(await storedType(request, chartId)).toBe('bar');
   await saveDashboard(page).click();
 
   await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
@@ -758,6 +760,8 @@ test('a library chart edited from its tile is saved with the dashboard, for ever
   const save = barButton(page, 'Save');
   await expect(save).toHaveAttribute('aria-disabled', 'false');
   await expect(page.getByTestId('save-blocked')).toHaveText('');
+  // Nothing written until saved (AC-183; T134's review).
+  expect(await storedType(request, chartId)).toBe('bar');
 
   // An edit of the session like any other: Undo takes the tile back, Redo returns it.
   await barButton(page, 'Undo').click();

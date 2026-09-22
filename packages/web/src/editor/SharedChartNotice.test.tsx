@@ -32,7 +32,7 @@ const notice = (folderId = 'sales') =>
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <SharedChartNotice chartId="c1" folderId={folderId} />
+      <SharedChartNotice chartId="c1" dashboardId="d1" folderId={folderId} />
     </QueryClientProvider>,
   );
 
@@ -55,6 +55,19 @@ describe('a shared chart, opened for editing', () => {
     expect(said.closest('[role="status"]')?.querySelector('[data-icon="warn"]')).not.toBeNull();
   });
 
+  /**
+   * T134's review: counted as the other dashboards and this one — so a chart
+   * this dashboard shows only in the session, not yet saved, still counts the
+   * one other dashboard that does.
+   */
+  it('counts this dashboard with the others, whether or not its saved body shows the chart yet', async () => {
+    answering([{ id: 'd2', title: 'Board' }]);
+    notice();
+    expect(
+      (await screen.findByText(/on 2 dashboards/)).closest('[role="status"]')?.textContent,
+    ).toMatch(/Shared chart · on 2 dashboards/);
+  });
+
   it('names its folder when no other dashboard uses it yet', async () => {
     answering([{ id: 'd1', title: 'Sales' }]);
     notice();
@@ -72,7 +85,12 @@ describe('a shared chart, opened for editing', () => {
     const onMakeLocalCopy = vi.fn();
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <SharedChartNotice chartId="c1" folderId="sales" onMakeLocalCopy={onMakeLocalCopy} />
+        <SharedChartNotice
+          chartId="c1"
+          dashboardId="d1"
+          folderId="sales"
+          onMakeLocalCopy={onMakeLocalCopy}
+        />
       </QueryClientProvider>,
     );
     (await screen.findByRole('button', { name: 'Make a local copy' })).click();

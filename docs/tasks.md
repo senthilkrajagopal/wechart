@@ -1752,6 +1752,18 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - AC-183 now covers library charts too: `e2e/chart-save.spec.ts` saves one from the editor's Save dashboard and from the bar's Save, and both the stored chart and a second dashboard that uses it show the change.
     - **A fix the count needed.** `dashboardsUsing` read only the `body.charts` list, which a chart added from its own page writes, but tiles don't. A library chart shown on two dashboards' tiles read as on none: wrong here, and in the library chart page's list and its delete protection (AC-022, AC-023). It now also finds a tile's `chartId` at any depth (`jsonb_path_exists` with `strict $.**`, checked against PostgreSQL 18's docs and the local database).
     - **Tests changed at the user's decision.** The tests that pinned T192's hold on library charts, in `chartDrafts.test.ts`, `server.test.ts` and `e2e/chart-save.spec.ts`, now assert the opposite: saved everywhere, still a library chart, and the other dashboard changed. Tests that used a library draft only as an example of an unsaveable one now use another dashboard's chart, which is still refused.
+    - **Cold review (one round), verdict PASS. Fixed:**
+      - **The notice's hide rule is tested.** `e2e/save-to-folder.spec.ts` opens a local chart's editor, and one being saved to a folder, and finds no notice.
+      - **The rewritten e2e tests** again check the shared chart is unchanged before Save (AC-183).
+      - **The count** is the other dashboards plus this one (`dashboardId`), so a chart this dashboard shows only in the session still counts the one other dashboard that does.
+      - **Three stale comments** about the hold.
+    - **Noted, not fixed:**
+      - The count query walks every dashboard's body on each editor open, library page view and delete. That is fine at phase-1 size. A kept list of referenced chart ids, indexed, would scale.
+      - `silent` makes a path error read as "no dashboards use it".
+      - A notice mounted with its text already in it may not be announced on reopening.
+      - The ≤1 case's clock icon differs from the prototype's plain note.
+      - `wasLocalTo` no longer affects refusals, only what is said.
+      - The library chart's own editor (`/explore/charts/:id/edit`) writes nothing, so it needs no warning.
 - [x] T135 (AC-129) Repoint the tile to a local copy, keeping edits and leaving the shared chart untouched
   - Files: `packages/web/src/editor/detach.ts`, `packages/web/src/editor/detach.test.ts`
   - Failing test: `detach.test.ts`: after detaching, the tile uses the copy with the edits made so far, and the shared chart is unchanged (AC-129).

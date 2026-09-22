@@ -130,8 +130,9 @@ export interface EditChromeProps<T> {
    * While there is a reason, Save is held back with the reason beside it,
    * rather than saving what it can and leaving edit mode — which drops the
    * rest in silence. A dashboard holding a chart edited from a tile that
-   * cannot be written with it — a library chart, one local to another
-   * dashboard, one with no version — is such a document (T032, T192).
+   * cannot be written with it — one local to another dashboard, one with no
+   * version — is such a document (T032, T192; library charts are written
+   * since T134).
    */
   readonly saveBlocked?: ((document: T) => string | undefined) | undefined;
   /**

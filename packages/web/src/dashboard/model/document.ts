@@ -215,8 +215,8 @@ export interface ChartDraft {
   /**
    * The dashboard this chart was local to when it was saved to a folder in
    * this session (T133, AC-127): its document is a library chart's now, and
-   * this dashboard's save writes it so — as that dashboard's own chart, which
-   * a library chart drafted here otherwise is not (T192's hold).
+   * this dashboard's save writes it so. Said so on its Ownership panel and
+   * after the save, and no shared-chart notice is shown for it until then.
    */
   readonly wasLocalTo?: string;
 }

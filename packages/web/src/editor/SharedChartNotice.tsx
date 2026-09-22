@@ -14,10 +14,13 @@ import { StateLine } from '../shell/StatusIcon';
  */
 export function SharedChartNotice({
   chartId,
+  dashboardId,
   folderId,
   onMakeLocalCopy,
 }: {
   chartId: string;
+  /** The dashboard it is opened from, counted with the others (T134's review). */
+  dashboardId: string;
   folderId: string | undefined;
   /** "Make a local copy" (T135, AC-129), before any change spreads. */
   onMakeLocalCopy?: (() => void) | undefined;
@@ -44,7 +47,12 @@ export function SharedChartNotice({
       ? 'All folders'
       : (folders.data?.find((each) => each.id === folderId)?.title ?? folderId);
 
-  const count = using.data?.length;
+  // The other dashboards, and this one: whether its saved body shows the
+  // chart yet or only this session does.
+  const count =
+    using.data === undefined
+      ? undefined
+      : using.data.filter((each) => each.id !== dashboardId).length + 1;
   const said = using.isPending ? (
     <StateLine kind="run">Shared chart: asking which dashboards use it…</StateLine>
   ) : using.isError || count === undefined ? (

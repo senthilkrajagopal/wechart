@@ -1372,9 +1372,10 @@ export function DashboardView({
         }
         /**
          * Held back only while a draft cannot be written with this dashboard: a
-         * library chart (AC-128's warning comes first, T134), a chart local to
-         * another dashboard, or a draft with no version to check. Charts local
-         * to this dashboard are written with it (T192). Saving a draft that
+         * chart local to another dashboard, or a draft with no version to
+         * check. Charts local to this dashboard are written with it (T192),
+         * and library charts too, everywhere they are used, after the editor
+         * has said they are shared (T134). Saving a draft that
          * cannot be written would drop it in silence and put the old chart back
          * on the tile — AC-034's failing state, reached through Save. See
          * `whyUnsaveable` for the wording and why it names Undo, not Discard.
@@ -1467,6 +1468,7 @@ export function DashboardView({
             <ChartEditorOverlay
               chartId={editingChart.chartId}
               dashboardTitle={session.document.title}
+              dashboardId={dashboardId}
               tile={editingChart.tile}
               draft={session.document.chartDrafts?.[editingChart.chartId]}
               // The browser's Back takes the tile out of the URL; the editor

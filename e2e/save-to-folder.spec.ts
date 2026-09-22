@@ -73,6 +73,13 @@ test('a local chart saved to a folder becomes a library chart there, and the pag
   const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
   await sidebar.getByRole('tab', { name: 'Properties' }).click();
   await expect(sidebar.getByText(/Only on this dashboard/)).toBeVisible();
+  // A local chart's editor says nothing of sharing (T134's review).
+  await tile.getByRole('button', { name: /^Edit / }).click();
+  await expect(page.getByTestId('chart-editor-overlay').getByLabel('Chart type')).toBeVisible();
+  await expect(page.locator('.shared-chart-notice')).toHaveCount(0);
+  await page.getByTestId('editor-back').click();
+  await tile.click();
+  await sidebar.getByRole('tab', { name: 'Properties' }).click();
 
   await sidebar.getByRole('button', { name: 'Save to folders…' }).click();
   await sidebar.getByRole('combobox', { name: 'Folder' }).selectOption(folderId);
@@ -80,6 +87,16 @@ test('a local chart saved to a folder becomes a library chart there, and the pag
   await expect(sidebar.getByRole('status').filter({ hasText: folderTitle })).toContainText(
     'when the dashboard is saved',
   );
+  /**
+   * Its editor says nothing of sharing (T134's review): a chart this dashboard
+   * is saving to a folder is its own until the save — as a local chart's is.
+   */
+  await tile.getByRole('button', { name: /^Edit / }).click();
+  const overlay = page.getByTestId('chart-editor-overlay');
+  await expect(overlay.getByLabel('Chart type')).toBeVisible();
+  await expect(overlay.locator('.shared-chart-notice')).toHaveCount(0);
+  await page.getByTestId('editor-back').click();
+  await expect(overlay).toHaveCount(0);
 
   await page
     .getByRole('toolbar', { name: 'Dashboard editing' })
