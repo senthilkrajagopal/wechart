@@ -16,11 +16,13 @@ describe('a model file that is code or a template', () => {
     render(<ReadOnlyFile path="cubes/generated.yml" content={TEMPLATE} code="Jinja" />);
 
     expect(screen.getByRole('note').textContent).toBe(
-      'Jinja template: Cube renders it before reading its cubes and views, so they aren’t listed from its text. It opens read-only here: the form edits plain YAML, and wechart publishes no templates, which Cube would run.',
+      'Jinja template: Cube renders it before reading its cubes and views, so they aren’t listed from its text. It opens read-only here: the form edits plain YAML only.',
     );
     const editor = screen.getByRole('textbox', { name: 'cubes/generated.yml, read-only' });
     expect(editor.getAttribute('contenteditable')).not.toBe('true');
     expect(editor.getAttribute('aria-readonly')).toBe('true');
+    // Reached from the keyboard, to read and scroll (T146's review).
+    expect(editor.getAttribute('tabindex')).toBe('0');
     expect(editor.textContent).toContain('{% for n in ["a", "b"] %}');
     // And no form: nothing here takes an edit.
     expect(screen.queryAllByRole('region', { name: /^Cube / })).toEqual([]);
@@ -33,6 +35,15 @@ describe('a model file that is code or a template', () => {
     );
     expect(screen.getByRole('note').textContent).toMatch(/^JavaScript: Cube runs it/);
     unmount();
+
+    const { unmount: gone } = render(
+      <ReadOnlyFile path="cubes/helpers.py" content={'x = 1\n'} code="Python" />,
+    );
+    // One Cube doesn't use: said so, and nothing said that contradicts it.
+    expect(screen.getByRole('note').textContent).toBe(
+      'Python: Cube reads only a globals.py at the model’s root, so it doesn’t use this file. It opens read-only here: the form edits plain YAML only.',
+    );
+    gone();
 
     render(
       <ReadOnlyFile

@@ -2154,6 +2154,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - no form and no Save;
       - typing changes nothing;
       - Cube renders it, since `product_catalog` is in the model.
+  - **Cold review (one round), verdict PASS. Fixed in a follow-up commit:**
+    - **Keyboard reach.** The read-only view was out of the tab order, since `editable: false` drops it. It now has `tabindex="0"`, so keyboard users can reach, read and scroll it.
+    - **A contradictory reason.** For a Python file outside the root it read "Cube … doesn't use this file … which Cube would run". The reason's second sentence is now "It opens read-only here: the form edits plain YAML only."
+    - **A file whose only brace is `{#`** was held as a template, though Cube renders only on `{%`, `%}`, `{{` or `}}` (research/cube/data-modeling.md, from Cube's source). Listing and publishing now use Cube's own test. research/yaml.md, which advised `{#`, is corrected.
+    - **The note** has a style: a quiet bar above the code.
+  - **Left from the review:**
+    - **For the user:** AC-131 says every object a file defines is listed, but a template's cubes aren't, since they exist only once Cube renders them. The seed template `product_catalog.yml` makes that visible in the demo. The options are to amend AC-131 to leave dynamic files out, or to list the rendered cubes.
+    - The seed template adds a "Product Catalog" cube to the demo's model, alongside `products`.
+    - Typing `{{ }}` into a plain file's YAML keeps the form open until the file is reopened, but the publish refuses it.
 - [x] T147 (AC-141) List the charts and dashboards that reference a member before saving an edit to it
   - Files: `packages/api/src/model/references.ts`, `packages/api/src/model/references.test.ts`
   - Failing test: `references.test.ts`: editing a member lists every chart and dashboard referencing it before the save proceeds (AC-141).

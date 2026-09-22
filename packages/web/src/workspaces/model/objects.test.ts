@@ -119,6 +119,17 @@ views:
     });
   });
 
+  it('reads a file whose only brace is a Jinja comment as the YAML it is, as Cube does', () => {
+    // Cube renders Jinja on `{%`, `%}`, `{{` or `}}` only (research/cube/data-modeling.md).
+    const read = objectsOf(
+      'cubes/a.yml',
+      'cubes:\n  - name: a\n    description: "{# not a tag #}"\n',
+    );
+
+    expect(read.code).toBeUndefined();
+    expect(read.objects.map((object) => object.name)).toEqual(['a']);
+  });
+
   it('says a file’s values cannot be read, rather than failing the whole listing', () => {
     const read = objectsOf('cubes/x.yml', 'cubes:\n  - name: a\n    sql_table: *ba\n');
 

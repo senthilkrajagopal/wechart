@@ -231,6 +231,16 @@ main { padding: var(--wc-surface-padding); }
 .model-file__note { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
 /* The workspace's own notes: reading, none, or a file that is not plain YAML. */
 .model-files__note { margin: 0; color: var(--wc-text-secondary); }
+/* A file that is code or a template (T146): why it is read-only, above its text. */
+.model-readonly { display: grid; gap: 8px; max-width: 960px; }
+.model-readonly__why {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+}
 .model-object { padding: 8px 0; border-top: 1px solid var(--wc-border-subtle); }
 .model-object__name { margin: 0 0 4px; font-weight: 600; }
 .model-object__kind {

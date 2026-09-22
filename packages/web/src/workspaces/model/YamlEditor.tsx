@@ -124,7 +124,8 @@ export function YamlEditor({
           readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [],
           EditorView.contentAttributes.of({
             'aria-label': label,
-            ...(readOnly ? { 'aria-readonly': 'true' } : {}),
+            // Not editable is out of the tab order: back in, to be read and scrolled.
+            ...(readOnly ? { 'aria-readonly': 'true', tabindex: '0' } : {}),
           }),
           EditorView.updateListener.of((update) => {
             // Only what the user typed: a change dispatched from `value` is

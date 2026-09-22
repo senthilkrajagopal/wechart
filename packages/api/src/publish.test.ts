@@ -302,7 +302,8 @@ describe('publishing model changes', () => {
     ) as CubeClient;
     const app = buildServer({ config, modelFiles: store, cube });
 
-    for (const marker of ["{{ env_var('CUBEJS_API_SECRET') }}", '{% set x = 1 %}', '{# note #}']) {
+    // Cube's own test for a template: `{%`, `%}`, `{{` or `}}` (research/cube/data-modeling.md).
+    for (const marker of ["{{ env_var('CUBEJS_API_SECRET') }}", '{% set x = 1 %}', 'a }} b']) {
       const response = await publish(app, [
         {
           path: 'cubes/orders.yml',
@@ -313,6 +314,24 @@ describe('publishing model changes', () => {
     }
     expect(asked).toBe(false);
     expect(store.files).toEqual([ORDERS]);
+    await app.close();
+  });
+
+  it('publishes a Jinja comment’s braces as the text they are: Cube renders none of it', async () => {
+    const store = memory([ORDERS]);
+    const holder: { app?: FastifyInstance } = {};
+    const { cube } = cubeReading(holder, () => ({ cubes: [] }));
+    const app = buildServer({ config, modelFiles: store, cube });
+    holder.app = app;
+    const commented = {
+      ...ORDERS,
+      content: 'cubes:\n  - name: orders\n    description: "{# not a tag #}"\n',
+    };
+
+    const response = await publish(app, [commented]);
+
+    expect(response.statusCode).toBe(200);
+    expect(store.files).toEqual([commented]);
     await app.close();
   });
 

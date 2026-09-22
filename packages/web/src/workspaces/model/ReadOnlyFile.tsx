@@ -22,8 +22,7 @@ export function ReadOnlyFile({
   return (
     <div className="model-readonly">
       <p role="note" className="model-readonly__why">
-        {codeNoteOf(path, code)} It opens read-only here: the form edits plain YAML, and wechart
-        publishes no {code === 'Jinja' ? 'templates' : 'code'}, which Cube would run.
+        {codeNoteOf(path, code)} It opens read-only here: the form edits plain YAML only.
       </p>
       <YamlEditor
         value={content}

@@ -35,9 +35,10 @@ export interface FileObjects {
 /**
  * Cube renders a YAML file with Jinja first if it matches this, and every
  * `.jinja` file (research/cube/data-modeling.md, "How each file type is
- * compiled"); `{#` comments too (research/yaml.md, "Jinja files").
+ * compiled", from Cube's source) — Cube's own test, so a file is a template
+ * here exactly when Cube renders it. A `{#` alone isn't one (T146's review).
  */
-const JINJA = /{%|%}|{{|}}|{#/;
+const JINJA = /{%|%}|{{|}}/;
 
 /**
  * Cube reads YAML with js-yaml's defaults, which resolve `<<` merges and

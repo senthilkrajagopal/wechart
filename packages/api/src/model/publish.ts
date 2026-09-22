@@ -28,12 +28,13 @@ const MODEL_PATH = /^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.ya?ml$/;
 
 /**
  * Cube renders a YAML file with Jinja first if it matches this
- * (research/cube/data-modeling.md, "How each file type is compiled"), `{#`
- * too. A template can reach Cube's environment: `{{ env_var(...) }}` came
- * back with Cube's secret in its error text (research spike §1a, T142's
- * review) — the secret AC-007 keeps from the browser. So none is published.
+ * (research/cube/data-modeling.md, "How each file type is compiled", from
+ * Cube's source): Cube's own test, so exactly what Cube would render. A
+ * template can reach Cube's environment: `{{ env_var(...) }}` came back
+ * with Cube's secret in its error text (research spike §1a, T142's review) —
+ * the secret AC-007 keeps from the browser. So none is published.
  */
-const JINJA = /{%|%}|{{|}}|{#/;
+const JINJA = /{%|%}|{{|}}/;
 
 const asCube = (files: readonly ModelFile[]) =>
   files.map(({ path, content }) => ({ fileName: path, content }));
