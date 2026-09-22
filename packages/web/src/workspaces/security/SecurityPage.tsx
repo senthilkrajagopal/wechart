@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { MODEL_FILES_QUERY } from '../model/FileList';
 import { AuthWarning } from './AuthWarning';
 import { ContextPreview } from './ContextPreview';
+import { Scopes } from './Scopes';
 import {
   conditionsText,
   groupsText,
@@ -54,6 +55,9 @@ export function SecurityPage() {
         ) : (
           <PolicyList rows={rows} open={open} unread={unread} />
         )}
+        {/* The API scopes wechart's own context has (T176, AC-170). */}
+        <h2 className="security-workspace__head">Cube API scopes</h2>
+        <Scopes />
       </div>
       <ContextPreview groups={groups} />
     </div>

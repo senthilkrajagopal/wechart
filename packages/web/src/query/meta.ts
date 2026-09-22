@@ -10,7 +10,16 @@ export const META_QUERY = {
   queryKey: ['meta'] as const,
   queryFn: async (): Promise<unknown> => {
     const response = await fetch('/api/meta');
-    if (!response.ok) throw new Error(`Could not load the model: ${String(response.status)}`);
+    if (!response.ok) {
+      // Cube's own words when it gave some — a missing scope among them
+      // (T176, AC-170) — so a screen can say what is wrong.
+      const said = ((await response.json().catch(() => null)) as { error?: unknown } | null)?.error;
+      throw new Error(
+        typeof said === 'string'
+          ? `Could not load the model: ${said}`
+          : `Could not load the model: ${String(response.status)}`,
+      );
+    }
     return (await response.json()) as unknown;
   },
 };

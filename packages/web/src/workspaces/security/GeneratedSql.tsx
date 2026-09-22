@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useRef } from 'react';
 
+import { missingScopeOf, ScopeUnavailable } from '../../query/scopes';
 import { MODEL_FILES_QUERY } from '../model/FileList';
 import { objectsOf } from '../model/objects';
 import { YamlEditor } from '../model/YamlEditor';
@@ -191,11 +192,14 @@ export function GeneratedSql({
       >
         <h2 id={heading}>SQL for {title} as this context</h2>
         {generated.isPending ? <p>Asking Cube for its SQL…</p> : null}
-        {generated.isError ? (
+        {!generated.isError ? null : missingScopeOf(generated.error) === undefined ? (
           <p role="alert" className="generated-sql__problem">
             {generated.error.message}
           </p>
-        ) : null}
+        ) : (
+          // The previewed context's scope, not wechart's (T176's review).
+          <ScopeUnavailable scope={missingScopeOf(generated.error) ?? 'sql'} what="Its SQL" />
+        )}
         {generated.isSuccess
           ? generated.data.queries.map(({ sql, params }, index) => (
               // Positions: Cube's statements, in the order it gave them.

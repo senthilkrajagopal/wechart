@@ -150,6 +150,19 @@ export function registerModelPublishing(
       // draft. A 500 without reading it is Cube failing, not the file.
       if (error instanceof CubeError && error.status === 500 && held.read)
         return reply.status(422).send({ errors: compileErrorsOf(error.message, changed) });
+      /**
+       * Cube asserts the `meta` scope before it compiles anything, so a draft
+       * token refused it was never read: said as that, not as a store Cube
+       * was not told of (T176's review; research/cube/api-scope-probes.md).
+       */
+      if (
+        error instanceof CubeError &&
+        error.status === 403 &&
+        /API scope is missing/.test(error.message)
+      )
+        return reply.status(502).send({
+          error: `Cube refused to check the change — ${error.message} for the context wechart checks drafts as — so nothing was published.`,
+        });
       app.log.warn({ err: error }, 'could not ask Cube to compile the model');
       if (!held.read && error instanceof CubeError) return unread();
       return reply

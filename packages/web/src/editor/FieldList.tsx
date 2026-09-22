@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { META_QUERY } from '../query/meta';
+import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
 import { GROUP_LABELS, cubesFrom, groupMembers, membersOf, type Member } from './fields';
 
 /**
@@ -50,7 +51,13 @@ export function FieldList({
 
   if (meta.isPending) return <p>Loading the model…</p>;
   if (meta.isError) {
-    return <p role="alert">{(meta.error as Error).message}</p>;
+    // A scope the context lacks, said as that (T176, AC-170).
+    const lacking = missingScopeOf(meta.error);
+    return lacking === undefined ? (
+      <p role="alert">{(meta.error as Error).message}</p>
+    ) : (
+      <ScopeUnavailable scope={lacking} what="The model’s fields" />
+    );
   }
 
   const cubes = cubesFrom(meta.data);

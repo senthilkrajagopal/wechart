@@ -8,6 +8,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 
 import { loadTile } from '../query/loadTile';
+import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
 import { AccelerationPanel } from './AccelerationPanel';
 
 /**
@@ -205,7 +206,15 @@ export function ResultsDrawer({
               {underlying.isPending ? (
                 <p>Loading…</p>
               ) : underlying.isError ? (
-                <p role="alert">{(underlying.error as Error).message}</p>
+                // A scope the context lacks, said as that (T176, AC-170).
+                missingScopeOf(underlying.error) === undefined ? (
+                  <p role="alert">{(underlying.error as Error).message}</p>
+                ) : (
+                  <ScopeUnavailable
+                    scope={missingScopeOf(underlying.error) ?? 'data'}
+                    what="The underlying rows"
+                  />
+                )
               ) : (
                 <RowTable
                   rows={underlyingRows}

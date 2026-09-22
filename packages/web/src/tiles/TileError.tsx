@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { TileLoadError } from '../query/loadTile';
+import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
 
 /**
  * A tile whose query failed (AC-012).
@@ -21,6 +22,10 @@ export function TileError({ error, onRetry }: TileErrorProps) {
   const [showQuery, setShowQuery] = useState(false);
   const message = error instanceof Error ? error.message : String(error);
   const query = error instanceof TileLoadError ? error.query : null;
+
+  // A scope wechart's context lacks is not this chart's failure (T176, AC-170).
+  const lacking = missingScopeOf(error);
+  if (lacking !== undefined) return <ScopeUnavailable scope={lacking} what="This chart" />;
 
   return (
     <div className="tile-error" role="alert">

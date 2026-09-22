@@ -52,6 +52,15 @@ function page() {
     vi.fn(async (input: RequestInfo | URL) => {
       // Whether Cube refuses unsigned requests (T175), asked beside the files.
       if (String(input) === '/api/cube-auth') return Response.json({ auth: 'enforced' });
+      // And which API scopes it has (T176).
+      if (String(input) === '/api/cube-scopes')
+        return Response.json({
+          meta: 'granted',
+          data: 'granted',
+          sql: 'granted',
+          graphql: 'granted',
+          jobs: 'granted',
+        });
       expect(String(input)).toBe('/api/model/files');
       return new Response(JSON.stringify({ files: FILES }));
     }),

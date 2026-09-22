@@ -163,6 +163,26 @@ export class CubeClient {
     });
   }
 
+  /**
+   * One request signed as wechart, answered as Cube answers it — its status
+   * and body, refusals included — for the scope probes (T176), which read a
+   * refusal's words rather than failing on it.
+   */
+  async ask(
+    path: string,
+    init: { method?: string; body?: string; headers?: Record<string, string> },
+  ): Promise<{ status: number; body: unknown }> {
+    const response = await this.#fetch(`${this.#apiUrl}${path}`, {
+      ...init,
+      headers: { ...init.headers, authorization: `Bearer ${this.#token()}` },
+      redirect: 'manual',
+      // A hung Cube is not an answer: the probe reads it as unknown.
+      signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
+    });
+    const text = await response.text();
+    return { status: response.status, body: text ? safeJson(text) : null };
+  }
+
   async #request(
     path: string,
     init: RequestInit,
@@ -219,6 +239,9 @@ export class CubeClient {
     return `${unsigned}.${signature}`;
   }
 }
+
+/** How long `ask` waits: long enough for a busy Cube, short enough that a hung one reads unknown. */
+const ASK_TIMEOUT_MS = 5000;
 
 /**
  * The claims that say whether a token is valid — when, by whom, for whom —

@@ -16,6 +16,7 @@ import {
   type CachePolicy,
 } from './cube/client';
 import { authCheckOf } from './cube/authCheck';
+import { scopesOf } from './cube/scopes';
 import { healthOf, originOf } from './cube/health';
 import { MetaCache } from './cube/meta-cache';
 import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
@@ -190,6 +191,13 @@ export function buildServer({
   app.get('/api/health', () => ({ status: 'ok' }));
 
   app.get('/api/meta', async () => meta.meta());
+
+  /**
+   * The Cube API scopes wechart's own context has (T176, AC-170), each probed
+   * with its token by the cheapest request past the scope's assertion
+   * (`cube/scopes.ts`; research/cube/api-scope-probes.md).
+   */
+  app.get('/api/cube-scopes', async () => scopesOf((path, init) => client.ask(path, init)));
 
   /**
    * The Cube model's files, each with its whole text (T137, AC-131). What a

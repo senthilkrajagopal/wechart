@@ -665,6 +665,11 @@ fieldset.model-field > legend {
 /* The Security workspace (T171): its policies' table, and the note on phase 2. */
 .security-workspace { display: grid; gap: 12px; align-content: start; min-width: 0; }
 .security-workspace__note { margin: 0; color: var(--wc-text-secondary); }
+.security-workspace__head { margin: 8px 0 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
+/* A screen that needs a Cube API scope wechart lacks (T176, AC-170): said as
+   a state, in secondary ink, as an empty tile is — not as a failure. */
+.scope-unavailable { display: grid; gap: 4px; padding: 8px 0; color: var(--wc-text-secondary); }
+.scope-unavailable p { margin: 0; }
 /* Whether Cube refuses unsigned requests (T175, AC-169): a status line when
    it does, and while it does not, the prototype's .warnbar in the error
    colour — its icon and words, and what makes Cube refuse them. */

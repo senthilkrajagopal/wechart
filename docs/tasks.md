@@ -2565,10 +2565,35 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - `authCheck.test.ts`, "reads a Cube that lets unsigned requests in as open, over the network": the real API against a real server that lets them in.
       - `e2e/cube-auth.spec.ts`, "…says Cube refuses unsigned requests, probing the real Cube": page, API and the compose Cube end to end.
     - No accepting Cube runs beside the suite, since the compose Cube is in production mode.
-- [ ] T176 (AC-170) Show the configured context's API scopes and mark screens whose scope is missing
+- [x] T176 (AC-170) Show the configured context's API scopes and mark screens whose scope is missing
   - Files: `packages/web/src/workspaces/security/Scopes.tsx`, `packages/web/src/workspaces/security/scopes.test.ts`
   - Failing test: `scopes.test.ts`: the granted scopes are listed, and a screen whose scope is absent reports it as unavailable instead of failing with an error (AC-170).
   - Depends on: T171
+  - **Done 2026-09-22.** Files as built:
+    - API: `cube/scopes.ts` and its test; `ask()` in `cube/client.ts`; `GET /api/cube-scopes` in `server.ts`; `model/publish.ts` and `publish.test.ts`.
+    - Web:
+      - `query/scopes.tsx`: `ScopeUnavailable`, `missingScopeOf` and the scopes query.
+      - `workspaces/security/Scopes.tsx` and `scopes.test.tsx`; `SecurityPage.tsx` and its test.
+      - The screens that ask Cube: `jobs/BuildPanel.tsx` and its test, `tiles/TileError.tsx`, `editor/AccelerationPanel.tsx`, `editor/FieldList.tsx`, `editor/ResultsDrawer.tsx`, `query/meta.ts`, `security/GeneratedSql.tsx`.
+      - `shell/styles.ts`.
+    - e2e: `e2e/cube-scopes.spec.ts`.
+    - Research: `research/cube/api-scope-probes.md`, with "Observed locally".
+    - Each scope is probed with wechart's token by the cheapest request past Cube's scope assertion. It reads missing only on Cube's own words, granted only on Cube's own answer shape, and unknown otherwise.
+    - A screen refused its scope says which one:
+      - dashboard tiles and the editor preview;
+      - the field list;
+      - underlying rows;
+      - the acceleration panel;
+      - listing, building and following pre-aggregations;
+      - the SQL dialog;
+      - publish.
+
+      Under a previewed context, the message names that context, since scopes are per token.
+    - A tile refused its scope shows the unavailable state, not `TileError`, so Retry and the query JSON (AC-012, AC-042) are not offered there, as for AC-167.
+    - AC-170 ticked on:
+      - `e2e/cube-scopes.spec.ts`: all five scopes probed from the real Cube, and the build panel unavailable when `jobs` is missing, via the API's answer given at the network;
+      - `packages/api/src/cube/scopes.test.ts`: the probe reading Cube's refusal;
+      - `workspaces/security/scopes.test.tsx`: each screen refused its scope.
 
 ## F20. Export
 

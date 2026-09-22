@@ -36,6 +36,15 @@ function api(states: string[], tokens: string[], leftOut: string[] = []) {
       // The Jobs header's own ask (T162), answered and not counted.
       if (url === '/api/cube-health')
         return new Response(JSON.stringify({ cube: 'healthy', worker: 'healthy' }));
+      // The API scopes wechart has (T176), all granted: answered and not counted.
+      if (url === '/api/cube-scopes')
+        return Response.json({
+          meta: 'granted',
+          data: 'granted',
+          sql: 'granted',
+          graphql: 'granted',
+          jobs: 'granted',
+        });
       if (url === '/api/builds') {
         expect(JSON.parse(String(init?.body))).toEqual({
           preAggregation: 'monthly_orders.by_status_month',

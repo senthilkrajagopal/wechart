@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 
+import { missingScopeOf, ScopeUnavailable, useScopes } from '../../query/scopes';
 import { StateBadge } from './StateBadge';
 
 /**
@@ -70,7 +71,15 @@ function BuildJobs({
       {tokens.length === 0 ? (
         <p data-testid="build-empty">Cube started no job: no partition of {id} was built.</p>
       ) : null}
-      {jobs.isError ? <p role="alert">{jobs.error.message}</p> : null}
+      {!jobs.isError ? null : missingScopeOf(jobs.error) === undefined ? (
+        <p role="alert">{jobs.error.message}</p>
+      ) : (
+        // Refused its scope since the build started (T176, AC-170).
+        <ScopeUnavailable
+          scope={missingScopeOf(jobs.error) ?? 'jobs'}
+          what="Following this build"
+        />
+      )}
       <ul className="build-jobs__list" aria-label={`Jobs building ${id}`}>
         {tokens.map((token) => {
           const job = byToken.get(token);
@@ -93,12 +102,21 @@ function BuildJobs({
 }
 
 export function BuildPanel({ pollMs = 1500 }: { pollMs?: number }) {
+  const scopes = useScopes();
   const buildable = useQuery({
     queryKey: ['preaggregations'],
     queryFn: ({ signal }) =>
       fetch('/api/preaggregations', { signal }).then(async (response) => {
-        if (!response.ok)
-          throw new Error(`The pre-aggregations could not be read (${String(response.status)}).`);
+        if (!response.ok) {
+          // Cube's own words when it gave some: a missing scope among them (T176).
+          const said = ((await response.json().catch(() => null)) as { error?: unknown } | null)
+            ?.error;
+          throw new Error(
+            typeof said === 'string'
+              ? said
+              : `The pre-aggregations could not be read (${String(response.status)}).`,
+          );
+        }
         return (await response.json()) as Buildable[];
       }),
     // Read again each time: a publish adds or removes pre-aggregations.
@@ -118,8 +136,22 @@ export function BuildPanel({ pollMs = 1500 }: { pollMs?: number }) {
     },
   });
 
+  /**
+   * Without Cube's `jobs` scope no build can start (T176, AC-170): said as
+   * that, up front when the probe says so, and when a build is refused for
+   * it — never as the build's failure.
+   */
+  if (scopes.data?.jobs === 'missing' || missingScopeOf(start.error) === 'jobs')
+    return <ScopeUnavailable scope="jobs" what="Building pre-aggregations" />;
   if (buildable.isPending) return <p>Reading the pre-aggregations…</p>;
-  if (buildable.isError) return <p role="alert">{buildable.error.message}</p>;
+  if (buildable.isError) {
+    const lacking = missingScopeOf(buildable.error);
+    return lacking === undefined ? (
+      <p role="alert">{buildable.error.message}</p>
+    ) : (
+      <ScopeUnavailable scope={lacking} what="Listing pre-aggregations" />
+    );
+  }
   return (
     <div className="build-panel">
       {buildable.data.length === 0 ? (

@@ -368,6 +368,29 @@ describe('publishing model changes', () => {
     await app.close();
   });
 
+  it('says Cube refused the check for a missing scope, not that it reads another store (T176)', async () => {
+    const store = memory([ORDERS]);
+    const cube = Object.create(
+      new CubeClient({ apiUrl: config.cubeApiUrl, apiSecret: 'secret', securityContext: {} }),
+      {
+        meta: {
+          value: async () => {
+            throw new CubeError('API scope is missing: meta', 403);
+          },
+        },
+      },
+    ) as CubeClient;
+    const app = buildServer({ config, modelFiles: store, cube });
+
+    const response = await publish(app, [edited]);
+
+    expect(response.statusCode).toBe(502);
+    expect((response.json() as { error: string }).error).toContain('API scope is missing: meta');
+    expect((response.json() as { error: string }).error).not.toContain('WECHART_MODEL_STORES');
+    expect(store.files).toEqual([ORDERS]);
+    await app.close();
+  });
+
   it('says Cube failed, not that it refused the file, when it failed without reading it', async () => {
     const store = memory([ORDERS]);
     const cube = Object.create(
