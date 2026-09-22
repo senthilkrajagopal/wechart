@@ -254,6 +254,29 @@ main { padding: var(--wc-surface-padding); }
 /* A model file's forms (T138, AC-132; direction.md §7b): the tabs as the edit
    sidebar's, fields as the prototype's .field — two short ones to a row, SQL
    and YAML the full width — and members as rows that open in place. */
+/* direction.md §7b: the form as the main working area, the YAML on the right. */
+.model-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.model-editor__yaml { position: sticky; top: 0; }
+.yaml-editor .cm-editor {
+  max-height: calc(100vh - 160px);
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font-size: 12px;
+}
+.yaml-editor .cm-scroller { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.yaml-editor .cm-gutters {
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  border-right: 1px solid var(--wc-border-subtle);
+}
+.yaml-editor .cm-focused { outline: 2px solid var(--wc-accent); }
 .model-file-page__path {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 16px !important;
@@ -277,7 +300,9 @@ main { padding: var(--wc-surface-padding); }
 .model-form__fields > .model-field--object,
 .model-form__fields > .model-field--list,
 .model-form__legacy { grid-column: 1 / -1; }
-.model-field input,
+/* Inspector controls, 28 px at 12 px (direction.md §7d), over the global
+   32 px input rule, which outranks a bare class. */
+.model-field input:not([type='checkbox']):not([type='radio']),
 .model-field select { width: 100%; height: 28px; font-size: 12px; }
 .model-field__sql,
 .model-field__yaml {

@@ -1,67 +1,86 @@
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
-import { parseDocument } from 'yaml';
+import { useEffect, useMemo, useState } from 'react';
 
 import { MODEL_FILES_QUERY } from './FileList';
-import { CUBE_PARSE, objectsOf } from './objects';
+import { objectsOf } from './objects';
 import { CubeForm } from './form/CubeForm';
+import { modelOf, withObject } from './sync';
+import { YamlEditor } from './YamlEditor';
 
 /**
- * A model file, opened (T138, AC-132): a form for each cube and view it
- * defines. Edits are held here until the YAML view writes them (T139) and
- * publishing takes them to Cube (T142).
+ * A model file, opened (T138, T139; direction.md §7b): a form for each cube
+ * and view it defines, and the file's YAML beside it, each editing the same
+ * text. Held here until publishing takes it to Cube (T142).
  */
 type Value = Record<string, unknown>;
 
-function FileForms({ path, content }: { path: string; content: string }) {
-  const read = useMemo(() => objectsOf(path, content), [path, content]);
-  const [model, setModel] = useState<{ cubes?: Value[]; views?: Value[] }>(() => {
-    try {
-      return (parseDocument(content, CUBE_PARSE).toJS() ?? {}) as {
-        cubes?: Value[];
-        views?: Value[];
-      };
-    } catch {
-      return {};
-    }
-  });
+/** direction.md §7b: "Code edits re-parse after a 300 ms pause" — inside AC-133's 500. */
+export const YAML_PAUSE_MS = 300;
 
-  if (read.problem !== undefined) return <p role="alert">{read.problem}</p>;
-  if (read.code !== undefined)
-    return <p>{read.code} code: its cubes and views are made when Cube runs it.</p>;
+function FileEditor({ path, content }: { path: string; content: string }) {
+  /** The YAML view's text, as typed. */
+  const [text, setText] = useState(content);
+  /** The text the form reads: the last that parsed, once typing paused. */
+  const [read, setRead] = useState(content);
 
-  const replace = (list: 'cubes' | 'views', index: number, next: Value) => {
-    setModel((current) => ({
-      ...current,
-      [list]: (current[list] ?? []).map((each, at) => (at === index ? next : each)),
-    }));
+  useEffect(() => {
+    if (text === read) return undefined;
+    const timer = setTimeout(() => {
+      // Only a text that parses reaches the form (T141 says what is wrong).
+      if (modelOf(text).model !== undefined) setRead(text);
+    }, YAML_PAUSE_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [text, read]);
+
+  const model = useMemo(() => modelOf(read).model ?? {}, [read]);
+
+  /** A form edit, written into the file at once: the YAML view shows it in the same render. */
+  const edit = (list: 'cubes' | 'views', index: number, next: Value) => {
+    const written = withObject(read, list, index, next);
+    setText(written);
+    setRead(written);
   };
 
   return (
-    <>
-      {(model.cubes ?? []).map((cube, index) => (
-        <CubeForm
-          // The cube's place in the file: its name is a field it edits.
-          key={`cube ${String(index)}`}
-          kind="cube"
-          value={cube}
-          onChange={(next) => {
-            replace('cubes', index, next);
-          }}
-        />
-      ))}
-      {(model.views ?? []).map((view, index) => (
-        <CubeForm
-          key={`view ${String(index)}`}
-          kind="view"
-          value={view}
-          onChange={(next) => {
-            replace('views', index, next);
-          }}
-        />
-      ))}
-    </>
+    <div className="model-editor">
+      <div className="model-editor__form">
+        {(model.cubes ?? []).map((cube, index) => (
+          <CubeForm
+            // The cube's place in the file: its name is a field it edits.
+            key={`cube ${String(index)}`}
+            kind="cube"
+            value={cube}
+            onChange={(next) => {
+              edit('cubes', index, next);
+            }}
+          />
+        ))}
+        {(model.views ?? []).map((view, index) => (
+          <CubeForm
+            key={`view ${String(index)}`}
+            kind="view"
+            value={view}
+            onChange={(next) => {
+              edit('views', index, next);
+            }}
+          />
+        ))}
+      </div>
+      <div className="model-editor__yaml">
+        <YamlEditor value={text} onChange={setText} label={`${path}, as YAML`} />
+      </div>
+    </div>
   );
+}
+
+function FileBody({ path, content }: { path: string; content: string }) {
+  const read = useMemo(() => objectsOf(path, content), [path, content]);
+  if (read.code !== undefined)
+    return <p>{read.code} code: its cubes and views are made when Cube runs it.</p>;
+  if (read.problem !== undefined) return <p role="alert">{read.problem}</p>;
+  return <FileEditor path={path} content={content} />;
 }
 
 export function ModelFilePage({ path }: { path: string }) {
@@ -81,7 +100,7 @@ export function ModelFilePage({ path }: { path: string }) {
       ) : file === undefined ? (
         <p role="alert">There is no model file {path}.</p>
       ) : (
-        <FileForms path={file.path} content={file.content} />
+        <FileBody path={file.path} content={file.content} />
       )}
     </div>
   );

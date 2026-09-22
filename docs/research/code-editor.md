@@ -21,6 +21,7 @@ pnpm add codemirror@6.0.2 @codemirror/state@6.7.5 @codemirror/view@6.43.12 \
   @codemirror/lang-yaml@6.1.3 @codemirror/lang-sql@6.10.0 @codemirror/lang-json@6.0.2
 ```
 
+- `@codemirror/commands` (history and the default keymaps) was not pinned above; T139 pinned it at `6.11.1`, the registry's latest on 2026-09-21 (`npm view @codemirror/commands version`).
 - All MIT ([codemirror](https://registry.npmjs.org/codemirror/latest), [view](https://registry.npmjs.org/@codemirror/view/latest), [state](https://registry.npmjs.org/@codemirror/state/latest), [lint](https://registry.npmjs.org/@codemirror/lint/latest), [lang-yaml](https://registry.npmjs.org/@codemirror/lang-yaml/latest), [lang-sql](https://registry.npmjs.org/@codemirror/lang-sql/latest), [lang-json](https://registry.npmjs.org/@codemirror/lang-json/latest)).
 - No peer deps to satisfy; `@codemirror/view` is `"type": "module"` with dual ESM/CJS `exports` ([registry](https://registry.npmjs.org/@codemirror/view/latest)), so Vite resolves it without configuration.
 - `codemirror` 6.0.2 is only "an example configuration" bundling view/state/language/commands/search/autocomplete/lint ([registry](https://registry.npmjs.org/codemirror/latest), [README](https://code.haverbeke.berlin/codemirror/basic-setup/raw/branch/main/README.md)); prefer composing extensions explicitly so unused ones stay out of the chunk.

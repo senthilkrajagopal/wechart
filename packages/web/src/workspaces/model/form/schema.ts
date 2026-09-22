@@ -79,7 +79,7 @@ export interface ObjectSchema {
 
 /** A key's label: its words, the first capitalised — "pre_aggregations" reads "Pre aggregations". */
 function labelOf(key: string): string {
-  const words = key.replace(/[._]/g, ' ');
+  const words = key.replace(/[._]/g, ' ').replace(/\bsql\b/g, 'SQL');
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 

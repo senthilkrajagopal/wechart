@@ -39,6 +39,33 @@ test('the Model workspace lists each model file with what it defines', async ({ 
  * `form/schema.test.ts` holds every key to the research's inventory; here,
  * the real file opened on its form.
  */
+/**
+ * T139 / AC-133: WHEN the user edits a field in the form, THE SYSTEM SHALL
+ * update the YAML view within one render, and WHEN the user edits valid YAML,
+ * THE SYSTEM SHALL update the form within 500 milliseconds.
+ * Fails when: either view still shows the previous value after that point.
+ */
+test('the form and the YAML view each show what the other edits', async ({ page }) => {
+  await page.goto('/model/files/cubes%2Forders.yml');
+  const form = page.getByRole('region', { name: 'Cube orders' });
+  const yaml = page.getByRole('textbox', { name: 'cubes/orders.yml, as YAML' });
+  await expect(yaml).toContainText('sql_table: public.orders');
+
+  // The form, into the YAML: written in the same update, so shown at once.
+  await form.getByLabel('Title', { exact: true }).fill('Orders ledger');
+  await expect(yaml).toContainText('title: Orders ledger', { timeout: 250 });
+
+  // The YAML, into the form: after the 300 ms pause, inside the 500 allowed.
+  await page.locator('.cm-line', { hasText: 'sql_table: public.orders' }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.type('_2026');
+  await expect(form.getByLabel('SQL table', { exact: true })).toHaveValue('public.orders_2026', {
+    timeout: 500,
+  });
+  // And the form's own edit is still in the file, not undone by the YAML's.
+  await expect(yaml).toContainText('title: Orders ledger');
+});
+
 test('a model file opens on a form for its cube, its enumerations the validatorâ€™s own', async ({
   page,
 }) => {
@@ -47,7 +74,7 @@ test('a model file opens on a form for its cube, its enumerations the validatorâ
   await expect(page.getByTestId('selected-object')).toHaveText('cubes/orders.yml');
 
   const form = page.getByRole('region', { name: 'Cube orders' });
-  await expect(form.getByLabel('Sql table', { exact: true })).toHaveValue('public.orders');
+  await expect(form.getByLabel('SQL table', { exact: true })).toHaveValue('public.orders');
   await expect(form.getByRole('group', { name: 'Refresh key' })).toBeVisible();
 
   await form.getByRole('tab', { name: /^Measures/ }).click();

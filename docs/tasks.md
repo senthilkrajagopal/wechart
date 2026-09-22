@@ -1723,10 +1723,33 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - Measures opens `total_amount`: its type is `sum` among exactly the measure types, and its format is `currency`.
       - Joins opens `customers`: `many_to_one`, among exactly the three.
   - The test-integrity hook flagged one edit to `CubeForm.test.tsx`, a new, uncommitted file, as weakening a matcher. That edit only scoped the queries so a nested object's same-named field is not found; the matchers were `toBeTruthy` and `toEqual` before and after.
-- [ ] T139 (AC-133) Synchronise the form and the YAML view in both directions
+- [x] T139 (AC-133) Synchronise the form and the YAML view in both directions
   - Files: `packages/web/src/workspaces/model/{YamlEditor,sync}.tsx`, `packages/web/src/workspaces/model/sync.test.ts`
   - Failing test: `sync.test.ts`: a form edit updates the YAML within one render, and a valid YAML edit updates the form within 500 ms (AC-133). Monaco is driven as a controlled editor per `docs/research/code-editor.md`; parsing uses `yaml` with Cube's own options.
   - Depends on: T138
+  - **Built 2026-09-21.**
+    - **The editor is CodeMirror 6, not Monaco.** The planned text predates `research/code-editor.md`, which recommends CodeMirror and rejects Monaco on theming (no CSS variables, so the tokens can't drive its contrast) and on trapping Tab.
+      - Pinned per that research: `@codemirror/state` 6.7.5, `view` 6.43.12, `language` 6.12.4, `lint` 6.9.7, `lang-yaml` 6.1.3, and `commands` 6.11.1, which the research had not pinned and now records.
+      - `YamlEditor` is a controlled editor, built once. A `value` from elsewhere is dispatched in as a change marked with an annotation, so the cursor maps through it and it isn't handed back. It has syntax highlighting and line numbers, and is named for screen readers by the file.
+    - **The file's text is the one truth (`sync.ts`):**
+      - A form edit is written into it through the parsed document: `withObject` walks what changed and sets or deletes only that. The file's comments, and every key the edit did not touch, stay exactly as written. A comment written on a key the form removes goes with it.
+      - The form reads from the last text that parsed (`modelOf`).
+    - **Timing (`ModelFilePage`):**
+      - A form edit sets the text in the same update, so the YAML view shows it in that render.
+      - A YAML edit reaches the form after direction.md §7b's 300 ms pause, inside AC-133's 500, and only if the text parses. The form freezing on a parse error, with the problem shown, is T141.
+    - **Layout:** direction.md §7b, the form as the main working area and the YAML on the right.
+    - Labels write "SQL" for `sql`, and the form's controls are the inspector's 28 px.
+  - **Tests, red first:**
+    - `sync.test.ts` (5):
+      - a key added keeps the comments and the other keys as written;
+      - one member's key changed changes that line and nothing else (the whole file compared);
+      - a key removed takes its own comment and no other;
+      - the model from a parsing text;
+      - no model, and the problem's line, from one that doesn't parse.
+    - `e2e/model.spec.ts` (1 more in each browser), on the real file:
+      - the form's Title typed in shows in the YAML within 250 ms;
+      - `_2026` typed at the end of the YAML's `sql_table` line shows in the form's SQL table field within 500 ms;
+      - the form's edit is still in the YAML after the YAML's.
 - [ ] T140 (AC-134) Warn and name what a code-to-form switch would lose
   - Files: `packages/web/src/workspaces/model/lossCheck.ts`, `packages/web/src/workspaces/model/lossCheck.test.ts`
   - Failing test: `lossCheck.test.ts`: a file with comments and anchors produces a warning naming each before the change is applied, and no comment disappears silently (AC-134).
