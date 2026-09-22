@@ -80,9 +80,20 @@ let asked: { query: Record<string, unknown>; cache?: string }[] = [];
 let clock = 0;
 const timeOf = (second: number) => new Date(Date.UTC(2026, 8, 21, 10, 0, second)).toISOString();
 
+/** Whether Cube answers the chart queries from a rollup (T014, AC-013). */
+let servedByRollup = false;
+const ROLLUP = {
+  'prod_pre_aggregations.orders_by_status': {
+    preAggregationId: 'orders.by_status',
+    lastUpdatedAt: Date.UTC(2026, 8, 21, 9, 0, 0),
+    type: 'rollup',
+  },
+};
+
 beforeEach(() => {
   asked = [];
   clock = 0;
+  servedByRollup = false;
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -112,6 +123,7 @@ beforeEach(() => {
         JSON.stringify({
           data: [{ 'orders.status': 'completed', 'orders.count': 3 }],
           lastRefreshTime: timeOf(clock),
+          ...(servedByRollup ? { usedPreAggregations: ROLLUP } : {}),
         }),
       );
     }),
@@ -206,5 +218,36 @@ describe('refreshing a tile a filter reaches', () => {
     expect(onRefresh).toHaveBeenCalledWith('c-region');
     expect(asked).toHaveLength(1);
     expect(asOfOn('t-region')).toBe(timeOf(0));
+  });
+});
+
+/**
+ * T014 / AC-013: WHEN a result is served from a pre-aggregation, THE SYSTEM
+ * SHALL mark the tile as accelerated and show the age of the data; otherwise
+ * it SHALL mark the tile as live.
+ *
+ * A filtered tile says what served the answer it draws — its filtered one —
+ * not what served its unfiltered chart (T014's review).
+ */
+describe('what served a filtered tile’s answer', () => {
+  it('is its filtered answer’s, and a tile no filter reaches keeps its own', async () => {
+    servedByRollup = true;
+    dashboard();
+    const badgeOn = (id: string) => within(tile(id)).getByTestId('acceleration');
+    // Unfiltered, as loaded: from the database.
+    expect(badgeOn('t-status').textContent).toMatch(/Live/);
+
+    await openFilter();
+    await userEvent.click(
+      await within(screen.getByRole('region', { name: 'Filters' })).findByRole('checkbox', {
+        name: 'completed',
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(badgeOn('t-status').textContent).toMatch(/Accelerated/);
+    });
+    expect(badgeOn('t-status').getAttribute('title')).toMatch(/orders\.by_status/);
+    expect(badgeOn('t-region').textContent).toMatch(/Live/);
   });
 });

@@ -101,6 +101,20 @@ test('a tile served from a pre-aggregation says so with its age, and one from th
   await expect(accelerated.locator('[data-icon="accelerated"]')).toHaveCount(1);
   await expect(accelerated).toHaveAttribute('title', /monthly_orders\.by_status_month/);
 
+  // Shown as the prototype's badge is, the age in a word ("16m"), so a
+  // half-width tile keeps its title readable and its Table view clear of the
+  // corner controls (T014's review).
+  const tile = page.locator('[data-tile="tile-monthly_orders"]');
+  await expect(accelerated.locator('.acceleration__short')).toHaveText(/^\d+[smhdw]$/);
+  const heading = await tile
+    .getByRole('heading', { name: 'monthly_orders by status' })
+    .boundingBox();
+  expect(heading?.width ?? 0).toBeGreaterThanOrEqual(96);
+  await tile.hover();
+  const table = await tile.getByTestId('toggle-table-view').boundingBox();
+  const refresh = await tile.getByRole('button', { name: /^Refresh / }).boundingBox();
+  expect((table?.x ?? 0) + (table?.width ?? 0)).toBeLessThanOrEqual(refresh?.x ?? 0);
+
   const live = page.locator('[data-tile="tile-orders"]').getByTestId('acceleration');
   await expect(live).toHaveText(/Live/);
   await expect(live).not.toHaveText(/Accelerated/);

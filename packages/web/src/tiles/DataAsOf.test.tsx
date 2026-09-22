@@ -58,6 +58,22 @@ describe('when a chart’s data is from', () => {
     );
   });
 
+  it('shows "as of" and the time, the whole sentence for a screen reader and in its tooltip', () => {
+    // Room for the chart's title in a half-width tile (T014's review).
+    const at = new Date(2026, 8, 21, 22, 32, 18);
+    render(<DataAsOf at={at.toISOString()} now={new Date(2026, 8, 21, 23, 0, 0)} />);
+
+    const time = screen.getByTestId('data-as-of');
+    const shown = at.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    expect(time.querySelector('.visually-hidden')?.textContent).toBe('Data ');
+    expect(time.textContent).toBe(`Data as of ${shown}`);
+    expect(time.getAttribute('title')).toBe(`Data as of ${shown}`);
+  });
+
   it('is shown for an answer with no rows too — a refresh can come back empty', () => {
     render(<ChartTile spec={spec([])} asOf="2026-09-21T10:32:18.000Z" />);
 

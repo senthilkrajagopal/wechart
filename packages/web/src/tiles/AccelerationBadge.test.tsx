@@ -84,6 +84,26 @@ describe('the badge (AC-013)', () => {
     expect(badge.textContent).not.toMatch(/accelerated/i);
   });
 
+  it('shows the age compactly, as the prototype’s tile badge does, and says it in full', () => {
+    /**
+     * The prototype's tile head carries "✓ 3m", its words in the tooltip
+     * (prototype/dashboard.js). Written out in the head, the badge left a
+     * half-width tile's title one letter wide (T014's review). The words stay
+     * — for a screen reader, and in the tooltip with the rollup's name.
+     */
+    render(<AccelerationBadge result={accelerated} now={NOW} />);
+
+    const badge = screen.getByTestId('acceleration');
+    expect(badge.querySelector('.acceleration__short')?.textContent).toBe('40m');
+    expect(badge.querySelector('.acceleration__short')?.getAttribute('aria-hidden')).toBe('true');
+    expect(badge.querySelector('.visually-hidden')?.textContent).toBe(
+      'Accelerated · built 40 minutes ago',
+    );
+    expect(badge.getAttribute('title')).toBe(
+      'Accelerated: served from orders.main, built 40 minutes ago',
+    );
+  });
+
   it('pairs the state with an icon and a label, never colour alone', () => {
     render(<AccelerationBadge result={accelerated} now={NOW} />);
 

@@ -21,9 +21,10 @@ interface PreAggregationInfo {
 }
 
 /**
- * Cube reports `usedPreAggregations` on the result. It sends the key with no
- * entries for a source-database query, so its *presence* proves nothing —
- * only a non-empty set means the result was accelerated.
+ * Cube reports `usedPreAggregations` on the result, and leaves it out of a
+ * source-database answer (research/cube/pre-aggregations.md §4). An empty set
+ * is taken as live too, so the key's *presence* proves nothing — only a
+ * non-empty set means the result was accelerated.
  */
 export function accelerationOf(result: unknown): Acceleration {
   const used =
@@ -67,18 +68,43 @@ export function AccelerationBadge({ result, now = new Date() }: AccelerationBadg
     );
   }
 
+  /**
+   * Shown as the prototype's tile badge is — the icon and the age, "⚡ 40m" —
+   * so a half-width tile keeps room for its title (T014's review). The words
+   * are the badge's text for a screen reader, and its tooltip, with the
+   * rollup's name.
+   */
+  const built = lastUpdatedAt ? `built ${relativeAge(lastUpdatedAt, now)}` : 'age unknown';
+  const short = lastUpdatedAt ? shortAge(lastUpdatedAt, now) : '?';
   return (
     <span
       className="acceleration acceleration--accelerated"
       data-testid="acceleration"
-      title={preAggregation ?? undefined}
+      title={`Accelerated: served from ${preAggregation ?? 'a pre-aggregation'}, ${built}`}
     >
       <span data-icon="accelerated" aria-hidden="true">
         ⚡
-      </span>{' '}
-      Accelerated · {lastUpdatedAt ? `built ${relativeAge(lastUpdatedAt, now)}` : 'age unknown'}
+      </span>
+      <span className="acceleration__short" aria-hidden="true">
+        {short}
+      </span>
+      <span className="visually-hidden">Accelerated · {built}</span>
     </span>
   );
+}
+
+/** The age as the prototype's badge writes it: "45s", "40m", "3h", "2d", "1w". */
+function shortAge(then: Date, now: Date): string {
+  const seconds = Math.max(0, Math.round((now.getTime() - then.getTime()) / 1000));
+  const units: [number, string][] = [
+    [7 * 24 * 3600, 'w'],
+    [24 * 3600, 'd'],
+    [3600, 'h'],
+    [60, 'm'],
+  ];
+  for (const [size, unit] of units)
+    if (seconds >= size) return `${String(Math.round(seconds / size))}${unit}`;
+  return `${String(seconds)}s`;
 }
 
 function relativeAge(then: Date, now: Date): string {

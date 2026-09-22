@@ -128,6 +128,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - Web:
       - `query/answerMeta.ts` (`answerMetaOf`) and its test. What Cube says of an answer besides its rows is `lastRefreshTime` and `usedPreAggregations`. It is carried as one `answered` record wherever the answer goes, replacing T154's `asOf`: the page's load, a refresh, a filtered answer, and a save with drafts.
       - `ChartTile.tsx` (`served`) draws the badge in the head, before the data-as-of time.
+      - The record's path through the dashboard: `DashboardPage.tsx`, `DashboardView.tsx` (its filtered overlay included), `filters/FilteredCharts.tsx`, and `edit/chartDrafts.ts` with its test. `dashboard/refreshTile.test.tsx` checks that a filtered tile's badge is its filtered answer's.
       - `AccelerationBadge.tsx` names the pre-aggregation by the model's `preAggregationId`, not its Cube Store table.
       - `shell/styles.ts`: the prototype's `.badge`, in the success colour when accelerated.
     - The Cube stack:
@@ -135,6 +136,11 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - `infra/cube/cube.js`: `scheduledRefreshContexts`, covering the mounted model and each trusted store's.
       - A seed cube, `infra/cube/model/cubes/monthly_orders.yml`. It has a rollup of count and total by status and month, partitioned by year, with an index on status. It is a cube of its own with no joins, so nothing else the sample model answers changes. It gives F16 a rollup to list, rebuild and index.
     - **Why the worker.** Observed locally: in production mode, a Cube API instance with no refresh worker answers HTTP 400 to any query a rollup would serve until the rollup is built ("this API instance wasn't set up to build pre-aggregations"). With the worker, the rollup was built 24–30 s after start. Recorded in `research/cube/pre-aggregations.md`, "Observed locally".
+    - **Review fixes (2026-09-21, verdict PASS):**
+      - Written out, the two badges left a half-width tile's title one letter wide at 1280 px, and pushed "Table view" under the corner controls. They are now shown as the prototype's tile badge is (`✓ 3m` in `prototype/dashboard.js`): "⚡ 16m" and "as of 11:01:13 PM". The whole sentences are the badges' text for a screen reader, and their tooltips; the tooltip also names the rollup. `e2e/acceleration.spec.ts` now checks the title keeps at least 96 px and "Table view" ends before ↻.
+      - A test that a filtered tile's badge comes from its filtered answer (above).
+      - Stale notes corrected (T137's note about the seed model, and the badge's comment on an absent `usedPreAggregations`).
+      - Left as found: the relative age is worked out when the tile draws, so "16m" doesn't count up on an open dashboard. The absolute time beside it stays true. The Jobs log names a rollup by its table, where the tile uses the model's name.
     - AC-013 stays ticked, now on the real surface: `e2e/acceleration.spec.ts`, against the real Cube in all three browsers. A `monthly_orders` tile reads "Accelerated · built … ago", with its icon and the rollup's model name. An `orders` tile reads "Live" and not "Accelerated". The test first waits for the worker to have built the rollup.
 - [x] T015 (AC-016) Record every query wechart issues and list the records in the Jobs workspace
   - Files: `packages/api/src/repos/query-log.ts`, `packages/api/src/repos/query-log.test.ts`, `packages/api/src/db/migrations/1758240001000_query-log.cjs`, `packages/api/src/db/schema.ts`, `packages/api/src/server.ts`, `packages/api/src/server.test.ts`, `packages/web/src/workspaces/jobs/QueryLog.tsx`, `packages/web/src/workspaces/jobs/QueryLog.test.tsx`
@@ -1701,7 +1707,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - `objects.test.ts` (4): every member kind AC-131 names; several cubes and a view in one file; an unreadable file's line; code files.
     - `FileList.test.tsx` (2): every kind, listed under its cube, in the rendered component; an unreadable file's problem, shown on it.
     - `e2e/model.spec.ts` (1 in each browser): on the real service, `/model` lists the seeded files. `cubes/orders.yml` shows cube `orders` with its measures, dimensions and joins; `customers.yml` and `products.yml` are there; `views/order_summary.yml` shows view `order_summary`.
-      - The seed model declares no segments, hierarchies or pre-aggregations. Those kinds are shown in the same component by `FileList.test.tsx`.
+      - The seed model declared no segments, hierarchies or pre-aggregations when this was built. Those kinds are shown in the same component by `FileList.test.tsx`. (Since T014's fix, `cubes/monthly_orders.yml` declares a pre-aggregation.)
   - **Cold review (one round, 2026-09-21), verdict FAIL. Fixed in the review commit:**
     - **A view's members were never listed**, against AC-131's Fails-when.
       - A view now lists its own member lists.
