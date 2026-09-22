@@ -305,6 +305,30 @@ export function buildServer({
     }
   });
 
+  /**
+   * A query's SQL as Cube generates it for a previewed security context
+   * (T174, AC-168): `/v1/sql` asked as the context, generated after its
+   * policies apply, so the row filters they add are in it with the values it
+   * binds (research/cube/access-control.md, "Observed locally"). Every
+   * statement, for a query Cube runs as several: one left out would be SQL
+   * the context runs that is not shown.
+   */
+  app.post('/api/sql', async (request, reply) => {
+    const body = request.body as { query?: Record<string, unknown>; context?: unknown } | undefined;
+    if (!body?.query) throw new BadRequest();
+    const context = body.context === undefined ? undefined : previewClaimsOf(body.context);
+    if (context === null) throw new BadRequest('A preview context is a JSON object.');
+    const planned = await client.sql(body.query, context);
+    const queries = (Array.isArray(planned) ? planned : [planned]).map((plan) => {
+      const [sql, params] = (plan as { sql?: { sql?: [unknown, unknown] } } | null)?.sql?.sql ?? [];
+      return { sql, params: Array.isArray(params) ? params : [] };
+    });
+    // An answer without SQL is said as one, not shown as an empty statement.
+    if (queries.length === 0 || queries.some(({ sql }) => typeof sql !== 'string'))
+      return reply.status(502).send({ error: 'Cube answered without the SQL it would run.' });
+    return { queries };
+  });
+
   // Explore's folder tree and contents (AC-017).
   app.get('/api/folders', async () => (cat ? cat.folders() : []));
 

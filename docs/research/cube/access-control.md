@@ -267,6 +267,7 @@ The seed view `infra/cube/model/views/secured_orders.yml` declares three policie
 - **`total_amount` for `auditors`:** 200, with the value masked to `null`.
 - **`total_amount` for `sales`:** the same hidden-member 500, since the member is excluded.
 - **The hidden-member message names one member.** `secured_orders.count` by `secured_orders.status` under `{ groups: ["sales"] }`, where both are hidden, answers "You requested hidden member: 'secured_orders.count'" only (T173's e2e test).
+- **`GET /v1/sql` for the same query under `{ groups: ["sales"], is_employee: true }`:** 200. `sql.sql` is `[text, params]`. The text carries the policy's row-level filter, `WHERE ("orders".status = $1)`, with params `["shipped"]`. The response also carries `sql.dataSource`, `sql.preAggregations` and `sql.aliasNameToMember`.
 
 ### Member visibility: `public`
 

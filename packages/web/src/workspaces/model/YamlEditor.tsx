@@ -1,4 +1,5 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { sql } from '@codemirror/lang-sql';
 import { yaml } from '@codemirror/lang-yaml';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { lintGutter, setDiagnostics } from '@codemirror/lint';
@@ -97,7 +98,7 @@ export function YamlEditor({
    */
   readOnly?: boolean;
   /** YAML is highlighted; code wechart has no grammar for is shown plain. */
-  language?: 'yaml' | 'plain';
+  language?: 'yaml' | 'sql' | 'plain';
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -118,7 +119,8 @@ export function YamlEditor({
           lintGutter(),
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
-          language === 'yaml' ? yaml() : [],
+          // SQL as Cube generates it, read only (T174): highlighted, no completion.
+          language === 'yaml' ? yaml() : language === 'sql' ? sql() : [],
           syntaxHighlighting(TOKEN_HIGHLIGHT),
           TOKEN_THEME,
           readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [],

@@ -199,3 +199,44 @@ test('a tile whose member the previewed context is not given reads as unavailabl
   await expect(tile).not.toContainText('Please make it visible');
   await expect(tile.getByRole('alert')).toHaveCount(0);
 });
+
+/**
+ * T174 / AC-168: THE SYSTEM SHALL show the generated SQL and the effective
+ * filters for a chart under the previewed context.
+ * Fails when: the SQL shown omits the row-level filters the policy adds.
+ *
+ * Against the real Cube: as the employed sales group, the secured view's
+ * policy adds `status = shipped` (research/cube/access-control.md,
+ * "Observed locally").
+ */
+test('a previewed tile shows Cube’s SQL as the context, with the row filter its policy adds', async ({
+  page,
+  request,
+}) => {
+  const { id } = await securedDashboard(request);
+  const context = { groups: ['sales'], is_employee: true };
+  await page.goto(
+    `/explore/dashboards/${id}?preview=${encodeURIComponent(JSON.stringify(context))}`,
+  );
+
+  const tile = page.locator('[data-tile="tile-secured"]');
+  await expect(tile.getByRole('table')).toContainText('shipped', { timeout: 15_000 });
+  const opener = tile.getByRole('button', { name: 'SQL for Secured by status as this context' });
+  await opener.click();
+
+  const dialog = page.getByRole('dialog', { name: 'SQL for Secured by status as this context' });
+  const sql = dialog.getByTestId('generated-sql');
+  await expect(sql).toContainText('WHERE', { timeout: 15_000 });
+  await expect(sql).toContainText('"orders".status = $1');
+  await expect(dialog.getByTestId('generated-sql-params')).toHaveText(
+    'Values bound, in order: 1 = shipped',
+  );
+  // Beside it, the row filter the policy declares for the context's group.
+  const declared = dialog.getByRole('table', { name: 'Row filters declared for this context' });
+  await expect(declared).toContainText('status equals shipped');
+  await expect(declared).toContainText('{ securityContext.is_employee }');
+
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});

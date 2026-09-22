@@ -96,10 +96,17 @@ export class CubeClient {
    * the pre-aggregations it would use (T150; research/cube/pre-aggregations.md
    * §4 and "Observed locally").
    */
-  async sql(query: Record<string, unknown>): Promise<unknown> {
-    return this.#request(`/v1/sql?query=${encodeURIComponent(JSON.stringify(query))}`, {
-      method: 'GET',
-    });
+  async sql(
+    query: Record<string, unknown>,
+    /** A previewed security context, asked as in place of wechart's (T174). */
+    preview?: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.#request(
+      `/v1/sql?query=${encodeURIComponent(JSON.stringify(query))}`,
+      { method: 'GET' },
+      undefined,
+      preview,
+    );
   }
 
   /** `/v1/dry-run`: the query as Cube's matcher sees it (its transformed query). */

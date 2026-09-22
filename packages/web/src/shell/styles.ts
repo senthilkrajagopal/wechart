@@ -706,6 +706,23 @@ fieldset.model-field > legend {
 }
 .preview-banner code { overflow-wrap: anywhere; font-weight: 400; }
 .preview-banner a { margin-left: auto; color: var(--wc-text-primary); }
+/* A chart's SQL as the previewed context (T174, AC-168): Cube's text as it
+   wrote it, scrolling within the dialog rather than widening it. */
+.dialog.generated-sql { width: min(760px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 64px); overflow: auto; }
+.dialog.generated-sql h3 { margin: 8px 0 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
+/* A statement may shrink below its longest line (T174's review): the code
+   view scrolls it, rather than the line widening the dialog past Close. */
+.generated-sql { grid-template-columns: minmax(0, 1fr); }
+.generated-sql__query { display: grid; gap: 4px; min-width: 0; }
+.generated-sql__query .cm-editor {
+  max-height: 320px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.dialog .generated-sql__note { margin: 0; font-size: 12px; }
+.dialog .generated-sql__params { font: 12px/16px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.dialog .generated-sql__problem { color: var(--wc-status-error); overflow-wrap: anywhere; }
 /* A job's state (T158, AC-152): the prototype's .status — its icon, its words. */
 .status {
   display: inline-flex;
@@ -1847,6 +1864,16 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* With "Refresh now" there, the head keeps room for three corner controls:
    26 + 2 + 26 + 2 + 26, and its 8 px gap. */
 .grid-tile:has(.tile-refresh) .tile-head { padding-right: 90px; }
+/* A chart's SQL as the previewed context (T174): only while previewing, when
+   there is no pencil, so it takes the pencil's place; a word, not an icon. */
+.tile-refresh.tile-sql {
+  right: 44px;
+  width: auto;
+  min-width: 26px;
+  padding: 0 2px;
+  font-size: 10px;
+  font-weight: 600;
+}
 /* Where the chart's answer came from (T014, AC-013) and when its data is from
    (T154): the prototype's .badge in the tile head, where its tiles carry their
    data's age — "ok"-coloured when a pre-aggregation served it. */

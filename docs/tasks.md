@@ -2530,10 +2530,23 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - e2e: `e2e/security.spec.ts`.
     - It names the one member Cube names, and says there may be more. Cube words a member that is `public: false` for everyone the same way, so under a preview that also reads as unavailable. Outside a preview, Cube's message shows.
     - AC-167 ticked on `e2e/security.spec.ts`, "a tile whose member the previewed context is not given reads as unavailable to it" (Chrome, Firefox, Safari against the compose Cube).
-- [ ] T174 (AC-168) Show the generated SQL and the effective filters under the previewed context
+- [x] T174 (AC-168) Show the generated SQL and the effective filters under the previewed context
   - Files: `packages/web/src/workspaces/security/GeneratedSql.tsx`, `packages/web/src/workspaces/security/GeneratedSql.test.tsx`
   - Failing test: `GeneratedSql.test.tsx`: the SQL shown includes the row-level filters the policy adds, and the effective filters are listed beside it (AC-168). Rendered read-only in Monaco.
   - Depends on: T172
+  - **Done 2026-09-22.** Files as built:
+    - API: `POST /api/sql` in `server.ts`, and `sql(query, preview)` in `cube/client.ts`. The route asks Cube's `/v1/sql` as the previewed context and answers every statement. An answer without SQL is a 502.
+    - Web:
+      - `workspaces/security/GeneratedSql.tsx` and its test, and `workspaces/security/sqlOnDashboard.test.tsx`.
+      - `dashboard/DashboardView.tsx`: while previewing, each chart tile has "SQL". It opens Cube's SQL for the query the tile runs: its chart, with the filters that reach it, less any Cube could not join.
+      - `workspaces/model/YamlEditor.tsx`: an `sql` language.
+      - `shell/styles.ts`.
+    - Beside the SQL: the row filters the model's policies declare for the context's groups. That covers the queried cubes and views, and a view's cubes too, since Cube applies both. The list is declared, not evaluated, and says so. Files whose policies cannot be read are named.
+    - Rendered read-only in CodeMirror with `@codemirror/lang-sql` 6.10.0, not Monaco, which research rejected. `research/code-editor.md` left open whether to offer completion; a read-only view takes no input, so there is none.
+    - Bound values are numbered in order ("1 = shipped") rather than written as Postgres's `$1`, so they read the same whatever the database's placeholder.
+    - e2e: `e2e/security.spec.ts`.
+    - Not sourced: the multi-statement shape of `/v1/sql` (an array), which `/api/acceleration` already assumes.
+    - AC-168 ticked on `e2e/security.spec.ts`, "a previewed tile shows Cube's SQL as the context, with the row filter its policy adds" (Chrome, Firefox, Safari against the compose Cube).
 - [ ] T175 (AC-169) Warn persistently when Cube would accept unauthenticated requests
   - Files: `packages/api/src/cube/authCheck.ts`, `packages/web/src/workspaces/security/AuthWarning.tsx`, `packages/api/src/cube/authCheck.test.ts`
   - Failing test: `authCheck.test.ts`: when an unauthenticated probe succeeds, the Security workspace shows a persistent warning (AC-169).

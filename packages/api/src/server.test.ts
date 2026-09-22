@@ -33,6 +33,7 @@ function stubCube(handler: () => unknown): CubeClient {
   return Object.create(client, {
     meta: { value: run },
     load: { value: run },
+    sql: { value: run },
   }) as CubeClient;
 }
 
@@ -177,6 +178,113 @@ describe('the API answers for Cube (AC-007)', () => {
 
     expect(response.statusCode).toBe(400);
     expect(reached).toBe(false);
+    await app.close();
+  });
+
+  /**
+   * T174 / AC-168: THE SYSTEM SHALL show the generated SQL and the effective
+   * filters for a chart under the previewed context.
+   *
+   * Cube's `/v1/sql`, asked as the context, answers `sql.sql` as `[text,
+   * params]`, generated after its policies apply (research/cube/
+   * access-control.md, "Observed locally").
+   */
+  it('answers a query’s SQL as Cube generates it for a previewed context (T174)', async () => {
+    const asked: { url: string; claims: Record<string, unknown> }[] = [];
+    const cube = new CubeClient({
+      apiUrl: config.cubeApiUrl,
+      apiSecret: SECRET,
+      securityContext: { tenant: 'acme', wechartStore: 'http://store' },
+      fetchImpl: (async (url: string, init: RequestInit) => {
+        const token = new Headers(init.headers).get('authorization')?.replace('Bearer ', '') ?? '';
+        asked.push({
+          url,
+          claims: JSON.parse(
+            Buffer.from(token.split('.')[1] ?? '', 'base64url').toString(),
+          ) as Record<string, unknown>,
+        });
+        return new Response(
+          JSON.stringify({
+            sql: { sql: ['SELECT 1 WHERE status = $1', ['shipped']], preAggregations: [] },
+          }),
+        );
+      }) as typeof fetch,
+    });
+    const app = buildServer({ config, cube });
+    const query = { measures: ['secured_orders.count'] };
+
+    const answered = await app.inject({
+      method: 'POST',
+      url: '/api/sql',
+      payload: { query, context: { groups: ['sales'], wechartDraft: 'x' } },
+    });
+    const noQuery = await app.inject({ method: 'POST', url: '/api/sql', payload: {} });
+    const badContext = await app.inject({
+      method: 'POST',
+      url: '/api/sql',
+      payload: { query, context: 'sales' },
+    });
+
+    expect(answered.statusCode).toBe(200);
+    expect(answered.json()).toEqual({
+      queries: [{ sql: 'SELECT 1 WHERE status = $1', params: ['shipped'] }],
+    });
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.url).toBe(
+      `${config.cubeApiUrl}/v1/sql?query=${encodeURIComponent(JSON.stringify(query))}`,
+    );
+    // As the preview, in place of the configured context (T172).
+    const { iat, exp, ...claims } = asked[0]?.claims ?? {};
+    expect(claims).toEqual({ groups: ['sales'], wechartStore: 'http://store' });
+    expect([typeof iat, typeof exp]).toEqual(['number', 'number']);
+    expect([noQuery.statusCode, badContext.statusCode]).toEqual([400, 400]);
+    await app.close();
+  });
+
+  it('answers every statement of a query Cube runs as several, and refuses one without SQL (T174)', async () => {
+    let answer: unknown = [
+      { sql: { sql: ['SELECT a WHERE x = $1', ['1']] } },
+      { sql: { sql: ['SELECT b', []] } },
+    ];
+    const app = buildServer({ config, cube: stubCube(() => answer) });
+    const ask = () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/sql',
+        payload: { query: { measures: ['a.count'] }, context: {} },
+      });
+
+    const several = await ask();
+    answer = { sql: { preAggregations: [] } };
+    const without = await ask();
+
+    expect(several.json()).toEqual({
+      queries: [
+        { sql: 'SELECT a WHERE x = $1', params: ['1'] },
+        { sql: 'SELECT b', params: [] },
+      ],
+    });
+    expect(without.statusCode).toBe(502);
+    expect(without.json()).toEqual({ error: 'Cube answered without the SQL it would run.' });
+    await app.close();
+  });
+
+  it('passes on Cube’s refusal of a previewed context’s SQL, in Cube’s words (T174)', async () => {
+    const app = buildServer({
+      config,
+      cube: stubCube(() => {
+        throw new CubeError("Error: You requested hidden member: 'secured_orders.count'.", 500);
+      }),
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sql',
+      payload: { query: { measures: ['secured_orders.count'] }, context: {} },
+    });
+    expect(response.json()).toMatchObject({
+      error: "Error: You requested hidden member: 'secured_orders.count'.",
+    });
+    expect(response.statusCode).toBe(500);
     await app.close();
   });
 });

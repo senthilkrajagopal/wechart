@@ -1,4 +1,10 @@
-import type { ChartDocument, MemberFormats, RenderSpec } from '@wechart/core';
+import {
+  toChartSpec,
+  toCubeQuery,
+  type ChartDocument,
+  type MemberFormats,
+  type RenderSpec,
+} from '@wechart/core';
 import {
   useCallback,
   useContext,
@@ -42,7 +48,8 @@ import { PreviewBanner } from './PreviewBanner';
 import { SettingsPage } from './settings/SettingsPage';
 import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
-import { activeFilters, type ActiveFilter } from '../filters/apply';
+import { activeFilters, withFilters, type ActiveFilter } from '../filters/apply';
+import { GeneratedSql } from '../workspaces/security/GeneratedSql';
 import { coverageOf, type Reach } from '../filters/coverage';
 import { describeFilter } from '../filters/describe';
 import { NotCovered } from '../filters/NotCovered';
@@ -331,6 +338,8 @@ interface TileCharts {
   readonly onRefresh?: ((chartId: string) => void) | undefined;
   readonly refreshing?: ReadonlySet<string> | undefined;
   readonly refreshable?: boolean | undefined;
+  /** Show a chart's SQL as the previewed security context (T174); only while previewing. */
+  readonly onShowSql?: ((chartId: string, tileId: string) => void) | undefined;
 }
 
 interface Affordances {
@@ -493,6 +502,25 @@ function Elements({
                 }}
               >
                 ↻
+              </button>
+            )}
+            {/* The chart's SQL as the previewed context (T174, AC-168). */}
+            {element.kind !== 'chart' ||
+            element.chartId === undefined ||
+            affordances.charts.onShowSql === undefined ? null : (
+              <button
+                type="button"
+                className="tile-refresh tile-sql"
+                // The tile, not the chart: one chart can be on two tiles, and
+                // focus goes back to the one it was opened from.
+                data-show-sql={element.id}
+                aria-label={`SQL for ${charts.titleOf?.(chartId) ?? element.text ?? element.kind} as this context`}
+                title="The SQL Cube runs for this chart as the previewed context"
+                onClick={() => {
+                  affordances.charts.onShowSql?.(chartId, element.id);
+                }}
+              >
+                SQL
               </button>
             )}
             {affordances.moveTo === undefined ? null : (
@@ -866,6 +894,8 @@ export function DashboardView({
    */
   const filteredCharts = useRef<FilteredChartsHandle>(null);
   const [refreshingFiltered, setRefreshingFiltered] = useState<ReadonlySet<string>>(new Set());
+  /** The chart whose SQL as the previewed context is open (T174). */
+  const [sqlFor, setSqlFor] = useState<{ chartId: string; tileId: string } | undefined>(undefined);
   const refreshTile = (chartId: string) => {
     const handle = filteredCharts.current;
     if (handle === null || !handle.isFiltered(chartId) || filtered[chartId]?.unfiltered === true) {
@@ -958,6 +988,43 @@ export function DashboardView({
     ...(onRefresh === undefined ? {} : { onRefresh: refreshTile }),
     refreshing: new Set([...(refreshing ?? []), ...refreshingFiltered]),
     refreshable: refreshable !== false && !loading,
+    ...(preview === undefined
+      ? {}
+      : {
+          // Only for a chart whose query can be read: a click before it has
+          // loaded would otherwise open the dialog later, unasked.
+          onShowSql: (chartId: string, tileId: string) => {
+            if (queryOf(chartId) !== undefined) setSqlFor({ chartId, tileId });
+          },
+        }),
+  };
+
+  /**
+   * The query a tile asks, for its SQL as the previewed context (T174): its
+   * chart's, with the filters that reach it and that Cube could join — the
+   * same query `FilteredCharts` asks — so the SQL shown is the SQL it runs.
+   */
+  const queryOf = (chartId: string): Record<string, unknown> | undefined => {
+    const chart = drawn.documents?.[chartId];
+    if (chart === undefined) return undefined;
+    const refused = filtered[chartId]?.uncovered ?? [];
+    const applied = (reached[chartId] ?? []).filter(({ filter }) => !refused.includes(filter.id));
+    try {
+      return withFilters(toCubeQuery(toChartSpec(chart)), applied);
+    } catch {
+      return undefined;
+    }
+  };
+  const sqlQuery = sqlFor === undefined ? undefined : queryOf(sqlFor.chartId);
+  const closeSql = () => {
+    const opener = sqlFor?.tileId ?? '';
+    setSqlFor(undefined);
+    // Back to the SQL button of the tile it was opened from.
+    requestAnimationFrame(() => {
+      window.document
+        .querySelector<HTMLElement>(`[data-show-sql="${CSS.escape(opener)}"]`)
+        ?.focus();
+    });
   };
 
   /**
@@ -1105,6 +1172,14 @@ export function DashboardView({
   return (
     <SecurityPreview.Provider value={preview}>
       {preview === undefined ? null : <PreviewBanner context={preview} onExit={onExitPreview} />}
+      {preview === undefined || sqlFor === undefined || sqlQuery === undefined ? null : (
+        <GeneratedSql
+          title={chartTitleOf(sqlFor.chartId) ?? 'this chart'}
+          query={sqlQuery}
+          context={preview}
+          onClose={closeSql}
+        />
+      )}
       {Object.keys(reached).length === 0 ? null : (
         <FilteredCharts
           ref={filteredCharts}
