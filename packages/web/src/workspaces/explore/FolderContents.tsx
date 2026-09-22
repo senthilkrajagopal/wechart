@@ -52,6 +52,8 @@ export function FolderContents({
   const [draft, setDraft] = useState('');
   const [selected, setSelected] = useState(0);
   const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
+  /** Each row's Rename, for focus to go back to when a rename is put away. */
+  const renameRefs = useRef(new Map<string, HTMLButtonElement>());
 
   /**
    * AC-024: arrow keys move the selection, Enter opens it.
@@ -67,6 +69,10 @@ export function FolderContents({
   };
 
   const onKeyDown = (event: React.KeyboardEvent, index: number) => {
+    // The row's own keys only: those pressed in its rename field, its
+    // buttons or its Move-to list are theirs — Enter saving a rename, the
+    // arrows choosing a folder (found by the AC-176 keyboard audit).
+    if (event.target !== event.currentTarget) return;
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
@@ -139,7 +145,16 @@ export function FolderContents({
                   <input
                     id={`rename-${item.id}`}
                     value={draft}
+                    // The keyboard goes where the rename is (AC-176 audit).
+                    ref={(element) => element?.focus()}
                     onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Escape') return;
+                      // The name as it was, and focus back where it began.
+                      event.preventDefault();
+                      setRenaming(null);
+                      renameRefs.current.get(item.id)?.focus();
+                    }}
                   />
                   <button type="submit">Save</button>
                 </form>
@@ -163,6 +178,10 @@ export function FolderContents({
             <td>
               <button
                 type="button"
+                ref={(element) => {
+                  if (element === null) renameRefs.current.delete(item.id);
+                  else renameRefs.current.set(item.id, element);
+                }}
                 onClick={() => {
                   setRenaming(item.id);
                   setDraft(item.title);

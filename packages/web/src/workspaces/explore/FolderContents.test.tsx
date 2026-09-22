@@ -168,6 +168,60 @@ describe('keyboard navigation (AC-024)', () => {
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'f1' }));
   });
 
+  /**
+   * Found by the AC-176 keyboard audit: the row's keys are the row's, not the
+   * rename field's or the Move-to list's inside it. Enter in the rename field
+   * saves the name — it opened the item, and the rename was lost — and the
+   * arrow keys and Home/End act on the field and the list.
+   */
+  it('leaves the keys of the controls inside a row to them', async () => {
+    const onOpen = vi.fn();
+    const onRename = vi.fn();
+    const onMove = vi.fn();
+    render(
+      <FolderContents
+        items={items}
+        onOpen={onOpen}
+        onRename={onRename}
+        onMove={onMove}
+        folders={[{ id: 'f9', title: 'Archive' }]}
+      />,
+    );
+    const row = rowFor('c1');
+
+    await userEvent.click(within(row).getByRole('button', { name: 'Rename' }));
+    const field = within(row).getByLabelText(/^New name for/);
+    await userEvent.clear(field);
+    await userEvent.type(field, 'Renamed{Home}{End}{ArrowUp}{Enter}');
+
+    expect(onRename).toHaveBeenCalledWith(expect.objectContaining({ id: 'c1' }), 'Renamed');
+    expect(onOpen).not.toHaveBeenCalled();
+
+    // The Move-to list: arrow keys choose within it, not another row.
+    const move = within(rowFor('d1')).getByLabelText(/^Move .* to$/);
+    move.focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(move);
+  });
+
+  it('puts the keyboard in the rename field, and Escape puts the name back', async () => {
+    const onRename = vi.fn();
+    render(<FolderContents items={items} onRename={onRename} />);
+    const row = rowFor('c1');
+    const rename = within(row).getByRole('button', { name: 'Rename' });
+
+    rename.focus();
+    await userEvent.keyboard('{Enter}');
+    const field = within(row).getByLabelText(/^New name for/);
+    expect(document.activeElement).toBe(field);
+
+    await userEvent.keyboard('Other{Escape}');
+    expect(within(row).queryByLabelText(/^New name for/)).toBeNull();
+    expect(onRename).not.toHaveBeenCalled();
+    // Back where the rename began.
+    expect(document.activeElement).toBe(within(row).getByRole('button', { name: 'Rename' }));
+  });
+
   it('leaves the empty folder message alone', () => {
     render(<FolderContents items={[]} />);
 

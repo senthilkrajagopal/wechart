@@ -205,6 +205,9 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 - [x] T022 (AC-024) Navigate the Explore contents with the arrow keys and open with Enter
   - Files: `packages/web/src/workspaces/explore/FolderContents.tsx`, `packages/web/src/workspaces/explore/FolderContents.test.tsx`, `packages/web/src/shell/styles.ts`, `e2e/explore-keyboard.spec.ts`
   - Failing test: `FolderContents.test.tsx` and `e2e/explore-keyboard.spec.ts`: arrow keys move the selection through the listed items and Enter opens the selected one (AC-024).
+  - **Fixed 2026-09-22 (found by the AC-176 keyboard audit):**
+    - The row's handler took the keys of the controls inside it. Enter in the rename field opened the item and lost the rename, and the arrows and Home/End moved rows instead of acting on the field or the Move-to list. The row now handles only keys pressed on itself.
+    - Rename now puts the keyboard in its field, and Escape puts the name back, returning focus to Rename.
   - Depends on: T016
   - Done 2026-09-19. AC-024 ticked. A **roving tabindex**, so the list is one stop in the page's tab order rather than one per row — with thirty dashboards, tabbing through every one to reach what follows is its own accessibility failure, and a test asserts exactly one row is tabbable at a time.
   - Selection is marked with `aria-selected` and a background, not the focus ring alone, so it stays visible when focus moves into a control inside the row. Arrow keys stop at the ends rather than wrapping.
