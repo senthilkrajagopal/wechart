@@ -2721,10 +2721,24 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/ui/src/StatusBadge.tsx`, `e2e/status-labels.spec.ts`
   - Failing test: `e2e/status-labels.spec.ts`: across every workspace, no status, validation or job state is conveyed by colour alone (AC-177).
   - Depends on: T158
-- [ ] T184 (AC-179) Render dashboards, the chart editor and the model editor without horizontal scrolling at 1,280 px
+- [x] T184 (AC-179) Render dashboards, the chart editor and the model editor without horizontal scrolling at 1,280 px
   - Files: `packages/web/src/**/*.css.ts`, `e2e/no-horizontal-scroll.spec.ts`
   - Failing test: `e2e/no-horizontal-scroll.spec.ts`: at a 1,280 px viewport none of the three surfaces scrolls horizontally (AC-179).
   - Depends on: T023, T032, T139
+  - **Done 2026-09-22.** Files as built:
+    - `e2e/no-horizontal-scroll.spec.ts`.
+    - `packages/web/src/shell/styles.ts` (there is no `*.css.ts`).
+  - **What counts, the user's ruling (2026-09-22):**
+    - Never scroll sideways: the page and each surface's own scroll area (the document, the shell's `main`, and a dashboard's canvas).
+    - May scroll within themselves: inner panes, such as the chart preview at Actual size, the code editor's long lines, a wide table tile, and a tab strip.
+  - **Found and fixed:** the chart editor's first-row JSON, one unbroken line in its 280 px column, pushed the page about 387 px sideways. It now wraps.
+    - Without the fix the test fails in all three browsers (about 385–388 px). The first draft of the test measured before the result was drawn, so only WebKit caught it.
+  - Measured:
+    - the seeded dashboard, viewed and in edit mode with its sidebar;
+    - the standalone editor with its result and preview drawn;
+    - the editor over a dashboard, at the widest seeded tile;
+    - the model editor.
+  - AC-179 ticked on `e2e/no-horizontal-scroll.spec.ts` (Chrome, Firefox, Safari). Edge runs in CI only.
 - [ ] T185 (AC-180) Run the acceptance suite in Chrome, Edge, Firefox and Safari against the built app
   - Files: `playwright.config.ts`, `.github/workflows/ci.yml`, `e2e/**`
   - Failing test: the full `e2e/` suite passes in all four desktop browsers (AC-180).

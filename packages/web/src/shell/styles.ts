@@ -1777,6 +1777,9 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   border-radius: 6px;
   background: var(--wc-bg-surface);
 }
+/* The first row's JSON wraps within its column: one unbroken line of it
+   pushed the page sideways at 1,280 px (T184, AC-179). */
+.chart-editor [data-testid='result-first-row'] { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* The chart editor opened over the dashboard from a tile (T032). Laid out
    as the settings page is: its own bar in place of the dashboard's, and the

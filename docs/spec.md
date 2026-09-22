@@ -597,7 +597,7 @@ Traces to: `[R3]`, `[R7]`, direction.md rules 1–5, 39, 52.
       Fails when: any state is conveyed by colour alone.
 - [x] AC-178 THE SYSTEM SHALL provide a table view of every chart's data, reachable from the tile (direction.md rule 5).
       Fails when: a chart type offers no table view.
-- [ ] AC-179 THE SYSTEM SHALL render dashboards, the chart editor and the model editor without horizontal scrolling at a viewport width of 1,280 pixels.
+- [x] AC-179 THE SYSTEM SHALL render dashboards, the chart editor and the model editor without horizontal scrolling at a viewport width of 1,280 pixels.
       Fails when: any of those surfaces scrolls horizontally at that width.
 - [ ] AC-180 THE SYSTEM SHALL work in current Chrome, Edge, Firefox and Safari on desktop (`[R7]`).
       Fails when: any acceptance test in this spec fails in one of those browsers.
