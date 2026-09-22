@@ -37,7 +37,25 @@ const FILES = [
 `,
   },
   { path: 'views/summary.yml', content: 'views:\n  - name: summary\n' },
+  {
+    path: 'views/orders_view.yml',
+    content: `views:
+  - name: orders_view
+    cubes:
+      - join_path: orders
+        includes: [count, status]
+    measures:
+      - name: share
+        sql: "{count} / 2"
+        type: number
+`,
+  },
   { path: 'cubes/broken.yml', content: 'cubes:\n  - name: [unclosed\n' },
+  {
+    path: 'cubes/generated.yml',
+    content: 'cubes:\n{% for n in ["a"] %}\n  - name: {{ n }}\n{% endfor %}\n',
+  },
+  { path: 'globals.py', content: 'from cube import TemplateContext\n' },
 ];
 
 beforeEach(() => {
@@ -85,10 +103,49 @@ describe('the model files', () => {
     expect(within(summary).getByRole('group', { name: 'View summary' })).toBeTruthy();
   });
 
+  it('list a view’s own members and what it includes from its cubes', async () => {
+    list();
+
+    const file = await screen.findByRole('region', { name: 'views/orders_view.yml' });
+    const view = within(file).getByRole('group', { name: 'View orders_view' });
+    expect(
+      within(within(view).getByRole('list', { name: 'Measures' })).getByText('share'),
+    ).toBeTruthy();
+    expect(
+      within(view)
+        .getAllByRole('listitem')
+        .filter((item) => item.closest('ul')?.getAttribute('aria-label') === 'Includes')
+        .map((item) => item.textContent),
+    ).toEqual(['orders.count', 'orders.status']);
+  });
+
   it('say which file could not be read, and where', async () => {
     list();
 
     const broken = await screen.findByRole('region', { name: 'cubes/broken.yml' });
     expect(within(broken).getByRole('alert').textContent).toMatch(/line \d+/);
+  });
+
+  it('say what a Jinja template and the Python globals are, rather than misreading them', async () => {
+    list();
+
+    const template = await screen.findByRole('region', { name: 'cubes/generated.yml' });
+    expect(within(template).queryByRole('alert')).toBeNull();
+    expect(template.textContent).toContain(
+      'Jinja template: Cube renders it before reading its cubes and views, so they aren’t listed from its text.',
+    );
+    expect(screen.getByRole('region', { name: 'globals.py' }).textContent).toContain(
+      'Python: the functions and variables the Jinja templates use. It defines no cubes or views.',
+    );
+  });
+
+  it('say there are none, rather than showing nothing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ files: [] }))),
+    );
+    list();
+
+    expect(await screen.findByText('There are no model files.')).toBeTruthy();
   });
 });

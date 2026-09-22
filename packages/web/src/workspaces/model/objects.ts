@@ -6,7 +6,14 @@ import { parseDocument, type DocumentOptions, type ParseOptions, type SchemaOpti
  * pre-aggregations — read from its text as Cube reads it.
  */
 export type MemberKind =
-  'measure' | 'dimension' | 'segment' | 'hierarchy' | 'join' | 'pre-aggregation';
+  | 'measure'
+  | 'dimension'
+  | 'segment'
+  | 'hierarchy'
+  | 'join'
+  | 'pre-aggregation'
+  /** A view's member taken from one of its cubes, by path: `orders.count`, `orders.*`. */
+  | 'include';
 
 export interface ModelObject {
   readonly kind: 'cube' | 'view';
@@ -18,9 +25,19 @@ export interface FileObjects {
   readonly objects: readonly ModelObject[];
   /** Why the file could not be read, with the line; absent when it could. */
   readonly problem?: string;
-  /** The language of a file that is code, not YAML, whose objects its text does not list. */
-  readonly code?: 'JavaScript' | 'Python';
+  /**
+   * What a file is when it is not plain YAML, whose objects its text does
+   * not list: code, or a Jinja template Cube renders before reading it.
+   */
+  readonly code?: 'JavaScript' | 'Python' | 'Jinja';
 }
+
+/**
+ * Cube renders a YAML file with Jinja first if it matches this, and every
+ * `.jinja` file (research/cube/data-modeling.md, "How each file type is
+ * compiled"); `{#` comments too (research/yaml.md, "Jinja files").
+ */
+const JINJA = /{%|%}|{{|}}|{#/;
 
 /**
  * Cube reads YAML with js-yaml's defaults, which resolve `<<` merges and
@@ -49,9 +66,38 @@ const named = (entries: unknown): string[] =>
     .map((entry) => (entry as { name?: unknown } | null)?.name)
     .filter((name): name is string => typeof name === 'string');
 
+/**
+ * What a view takes from its cubes (research Y.10a): each `cubes` entry's
+ * `includes` — names, `{name, …}` objects, or `"*"` — by the join path.
+ */
+function includedBy(view: Record<string, unknown>): string[] {
+  const cubes = Array.isArray(view['cubes']) ? (view['cubes'] as unknown[]) : [];
+  return cubes.flatMap((entry) => {
+    const { join_path: path, includes } = (entry ?? {}) as Record<string, unknown>;
+    if (typeof path !== 'string') return [];
+    if (includes === '*') return [`${path}.*`];
+    return (Array.isArray(includes) ? includes : [])
+      .map((each) => (typeof each === 'string' ? each : (each as { name?: unknown } | null)?.name))
+      .filter((name): name is string => typeof name === 'string')
+      .map((name) => `${path}.${name}`);
+  });
+}
+
+const membersOf = (object: Record<string, unknown>) =>
+  MEMBER_LISTS.flatMap(([key, kind]) => named(object[key]).map((name) => ({ kind, name })));
+
+const namedObjects = (list: unknown) =>
+  (Array.isArray(list) ? list : []).filter(
+    (each): each is Record<string, unknown> =>
+      each !== null &&
+      typeof each === 'object' &&
+      typeof (each as { name?: unknown }).name === 'string',
+  );
+
 export function objectsOf(path: string, content: string): FileObjects {
   if (path.endsWith('.js')) return { objects: [], code: 'JavaScript' };
   if (path.endsWith('.py')) return { objects: [], code: 'Python' };
+  if (path.endsWith('.jinja') || JINJA.test(content)) return { objects: [], code: 'Jinja' };
 
   let document;
   try {
@@ -70,20 +116,29 @@ export function objectsOf(path: string, content: string): FileObjects {
     };
   }
 
-  const model = (document.toJS() ?? {}) as { cubes?: unknown; views?: unknown };
-  const cubes = (Array.isArray(model.cubes) ? model.cubes : []) as Record<string, unknown>[];
+  let model: { cubes?: unknown; views?: unknown };
+  try {
+    model = (document.toJS() ?? {}) as { cubes?: unknown; views?: unknown };
+  } catch (error) {
+    // Some problems show only in reading the values (research/yaml.md):
+    // this file says so, and the rest of the listing still reads.
+    return { objects: [], problem: error instanceof Error ? error.message : String(error) };
+  }
   return {
     objects: [
-      ...cubes
-        .filter((cube) => typeof cube?.['name'] === 'string')
-        .map((cube) => ({
-          kind: 'cube' as const,
-          name: cube['name'] as string,
-          members: MEMBER_LISTS.flatMap(([key, kind]) =>
-            named(cube[key]).map((name) => ({ kind, name })),
-          ),
-        })),
-      ...named(model.views).map((name) => ({ kind: 'view' as const, name, members: [] })),
+      ...namedObjects(model.cubes).map((cube) => ({
+        kind: 'cube' as const,
+        name: cube['name'] as string,
+        members: membersOf(cube),
+      })),
+      ...namedObjects(model.views).map((view) => ({
+        kind: 'view' as const,
+        name: view['name'] as string,
+        members: [
+          ...membersOf(view),
+          ...includedBy(view).map((name) => ({ kind: 'include' as const, name })),
+        ],
+      })),
     ],
   };
 }

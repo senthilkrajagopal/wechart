@@ -229,6 +229,8 @@ main { padding: var(--wc-surface-padding); }
 }
 .model-file__problem { margin: 0; color: var(--wc-text-primary); }
 .model-file__note { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+/* The workspace's own notes: reading, none, or a file that is not plain YAML. */
+.model-files__note { margin: 0; color: var(--wc-text-secondary); }
 .model-object { padding: 8px 0; border-top: 1px solid var(--wc-border-subtle); }
 .model-object__name { margin: 0 0 4px; font-weight: 600; }
 .model-object__kind {

@@ -1690,6 +1690,29 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - `FileList.test.tsx` (2): every kind, listed under its cube, in the rendered component; an unreadable file's problem, shown on it.
     - `e2e/model.spec.ts` (1 in each browser): on the real service, `/model` lists the seeded files. `cubes/orders.yml` shows cube `orders` with its measures, dimensions and joins; `customers.yml` and `products.yml` are there; `views/order_summary.yml` shows view `order_summary`.
       - The seed model declares no segments, hierarchies or pre-aggregations. Those kinds are shown in the same component by `FileList.test.tsx`.
+  - **Cold review (one round, 2026-09-21), verdict FAIL. Fixed in the review commit:**
+    - **A view's members were never listed**, against AC-131's Fails-when.
+      - A view now lists its own member lists.
+      - It also lists what it includes from its cubes, by path, under Includes. For example `orders.count`, and `orders.customers.*` for `"*"`.
+      - Tests: `objects.test.ts` and `FileList.test.tsx`, and the e2e checks the seeded `order_summary`'s includes.
+    - **Jinja templates were read as plain YAML.** A `{% for %}` showed a false parse error, and a `{{ name }}` dropped its cube.
+      - A `.jinja` file, or one matching Cube's Jinja test (`{%`, `%}`, `{{`, `}}`, plus `{#`), is now held as a template. It isn't parsed, and it says why.
+      - The file page does the same, so a template no longer opens in the editor. That closes what T141's review left.
+    - **One file whose values can't be read** (an alias to no anchor) threw from `toJS()` and took the whole listing down. That file now says so, and the rest still reads.
+    - **The notes for non-YAML files now say what Cube does:**
+      - JavaScript: Cube runs it.
+      - Python: a root `globals.py` supplies the Jinja templates' functions and variables, and any other `.py` isn't used.
+      - Jinja: rendered before its cubes and views are read.
+    - **Dot-files are read, as Cube reads them.** Cube's `FileRepository` has no hidden-file filter (research/cube/data-modeling.md, checked in the v1.7.42 source), so a `cubes/.draft.yml` is compiled. wechart used to drop it.
+    - **A path that isn't a file** (a directory named `old.yml`) is walked, not read.
+    - **A missing model directory still reads as nothing.** Any other failure to read it, such as a file in its place, now fails the start instead of showing an empty model.
+    - **An empty model** says "There are no model files." instead of showing a blank page. The `.model-files__note` class now has its rule.
+  - **Left from the review:**
+    - **Seeding never refreshes a stored path.** Until T143 Cube reads the disk while the listing reads the store, so a file changed on disk after the first seed makes the two differ. The claim above that they "cannot differ" was wrong.
+      - This is left alone because the store is meant to be the truth once T142 and T143 publish from it, and a restart must not write over what was published.
+      - T143 serves Cube from the store, which closes the gap.
+    - **JavaScript models' objects aren't listed.** A static `cube(...)` file has objects only once Cube runs it, and AC-131 has no exception for that. This is put to the user. The seed model has no JavaScript files.
+    - **The layout differs from direction.md §7b's user decision:** a file tree beside the form and the YAML. What was built is a listing page and a separate file page. That design gap is recorded for the Model workspace's layout work.
 - [x] T138 (AC-132) Generate a form for every key Cube's validator accepts, with the validator's own enumerations
   - Files: `packages/web/src/workspaces/model/form/{schema,CubeForm}.tsx`, `packages/web/src/workspaces/model/form/schema.test.ts`
   - Failing test: `schema.test.ts`: every accepted key on a cube or view has a field, and each enumeration offers exactly the validator's allowed values (AC-132).

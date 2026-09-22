@@ -123,6 +123,7 @@ module.exports = {
 
 - Model files live in `model/` by default. Change it with `schema_path` or `CUBEJS_SCHEMA_PATH`. The docs recommend `model/cubes` and `model/views` with one entity per file ([d-syntax], [r-config], [r-env]).
 - The default `FileRepository` recursively reads `process.cwd()/<schemaPath>` and keeps files ending in `.js`, `.yml`, `.yaml`, `.jinja` or `.py`. It returns `{ fileName (relative path), content }` ([s-filerepo]).
+  - It skips nothing else. `getFiles` `fs.stat`s each entry, recurses into directories and pushes everything else. The only filter is the extension check, so a dot-file such as `cubes/.draft.yml` is compiled. Checked in the v1.7.42 source on 2026-09-21 ([raw](https://raw.githubusercontent.com/cube-js/cube/v1.7.42/packages/cubejs-backend-shared/src/FileRepository.ts)).
 
 **How each file type is compiled** ([s-dsc])
 

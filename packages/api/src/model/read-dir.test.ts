@@ -23,6 +23,11 @@ beforeEach(async () => {
   await writeFile(join(dir, 'cubes', 'dynamic.py'), 'from cube import TemplateContext\n');
   await writeFile(join(dir, 'README.md'), 'not a model file\n');
   await writeFile(join(dir, 'cubes', '.orders.yml.swp'), 'an editor’s scratch\n');
+  // Cube's FileRepository skips no dot-file, only other extensions
+  // (research/cube/data-modeling.md, "File layout"): so neither does wechart.
+  await writeFile(join(dir, 'cubes', '.draft.yml'), 'cubes:\n  - name: draft\n');
+  // A directory is not a file, whatever it is called.
+  await mkdir(join(dir, 'views', 'old.yml'));
 });
 
 afterEach(async () => {
@@ -34,6 +39,7 @@ describe('reading the model directory', () => {
     const files = await readModelDir(dir);
 
     expect(files).toEqual([
+      { path: 'cubes/.draft.yml', content: 'cubes:\n  - name: draft\n' },
       { path: 'cubes/dynamic.py', content: 'from cube import TemplateContext\n' },
       { path: 'cubes/orders.yml', content: 'cubes:\n  - name: orders\n' },
       { path: 'views/summary.yaml', content: 'views:\n  - name: summary\n' },
@@ -42,5 +48,10 @@ describe('reading the model directory', () => {
 
   it('reads nothing, rather than failing the service, from a directory that is not there', async () => {
     expect(await readModelDir(join(dir, 'missing'))).toEqual([]);
+  });
+
+  it('fails, rather than reading nothing, where the directory is there but can’t be read', async () => {
+    // A file where the directory should be: not "missing", so not quietly empty.
+    await expect(readModelDir(join(dir, 'README.md'))).rejects.toThrow(/ENOTDIR/);
   });
 });

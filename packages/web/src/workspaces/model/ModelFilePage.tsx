@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
-import { MODEL_FILES_QUERY } from './FileList';
+import { codeNoteOf, MODEL_FILES_QUERY } from './FileList';
 import { objectsOf } from './objects';
 import { CubeForm } from './form/CubeForm';
 import { problemsOf, type Problem } from './problems';
@@ -138,8 +138,9 @@ function FileEditor({ path, content }: { path: string; content: string }) {
 
 function FileBody({ path, content }: { path: string; content: string }) {
   const read = useMemo(() => objectsOf(path, content), [path, content]);
+  // Held read-only, with the reason; its text in a read-only editor is T146.
   if (read.code !== undefined)
-    return <p>{read.code} code: its cubes and views are made when Cube runs it.</p>;
+    return <p className="model-files__note">{codeNoteOf(path, read.code)}</p>;
   // A file that does not parse opens too: its problems are listed, to be fixed.
   // Keyed by the file: another file is another text, not this one's state.
   return <FileEditor key={path} path={path} content={content} />;

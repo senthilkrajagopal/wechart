@@ -22,11 +22,14 @@ test('the Model workspace lists each model file with what it defines', async ({ 
   for (const file of ['cubes/customers.yml', 'cubes/products.yml']) {
     await expect(page.getByRole('region', { name: file })).toBeVisible();
   }
-  await expect(
-    page
-      .getByRole('region', { name: 'views/order_summary.yml' })
-      .getByRole('group', { name: 'View order_summary' }),
-  ).toBeVisible();
+  // A view's members: what it includes from its cubes, by path.
+  const view = page
+    .getByRole('region', { name: 'views/order_summary.yml' })
+    .getByRole('group', { name: 'View order_summary' });
+  await expect(view.getByRole('list', { name: 'Includes' }).getByRole('listitem')).toHaveText([
+    'orders.count',
+    'orders.status',
+  ]);
 });
 
 /**

@@ -78,6 +78,54 @@ views:
     ]);
   });
 
+  it('lists a view’s own members, and the members it includes from its cubes', () => {
+    const text = `views:
+  - name: summary
+    cubes:
+      - join_path: orders
+        includes:
+          - count
+          - name: status
+            alias: order_status
+      - join_path: orders.customers
+        includes: "*"
+    measures:
+      - name: share
+        sql: "{count} / 2"
+        type: number
+`;
+    expect(objectsOf('views/summary.yml', text).objects).toEqual([
+      {
+        kind: 'view',
+        name: 'summary',
+        members: [
+          { kind: 'measure', name: 'share' },
+          { kind: 'include', name: 'orders.count' },
+          { kind: 'include', name: 'orders.status' },
+          { kind: 'include', name: 'orders.customers.*' },
+        ],
+      },
+    ]);
+  });
+
+  it('holds a Jinja template as a template, rather than reading it as YAML', () => {
+    // Cube renders Jinja before it reads the YAML (research/cube/data-modeling.md).
+    const loop = 'cubes:\n{% for name in ["a", "b"] %}\n  - name: {{ name }}\n{% endfor %}\n';
+
+    expect(objectsOf('cubes/generated.yml', loop)).toEqual({ objects: [], code: 'Jinja' });
+    expect(objectsOf('cubes/plain.yml.jinja', 'cubes:\n  - name: a\n')).toEqual({
+      objects: [],
+      code: 'Jinja',
+    });
+  });
+
+  it('says a file’s values cannot be read, rather than failing the whole listing', () => {
+    const read = objectsOf('cubes/x.yml', 'cubes:\n  - name: a\n    sql_table: *ba\n');
+
+    expect(read.objects).toEqual([]);
+    expect(read.problem).toBe('Unresolved alias (the anchor must be set before the alias): ba');
+  });
+
   it('says where a file cannot be read, rather than listing nothing', () => {
     const read = objectsOf('cubes/broken.yml', 'cubes:\n  - name: [unclosed\n');
 

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { objectsOf, type MemberKind, type ModelObject } from './objects';
+import { objectsOf, type FileObjects, type MemberKind, type ModelObject } from './objects';
 
 /**
  * The Model workspace's file list (T137, AC-131): every model file, and under
@@ -18,7 +18,23 @@ const GROUPS: readonly [kind: MemberKind, label: string][] = [
   ['hierarchy', 'Hierarchies'],
   ['join', 'Joins'],
   ['pre-aggregation', 'Pre-aggregations'],
+  ['include', 'Includes'],
 ];
+
+/**
+ * What a file that is not plain YAML is, and why its objects are not listed
+ * (research/cube/data-modeling.md, "How each file type is compiled").
+ */
+export function codeNoteOf(path: string, code: NonNullable<FileObjects['code']>): string {
+  if (code === 'JavaScript')
+    return 'JavaScript: Cube runs it to make its cubes and views, so they aren’t listed from its text.';
+  if (code === 'Jinja')
+    return 'Jinja template: Cube renders it before reading its cubes and views, so they aren’t listed from its text.';
+  // Cube loads only a `globals.py` at the model's root, as the Jinja context.
+  return path === 'globals.py'
+    ? 'Python: the functions and variables the Jinja templates use. It defines no cubes or views.'
+    : 'Python: Cube reads only a globals.py at the model’s root, so it doesn’t use this file.';
+}
 
 export const MODEL_FILES_QUERY = {
   queryKey: ['model-files'],
@@ -65,6 +81,10 @@ export function FileList() {
       </p>
     );
 
+  if (files.data.length === 0)
+    // Nothing seeded: an empty or missing model directory (logged by the API).
+    return <p className="model-files__note">There are no model files.</p>;
+
   return (
     <div className="model-files" data-testid="model-files">
       {files.data.map((file) => {
@@ -81,9 +101,7 @@ export function FileList() {
               </p>
             )}
             {read.code === undefined ? null : (
-              <p className="model-file__note">
-                {read.code} code: its cubes and views are made when Cube runs it.
-              </p>
+              <p className="model-file__note">{codeNoteOf(file.path, read.code)}</p>
             )}
             {read.objects.map((object) => (
               <ObjectEntry key={`${object.kind} ${object.name}`} object={object} />
