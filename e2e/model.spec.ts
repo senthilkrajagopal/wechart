@@ -280,6 +280,53 @@ test('the join diagram draws each declared join its way, and adds one', async ({
 });
 
 /**
+ * T147 / AC-141: WHEN the user edits a member that charts use, THE SYSTEM
+ * SHALL list the charts and dashboards that reference it before saving.
+ * Fails when: a referencing chart is missing from that list.
+ *
+ * On the seed data: `orders.count` is used by the seed charts. Cancelled, so
+ * the model every other test reads is never changed.
+ */
+test('a save that edits a member charts use lists them first, and saves only if told', async ({
+  page,
+}) => {
+  await page.goto('/model/files/cubes%2Forders.yml');
+  const form = page.getByRole('region', { name: 'Cube orders' });
+  await form.getByRole('tab', { name: /^Measures/ }).click();
+  await form.locator('.model-member__name', { hasText: /^count$/ }).click();
+  const count = form
+    .getByRole('listitem')
+    .filter({ has: page.locator('.model-member__name', { hasText: /^count$/ }) });
+  await count
+    .locator('.model-member > .model-form__fields > [data-key="title"]')
+    .getByLabel('Title', { exact: true })
+    .fill('Order lines');
+
+  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+
+  const warning = page.getByRole('alert').filter({ hasText: 'This save changes members that' });
+  await expect(warning.getByRole('list', { name: 'Charts' })).toContainText(
+    'Orders by category and status',
+  );
+  await expect(
+    warning.getByRole('link', { name: 'Orders by category and status' }),
+  ).toHaveAttribute('href', /^\/explore\/(charts|dashboards)\//);
+  await expect(warning).toContainText('orders.count');
+  // Nothing saved yet: the stored file is as it was.
+  const stored = async () =>
+    (
+      (await (await page.request.get('/api/model/files')).json()) as {
+        files: { path: string; content: string }[];
+      }
+    ).files.find((file) => file.path === 'cubes/orders.yml')?.content ?? '';
+  expect(await stored()).not.toContain('Order lines');
+
+  await warning.getByRole('button', { name: 'Cancel' }).click();
+  await expect(warning).toHaveCount(0);
+  expect(await stored()).not.toContain('Order lines');
+});
+
+/**
  * T146 / AC-140: WHEN a model file uses Jinja, Python or JavaScript
  * generation, THE SYSTEM SHALL open it read-only in the code view and say
  * why it cannot be edited as a form.

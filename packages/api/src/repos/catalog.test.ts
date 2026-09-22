@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getDb } from '../db/client';
+import { referencesOf } from '../model/references';
 import { ROOT_FOLDER_ID, catalog } from './catalog';
 import { documents } from './documents';
 
@@ -385,6 +386,45 @@ describe('search (AC-019)', () => {
 
     // '%' must not match everything.
     expect(await cat().search(`${unique}%margin`)).toHaveLength(0);
+  });
+});
+
+describe('what uses a member (T147, AC-141)', () => {
+  it('reads every chart and dashboard with its body, a dashboard’s own charts found through it', async () => {
+    const member = `cube_${randomUUID().slice(0, 8)}.amount`;
+    const dashboardId = randomUUID();
+    const libraryId = randomUUID();
+    const localId = randomUUID();
+    await repo().create({
+      kind: 'chart',
+      id: libraryId,
+      body: { title: 'Library', folderId: ROOT_FOLDER_ID, query: { measures: [member] } },
+    });
+    await repo().create({
+      kind: 'chart',
+      id: localId,
+      body: {
+        title: 'Local',
+        folderId: ROOT_FOLDER_ID,
+        localToDashboardId: dashboardId,
+        query: { measures: [member] },
+      },
+    });
+    await repo().create({
+      kind: 'dashboard',
+      id: dashboardId,
+      body: { title: 'Holds both', folderId: ROOT_FOLDER_ID, charts: [libraryId, localId] },
+    });
+
+    const found = referencesOf(await cat().referenceDocuments(), [member]);
+
+    expect(found.charts.map((chart) => [chart.title, chart.dashboardId])).toEqual([
+      ['Library', null],
+      ['Local', dashboardId],
+    ]);
+    expect(found.dashboards).toEqual([
+      { id: dashboardId, title: 'Holds both', members: [member], through: [libraryId, localId] },
+    ]);
   });
 });
 

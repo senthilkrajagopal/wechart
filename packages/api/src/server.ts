@@ -12,6 +12,7 @@ import { CubeClient, CubeError } from './cube/client';
 import { MetaCache } from './cube/meta-cache';
 import type { Config } from './config';
 import { registerModelPublishing } from './model/publish';
+import { referencesOf, type ReferenceDocument } from './model/references';
 import type { QueryLogEntry } from './repos/query-log';
 
 /**
@@ -101,6 +102,8 @@ export interface CatalogReader {
   contents(folderId: string): Promise<unknown[]>;
   search(text: string): Promise<unknown[]>;
   dashboardsUsing?(chartId: string): Promise<unknown[]>;
+  /** Every chart and dashboard, with its body: what uses a member (T147). */
+  referenceDocuments?(): Promise<readonly ReferenceDocument[]>;
 }
 
 /** The slice of the query-log repository the server uses. */
@@ -159,6 +162,20 @@ export function buildServer({
   app.get('/api/model/files', async () => ({ files: modelFiles ? await modelFiles.list() : [] }));
 
   registerModelPublishing(app, { config, client, meta, modelFiles });
+
+  /**
+   * The charts and dashboards that use the members an edit changes, listed
+   * before it is saved (T147, AC-141): `?members=orders.count,orders.status`.
+   */
+  app.get('/api/model/references', async (request) => {
+    const asked = (request.query as { members?: unknown }).members;
+    const members = (typeof asked === 'string' ? asked : '')
+      .split(',')
+      .map((member) => member.trim())
+      .filter((member) => member !== '');
+    if (members.length === 0) return { charts: [], dashboards: [] };
+    return referencesOf((await cat?.referenceDocuments?.()) ?? [], members);
+  });
 
   /**
    * AC-011: a superseded query is stopped in Cube, not merely ignored in the

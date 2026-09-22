@@ -1,4 +1,23 @@
 import type { CubeProblem } from './ProblemsPanel';
+import type { MemberReferences } from './ReferencesWarning';
+
+/**
+ * The charts and dashboards using the members a save edits (T147, AC-141);
+ * nothing, if they couldn't be asked about — and then nothing is saved.
+ */
+export async function referencesTo(
+  members: readonly string[],
+): Promise<MemberReferences | undefined> {
+  try {
+    const response = await fetch(
+      `/api/model/references?members=${encodeURIComponent(members.join(','))}`,
+    );
+    if (!response.ok) return undefined;
+    return (await response.json()) as MemberReferences;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Publishing model changes (T142, AC-136): the API has Cube compile them as

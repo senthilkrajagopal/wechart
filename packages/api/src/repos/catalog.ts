@@ -74,6 +74,24 @@ export function catalog(db: Kysely<Database>) {
      * A dashboard refers to a chart by id in `body.charts`, so this survives
      * the chart being renamed or moved — which is exactly what AC-021 asks for.
      */
+    /** Every chart and dashboard with its body, for what uses a member (T147, AC-141). */
+    async referenceDocuments() {
+      const rows = await db
+        .selectFrom('documents')
+        .select(['kind', 'id', 'title', 'body', 'local_to_dashboard_id'])
+        .where('kind', 'in', ['chart', 'dashboard'])
+        .orderBy('kind')
+        .orderBy('title')
+        .execute();
+      return rows.map((row) => ({
+        kind: row.kind,
+        id: row.id,
+        title: row.title,
+        body: row.body,
+        localToDashboardId: row.local_to_dashboard_id,
+      }));
+    },
+
     async dashboardsUsing(chartId: string): Promise<CatalogItem[]> {
       const rows = await selectItems()
         .where('kind', '=', 'dashboard')

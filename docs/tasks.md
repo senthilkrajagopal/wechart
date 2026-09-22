@@ -2154,10 +2154,41 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - no form and no Save;
       - typing changes nothing;
       - Cube renders it, since `product_catalog` is in the model.
-- [ ] T147 (AC-141) List the charts and dashboards that reference a member before saving an edit to it
+- [x] T147 (AC-141) List the charts and dashboards that reference a member before saving an edit to it
   - Files: `packages/api/src/model/references.ts`, `packages/api/src/model/references.test.ts`
   - Failing test: `references.test.ts`: editing a member lists every chart and dashboard referencing it before the save proceeds (AC-141).
   - Depends on: T142
+  - **Built 2026-09-21.** Files as built:
+    - `packages/api/src/model/references.ts` and its test;
+    - `repos/catalog.ts` (`referenceDocuments`) and its database test;
+    - `server.ts` (`GET /api/model/references?members=`);
+    - on the web side, `workspaces/model/{editedMembers.ts,ReferencesWarning.tsx,publish.ts,ModelFilePage.tsx}` with tests;
+    - `e2e/model.spec.ts`.
+    - **What uses a member (`referencesOf`):**
+      - Every chart whose body names it, wherever it keeps it: a query's lists, a time dimension, possibly with its granularity (`orders.ordered_at.month`), a filter.
+      - Every dashboard whose own body names it (its filters), or that holds a chart that does, its own local charts included.
+      - Every string in a body is read, not one shape of it: a name listed once too often is a warning, a name missed is AC-141 failing.
+      - Whole names only: `orders.total` isn't `orders.total_amount`.
+    - **Which members a save edits (`editedMembersOf`).** Each member of a cube or view, and what a view includes, by the name charts use (a view's include by its alias), that the text being saved changes or no longer has, compared with the text last published. One only added is used by nothing.
+    - **Before the save.** If any chart or dashboard uses those members, the save is held and the warning lists them:
+      - "This save changes members that N charts and M dashboards use."
+      - Each is a link, a dashboard's own chart opening its dashboard, with the members it uses.
+      - "Save anyway" publishes, and "Cancel" leaves the file unsaved. Cancel has the focus, as the choice that changes nothing.
+      - The form is locked meanwhile.
+      - If what uses them can't be checked, nothing is saved, and the page says so.
+  - **Tests, red first:**
+    - `references.test.ts` (6):
+      - every chart, however it keeps the member;
+      - every dashboard, directly or through its charts;
+      - a time dimension at a granularity, and a chart kept on its dashboard;
+      - whole names;
+      - the route, and the route with no members.
+    - `catalog.test.ts` (1 more, on the database): charts and dashboards read with their bodies, a dashboard's charts found through it.
+    - `editedMembers.test.ts` (5): none unchanged; changed and removed, not added; a cube renamed; a view's includes by alias; none from a text that doesn't parse.
+    - `ReferencesWarning.test.tsx` (2): the lists as links with the members; Save anyway and Cancel, with the focus on Cancel.
+    - `e2e/model.spec.ts` (1 in each browser), on the seed data:
+      - `orders.count`'s title changed, then Save: the warning lists "Orders by category and status" as a link, and names `orders.count`.
+      - The stored file is unchanged before and after Cancel. Cancelled, so the shared model isn't changed for the other tests.
 
 ## F16. Pre-aggregations
 

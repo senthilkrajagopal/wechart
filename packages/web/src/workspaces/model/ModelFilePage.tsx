@@ -12,8 +12,10 @@ import { lossOf, type Loss } from './lossCheck';
 import { LossWarning } from './LossWarning';
 import { problemsOf, type Problem } from './problems';
 import { ProblemsPanel, type CubeProblem } from './ProblemsPanel';
+import { editedMembersOf } from './editedMembers';
 import { ReadOnlyFile } from './ReadOnlyFile';
-import { publishModel } from './publish';
+import { ReferencesWarning, type MemberReferences } from './ReferencesWarning';
+import { publishModel, referencesTo } from './publish';
 import { modelOf, withObject } from './sync';
 import { YamlEditor } from './YamlEditor';
 
@@ -93,6 +95,8 @@ function FileEditor({ path, content }: { path: string; content: string }) {
   const [pending, setPending] = useState<{ written: string; lost: readonly Loss[] } | null>(null);
   /** A form edit that can't be written at all, and why. */
   const [refused, setRefused] = useState<string | null>(null);
+  /** What uses the members a save edits, shown until the user saves anyway or cancels (T147). */
+  const [references, setReferences] = useState<MemberReferences | null>(null);
 
   const apply = (written: string) => {
     setText(written);
@@ -134,7 +138,7 @@ function FileEditor({ path, content }: { path: string; content: string }) {
    * the typing, from the text before it — and while an edit waits to be
    * applied or kept.
    */
-  const readOnly = problems.length > 0 || text !== read || pending !== null;
+  const readOnly = problems.length > 0 || text !== read || pending !== null || references !== null;
   /** Where a picked problem sends the editor's cursor. */
   const [goTo, setGoTo] = useState<{ at: number }>();
   const [first] = problems;
@@ -179,12 +183,40 @@ function FileEditor({ path, content }: { path: string; content: string }) {
   const queryClient = useQueryClient();
   /** Something to publish, that parses, that the form has caught up with, and nothing held. */
   const canPublish =
-    text !== saved && text === read && problems.length === 0 && pending === null && !publishing;
+    text !== saved &&
+    text === read &&
+    problems.length === 0 &&
+    pending === null &&
+    references === null &&
+    !publishing;
 
-  const publish = async () => {
+  /**
+   * Publish this file — after listing the charts and dashboards that use the
+   * members the save edits, if any do, and only once the user says so (AC-141).
+   */
+  const publish = async (told = false) => {
     const sent = text;
     setPublishing(true);
     setOutcome(null);
+    if (!told) {
+      const edited = editedMembersOf(saved, sent);
+      if (edited.length > 0) {
+        const found = await referencesTo(edited);
+        if (found === undefined) {
+          setPublishing(false);
+          setOutcome({
+            ok: false,
+            text: 'What uses the changed members could not be checked, so nothing was saved.',
+          });
+          return;
+        }
+        if (found.charts.length + found.dashboards.length > 0) {
+          setPublishing(false);
+          setReferences(found);
+          return;
+        }
+      }
+    }
     const result = await publishModel([{ path, content: sent }]);
     setPublishing(false);
     if (result.kind === 'published') {
@@ -229,6 +261,18 @@ function FileEditor({ path, content }: { path: string; content: string }) {
         // Shown locked only for a parse error: the lock while typing catches up is brief.
         className={`model-editor__form${first === undefined ? '' : ' model-editor__form--frozen'}`}
       >
+        {references === null ? null : (
+          <ReferencesWarning
+            found={references}
+            onSave={() => {
+              setReferences(null);
+              void publish(true);
+            }}
+            onCancel={() => {
+              setReferences(null);
+            }}
+          />
+        )}
         {pending === null ? null : (
           <LossWarning
             lost={pending.lost}
