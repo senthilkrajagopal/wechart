@@ -246,10 +246,14 @@ export function buildServer({
     const body = request.body as { query?: Record<string, unknown> } | undefined;
     if (!body?.query) throw new BadRequest();
     const query = body.query;
-    const planned = (await client.sql(query)) as {
-      sql?: { preAggregations?: { preAggregationId?: unknown }[] };
-    } | null;
-    const used = (planned?.sql?.preAggregations ?? [])
+    // One plan, or — for a query Cube runs as several — one per query.
+    const planned = await client.sql(query);
+    const used = (Array.isArray(planned) ? planned : [planned])
+      .flatMap(
+        (plan) =>
+          (plan as { sql?: { preAggregations?: { preAggregationId?: unknown }[] } } | null)?.sql
+            ?.preAggregations ?? [],
+      )
       .map((each) => each.preAggregationId)
       .find((id): id is string => typeof id === 'string');
     if (used !== undefined) return { matched: used };

@@ -315,6 +315,10 @@ Client types [src-client-types]:
     - `ownedDimensions`, and `ownedTimeDimensionsWithRollupGranularity`: `[["monthly_orders.ordered_at","day"]]`.
     - `granularityHierarchies`: `{ "<member>.<granularity>": [the granularities that can serve it] }`, for example `"orders.ordered_at.week": ["week","day","hour","minute","second"]` and `"…month": ["month","day","hour","minute","second"]`.
     - `allFiltersWithinSelectedDimensions`, `filterDimensionsSingleValueEqual`, `hasMultipliedMeasures`, `hasCumulativeMeasures`.
+  - **How the dry run spells what it owns.** A query of `orders.count` by `customers.country` (`orders` joins `customers`), with `customers.signed_up_at` by month, and `orders.ordered_at` with a date range and no granularity, was asked with two filters, `orders.count gt 0` and `orders.status equals shipped`. The dry run gave:
+    - `ownedDimensions: ["orders.customers.country", "orders.status"]`. A joined cube's member is spelled by its **join path** from the root cube. A filtered dimension is included, and a filtered measure is not.
+    - `ownedTimeDimensionsWithRollupGranularity: [["orders.customers.signed_up_at","month"], ["orders.ordered_at","day"]]`, but `ownedTimeDimensionsAsIs: [[…,"month"], ["orders.ordered_at", null]]`. A date range with no granularity reads `day` in the first and `null` in the second. The matcher uses the as-is list when a rollup allows non-strict date ranges (§2).
+    - `granularityHierarchies` is keyed by the member's own short name (`customers.signed_up_at.month`), not its path.
   - **`/v1/meta?extended=true` → each cube's `preAggregations`**: the compiled rollups, as Cube runs them.
     - Members are given as the reference functions' text: `measureReferences: "[count, total_amount]"`, `dimensionReferences: "[status]"`, `timeDimensionReference: "ordered_at"`.
     - Also `granularity`, `partitionGranularity`, `type`, `name`, and `indexes: { byStatus: { type: "regular" } }` (camelCased, with no columns).

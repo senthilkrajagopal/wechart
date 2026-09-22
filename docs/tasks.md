@@ -2276,6 +2276,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - The seed cube's count by status reads "Served from the pre-aggregation monthly_orders.by_status_month.", and `/api/load` confirms Cube serves that chart from that rollup.
     - Adding `ordered_at`, which every chart asks by day, reads a miss: the nearest rollup, and `monthly_orders.ordered_at` "is grouped by day, and the rollup keeps it by month". `/api/load` confirms Cube answers it from the database.
     - A chart on `orders` reads "orders has no pre-aggregations".
+  - **Cold review (one round, 2026-09-21), verdict FAIL.** A chart touching a joined cube had its reason blamed on a member the rollup holds. Fixed, with each of Cube's shapes checked on the local Cube first (`research/cube/pre-aggregations.md`, "How the dry run spells what it owns"):
+    - **Joined members.** The dry run spells a joined cube's member by its join path (`orders.customers.country`), and the model spells it `customers.country`. Members are now compared by their own cube and name (the last two segments), and hierarchies are looked up the same way. Rollups are looked for on every cube the query involves, the joined ones included, as Cube searches them.
+    - **Filters.** The extra pass over the query's raw filters is gone. A filtered dimension is already among the dry run's owned dimensions, by its cube name. A filtered measure is not, so it is no longer blamed. A blocking dimension that is filtered on still says so.
+    - **Segments.** A rollup's `segmentReferences` count among what it can serve, since a query's segments are among its owned dimensions.
+    - **Date ranges.** A rollup that allows non-strict date ranges (Cube's default) is matched on the time dimensions as asked (`ownedTimeDimensionsAsIs`), and a strict one on the granularity a range needs. A date range with no grouping is no longer read as "grouped by day". A range that isn't whole periods, for a strict rollup, now says so.
+    - **Measures that don't add up** need the same time dimension at the same granularity as well as the same dimensions.
+    - **Other fixes.** A plan Cube gives as a list, one per query it runs, is read whole. A Cube refusal on any of the three calls is passed on as Cube's. A dry run that owns nothing still names the query's first member.
+    - Tests: the two fixtures that didn't match what Cube emits now do. Added: joined members (blamed and not), a rollup on a joined cube, a measure filter, segments, a date range without grouping, the non-additive granularity case, the list plan, and Cube's refusal.
+    - Left as found: a rollup Cube plans to use but hasn't built yet reads as a match, while the chart itself shows Cube's "not built yet" error.
 - [ ] T151 (AC-145) List a rollup's partitions and rebuild the selected ones
   - Files: `packages/web/src/workspaces/model/preagg/Partitions.tsx`, `packages/api/src/routes/preagg.ts`, `packages/api/src/routes/partitions.test.ts`
   - Failing test: `partitions.test.ts`: every partition is listed with its build state and last build time, and a rebuild targets exactly the selected partitions (AC-145).

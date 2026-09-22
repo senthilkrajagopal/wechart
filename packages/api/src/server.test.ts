@@ -1070,6 +1070,57 @@ describe('whether a query is served from a rollup (AC-144)', () => {
     expect(asked).toEqual([]);
     await app.close();
   });
+
+  it('passes Cube’s refusal on as Cube’s, rather than calling it a miss (T150’s review)', async () => {
+    const cube = new CubeClient({
+      apiUrl: config.cubeApiUrl,
+      apiSecret: SECRET,
+      securityContext: config.securityContext,
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ error: "Can't find join path to join 'a', 'b'" }), {
+          status: 400,
+        })) as unknown as typeof fetch,
+    });
+    const app = buildServer({ config, cube });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/acceleration',
+      payload: { query },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: "Can't find join path to join 'a', 'b'",
+      source: 'cube',
+    });
+    await app.close();
+  });
+
+  it('reads a plan Cube gives as a list, one per query it runs', async () => {
+    const cube = new CubeClient({
+      apiUrl: config.cubeApiUrl,
+      apiSecret: SECRET,
+      securityContext: config.securityContext,
+      fetchImpl: (async () =>
+        new Response(
+          JSON.stringify([
+            { sql: { preAggregations: [] } },
+            { sql: { preAggregations: [{ preAggregationId: 'monthly_orders.by_status_month' }] } },
+          ]),
+        )) as unknown as typeof fetch,
+    });
+    const app = buildServer({ config, cube });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/acceleration',
+      payload: { query },
+    });
+
+    expect(response.json()).toEqual({ matched: 'monthly_orders.by_status_month' });
+    await app.close();
+  });
 });
 
 describe('configuration', () => {
