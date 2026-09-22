@@ -1,4 +1,4 @@
-import { csvOf, type RenderSpec } from '@wechart/core';
+import { csvOf, exportNoteOf, rowsText, type RenderSpec } from '@wechart/core';
 import { useEffect, useRef, useState } from 'react';
 
 /** A file name from a chart's title: the characters file systems refuse replaced. */
@@ -38,6 +38,7 @@ export function TileViewMenu({
   title,
   spec,
   asking = false,
+  countRows,
   save = saveFile,
 }: {
   tileId: string;
@@ -49,10 +50,63 @@ export function TileViewMenu({
    * hold rows the filter now excludes (T177's review).
    */
   asking?: boolean;
+  /**
+   * The tile's query asked again with `total` (T178): the rows Cube returns
+   * for it and its full count, from the one answer so they cannot disagree;
+   * undefined when they cannot be had.
+   */
+  countRows?:
+    ((signal: AbortSignal) => Promise<{ returned: number; total: number } | undefined>) | undefined;
   /** How the file is handed over; the browser's download unless a test says. */
   save?: (name: string, text: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  /**
+   * What the last download holds (T178, AC-172): how many rows, and whether
+   * they are the whole result — said once Cube has counted, and never claimed
+   * whole before then.
+   */
+  const [note, setNote] = useState<string | undefined>(undefined);
+  const noteRef = useRef<HTMLParagraphElement>(null);
+  // It lies over the tile, so it goes on Escape or a press anywhere but on it.
+  const noted = note !== undefined;
+  useEffect(() => {
+    if (!noted) return undefined;
+    const dismiss = (event: Event) => {
+      if (event instanceof KeyboardEvent && event.key !== 'Escape') return;
+      if (noteRef.current?.contains(event.target as Node) === true) return;
+      setNote(undefined);
+    };
+    document.addEventListener('keydown', dismiss);
+    document.addEventListener('pointerdown', dismiss);
+    return () => {
+      document.removeEventListener('keydown', dismiss);
+      document.removeEventListener('pointerdown', dismiss);
+    };
+  }, [noted]);
+
+  /**
+   * Only the latest download's count is said (T178's review): each new one
+   * lets go of the one before, so an earlier answer arriving late cannot say
+   * of this file what was true of the last.
+   */
+  const counting = useRef<AbortController | null>(null);
+  useEffect(() => () => counting.current?.abort(), []);
+  const download = () => {
+    const written = spec.rows.length;
+    save(csvFileName(title), `${BYTE_ORDER_MARK}${csvOf(spec)}`);
+    setNote(`Downloaded ${rowsText(written)}. Asking Cube whether any were cut short…`);
+    counting.current?.abort();
+    const mine = new AbortController();
+    counting.current = mine;
+    void (countRows?.(mine.signal) ?? Promise.resolve(undefined))
+      .catch(() => undefined)
+      .then((counted) => {
+        if (mine.signal.aborted) return;
+        // Said even if the note was put away meanwhile: a truncation is news.
+        setNote(exportNoteOf({ written, returned: counted?.returned, total: counted?.total }).text);
+      });
+  };
   const trigger = useRef<HTMLButtonElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
 
@@ -83,7 +137,12 @@ export function TileViewMenu({
         aria-label={`Actions for ${title}`}
         aria-expanded={open}
         data-testid={`tile-view-menu-${tileId}`}
-        onClick={() => setOpen((was) => !was)}
+        onClick={() => {
+          // The menu and the note share the place under ⋯: opening it puts
+          // the note away, so neither covers the other.
+          setNote(undefined);
+          setOpen((was) => !was);
+        }}
       >
         <span aria-hidden="true">⋯</span>
       </button>
@@ -96,8 +155,8 @@ export function TileViewMenu({
               title={asking ? 'Its newest answer is still on its way' : undefined}
               onClick={() => {
                 // The tile's table, as it writes it, with the mark that tells
-                // a spreadsheet it is UTF-8.
-                save(csvFileName(title), `${BYTE_ORDER_MARK}${csvOf(spec)}`);
+                // a spreadsheet it is UTF-8 — and then what it holds.
+                download();
                 setOpen(false);
                 trigger.current?.focus();
               }}
@@ -107,6 +166,14 @@ export function TileViewMenu({
           </li>
         </ul>
       ) : null}
+      {/* Always there, so each message is announced as it changes. */}
+      <p
+        ref={noteRef}
+        className={note === undefined ? 'visually-hidden' : 'tile-export-note'}
+        role="status"
+      >
+        {note ?? ''}
+      </p>
     </div>
   );
 }

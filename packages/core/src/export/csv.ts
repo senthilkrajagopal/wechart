@@ -53,3 +53,50 @@ export function csvOf(spec: RenderSpec): string {
   );
   return Papa.unparse([columns, ...records], { newline: '\r\n', escapeFormulae: false });
 }
+
+const count = (rows: number) => `${rows.toLocaleString('en-US')} ${rows === 1 ? 'row' : 'rows'}`;
+
+/**
+ * What a download says of its rows (T178, AC-172): how many were written,
+ * and whether they are the whole result. Cube answers at most its row limit
+ * and says nothing of what it left out; asked again with `total: true` it
+ * answers the full count (research/cube/data-apis.md, "Observed locally").
+ * More than it returned is truncated.
+ *
+ * - `written`: the rows the file holds — the tile's, "Other" folded.
+ * - `returned`: the rows Cube returned for the tile's query.
+ * - `total`: the query's full count.
+ *
+ * Without either count it cannot tell, and says so, so it never claims a
+ * whole result it did not see.
+ */
+export function exportNoteOf({
+  written,
+  returned,
+  total,
+}: {
+  written: number;
+  returned: number | undefined;
+  total: number | undefined;
+}): { truncated: boolean | undefined; text: string } {
+  // Fewer in the count than it returned: the data moved between the two, and
+  // neither can be taken for the other.
+  if (returned === undefined || total === undefined || total < returned)
+    return {
+      truncated: undefined,
+      text: `Downloaded ${count(written)}. Could not tell whether Cube cut the result short.`,
+    };
+  if (total > returned)
+    return {
+      truncated: true,
+      text: `Downloaded ${count(written)}. Truncated: the query has ${count(total)}, and Cube returned the first ${returned.toLocaleString('en-US')}.`,
+    };
+  // The query's own count, so rows folded into "Other" are not read as missing.
+  return {
+    truncated: false,
+    text: `Downloaded ${count(written)}. Nothing was cut short: Cube returned all ${count(total)} of the query.`,
+  };
+}
+
+/** How many rows, in words: "1 row", "10,000 rows". */
+export { count as rowsText };

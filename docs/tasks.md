@@ -2629,10 +2629,25 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - Download is held back while a newer answer (filter or refresh) is on its way.
     - Demonstrated by `e2e/export.spec.ts` on Chrome, Firefox and Safari: a filtered table tile of three dimensions, the third on no chart channel, parsed and compared to its table cell by cell.
     - Started ahead of T120, which is deferred with markings. **AC-171 is not ticked:** its marked-rows trigger and "marking limits" need T120 and T190. Tick it when those land, with an export test on a marked-rows view.
-- [ ] T178 (AC-172) State the exported row count and that a result was truncated
+- [x] T178 (AC-172) State the exported row count and that a result was truncated
   - Files: `packages/core/src/export/csv.ts`, `packages/core/src/export/truncation.test.ts`
   - Failing test: `truncation.test.ts`: an export past Cube's row limit reports how many rows were written and that it is truncated (AC-172).
   - Depends on: T177
+  - **Done 2026-09-22.** Files as built:
+    - Core: `export/csv.ts` (`exportNoteOf`, `rowsText`), `export/truncation.test.ts`, `index.ts`.
+    - Web: `dashboard/TileViewMenu.tsx` and its test; `dashboard/DashboardView.tsx` (`countRows`); `shell/styles.ts`, which also styles T177's disabled Download.
+    - e2e: `e2e/export.spec.ts`.
+    - Research: `research/cube/data-apis.md`.
+    - The download is immediate. Then the tile's own query is asked again with `total: true`. Cube's rows for it and its full count come from that one answer, so they cannot disagree.
+      - More in the count than returned: truncated, with both numbers.
+      - All returned: "Nothing was cut short", with the query's own count, so rows folded into "Other" are not read as missing.
+      - A count that fails, is missing, or is smaller than the rows: "Could not tell". It never claims nothing was cut.
+    - Each download lets go of the one before, and an earlier count arriving late is not said of the last.
+    - **The premise, checked against a real Cube:** a one-off compose Cube with `CUBEJS_DB_QUERY_DEFAULT_LIMIT=2` returned 2 of 3 rows with `total: 3`. So the count sees past the default limit a tile's query is capped by (research, "Observed locally").
+    - AC-172 ticked on two tests:
+      - `e2e/export.spec.ts`, "a download says how many rows it holds, and whether Cube cut them short": the real page and Cube. Past the limit, Cube's real answer has its `total` raised at the network, since the sample data is far under 10,000 rows.
+      - `TileViewMenu.test.tsx`: each case, and the stale count.
+    - When the marked-rows export (T120) lands, it must carry the same note.
 - [ ] T179 (AC-173) Export formatted values alongside raw numerics for measures
   - Files: `packages/core/src/export/csv.ts`, `packages/core/src/export/format.test.ts`
   - Failing test: `format.test.ts`: values carry their member formats and every measure also appears as a raw number (AC-173).

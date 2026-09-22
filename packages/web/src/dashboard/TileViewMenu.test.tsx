@@ -55,6 +55,127 @@ describe('a tile’s view-mode menu', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  /**
+   * T178 / AC-172: WHEN an export exceeds the row limit Cube returns, THE
+   * SYSTEM SHALL say how many rows were exported and that the result was
+   * truncated. Fails when: a truncated export claims to be complete.
+   */
+  it('says how many rows it wrote, and that Cube cut them short past its limit', async () => {
+    const order: string[] = [];
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="T"
+        spec={SPEC}
+        countRows={async () => {
+          order.push('counted');
+          return { returned: 10_000, total: 12_345 };
+        }}
+        save={() => {
+          order.push('saved');
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+
+    const note = await screen.findByText(/^Downloaded 2 rows\. Truncated:/);
+    expect(note.textContent).toBe(
+      'Downloaded 2 rows. Truncated: the query has 12,345 rows, and Cube returned the first 10,000.',
+    );
+    expect(note.getAttribute('role')).toBe('status');
+    // The file first, at the click; the count after.
+    expect(order).toEqual(['saved', 'counted']);
+  });
+
+  it('says nothing was cut short when Cube returned every row', async () => {
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="T"
+        spec={SPEC}
+        countRows={async () => ({ returned: 2, total: 2 })}
+        save={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+
+    expect((await screen.findByText(/Nothing was cut short/)).textContent).toBe(
+      'Downloaded 2 rows. Nothing was cut short: Cube returned all 2 rows of the query.',
+    );
+  });
+
+  it('says it could not tell when the count fails or cannot be had', async () => {
+    for (const countRows of [async () => Promise.reject(new Error('down')), undefined]) {
+      const { unmount } = render(
+        <TileViewMenu tileId="t1" title="T" spec={SPEC} countRows={countRows} save={vi.fn()} />,
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+      expect((await screen.findByText(/Could not tell/)).textContent).toBe(
+        'Downloaded 2 rows. Could not tell whether Cube cut the result short.',
+      );
+      unmount();
+    }
+  });
+
+  /** From T178's review: an earlier download's count, arriving late, is not said of the last. */
+  it('says only the latest download’s count, letting go of the one before', async () => {
+    const counts: {
+      signal: AbortSignal;
+      answer: (counted: { returned: number; total: number }) => void;
+    }[] = [];
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="T"
+        spec={SPEC}
+        countRows={(signal) =>
+          new Promise((answer) => {
+            counts.push({ signal, answer });
+          })
+        }
+        save={vi.fn()}
+      />,
+    );
+    for (let time = 0; time < 2; time += 1) {
+      await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+    }
+    expect(counts[0]?.signal.aborted).toBe(true);
+
+    // The last download's count, truncated, and then the first's, late.
+    counts[1]?.answer({ returned: 10_000, total: 12_345 });
+    await screen.findByText(/Truncated/);
+    counts[0]?.answer({ returned: 2, total: 2 });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByText(/Nothing was cut short/)).toBeNull();
+    expect(screen.getByText(/Truncated/)).toBeTruthy();
+  });
+
+  it('puts the note away when the menu is opened, so neither covers the other', async () => {
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="T"
+        spec={SPEC}
+        countRows={async () => ({ returned: 2, total: 2 })}
+        save={vi.fn()}
+      />,
+    );
+    const trigger = screen.getByRole('button', { name: 'Actions for T' });
+    await userEvent.click(trigger);
+    await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+    await screen.findByText(/Nothing was cut short/);
+
+    // From the keyboard, where focus went back to.
+    expect(document.activeElement).toBe(trigger);
+    await userEvent.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'Download CSV' })).toBeTruthy();
+    expect(screen.queryByText(/Nothing was cut short/)).toBeNull();
+  });
+
   it('offers no download while the tile’s newest answer is on its way (T177’s review)', async () => {
     const save = vi.fn();
     render(<TileViewMenu tileId="t1" title="T" spec={SPEC} asking save={save} />);

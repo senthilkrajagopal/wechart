@@ -17,6 +17,7 @@ import {
 
 import type { TileSize } from '../editor/PreviewFrame';
 import type { AnswerMeta } from '../query/answerMeta';
+import { loadTile } from '../query/loadTile';
 import { SecurityPreview } from '../query/securityPreview';
 import { ChartTile } from '../tiles/ChartTile';
 import { TileError } from '../tiles/TileError';
@@ -339,6 +340,13 @@ interface TileCharts {
   readonly onRefresh?: ((chartId: string) => void) | undefined;
   readonly refreshing?: ReadonlySet<string> | undefined;
   readonly refreshable?: boolean | undefined;
+  /** A chart's query's returned rows and full count, asked of Cube with `total` (T178). */
+  readonly countRows?:
+    | ((
+        chartId: string,
+        signal: AbortSignal,
+      ) => Promise<{ returned: number; total: number } | undefined>)
+    | undefined;
   /** Show a chart's SQL as the previewed security context (T174); only while previewing. */
   readonly onShowSql?: ((chartId: string, tileId: string) => void) | undefined;
 }
@@ -539,6 +547,12 @@ function Elements({
                   charts.pending?.has(chartId) === true ||
                   charts.refreshing?.has(chartId) === true ||
                   charts.refreshable === false
+                }
+                // Whether Cube cut a download short (T178, AC-172).
+                countRows={
+                  charts.countRows === undefined
+                    ? undefined
+                    : (signal) => charts.countRows?.(chartId, signal) ?? Promise.resolve(undefined)
                 }
               />
             )}
@@ -1007,6 +1021,26 @@ export function DashboardView({
     ...(onRefresh === undefined ? {} : { onRefresh: refreshTile }),
     refreshing: new Set([...(refreshing ?? []), ...refreshingFiltered]),
     refreshable: refreshable !== false && !loading,
+    /**
+     * The tile's query asked again with `total: true` (T178, AC-172): the
+     * rows Cube returns for it — capped by its row limit — and the query's
+     * full count, as a top-level `total` that counts past that limit
+     * (research/cube/data-apis.md, "Observed locally"). Both from the one
+     * answer, so they cannot disagree; the query otherwise the tile's own,
+     * asked as its context asks, previewed or not.
+     */
+    countRows: async (chartId: string, signal: AbortSignal) => {
+      const query = queryOf(chartId);
+      if (query === undefined) return undefined;
+      const result = (await loadTile({
+        query: { ...query, total: true },
+        signal,
+        ...(preview === undefined ? {} : { context: preview }),
+      })) as { data?: unknown; total?: unknown };
+      return Array.isArray(result.data) && typeof result.total === 'number'
+        ? { returned: result.data.length, total: result.total }
+        : undefined;
+    },
     ...(preview === undefined
       ? {}
       : {

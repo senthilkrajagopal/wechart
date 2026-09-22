@@ -114,6 +114,64 @@ test('a tile’s CSV has the rows and columns the tile shows, its filter applied
   expect(file).not.toContain('completed');
 });
 
+/**
+ * T178 / AC-172: WHEN an export exceeds the row limit Cube returns, THE
+ * SYSTEM SHALL say how many rows were exported and that the result was
+ * truncated.
+ * Fails when: a truncated export claims to be complete.
+ *
+ * The count is Cube's: the tile's query asked again with `total: true`
+ * (research/cube/data-apis.md, "Observed locally"). The sample model's
+ * results are all under Cube's 10,000-row limit, so the real Cube answers the
+ * whole result; a count past what was returned is given at the network.
+ */
+test('a download says how many rows it holds, and whether Cube cut them short', async ({
+  page,
+  request,
+}) => {
+  const id = await ordersDashboard(request);
+  const filters = [
+    { id: 'f-status', member: 'orders.status', value: { kind: 'values', values: ['shipped'] } },
+  ];
+  const url = `/explore/dashboards/${id}?filters=${encodeURIComponent(JSON.stringify(filters))}`;
+  const tile = page.locator('[data-tile="tile-orders"]');
+  const download = async () => {
+    // The filtered answer, not the unfiltered one drawn while it is asked.
+    await expect(tile.getByRole('table')).toContainText('shipped', { timeout: 15_000 });
+    await expect(tile.getByRole('table')).not.toContainText('completed');
+    const rows = await tile.locator('tbody tr').count();
+    await tile.getByRole('button', { name: 'Actions for Orders by status' }).click();
+    await Promise.all([
+      page.waitForEvent('download'),
+      tile.getByRole('button', { name: 'Download CSV' }).click(),
+    ]);
+    return rows;
+  };
+
+  // The real Cube counts: every row returned, nothing cut short.
+  await page.goto(url);
+  const rows = await download();
+  const said = `Downloaded ${String(rows)} ${rows === 1 ? 'row' : 'rows'}.`;
+  await expect(tile.getByRole('status')).toHaveText(
+    `${said} Nothing was cut short: Cube returned all ${String(rows)} ${rows === 1 ? 'row' : 'rows'} of the query.`,
+  );
+
+  // Cube counting more than it returned: its real answer, its `total` past
+  // its rows as a result over the row limit's would be — truncated, and said.
+  await page.route('**/api/load', async (route) => {
+    const body = JSON.parse(route.request().postData() ?? '{}') as { query?: { total?: unknown } };
+    if (body.query?.total !== true) return route.continue();
+    const answered = await route.fetch();
+    const json = (await answered.json()) as { data: unknown[]; total: number };
+    return route.fulfill({ response: answered, json: { ...json, total: 12_345 } });
+  });
+  await page.goto(url);
+  await download();
+  await expect(tile.getByRole('status')).toHaveText(
+    `${said} Truncated: the query has 12,345 rows, and Cube returned the first ${String(rows)}.`,
+  );
+});
+
 /** RFC 4180 records: CRLF between them, a quoted field's quotes doubled. */
 function records(csv: string): string[][] {
   const out: string[][] = [[]];

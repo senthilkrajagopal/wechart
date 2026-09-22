@@ -279,6 +279,13 @@ Source: [src-core-types].
 - **Values are JSON strings.** Numeric primitives (Int64, UInt64, Float64) are serialized as strings ([src-rust-transform]). As of 1.7.0, "All numeric values in query results are now serialized as JSON strings" ([chg-root]). The docs give the reason: precision beyond ±9007199254740991 ([r-cast]).
 - **Visibility of pre-aggregation fields.** `preAggregationId`, `lastUpdatedAt` and `type` are always visible. `targetTableName` and `refreshKeyValues` are visible only in dev mode ([rest-ref]).
 - **`responseFormat: compact`** returns `{members, dataset}` with rows as primitive arrays. **`columnar`** returns `{members, columns}` ([rest-ref]). The SDK converts both back to row objects ([src-core-index]).
+- **Observed locally (2026-09-22, compose Cube 1.7.42):** `POST /v1/load` with `{measures: ["orders.count"], dimensions: ["orders.status"], limit: 2, total: true}` answered 2 rows in `data` and **`total: 3`** as a top-level field of the response. The other top-level fields were `query`, `lastRefreshTime`, `annotation`, `dataSource`, `dbType`, `extDbType`, `external` and `slowQuery`.
+- **Observed locally, `total` against the *default* limit (2026-09-22):** a one-off compose Cube container started with `CUBEJS_DB_QUERY_DEFAULT_LIMIT=2`. For `orders.count` by `orders.status` (3 statuses) with no `limit`:
+  - without `total`: 2 rows, no `total`;
+  - with `total: true`: 2 rows and `total: 3`;
+  - with `limit: 1, total: true`: 1 row and `total: 3`.
+
+  So `total` counts past the default limit a query is capped by, not only past an explicit one. A result truncated by Cube's row limit is one whose `total` exceeds its rows (T178).
 
 ### 4. Errors, "Continue wait", progress, cancellation
 

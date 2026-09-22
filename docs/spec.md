@@ -577,7 +577,7 @@ Traces to: `[R6]`, direction.md §7c.
 
 - [ ] AC-171 WHEN the user exports a chart or a marked-rows view, THE SYSTEM SHALL produce a CSV whose rows and columns match what the tile shows, including the applied filters and marking limits.
       Fails when: the CSV contains rows the tile excluded, or omits a displayed column.
-- [ ] AC-172 WHEN an export exceeds the row limit Cube returns, THE SYSTEM SHALL say how many rows were exported and that the result was truncated.
+- [x] AC-172 WHEN an export exceeds the row limit Cube returns, THE SYSTEM SHALL say how many rows were exported and that the result was truncated.
       Fails when: a truncated export claims to be complete.
 - [ ] AC-173 THE SYSTEM SHALL format exported values with their member formats, and SHALL write raw numeric values for measures so the file can be re-analysed.
       Fails when: a measure is exported only as a formatted string.

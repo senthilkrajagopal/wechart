@@ -1593,6 +1593,27 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   cursor: pointer;
 }
 .tile-menu__list button:hover { background: var(--wc-bg-subtle); }
+.tile-menu__list button:disabled { color: var(--wc-text-muted); cursor: not-allowed; }
+/* What a download holds (T178, AC-172), under the ⋯ it came from, over the
+   tile until Escape or a press elsewhere. */
+.tile-export-note {
+  position: absolute;
+  top: 28px;
+  right: 0;
+  z-index: 3;
+  width: max-content;
+  max-width: 260px;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  box-shadow: var(--wc-shadow-pop);
+  color: var(--wc-text-primary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.grid-tile:has(.tile-export-note) { overflow: visible; }
 .tile-menu__empty { padding: 4px 8px; color: var(--wc-text-secondary); }
 /* Delete sits apart from the destinations above it: one changes where a thing
    is, the other takes it away. */
