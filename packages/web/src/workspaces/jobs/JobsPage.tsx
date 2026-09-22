@@ -32,8 +32,14 @@ function Queries() {
   return <QueryLog records={records.data} />;
 }
 
-export function JobsPage() {
-  const [open, setOpen] = useState<Tab>('preaggs');
+/** `?tab=queries` opens the log: a link to it, and the accessibility sweep's. */
+function tabOfUrl(): Tab {
+  const asked = new URLSearchParams(window.location.search).get('tab');
+  return TABS.some(([key]) => key === asked) ? (asked as Tab) : 'preaggs';
+}
+
+export function JobsPage({ pollMs }: { pollMs?: number }) {
+  const [open, setOpen] = useState<Tab>(tabOfUrl);
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const base = useId();
   return (
@@ -69,8 +75,26 @@ export function JobsPage() {
           </button>
         ))}
       </div>
-      <div role="tabpanel" id={`${base}-${open}-panel`} aria-labelledby={`${base}-${open}`}>
-        {open === 'preaggs' ? <BuildPanel /> : <Queries />}
+      {/*
+        Both kept mounted, the one not shown hidden: a build being followed
+        is not dropped by a look at the queries (T155's review), and each
+        tab's `aria-controls` names a panel that is there.
+      */}
+      <div
+        role="tabpanel"
+        id={`${base}-preaggs-panel`}
+        aria-labelledby={`${base}-preaggs`}
+        hidden={open !== 'preaggs'}
+      >
+        <BuildPanel {...(pollMs === undefined ? {} : { pollMs })} />
+      </div>
+      <div
+        role="tabpanel"
+        id={`${base}-queries-panel`}
+        aria-labelledby={`${base}-queries`}
+        hidden={open !== 'queries'}
+      >
+        <Queries />
       </div>
     </div>
   );

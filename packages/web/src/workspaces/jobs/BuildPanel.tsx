@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 /**
  * Building a pre-aggregation (T155, AC-149), as the prototype's Jobs page lists
@@ -16,21 +16,9 @@ interface Buildable {
 interface JobStatus {
   readonly token: string;
   readonly status: string;
+  /** Said by the API, by its one tested rule (`isFinished`). */
+  readonly finished: boolean;
   readonly table?: string;
-}
-
-/**
- * Finished: done, missing its partition, failed, or unknown to Cube — as the
- * API's `isFinished` (packages/api/src/jobs/build.ts) reads Cube's states.
- */
-function isFinished(status: string): boolean {
-  return (
-    status === 'done' ||
-    status === 'missing_partition' ||
-    status === 'not_found' ||
-    status === 'pre_agg_not_found' ||
-    status.startsWith('failure')
-  );
 }
 
 async function send<T>(url: string, init?: { body: unknown; signal?: AbortSignal }): Promise<T> {
@@ -64,15 +52,22 @@ function BuildJobs({
   const jobs = useQuery({
     queryKey: ['build-status', tokens],
     queryFn: ({ signal }) => send<JobStatus[]>('/api/builds/status', { body: { tokens }, signal }),
-    refetchInterval: (query) =>
-      query.state.data !== undefined && query.state.data.every((job) => isFinished(job.status))
-        ? false
-        : pollMs,
+    // Stopped once every token asked about has finished — not merely every
+    // answer, which may leave a token out (T155's review).
+    refetchInterval: (query) => {
+      const answered = new Map((query.state.data ?? []).map((job) => [job.token, job]));
+      return tokens.every((token) => answered.get(token)?.finished === true) ? false : pollMs;
+    },
+    // A build that started no job has nothing to follow.
+    enabled: tokens.length > 0,
   });
   const byToken = new Map((jobs.data ?? []).map((job) => [job.token, job]));
   return (
     <li className="build-jobs">
       <span className="build-jobs__id">{id}</span>
+      {tokens.length === 0 ? (
+        <p data-testid="build-empty">Cube started no job: no partition of {id} was built.</p>
+      ) : null}
       {jobs.isError ? <p role="alert">{jobs.error.message}</p> : null}
       <ul className="build-jobs__list" aria-label={`Jobs building ${id}`}>
         {tokens.map((token) => {
@@ -103,14 +98,20 @@ export function BuildPanel({ pollMs = 1500 }: { pollMs?: number }) {
           throw new Error(`The pre-aggregations could not be read (${String(response.status)}).`);
         return (await response.json()) as Buildable[];
       }),
+    // Read again each time: a publish adds or removes pre-aggregations.
+    refetchOnMount: 'always',
   });
-  // Newest first, as a run history reads.
-  const [builds, setBuilds] = useState<{ id: string; tokens: string[]; at: number }[]>([]);
+  // Newest first, as a run history reads; numbered, not timed, so two builds
+  // started together are still two.
+  const [builds, setBuilds] = useState<{ id: string; tokens: string[]; n: number }[]>([]);
+  const started = useRef(0);
   const start = useMutation({
     mutationFn: (id: string) =>
       send<{ tokens: string[] }>('/api/builds', { body: { preAggregation: id } }),
     onSuccess: ({ tokens }, id) => {
-      setBuilds((before) => [{ id, tokens, at: Date.now() }, ...before]);
+      started.current += 1;
+      const n = started.current;
+      setBuilds((before) => [{ id, tokens, n }, ...before]);
     },
   });
 
@@ -143,7 +144,9 @@ export function BuildPanel({ pollMs = 1500 }: { pollMs?: number }) {
                     type="button"
                     className="btn-sm"
                     aria-label={`Build ${id}`}
-                    disabled={start.isPending && start.variables === id}
+                    // One start at a time, so each start's answer — a refusal
+                    // included — is the one shown (T155's review).
+                    disabled={start.isPending}
                     onClick={() => {
                       start.mutate(id);
                     }}
@@ -162,9 +165,14 @@ export function BuildPanel({ pollMs = 1500 }: { pollMs?: number }) {
           <h2 className="build-panel__head">Builds</h2>
           <ul className="build-panel__builds">
             {builds.map((build) => (
-              <BuildJobs key={build.at} id={build.id} tokens={build.tokens} pollMs={pollMs} />
+              <BuildJobs key={build.n} id={build.id} tokens={build.tokens} pollMs={pollMs} />
             ))}
           </ul>
+          {/* research/cube/refresh-jobs-caching.md, gotcha 3. */}
+          <p className="build-panel__note">
+            States are Cube&rsquo;s own. Cube 1.7.42 reports <code>done</code> once the
+            partition&rsquo;s table exists, which a failed import can leave behind.
+          </p>
         </section>
       )}
     </div>

@@ -29,9 +29,18 @@ export function isFinished(status: string): boolean {
 export interface JobStatus {
   readonly token: string;
   readonly status: string;
+  /** Whether it has reached a state it will not leave (`isFinished`). */
+  readonly finished: boolean;
   /** The Cube Store table the partition is built into. */
   readonly table?: string;
 }
+
+/**
+ * The types offered to build: rollups, and original-SQL pre-aggregations.
+ * A lambda or a join is made of rollups listed in their own right, and its
+ * build through the jobs API is not researched; both are authoring Non-goals.
+ */
+const BUILDABLE_TYPES = ['rollup', 'originalSql'];
 
 /** `cube.pre_aggregation`, and nothing a selector could be made of. */
 const PRE_AGGREGATION = /^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/;
@@ -43,14 +52,24 @@ export interface Buildable {
   readonly partitionGranularity?: string;
 }
 
-/** Every pre-aggregation Cube compiled (`/v1/meta?extended=true`), in model order. */
+/**
+ * The pre-aggregations wechart offers to build, in model order: the rollups
+ * and original-SQL ones of the cubes Cube's extended metadata lists. That
+ * leaves out a cube marked `public: false`, which the metadata does not list
+ * outside dev mode (research/cube/access-control.md) — its rollups are built
+ * by the refresh worker, and cannot be started from here.
+ */
 export function buildablesFrom(meta: unknown): Buildable[] {
   const cubes = (meta as { cubes?: unknown } | null)?.cubes;
   if (!Array.isArray(cubes)) return [];
   return (cubes as { name?: unknown; preAggregations?: unknown }[]).flatMap((cube) =>
     typeof cube.name === 'string' && Array.isArray(cube.preAggregations)
       ? (cube.preAggregations as Record<string, unknown>[])
-          .filter((each) => typeof each['name'] === 'string')
+          .filter(
+            (each) =>
+              typeof each['name'] === 'string' &&
+              BUILDABLE_TYPES.includes(typeof each['type'] === 'string' ? each['type'] : 'rollup'),
+          )
           .map((each) => ({
             id: `${String(cube.name)}.${String(each['name'])}`,
             type: typeof each['type'] === 'string' ? each['type'] : 'rollup',
@@ -85,14 +104,23 @@ export function registerBuilds(app: FastifyInstance, client: CubeClient): void {
     )
       return reply.status(400).send({ error: 'Name the jobs by their tokens.' });
     const answered = await client.jobStatuses(tokens as string[]);
-    // Each token's state and table — not the selector, which echoes the
-    // security context the build ran for.
-    return (Array.isArray(answered) ? (answered as Record<string, unknown>[]) : []).map(
-      (each): JobStatus => ({
-        token: String(each['token']),
-        status: String(each['status']),
-        ...(typeof each['table'] === 'string' ? { table: each['table'] } : {}),
-      }),
+    // Each token's state, whether it has finished, and its table — not the
+    // selector, which echoes the security context the build ran for. An
+    // answer naming no token or no state is left out, not made up: its token
+    // then reads as not yet answered, and is asked again.
+    return (Array.isArray(answered) ? (answered as Record<string, unknown>[]) : []).flatMap(
+      (each): JobStatus[] => {
+        const { token, status, table } = each;
+        if (typeof token !== 'string' || typeof status !== 'string') return [];
+        return [
+          {
+            token,
+            status,
+            finished: isFinished(status),
+            ...(typeof table === 'string' ? { table } : {}),
+          },
+        ];
+      },
     );
   });
 }

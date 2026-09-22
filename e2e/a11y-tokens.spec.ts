@@ -24,6 +24,8 @@ const SURFACES = [
   '/explore',
   '/explore/dashboards/seed-root-dashboard-1',
   '/jobs',
+  // The query log, a tab beside the pre-aggregations since T155.
+  '/jobs?tab=queries',
   '/model',
   '/model/files/cubes%2Forders.yml',
   '/security',

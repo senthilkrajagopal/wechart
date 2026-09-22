@@ -658,6 +658,7 @@ fieldset.model-field > legend {
 .build-jobs__id { font-weight: 600; }
 .build-jobs__job { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; font-size: 12px; }
 .build-jobs__table { color: var(--wc-text-secondary); overflow-wrap: anywhere; }
+.build-panel__note { margin: 8px 0 0; color: var(--wc-text-secondary); font-size: 12px; }
 
 /* The selected row is marked by more than the focus ring, so the selection is
    still visible when focus moves into a control inside the row. */

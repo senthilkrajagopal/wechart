@@ -31,8 +31,7 @@ test('the Jobs workspace lists the queries a dashboard issued, with duration and
  * T155 / AC-149: WHEN the user starts a build for a pre-aggregation, THE
  * SYSTEM SHALL submit it to Cube, show the job token, and poll until the job
  * reports done, missing partition, failure or not found.
- * Fails when: the token is not shown, or polling stops before a terminal
- * state or continues after one.
+ * Fails when: the job's terminal state is never shown, or the token is absent.
  *
  * On the real Cube, with the seed rollup: Build, its token, and its state
  * followed to done — which Cube's own jobs API then confirms for that token.
@@ -47,7 +46,7 @@ test('building a pre-aggregation shows its job token and follows it to done', as
   await row.getByRole('button', { name: 'Build monthly_orders.by_status_month' }).click();
 
   const jobs = page.getByRole('list', { name: 'Jobs building monthly_orders.by_status_month' });
-  const job = jobs.locator('[data-testid^="job-"]').first();
+  const job = jobs.locator(':scope > li').first();
   const token = (await job.getByTestId('job-token').textContent()) ?? '';
   expect(token).toMatch(/^[0-9a-f]{16,}$/);
   // Followed while Cube builds it, to its end — a build takes a second or two.

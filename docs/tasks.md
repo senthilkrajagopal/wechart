@@ -2352,7 +2352,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **Done 2026-09-21.** Files as built:
     - API: `jobs/build.ts` (`isFinished`, `buildablesFrom`, `registerBuilds`: `GET /api/preaggregations`, `POST /api/builds`, `POST /api/builds/status`) and its test; `cube/client.ts` (`buildPreAggregations`, `jobStatuses`); `server.ts` registers them.
     - Cube: `infra/cube/cube.js` (`contextToApiScopes` adds `jobs` to the default scopes; only wechart can sign a token).
-    - Web: `workspaces/jobs/BuildPanel.tsx` and its test; `workspaces/jobs/JobsPage.tsx` (the prototype's tabs: Pre-aggregations first, and the query log under Queries); `shell/styles.ts`.
+    - Web: `workspaces/jobs/BuildPanel.tsx` and its test; `workspaces/jobs/JobsPage.tsx` (tabs: the prototype's Pre-aggregations first, then a Queries tab of wechart's own for AC-016's log, where the prototype has Run history and Queue); `shell/styles.ts`.
     - e2e: `e2e/jobs.spec.ts` (the query-log test now opens its tab, with its assertions unchanged).
     - **Through Cube's documented jobs API only** (`research/cube/refresh-jobs-caching.md` §B, with its shapes observed locally).
       - A build is asked for the security context wechart's own requests carry, so it builds the model Cube answers wechart from, in UTC.
@@ -2360,6 +2360,16 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - The status route passes on each token's state and table, but not the selector, which echoes the security context.
       - A name that isn't `cube.name` is refused before Cube is asked. Cube's own refusal of an unknown pre-aggregation is passed on as Cube's.
     - **The state is shown as text here.** Its icon comes with T158 (AC-152).
+    - **Cold review (one round, 2026-09-22), verdict FAIL. Fixed:**
+      - **A look at the Queries tab threw away every build being followed.** That is AC-149's failing state, since a job's end then never shows. Both tabs' panels now stay mounted, the one not shown hidden, and each tab's `aria-controls` names a panel that exists. A test switches tabs mid-build and sees it through to `done`.
+      - **Polling stops once every token asked about has finished,** not once every answer has. An answer that left a token out had counted as finished. Whether a job has finished now comes from the API, whose `isFinished` is the one tested rule; the browser's copy is gone. An answer naming no token or no state is left out, not made up.
+      - **A build that starts no job** (no tokens) says so and asks nothing more, where it had polled a 400 every 1.5 s.
+      - **The list is read again each time the tab mounts**, so a published rollup shows. Only rollups and original-SQL pre-aggregations are offered: a lambda or a join is made of rollups listed in their own right, and its build isn't researched.
+      - **One start at a time.** Each start's answer, a refusal included, is the one shown, and builds are numbered rather than timed.
+      - **A draft's token has no `jobs` scope.** `contextToApiScopes` leaves it at the defaults, so Cube as well as wechart keeps drafts unbuilt. Checked on Cube: a draft token's jobs call gets 403 "API scope is missing: jobs", and a plain one gets 200.
+      - **A note under Builds:** Cube 1.7.42 reports `done` once the partition's table exists, which a failed import can leave (research gotcha 3).
+      - **The accessibility sweep** covers the query log again (`/jobs?tab=queries` opens it). The e2e's job locator is the list item, not any `job-*` test id.
+      - Left as found: a cube marked `public: false` is missing from the extended metadata outside dev mode, so its rollups can't be started here; the refresh worker still builds them.
     - AC-149 ticked. `e2e/jobs.spec.ts`, against the real Cube in all three browsers, builds the seed rollup from the Jobs page. The job's token appears, its state is followed to `done`, and it names its Cube Store table. Cube's own record of that token, asked afterwards, is `done`. `BuildPanel.test.tsx` shows the polling stopping at each finished state and not before.
 - [ ] T156 (AC-150) Keep build history in wechart beyond Cube's 24-hour window
   - Files: `packages/api/src/repos/build-history.ts`, `packages/api/src/repos/build-history.test.ts`

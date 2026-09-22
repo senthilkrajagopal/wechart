@@ -8,8 +8,7 @@ import { isFinished } from './build';
  * T155 / AC-149: WHEN the user starts a build for a pre-aggregation, THE
  * SYSTEM SHALL submit it to Cube, show the job token, and poll until the job
  * reports done, missing partition, failure or not found.
- * Fails when: the token is not shown, or polling stops before a terminal
- * state or continues after one.
+ * Fails when: the job's terminal state is never shown, or the token is absent.
  *
  * Through Cube's documented jobs API, as the local Cube answered it
  * (research/cube/refresh-jobs-caching.md §B and "Observed locally").
@@ -121,15 +120,33 @@ describe('following a build (AC-149)', () => {
       payload: { tokens: ['78f5612', 'gone'] },
     });
 
+    // Whether each has finished is said here, by the one rule that is tested
+    // (`isFinished`), not worked out again in the browser (T155's review).
     expect(response.json()).toEqual([
       {
         token: '78f5612',
         table: 'prod_pre_aggregations.monthly_orders_by_status_month20260101_zkut1k4w',
         status: 'processing',
+        finished: false,
       },
-      { token: 'gone', status: 'not_found' },
+      { token: 'gone', status: 'not_found', finished: true },
     ]);
     expect(sent[0]?.body).toEqual({ action: 'get', tokens: ['78f5612', 'gone'] });
+    await app.close();
+  });
+
+  it('leaves out an answer that names no token or no state, rather than inventing one', async () => {
+    const { app } = cubeAnswering(() =>
+      json([{ token: 'a1', status: 'done' }, { token: 'b2' }, { status: 'done' }]),
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/builds/status',
+      payload: { tokens: ['a1', 'b2'] },
+    });
+
+    expect(response.json()).toEqual([{ token: 'a1', status: 'done', finished: true }]);
     await app.close();
   });
 
@@ -150,7 +167,7 @@ describe('following a build (AC-149)', () => {
 });
 
 describe('what can be built (AC-149)', () => {
-  it('lists every pre-aggregation Cube compiled, with its type and partitioning', async () => {
+  it('lists the rollups and original-SQL pre-aggregations, with their type and partitioning', async () => {
     const cube = new CubeClient({
       apiUrl: config.cubeApiUrl,
       apiSecret: config.cubeApiSecret,
@@ -170,6 +187,9 @@ describe('what can be built (AC-149)', () => {
                   partitionGranularity: 'year',
                 },
                 { name: 'cached', type: 'originalSql' },
+                // Made of other rollups, and an authoring Non-goal: its build
+                // through the jobs API is not researched, so it is not offered.
+                { name: 'combined', type: 'rollupLambda' },
               ],
             },
             { name: 'orders', preAggregations: [] },

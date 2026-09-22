@@ -107,8 +107,13 @@ module.exports = {
   // asks Cube to build pre-aggregations through the jobs API (T155, AC-149) —
   // which answers 403 "API scope is missing: jobs" without this scope. The
   // defaults are kept (docs/research/cube/refresh-jobs-caching.md, "Auth and
-  // scope"; `contextToApiScopes`).
-  contextToApiScopes: async (_securityContext, defaultScopes) => [...defaultScopes, 'jobs'],
+  // scope"; `contextToApiScopes`). Not for a draft's token: a draft is compiled
+  // to be checked, never built — kept so by Cube as well as by wechart (T155's
+  // review).
+  contextToApiScopes: async (securityContext, defaultScopes) =>
+    securityContext && securityContext.wechartDraft !== undefined
+      ? defaultScopes
+      : [...defaultScopes, 'jobs'],
 
   // What the refresh worker builds rollups for: the mounted model, and each
   // trusted store's — the model Cube answers wechart from. Without this the
