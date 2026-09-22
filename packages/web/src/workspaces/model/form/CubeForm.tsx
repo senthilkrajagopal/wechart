@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from 'react';
 
+import { RollupFacts } from '../preagg/RollupList';
 import { MemberList, ObjectForm, schemaOf } from './ObjectForm';
 import { SCHEMA, type Field, type SectionId } from './schema';
 
@@ -120,6 +121,12 @@ export function CubeForm({
                 fieldOf(open) ?? { key: open, label: open, kind: 'list', of: 'Y.6' },
               )}
               items={Array.isArray(value[open]) ? (value[open] as Value[]) : []}
+              // Each rollup listed with what it declares (T148, AC-142).
+              describe={
+                open === 'pre_aggregations'
+                  ? (rollup: Value) => <RollupFacts rollup={rollup} />
+                  : undefined
+              }
               onChange={(items) => {
                 const next = { ...value };
                 if (items === undefined || items.length === 0) delete next[open];

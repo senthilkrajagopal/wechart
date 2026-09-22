@@ -453,7 +453,7 @@ Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[researc
 Purpose: make acceleration visible and editable, because data volumes vary widely.
 Traces to: `[R4]`, `[docs/inputs §1]`, direction.md §7c; `[research/cube/pre-aggregations.md]`.
 
-- [ ] AC-142 WHEN the user opens a cube's pre-aggregations, THE SYSTEM SHALL list each rollup with its measures, dimensions, time dimension, granularity, partition granularity and indexes.
+- [x] AC-142 WHEN the user opens a cube's pre-aggregations, THE SYSTEM SHALL list each rollup with its measures, dimensions, time dimension, granularity, partition granularity and indexes.
       Fails when: a declared rollup or any of those attributes is missing.
 - [ ] AC-143 WHEN the user edits a rollup in the form, THE SYSTEM SHALL write it into the model file as YAML, subject to the same validation and publishing as any model change.
       Fails when: the change is applied to Cube without being written to the model file.

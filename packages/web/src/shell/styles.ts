@@ -543,6 +543,23 @@ fieldset.model-field > legend {
   gap: 6px;
   align-items: start;
 }
+.model-members__item > .model-members__remove { grid-column: 2; grid-row: 1; }
+/* What a rollup declares, under it in the list (T148, AC-142): label and
+   value in two columns, in the member's own inset. */
+.rollup-facts {
+  grid-column: 1;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px 12px;
+  margin: 0;
+  padding: 0 9px 4px;
+  font-size: 12px;
+  line-height: 16px;
+}
+.rollup-facts > div { display: contents; }
+.rollup-facts dt { color: var(--wc-text-muted); }
+.rollup-facts dd { margin: 0; color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 .model-field__problem { color: var(--wc-status-error); font-size: 12px; }
 .model-member__type {
   margin-left: 8px;

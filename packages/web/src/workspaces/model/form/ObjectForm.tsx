@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { parse, stringify } from 'yaml';
 
 import { CUBE_PARSE } from '../objects';
@@ -465,10 +465,16 @@ export function MemberList({
   schema,
   items,
   onChange,
+  describe,
 }: {
   schema: ObjectSchema;
   items: readonly Value[];
   onChange: (next: Value[] | undefined) => void;
+  /**
+   * What a member holds, listed with it rather than only in its closed form —
+   * a pre-aggregation's attributes (T148, AC-142).
+   */
+  describe?: ((item: Value) => ReactNode) | undefined;
 }) {
   const { title } = schema;
   const noun = title.charAt(0).toLowerCase() + title.slice(1);
@@ -497,6 +503,7 @@ export function MemberList({
                   }}
                 />
               </details>
+              {describe?.(item)}
               <button
                 type="button"
                 className="btn-sm model-members__remove"

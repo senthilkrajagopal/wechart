@@ -2226,10 +2226,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F16. Pre-aggregations
 
-- [ ] T148 (AC-142) List each rollup with its full definition
+- [x] T148 (AC-142) List each rollup with its full definition
   - Files: `packages/web/src/workspaces/model/preagg/RollupList.tsx`, `packages/web/src/workspaces/model/preagg/RollupList.test.tsx`
   - Failing test: `RollupList.test.tsx`: every declared rollup appears with its measures, dimensions, time dimension, granularity, partition granularity and indexes (AC-142).
   - Depends on: T137
+  - **Done 2026-09-21.** Files as built: `preagg/RollupList.tsx` (`rollupFacts`, `RollupFacts`) and its test; `form/ObjectForm.tsx` (`MemberList` takes `describe`, shown after a member's closed form); `form/CubeForm.tsx` (the Pre-aggregations tab passes it); `shell/styles.ts` (`.rollup-facts`); `e2e/preaggregations.spec.ts`.
+    - **Where.** A cube's Pre-aggregations tab in its form (direction.md §7b's tabs), as the prototype's model editor has it. Each rollup is listed by name and type, as before. Under it now are six rows: measures, dimensions, time dimension, granularity, partition granularity and indexes. They are always shown, not only once the rollup's form is opened. A lambda or join also lists the rollups it's made of.
+    - **As written, and "none" where absent.** Members are shown as the file writes them (`count`, `CUBE.count`), since this lists the file and doesn't resolve it. An attribute the rollup doesn't declare reads "none", so something missing reads as missing from the model, not from the page. An index reads `name (columns in order)`, plus ", aggregate" when it is one.
+    - AC-142 ticked: `e2e/preaggregations.spec.ts` opens the seed `cubes/monthly_orders.yml` (T014) in all three browsers and reads its one rollup's six attributes from the list, with its form closed.
 - [ ] T149 (AC-143) Write a rollup edited in the form back into the model file
   - Files: `packages/web/src/workspaces/model/preagg/RollupForm.tsx`, `packages/api/src/model/writeRollup.ts`, `packages/api/src/model/writeRollup.test.ts`
   - Failing test: `writeRollup.test.ts`: the edit appears as YAML in the model file and goes through the same validation and publishing path as any model change (AC-143).
