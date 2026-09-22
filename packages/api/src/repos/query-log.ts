@@ -55,6 +55,22 @@ export function queryLog(db: Kysely<Database>) {
 
       return rows.map(toRecord);
     },
+
+    /**
+     * The records of these request ids, whatever else was logged since —
+     * a dashboard's own queries, as its page sent them (T180, AC-174).
+     */
+    async byRequestIds(requestIds: readonly string[]): Promise<QueryLogRecord[]> {
+      if (requestIds.length === 0) return [];
+      const rows = await db
+        .selectFrom('query_log')
+        .selectAll()
+        .where('request_id', 'in', [...requestIds])
+        .orderBy('id', 'asc')
+        .execute();
+
+      return rows.map(toRecord);
+    },
   };
 }
 

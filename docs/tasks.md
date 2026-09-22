@@ -2676,10 +2676,39 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F21. Performance, accessibility and design conformance
 
-- [ ] T180 (AC-174) Meet the 3-second p95 for opening a 10-chart dashboard
+- [x] T180 (AC-174) Meet the 3-second p95 for opening a 10-chart dashboard
   - Files: `e2e/perf/dashboard-open.spec.ts`, `packages/api/src/repos/query-log.ts`
   - Failing test: `e2e/perf/dashboard-open.spec.ts`: over a repeated run against live warehouse data, the p95 time to render all ten tiles, taken from wechart's own query timings, is under 3 s (AC-174).
   - Depends on: T015, T023
+  - **Done 2026-09-22.** Files as built:
+    - `e2e/perf/dashboard-open.spec.ts`.
+    - `repos/query-log.ts` and its test: `byRequestIds`.
+    - `server.ts` and its test: `POST /api/jobs/queries/find`.
+    - `research/echarts.md`: a chart is drawn when `setOption` returns, read from the 6.1.0 source.
+    - **Method:**
+      - Ten charts on `orders` (bar ×2, line ×2, pie, KPI ×3, table ×2), the dashboard opened 20 times per browser, with no retry.
+      - Two p95s, each held under 3 s:
+        - wechart's own query timings, from its query log, found by the request ids the page sent (a polled query counts as one sample);
+        - the whole open, from navigating to every tile drawn.
+      - Every query is asserted live: none served by a pre-aggregation.
+    - **Measured 2026-09-22 on an Apple M4 Pro, docker-desktop compose stack (Cube 1.7.42), this spec run on its own:**
+
+      | Browser | Opens p95 | Queries p95 |
+      |---|---|---|
+      | Chrome | 851 ms | 428 ms |
+      | Firefox | 1,019 ms | 288 ms |
+      | Safari | 850 ms | 293 ms |
+
+      Edge runs in CI only.
+    - **Conditions:**
+      - The sample warehouse has 240 order rows.
+      - `orders` has no pre-aggregations, so every query reads Postgres through Cube.
+      - Cube's result cache is not bypassed. Under its default 10-second refresh key most opens are served from it, and the browsers share it.
+    - **Not demonstrated:**
+      - Production-sized warehouse volumes (M3).
+      - A cold-cache p95. Whether AC-174 means a cold open is a question put to the user.
+    - The budget held on the first run; no red phase was seen.
+    - AC-174 ticked under these conditions.
 - [ ] T181 (AC-175) Meet the 3-second p95 for a marking change on a 10-chart dashboard
   - Files: `e2e/perf/marking-update.spec.ts`, `packages/web/src/query/concurrency.ts`
   - Failing test: `e2e/perf/marking-update.spec.ts`: the p95 time to update every affected tile after a marking change is under 3 s (AC-175). The client-side concurrency bound is set here against Cube's queue concurrency.

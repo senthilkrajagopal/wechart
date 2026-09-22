@@ -126,6 +126,8 @@ export interface CatalogReader {
 export interface QueryLogWriter {
   record(entry: QueryLogEntry): Promise<unknown>;
   recent(limit?: number): Promise<unknown[]>;
+  /** The records of these request ids (T180). */
+  byRequestIds?(requestIds: readonly string[]): Promise<unknown[]>;
 }
 
 export function buildServer({
@@ -789,6 +791,22 @@ export function buildServer({
   app.get('/api/jobs/queries', async (request) => {
     const { limit } = request.query as { limit?: string };
     return log ? log.recent(Number(limit) || 100) : [];
+  });
+
+  /**
+   * The query records of the request ids a page sent (T180, AC-174): its own
+   * queries' timings, whatever else was logged since. A body, not a query
+   * string: a dashboard opened many times sends hundreds of ids.
+   */
+  app.post('/api/jobs/queries/find', async (request) => {
+    const requestIds = (request.body as { requestIds?: unknown } | undefined)?.requestIds;
+    if (
+      !Array.isArray(requestIds) ||
+      requestIds.length > 5000 ||
+      requestIds.some((id) => typeof id !== 'string')
+    )
+      throw new BadRequest('requestIds is a list of request ids.');
+    return log?.byRequestIds ? log.byRequestIds(requestIds as string[]) : [];
   });
 
   /**

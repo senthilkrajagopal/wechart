@@ -88,4 +88,20 @@ describe('query log (AC-016)', () => {
 
     expect(await log().recent(2)).toHaveLength(2);
   });
+
+  /**
+   * T180 (AC-174): a dashboard's own queries, found by the request ids its page
+   * sent — whatever else was logged since — so their timings can be read.
+   */
+  it('finds the records of given request ids, every one, and no others', async () => {
+    const mine = [randomUUID(), randomUUID()];
+    const other = randomUUID();
+    for (const requestId of [...mine, other])
+      await log().record({ requestId, query: {}, durationMs: 5, accelerated: false });
+
+    const found = await log().byRequestIds(mine);
+
+    expect(found.map((entry) => entry.requestId).sort()).toEqual([...mine].sort());
+    expect(await log().byRequestIds([])).toEqual([]);
+  });
 });

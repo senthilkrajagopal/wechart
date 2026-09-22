@@ -790,6 +790,36 @@ describe('recording every query (AC-016)', () => {
     expect(response.json()).toHaveLength(1);
     await app.close();
   });
+
+  /** T180 (AC-174): a page's own queries, by the request ids it sent. */
+  it('finds the records of given request ids, and refuses anything else', async () => {
+    const asked: (readonly string[])[] = [];
+    const queryLog = {
+      ...recordingLog(),
+      byRequestIds: async (ids: readonly string[]) => {
+        asked.push(ids);
+        return ids.map((requestId) => ({ requestId, durationMs: 5 }));
+      },
+    };
+    const app = buildServer({ config, queryLog, cube: stubCube(() => ({ data: [] })) });
+    const find = (payload: unknown) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/jobs/queries/find',
+        payload: payload as Record<string, unknown>,
+      });
+
+    const found = await find({ requestIds: ['a', 'b'] });
+    const refused = await Promise.all([find({}), find({ requestIds: ['a', 1] })]);
+
+    expect(found.json()).toEqual([
+      { requestId: 'a', durationMs: 5 },
+      { requestId: 'b', durationMs: 5 },
+    ]);
+    expect(refused.map((response) => response.statusCode)).toEqual([400, 400]);
+    expect(asked).toEqual([['a', 'b']]);
+    await app.close();
+  });
 });
 
 describe('cancelling a running query (AC-011)', () => {

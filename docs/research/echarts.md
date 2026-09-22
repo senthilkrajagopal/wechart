@@ -184,6 +184,14 @@ Guidance: canvas for large data (the stated benchmark is >1,000 elements) and fo
   - A function `legend.formatter` is called with the entry's name, and its return value is the text shown (`lib/component/legend/LegendView.js`, around lines 321–326). The name is still the series or data name, so the entry and its series stay matched.
 - **A "cross" axis pointer labels both axes, and its label ignores `axisLabel.formatter`** (added at T195, 2026-09-21, from the installed 6.1.0 source). The pointer's label text comes from `axis.scale.getLabel` and is replaced only by the axis pointer's own `label.formatter`, which is called with `{ value, axisDimension, … }`, `value` being the raw axis value (`node_modules/.pnpm/echarts@6.1.0/node_modules/echarts/lib/component/axisPointer/viewHelper.js`, `getValueLabel`, around lines 120–150; the formatter option is read at line 74 as `axisPointerModel.get(['label', 'formatter'])`). So a formatted value axis needs `axisPointer.label.formatter` too, or hovering shows the value unformatted beside formatted ticks.
 
+### Drawn when `setOption` returns (read from the 6.1.0 source, 2026-09-22, for T180)
+
+- In the installed `echarts@6.1.0`, `lib/core/echarts.js` around lines 486-500: a `setOption` without `lazyUpdate` runs the update, then calls `this._zr.flush()`.
+  - The source comments this: "Ensure zr refresh sychronously, and then pixel in canvas can be fetched after `setOption`".
+  - The flush is skipped only in SSR mode.
+- wechart's series turn animation off: `packages/charts/src/series/bar.ts`, `line.ts` and `pie.ts` set `animation: false`. So that first frame is the final one.
+- **Consequence for T180 (AC-174):** a tile's `chart-canvas` element, given its option in a layout effect (`packages/web/src/tiles/ChartCanvas.tsx`), is drawn by the time a separate task can observe it. The perf test counts a tile as drawn when that element is present, rather than waiting for the `finished` event named above as the stop-watch.
+
 ## Alternatives considered
 
 Not requested — ECharts is fixed by `CLAUDE.md`. No React wrapper is used; `echarts-for-react` was not evaluated.
