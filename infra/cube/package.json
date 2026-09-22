@@ -1,0 +1,5 @@
+{
+  "//": "cube.js is Cube's configuration, which Cube loads as CommonJS. The repository's root package is an ES module one; this keeps cube.js CommonJS here too, so its tests load it as Cube does. Not a workspace package.",
+  "private": true,
+  "type": "commonjs"
+}

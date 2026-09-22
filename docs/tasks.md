@@ -1957,10 +1957,79 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **Left from the review:**
     - **Jinja files:** a Jinja-templated file that doesn't parse as YAML now opens in the editor, where it used to show an alert. The fix is the same as T137's review finding: detect Jinja before parsing and hold the file read-only. It lands in that fix, the next commit.
     - **The brief lock** while the form catches up with typing has no AC of its own. It is recorded above.
-- [ ] T142 (AC-136) Validate against Cube before publishing and refuse what Cube rejects
+- [x] T142 (AC-136) Validate against Cube before publishing and refuse what Cube rejects
   - Files: `packages/api/src/routes/model.ts`, `packages/api/src/model/validate.ts`, `packages/api/src/model/validate.test.ts`
   - Failing test: `validate.test.ts`: an invalid model is not published and Cube's error is attributed to the file it came from (AC-136).
   - Depends on: T141
+  - **Built 2026-09-21, on the store the user chose in the spike:** Cube reads the model from wechart through `repositoryFactory` and picks up a publish through `schemaVersion`, with no restart.
+    - **Files as built:**
+      - `infra/cube/cube.js`, with `infra/cube/package.json` so the repo loads it as CommonJS, as Cube does;
+      - `packages/api/src/model/{publish,validate}.ts`, with their tests and `cube-config.test.ts`;
+      - `config.ts`, `cube/client.ts`, `server.ts`, `repos/model-files.ts`, `seed.ts`;
+      - on the web side, `workspaces/model/{publish.ts,ModelFilePage.tsx,ProblemsPanel.tsx}`;
+      - `docker-compose.yml` and `playwright.config.ts`.
+      - There is no `routes/model.ts`: the routes are registered from `model/publish.ts`.
+    - **`cube.js`: where Cube reads the model.**
+      - It reads from the store named in the request's signed security context (`wechartStore`), and only if that store is on `WECHART_MODEL_STORES`. Otherwise it reads the mounted directory, as Cube did before.
+      - A `wechartDraft` compiles a draft under its own app id.
+      - The store is asked for its version on every request. A version kept even for a second hid a publish (T143).
+      - Idle compiled models expire after ten minutes (`maxCompilerCacheKeepAlive`, reset on use), so drafts don't pile up in Cube's memory.
+      - Observed through a throwaway Cube (research spike §1a).
+    - **One Cube, several wechart instances.** The compose Cube trusts the dev and browser-test API (:4100) and the demo (:4200). Each instance's tokens name its own store, so each reads its own model.
+    - **API routes for Cube** (`/api/cube-model/{files,version,drafts/:id}`), behind a shared key (`WECHART_MODEL_KEY`, compared timing-safely):
+      - With no key, no one is served.
+      - A store address without a key fails the start.
+      - The version is worked out from the store on each ask, since another instance may have published.
+    - **Publish (`POST /api/model/publish`):**
+      - Only YAML files, by plain paths. Nothing with Jinja markers, and no stored template written over.
+      - The whole model with the changes goes to Cube as a draft, through `/v1/meta` with the draft named.
+      - It is published only if Cube read the draft and compiled it.
+      - Cube's refusal (a 500, draft read) comes back as 422 with its errors attributed per file.
+      - Cube failing without reading the draft, or answering from another model, is a 502, not a refusal of the file.
+      - On success the files are written and the metadata cache let go of.
+    - **Attribution (`validate.ts`):**
+      - A compile-errors group names its file.
+      - An undefined name goes on the changed file that holds it.
+      - A YAML error goes on the changed file whose line its snippet shows.
+      - Otherwise, each changed file: the live model compiled, so the error is in the change.
+    - **The page:** "Save & reload Cube", the prototype's label, in the editor head.
+      - It is enabled when the text has changed, parses, and has been read by the form, with nothing held.
+      - On success: "Published. Cube is reading the new model.", and the listing and every field list are refetched.
+      - On refusal: "Cube refused the model, so nothing was published.", with Cube's reasons in the Problems panel as "Cube: …" on their files.
+    - **Browser-test isolation.** The browsers run at once and each publish writes a whole file, so a test that publishes successfully does so on a cube file of its own, created through the API (`e2e/model-files.ts`).
+      - `WECHART_RESET_DATA` also clears the model, which is seeded again from the directory.
+  - **Tests, red first:**
+    - `validate.test.ts` (5): the three kinds of error, as observed; several to a file; the fallback.
+    - `publish.test.ts` (12):
+      - served to Cube only with the key, and to no one without one;
+      - the version;
+      - a draft compiled, then published, with the context named and the cache let go of;
+      - a refusal on its file, with nothing published and the draft gone;
+      - Cube unreachable is a 502;
+      - no store is a 409;
+      - paths;
+      - Jinja refused before Cube is asked;
+      - no template written over;
+      - answered unread is a 502;
+      - failed unread is a 502.
+    - `cube-config.test.ts` (5): trusted store and key; a draft's own app id, with the version always asked; an untrusted or absent store reads the directory and asks nothing; draft names; compiled-model expiry.
+    - `server.test.ts` (3 more): config; the store in every token; added from config.
+    - `ProblemsPanel.test.tsx` (1 more): Cube's problems.
+    - `e2e/model.spec.ts` (2 in each browser), on the real Cube:
+      - A measure naming a member that doesn't exist is refused. "Cube: no_such_member is not defined" shows on `cubes/orders.yml`, and neither the stored file nor Cube's metadata has it.
+      - A description on this browser's own cube is published, stored, and served by Cube.
+  - **Cold review (one round), verdict FAIL. Fixed:**
+    - **Security (H1):** a publish could carry Jinja, which Cube renders with its environment. `{{ env_var('CUBEJS_API_SECRET') }}` was confirmed to come back with the secret, which is AC-007's failing state.
+      - Only YAML without Jinja markers is published now, and no template is written over. This matches the Non-goal that dynamic models are read-only.
+    - **Validation without Cube reading the draft (H2)** now publishes nothing.
+    - **An infrastructure failure shown as Cube refusing the file (M1)** is now a 502. A store address without a key fails the start.
+    - **Compiled drafts piling up in Cube (M3):** idle ones expire.
+    - **`cube.js` untested (M4):** it now has tests of its own.
+    - **Loose paths (L3):** only plain segments are accepted.
+  - **Left from the review:**
+    - **`scheduledRefreshContexts`** isn't defined. Refresh runs against the directory's model. Nothing needs it until pre-aggregations (F16), which must define it.
+    - **Two publishes to different files at once** are each compiled against the live model without the other. The user has ruled that concurrent changes may overwrite.
+    - **Cube's problems stay listed** until the next save, labelled "Cube:" as from it.
 - [ ] T143 (AC-137) Make published members available to the chart builder without restarting Cube
   - Files: `packages/api/src/cube/meta-cache.ts`, `e2e/publish-model.spec.ts`
   - Failing test: `e2e/publish-model.spec.ts`: after publishing, the new member appears in the chart builder's field list once Cube reports the new schema version, with no restart (AC-137).

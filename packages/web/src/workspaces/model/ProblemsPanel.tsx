@@ -24,22 +24,32 @@ function OkGlyph() {
   );
 }
 
+/** A reason Cube gave for refusing the model, on the file it is about (T142, AC-136). */
+export interface CubeProblem {
+  readonly path: string;
+  readonly message: string;
+  readonly line?: number;
+}
+
 /**
  * The Problems panel beneath the YAML (direction.md §7b; rule 28), as the
  * prototype draws it: each thing that stops the file parsing, by file and
- * line (T141, AC-135), and each a link to its line.
+ * line (T141, AC-135), and each a link to its line; then Cube's reasons for
+ * refusing the last save, by file (T142, AC-136).
  */
 export function ProblemsPanel({
   path,
   problems,
+  cubeProblems = [],
   onPick,
 }: {
   path: string;
   problems: readonly Problem[];
+  cubeProblems?: readonly CubeProblem[];
   /** A problem picked: the editor goes to where it is. */
   onPick?: (problem: Problem) => void;
 }) {
-  const errors = problems.length;
+  const errors = problems.length + cubeProblems.length;
   return (
     <section className="model-problems" aria-label="Problems">
       <h2 className="model-problems__head">
@@ -63,11 +73,25 @@ export function ProblemsPanel({
                 }}
               >
                 <ErrorGlyph />
-                <span>{problem.message}</span>
+                <span className="model-problems__message">{problem.message}</span>
                 <span className="model-problems__where">
                   {problem.path}:{problem.line}
                 </span>
               </button>
+            </li>
+          ))}
+          {cubeProblems.map((problem, index) => (
+            // Cube's own order: the same message can be on two files.
+            <li key={`cube ${String(index)}`}>
+              <p className="model-problems__row">
+                <ErrorGlyph />
+                <span className="model-problems__message">Cube: {problem.message}</span>
+                <span className="model-problems__where">
+                  {problem.line === undefined
+                    ? problem.path
+                    : `${problem.path}:${String(problem.line)}`}
+                </span>
+              </p>
             </li>
           ))}
         </ul>

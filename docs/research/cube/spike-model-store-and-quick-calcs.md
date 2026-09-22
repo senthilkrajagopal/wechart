@@ -65,6 +65,36 @@ module.exports = {
 - Cube must reach wechart's API: on the compose network locally, and through a service in Kubernetes. The file endpoints are Cube's alone and need a credential.
 - Each draft app id is a compiler Cube keeps in memory. Whether and when Cube evicts them was not measured, so drafts should be few and short-lived.
 
+## 1a. Through wechart's own `infra/cube/cube.js` (T142, observed 2026-09-21)
+
+**Setup.** A throwaway `cubejs/cube:v1.7.42` ran on the compose network, on port 54100, in production mode, against the sample database.
+- It mounted `infra/cube/cube.js` and `infra/cube/model`.
+- `WECHART_MODEL_STORES` was set to one stand-in store, with a key.
+- The store served the paths as wechart stores them (`cubes/orders.yml`) as `fileName`s.
+- `/v1/meta` was asked with a token per case.
+
+**Observed:**
+- **Where the model comes from:**
+  - No `wechartStore` in the context: the mounted directory.
+  - A store not on `WECHART_MODEL_STORES`: the directory too, not that store.
+  - The listed store: its files, fetched once, with `version` fetched on each request, as §1 found.
+- **Drafts:**
+  - A draft (`wechartDraft`) compiled under its own app id. A valid draft's new member was in its `/v1/meta`.
+  - The live model, asked again afterwards, didn't have that member.
+- **The three kinds of error, as Cube returns them (HTTP 500, `{"error": …}`):**
+  - A duplicate member names the file by the `fileName` wechart served: `"Error: Compile errors:\ncubes/customers.yml Errors:\nMember names must be unique within a cube. Found duplicate measure 'count' in cube 'customers'.\n"`.
+  - An undefined reference names no file: `"Error: Compile errors:\nErrors:\nno_such_member is not defined\n"`.
+  - A YAML syntax error names no file, and it isn't a compile-errors list. It gives a line, a column and a snippet: `"YAMLException: missed comma between flow collection entries (2:3)\n\n 1 | cubes: [\n …"`.
+- **Jinja reaches Cube's environment.** Found by T142's review and observed the same way on 2026-09-21. A draft whose `products.yml` had `description: "{{ env_var('CUBEJS_API_SECRET') }}"` was rendered with the secret in place.
+  - Cube's answer was a 500 whose `YAMLException` snippet showed the line as `description: ""probe-secret""`.
+  - So the secret came back in Cube's error text, which a publish would hand to the browser as a problem, and a well-formed template would have put it in `/v1/meta`.
+  - wechart therefore publishes no Jinja template: content matching Cube's Jinja test is refused before Cube sees it.
+  - It also publishes no JavaScript, Python or `.jinja` file, since those run inside Cube (spec Non-goals, AC-140). A stored template is never written over.
+- **What this means for AC-136:** wechart must attribute the last two itself.
+  - The live model compiled, so a draft's error comes from the files the draft changed.
+  - An undefined name is placed on the changed file that holds it.
+  - A YAML error is placed on the changed file whose text doesn't parse. wechart's own parse finds it before Cube does (T141).
+
 ## 2. Quick calculations as generated multi-stage measures: all six work
 
 Each calculation was written as a companion of `orders.count` and queried on the seed data (orders: 80 of each of three statuses; monthly counts 30, 28, 31, 30, 31, 30, 31, 29 from January to August 2026).

@@ -23,6 +23,19 @@ export interface Config {
    * which docker-compose mounts into Cube.
    */
   readonly modelDir: string;
+  /**
+   * The key Cube presents to read the model from this store (T142):
+   * `WECHART_MODEL_KEY`, the same as the Cube container's. Without it the
+   * model is served to no one, and Cube reads its mounted directory.
+   */
+  readonly modelKey?: string;
+  /**
+   * This store's address as Cube reaches it — `WECHART_CUBE_STORE_URL`, for
+   * example `http://host.docker.internal:4100` — named in every token so Cube
+   * reads this wechart's model (`infra/cube/cube.js`). Without it Cube reads
+   * its mounted directory, and nothing can be published.
+   */
+  readonly cubeStoreUrl?: string;
 }
 
 /** `infra/cube/model`, three levels up from `src/` or `dist/` in this package. */
@@ -46,12 +59,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   }
 
+  if (env['WECHART_CUBE_STORE_URL'] && !env['WECHART_MODEL_KEY']) {
+    throw new ConfigError(
+      'WECHART_CUBE_STORE_URL is set without WECHART_MODEL_KEY. Cube reads the model from this ' +
+        'store with that key; without it every Cube request would fail.',
+    );
+  }
+
   return {
     cubeApiUrl,
     cubeApiSecret,
     securityContext: parseSecurityContext(env['WECHART_SECURITY_CONTEXT']),
     port: Number(env['PORT'] ?? 4100),
     modelDir: env['WECHART_MODEL_DIR'] ?? DEFAULT_MODEL_DIR,
+    ...(env['WECHART_MODEL_KEY'] ? { modelKey: env['WECHART_MODEL_KEY'] } : {}),
+    ...(env['WECHART_CUBE_STORE_URL']
+      ? { cubeStoreUrl: env['WECHART_CUBE_STORE_URL'].replace(/\/$/, '') }
+      : {}),
   };
 }
 

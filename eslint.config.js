@@ -29,6 +29,21 @@ export default tseslint.config(
     },
   },
   {
+    // Cube loads its configuration as a CommonJS module in its own Node process.
+    files: ['infra/cube/cube.js'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        module: 'writable',
+        require: 'readonly',
+        __dirname: 'readonly',
+        process: 'readonly',
+        fetch: 'readonly',
+      },
+    },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
     files: [
       'packages/web/**/*.{ts,tsx}',
       'packages/ui/**/*.{ts,tsx}',

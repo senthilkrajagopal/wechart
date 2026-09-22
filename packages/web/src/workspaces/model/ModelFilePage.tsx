@@ -1,4 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { META_QUERY } from '../../query/meta';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { codeNoteOf, MODEL_FILES_QUERY } from './FileList';
@@ -7,7 +9,8 @@ import { CubeForm } from './form/CubeForm';
 import { lossOf, type Loss } from './lossCheck';
 import { LossWarning } from './LossWarning';
 import { problemsOf, type Problem } from './problems';
-import { ProblemsPanel } from './ProblemsPanel';
+import { ProblemsPanel, type CubeProblem } from './ProblemsPanel';
+import { publishModel } from './publish';
 import { modelOf, withObject } from './sync';
 import { YamlEditor } from './YamlEditor';
 
@@ -125,8 +128,61 @@ function FileEditor({ path, content }: { path: string; content: string }) {
   const [goTo, setGoTo] = useState<{ at: number }>();
   const [first] = problems;
 
+  /** The text last published, or as it was read from the store (T142). */
+  const [saved, setSaved] = useState(content);
+  const [publishing, setPublishing] = useState(false);
+  /** Cube's reasons for refusing the last save, by file (AC-136). */
+  const [cubeProblems, setCubeProblems] = useState<readonly CubeProblem[]>([]);
+  const [outcome, setOutcome] = useState<{ ok: boolean; text: string } | null>(null);
+  const queryClient = useQueryClient();
+  /** Something to publish, that parses, that the form has caught up with, and nothing held. */
+  const canPublish =
+    text !== saved && text === read && problems.length === 0 && pending === null && !publishing;
+
+  const publish = async () => {
+    const sent = text;
+    setPublishing(true);
+    setOutcome(null);
+    const result = await publishModel([{ path, content: sent }]);
+    setPublishing(false);
+    if (result.kind === 'published') {
+      setSaved(sent);
+      setCubeProblems([]);
+      setOutcome({ ok: true, text: 'Published. Cube is reading the new model.' });
+      // The listing, and every field list, read the model afresh (AC-137).
+      void queryClient.invalidateQueries({ queryKey: MODEL_FILES_QUERY.queryKey });
+      void queryClient.invalidateQueries({ queryKey: META_QUERY.queryKey });
+    } else if (result.kind === 'refused') {
+      setCubeProblems(result.problems);
+      setOutcome({ ok: false, text: 'Cube refused the model, so nothing was published.' });
+    } else {
+      setOutcome({ ok: false, text: result.message });
+    }
+  };
+
   return (
     <div className="model-editor">
+      {/* The prototype's editor head (model.js): the file's one action. */}
+      <div className="model-editor__head">
+        {outcome === null ? null : (
+          <p
+            className={`model-editor__outcome${outcome.ok ? '' : ' model-editor__outcome--failed'}`}
+            role={outcome.ok ? 'status' : 'alert'}
+          >
+            {outcome.text}
+          </p>
+        )}
+        <button
+          type="button"
+          className="btn-sm btn-primary"
+          disabled={!canPublish}
+          onClick={() => {
+            void publish();
+          }}
+        >
+          {publishing ? 'Saving…' : 'Save & reload Cube'}
+        </button>
+      </div>
       <div
         // Shown locked only for a parse error: the lock while typing catches up is brief.
         className={`model-editor__form${first === undefined ? '' : ' model-editor__form--frozen'}`}
@@ -222,6 +278,7 @@ function FileEditor({ path, content }: { path: string; content: string }) {
         <ProblemsPanel
           path={path}
           problems={problems}
+          cubeProblems={cubeProblems}
           onPick={(problem) => {
             setGoTo({ at: problem.from });
           }}

@@ -51,9 +51,12 @@ export class CubeClient {
     this.#fetch = options.fetchImpl ?? fetch;
   }
 
-  /** `/v1/meta`: the cubes, views and members the model exposes. */
-  async meta(): Promise<unknown> {
-    return this.#request('/v1/meta', { method: 'GET' });
+  /**
+   * `/v1/meta`: the cubes, views and members the model exposes. `context`
+   * adds claims for this one request — a draft to compile (T142).
+   */
+  async meta(context?: Record<string, unknown>): Promise<unknown> {
+    return this.#request('/v1/meta', { method: 'GET' }, context);
   }
 
   /** `/v1/load`: run a query. */
@@ -76,13 +79,17 @@ export class CubeClient {
     });
   }
 
-  async #request(path: string, init: RequestInit): Promise<unknown> {
+  async #request(
+    path: string,
+    init: RequestInit,
+    context?: Record<string, unknown>,
+  ): Promise<unknown> {
     const response = await this.#fetch(`${this.#apiUrl}${path}`, {
       ...init,
       headers: {
         ...init.headers,
         // AC-008: every request, not only the first.
-        authorization: `Bearer ${this.#token()}`,
+        authorization: `Bearer ${this.#token(context)}`,
       },
     });
 
@@ -104,10 +111,15 @@ export class CubeClient {
    * with a JWT library: it is three base64url segments and an HMAC, and this
    * keeps the secret from travelling through another dependency.
    */
-  #token(): string {
+  #token(context?: Record<string, unknown>): string {
     const issuedAt = Math.floor(Date.now() / 1000);
     const header = { alg: 'HS256', typ: 'JWT' };
-    const payload = { ...this.#securityContext, iat: issuedAt, exp: issuedAt + this.#ttl };
+    const payload = {
+      ...this.#securityContext,
+      ...context,
+      iat: issuedAt,
+      exp: issuedAt + this.#ttl,
+    };
 
     const unsigned = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
     const signature = createHmac('sha256', this.#apiSecret).update(unsigned).digest('base64url');

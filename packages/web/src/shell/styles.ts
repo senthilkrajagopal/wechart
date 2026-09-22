@@ -264,6 +264,16 @@ main { padding: var(--wc-surface-padding); }
   align-items: start;
 }
 .model-editor__yaml { position: sticky; top: 0; }
+/* The prototype's editor head: the file's one action, and how it went (T142). */
+.model-editor__head {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.model-editor__outcome { margin: 0; color: var(--wc-text-secondary); font-size: 12px; }
+.model-editor__outcome--failed { color: var(--wc-status-error); }
 .yaml-editor .cm-editor {
   max-height: calc(100vh - 160px);
   border: 1px solid var(--wc-border-strong);

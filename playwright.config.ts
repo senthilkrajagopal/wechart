@@ -78,6 +78,11 @@ export default defineConfig({
         // These tests create objects, so each run starts from the seed rather
         // than from whatever the last run left behind.
         WECHART_RESET_DATA: '1',
+        // Cube reads this API's model store (infra/cube/cube.js, T142): the
+        // key the compose Cube holds, and this API as the Cube container
+        // reaches it — one of the stores it is told to trust.
+        WECHART_MODEL_KEY: 'dev-model-key',
+        WECHART_CUBE_STORE_URL: 'http://host.docker.internal:4100',
       },
     },
     {

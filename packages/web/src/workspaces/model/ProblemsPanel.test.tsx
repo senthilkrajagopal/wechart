@@ -38,6 +38,33 @@ describe('the problems panel', () => {
     expect(onPick).toHaveBeenCalledWith(problems[0]);
   });
 
+  it('lists Cube’s reasons for refusing the model too, each on its file (T142, AC-136)', () => {
+    render(
+      <ProblemsPanel
+        path="cubes/orders.yml"
+        problems={[]}
+        cubeProblems={[
+          { path: 'cubes/orders.yml', message: 'no_such_member is not defined' },
+          { path: 'cubes/products.yml', line: 2, message: 'YAMLException: missed comma (2:3)' },
+        ]}
+      />,
+    );
+
+    const panel = screen.getByRole('region', { name: 'Problems' });
+    expect(within(panel).getByRole('heading').textContent).toBe('Problems · 2 errors');
+    expect(
+      within(panel)
+        .getAllByRole('listitem')
+        .map((item) => [
+          item.querySelector('.model-problems__message')?.textContent,
+          item.querySelector('.model-problems__where')?.textContent,
+        ]),
+    ).toEqual([
+      ['Cube: no_such_member is not defined', 'cubes/orders.yml'],
+      ['Cube: YAMLException: missed comma (2:3)', 'cubes/products.yml:2'],
+    ]);
+  });
+
   it('says there are none when the file parses', () => {
     render(<ProblemsPanel path="cubes/x.yml" problems={[]} />);
 

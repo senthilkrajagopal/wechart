@@ -29,5 +29,19 @@ export function modelFileStore(db: Kysely<Database>): ModelFileStore {
         .onConflict((conflict) => conflict.column('path').doNothing())
         .execute();
     },
+    /** A publish (T142): each file stored, over the one at its path. */
+    async write(files: readonly ModelFile[]) {
+      if (files.length === 0) return;
+      await db
+        .insertInto('model_files')
+        .values(files.map(({ path, content }) => ({ path, content })))
+        .onConflict((conflict) =>
+          conflict.column('path').doUpdateSet((row) => ({
+            content: row.ref('excluded.content'),
+            updated_at: sql`now()`,
+          })),
+        )
+        .execute();
+    },
   };
 }

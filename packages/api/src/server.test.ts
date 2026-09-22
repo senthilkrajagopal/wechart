@@ -951,4 +951,81 @@ describe('configuration', () => {
     // By default the repository's own, which docker-compose mounts into Cube.
     expect(loadConfig({ CUBE_API_SECRET: 'x' }).modelDir).toMatch(/[/\\]infra[/\\]cube[/\\]model$/);
   });
+
+  it('reads the key Cube reads the model with, and this store’s address as Cube reaches it (T142)', () => {
+    const loaded = loadConfig({
+      CUBE_API_SECRET: 'x',
+      WECHART_MODEL_KEY: 'k',
+      WECHART_CUBE_STORE_URL: 'http://host.docker.internal:4100/',
+    });
+
+    expect(loaded.modelKey).toBe('k');
+    expect(loaded.cubeStoreUrl).toBe('http://host.docker.internal:4100');
+    // A store with no key: Cube would be sent to read what it can't, and
+    // every request would fail on the version (T142's review).
+    expect(() =>
+      loadConfig({
+        CUBE_API_SECRET: 'x',
+        WECHART_CUBE_STORE_URL: 'http://host.docker.internal:4100',
+      }),
+    ).toThrow(ConfigError);
+    // Neither set: Cube reads its own directory, and nothing is published.
+    const plain = loadConfig({ CUBE_API_SECRET: 'x' });
+    expect('modelKey' in plain).toBe(false);
+    expect('cubeStoreUrl' in plain).toBe(false);
+  });
+});
+
+describe('the store each Cube request names (T142)', () => {
+  it('is in every token, so Cube reads this wechart’s model', async () => {
+    const payloads: Record<string, unknown>[] = [];
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      const token = String((init.headers as Record<string, string>)['authorization']).split(' ')[1];
+      payloads.push(JSON.parse(Buffer.from(token?.split('.')[1] ?? '', 'base64url').toString()));
+      return new Response('{"cubes":[]}');
+    }) as typeof fetch;
+    const cube = new CubeClient({
+      apiUrl: config.cubeApiUrl,
+      apiSecret: SECRET,
+      securityContext: { tenant: 'acme', wechartStore: 'http://host.docker.internal:4100' },
+      fetchImpl,
+    });
+
+    await cube.meta();
+    await cube.meta({ wechartDraft: 'd1' });
+
+    expect(payloads[0]).toMatchObject({
+      tenant: 'acme',
+      wechartStore: 'http://host.docker.internal:4100',
+    });
+    expect(payloads[1]).toMatchObject({
+      wechartStore: 'http://host.docker.internal:4100',
+      wechartDraft: 'd1',
+    });
+    expect(payloads[0]).not.toHaveProperty('wechartDraft');
+  });
+
+  it('is added by the server from its config', async () => {
+    const payloads: Record<string, unknown>[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (_url: string, init: RequestInit) => {
+      const token = String((init.headers as Record<string, string>)['authorization']).split(' ')[1];
+      payloads.push(JSON.parse(Buffer.from(token?.split('.')[1] ?? '', 'base64url').toString()));
+      return new Response('{"cubes":[]}');
+    }) as typeof fetch;
+    try {
+      const app = buildServer({
+        config: { ...config, cubeStoreUrl: 'http://host.docker.internal:4100' },
+      });
+      await app.inject({ method: 'GET', url: '/api/meta' });
+      await app.close();
+    } finally {
+      globalThis.fetch = original;
+    }
+
+    expect(payloads[0]).toMatchObject({
+      tenant: 'acme',
+      wechartStore: 'http://host.docker.internal:4100',
+    });
+  });
 });

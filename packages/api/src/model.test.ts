@@ -28,6 +28,7 @@ const files = [
 const memory = (): ModelFileStore => ({
   list: async () => files,
   seed: async () => undefined,
+  write: async () => undefined,
 });
 
 describe('the model files', () => {

@@ -11,6 +11,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { CubeClient, CubeError } from './cube/client';
 import { MetaCache } from './cube/meta-cache';
 import type { Config } from './config';
+import { registerModelPublishing } from './model/publish';
 import type { QueryLogEntry } from './repos/query-log';
 
 /**
@@ -43,6 +44,8 @@ export interface ModelFileStore {
   list(): Promise<readonly ModelFile[]>;
   /** Stores each file whose path is not stored yet; never writes over one that is. */
   seed(files: readonly ModelFile[]): Promise<unknown>;
+  /** Stores each file, over the one at its path if there is one: a publish (T142). */
+  write(files: readonly ModelFile[]): Promise<unknown>;
 }
 
 /** Where image tiles' images are kept: bytes, and the type they were accepted as. */
@@ -123,7 +126,12 @@ export function buildServer({
     new CubeClient({
       apiUrl: config.cubeApiUrl,
       apiSecret: config.cubeApiSecret,
-      securityContext: config.securityContext,
+      // Every request names this store, so Cube reads this wechart's model
+      // (infra/cube/cube.js); without one Cube reads its mounted directory.
+      securityContext: {
+        ...config.securityContext,
+        ...(config.cubeStoreUrl === undefined ? {} : { wechartStore: config.cubeStoreUrl }),
+      },
     });
 
   // Metadata is cached with a 60-second freshness bound (AC-009), so a
@@ -149,6 +157,8 @@ export function buildServer({
    * its editor uses, so the two cannot disagree.
    */
   app.get('/api/model/files', async () => ({ files: modelFiles ? await modelFiles.list() : [] }));
+
+  registerModelPublishing(app, { config, client, meta, modelFiles });
 
   /**
    * AC-011: a superseded query is stopped in Cube, not merely ignored in the

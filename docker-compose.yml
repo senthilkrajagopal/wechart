@@ -88,9 +88,21 @@ services:
       # development stays faithful to how it is deployed.
       CUBEJS_DEV_MODE: 'false'
       NODE_ENV: production
+      # The model is read from wechart's store, named in each request's signed
+      # security context, when it is one of these; otherwise from the mounted
+      # directory (infra/cube/cube.js, T142). 4100 is the dev and browser-test
+      # API, 4200 the local demo's.
+      WECHART_MODEL_STORES: ${WECHART_MODEL_STORES:-http://host.docker.internal:4100,http://host.docker.internal:4200}
+      # Presented to wechart's store to read the model; the API holds the same.
+      WECHART_MODEL_KEY: ${WECHART_MODEL_KEY:-dev-model-key}
+    extra_hosts:
+      # The API runs on the host in development; Docker Desktop names it so
+      # already, and this does on Linux.
+      - 'host.docker.internal:host-gateway'
     ports:
       - '54000:4000'
     volumes:
+      - ./infra/cube/cube.js:/cube/conf/cube.js:ro
       - ./infra/cube/model:/cube/conf/model:ro
 
 volumes:

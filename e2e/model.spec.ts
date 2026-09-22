@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { ownCubeFile } from './model-files';
+
 /**
  * T137 / AC-131: WHEN the user opens the Model workspace, THE SYSTEM SHALL
  * list the model files and show the cubes, views, measures, dimensions,
@@ -122,6 +124,87 @@ test('a form edit that would drop a comment names it first, and waits to be told
     element.scrollTop = 0;
   });
   await expect(yaml).not.toContainText('Cube hides primary keys');
+});
+
+/**
+ * T142 / AC-136: WHEN the user saves model changes, THE SYSTEM SHALL
+ * validate them against Cube before publishing and refuse to publish a model
+ * Cube rejects, showing Cube's error per file.
+ * Fails when: an invalid model is published, or the error is not attributed
+ * to a file.
+ *
+ * On the real Cube, reading this API's model store through infra/cube/cube.js:
+ * the change is compiled by Cube as a draft, and goes live only if it compiles.
+ */
+test('a model change Cube refuses is not published, and Cube’s reason is on its file', async ({
+  page,
+}) => {
+  await page.goto('/model/files/cubes%2Forders.yml');
+  const form = page.getByRole('region', { name: 'Cube orders' });
+  const save = page.getByRole('button', { name: 'Save & reload Cube' });
+  await expect(save).toBeDisabled();
+
+  // A measure whose SQL names a member there is none of.
+  await form.getByRole('tab', { name: /^Measures/ }).click();
+  await form.getByRole('button', { name: 'Add measure' }).click();
+  await form.locator('.model-member__name', { hasText: /^measure_1$/ }).click();
+  const measure = form
+    .getByRole('listitem')
+    .filter({ has: page.locator('.model-member__name', { hasText: /^measure_1$/ }) });
+  const own = (key: string) =>
+    measure.locator(`.model-member > .model-form__fields > [data-key="${key}"]`);
+  await own('type').getByLabel('Type', { exact: true }).selectOption('number');
+  await own('sql').getByLabel('SQL', { exact: true }).fill('{no_such_member}');
+
+  await save.click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Cube refused the model' })).toBeVisible();
+  const problem = page
+    .getByRole('region', { name: 'Problems' })
+    .getByRole('listitem')
+    .filter({ hasText: 'Cube: no_such_member is not defined' });
+  await expect(problem.locator('.model-problems__where')).toHaveText('cubes/orders.yml');
+
+  // Nothing published: the stored file, and the model Cube serves, as they were.
+  const stored = await page.request.get('/api/model/files');
+  const orders = (
+    (await stored.json()) as { files: { path: string; content: string }[] }
+  ).files.find((file) => file.path === 'cubes/orders.yml');
+  expect(orders?.content).not.toContain('measure_1');
+  const meta = (await (await page.request.get('/api/meta')).json()) as {
+    cubes: { name: string; measures: { name: string }[] }[];
+  };
+  expect(
+    meta.cubes.find((cube) => cube.name === 'orders')?.measures.map((each) => each.name),
+  ).not.toContain('orders.measure_1');
+});
+
+test('a model change Cube compiles is published, and Cube serves it', async ({
+  page,
+}, testInfo) => {
+  // On a cube file of this browser's own: the browsers publish at once.
+  const cube = `e2e_described_${testInfo.project.name}`;
+  const path = await ownCubeFile(page.request, cube);
+  const description = `Every product the shop sells, as ${testInfo.project.name} saw it.`;
+  await page.goto(`/model/files/${encodeURIComponent(path)}`);
+  const form = page.getByRole('region', { name: `Cube ${cube}` });
+  await form.getByLabel('Description', { exact: true }).fill(description);
+
+  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+
+  await expect(page.getByRole('status').filter({ hasText: 'Published' })).toHaveText(
+    'Published. Cube is reading the new model.',
+  );
+  await expect(page.getByRole('button', { name: 'Save & reload Cube' })).toBeDisabled();
+  const stored = (await (await page.request.get('/api/model/files')).json()) as {
+    files: { path: string; content: string }[];
+  };
+  expect(stored.files.find((file) => file.path === path)?.content).toContain(
+    `description: ${description}`,
+  );
+  const meta = (await (await page.request.get('/api/meta')).json()) as {
+    cubes: { name: string; description?: string }[];
+  };
+  expect(meta.cubes.find((each) => each.name === cube)?.description).toBe(description);
 });
 
 /**
