@@ -11,6 +11,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { CACHE_POLICIES, CubeClient, CubeError, type CachePolicy } from './cube/client';
 import { MetaCache } from './cube/meta-cache';
 import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
+import { registerBuilds } from './jobs/build';
 import type { Config } from './config';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, type ReferenceDocument } from './model/references';
@@ -163,6 +164,7 @@ export function buildServer({
   app.get('/api/model/files', async () => ({ files: modelFiles ? await modelFiles.list() : [] }));
 
   registerModelPublishing(app, { config, client, meta, modelFiles });
+  registerBuilds(app, client);
 
   /**
    * The charts and dashboards that use the members an edit changes, listed

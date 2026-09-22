@@ -645,6 +645,16 @@ fieldset.model-field > legend {
 
 .folder-contents__empty,
 .query-log__empty { color: var(--wc-text-secondary); }
+/* The Jobs workspace's tabs, and its pre-aggregations with their builds (T155). */
+.jobs-workspace__tabs { margin-bottom: 12px; }
+.build-panel { display: grid; gap: 12px; }
+.build-panel__head { margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
+.build-panel__builds,
+.build-jobs__list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.build-jobs { display: grid; gap: 4px; }
+.build-jobs__id { font-weight: 600; }
+.build-jobs__job { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; font-size: 12px; }
+.build-jobs__table { color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 
 /* The selected row is marked by more than the focus ring, so the selection is
    still visible when focus moves into a control inside the row. */

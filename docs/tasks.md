@@ -2333,10 +2333,22 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 > **2026-09-21: T156, T159, T160 and T161 are deferred.** Cube Core has no API for them: wechart's own build history and scheduler. The user: "for requirements that dont work with cube defer". See the status note under F17 in spec.md. T155, T157, T158 and T162 stay.
 
-- [ ] T155 (AC-149) Start a build, show its token, and poll to a terminal state
+- [x] T155 (AC-149) Start a build, show its token, and poll to a terminal state
   - Files: `packages/api/src/jobs/build.ts`, `packages/web/src/workspaces/jobs/BuildPanel.tsx`, `packages/api/src/jobs/build.test.ts`
   - Failing test: `build.test.ts`: the job token is shown and polling reports done, missing partition, failure or not found (AC-149).
-  - Depends on: T015, T151
+  - Depends on: T015, T151. T151 is deferred; this needed only the documented jobs API.
+  - **Done 2026-09-21.** Files as built:
+    - API: `jobs/build.ts` (`isFinished`, `buildablesFrom`, `registerBuilds`: `GET /api/preaggregations`, `POST /api/builds`, `POST /api/builds/status`) and its test; `cube/client.ts` (`buildPreAggregations`, `jobStatuses`); `server.ts` registers them.
+    - Cube: `infra/cube/cube.js` (`contextToApiScopes` adds `jobs` to the default scopes; only wechart can sign a token).
+    - Web: `workspaces/jobs/BuildPanel.tsx` and its test; `workspaces/jobs/JobsPage.tsx` (the prototype's tabs: Pre-aggregations first, and the query log under Queries); `shell/styles.ts`.
+    - e2e: `e2e/jobs.spec.ts` (the query-log test now opens its tab, with its assertions unchanged).
+    - **Through Cube's documented jobs API only** (`research/cube/refresh-jobs-caching.md` §B, with its shapes observed locally).
+      - A build is asked for the security context wechart's own requests carry, so it builds the model Cube answers wechart from, in UTC.
+      - Cube returns one token per partition, and each is followed every 1.5 s until it reports `done`, `missing_partition`, `failure: …`, `not_found` or `pre_agg_not_found`, then no further.
+      - The status route passes on each token's state and table, but not the selector, which echoes the security context.
+      - A name that isn't `cube.name` is refused before Cube is asked. Cube's own refusal of an unknown pre-aggregation is passed on as Cube's.
+    - **The state is shown as text here.** Its icon comes with T158 (AC-152).
+    - AC-149 ticked. `e2e/jobs.spec.ts`, against the real Cube in all three browsers, builds the seed rollup from the Jobs page. The job's token appears, its state is followed to `done`, and it names its Cube Store table. Cube's own record of that token, asked afterwards, is `done`. `BuildPanel.test.tsx` shows the polling stopping at each finished state and not before.
 - [ ] T156 (AC-150) Keep build history in wechart beyond Cube's 24-hour window
   - Files: `packages/api/src/repos/build-history.ts`, `packages/api/src/repos/build-history.test.ts`
   - Failing test: `build-history.test.ts`: a build recorded more than 24 hours ago is still listed with its target, partitions, duration, outcome and log (AC-150).

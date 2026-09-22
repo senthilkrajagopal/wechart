@@ -99,6 +99,37 @@ export class CubeClient {
     });
   }
 
+  /**
+   * `POST /v1/pre-aggregations/jobs`, `action: post`: build these
+   * pre-aggregations, for the context wechart's own requests carry — so the
+   * build is of the model Cube answers wechart from — in UTC, the zone the
+   * refresh worker builds in by default. One token per partition built
+   * (T155; research/cube/refresh-jobs-caching.md §B).
+   */
+  async buildPreAggregations(ids: readonly string[]): Promise<unknown> {
+    return this.#request('/v1/pre-aggregations/jobs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'post',
+        selector: {
+          contexts: [{ securityContext: this.#securityContext }],
+          timezones: ['UTC'],
+          preAggregations: ids,
+        },
+      }),
+    });
+  }
+
+  /** `POST /v1/pre-aggregations/jobs`, `action: get`: each token's state. */
+  async jobStatuses(tokens: readonly string[]): Promise<unknown> {
+    return this.#request('/v1/pre-aggregations/jobs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'get', tokens }),
+    });
+  }
+
   /** `/v1/meta?extended=true`: the model as compiled, its pre-aggregations included. */
   async metaExtended(): Promise<unknown> {
     return this.#request('/v1/meta?extended=true', { method: 'GET' });

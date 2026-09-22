@@ -501,7 +501,7 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
 > Cube Store's MySQL interface can, and the user deferred both (see F16's
 > status note, AC-145).
 
-- [ ] AC-149 WHEN the user starts a build for a pre-aggregation, THE SYSTEM SHALL submit it to Cube, show the job token, and poll until the job reports done, missing partition, failure or not found.
+- [x] AC-149 WHEN the user starts a build for a pre-aggregation, THE SYSTEM SHALL submit it to Cube, show the job token, and poll until the job reports done, missing partition, failure or not found.
       Fails when: the job's terminal state is never shown, or the token is absent.
 - [ ] AC-150 WHEN a build finishes, THE SYSTEM SHALL record it in wechart's own history with its target, partitions, duration, outcome and log, and keep that record beyond Cube's 24-hour window.
       Fails when: a build older than 24 hours is missing from the history.

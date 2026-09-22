@@ -103,6 +103,13 @@ module.exports = {
     return draft === undefined ? versionOf(store) : `draft_${draft}`;
   },
 
+  // wechart alone signs Cube's tokens (it alone holds CUBEJS_API_SECRET), and
+  // asks Cube to build pre-aggregations through the jobs API (T155, AC-149) —
+  // which answers 403 "API scope is missing: jobs" without this scope. The
+  // defaults are kept (docs/research/cube/refresh-jobs-caching.md, "Auth and
+  // scope"; `contextToApiScopes`).
+  contextToApiScopes: async (_securityContext, defaultScopes) => [...defaultScopes, 'jobs'],
+
   // What the refresh worker builds rollups for: the mounted model, and each
   // trusted store's — the model Cube answers wechart from. Without this the
   // worker's security context is undefined and it builds the mounted model
