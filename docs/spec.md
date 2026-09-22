@@ -412,9 +412,9 @@ Traces to: `[docs/inputs §9]`, direction.md §2, rule 41.
       Fails when: a dashboard-local chart appears in a folder listing or in search results.
 - [x] AC-127 WHEN the user saves a local chart to a folder, THE SYSTEM SHALL make it a library chart reusable by other dashboards, and say where it was saved.
       Fails when: the chart stays local, or the confirmation does not name the folder.
-- [ ] AC-128 WHEN a library chart is opened for editing from a dashboard, THE SYSTEM SHALL state that it is shared and on how many dashboards, and offer to make a local copy before changes spread (direction.md rule 41).
+- [x] AC-128 WHEN a library chart is opened for editing from a dashboard, THE SYSTEM SHALL state that it is shared and on how many dashboards, and offer to make a local copy before changes spread (direction.md rule 41).
       Fails when: the editor gives no shared indication for a library chart used by more than one dashboard.
-- [ ] AC-129 WHEN the user makes a local copy of a shared chart, THE SYSTEM SHALL repoint that tile to the copy, keep edits made so far, and leave the shared chart unchanged.
+- [x] AC-129 WHEN the user makes a local copy of a shared chart, THE SYSTEM SHALL repoint that tile to the copy, keep edits made so far, and leave the shared chart unchanged.
       Fails when: the shared chart changes, or the edits are lost.
 - [x] AC-130 WHEN a local chart is edited, THE SYSTEM SHALL change no other dashboard (direction.md rule 41).
       Fails when: another dashboard's rendering changes after editing a local chart.

@@ -109,6 +109,7 @@ import {
   type Element_,
   type Tile,
 } from './model/document';
+import { detach } from '../editor/detach';
 import { TileChartOwnership } from './edit/ChartOwnership';
 import { duplicateChartTile } from './model/duplicate';
 import { withLocalCharts } from './model/localCharts';
@@ -1500,6 +1501,15 @@ export function DashboardView({
               saveBlocked={(pending) =>
                 whyUnsaveableWith(session.document, dashboardId, editingChart.chartId, pending)
               }
+              // A shared chart's "Make a local copy" (T135, AC-129): the tile
+              // repointed to a copy with the edits so far, the editor on it.
+              onMakeLocalCopy={(edited) => {
+                const copyId = mintChartId();
+                session.change(
+                  detach(session.document, editingChart.tileId, { dashboardId, copyId, edited }),
+                );
+                setEditingChart({ ...editingChart, chartId: copyId });
+              }}
             />
           )
         }

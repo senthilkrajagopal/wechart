@@ -64,6 +64,21 @@ describe('a shared chart, opened for editing', () => {
     ).toMatch(/Shared chart from Sales · no other dashboard uses it yet/);
   });
 
+  it('offers a local copy, before any change spreads (T135)', async () => {
+    answering([
+      { id: 'd1', title: 'Sales' },
+      { id: 'd2', title: 'Board' },
+    ]);
+    const onMakeLocalCopy = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <SharedChartNotice chartId="c1" folderId="sales" onMakeLocalCopy={onMakeLocalCopy} />
+      </QueryClientProvider>,
+    );
+    (await screen.findByRole('button', { name: 'Make a local copy' })).click();
+    expect(onMakeLocalCopy).toHaveBeenCalledTimes(1);
+  });
+
   it('still says it is shared when who uses it cannot be read', async () => {
     answering('fail');
     notice();

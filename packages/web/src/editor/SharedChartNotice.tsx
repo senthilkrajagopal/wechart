@@ -15,9 +15,12 @@ import { StateLine } from '../shell/StatusIcon';
 export function SharedChartNotice({
   chartId,
   folderId,
+  onMakeLocalCopy,
 }: {
   chartId: string;
   folderId: string | undefined;
+  /** "Make a local copy" (T135, AC-129), before any change spreads. */
+  onMakeLocalCopy?: (() => void) | undefined;
 }) {
   const using = useQuery({
     queryKey: ['chart-dashboards', chartId],
@@ -41,27 +44,29 @@ export function SharedChartNotice({
       ? 'All folders'
       : (folders.data?.find((each) => each.id === folderId)?.title ?? folderId);
 
-  if (using.isPending)
-    return (
-      <StateLine kind="run" className="shared-chart-notice">
-        Shared chart: asking which dashboards use it…
-      </StateLine>
-    );
-  if (using.isError)
-    return (
-      <StateLine kind="warn" role="status" className="shared-chart-notice">
-        Shared chart: which dashboards use it could not be read. Edits change every dashboard that
-        uses it.
-      </StateLine>
-    );
-  const count = using.data.length;
-  return count > 1 ? (
-    <StateLine kind="warn" role="status" className="shared-chart-notice">
+  const count = using.data?.length;
+  const said = using.isPending ? (
+    <StateLine kind="run">Shared chart: asking which dashboards use it…</StateLine>
+  ) : using.isError || count === undefined ? (
+    <StateLine kind="warn" role="status">
+      Shared chart: which dashboards use it could not be read. Edits change every dashboard that
+      uses it.
+    </StateLine>
+  ) : count > 1 ? (
+    <StateLine kind="warn" role="status">
       Shared chart · on {count} dashboards · edits change all of them
     </StateLine>
   ) : (
-    <StateLine kind="idle" className="shared-chart-notice">
-      Shared chart from {folder} · no other dashboard uses it yet
-    </StateLine>
+    <StateLine kind="idle">Shared chart from {folder} · no other dashboard uses it yet</StateLine>
+  );
+  return (
+    <div className="shared-chart-notice">
+      {said}
+      {onMakeLocalCopy === undefined ? null : (
+        <button type="button" className="btn-sm" onClick={onMakeLocalCopy}>
+          Make a local copy
+        </button>
+      )}
+    </div>
   );
 }

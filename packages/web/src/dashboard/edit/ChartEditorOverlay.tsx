@@ -40,6 +40,12 @@ export interface ChartEditorOverlayProps {
    * undefined when it could. Asked with the edit, or with nothing while the
    * chart is unchanged.
    */
+  /**
+   * "Make a local copy" of a shared chart (T135, AC-129): the chart with the
+   * edits so far, and what it draws, for the dashboard to repoint the tile
+   * to a copy of its own. The editor stays open, on the copy.
+   */
+  readonly onMakeLocalCopy?: ((edited: Pick<ChartDraft, 'document' | 'drawn'>) => void) | undefined;
   readonly saveBlocked: (
     pending: Pick<ChartDraft, 'document' | 'version'> | undefined,
   ) => string | undefined;
@@ -81,6 +87,7 @@ export function ChartEditorOverlay({
   draft,
   onBack,
   onSaveDashboard,
+  onMakeLocalCopy,
   saveBlocked,
   tileId,
   urlTile,
@@ -180,6 +187,23 @@ export function ChartEditorOverlay({
     [opened],
   );
   const back = useCallback(() => leave(onBack), [leave, onBack]);
+
+  /**
+   * "Make a local copy" (T135, AC-129): the chart as the editor has it now —
+   * the edits so far, not only those applied — drawn as a tile draws it, and
+   * handed on. The dashboard repoints the tile to a copy of its own; the
+   * editor, on that copy now, says so.
+   */
+  const [copied, setCopied] = useState(false);
+  const makeLocalCopy = useCallback(async () => {
+    if (opened === undefined || onMakeLocalCopy === undefined || applying) return;
+    setApplying(true);
+    const document = chartDocumentWith(opened.document, latest.current ?? opened.state);
+    const drawn = await tileChartOf(document, loadRows);
+    setApplying(false);
+    setCopied(true);
+    onMakeLocalCopy({ document, drawn });
+  }, [opened, onMakeLocalCopy, applying]);
 
   /**
    * The browser's Back (T196). Opened from a tile, the editor puts the tile in
@@ -307,8 +331,24 @@ export function ChartEditorOverlay({
       {opened === undefined ||
       opened.document.localToDashboardId !== undefined ||
       draft?.wasLocalTo !== undefined ? null : (
-        <SharedChartNotice chartId={chartId} folderId={opened.document.folderId} />
+        <SharedChartNotice
+          chartId={chartId}
+          folderId={opened.document.folderId}
+          onMakeLocalCopy={
+            onMakeLocalCopy === undefined
+              ? undefined
+              : () => {
+                  void makeLocalCopy();
+                }
+          }
+        />
       )}
+      {/* The prototype's note once copied: whose it is now, and the shared chart as it was. */}
+      {copied && opened?.document.localToDashboardId !== undefined ? (
+        <StateLine kind="ok" className="shared-chart-notice" testId="local-copy-made">
+          Local copy · only on this dashboard. The shared chart is unchanged.
+        </StateLine>
+      ) : null}
       {view.kind === 'loading' ? (
         <StateLine kind="run" testId="editor-loading">
           Opening the chart…

@@ -1730,7 +1730,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - **Tests added:** the mark carried through the editor's Save dashboard check, and the container's read (both the no-draft and the draft path).
       - **Stale comments** in `server.ts`.
     - **Noted, not fixed:** Save pressed while the chart is still being read goes out without the folder change, which the panel said was under way.
-- [ ] T134 (AC-128) State that a library chart is shared and on how many dashboards, and offer a local copy
+- [x] T134 (AC-128) State that a library chart is shared and on how many dashboards, and offer a local copy
   - Files: `packages/web/src/editor/SharedChartNotice.tsx`, `packages/web/src/editor/SharedChartNotice.test.tsx`
   - Failing test: `SharedChartNotice.test.tsx`: opening a library chart used by more than one dashboard shows the shared indication with the count and a "make a local copy" action (AC-128).
   - Depends on: T133
@@ -1752,10 +1752,21 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - AC-183 now covers library charts too: `e2e/chart-save.spec.ts` saves one from the editor's Save dashboard and from the bar's Save, and both the stored chart and a second dashboard that uses it show the change.
     - **A fix the count needed.** `dashboardsUsing` read only the `body.charts` list, which a chart added from its own page writes, but tiles don't. A library chart shown on two dashboards' tiles read as on none: wrong here, and in the library chart page's list and its delete protection (AC-022, AC-023). It now also finds a tile's `chartId` at any depth (`jsonb_path_exists` with `strict $.**`, checked against PostgreSQL 18's docs and the local database).
     - **Tests changed at the user's decision.** The tests that pinned T192's hold on library charts, in `chartDrafts.test.ts`, `server.test.ts` and `e2e/chart-save.spec.ts`, now assert the opposite: saved everywhere, still a library chart, and the other dashboard changed. Tests that used a library draft only as an example of an unsaveable one now use another dashboard's chart, which is still refused.
-- [ ] T135 (AC-129) Repoint the tile to a local copy, keeping edits and leaving the shared chart untouched
+- [x] T135 (AC-129) Repoint the tile to a local copy, keeping edits and leaving the shared chart untouched
   - Files: `packages/web/src/editor/detach.ts`, `packages/web/src/editor/detach.test.ts`
   - Failing test: `detach.test.ts`: after detaching, the tile uses the copy with the edits made so far, and the shared chart is unchanged (AC-129).
   - Depends on: T134
+  - **Done 2026-09-22.** Files as built:
+    - `editor/detach.ts` (`detach`) and its test.
+    - `editor/SharedChartNotice.tsx` (the offer) and its test.
+    - `dashboard/edit/ChartEditorOverlay.tsx` (`onMakeLocalCopy`, and the note once copied).
+    - `dashboard/DashboardView.tsx` and `shell/styles.ts`.
+    - `e2e/chart-save.spec.ts`.
+    - **What it does.** The shared-chart notice offers "Make a local copy". Pressed, the chart as the editor has it now, with the edits made so far including unapplied ones, is drawn and handed on. The tile is repointed to a new chart made from it: local to this dashboard, in no folder, a draft at version 0 that the dashboard's save creates (T132). The shared chart's own draft in this session, if it had one, goes, because those edits are the copy's now. The editor stays open on the copy and reads "Local copy · only on this dashboard. The shared chart is unchanged." (the prototype's note). Undo and Discard take it all back with the session.
+    - AC-129 ticked, and AC-128 with it, now that the offer is made (T134 built the rest). `e2e/chart-save.spec.ts`, "a local copy of a shared chart takes the tile and the edits so far…", runs on the real dashboard in all three browsers:
+      - A library chart used by two dashboards is opened from a tile. The notice says it is on 2 dashboards, and a type change is made before the copy.
+      - After the copy, the editor keeps the edit and the offer is gone. Saved, the tile's chart is a new one, local to the dashboard, with the edit.
+      - The library chart is stored as it was, and the other dashboard still draws it so.
 - [x] T136 (AC-130) Change no other dashboard when a local chart is edited
   - Files: `packages/web/src/editor/applyChanges.ts`, `e2e/local-chart-isolation.spec.ts`
   - Failing test: `e2e/local-chart-isolation.spec.ts`: editing a local chart leaves a second dashboard's rendering unchanged (AC-130).

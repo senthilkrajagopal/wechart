@@ -682,6 +682,56 @@ test.describe('a save that fails keeps the session (AC-184)', () => {
   });
 });
 
+/**
+ * T135 / AC-129: WHEN the user makes a local copy of a shared chart, THE
+ * SYSTEM SHALL repoint that tile to the copy, keep edits made so far, and
+ * leave the shared chart unchanged.
+ * Fails when: the shared chart changes, or the edits are lost.
+ *
+ * And AC-128's offer, made where the editor says the chart is shared.
+ */
+test('a local copy of a shared chart takes the tile and the edits so far, and leaves the shared chart as it was', async ({
+  page,
+  request,
+}) => {
+  const { dashboardId, chartId } = await makeDashboard(request, true);
+  const other = await alsoOn(request, chartId);
+  await page.goto(`/explore/dashboards/${dashboardId}`);
+  await expect(canvas(page)).toHaveAttribute('data-chart-type', 'bar');
+  await page.getByTestId('edit-chart-tile-save').click();
+
+  const notice = editor(page).locator('.shared-chart-notice');
+  await expect(notice).toContainText('on 2 dashboards');
+  // An edit made before the copy: it goes with it.
+  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await notice.getByRole('button', { name: 'Make a local copy' }).click();
+
+  await expect(editor(page).getByTestId('local-copy-made')).toContainText(
+    'The shared chart is unchanged',
+  );
+  await expect(editor(page).getByRole('button', { name: 'Make a local copy' })).toHaveCount(0);
+  await expect(page.getByTestId('chart-type')).toHaveText('stackedBar');
+
+  await page.getByTestId('editor-back').click();
+  await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
+  await barButton(page, 'Save').click();
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+
+  // The tile shows a copy of its own, local to this dashboard, with the edit.
+  const saved = (await (await request.get(`${API}/documents/dashboard/${dashboardId}`)).json()) as {
+    body: { pages: { items: { chartId?: string }[] }[] };
+  };
+  const copyId = saved.body.pages[0]?.items[0]?.chartId ?? '';
+  expect(copyId).not.toBe(chartId);
+  const copy = await stored(request, copyId);
+  expect(copy.body['localToDashboardId']).toBe(dashboardId);
+  expect((copy.body['chart'] as { chartType?: string }).chartType).toBe('stackedBar');
+  // The shared chart as it was, and the other dashboard with it.
+  expect(await storedType(request, chartId)).toBe('bar');
+  await page.goto(`/explore/dashboards/${other}`);
+  await expect(canvas(page)).toHaveAttribute('data-chart-type', 'bar');
+});
+
 test('a library chart edited from its tile is saved with the dashboard, for every dashboard that uses it', async ({
   page,
   request,
