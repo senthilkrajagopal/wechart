@@ -13,8 +13,21 @@ type Value = Record<string, unknown>;
 
 const NONE = 'none';
 
+/** A list of members, or one written on its own — as Cube and the form both take it. */
 const strings = (value: unknown): string[] =>
-  Array.isArray(value) ? value.filter((each): each is string => typeof each === 'string') : [];
+  typeof value === 'string'
+    ? [value]
+    : Array.isArray(value)
+      ? value.filter((each): each is string => typeof each === 'string')
+      : [];
+
+/**
+ * A key as the model may write it: its name, its legacy `*_reference(s)`
+ * name, or camelCased — Cube's YAML compiler camelises a rollup, so each is
+ * accepted (T148's review).
+ */
+const read = (rollup: Value, ...keys: string[]): unknown =>
+  keys.map((key) => rollup[key]).find((value) => value !== undefined);
 
 const listed = (value: unknown) => {
   const all = strings(value);
@@ -27,26 +40,63 @@ function indexes(value: unknown): string {
   if (!Array.isArray(value)) return NONE;
   const each = value.flatMap((index) => {
     if (typeof index !== 'object' || index === null) return [];
-    const { name, columns, type } = index as Value;
+    const { name, columns, sql, type } = index as Value;
     const named = typeof name === 'string' ? name : 'unnamed';
-    return [
-      `${named} (${strings(columns).join(', ')})${type === 'aggregate' ? ', aggregate' : ''}`,
-    ];
+    // On columns, in order; or on SQL, the other form Cube accepts.
+    const on = typeof sql === 'string' ? `sql: ${sql}` : strings(columns).join(', ');
+    return [`${named} (${on})${type === 'aggregate' ? ', aggregate' : ''}`];
   });
   return each.length === 0 ? NONE : each.join('; ');
 }
 
+/** Several time dimensions, each `{dimension, granularity}`, in order. */
+function timeDimensions(value: unknown): { dimension: string; granularity: string }[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((each) => {
+    if (typeof each !== 'object' || each === null) return [];
+    const { dimension, granularity } = each as Value;
+    return typeof dimension === 'string'
+      ? [{ dimension, granularity: typeof granularity === 'string' ? granularity : NONE }]
+      : [];
+  });
+}
+
 export function rollupFacts(rollup: Value): [label: string, value: string][] {
+  const several = timeDimensions(read(rollup, 'time_dimensions', 'timeDimensions'));
+  const time = read(
+    rollup,
+    'time_dimension',
+    'time_dimension_reference',
+    'timeDimension',
+    'timeDimensionReference',
+  );
   const facts: [string, string][] = [
-    ['Measures', listed(rollup['measures'])],
-    ['Dimensions', listed(rollup['dimensions'])],
-    ['Time dimension', text(rollup['time_dimension'])],
-    ['Granularity', text(rollup['granularity'])],
-    ['Partition granularity', text(rollup['partition_granularity'])],
+    ['Measures', listed(read(rollup, 'measures', 'measure_references', 'measureReferences'))],
+    [
+      'Dimensions',
+      listed(read(rollup, 'dimensions', 'dimension_references', 'dimensionReferences')),
+    ],
+    [
+      'Time dimension',
+      time === undefined && several.length > 0
+        ? several.map((each) => each.dimension).join(', ')
+        : text(time),
+    ],
+    [
+      'Granularity',
+      time === undefined && several.length > 0
+        ? several.map((each) => each.granularity).join(', ')
+        : text(rollup['granularity']),
+    ],
+    ['Partition granularity', text(read(rollup, 'partition_granularity', 'partitionGranularity'))],
     ['Indexes', indexes(rollup['indexes'])],
   ];
-  if (rollup['type'] === 'rollup_join' || rollup['type'] === 'rollup_lambda')
-    facts.push(['Rollups', listed(rollup['rollups'])]);
+  const type = rollup['type'];
+  if (['rollup_join', 'rollupJoin', 'rollup_lambda', 'rollupLambda'].includes(String(type)))
+    facts.push([
+      'Rollups',
+      listed(read(rollup, 'rollups', 'rollup_references', 'rollupReferences')),
+    ]);
   return facts;
 }
 

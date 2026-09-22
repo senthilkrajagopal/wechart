@@ -2240,6 +2240,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **Where.** A cube's Pre-aggregations tab in its form (direction.md §7b's tabs), as the prototype's model editor has it. Each rollup is listed by name and type, as before. Under it now are six rows: measures, dimensions, time dimension, granularity, partition granularity and indexes. They are always shown, not only once the rollup's form is opened. A lambda or join also lists the rollups it's made of.
     - **As written, and "none" where absent.** Members are shown as the file writes them (`count`, `CUBE.count`), since this lists the file and doesn't resolve it. An attribute the rollup doesn't declare reads "none", so something missing reads as missing from the model, not from the page. An index reads `name (columns in order)`, plus ", aggregate" when it is one.
     - AC-142 ticked: `e2e/preaggregations.spec.ts` opens the seed `cubes/monthly_orders.yml` (T014) in all three browsers and reads its one rollup's six attributes from the list, with its form closed.
+    - **Cold review (one round, 2026-09-21), verdict FAIL. Fixed:**
+      - **Rollups Cube accepts, written another way, read "none" for what they declare** (AC-142's Fails-when). Now read as well:
+        - a list of `time_dimensions` (several time dimensions, and their granularities in the same order), which the form itself can write;
+        - the legacy reference keys (`measure_references`, `dimension_references`, `time_dimension_reference`);
+        - camelCase keys and types (`timeDimension`, `partitionGranularity`, `rollupLambda`), since Cube's YAML compiler camelises a rollup;
+        - an index on `sql` rather than columns;
+        - one member written on its own rather than in a list. Here my own unit test had asserted "none", and it was wrong: Cube and the form both take it as that member. The assertion now expects the member.
+      - **Left for the user:** Cube's compile lets a rollup's unknown members through (T149's record). The "Rollups" row shows for `rollup_join` and `rollup_lambda`, whose authoring is a Non-goal. It is kept deliberately, because it only lists what the file declares, as the form does.
 - [x] T149 (AC-143) Write a rollup edited in the form back into the model file
   - Files: `packages/web/src/workspaces/model/preagg/RollupForm.tsx`, `packages/api/src/model/writeRollup.ts`, `packages/api/src/model/writeRollup.test.ts`
   - Failing test: `writeRollup.test.ts`: the edit appears as YAML in the model file and goes through the same validation and publishing path as any model change (AC-143).

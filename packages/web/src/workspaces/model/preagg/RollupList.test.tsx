@@ -96,11 +96,64 @@ describe('what a rollup declares, in words', () => {
       }),
     ).toEqual([
       ['Measures', 'CUBE.count'],
-      ['Dimensions', 'none'],
+      // One member written on its own, as Cube and the form both take it.
+      ['Dimensions', 'status'],
       ['Time dimension', 'CUBE.ordered_at'],
       ['Granularity', 'none'],
       ['Partition granularity', 'none'],
       ['Indexes', 'unnamed (status)'],
     ]);
+  });
+
+  it('reads every way Cube accepts a rollup being written (T148’s review)', () => {
+    // The legacy reference keys, which the form lists under its legacy keys.
+    expect(
+      rollupFacts({
+        measure_references: ['count'],
+        dimension_references: ['status'],
+        time_dimension_reference: 'ordered_at',
+        granularity: 'day',
+      }).slice(0, 4),
+    ).toEqual([
+      ['Measures', 'count'],
+      ['Dimensions', 'status'],
+      ['Time dimension', 'ordered_at'],
+      ['Granularity', 'day'],
+    ]);
+    // camelCase keys and types: Cube's YAML compiler camelises a rollup.
+    expect(
+      rollupFacts({
+        type: 'rollupLambda',
+        measureReferences: ['count'],
+        timeDimension: 'ordered_at',
+        partitionGranularity: 'year',
+        rollupReferences: ['a', 'b'],
+      }),
+    ).toEqual([
+      ['Measures', 'count'],
+      ['Dimensions', 'none'],
+      ['Time dimension', 'ordered_at'],
+      ['Granularity', 'none'],
+      ['Partition granularity', 'year'],
+      ['Indexes', 'none'],
+      ['Rollups', 'a, b'],
+    ]);
+    // Several time dimensions, each with its granularity, in order.
+    expect(
+      rollupFacts({
+        measures: ['count'],
+        time_dimensions: [
+          { dimension: 'ordered_at', granularity: 'day' },
+          { dimension: 'shipped_at', granularity: 'month' },
+        ],
+      }).slice(2, 4),
+    ).toEqual([
+      ['Time dimension', 'ordered_at, shipped_at'],
+      ['Granularity', 'day, month'],
+    ]);
+    // An index on SQL rather than columns.
+    expect(
+      rollupFacts({ indexes: [{ name: 'by_lower', sql: 'lower(status)', type: 'aggregate' }] })[5],
+    ).toEqual(['Indexes', 'by_lower (sql: lower(status)), aggregate']);
   });
 });
