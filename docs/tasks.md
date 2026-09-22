@@ -1784,7 +1784,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - rows' SQL preview and badges;
       - fields that follow a member's shape, such as a `switch` dimension.
 - [x] T139 (AC-133) Synchronise the form and the YAML view in both directions
-  - Files: `packages/web/src/workspaces/model/{YamlEditor,sync}.tsx`, `packages/web/src/workspaces/model/sync.test.ts`
+  - Files: `packages/web/src/workspaces/model/YamlEditor.tsx`, `packages/web/src/workspaces/model/sync.ts`, `packages/web/src/workspaces/model/sync.test.ts`
   - Failing test: `sync.test.ts`: a form edit updates the YAML within one render, and a valid YAML edit updates the form within 500 ms (AC-133). Monaco is driven as a controlled editor per `docs/research/code-editor.md`; parsing uses `yaml` with Cube's own options.
   - Depends on: T138
   - **Built 2026-09-21.**
@@ -1810,6 +1810,43 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - the form's Title typed in shows in the YAML within 250 ms;
       - `_2026` typed at the end of the YAML's `sql_table` line shows in the form's SQL table field within 500 ms;
       - the form's edit is still in the YAML after the YAML's.
+  - **Cold review (one round, 2026-09-21), verdict FAIL. Fixed in the review commit:**
+    - **Valid YAML with an entry that isn't an object crashed the page and lost every unsaved edit.** A bare `- ` parses as `null`, and a `cubes:` that isn't a list is another example.
+      - The page now gives a form only to the entries that are objects, each at its place in the file.
+      - The member list reads a `null` member as one with no keys yet. That part landed in T138's review commit.
+      - Test: e2e, `- ` typed under `measures:` shows "Measure 1" and the page stands.
+    - **Every form edit replaced the whole YAML text, so the cursor went to the top.**
+      - `changeBetween` now sends only the part between the shared start and the shared end, so the editor maps the cursor through it.
+      - Tests: `YamlEditor.test.ts` (4). The e2e checks the cursor stays where it was.
+    - **CodeMirror draws only the lines near its scroll position**, so the key the form adds at a cube's end wasn't on screen. The whole-text replace had redrawn everything.
+      - The change now scrolls itself into view, "nearest", moving the view and not the cursor.
+      - **The YAML also never scrolled.** It had a max-height without the `overflow: auto` CodeMirror's styling guide calls for, so the lines past it were cut off. Once fixed, a scroll moves the editor rather than the page.
+      - Both are in research/code-editor.md.
+    - **A form edit re-rendered the whole file in `yaml`'s default style:** two spaces, lists indented, folded at 80 columns. The file is now written in its own style: its indent, whether its lists sit under their key, and no folding (`lineWidth: 0`).
+      - Tests: a four-space file with a long line, and a two-space file with lists level with their key, each byte-for-byte as written apart from the added line.
+      - A file that mixes the two list styles in one document comes back in one style, the first it uses.
+    - **A list whose length changed was written anew**, so every comment in it was lost.
+      - A member added at the end is now appended.
+      - A single member removed is deleted on its own.
+      - Anything else is still written anew. `lossCheck` (T140) names what that would lose.
+      - Tests: `sync.test.ts`, one of each, the whole file compared.
+    - **Writing an anchored list anew left its aliases pointing at nothing**, and `toString()` threw "Unresolved alias". Found while building T140. The list written anew now keeps its anchor and its own comments. Test: `sync.test.ts`.
+    - **Dark mode broke AC-005** (direction.md rules 2 and 24): `defaultHighlightStyle` is light-only, and keys were 1.52:1.
+      - The YAML now highlights from `--wc-code-*` tokens, the prototype's `--cm-*` roles, which the token audit covers in both themes.
+      - The comment grey is `text-muted`, because the prototype's grey is 4.02:1 on `bg-hover`.
+      - The caret and the selection come from the tokens too.
+      - `@lezer/highlight` 1.2.3 is pinned and researched.
+      - The rendered audit now covers `/model/files/cubes%2Forders.yml`. It failed first at 1.52:1.
+    - **Typing that never paused held the form** past AC-133's 500 ms. The wait is now the 300 ms pause, and never more than 300 ms after the first keystroke the form hasn't read.
+      - Test: e2e, a key every 150 ms reaches the form within 500 ms. With the ceiling removed it failed.
+    - **Tests and records:**
+      - `sync.test.ts`'s comment test now checks the comment is gone.
+      - The T138 doc comment in `model.spec.ts` sits over its own test again.
+      - The Files line names `sync.ts`.
+      - The claims above about the cursor and about keeping everything as written hold now, within the limits listed here.
+  - **Left from the review:**
+    - **Clearing a field removes its key**, and a comment written on it goes too. Typing into the field again adds the key back at the end of its object. The comment's loss is what T140's warning names before the edit is applied.
+    - **A `timestamp` value** the form doesn't touch still comes back in `toISOString` form when the file is written.
 - [ ] T140 (AC-134) Warn and name what a code-to-form switch would lose
   - Files: `packages/web/src/workspaces/model/lossCheck.ts`, `packages/web/src/workspaces/model/lossCheck.test.ts`
   - Failing test: `lossCheck.test.ts`: a file with comments and anchors produces a warning naming each before the change is applied, and no comment disappears silently (AC-134).

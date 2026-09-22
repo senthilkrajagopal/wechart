@@ -1,15 +1,67 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { yaml } from '@codemirror/lang-yaml';
-import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { lintGutter, setDiagnostics } from '@codemirror/lint';
 import { Annotation, EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
+import { tags } from '@lezer/highlight';
 import { useEffect, useRef } from 'react';
 
 import type { Problem } from './problems';
 
+/**
+ * The YAML's colours, from the tokens, so each theme's own values apply and
+ * the contrast audit covers them (AC-005; direction.md rules 2 and 24). The
+ * prototype's --cm-* roles on the tags the YAML grammar gives
+ * (research/code-editor.md, "Highlighting from tokens"). Not
+ * `defaultHighlightStyle`: a light style, it put dark blue on dark.
+ */
+const TOKEN_HIGHLIGHT = HighlightStyle.define([
+  { tag: tags.propertyName, color: 'var(--wc-code-key)' },
+  { tag: [tags.string, tags.special(tags.string)], color: 'var(--wc-code-string)' },
+  { tag: [tags.number, tags.bool, tags.null], color: 'var(--wc-code-number)' },
+  { tag: [tags.lineComment, tags.comment], color: 'var(--wc-code-comment)', fontStyle: 'italic' },
+  {
+    tag: [tags.labelName, tags.typeName, tags.keyword, tags.meta],
+    color: 'var(--wc-code-atom)',
+  },
+]);
+
+/**
+ * The caret and the selection in the tokens too: CodeMirror's base theme
+ * draws a black caret and a light selection, lost on the dark ground.
+ */
+const TOKEN_THEME = EditorView.theme({
+  '.cm-content': { caretColor: 'var(--wc-text-primary)' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--wc-text-primary)' },
+  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
+    { backgroundColor: 'color-mix(in srgb, var(--wc-accent) 28%, transparent)' },
+});
+
 /** No problems: one array, so leaving out `problems` does not redo the marks each render. */
 const NONE: readonly Problem[] = [];
+
+/**
+ * The part of `before` that `after` changes: the text between their shared
+ * start and their shared end. Dispatched as the change, so the editor maps
+ * the cursor through it rather than to the edge of a whole-text replace.
+ */
+export function changeBetween(
+  before: string,
+  after: string,
+): { from: number; to: number; insert: string } {
+  const shorter = Math.min(before.length, after.length);
+  let start = 0;
+  while (start < shorter && before.charCodeAt(start) === after.charCodeAt(start)) start += 1;
+  // The end may not reach back into the start: "aa" → "aaa" is one "a" added.
+  let end = 0;
+  while (
+    end < shorter - start &&
+    before.charCodeAt(before.length - 1 - end) === after.charCodeAt(after.length - 1 - end)
+  )
+    end += 1;
+  return { from: start, to: before.length - end, insert: after.slice(start, after.length - end) };
+}
 
 /** Marks a change that came in through `value`, so it is not handed back out. */
 const FROM_VALUE = Annotation.define<boolean>();
@@ -57,7 +109,8 @@ export function YamlEditor({
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           yaml(),
-          syntaxHighlighting(defaultHighlightStyle),
+          syntaxHighlighting(TOKEN_HIGHLIGHT),
+          TOKEN_THEME,
           EditorView.contentAttributes.of({ 'aria-label': label }),
           EditorView.updateListener.of((update) => {
             // Only what the user typed: a change dispatched from `value` is
@@ -83,9 +136,13 @@ export function YamlEditor({
     if (editor === null) return;
     const current = editor.state.doc.toString();
     if (current === value) return;
+    const change = changeBetween(current, value);
     editor.dispatch({
-      changes: { from: 0, to: current.length, insert: value },
+      changes: change,
       annotations: FROM_VALUE.of(true),
+      // Shown where it is — the editor draws only the lines near its scroll
+      // position — without moving the cursor (research/code-editor.md).
+      effects: EditorView.scrollIntoView(change.from, { y: 'nearest' }),
     });
   }, [value]);
 

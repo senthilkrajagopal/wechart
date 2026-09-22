@@ -33,16 +33,6 @@ test('the Model workspace lists each model file with what it defines', async ({ 
 });
 
 /**
- * T138 / AC-132: THE SYSTEM SHALL offer a form for every key Cube's validator
- * accepts on a cube or a view, with enumerations offering exactly the
- * validator's allowed values.
- * Fails when: a key the validator accepts has no form field, or an
- * enumeration offers a value the validator rejects.
- *
- * `form/schema.test.ts` holds every key to the research's inventory; here,
- * the real file opened on its form.
- */
-/**
  * T139 / AC-133: WHEN the user edits a field in the form, THE SYSTEM SHALL
  * update the YAML view within one render, and WHEN the user edits valid YAML,
  * THE SYSTEM SHALL update the form within 500 milliseconds.
@@ -58,7 +48,16 @@ test('the form and the YAML view each show what the other edits', async ({ page 
   await form.getByLabel('Title', { exact: true }).fill('Orders ledger');
   await expect(yaml).toContainText('title: Orders ledger', { timeout: 250 });
 
+  // The form's edit is shown where it is: the YAML scrolled to the new line,
+  // at the cube's end — the view moved, not the cursor.
+  const scroller = page.locator('.yaml-editor .cm-scroller');
+  expect(await scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
   // The YAML, into the form: after the 300 ms pause, inside the 500 allowed.
+  // Scrolled back up first, as a person would, so the click lands on line 3.
+  await scroller.evaluate((element) => {
+    element.scrollTop = 0;
+  });
   await page.locator('.cm-line', { hasText: 'sql_table: public.orders' }).click();
   await page.keyboard.press('End');
   await page.keyboard.type('_2026');
@@ -130,6 +129,49 @@ test('YAML that does not parse is listed by file and line, and holds the form re
   await expect(form.getByLabel('SQL table', { exact: true })).toHaveValue('public.orders');
 });
 
+test('typing that never pauses still reaches the form within 500 ms', async ({ page }) => {
+  // T139's review: a pause-only wait held the form as long as the typing went on.
+  await page.goto('/model/files/cubes%2Forders.yml');
+  const table = page
+    .getByRole('region', { name: 'Cube orders' })
+    .getByLabel('SQL table', { exact: true });
+  await expect(table).toHaveValue('public.orders');
+  await page.locator('.cm-line', { hasText: 'sql_table: public.orders' }).click();
+  await page.keyboard.press('End');
+
+  // A key every 150 ms for 1.5 s, each under the 300 ms pause; every text parses.
+  const typing = page.keyboard.type('_abcdefghij', { delay: 150 });
+  await expect(table).toHaveValue(/^public\.orders_/, { timeout: 500 });
+  await typing;
+});
+
+test('an entry typed as far as its dash is waited for, not a crash', async ({ page }) => {
+  // T139's review: `- ` parses as null, and the form read it as an object.
+  await page.goto('/model/files/cubes%2Forders.yml');
+  const form = page.getByRole('region', { name: 'Cube orders' });
+  await form.getByRole('tab', { name: /^Measures/ }).click();
+  await page.locator('.cm-line', { hasText: /^\s+measures:$/ }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('- ');
+
+  // The pause passes, and the page still stands: the null is a member with no keys yet.
+  await expect(
+    form.getByRole('list', { name: 'Measures' }).locator('.model-member__name'),
+  ).toContainText(['Measure 1']);
+  await expect(page.getByRole('textbox', { name: 'cubes/orders.yml, as YAML' })).toBeVisible();
+});
+
+/**
+ * T138 / AC-132: THE SYSTEM SHALL offer a form for every key Cube's validator
+ * accepts on a cube or a view, with enumerations offering exactly the
+ * validator's allowed values.
+ * Fails when: a key the validator accepts has no form field, or an
+ * enumeration offers a value the validator rejects.
+ *
+ * `form/schema.test.ts` holds every key to the research's inventory; here,
+ * the real file opened on its form.
+ */
 test('a model file opens on a form for its cube, its enumerations the validator’s own', async ({
   page,
 }) => {

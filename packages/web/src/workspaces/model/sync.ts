@@ -1,4 +1,4 @@
-import { isMap, isSeq, parseDocument, type Document } from 'yaml';
+import { isAlias, isMap, isNode, isSeq, parseDocument, type Document } from 'yaml';
 
 import { CUBE_PARSE } from './objects';
 
@@ -60,18 +60,69 @@ function applyChange(
     }
     return;
   }
-  if (
-    Array.isArray(before) &&
-    Array.isArray(after) &&
-    isSeq(node) &&
-    before.length === after.length
-  ) {
-    after.forEach((item, index) => {
-      applyChange(document, [...path, index], before[index], item);
-    });
+  if (Array.isArray(before) && Array.isArray(after) && isSeq(node)) {
+    // Item by item where they line up, and a member added at the end is
+    // added there, so the items kept keep their comments.
+    if (after.length >= before.length) {
+      before.forEach((item, index) => {
+        applyChange(document, [...path, index], item, after[index]);
+      });
+      for (const item of after.slice(before.length)) node.add(document.createNode(item));
+      return;
+    }
+    // One member removed: that one goes, and nothing around it.
+    const gone = before.findIndex(
+      (_, at) =>
+        JSON.stringify([...before.slice(0, at), ...before.slice(at + 1)]) === JSON.stringify(after),
+    );
+    if (before.length - after.length === 1 && gone !== -1) {
+      document.deleteIn([...path, gone]);
+      return;
+    }
+  }
+  // A scalar goes in as its value: over a scalar, `yaml` sets the value on the
+  // node that is there, keeping its comments. A list or a map is written anew,
+  // as a node, and given what the node it replaces carried itself: its anchor
+  // — or an alias to it would resolve to nothing, and the file could not be
+  // written (T139's review) — and its own comments. What was inside it goes;
+  // `lossCheck` names that before the edit is applied (T140).
+  if (after === null || typeof after !== 'object') {
+    document.setIn(path, after);
     return;
   }
-  document.setIn(path, after);
+  const written = document.createNode(after);
+  if (isNode(node) && !isAlias(node)) {
+    if (node.anchor !== undefined) written.anchor = node.anchor;
+    if (node.commentBefore !== undefined) written.commentBefore = node.commentBefore;
+    if (node.comment !== undefined) written.comment = node.comment;
+  }
+  document.setIn(path, written);
+}
+
+/**
+ * How the file is written: its own indent, and whether its lists sit under
+ * their key's indent or past it, read from the text; no line folded
+ * (`lineWidth: 0`). Without these `yaml` writes its defaults — two spaces,
+ * lists indented, folded at 80 columns — and a form edit reflows the whole
+ * file (research/yaml.md, "Round-trip is a re-render").
+ */
+function styleOf(text: string): { indent: number; indentSeq: boolean; lineWidth: 0 } {
+  const lines = text
+    .split('\n')
+    .filter((line) => line.trim() !== '' && !line.trim().startsWith('#'));
+  const indents = lines.map((line) => line.length - line.trimStart().length).filter((n) => n > 0);
+  const indent = indents.length === 0 ? 2 : Math.min(...indents);
+  // A `key:` line, then a `-` on the next: past its indent, or at it.
+  let indentSeq = true;
+  for (let at = 0; at + 1 < lines.length; at += 1) {
+    const key = /^(\s*)[^\s#-][^:]*:\s*$/.exec(lines[at] ?? '');
+    const dash = /^(\s*)- /.exec(lines[at + 1] ?? '');
+    if (key !== null && dash !== null) {
+      indentSeq = (dash[1] ?? '').length > (key[1] ?? '').length;
+      break;
+    }
+  }
+  return { indent, indentSeq, lineWidth: 0 };
 }
 
 /** The file with one cube or view replaced by the form's next version of it. */
@@ -84,5 +135,5 @@ export function withObject(
   const document = parseDocument(text, CUBE_PARSE);
   const before = (document.toJS() as FileModel | null)?.[list]?.[index];
   applyChange(document, [list, index], before, next);
-  return document.toString();
+  return document.toString(styleOf(text));
 }

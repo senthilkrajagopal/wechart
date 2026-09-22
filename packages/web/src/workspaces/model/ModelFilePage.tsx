@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { codeNoteOf, MODEL_FILES_QUERY } from './FileList';
 import { objectsOf } from './objects';
@@ -18,8 +18,28 @@ type Value = Record<string, unknown>;
 
 /** direction.md §7b: "Code edits re-parse after a 300 ms pause" — inside AC-133's 500. */
 export const YAML_PAUSE_MS = 300;
+/**
+ * And never longer than this after the first keystroke the form hasn't
+ * read, so typing that never pauses still reaches it inside AC-133's 500 ms
+ * (T139's review), with room for the render: the pause itself, as a ceiling.
+ */
+export const YAML_MAX_WAIT_MS = YAML_PAUSE_MS;
 
 const NONE: readonly Problem[] = [];
+
+const isPlain = (value: unknown): value is Value =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * A file's cubes or views, each at its place in the file. Only those that are
+ * objects get a form: a `-` with nothing after it yet is `null`, and a list
+ * written as something other than a list is Cube's to reject (T142), not the
+ * page's to crash on (T139's review).
+ */
+const entriesOf = (list: unknown): { at: number; value: Value }[] =>
+  (Array.isArray(list) ? (list as unknown[]) : []).flatMap((value, at) =>
+    isPlain(value) ? [{ at, value }] : [],
+  );
 
 function FileEditor({ path, content }: { path: string; content: string }) {
   /** The YAML view's text, as typed. */
@@ -32,19 +52,31 @@ function FileEditor({ path, content }: { path: string; content: string }) {
     return found.length === 0 ? NONE : found;
   });
 
+  /** When the text first differed from what the form read: the wait counts from it. */
+  const since = useRef<number | null>(null);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Only a text that parses reaches the form; what stops one is listed.
-      const found = problemsOf(path, text);
-      setProblems(found.length === 0 ? NONE : found);
-      if (found.length === 0 && text !== read) setRead(text);
-    }, YAML_PAUSE_MS);
+    if (text !== read) since.current ??= Date.now();
+    const cap =
+      since.current === null ? YAML_PAUSE_MS : since.current + YAML_MAX_WAIT_MS - Date.now();
+    const timer = setTimeout(
+      () => {
+        // Only a text that parses reaches the form; what stops one is listed.
+        const found = problemsOf(path, text);
+        setProblems(found.length === 0 ? NONE : found);
+        // Checked: the next keystroke starts the next wait.
+        since.current = null;
+        if (found.length === 0 && text !== read) setRead(text);
+      },
+      Math.max(0, Math.min(YAML_PAUSE_MS, cap)),
+    );
     return () => {
       clearTimeout(timer);
     };
   }, [path, text, read]);
 
   const model = useMemo(() => modelOf(read).model ?? {}, [read]);
+  const cubes = entriesOf(model.cubes);
+  const views = entriesOf(model.views);
 
   /** A form edit, written into the file at once: the YAML view shows it in the same render. */
   const edit = (list: 'cubes' | 'views', index: number, next: Value) => {
@@ -85,33 +117,33 @@ function FileEditor({ path, content }: { path: string; content: string }) {
             </svg>
             <span>
               The YAML doesn’t parse (line {first.line}).{' '}
-              {(model.cubes ?? []).length + (model.views ?? []).length > 0
+              {cubes.length + views.length > 0
                 ? 'The form is read-only until the code is fixed.'
                 : // Broken when it was opened: there is no form yet to hold.
                   'Its form shows once the code is fixed.'}
             </span>
           </p>
         )}
-        {(model.cubes ?? []).map((cube, index) => (
+        {cubes.map(({ at, value }) => (
           <CubeForm
             // The cube's place in the file: its name is a field it edits.
-            key={`cube ${String(index)}`}
+            key={`cube ${String(at)}`}
             kind="cube"
-            value={cube}
+            value={value}
             readOnly={readOnly}
             onChange={(next) => {
-              edit('cubes', index, next);
+              edit('cubes', at, next);
             }}
           />
         ))}
-        {(model.views ?? []).map((view, index) => (
+        {views.map(({ at, value }) => (
           <CubeForm
-            key={`view ${String(index)}`}
+            key={`view ${String(at)}`}
             kind="view"
-            value={view}
+            value={value}
             readOnly={readOnly}
             onChange={(next) => {
-              edit('views', index, next);
+              edit('views', at, next);
             }}
           />
         ))}

@@ -18,7 +18,8 @@ import { expect, test, type Page } from '@playwright/test';
  * docs/research/test-stack.md, "Addendum: the bold threshold").
  */
 const THEMES = ['light', 'dark'] as const;
-const SURFACES = ['/explore', '/jobs', '/model', '/security'];
+// A model file's page too: its YAML is text, in the editor's own colours (T139's review).
+const SURFACES = ['/explore', '/jobs', '/model', '/model/files/cubes%2Forders.yml', '/security'];
 
 const MIN_FONT_SIZE_PX = 12;
 

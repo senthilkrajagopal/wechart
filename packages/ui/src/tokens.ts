@@ -53,6 +53,14 @@ export const COLORS = {
     'status-success-icon': '#0ca30c',
     'status-warning-icon': '#fab219',
     'status-error-icon': '#d03b3b',
+    // The code editor's syntax colours: the prototype's --cm-* (index.html),
+    // but for the comment: its #76746f is 4.02:1 on bg-hover, below AA
+    // (direction.md rule 2), so it takes text-muted, the next passing grey.
+    'code-key': '#1f6f86',
+    'code-string': '#8a4b00',
+    'code-number': '#2d6ab4',
+    'code-comment': '#6e6c67',
+    'code-atom': '#7a3fb0',
   },
   dark: {
     'bg-page': '#121211',
@@ -80,6 +88,12 @@ export const COLORS = {
     'status-success-icon': '#0ca30c',
     'status-warning-icon': '#fab219',
     'status-error-icon': '#e66767',
+    'code-key': '#4fb3d1',
+    'code-string': '#f0a35c',
+    'code-number': '#7fb0ea',
+    // As in light: the prototype's #8e8c86 is 4.16:1 on bg-hover; text-muted passes.
+    'code-comment': '#97958e',
+    'code-atom': '#b58be0',
   },
 } as const satisfies Palette;
 
@@ -118,6 +132,12 @@ export const TEXT_COLOR_TOKENS = [
   'status-success',
   'status-warning',
   'status-error',
+  // The code editor's text (T139's review): audited like any other.
+  'code-key',
+  'code-string',
+  'code-number',
+  'code-comment',
+  'code-atom',
 ] as const satisfies readonly ColorTokenName[];
 
 /**

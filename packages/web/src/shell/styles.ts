@@ -272,7 +272,13 @@ main { padding: var(--wc-surface-padding); }
   color: var(--wc-text-primary);
   font-size: 12px;
 }
-.yaml-editor .cm-scroller { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* The editor scrolls itself: CodeMirror's scroller needs "overflow: auto" as
+   well as the editor's max-height, or the lines past it are cut off, not
+   scrolled to (research/code-editor.md, "Scrolling"; T139's review). */
+.yaml-editor .cm-scroller {
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 .yaml-editor .cm-gutters {
   background: var(--wc-bg-subtle);
   color: var(--wc-text-secondary);
