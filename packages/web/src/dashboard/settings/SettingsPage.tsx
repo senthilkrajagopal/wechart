@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DashboardDocument } from '../model/document';
 import { isDirty } from './dirtyGuard';
 import { StatusIcon } from '../../shell/StatusIcon';
+import { useFocusTrap } from '../../shell/useFocusTrap';
 import { interactionsOf, labelOf, setMode, type InteractionMode } from './interactionMode';
 
 /**
@@ -139,6 +140,8 @@ export function SettingsPage({ document, onCancel, onSave }: SettingsPageProps) 
    * work whatever the answer was.
    */
   const [asking, setAsking] = useState(false);
+  /** The control that asked, for focus to go back to when the answer is to stay (T182). */
+  const asker = useRef<HTMLElement | null>(null);
 
   /**
    * Stable, because the dialog focuses its safe answer in an effect keyed on
@@ -147,13 +150,27 @@ export function SettingsPage({ document, onCancel, onSave }: SettingsPageProps) 
    */
   const keepEditing = useCallback(() => {
     setAsking(false);
+    asker.current?.focus();
   }, []);
 
   /** Leave, but not silently if there is something to lose. */
   const leave = () => {
-    if (isDirty(document, draft)) setAsking(true);
-    else onCancel();
+    if (isDirty(document, draft)) {
+      asker.current =
+        window.document.activeElement instanceof HTMLElement ? window.document.activeElement : null;
+      setAsking(true);
+    } else onCancel();
   };
+
+  /**
+   * Focus onto the page as it opens (T182, AC-176): the gear it opened from is
+   * gone while it is open. The section's heading, so what is read first is
+   * where the page has opened.
+   */
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
 
   const chooseMode = (mode: InteractionMode) => {
     setDraft({
@@ -230,7 +247,9 @@ export function SettingsPage({ document, onCancel, onSave }: SettingsPageProps) 
         </nav>
 
         <section className="settings-page__panel" aria-label={`${open} settings`}>
-          <h2>{open}</h2>
+          <h2 ref={heading} tabIndex={-1}>
+            {open}
+          </h2>
           {open === 'General' ? (
             <label className="settings-field">
               Name
@@ -316,6 +335,8 @@ function DiscardSettingsDialog({
   readonly onKeep: () => void;
 }) {
   const safe = useRef<HTMLButtonElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  useFocusTrap(box);
 
   /**
    * `onKeep` has to be stable, and the caller makes it so. Given a fresh
@@ -339,6 +360,7 @@ function DiscardSettingsDialog({
   return (
     <div className="dialog-backdrop" data-testid="discard-settings-dialog">
       <div
+        ref={box}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="discard-settings-heading"

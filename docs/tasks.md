@@ -2845,9 +2845,47 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Failing test: `e2e/perf/marking-update.spec.ts`: the p95 time to update every affected tile after a marking change is under 3 s (AC-175). The client-side concurrency bound is set here against Cube's queue concurrency.
   - Depends on: T110, T180
 - [ ] T182 (AC-176) Make every action keyboard-reachable with a focus indicator distinct from the marking outline
-  - Files: `packages/ui/src/focus.css.ts`, `packages/web/src/workspaces/model/YamlEditor.tsx`, `e2e/keyboard-coverage.spec.ts`
-  - Failing test: `e2e/keyboard-coverage.spec.ts`: navigation, authoring, marking, filtering and every dialog are reachable from the keyboard, focus is visible on every control and is visually distinct from the marking outline, and the code editor shows its Tab-escape hint so it is not a keyboard trap (AC-176).
+  - Files: `packages/web/src/shell/styles.ts` (the ring), `packages/web/src/shell/useFocusTrap.ts`, the dashboard, filter, settings, security, search and Explore surfaces it names below, `e2e/keyboard-coverage.spec.ts`. The planned `packages/ui/src/focus.css.ts` and `YamlEditor.tsx` hint were not needed; see below.
+  - Failing test: `e2e/keyboard-coverage.spec.ts`: navigation, authoring, marking, filtering and every dialog are reachable from the keyboard, focus is visible on every control and is visually distinct from the marking outline, and Tab leaves the code editor, which is no keyboard trap (AC-176).
   - Depends on: T063, T106, T139
+  - **Partly built 2026-09-22. Left unchecked, and AC-176 unticked, because marking is deferred** (T190, T120, T181): marking from the keyboard, and a focus ring distinct from the marking outline, come with markings. The prototype's ring is the accent, the same as the marking colours' neighbourhood; an audit measured accent against `mk4` at ΔE 7.4 (light) and against `mk2` under protanopia at 4.9 (dark). Built here, from that audit of what exists now:
+    - **Properties from the tile.** Enter on a focused edit-mode tile selects it, then opens and focuses the sidebar's Properties panel, as direction.md's keyboard section and the prototype have it (`grid/keyboard.ts` `properties`, `EditSidebar` `openSidebarPanel`). Tabbing towards the sidebar selects every tile on the way, so a middle tile's Properties were out of the keyboard's reach. The tile's accessible name lists the key.
+    - **Focus kept after a removal.** After Delete, the ⋯ menu's Delete, and either answer to the section question, focus goes to the next item in the container, else the previous one, else the enclosing section (`focusAfterDeleting`). The section question's Cancel goes back to the section. Move to keeps focus on the tile where it landed, or on its neighbour if it went to a page that isn't showing. A filter's Clear leaves focus on its summary; Remove moves it to the next filter, or the one before.
+    - **Dialogs.** `shell/useFocusTrap` keeps Tab inside the four modal dialogs: the section question, discard settings, generated SQL and search. The library chart's delete confirmation opens on "Keep the chart", Escape keeps it, and focus returns to Delete chart. The settings page opens with focus on its section's heading, gives focus back to the gear on the way out, and "Keep editing" returns it to whatever asked.
+    - **The code editor is no trap.** CodeMirror leaves Tab alone unless it's bound to indent, and ours isn't (`research/code-editor.md`), so Tab moves on and no Escape-then-Tab hint is needed. The planned hint is dropped, and the e2e shows Tab leaving the editor with the file unchanged.
+    - **A tile's table** has a named, focusable scrolling region (`role=region`, "{title}, table"), so its rows can be reached and scrolled in WebKit too.
+    - **Rings.** Inside a box that clips or scrolls, the ring is drawn inset (`outline-offset: -2px`): the model's YAML/Join toggle, the edit sidebar's tabs and panel, the settings nav, a tile's ⋯ menu, the Problems panel and a filter's options. The undo toast's ring is drawn in the toast's ink; the accent there was 2.89:1 light and 2.15:1 dark, under WCAG 1.4.11's 3:1. The planned `packages/ui/src/focus.css.ts` isn't needed: the ring is the app sheet's (`shell/styles.ts`).
+    - **Reasons in words, not tooltips.** A tile a filter can't reach says why beneath "Not filtered by…" (`aria-describedby`). A disabled Download CSV says why beneath it; a disabled button takes no focus, so its tooltip was out of the keyboard's reach. The Accelerated badge keeps its rollup name in the tooltip, the prototype's form chosen at T014. The same name is reachable from the keyboard in the chart editor's Acceleration panel.
+    - **Tests:**
+      - `e2e/keyboard-coverage.spec.ts` covers:
+        - Enter → Properties;
+        - Delete and Move to keeping focus;
+        - the section question's trap and Cancel;
+        - the library delete confirmation;
+        - filter Clear and Remove;
+        - the settings page's focus in and out;
+        - the table region;
+        - the code editor's Tab;
+        - rings measured whole against every clipping box around them;
+        - the toast ring's contrast in both themes.
+      - Unit tests: `shell/useFocusTrap.test.tsx` (including a modal stacked over another), `EditSidebar.test.tsx` (including the panel already open), `DeleteSectionDialog.test.tsx`, `SettingsPage.test.tsx` (focus in and out, and the discard question's trap), `GeneratedSql.test.tsx` and `SearchPalette.test.tsx` (their traps), `keyboard.test.ts` (Enter), `DataTable.test.tsx` (region), `coverageOnDashboard.test.tsx` and `TileViewMenu.test.tsx` (reasons). Each trap test was checked to fail with the trap switched off.
+      - The e2e suite passes in all three browsers (957). The ten-chart perf test failed in Firefox and Safari under the full parallel run and passed alone.
+    - **Cold review (one round), verdict FAIL. Fixed:**
+      - **The section question pulled focus back onto "Keep the items" whenever the dashboard re-rendered,** for example when a chart answered or the toast timed out. Its effect was keyed on the owner's fresh `onCancel`. It now reads the latest Cancel from a ref, as the SQL dialog does, and is tested with a re-render.
+      - **The table region's ring was cut off, and so were its last rows and scrollbar.** The chart and the table were drawn at the tile's whole height below its head, and ran 66 px past the tile's clipped bottom. The tile's body now takes what the tile has left (a flex column, with a zero basis outranking the pixel height). The chart follows its box. The e2e measures both the chart and the region inside the tile.
+      - **Stacked modals:** a trap takes no Tab from another modal opened over it, such as search opened over a dialog.
+      - **"Keep the items"** puts focus on the first kept item, where the section was.
+      - **Enter with Properties already open** moved no focus. React skips a render for the same panel, so the sidebar now counts each ask.
+      - **Coverage added:** the ⋯ menu's Delete, the "keep" answer, and the trap in each dialog.
+    - **Still open, beyond marking:**
+      - `role=tab` and `role=tree` without arrow keys in tab groups, page tabs, the results drawer and the folder tree;
+      - the grip is a dead tab stop;
+      - ⌘Z, F6 and `/` from direction.md are absent;
+      - the 8 s undo toast can time out under focus, and its Undo and Dismiss leave focus on the page;
+      - deleting a tab by its × leaves focus on the page;
+      - Escape with search open over a dialog closes both;
+      - removing the only filter leaves focus on the page;
+      - after a view-mode settings save the gear may still be disabled, and then takes no focus.
 - [x] T183 (AC-177) Pair every status, validation and job state with an icon and a text label
   - Files: `packages/ui/src/StatusBadge.tsx`, `e2e/status-labels.spec.ts`
   - Failing test: `e2e/status-labels.spec.ts`: across every workspace, no status, validation or job state is conveyed by colour alone (AC-177).

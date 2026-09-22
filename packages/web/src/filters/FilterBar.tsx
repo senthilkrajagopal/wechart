@@ -297,7 +297,12 @@ function Filters({
                 className="filter-pill__clear icon-button"
                 aria-label={`Clear ${member.title}`}
                 title={`Clear ${member.title}`}
-                onClick={() => {
+                onClick={(event) => {
+                  // The × goes with the value; focus stays on the filter
+                  // rather than falling to the page (T182, AC-176).
+                  event.currentTarget.parentElement
+                    ?.querySelector<HTMLElement>('button[aria-expanded]')
+                    ?.focus();
                   onValue(key, undefined);
                 }}
               >
@@ -351,9 +356,23 @@ function Filters({
                       className="btn-ghost btn-sm filter-popover__remove"
                       aria-label={`Remove ${name}`}
                       onClick={() => {
+                        /**
+                         * Focus to the next filter, else the one before, once
+                         * this one has gone (T182, AC-176): with it goes the
+                         * control focus was on.
+                         */
+                        const neighbour = (filters[index + 1] ?? filters[index - 1])?.id;
                         setChosenOpen({ id: null });
                         onFilters?.(filters.filter((each) => each.id !== filter.id));
                         onValue(key, undefined);
+                        if (neighbour === undefined) return;
+                        requestAnimationFrame(() => {
+                          bar.current
+                            ?.querySelector<HTMLElement>(
+                              `[data-filter-id="${CSS.escape(neighbour)}"] button[aria-expanded]`,
+                            )
+                            ?.focus();
+                        });
                       }}
                     >
                       {/* Its name begins with what it shows (WCAG 2.5.3). */}

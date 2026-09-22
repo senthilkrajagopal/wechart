@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useFocusTrap } from './useFocusTrap';
+
 export interface SearchHit {
   readonly kind: 'dashboard' | 'chart';
   readonly id: string;
@@ -68,6 +70,9 @@ export function SearchPalette() {
     if (open) inputRef.current?.focus();
   }, [open]);
 
+  const box = useRef<HTMLDivElement>(null);
+  useFocusTrap(box);
+
   if (!open) return null;
 
   return (
@@ -75,7 +80,7 @@ export function SearchPalette() {
     // keyboard, so the ways out are Escape and the Close button, both of which
     // every input method can reach.
     <div className="palette-backdrop">
-      <div role="dialog" aria-modal="true" aria-label="Search" className="palette">
+      <div ref={box} role="dialog" aria-modal="true" aria-label="Search" className="palette">
         <input
           ref={inputRef}
           type="search"

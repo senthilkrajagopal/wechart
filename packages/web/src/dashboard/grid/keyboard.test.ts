@@ -124,6 +124,17 @@ describe('the other two keys the criterion names', () => {
     expect(actionFor(press('Delete'), TILE)).toEqual({ kind: 'delete' });
     expect(actionFor(press('Backspace'), TILE)).toEqual({ kind: 'delete' });
   });
+
+  /**
+   * T182 / AC-176: every edit-mode action without a mouse (direction.md rule
+   * 39) — this tile's Properties included. Tabbing towards the sidebar selects
+   * each tile it passes, so only a key on the tile itself reaches its own:
+   * Enter, as the prototype opens Properties.
+   */
+  it('opens the tile’s Properties with Enter', () => {
+    expect(actionFor(press('Enter'), TILE)).toEqual({ kind: 'properties' });
+    expect(actionFor(press('Enter'), TILE, false)).toEqual({ kind: 'properties' });
+  });
 });
 
 describe('keys that are not ours', () => {
@@ -134,7 +145,8 @@ describe('keys that are not ours', () => {
   });
 
   it('ignores everything else', () => {
-    for (const key of ['Tab', 'Enter', ' ', 'a', 'Escape', 'Home', 'PageDown']) {
+    // Enter opens Properties since T182 (above).
+    for (const key of ['Tab', ' ', 'a', 'Escape', 'Home', 'PageDown']) {
       expect(actionFor(press(key), TILE)).toBeNull();
     }
   });

@@ -83,6 +83,22 @@ describe('search palette (AC-006)', () => {
     expect(document.activeElement).toBe(before);
   });
 
+  it('keeps Tab inside it, not on the page under it (T182, AC-176)', async () => {
+    render(
+      <>
+        <SearchPalette />
+        <button type="button">Under the palette</button>
+      </>,
+    );
+    await userEvent.keyboard('{Control>}k{/Control}');
+    const dialog = screen.getByRole('dialog');
+
+    for (const shift of [false, false, true, true, true]) {
+      await userEvent.tab({ shift });
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+  });
+
   it('does not open on K alone', async () => {
     render(<SearchPalette />);
 

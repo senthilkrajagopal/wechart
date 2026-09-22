@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { StateLine } from '../../shell/StatusIcon';
 
@@ -65,6 +65,27 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
    * user confirms is what the server checked.
    */
   const [blockedBy, setBlockedBy] = useState<UsingDashboard[] | null>(null);
+  /**
+   * The confirmation's focus (T182, AC-176): on the choice that loses nothing
+   * as it opens, Escape keeps the chart, and closing gives focus back to
+   * Delete chart — a keyboard user is never left on a control that has gone.
+   */
+  const deleteButton = useRef<HTMLButtonElement>(null);
+  const keepButton = useRef<HTMLButtonElement>(null);
+  const confirming = blockedBy !== null;
+  useEffect(() => {
+    if (!confirming) return undefined;
+    keepButton.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setBlockedBy(null);
+      deleteButton.current?.focus();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [confirming]);
 
   const remove = useMutation({
     mutationFn: async (confirmed: boolean) => {
@@ -137,7 +158,12 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
       ) : null}
 
       <h2>Delete</h2>
-      <button type="button" onClick={() => remove.mutate(false)} disabled={remove.isPending}>
+      <button
+        ref={deleteButton}
+        type="button"
+        onClick={() => remove.mutate(false)}
+        disabled={remove.isPending}
+      >
         Delete chart
       </button>
       {remove.isPending ? <StateLine kind="run">Deleting it…</StateLine> : null}
@@ -159,7 +185,14 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
           <button type="button" onClick={() => remove.mutate(true)}>
             Delete anyway
           </button>
-          <button type="button" onClick={() => setBlockedBy(null)}>
+          <button
+            ref={keepButton}
+            type="button"
+            onClick={() => {
+              setBlockedBy(null);
+              deleteButton.current?.focus();
+            }}
+          >
             Keep the chart
           </button>
         </div>

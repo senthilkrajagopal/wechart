@@ -3,6 +3,7 @@ import { useEffect, useId, useRef } from 'react';
 
 import { missingScopeOf, ScopeUnavailable } from '../../query/scopes';
 import { StateLine } from '../../shell/StatusIcon';
+import { useFocusTrap } from '../../shell/useFocusTrap';
 import { MODEL_FILES_QUERY } from '../model/FileList';
 import { objectsOf } from '../model/objects';
 import { YamlEditor } from '../model/YamlEditor';
@@ -172,6 +173,8 @@ export function GeneratedSql({
   useEffect(() => {
     closing.current = onClose;
   }, [onClose]);
+  const box = useRef<HTMLDivElement>(null);
+  useFocusTrap(box);
   useEffect(() => {
     close.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
@@ -186,6 +189,7 @@ export function GeneratedSql({
   return (
     <div className="dialog-backdrop">
       <div
+        ref={box}
         role="dialog"
         aria-modal="true"
         aria-labelledby={heading}

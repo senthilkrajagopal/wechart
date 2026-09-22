@@ -65,6 +65,21 @@ describe('table semantics', () => {
   });
 });
 
+/**
+ * T182 / AC-176: every action reachable from the keyboard. A table longer or
+ * wider than its tile scrolls, and its scroller takes focus — WebKit does not
+ * make a scrolling box focusable of itself — so arrow keys and Page Down can
+ * scroll it, and it is named for what it holds.
+ */
+describe('scrolling from the keyboard', () => {
+  it('takes focus, named as the chart’s table', () => {
+    render(<DataTable spec={spec()} label="Orders by status" />);
+    const scroller = screen.getByRole('region', { name: 'Orders by status, table' });
+    expect(scroller.getAttribute('tabindex')).toBe('0');
+    expect(scroller).toBe(screen.getByTestId('data-table'));
+  });
+});
+
 describe('member formats (AC-046)', () => {
   const AMOUNT = 'orders.total_amount';
 

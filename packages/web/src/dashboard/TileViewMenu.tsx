@@ -1,7 +1,7 @@
 import { csvOf, exportNoteOf, rowsText, type RenderSpec } from '@wechart/core';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
-import { StatusIcon, type StateKind } from '../shell/StatusIcon';
+import { StateLine, StatusIcon, type StateKind } from '../shell/StatusIcon';
 
 /** A file name from a chart's title: the characters file systems refuse replaced. */
 export function csvFileName(title: string): string {
@@ -115,6 +115,7 @@ export function TileViewMenu({
       });
   };
   const trigger = useRef<HTMLButtonElement>(null);
+  const why = useId();
   const wrapper = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -159,7 +160,7 @@ export function TileViewMenu({
             <button
               type="button"
               disabled={asking}
-              title={asking ? 'Its newest answer is still on its way' : undefined}
+              aria-describedby={asking ? why : undefined}
               onClick={() => {
                 // The tile's table, as it writes it, with the mark that tells
                 // a spreadsheet it is UTF-8 — and then what it holds.
@@ -170,6 +171,14 @@ export function TileViewMenu({
             >
               Download CSV
             </button>
+            {/* Why not yet, in words beside it (T182, AC-176): a disabled
+                button takes no focus, so a tooltip on it was out of the
+                keyboard's reach. */}
+            {asking ? (
+              <StateLine kind="run" className="tile-menu__why" id={why}>
+                Its newest answer is still on its way.
+              </StateLine>
+            ) : null}
           </li>
         </ul>
       ) : null}

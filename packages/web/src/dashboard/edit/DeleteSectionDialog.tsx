@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 
+import { useFocusTrap } from '../../shell/useFocusTrap';
+
 /**
  * Deleting a section that holds something asks first (AC-061).
  *
@@ -29,6 +31,19 @@ export function DeleteSectionDialog({
   onCancel,
 }: DeleteSectionDialogProps) {
   const first = useRef<HTMLButtonElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  useFocusTrap(box);
+
+  /**
+   * The latest Cancel, read by Escape without re-running the effect below.
+   * Its owner hands over a fresh one on every render, and keyed on it the
+   * effect pulled focus back onto "Keep" each time — from wherever the user
+   * had Tabbed to, where the next Enter would ungroup the section (T182).
+   */
+  const cancelling = useRef(onCancel);
+  useEffect(() => {
+    cancelling.current = onCancel;
+  }, [onCancel]);
 
   useEffect(() => {
     // Focus the safe answer, not the destructive one: a stray Enter should
@@ -36,17 +51,18 @@ export function DeleteSectionDialog({
     first.current?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCancel();
+      if (event.key === 'Escape') cancelling.current();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [onCancel]);
+  }, []);
 
   return (
     <div className="dialog-backdrop" data-testid="delete-section-dialog">
       <div
+        ref={box}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="delete-section-heading"

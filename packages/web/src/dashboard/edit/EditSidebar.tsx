@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 /**
  * The docked edit sidebar (AC-053, direction.md section 2): Add, Outline and
@@ -31,9 +31,41 @@ const CONTENT_KEY: Record<SidebarPanel, keyof SidebarContent> = {
 
 const tabId = (panel: SidebarPanel) => `edit-sidebar-tab-${panel.toLowerCase()}`;
 
+/**
+ * Asks the sidebar to open a panel and take focus there — a tile's Enter, for
+ * its Properties (T182, AC-176): the tile's key handler is far from the
+ * sidebar, and selecting the tile has already happened on its focus.
+ */
+const OPEN_PANEL = 'wechart:open-sidebar-panel';
+export function openSidebarPanel(panel: SidebarPanel) {
+  window.dispatchEvent(new CustomEvent<SidebarPanel>(OPEN_PANEL, { detail: panel }));
+}
+
 export function EditSidebar({ panels }: EditSidebarProps) {
   const [open, setOpen] = useState<SidebarPanel>('Add');
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+  const panel = useRef<HTMLDivElement>(null);
+  /**
+   * Each ask, counted: focus moves into the panel once it shows what was
+   * asked for — also when that panel was open already, when the ask alone
+   * changes nothing else to render.
+   */
+  const [asked, setAsked] = useState(0);
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const wanted = (event as CustomEvent<SidebarPanel>).detail;
+      if (!SIDEBAR_PANELS.includes(wanted)) return;
+      setOpen(wanted);
+      setAsked((count) => count + 1);
+    };
+    window.addEventListener(OPEN_PANEL, onOpen);
+    return () => {
+      window.removeEventListener(OPEN_PANEL, onOpen);
+    };
+  }, []);
+  useEffect(() => {
+    if (asked > 0) panel.current?.focus();
+  }, [asked]);
 
   /**
    * The APG tabs pattern: one tab stop for the list, arrows to move within it,
@@ -77,6 +109,7 @@ export function EditSidebar({ panels }: EditSidebarProps) {
       </div>
 
       <div
+        ref={panel}
         role="tabpanel"
         aria-labelledby={tabId(open)}
         tabIndex={0}

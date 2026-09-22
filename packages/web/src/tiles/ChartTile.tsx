@@ -195,7 +195,7 @@ export function ChartTile({
       {showingTable ? (
         // The same rows the chart drew, not a second query — the drawer at
         // AC-036 is built on the same rule, and for the same reason.
-        <DataTable spec={spec} {...(height === undefined ? {} : { height })} />
+        <DataTable spec={spec} label={title} {...(height === undefined ? {} : { height })} />
       ) : (
         <ChartBody spec={spec} {...(height === undefined ? {} : { height })} />
       )}

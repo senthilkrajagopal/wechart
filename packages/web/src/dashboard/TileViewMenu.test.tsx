@@ -185,6 +185,11 @@ describe('a tile’s view-mode menu', () => {
     expect((download as HTMLButtonElement).disabled).toBe(true);
     await userEvent.click(download);
     expect(save).not.toHaveBeenCalled();
+    // Why, in words beside it (T182, AC-176): a disabled button takes no
+    // focus, so a tooltip on it was out of the keyboard's reach.
+    const why = screen.getByText('Its newest answer is still on its way.').closest('p');
+    expect(download.getAttribute('aria-describedby')).toBe(why?.id);
+    expect(download.hasAttribute('title')).toBe(false);
   });
 
   it('closes on a press elsewhere', async () => {

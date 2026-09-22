@@ -10,15 +10,16 @@ import { MAX_ROWS, MIN_COLUMNS, MIN_ROWS, type TileSize } from './resize';
  * it came to be that size, so a limit that applied to a drag and not to
  * Shift+Arrow would let one route produce a tile the other could not.
  *
- * The keys follow the dashboard prototype in `docs/design/prototype`, except
- * for E — the prototype opens Properties with Enter, and the criterion names
- * E for the chart editor.
+ * The keys follow the dashboard prototype in `docs/design/prototype`: Enter
+ * opens the tile's Properties, as the prototype's does, and E the chart
+ * editor, as the criterion names it.
  */
 export type TileKeyAction =
   | { readonly kind: 'move'; readonly by: -1 | 1 }
   | { readonly kind: 'resize'; readonly size: TileSize }
   | { readonly kind: 'edit' }
   | { readonly kind: 'delete' }
+  | { readonly kind: 'properties' }
   | null;
 
 export interface KeyPress {
@@ -57,6 +58,8 @@ export function actionFor(
 
   if (event.key === 'Delete' || event.key === 'Backspace') return { kind: 'delete' };
   if (event.key === 'e' || event.key === 'E') return { kind: 'edit' };
+  // This tile's Properties, as the prototype opens them (T182, AC-176).
+  if (event.key === 'Enter') return { kind: 'properties' };
 
   const step = STEP[event.key];
   if (step === undefined) return null;

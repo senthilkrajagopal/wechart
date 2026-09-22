@@ -32,6 +32,8 @@ import { useRef, useState } from 'react';
 export interface DataTableProps {
   readonly spec: RenderSpec;
   readonly height?: number;
+  /** The chart's title, naming the table's scrolling region (T182). */
+  readonly label?: string | undefined;
   /**
    * Row marking (AC-092). Absent, or present without a primary key, and rows
    * are not markable at all: `references-markings.md` quotes Spotfire — "A
@@ -50,7 +52,7 @@ const DEFAULT_HEIGHT = 320;
 /** Fixed, so the native table layout survives virtualisation. */
 const ROW_HEIGHT = 28;
 
-export function DataTable({ spec, height = DEFAULT_HEIGHT, marking }: DataTableProps) {
+export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: DataTableProps) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const { rows } = spec;
 
@@ -132,6 +134,14 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking }: DataTableP
       className="data-table"
       data-testid="data-table"
       style={{ height: `${String(height)}px`, overflow: 'auto' }}
+      // Scrolled from the keyboard too (T182, AC-176): WebKit does not make a
+      // scrolling box focusable of itself. Named, as a focusable region must be.
+      // A scrolling region is the one non-control that must take focus: the
+      // keyboard has no other way to scroll it (WCAG 2.1.1).
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      tabIndex={0}
+      role="region"
+      aria-label={label === undefined ? 'Table' : `${label}, table`}
     >
       {/* The header counts as a row, so the body starts at 2. */}
       <table aria-rowcount={rows.length}>

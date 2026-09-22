@@ -633,3 +633,63 @@ describe('the dashboard settings page', () => {
     expect(screen.queryAllByRole('button', { name: 'Edit' })).toHaveLength(0);
   });
 });
+
+/**
+ * T182 / AC-176: the page from the keyboard. The gear it opens from goes away
+ * while it is open, so focus has to be put somewhere on the way in and on the
+ * way out, or it falls to the document and the next Tab starts from the top.
+ */
+describe('the settings page’s focus', () => {
+  it('lands on the open section’s heading as the page opens', async () => {
+    show();
+    screen.getByRole('button', { name: 'Dashboard settings' }).focus();
+    await userEvent.keyboard('{Enter}');
+
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'General' }));
+  });
+
+  it('goes back to the gear on the way out', async () => {
+    show();
+    screen.getByRole('button', { name: 'Dashboard settings' }).focus();
+    await userEvent.keyboard('{Enter}');
+    screen.getByTestId('settings-back').focus();
+    await userEvent.keyboard('{Enter}');
+
+    expect(screen.queryByTestId('dashboard-settings')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Dashboard settings' }));
+  });
+
+  it('goes back to what asked when the answer is to keep editing', async () => {
+    show();
+    await openSettings();
+    const name = screen.getByLabelText('Name');
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Half-finished');
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+
+    await userEvent.keyboard('{Enter}');
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(document.activeElement).toBe(cancel);
+  });
+
+  it('keeps Tab inside the discard question, off the page behind it', async () => {
+    show();
+    await openSettings();
+    const name = screen.getByLabelText('Name');
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Half-finished');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    const dialog = screen.getByRole('alertdialog');
+
+    for (const shift of [false, false, true, true, true]) {
+      await userEvent.tab({ shift });
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+    // Nothing typed into the field behind it on the way.
+    expect((name as HTMLInputElement).value).toBe('Half-finished');
+  });
+});

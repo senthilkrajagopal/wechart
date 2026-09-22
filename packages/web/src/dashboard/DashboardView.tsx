@@ -46,6 +46,7 @@ import {
 import { DeleteSectionDialog } from './edit/DeleteSectionDialog';
 import { UndoToast } from './edit/UndoToast';
 import { EditChrome, type EditSession } from './edit/EditChrome';
+import { openSidebarPanel } from './edit/EditSidebar';
 import { MoveToMenu } from './edit/MoveToMenu';
 import { NOTHING_CHOSEN, needsOf, templateElements } from './edit/templates';
 import { PreviewBanner } from './PreviewBanner';
@@ -86,6 +87,36 @@ function sayPlace(document: DashboardDocument, tileId: string): string {
   const place = placeOf(document, tileId);
   if (place === null) return '';
   return `${nameOfTile(document, tileId)}: position ${String(place.index + 1)} of ${String(place.of)}.`;
+}
+
+const tileNode = (id: string) =>
+  window.document.querySelector<HTMLElement>(`[data-tile="${CSS.escape(id)}"]`);
+
+/**
+ * Where focus goes once an element it was on, or was opened from, is deleted
+ * (T182, AC-176): the next item in its container, else the one before, else
+ * the section around it. Left alone it falls to the page, and a keyboard user
+ * starts again from the top. Read from the rendered order before the delete,
+ * because afterwards the element is gone; the returned call focuses after it.
+ */
+function focusAfterDeleting(id: string): () => void {
+  const node = tileNode(id);
+  const along = (step: 'nextElementSibling' | 'previousElementSibling') => {
+    let at = node?.[step] ?? null;
+    while (at !== null && !at.hasAttribute('data-tile')) at = at[step];
+    return at?.getAttribute('data-tile') ?? null;
+  };
+  const neighbour =
+    along('nextElementSibling') ??
+    along('previousElementSibling') ??
+    node?.parentElement?.closest('[data-tile]')?.getAttribute('data-tile') ??
+    null;
+  return () => {
+    if (neighbour === null) return;
+    requestAnimationFrame(() => {
+      tileNode(neighbour)?.focus();
+    });
+  };
 }
 import {
   chartIdOf,
@@ -1319,6 +1350,19 @@ export function DashboardView({
    * back through it — the same reason the selection is held out here.
    */
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /**
+   * Back to the gear once the page closes (T182, AC-176): the gear is gone
+   * while the page is open, so focus left with it.
+   */
+  const gear = useRef<HTMLButtonElement>(null);
+  const settingsWereOpen = useRef(false);
+  useEffect(() => {
+    if (settingsOpen) settingsWereOpen.current = true;
+    else if (settingsWereOpen.current) {
+      settingsWereOpen.current = false;
+      gear.current?.focus();
+    }
+  }, [settingsOpen]);
 
   const [openPage, setOpenPage] = useState<string | null>(null);
   const pageId = openPage ?? document.pages[0]?.id ?? '';
@@ -1385,6 +1429,7 @@ export function DashboardView({
         onStart={onEditStart}
         headerActions={(session) => (
           <button
+            ref={gear}
             type="button"
             className="dashboard__gear icon-button"
             aria-label="Dashboard settings"
@@ -1894,9 +1939,19 @@ function DashboardPages({
             const next = deleteFromDashboard(document, deletion);
             if (next === document) return;
 
+            const refocus = focusAfterDeleting(tile.id);
             session.change(next);
             onDeleted(said);
             drag.say(said);
+            refocus();
+            return;
+          }
+
+          if (action.kind === 'properties') {
+            // This tile's Properties, focus there (T182, AC-176): the tile is
+            // selected already, having focus.
+            onAim({ selected: tile.id, addTarget: null });
+            openSidebarPanel('Properties');
             return;
           }
 
@@ -1940,8 +1995,11 @@ function DashboardPages({
           const next = deleteFromDashboard(document, deletion);
           if (next === document) return;
 
+          // The ⋯ menu it came from goes with it.
+          const refocus = focusAfterDeleting(id);
           session.change(next);
           onDeleted(said);
+          refocus();
         }
       : undefined,
     onDuplicate:
@@ -2010,7 +2068,7 @@ function DashboardPages({
           const editable = chartIdOf(document, id) !== undefined ? ' E edits.' : '';
           return {
             role: 'dashboard tile',
-            keys: `Arrow keys move. Shift and arrow keys resize.${editable} Delete removes.`,
+            keys: `Arrow keys move. Shift and arrow keys resize.${editable} Enter opens its properties. Delete removes.`,
           };
         }
       : undefined,
@@ -2019,7 +2077,19 @@ function DashboardPages({
           containers: containersOf(document),
           onMove: (tileId, to) => {
             // The same move the drag makes, reached without one.
+            const elsewhere = focusAfterDeleting(tileId);
             session.change(moveTile(document, tileId, { key: to, index: null }));
+            /**
+             * Focus goes with the tile to where it landed (T182, AC-176): it
+             * is drawn afresh there, and its ⋯ menu with it. Moved to a page
+             * or tab not showing, it is out of reach, so focus stays where it
+             * was, on the tile beside it.
+             */
+            requestAnimationFrame(() => {
+              const moved = tileNode(tileId);
+              if (moved === null) elsewhere();
+              else moved.focus();
+            });
           },
         }
       : undefined,
@@ -2093,19 +2163,34 @@ function DashboardPages({
           onDeleteContents={() => {
             const deletion = { kind: 'element', id: asking } as const;
             const said = describeDeletion(document, deletion);
+            const refocus = focusAfterDeleting(asking);
             session.change(deleteFromDashboard(document, deletion));
             setAsking(null);
             setDeleted(said);
+            refocus();
           }}
           onKeepContents={() => {
             // Ungrouping: the section goes, its items stay where they were.
             // "Keep" losing a tile is this criterion's own failing state.
+            const refocus = focusAfterDeleting(asking);
+            // Onto the first of them, where the section was.
+            const kept = askedAbout.items[0]?.id;
             session.change(ungroupSection(document, asking));
             setAsking(null);
             setDeleted(`Deleted section “${askedAbout.title}” and kept what was in it.`);
+            requestAnimationFrame(() => {
+              const first = kept === undefined ? null : tileNode(kept);
+              if (first === null) refocus();
+              else first.focus();
+            });
           }}
           onCancel={() => {
+            // Back to the section it was asked about: its ⋯ menu has closed.
+            const section = asking;
             setAsking(null);
+            requestAnimationFrame(() => {
+              tileNode(section)?.focus();
+            });
           }}
         />
       )}

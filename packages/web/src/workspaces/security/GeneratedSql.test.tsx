@@ -169,6 +169,26 @@ describe('GeneratedSql', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it('keeps Tab inside it, not on the page under its backdrop (T182, AC-176)', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <GeneratedSql
+          title="T"
+          query={{ measures: ['secured_orders.count'] }}
+          context={{}}
+          onClose={vi.fn()}
+        />
+        <button type="button">Behind the backdrop</button>
+      </QueryClientProvider>,
+    );
+    const dialog = screen.getByRole('dialog');
+
+    for (const shift of [false, false, true, true, true]) {
+      await userEvent.tab({ shift });
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+  });
+
   /**
    * From T174's review: a view's cubes' row filters apply with the view's
    * (research/cube/access-control.md, "Views"), and a file whose policies

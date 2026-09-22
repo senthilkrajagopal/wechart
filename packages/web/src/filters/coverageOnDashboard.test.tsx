@@ -140,6 +140,23 @@ describe('a filter on a field a tile cannot reach', () => {
     expect(within(tile('t-weather')).queryByRole('alert')).toBeNull();
   });
 
+  /**
+   * T182 / AC-176: why, in words on the tile. A tooltip is reached by a
+   * pointer alone, and the tile's note takes no focus to show one.
+   */
+  it('says why on the tile itself, not only in a tooltip', async () => {
+    dashboard();
+    await openFilter();
+    await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'completed' }));
+
+    const note = await within(tile('t-weather')).findByTestId('not-covered');
+    const why = within(tile('t-weather')).getByText(
+      'Its cube or view has no path to that field in the model.',
+    );
+    expect(note.getAttribute('aria-describedby')).toBe(why.id);
+    expect(note.hasAttribute('title')).toBe(false);
+  });
+
   it('is not marked while no value is set, nor once the filter is cleared', async () => {
     dashboard();
     await openFilter();

@@ -1349,9 +1349,15 @@ button.filter-pill__clear {
 /* A tile a filter in effect cannot reach (AC-079): said on the tile, in
    secondary ink with an icon-free label, since it is information, not an error. */
 .tile-not-covered {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 12px;
   color: var(--wc-text-secondary);
+}
+.tile-not-covered__why {
+  margin: 0 0 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-muted);
 }
 /* After a refresh a pre-aggregation answered (T154, AC-148): in the tile's
    flow like the note above, so it covers nothing, with the accelerated icon
@@ -1565,6 +1571,19 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   background: var(--wc-bg-surface);
   overflow: hidden;
 }
+/* A chart tile's body takes what the tile has left, under its head and any
+   note above it (T182's review). Given the tile's whole height, the chart and
+   the table ran 66 px past the tile's clipped bottom: the table's last rows,
+   its scrollbar and its focus ring with them. A zero basis outranks the
+   pixel height the body is drawn with, and the chart follows its box. */
+.grid-tile:has(> .chart-tile) { display: flex; flex-direction: column; }
+.grid-tile > .chart-tile {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+.grid-tile > .chart-tile > :not(.tile-head) { flex: 1 1 0; min-height: 0; }
 
 /* Resize handles (AC-055, direction.md rule 36). Right edge, bottom edge and
    corner — the three direction.md names. They are invisible until the tile is
@@ -1682,6 +1701,15 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 }
 .tile-menu__list button:hover { background: var(--wc-bg-subtle); }
 .tile-menu__list button:disabled { color: var(--wc-text-muted); cursor: not-allowed; }
+/* Why an item is off, under it (T182, AC-176). */
+.tile-menu__why {
+  max-width: 220px;
+  margin: 0;
+  padding: 0 8px 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-secondary);
+}
 /* What a download holds (T178, AC-172), under the ⋯ it came from, over the
    tile until Escape or a press elsewhere. */
 .tile-export-note {
@@ -2113,6 +2141,20 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   outline: 2px solid var(--wc-accent);
   outline-offset: 2px;
 }
+/* The ring drawn inside the control where a box around it clips or scrolls
+   (T182, AC-176): outside, as everywhere else, the box would cut it off. */
+.seg button:focus-visible,
+.edit-sidebar__tabs button:focus-visible,
+.edit-sidebar__panel:focus-visible,
+.settings-page__nav button:focus-visible,
+.tile-menu__list button:focus-visible,
+.model-problems :focus-visible,
+.filter-widget__options :focus-visible {
+  outline-offset: -2px;
+}
+/* On the toast's inverted ground the accent falls short of 3:1 (WCAG 1.4.11);
+   the toast's own ink does not. */
+.undo-toast :focus-visible { outline-color: currentColor; }
 `;
 
 export function installStyles(doc: Document = document): void {
