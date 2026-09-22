@@ -208,7 +208,8 @@ export interface ChartDraft {
    * reopening of the draft, because it is what the write is checked against
    * (T192): a chart changed by someone else meanwhile is refused, not
    * overwritten. Undefined when the server sent none; such a draft cannot be
-   * written safely.
+   * written safely. 0 for a chart made in this session and not yet stored —
+   * a new tile's local chart (T132) — which the save creates.
    */
   readonly version: number | undefined;
 }

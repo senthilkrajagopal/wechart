@@ -2,6 +2,7 @@ import {
   toChartSpec,
   toCubeQuery,
   type ChartDocument,
+  type ChartType,
   type MemberFormats,
   type RenderSpec,
 } from '@wechart/core';
@@ -44,7 +45,7 @@ import { DeleteSectionDialog } from './edit/DeleteSectionDialog';
 import { UndoToast } from './edit/UndoToast';
 import { EditChrome, type EditSession } from './edit/EditChrome';
 import { MoveToMenu } from './edit/MoveToMenu';
-import { needsOf, templateElements } from './edit/templates';
+import { NOTHING_CHOSEN, needsOf, templateElements } from './edit/templates';
 import { PreviewBanner } from './PreviewBanner';
 import { TileViewMenu } from './TileViewMenu';
 import { SettingsPage } from './settings/SettingsPage';
@@ -100,10 +101,12 @@ import {
   resizeTile,
   sectionKey,
   tabKey,
+  type ChartDraft,
   type DashboardDocument,
   type Element_,
   type Tile,
 } from './model/document';
+import { withLocalCharts } from './model/localCharts';
 
 /**
  * A saved dashboard, open for reading (AC-018).
@@ -232,11 +235,17 @@ function TileBody({
   carried,
   title,
   answered,
+  chartType = tile.chartType,
+  canEditChart = false,
 }: {
   tile: Tile;
   spec: RenderSpec | undefined;
   error: unknown;
   loading: boolean;
+  /** The type the chart is made for: its document's, or the tile's without one. */
+  chartType?: ChartType | undefined;
+  /** The tile offers its pencil into the chart editor (T132). */
+  canEditChart?: boolean;
   /** A filtered answer is on its way (AC-078): what is drawn stays, marked busy. */
   busy?: boolean;
   /** The filters in effect on it, in words (AC-043). */
@@ -264,12 +273,20 @@ function TileBody({
        * and then "This chart is no longer available" — telling someone the
        * tile they just added is gone.
        */
-      if (tile.chartId === undefined) {
+      /**
+       * A chart of its own with no fields yet — a new tile's local chart
+       * (T132) — is the same instruction, not a failure: what it needs, and
+       * now that it has a chart, the way in.
+       */
+      if (tile.chartId === undefined || error === NOTHING_CHOSEN) {
         return (
           <div data-testid="tile-empty-chart" className="tile-empty">
-            {needsOf(tile.chartType).map((sentence) => (
+            {needsOf(chartType).map((sentence) => (
               <p key={sentence}>{sentence}</p>
             ))}
+            {tile.chartId === undefined || !canEditChart ? null : (
+              <p>Add its fields in the chart editor: its ✎, or E when the tile is selected.</p>
+            )}
           </div>
         );
       }
@@ -334,6 +351,8 @@ interface TileCharts {
   readonly carried?: readonly SearchFilter[] | undefined;
   /** A chart's title, which heads its tile (AC-187). */
   readonly titleOf?: ((chartId: string) => string | undefined) | undefined;
+  /** A chart's own type, from its document (T132). */
+  readonly typeOf?: ((chartId: string) => ChartType | undefined) | undefined;
   /** What Cube said of each chart's answer (T154, T014). */
   readonly answered?: Readonly<Record<string, AnswerMeta>> | undefined;
   /** Ask a chart's data again, past Cube's cache; in view mode. */
@@ -590,6 +609,11 @@ function Elements({
               carried={charts.carried}
               title={charts.titleOf?.(chartId)}
               answered={charts.answered?.[chartId]}
+              // The chart's own type, where it has one (T132's review): the
+              // editor changes the document's, not the tile's.
+              chartType={charts.typeOf?.(chartId) ?? element.chartType}
+              // Named as the way in only where the pencil is offered.
+              canEditChart={affordances.onEditChart !== undefined}
             />
           </>
         );
@@ -665,9 +689,12 @@ function TabGroupView({
  */
 function AddSlot({
   session,
+  dashboardId,
   where,
 }: {
   session: EditSession<DashboardDocument>;
+  /** Whose local charts a new chart tile's are (T132). */
+  dashboardId: string;
   where: {
     pageId: string;
     selected: string | null;
@@ -719,8 +746,19 @@ function AddSlot({
          * says so (AC-059, direction.md rule 37).
          */
         const placed = placeInGrammar(document, newElement(id, mint), at, mint);
+        /**
+         * A new chart has a chart of its own from the start, local to this
+         * dashboard (T132, AC-126): a draft, written when the dashboard is
+         * saved. Not "Chart from folders", whose tile is for a shared chart —
+         * which nothing binds it to yet.
+         */
+        const local =
+          id === 'chart'
+            ? withLocalCharts([placed.element], dashboardId, mintChartId)
+            : { elements: [placed.element], drafts: {} };
+        const element = local.elements[0] ?? placed.element;
 
-        session.change(insertElement(document, placed.element, placed.at));
+        session.change(withDrafts(insertElement(document, element, placed.at), local.drafts));
         setSaid(placed.message ?? '');
         // Aim at what was just added, so a second insert follows the first
         // rather than stacking in front of it.
@@ -728,7 +766,10 @@ function AddSlot({
       }}
       onAddTemplate={(id) => {
         const mint = () => `el-${String(Date.now())}-${String(counter++)}`;
-        const elements = templateElements(id, mint);
+        // Each chart tile with a chart of its own, as the palette's (T132;
+        // direction.md: "or from a section template").
+        const local = withLocalCharts(templateElements(id, mint), dashboardId, mintChartId);
+        const elements = local.elements;
 
         /**
          * Folded into one document and handed to the session once, so the
@@ -755,7 +796,7 @@ function AddSlot({
           if (index !== null) index += 1;
         }
 
-        session.change(next);
+        session.change(withDrafts(next, local.drafts));
         setSaid('');
         const last = elements.at(-1);
         if (last !== undefined) where.onAdded(last.id);
@@ -784,6 +825,23 @@ interface OpenChart {
 
 /** Ids only have to be unique within a document; Date.now alone collides. */
 let counter = 0;
+
+/**
+ * A new local chart's id (T132): minted in the browser, as the session holds
+ * it before any save, and random, so it claims no stored chart — the save
+ * creates it at version 0, and refuses an id already stored.
+ */
+const mintChartId = () => crypto.randomUUID();
+
+/** The session's chart drafts with new ones added: a new tile's local chart (T132). */
+function withDrafts(
+  document: DashboardDocument,
+  drafts: Readonly<Record<string, ChartDraft>>,
+): DashboardDocument {
+  return Object.keys(drafts).length === 0
+    ? document
+    : { ...document, chartDrafts: { ...document.chartDrafts, ...drafts } };
+}
 
 export function DashboardView({
   dashboardId,
@@ -1017,6 +1075,7 @@ export function DashboardView({
     inEffect,
     carried,
     titleOf: chartTitleOf,
+    typeOf: (chartId: string) => drawn.documents?.[chartId]?.chart.chartType,
     answered: withFiltered.answered,
     ...(onRefresh === undefined ? {} : { onRefresh: refreshTile }),
     refreshing: new Set([...(refreshing ?? []), ...refreshingFiltered]),
@@ -1393,7 +1452,7 @@ export function DashboardView({
           )
         }
         panels={(session) => ({
-          add: <AddSlot session={session} where={where} />,
+          add: <AddSlot session={session} dashboardId={dashboardId} where={where} />,
           properties: (
             <>
               <TileProperties

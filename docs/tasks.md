@@ -1664,9 +1664,23 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F14. Chart ownership: local and library charts
 
-- [ ] T132 (AC-126) Keep a dashboard-created chart local, out of folders and search
+- [x] T132 (AC-126) Keep a dashboard-created chart local, out of folders and search
   - Files: `packages/api/src/repos/charts.ts`, `packages/api/src/repos/ownership.test.ts`
   - Failing test: `ownership.test.ts`: a chart created on a dashboard appears in no folder listing and in no search result (AC-126).
+  - **Done 2026-09-22.** Files as built:
+    - API:
+      - `repos/documents.ts` and its test: `updateTogether` creates a chart written at version 0, in the save's transaction, and refuses an id already stored.
+      - `server.ts` and its test: `PUT /api/dashboards/:id` accepts a chart at version 0 only as this dashboard's local chart. It refuses a dashboard at version 0, since dashboards are created by `POST /api/documents`.
+      - The planned `charts.ts` and `ownership.test.ts` weren't needed: the catalog already left local charts out of folders and search (`catalog.ts`; `catalog.test.ts` proves both).
+    - Web:
+      - `dashboard/model/localCharts.ts` and its test.
+      - `dashboard/DashboardView.tsx`: the palette's Chart and the section templates mint a local chart per chart tile, as a draft at version 0, saved with the dashboard. The empty tile states what the chart needs by its own type, and names the ✎/E way in where the pencil is offered.
+      - `dashboard/edit/addTemplate.test.tsx`.
+      - `dashboard/model/document.ts`: a doc comment.
+    - e2e: `e2e/local-charts.spec.ts`.
+    - T074's note is settled: templates mint local charts, and the empty tile names the way in.
+    - A chart tile saved without a chart before T132 still has none.
+    - AC-126 ticked on `e2e/local-charts.spec.ts` (a chart added on the real dashboard is stored local to it, is in no folder or search result, and opens in the editor), with `catalog.test.ts` for the exclusion itself.
   - Depends on: T017
   - **Two things from T074 land here.** direction.md line 86 counts a section template among the ways a dashboard-local chart is created, so templates should mint one per tile once this exists — they currently insert a tile carrying `Tile.chartType` and no chart. And the empty tile's message deliberately stops at "This chart has no fields yet", with no way in named, because there is no pencil on a dashboard tile and E is withheld from tiles with no chart. **Both the local chart and that instruction belong here**; see the seam recorded on T068.
 - [ ] T133 (AC-127) Save a local chart to a folder as a library chart, naming where it went

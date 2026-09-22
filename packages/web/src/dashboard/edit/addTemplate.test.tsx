@@ -75,6 +75,24 @@ describe('adding a section template', () => {
     expect(screen.getAllByTestId('tile-empty-chart')).toHaveLength(4);
   });
 
+  /**
+   * T132 (AC-126; T074's note): a template's chart tiles each get a chart of
+   * their own, local to the dashboard — so each has its way into the editor.
+   */
+  it('gives each of its chart tiles a chart of its own, with the way in', async () => {
+    await edit();
+
+    await userEvent.click(screen.getByTestId('template-kpis'));
+
+    const empties = screen.getAllByTestId('tile-empty-chart');
+    expect(empties).toHaveLength(4);
+    for (const empty of empties) {
+      expect(empty.textContent).toContain('Add its fields in the chart editor');
+      const tile = empty.closest('[data-testid="grid-item"]') as HTMLElement;
+      expect(tile.querySelector('[data-edit-chart]')).not.toBeNull();
+    }
+  });
+
   it('lays out the notes template as a chart and a markdown tile', async () => {
     await edit();
 

@@ -68,6 +68,29 @@ export interface UpdateInput extends CreateInput {
   readonly expectedVersion: number;
 }
 
+/**
+ * A document written at version 0 in `updateTogether`: not yet stored —
+ * documents start at 1 — so created (T132, a chart made on a dashboard and
+ * written with it). One already stored is not written over: that is a stale
+ * save, as any other write at a version the document has moved past.
+ */
+async function created(db: Kysely<Database>, write: UpdateInput): Promise<StoredDocument> {
+  const row = await db
+    .insertInto('documents')
+    .values({ kind: write.kind, id: write.id, body: JSON.stringify(write.body) })
+    .onConflict((conflict) => conflict.columns(['kind', 'id']).doNothing())
+    .returningAll()
+    .executeTakeFirst();
+  if (row !== undefined) return toDocument(row);
+  const current = await db
+    .selectFrom('documents')
+    .select('version')
+    .where('kind', '=', write.kind)
+    .where('id', '=', write.id)
+    .executeTakeFirstOrThrow();
+  throw new StaleDocumentError(write.kind, write.id, 0, current.version);
+}
+
 export function documents(db: Kysely<Database>) {
   return {
     async create({ kind, id, body }: CreateInput): Promise<StoredDocument> {
@@ -168,7 +191,15 @@ export function documents(db: Kysely<Database>) {
         .execute(async (trx) => {
           const inside = documents(trx);
           const out = new Map<string, StoredDocument>();
-          for (const write of ordered) out.set(key(write), await inside.update(write));
+          for (const write of ordered)
+            out.set(
+              key(write),
+              // Only a chart is made this way (T132); anything else at 0 is an
+              // update of a version no document has, refused.
+              await (write.expectedVersion === 0 && write.kind === 'chart'
+                ? created(trx, write)
+                : inside.update(write)),
+            );
           return out;
         });
 

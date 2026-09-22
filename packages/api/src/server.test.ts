@@ -942,6 +942,62 @@ describe('saving a dashboard with the charts edited from its tiles (AC-183)', ()
     await app.close();
   });
 
+  /**
+   * T132 (AC-126): a chart made on the dashboard is written with it, at
+   * version 0 — not yet stored — and only as this dashboard's local chart.
+   */
+  it('creates a chart made on the dashboard with it, local to it, in the same call', async () => {
+    const { documents, written } = store({});
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c-new', body: chart('d1'), version: 0 }],
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(written).toEqual([
+      { kind: 'chart', id: 'c-new', body: chart('d1'), expectedVersion: 0 },
+      { kind: 'dashboard', id: 'd1', body: { title: 'Revenue' }, expectedVersion: 3 },
+    ]);
+    expect(response.json()).toEqual({ version: 4, charts: { 'c-new': 1 } });
+    await app.close();
+  });
+
+  it('creates only charts: a dashboard at version 0 is refused, not made (T132’s review)', async () => {
+    // A dashboard is created by POST /api/documents, which mints its id and
+    // its defaults (AC-072) — never by a save naming an id of its own.
+    const { documents, written } = store({});
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 0 },
+      charts: [],
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(written).toEqual([]);
+    await app.close();
+  });
+
+  it('refuses a new chart that is not local to this dashboard, and writes nothing', async () => {
+    const { documents, written } = store({});
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const library = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c-new', body: chart(), version: 0 }],
+    });
+    const elsewhere = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c-new', body: chart('d2'), version: 0 }],
+    });
+
+    expect([library.statusCode, elsewhere.statusCode]).toEqual([400, 400]);
+    expect(written).toEqual([]);
+    await app.close();
+  });
+
   it('refuses a library chart, and writes nothing', async () => {
     /**
      * A library chart can be on other dashboards. AC-128 requires the editor

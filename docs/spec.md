@@ -408,7 +408,7 @@ Traces to: `[R7]`, direction.md §7a.
 Purpose: editing a chart must never change a dashboard the author did not open.
 Traces to: `[docs/inputs §9]`, direction.md §2, rule 41.
 
-- [ ] AC-126 WHEN a chart is created on a dashboard, THE SYSTEM SHALL make it local to that dashboard and keep it out of Explore folders and search.
+- [x] AC-126 WHEN a chart is created on a dashboard, THE SYSTEM SHALL make it local to that dashboard and keep it out of Explore folders and search.
       Fails when: a dashboard-local chart appears in a folder listing or in search results.
 - [ ] AC-127 WHEN the user saves a local chart to a folder, THE SYSTEM SHALL make it a library chart reusable by other dashboards, and say where it was saved.
       Fails when: the chart stays local, or the confirmation does not name the folder.

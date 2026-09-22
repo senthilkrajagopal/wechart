@@ -531,7 +531,11 @@ export function buildServer({
       dashboard === null ||
       typeof dashboard.body !== 'object' ||
       dashboard.body === null ||
-      typeof dashboard.version !== 'number'
+      typeof dashboard.version !== 'number' ||
+      // Stored, so at 1 or later: version 0 would create it, and a dashboard
+      // is created by POST /api/documents, its id and defaults the server's
+      // (T132's review).
+      dashboard.version < 1
     ) {
       throw new BadRequest('A dashboard body and the version it was read at are required');
     }
@@ -551,6 +555,16 @@ export function buildServer({
     const checked = charts as { id: string; body: Record<string, unknown>; version: number }[];
 
     for (const chart of checked) {
+      /**
+       * A chart made on this dashboard (T132, AC-126): not yet stored, so at
+       * version 0, and created with the dashboard — only as its local chart.
+       * One whose id is already stored is refused inside the transaction.
+       */
+      if (chart.version === 0) {
+        if (chart.body['localToDashboardId'] !== dashboardId)
+          throw new BadRequest('A chart made on a dashboard is local to that dashboard.');
+        continue;
+      }
       let stored;
       try {
         stored = await docs.get('chart', chart.id);

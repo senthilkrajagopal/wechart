@@ -311,6 +311,53 @@ describe('writing several documents together (AC-183)', () => {
     expect((failure as StaleDocumentError).id).toBe(b);
   });
 
+  /**
+   * T132 (AC-126): a chart made on a dashboard is written with the dashboard,
+   * in the same save. Version 0 is a document not yet stored — documents
+   * start at 1 — so it is created, in the same transaction.
+   */
+  it('creates a document written at version 0, with the others, or not at all', async () => {
+    const { a, b } = ids();
+    await repo().create({ kind: 'dashboard', id: a, body: { title: 'before' } });
+
+    const written = await repo().updateTogether([
+      { kind: 'dashboard', id: a, body: { title: 'after' }, expectedVersion: 1 },
+      { kind: 'chart', id: b, body: { title: 'new' }, expectedVersion: 0 },
+    ]);
+
+    expect(written.map((document) => document.version)).toEqual([2, 1]);
+    expect((await repo().get('chart', b))?.body['title']).toBe('new');
+  });
+
+  it('creates only a chart at version 0: anything else is not made (T132’s review)', async () => {
+    const { a } = ids();
+
+    await expect(
+      repo().updateTogether([{ kind: 'dashboard', id: a, body: {}, expectedVersion: 0 }]),
+    ).rejects.toBeInstanceOf(DocumentNotFoundError);
+    expect(await repo().get('dashboard', a)).toBeNull();
+  });
+
+  it('refuses to create a document that is already stored, and writes nothing', async () => {
+    // Version 0 claims the id is new; one already stored is not written over.
+    const { a, b } = ids();
+    await repo().create({ kind: 'dashboard', id: a, body: { title: 'before' } });
+    await repo().create({ kind: 'chart', id: b, body: { title: 'stored' } });
+
+    const failure = await repo()
+      .updateTogether([
+        { kind: 'dashboard', id: a, body: { title: 'after' }, expectedVersion: 1 },
+        { kind: 'chart', id: b, body: { title: 'claimed' }, expectedVersion: 0 },
+      ])
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(StaleDocumentError);
+    expect((failure as StaleDocumentError).id).toBe(b);
+    // A chart reads back with the fields its reader adds; its own title stands.
+    expect((await repo().get('chart', b))?.body['title']).toBe('stored');
+    expect((await repo().get('dashboard', a))?.body).toEqual({ title: 'before' });
+  });
+
   it('refuses the same document twice, and writes nothing', async () => {
     // A second write of one document in the same save would be stale against
     // the first, so the pair is refused outright rather than half-applied.
