@@ -108,6 +108,7 @@ import {
   type Element_,
   type Tile,
 } from './model/document';
+import { duplicateChartTile } from './model/duplicate';
 import { withLocalCharts } from './model/localCharts';
 
 /**
@@ -387,6 +388,8 @@ interface Affordances {
   readonly addHere?: CanvasProps['addHere'];
   /** Deleting an element from its ⋯ menu, with an undo (AC-060). */
   readonly onDelete?: ((id: string) => void) | undefined;
+  /** Duplicating a chart tile from its ⋯ menu, the copy with a chart of its own (AC-062). */
+  readonly onDuplicate?: ((id: string) => void) | undefined;
   /** Opening a chart tile's chart in the editor, from its pencil (T032). */
   readonly onEditChart?: ((tileId: string, chartId: string) => void) | undefined;
   /** Deleting one tab of a tab group, the fourth thing AC-060 names. */
@@ -594,6 +597,18 @@ function Elements({
                   : {
                       onDelete: () => {
                         affordances.onDelete?.(element.id);
+                      },
+                    })}
+                {...(affordances.onDuplicate === undefined ||
+                element.kind !== 'chart' ||
+                element.chartId === undefined ||
+                // Only where there is a chart to copy: not while it loads,
+                // nor for one that is gone (T068's review).
+                charts.titleOf?.(element.chartId) === undefined
+                  ? {}
+                  : {
+                      onDuplicate: () => {
+                        affordances.onDuplicate?.(element.id);
                       },
                     })}
               />
@@ -1034,7 +1049,9 @@ export function DashboardView({
 
   // The assignment is held across renders, so a filter that hides a member
   // does not hand its colour to whoever is now first (AC-039).
-  const coloured = useDashboardColours(document, formatted);
+  // The dashboard as the session has it: a tile added in it — a duplicate's
+  // copy (T068) — is drawn, and coloured, before the dashboard is saved.
+  const coloured = useDashboardColours(live, formatted);
   /**
    * Each filtered chart's filters in words, for the empty state (AC-043):
    * named by the field each was set on — the filter bar's field, not the name
@@ -1551,6 +1568,14 @@ export function DashboardView({
               }
               session={session}
               charts={charts}
+              // A duplicate's chart is made from the stored one and what it
+              // draws; the session's drafts are read inside (T068, AC-062).
+              duplicateFrom={{
+                dashboardId,
+                documents: documents ?? {},
+                specs,
+                errors: errors ?? {},
+              }}
               // Not while previewing a security context: the editor asks as
               // wechart (T172's review), so a preview is read, not edited.
               onEditChart={preview === undefined ? openEditor : undefined}
@@ -1626,9 +1651,22 @@ function DashboardPages({
   filterBar,
   deleted,
   onDeleted,
+  duplicateFrom,
 }: {
   session: EditSession<DashboardDocument>;
   charts: TileCharts;
+  /**
+   * What a duplicated chart tile's copy is made from (T068, AC-062): the
+   * dashboard it is local to, and each chart's stored document and drawing.
+   */
+  duplicateFrom?:
+    | {
+        readonly dashboardId: string;
+        readonly documents: Readonly<Record<string, ChartDocument>>;
+        readonly specs: Readonly<Record<string, RenderSpec>>;
+        readonly errors: Readonly<Record<string, unknown>>;
+      }
+    | undefined;
   /** The filter bar, drawn under the page tabs. */
   filterBar?: ReactNode;
   /**
@@ -1864,6 +1902,27 @@ function DashboardPages({
           onDeleted(said);
         }
       : undefined,
+    onDuplicate:
+      editing && duplicateFrom !== undefined
+        ? (id) => {
+            const copied = duplicateChartTile(document, id, {
+              ...duplicateFrom,
+              mintTileId: () => `el-${String(Date.now())}-${String(counter++)}`,
+              mintChartId,
+            });
+            if (copied === undefined) return;
+            session.change(copied.document);
+            // The copy selected, said, and focused, as an insert's tile is:
+            // one insertion point, not two (T068's review).
+            onAim({ selected: copied.tileId, addTarget: null });
+            drag.say(`${nameOfTile(copied.document, copied.tileId)} duplicated.`);
+            requestAnimationFrame(() => {
+              window.document
+                .querySelector<HTMLElement>(`[data-tile="${CSS.escape(copied.tileId)}"]`)
+                ?.focus();
+            });
+          }
+        : undefined,
     onDeleteTab: editing
       ? (groupId, tabId) => {
           const deletion = { kind: 'tab', groupId, id: tabId } as const;

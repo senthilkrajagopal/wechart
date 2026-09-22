@@ -11,10 +11,8 @@ import type { ContainerKey } from '../model/document';
  * "whichever option wins, SC 2.5.7 forbids drag-only paths; the ⋯ 'Move to'
  * menu must stay." A grip that is the only route would fail that at AA.
  *
- * It is deliberately only Move to for now. direction.md has this menu also
- * offering Duplicate and Delete, which are AC-062 and AC-060 and belong with
- * their own tasks; a menu item that did nothing would be worse than an absent
- * one.
+ * direction.md has this menu also offering Duplicate and Delete: AC-062's
+ * and AC-060's, each here once its own task made it do something.
  */
 export interface MoveToMenuProps {
   readonly tileId: string;
@@ -29,6 +27,8 @@ export interface MoveToMenuProps {
    * criterion names sections among the things that can be deleted.
    */
   readonly onDelete?: (() => void) | undefined;
+  /** Duplicating a chart tile, the copy with a chart of its own (AC-062). */
+  readonly onDuplicate?: (() => void) | undefined;
 }
 
 export function MoveToMenu({
@@ -38,6 +38,7 @@ export function MoveToMenu({
   currentKey,
   onMove,
   onDelete,
+  onDuplicate,
 }: MoveToMenuProps) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -107,6 +108,20 @@ export function MoveToMenu({
             ))
           )}
 
+          {onDuplicate === undefined ? null : (
+            <li className="tile-menu__duplicate">
+              <button
+                type="button"
+                data-testid={`duplicate-${tileId}`}
+                onClick={() => {
+                  setOpen(false);
+                  onDuplicate();
+                }}
+              >
+                Duplicate
+              </button>
+            </li>
+          )}
           {onDelete === undefined ? null : (
             <li className="tile-menu__delete">
               <button

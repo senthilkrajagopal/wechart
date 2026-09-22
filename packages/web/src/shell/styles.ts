@@ -1657,6 +1657,9 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* Delete sits apart from the destinations above it: one changes where a thing
    is, the other takes it away. */
 .tile-menu__delete { margin-top: 4px; border-top: 1px solid var(--wc-border-subtle); }
+/* Duplicate makes something where Delete takes it away: its own group, above (AC-062). */
+.tile-menu__duplicate { margin-top: 4px; border-top: 1px solid var(--wc-border-subtle); }
+.tile-menu__duplicate + .tile-menu__delete { margin-top: 0; border-top: 0; }
 
 /* Deleting a page tab or a tab (AC-060), beside the strip they belong to. */
 /* Page tabs: the prototype's .dash-tabs — underlined, on a subtle rule. */

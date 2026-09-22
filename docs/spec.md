@@ -213,7 +213,7 @@ Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
       Fails when: an undo restores the element without its contents, or no undo is offered.
 - [x] AC-061 WHEN the user deletes a section that contains tiles, THE SYSTEM SHALL ask whether to delete its contents or keep them, and apply the choice.
       Fails when: the contents are deleted without asking, or "keep" loses a tile.
-- [ ] AC-062 WHEN the user duplicates a chart tile, THE SYSTEM SHALL give the copy its own dashboard-local chart, so editing one tile leaves the other unchanged.
+- [x] AC-062 WHEN the user duplicates a chart tile, THE SYSTEM SHALL give the copy its own dashboard-local chart, so editing one tile leaves the other unchanged.
       Fails when: editing the copy changes the original tile.
 - [x] AC-063 WHEN an image tile has no alternative text, THE SYSTEM SHALL show a warning on the tile in edit mode, and SHALL accept only PNG, JPEG, WebP, GIF and SVG files of at most 2 MB (direction.md rule 42).
       Fails when: a tile without alt text shows no warning, or a file of another type or over 2 MB is accepted.

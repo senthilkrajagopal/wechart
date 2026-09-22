@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
 import { readChartDocument, type ChartDocument, type RenderSpec } from '@wechart/core';
 
@@ -237,7 +237,16 @@ function LoadedDashboard({
    * asked as too, so a preview (T172) never draws answers Cube gave wechart's
    * own context, nor the reverse.
    */
-  const chartsKeyOf = (id: string) => ['dashboard-charts', id, preview ?? null] as const;
+  /**
+   * And by the charts the saved dashboard shows (T068's review): a save that
+   * adds one — a duplicate's copy, a new local chart — moves the key, so the
+   * charts are loaded for the dashboard as saved. Keyed only by the dashboard,
+   * the load after a save ran with the chart ids from before it, and the new
+   * chart's tile read "no longer available". The previous answer stays on the
+   * tiles meanwhile (`placeholderData`), so they do not flash.
+   */
+  const chartsKeyOf = (id: string) =>
+    ['dashboard-charts', id, preview ?? null, chartIdsOf(document)] as const;
   const [saveFailed, setSaveFailed] = useState('');
   /**
    * Moved on each time the charts are loaded afresh or a save writes them. A
@@ -365,13 +374,13 @@ function LoadedDashboard({
   });
   const charts = useQuery({
     queryKey: chartsKeyOf(dashboardId),
-    queryFn: async (): Promise<DrawnCharts> => {
+    // The charts the key names, not the page's at the time: a load asked for
+    // just after a save still has the key it was asked under.
+    queryFn: async ({ queryKey }): Promise<DrawnCharts> => {
       // A refresh still out was asked before this load: overtaken by it.
       chartsGeneration.current += 1;
       const entries = await Promise.all(
-        chartIdsOf(document).map(
-          async (id) => [id, await specFor(id, undefined, preview)] as const,
-        ),
+        queryKey[3].map(async (id) => [id, await specFor(id, undefined, preview)] as const),
       );
 
       // Split rather than collapsed: a chart that drew and a chart that failed
@@ -389,6 +398,7 @@ function LoadedDashboard({
       }
       return { specs, errors, documents, answered };
     },
+    placeholderData: keepPreviousData,
   });
 
   /**
