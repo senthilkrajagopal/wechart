@@ -21,6 +21,7 @@ export function TileProperties({
   document,
   selected,
   onChange,
+  chartProperties,
 }: {
   dashboardId: string;
   document: DashboardDocument;
@@ -30,6 +31,8 @@ export function TileProperties({
    * image's upload answers later, and anything changed meanwhile must stay.
    */
   onChange: (apply: (current: DashboardDocument) => DashboardDocument) => void;
+  /** A chart tile's own properties — its chart's ownership (T133) — from above, which has its chart. */
+  chartProperties?: ((tile: Tile) => ReactNode) | undefined;
 }) {
   const element = selected === null ? null : elementAt(document, selected);
   if (element === null || !isTile(element))
@@ -50,6 +53,8 @@ export function TileProperties({
       );
     case 'link':
       return <LinkProperties key={element.id} tile={element} onChange={change} />;
+    case 'chart':
+      return chartProperties?.(element) ?? <Note>This tile has no properties to set here.</Note>;
     default:
       return <Note>This tile has no properties to set here.</Note>;
   }

@@ -19,13 +19,22 @@ export type { ChartDraft };
  * else editing a shared chart.
  */
 
-/** The dashboard with this chart's edit held as a draft, replacing any earlier one. */
+/**
+ * The dashboard with this chart's edit held as a draft, replacing any earlier
+ * one. A chart saved to a folder in the session stays so through a later edit
+ * (T133): the chart editor hands back a draft that knows nothing of it.
+ */
 export function withDraft(
   dashboard: DashboardDocument,
   chartId: string,
   draft: ChartDraft,
 ): DashboardDocument {
-  return { ...dashboard, chartDrafts: { ...dashboard.chartDrafts, [chartId]: draft } };
+  const wasLocalTo = draft.wasLocalTo ?? dashboard.chartDrafts?.[chartId]?.wasLocalTo;
+  const held =
+    wasLocalTo === undefined || draft.document.localToDashboardId !== undefined
+      ? draft
+      : { ...draft, wasLocalTo };
+  return { ...dashboard, chartDrafts: { ...dashboard.chartDrafts, [chartId]: held } };
 }
 
 export interface Drawn {
@@ -106,10 +115,14 @@ function draftsInUse(dashboard: DashboardDocument): [string, ChartDraft][] {
 type Refusal = 'library' | 'elsewhere' | 'blind';
 
 function refusalOf(
-  draft: Pick<ChartDraft, 'document' | 'version'>,
+  draft: Pick<ChartDraft, 'document' | 'version' | 'wasLocalTo'>,
   dashboardId: string,
 ): Refusal | undefined {
   const owner = draft.document.localToDashboardId;
+  // This dashboard's own chart, saved to a folder in the session (T133): written
+  // with it, becoming a library chart then.
+  if (owner === undefined && draft.wasLocalTo === dashboardId)
+    return draft.version === undefined ? 'blind' : undefined;
   if (owner === undefined) return 'library';
   if (owner !== dashboardId) return 'elsewhere';
   if (draft.version === undefined) return 'blind';
@@ -150,7 +163,7 @@ export function whyUnsaveable(
 const REFUSALS_IN_ORDER: readonly Refusal[] = ['library', 'elsewhere', 'blind'];
 
 function worstOf(
-  drafts: readonly Pick<ChartDraft, 'document' | 'version'>[],
+  drafts: readonly Pick<ChartDraft, 'document' | 'version' | 'wasLocalTo'>[],
   dashboardId: string,
 ): Refusal | undefined {
   const found = new Set(drafts.map((draft) => refusalOf(draft, dashboardId)));
@@ -175,12 +188,22 @@ export function whyUnsaveableWith(
   dashboard: DashboardDocument,
   dashboardId: string,
   chartId: string,
-  pending: Pick<ChartDraft, 'document' | 'version'> | undefined,
+  pending: Pick<ChartDraft, 'document' | 'version' | 'wasLocalTo'> | undefined,
 ): string | undefined {
-  const inUse = new Map<string, Pick<ChartDraft, 'document' | 'version'>>(draftsInUse(dashboard));
+  const inUse = new Map<string, Pick<ChartDraft, 'document' | 'version' | 'wasLocalTo'>>(
+    draftsInUse(dashboard),
+  );
   // This chart as Save dashboard would save it: the edit, or with none, the
-  // change made to it earlier in the session.
-  const own = pending ?? inUse.get(chartId);
+  // change made to it earlier in the session — still saved to a folder, if it
+  // was (T133), as `withDraft` keeps it on applying.
+  const earlier = inUse.get(chartId);
+  const wasLocalTo = pending?.wasLocalTo ?? earlier?.wasLocalTo;
+  const own =
+    pending === undefined
+      ? earlier
+      : wasLocalTo === undefined
+        ? pending
+        : { ...pending, wasLocalTo };
   inUse.delete(chartId);
 
   switch (worstOf(own === undefined ? [] : [own], dashboardId)) {

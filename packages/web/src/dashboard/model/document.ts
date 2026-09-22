@@ -212,6 +212,13 @@ export interface ChartDraft {
    * a new tile's local chart (T132) — which the save creates.
    */
   readonly version: number | undefined;
+  /**
+   * The dashboard this chart was local to when it was saved to a folder in
+   * this session (T133, AC-127): its document is a library chart's now, and
+   * this dashboard's save writes it so — as that dashboard's own chart, which
+   * a library chart drafted here otherwise is not (T192's hold).
+   */
+  readonly wasLocalTo?: string;
 }
 
 export const DEFAULT_SETTINGS: DashboardSettings = { width: 'fixed' };

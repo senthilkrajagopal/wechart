@@ -1010,21 +1010,79 @@ describe('saving a dashboard with the charts edited from its tiles (AC-183)', ()
     await app.close();
   });
 
-  it('refuses a new chart that is not local to this dashboard, and writes nothing', async () => {
+  it('refuses a new chart local to another dashboard, and writes nothing', async () => {
     const { documents, written } = store({});
     const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
 
-    const library = await save(app, {
-      dashboard: { body: { title: 'Revenue' }, version: 3 },
-      charts: [{ id: 'c-new', body: chart(), version: 0 }],
-    });
     const elsewhere = await save(app, {
       dashboard: { body: { title: 'Revenue' }, version: 3 },
       charts: [{ id: 'c-new', body: chart('d2'), version: 0 }],
     });
 
-    expect([library.statusCode, elsewhere.statusCode]).toEqual([400, 400]);
+    expect(elsewhere.statusCode).toBe(400);
     expect(written).toEqual([]);
+    await app.close();
+  });
+
+  /**
+   * T133 / AC-127: WHEN the user saves a local chart to a folder, THE SYSTEM
+   * SHALL make it a library chart reusable by other dashboards, and say where
+   * it was saved — with the dashboard's Save, at the user's decision
+   * (2026-09-22): the chart leaves the dashboard and joins the folder.
+   */
+  it('saves a chart local to this dashboard into a folder, as a library chart (T133)', async () => {
+    const { documents, written } = store({ c1: chart('d1') });
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c1', body: chart(), version: 5 }],
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(written).toEqual([
+      { kind: 'chart', id: 'c1', body: chart(), expectedVersion: 5 },
+      { kind: 'dashboard', id: 'd1', body: { title: 'Revenue' }, expectedVersion: 3 },
+    ]);
+    await app.close();
+  });
+
+  it('refuses a chart made a library chart with no folder to be in (T133’s review)', async () => {
+    const { documents, written } = store({ c1: chart('d1') });
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+    // A library chart's body, local to no dashboard and in no folder.
+    const inNoFolder = { schemaVersion: 1, title: 'Orders', chart: chart().chart };
+
+    const published = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c1', body: inNoFolder, version: 5 }],
+    });
+    const created = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c-new', body: inNoFolder, version: 0 }],
+    });
+
+    expect([published.statusCode, created.statusCode]).toEqual([400, 400]);
+    expect(written).toEqual([]);
+    await app.close();
+  });
+
+  it('creates a new chart saved to a folder before its first save straight into it (T133)', async () => {
+    const { documents, written } = store({});
+    const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
+
+    const response = await save(app, {
+      dashboard: { body: { title: 'Revenue' }, version: 3 },
+      charts: [{ id: 'c-new', body: chart(), version: 0 }],
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(written).toContainEqual({
+      kind: 'chart',
+      id: 'c-new',
+      body: chart(),
+      expectedVersion: 0,
+    });
     await app.close();
   });
 

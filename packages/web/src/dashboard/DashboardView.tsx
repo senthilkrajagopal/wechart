@@ -109,6 +109,7 @@ import {
   type Element_,
   type Tile,
 } from './model/document';
+import { TileChartOwnership } from './edit/ChartOwnership';
 import { duplicateChartTile } from './model/duplicate';
 import { withLocalCharts } from './model/localCharts';
 
@@ -1513,6 +1514,26 @@ export function DashboardView({
                 onChange={(apply) => {
                   session.update(apply);
                 }}
+                // Whose its chart is, and "Save to folders…" (T133, AC-127).
+                chartProperties={(tile) =>
+                  tile.chartId === undefined ? undefined : (
+                    <TileChartOwnership
+                      key={tile.id}
+                      dashboardId={dashboardId}
+                      dashboard={session.document}
+                      chartId={tile.chartId}
+                      stored={documents?.[tile.chartId]}
+                      drawn={
+                        specs[tile.chartId] === undefined
+                          ? { error: errors?.[tile.chartId] }
+                          : { spec: specs[tile.chartId] as RenderSpec }
+                      }
+                      onChange={(apply) => {
+                        session.update(apply);
+                      }}
+                    />
+                  )
+                }
               />
               {/**
                * The dashboard's page tabs, each deletable (AC-060), as the

@@ -507,7 +507,9 @@ export function buildServer({
    * chart then fails. Every document is version-checked, so a chart or the
    * dashboard changed elsewhere is refused rather than overwritten.
    *
-   * **Only charts local to this dashboard.** A library chart can be on other
+   * **Only this dashboard's own charts:** those local to it, and those it is
+   * saving to a folder (T133, AC-127) — sent back as library charts, or made
+   * new straight into one. A library chart already stored can be on other
    * dashboards, and AC-128 requires the editor to say so and offer a local
    * copy *before* changes spread (T134); a chart local to another dashboard is
    * that dashboard's to save. The browser holds Save back for both
@@ -558,12 +560,25 @@ export function buildServer({
 
     for (const chart of checked) {
       /**
+       * A library chart this save makes (T133, AC-127) — its own chart saved
+       * to a folder — names the folder it is in: one in none would be listed
+       * nowhere (T133's review).
+       */
+      if (
+        chart.body['localToDashboardId'] === undefined &&
+        typeof chart.body['folderId'] !== 'string'
+      )
+        throw new BadRequest('A chart saved to a folder names the folder.');
+      /**
        * A chart made on this dashboard (T132, AC-126): not yet stored, so at
-       * version 0, and created with the dashboard — only as its local chart.
-       * One whose id is already stored is refused inside the transaction.
+       * version 0, and created with the dashboard — as its local chart, or,
+       * saved to a folder before the dashboard's first save (T133), as a
+       * library chart in it. One whose id is already stored is refused inside
+       * the transaction.
        */
       if (chart.version === 0) {
-        if (chart.body['localToDashboardId'] !== dashboardId)
+        const local = chart.body['localToDashboardId'];
+        if (local !== undefined && local !== dashboardId)
           throw new BadRequest('A chart made on a dashboard is local to that dashboard.');
         continue;
       }
@@ -603,7 +618,11 @@ export function buildServer({
           'This chart belongs to another dashboard, and can only be saved with that one.',
         );
       }
-      if (chart.body['localToDashboardId'] !== dashboardId) {
+      // Kept local to this dashboard, or saved to a folder as a library chart
+      // (T133, AC-127, with the dashboard's Save at the user's decision) —
+      // never moved to another dashboard.
+      const sent = chart.body['localToDashboardId'];
+      if (sent !== undefined && sent !== dashboardId) {
         throw new BadRequest('A dashboard save cannot move a chart to another dashboard.');
       }
     }

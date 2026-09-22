@@ -1150,6 +1150,9 @@ main:has(.dashboard) {
   letter-spacing: 0.04em;
 }
 .panel-section__note { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+/* A chart tile's Ownership (T133, AC-127): Save and Cancel side by side. */
+.chart-ownership__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.chart-ownership > button { justify-self: start; }
 .field { display: grid; gap: 4px; }
 /* An inspector's controls are the prototype's .input.sm and .select.sm: 28 px
    at 12 px, direction.md §4's compact row for inspectors. */

@@ -190,6 +190,43 @@ describe('whether a dashboard with drafts can be saved', () => {
     expect(reason).toMatch(/undone too/);
   });
 
+  /**
+   * T133 / AC-127: a chart local to this dashboard, saved to a folder in the
+   * session, is written by the dashboard's save as a library chart — the
+   * user's decision (2026-09-22) — and a later edit to it in the chart editor
+   * keeps it so.
+   */
+  it('can be saved with a chart of its own being saved to a folder, edited after or not', () => {
+    const toFolder = { ...library, wasLocalTo: 'd1' };
+    const published = withDraft(onTiles, 'c1', toFolder);
+    expect(whyUnsaveable(published, 'd1')).toBeUndefined();
+    expect(chartWritesOf(published, 'd1')).toEqual([
+      { id: 'c1', document: toFolder.document, version: toFolder.version },
+    ]);
+
+    // The editor hands back a draft of its own, knowing nothing of the folder.
+    const edited = withDraft(published, 'c1', {
+      ...drawing('line'),
+      document: { ...toFolder.document, title: 'Edited' },
+    });
+    expect(edited.chartDrafts?.['c1']?.wasLocalTo).toBe('d1');
+    expect(whyUnsaveable(edited, 'd1')).toBeUndefined();
+
+    // Nor does the editor's own Save dashboard hold back its next edit (T133's
+    // review): the pending edit knows nothing of the folder, the draft does.
+    expect(
+      whyUnsaveableWith(published, 'd1', 'c1', {
+        document: { ...toFolder.document, title: 'Edited again' },
+        version: toFolder.version,
+      }),
+    ).toBeUndefined();
+
+    // Not a chart another dashboard's: that stays refused.
+    expect(whyUnsaveable(withDraft(onTiles, 'c2', { ...library, wasLocalTo: 'd2' }), 'd1')).toMatch(
+      /library chart/,
+    );
+  });
+
   it('cannot be saved while a chart local to another dashboard is drafted', () => {
     expect(whyUnsaveable(withDraft(onTiles, 'c1', elsewhere), 'd1')).toMatch(/another dashboard/);
   });

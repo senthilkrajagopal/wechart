@@ -1699,15 +1699,43 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - AC-126 ticked on `e2e/local-charts.spec.ts` (a chart added on the real dashboard is stored local to it, is in no folder or search result, and opens in the editor), with `catalog.test.ts` for the exclusion itself.
   - Depends on: T017
   - **Two things from T074 land here.** direction.md line 86 counts a section template among the ways a dashboard-local chart is created, so templates should mint one per tile once this exists — they currently insert a tile carrying `Tile.chartType` and no chart. And the empty tile's message deliberately stops at "This chart has no fields yet", with no way in named, because there is no pencil on a dashboard tile and E is withheld from tiles with no chart. **Both the local chart and that instruction belong here**; see the seam recorded on T068.
-- [ ] T133 (AC-127) Save a local chart to a folder as a library chart, naming where it went
+- [x] T133 (AC-127) Save a local chart to a folder as a library chart, naming where it went
   - Files: `packages/web/src/editor/SaveToFolder.tsx`, `packages/web/src/editor/SaveToFolder.test.tsx`
   - Failing test: `SaveToFolder.test.tsx`: the chart becomes reusable by other dashboards and the confirmation names the folder (AC-127).
   - Depends on: T132
+  - **Decided by the user, 2026-09-22:** "Save to folders…" takes effect with the dashboard's Save, as part of the edit session. Undo and Discard take it back.
+  - **Done 2026-09-22.** Files as built:
+    - `dashboard/edit/ChartOwnership.tsx` (`ChartOwnership`, `TileChartOwnership`) and its test, in place of the planned `editor/SaveToFolder.tsx`.
+    - `dashboard/edit/TileProperties.tsx` (`chartProperties`) and `dashboard/DashboardView.tsx`.
+    - `dashboard/model/document.ts` (`ChartDraft.wasLocalTo`), and `dashboard/edit/chartDrafts.ts` (`refusalOf`, `withDraft`, `whyUnsaveableWith`) with its test.
+    - `dashboard/DashboardPage.tsx` (the confirmation), and `shell/styles.ts`.
+    - API: `server.ts` and `server.test.ts`.
+    - e2e: `e2e/save-to-folder.spec.ts`.
+    - **What the user sees.** A chart tile's Properties has the prototype's Ownership panel.
+      - A local chart reads "Only on this dashboard. Editing it changes nothing else." and offers "Save to folders…": a folder picker, the dashboard's own folder first, a note on what that means, and "Save to this folder".
+      - Once chosen, the panel says the chart goes to that folder, named, when the dashboard is saved.
+      - After the dashboard's Save, the page reads "Saved "<title>" to <folder>. It is now a shared chart." until the next edit.
+      - A library chart's panel names its folder.
+    - **How.** Saving to a folder is a draft of the chart: a library chart's document (`folderId` set, `localToDashboardId` gone), marked `wasLocalTo` this dashboard. A chart with no draft yet is first read for its stored version, which the save checks. The mark lets this dashboard's save write it, as that dashboard's own chart. Any other library chart drafted from a tile stays held back until T134 (T192's hold), and a later edit in the chart editor keeps the mark.
+      - The API accepts a chart local to this dashboard sent back as a library chart, and a new chart (version 0) created straight into a folder when it was saved to one before the dashboard's first save.
+      - It still refuses a stored library chart (until T134), a chart local to another dashboard, and a move to another dashboard.
+    - AC-127 ticked, on the real dashboard in all three browsers. `e2e/save-to-folder.spec.ts` saves a local chart to a new folder from its Properties and saves the dashboard. The confirmation names the folder and the chart. The chart is stored with `folderId` set and no `localToDashboardId`, the folder's contents list it for reuse, and the tile still draws it.
+    - **Cold review (one round), verdict FAIL. Fixed:**
+      - **The top level.** It is no folder of its own, so `/api/folders` doesn't list it. On a dashboard there, the picker showed one folder and saved to "root", and the confirmation said "root". It is now offered first, as "All folders" (Explore's name for it), and named so everywhere.
+      - **The draft is read as stored, in one read** (`loadChart`): every field, unknown ones kept, and the version, so the document and version can't disagree. Only `localToDashboardId` is taken off.
+      - **A chart local to another dashboard** is not offered the action.
+      - **Focus:** to the folder picker on opening, back to "Save to folders…" on Cancel, and to the panel's heading on Save.
+      - **States:** the chart being read says so, and folders that can't be read say so and hold the offer back.
+      - **The API requires a folder** for a chart it makes a library chart.
+      - **Tests added:** the mark carried through the editor's Save dashboard check, and the container's read (both the no-draft and the draft path).
+      - **Stale comments** in `server.ts`.
+    - **Noted, not fixed:** Save pressed while the chart is still being read goes out without the folder change, which the panel said was under way.
 - [ ] T134 (AC-128) State that a library chart is shared and on how many dashboards, and offer a local copy
   - Files: `packages/web/src/editor/SharedChartNotice.tsx`, `packages/web/src/editor/SharedChartNotice.test.tsx`
   - Failing test: `SharedChartNotice.test.tsx`: opening a library chart used by more than one dashboard shows the shared indication with the count and a "make a local copy" action (AC-128).
   - Depends on: T133
   - **Inherits a hold from T192 (2026-09-21).** A library chart edited from a dashboard tile is held in the session but never written: Save is held back for it with a reason (`whyUnsaveable` and `whyUnsaveableWith` in `packages/web/src/dashboard/edit/chartDrafts.ts`, the rule `refusalOf`), and `PUT /api/dashboards/:id` refuses it with a 400 (`packages/api/src/server.ts`). Once this task shows the count and offers the local copy, decide with the user what saving a library chart from a tile then does, lift or keep both holds together — the client and the server apply one rule and must go on agreeing — and re-check AC-183 for library charts: at T192 it is demonstrated for charts local to the dashboard only. The generic `PUT /api/documents/:kind/:id` writes any chart already; it is the library chart's own save, and AC-128's warning belongs there too.
+  - **Decided by the user, 2026-09-22:** a shared chart edited from a tile is saved everywhere, after the shared warning; the save is refused if the chart changed meanwhile. Lift both holds here. T133 has already relaxed both for one case: a chart this dashboard is saving to a folder (`wasLocalTo`), or making new straight into one.
 - [ ] T135 (AC-129) Repoint the tile to a local copy, keeping edits and leaving the shared chart untouched
   - Files: `packages/web/src/editor/detach.ts`, `packages/web/src/editor/detach.test.ts`
   - Failing test: `detach.test.ts`: after detaching, the tile uses the copy with the edits made so far, and the shared chart is unchanged (AC-129).

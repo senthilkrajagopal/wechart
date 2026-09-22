@@ -255,6 +255,51 @@ function LoadedDashboard({
     ['dashboard-charts', id, preview ?? null, chartIdsOf(document)] as const;
   const [saveFailed, setSaveFailed] = useState('');
   /**
+   * Where the charts this save put in folders went (T133, AC-127): each by
+   * its title and its folder's, said once the save has gone through — the
+   * Properties that said it would are gone with the edit session. Cleared by
+   * the next edit.
+   */
+  const [savedToFolders, setSavedToFolders] = useState('');
+  const sayWhereSaved = async (
+    id: string,
+    next: DashboardDocument,
+    drafts: DashboardDocument['chartDrafts'],
+  ) => {
+    const shown = new Set(chartIdsOf(next));
+    const moved = Object.entries(drafts ?? {}).flatMap(([chartId, draft]) =>
+      shown.has(chartId) &&
+      draft.wasLocalTo === id &&
+      draft.document.localToDashboardId === undefined &&
+      draft.document.folderId !== undefined
+        ? [{ title: draft.document.title, folderId: draft.document.folderId }]
+        : [],
+    );
+    if (moved.length === 0) {
+      setSavedToFolders('');
+      return;
+    }
+    // By name where the folders can be read; by id, never not at all. The top
+    // level is no folder of its own, and Explore calls it "All folders".
+    const names = new Map<string, string>([['root', 'All folders']]);
+    try {
+      const response = await fetch('/api/folders');
+      if (response.ok)
+        for (const folder of (await response.json()) as { id: string; title: string }[])
+          names.set(folder.id, folder.title);
+    } catch {
+      // Said by id.
+    }
+    setSavedToFolders(
+      moved
+        .map(
+          ({ title, folderId }) =>
+            `Saved “${title}” to ${names.get(folderId) ?? folderId}. It is now a shared chart.`,
+        )
+        .join(' '),
+    );
+  };
+  /**
    * Moved on each time the charts are loaded afresh or a save writes them. A
    * tile's refresh (T154) answers for the charts as they were when it was
    * asked, so one overtaken by either drops its answer rather than put older
@@ -351,8 +396,9 @@ function LoadedDashboard({
      * throw here would turn a stored save into a failure (gotcha 1) — and
      * `invalidateQueries` neither throws nor rejects unless asked to.
      */
-    onSuccess: async (_saved, { id }) => {
+    onSuccess: async (_saved, { id, next, drafts }) => {
       setSaveFailed('');
+      void sayWhereSaved(id, next, drafts);
       void queryClient.invalidateQueries({ queryKey: ['dashboard-charts', id] });
       await queryClient.invalidateQueries({ queryKey: ['dashboard', id] });
     },
@@ -477,6 +523,11 @@ function LoadedDashboard({
           {saveFailed}
         </StateLine>
       )}
+      {savedToFolders === '' ? null : (
+        <StateLine kind="ok" testId="saved-to-folder">
+          {savedToFolders}
+        </StateLine>
+      )}
       <DashboardView
         /**
          * Keyed by the dashboard, so moving from one to another starts a new
@@ -515,6 +566,7 @@ function LoadedDashboard({
         onFilterValues={onFilterValues}
         onEditStart={() => {
           setEditBase(version);
+          setSavedToFolders('');
         }}
         onSave={(next, drafts) =>
           save.mutateAsync({ id: dashboardId, next, drafts, version: editBase ?? version })
