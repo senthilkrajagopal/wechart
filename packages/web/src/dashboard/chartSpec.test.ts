@@ -277,9 +277,38 @@ describe('number formats (AC-046)', () => {
     };
 
     expect(formatsFrom(meta)).toEqual({
-      'probe.pct_1': { specifier: '.1~%' },
-      'probe.eur': { specifier: '$,.2~f', currency: 'EUR' },
+      'probe.pct_1': { specifier: '.1~%', name: 'percent_1' },
+      'probe.eur': { specifier: '$,.2~f', name: 'currency', currency: 'EUR' },
       'probe.ordered': { time: '%Y-%m' },
+    });
+  });
+
+  it('keeps an id by its name, and a link as text, so neither is written as a number (T201’s review)', () => {
+    const meta = {
+      cubes: [
+        {
+          name: 'probe',
+          measures: [],
+          dimensions: [
+            {
+              name: 'probe.id',
+              format: { type: 'custom-numeric', value: '.0f', alias: 'id' },
+              formatDescription: { name: 'id', specifier: '.0f' },
+            },
+            // A number dimension carries Cube's default description beside it.
+            {
+              name: 'probe.ref',
+              format: 'link',
+              formatDescription: { name: 'number', specifier: ',.2~f' },
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(formatsFrom(meta)).toEqual({
+      'probe.id': { specifier: '.0f', name: 'id' },
+      'probe.ref': 'link',
     });
   });
 

@@ -7,14 +7,16 @@
  * Every other category is shown as it came: run through Cube's plain number,
  * an order id on a category axis read "1,234" (T194).
  */
-import { formatterFor, granularityOf, type RenderSpec } from '@wechart/core';
+import { formatterFor, granularityOf, rewritesValues, type RenderSpec } from '@wechart/core';
 
 export type Writer = (value: unknown) => string;
 
 export function modelWriter(spec: RenderSpec, member: string | undefined): Writer | undefined {
   if (member === undefined) return undefined;
   const timed = granularityOf(member, spec.granularities ?? {}) !== undefined;
-  const declared = spec.formats?.[member] !== undefined;
+  // A format that writes values differently — not an id, a link or an image
+  // address, which are written as they came (T201's review).
+  const declared = rewritesValues(spec.formats?.[member]);
   if (!timed && !declared) return undefined;
   return formatterFor(member, spec.formats ?? {}, spec.granularities);
 }

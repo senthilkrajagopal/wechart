@@ -1,4 +1,4 @@
-import { formatValue, membersOn, pivot, type RenderSpec } from '@wechart/core';
+import { formatValue, membersOn, pivot, rewritesValues, type RenderSpec } from '@wechart/core';
 
 /**
  * The pivot table (AC-037).
@@ -66,7 +66,7 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
    */
   const headerText = (member: string | undefined, value: string) =>
     member !== undefined &&
-    (spec.granularities?.[member] !== undefined || spec.formats?.[member] !== undefined)
+    (spec.granularities?.[member] !== undefined || rewritesValues(spec.formats?.[member]))
       ? formatValue(value, member, spec.formats ?? {}, spec.granularities)
       : value;
   const rowMembers = membersOn(spec.encoding, 'row');

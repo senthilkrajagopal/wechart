@@ -72,7 +72,7 @@ describe('the axis', () => {
     expect(labels.some((label) => /^\$[\d,]+/.test(label))).toBe(true);
     expect(labels.some((label) => /^\d+%$/.test(label))).toBe(true);
     // Neither measure wears the other's format: the share's fractions are not
-    // written as money ("$0.25"). The money axis's own "$0.00" is its zero.
+    // written as money ("$0.25"). The money axis's own "$0" is its zero.
     expect(labels.some((label) => /^\$0\.(?!00$)\d+$/.test(label))).toBe(false);
   });
 
@@ -274,7 +274,7 @@ describe('the tooltip', () => {
   it('writes the value the way its member declares', () => {
     const text = tooltipOf(spec)({ seriesName: AMOUNT, name: 'paid', value: 1000 });
 
-    expect(text).toContain('$1,000');
+    expect(text).toMatch(/\$1,000(?![\d,.])/);
   });
 
   it('escapes what it interpolates, because the formatter returns raw HTML', () => {
@@ -374,7 +374,7 @@ describe('every drawable type', () => {
       seriesIndex: 0,
     });
 
-    expect(text).toContain('$4,000');
+    expect(text).toMatch(/\$4,000(?![\d,.])/);
   });
 
   it.each(DRAWABLE_TYPES.filter((type) => !NO_VALUE_AXIS.includes(type)))(
@@ -430,6 +430,26 @@ describe('a dimension’s declared format', () => {
     expect(tooltipOf(drawn)({ seriesName: AMOUNT, name: '20', value: 2 })).toBe(
       `$20<br/>${AMOUNT}: 2`,
     );
+  });
+
+  it('leaves a link or id dimension’s values as they came (T201’s review)', () => {
+    const REF = 'orders.ref';
+    for (const format of ['link', 'id'] as const) {
+      const drawn: RenderSpec = {
+        chartType: 'bar',
+        encoding: { x: [REF], y: [AMOUNT] },
+        rows: [
+          { [REF]: 12345, [AMOUNT]: 1 },
+          { [REF]: 23456, [AMOUNT]: 2 },
+        ],
+        palette: ['#123456'],
+        formats: { [REF]: format },
+      };
+      const labels = labelsOf(renderToSvg(optionFor(drawn))).map((label) => label.text);
+
+      expect(labels).toContain('12345');
+      expect(labels).not.toContain('12,345');
+    }
   });
 
   it('writes the members of its split in the legend', () => {

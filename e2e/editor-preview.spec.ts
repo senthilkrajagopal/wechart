@@ -485,5 +485,5 @@ test('the editor’s results drawer writes a value in its member’s format (AC-
   await overlay(page).getByRole('button', { name: 'Results' }).click();
 
   const cells = overlay(page).getByTestId('drawer-result-rows').locator('td');
-  await expect(cells.filter({ hasText: /^\$[\d,]+(\.\d{1,2})?$/ }).first()).toBeVisible();
+  await expect(cells.filter({ hasText: /^\$[\d,]+(\.\d?[1-9])?$/ }).first()).toBeVisible();
 });

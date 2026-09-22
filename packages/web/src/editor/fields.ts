@@ -104,7 +104,7 @@ export function formatsOf(meta: unknown): Record<string, string | MemberFormat> 
     for (const member of [...(cube.measures ?? []), ...(cube.dimensions ?? [])]) {
       const { name, format, formatDescription, currency } = member as RawMember & {
         format?: unknown;
-        formatDescription?: { specifier?: unknown; currency?: unknown };
+        formatDescription?: { name?: unknown; specifier?: unknown; currency?: unknown };
         currency?: unknown;
       };
       /**
@@ -124,10 +124,21 @@ export function formatsOf(meta: unknown): Record<string, string | MemberFormat> 
        * or `currency_N` (T201; research/cube/data-modeling.md, "What
        * `/v1/meta` reports for each format") — Cube's meaning, not a copy.
        */
+      // A link or image address is text, whatever number format sits beside
+      // it (T201's review): kept by name, which writes it as it came.
+      if (format === 'link' || format === 'imageUrl') {
+        formats[name] = format;
+        continue;
+      }
       const specifier = formatDescription?.specifier;
       const code = formatDescription?.currency ?? currency;
+      const called = formatDescription?.name;
       if (typeof specifier === 'string')
-        formats[name] = { specifier, ...(typeof code === 'string' ? { currency: code } : {}) };
+        formats[name] = {
+          specifier,
+          ...(typeof called === 'string' ? { name: called } : {}),
+          ...(typeof code === 'string' ? { currency: code } : {}),
+        };
       else if (typeof format === 'string') formats[name] = format;
     }
   }

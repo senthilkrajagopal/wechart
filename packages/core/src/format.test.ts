@@ -138,6 +138,28 @@ describe('Cube’s whole format vocabulary', () => {
     expect(written(1234.5, 'not a specifier')).toBe('1,234.5');
   });
 
+  it('writes an id as it came, however long, whatever its zeros (T201’s review)', () => {
+    // Through `.0f`, 20 digits lost precision past 2^53 and "00042" lost its
+    // zeros — an id is a name, not a number to round.
+    const id = (value: string, format: MemberFormats[string]) =>
+      formatValue(value, 'orders.ref', { 'orders.ref': format });
+    expect(id('12345678901234567890', 'id')).toBe('12345678901234567890');
+    expect(id('00042', 'id')).toBe('00042');
+    // As meta reports it: `formatDescription` names it `id`.
+    expect(id('9007199254740993', { specifier: '.0f', name: 'id' })).toBe('9007199254740993');
+  });
+
+  it('writes a link or image address as text, never as a number (T201’s review)', () => {
+    // Cube's `link` and `imageUrl` say what a value is for, not how to write a
+    // number: grouped, reference 12345 read "12,345".
+    expect(formatValue('12345', 'orders.ref', { 'orders.ref': 'link' })).toBe('12345');
+    expect(formatValue('12345', 'orders.ref', { 'orders.ref': 'imageUrl' })).toBe('12345');
+  });
+
+  it('keeps the plain minus when it falls back from a specifier it cannot read', () => {
+    expect(written(-5, 'bogus')).toBe('-5');
+  });
+
   it('writes a negative with a plain minus, as a reader can type it', () => {
     // d3 writes U+2212 by default; wechart keeps the hyphen-minus it has
     // always written, which searches and copies as a number.
@@ -215,6 +237,12 @@ describe('a time value, by its granularity', () => {
     // And under Cube's `member.<granularity>` column beside it.
     expect(formatterFor(`${AT}.day`, monthly, { [AT]: 'day' })('2026-01-02T00:00:00.000')).toBe(
       '2026-01',
+    );
+  });
+
+  it('keeps the milliseconds a pattern asks for', () => {
+    expect(formatValue('2026-01-02T15:04:05.123', AT, { [AT]: { time: '%H:%M:%S.%L' } })).toBe(
+      '15:04:05.123',
     );
   });
 

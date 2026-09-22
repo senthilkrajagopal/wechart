@@ -988,7 +988,9 @@ test('a dashboard tile writes a currency measure as money, on its axis and in it
   // decides the order of the columns it returns.
   // Cube's own currency format, `$,.2~f`: up to two decimals, trailing zeros
   // trimmed — the user chose Cube's formats over fixed pennies (T201).
-  await expect(await tableValue(tile, 'orders.total_amount')).toHaveText(/^\$[\d,]+(\.\d{1,2})?$/);
+  // Exactly Cube's: a last decimal is never a trimmed zero, so "$1,234.50"
+  // (the old fixed pennies) does not pass (T201's review).
+  await expect(await tableValue(tile, 'orders.total_amount')).toHaveText(/^\$[\d,]+(\.\d?[1-9])?$/);
 });
 
 test('a dashboard tile’s tooltip writes a currency measure as money (AC-046, T201)', async ({
@@ -1019,7 +1021,7 @@ test('a dashboard tile’s tooltip writes a currency measure as money (AC-046, T
   expect(mark).toBeDefined();
 
   // The tooltip's line is "<series>: <value>"; no axis label has the colon.
-  const line = tile.locator('div').filter({ hasText: /: \$[\d,]+(\.\d{1,2})?/ });
+  const line = tile.locator('div').filter({ hasText: /: \$[\d,]+(\.\d?[1-9])?(?![\d.])/ });
   await expect(line).toHaveCount(0);
   await page.mouse.move(mark?.x ?? 0, mark?.y ?? 0);
 

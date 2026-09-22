@@ -155,8 +155,8 @@ Traces to: `[docs/inputs §2]`, direction.md §6, rules 4–7, 18–19.
       Fails when: the order is not applied, or changes after a refresh with unchanged data.
 - [x] AC-045 WHEN a trellis chart is rendered, THE SYSTEM SHALL lay panels out in a grid with a shared scale by default and a per-panel title, and cap the panels at 20 (direction.md rule 6).
       Fails when: panels use different scales while the shared setting is on, or more than 20 panels render.
-- [x] AC-046 THE SYSTEM SHALL format every value with its member's format from the Cube model, including currency and percentage, in axes, labels, tooltips and tables.
-      Fails when: a value renders without its declared format in any of those places.
+- [x] AC-046 THE SYSTEM SHALL format every value with its member's format from the Cube model, including currency and percentage, in axes, labels, tooltips and tables. A value axis shared by measures whose formats differ shows plain ticks, while each value keeps its own format in tooltips, labels and tables (the user, 2026-09-21: "Record it as the rule").
+      Fails when: a value renders without its declared format in any of those places, other than the ticks of a value axis shared by measures whose formats differ.
 
 ## F6. Quick calculations and calculation requests
 

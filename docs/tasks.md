@@ -394,8 +394,22 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - `DataTable.test.tsx` and `ResultsDrawer.test.tsx`: 1 each;
     - `e2e/dashboard.spec.ts`'s table check: `\.\d{2}` became up to two decimals.
     - The negative check that an id is never written as money was strengthened to rule out "$1,234" as well.
+  - **Cold review (2026-09-21): AC-046 met.** Real bugs, each fixed with a test that failed first:
+    1. **An id lost digits and zeros.** Through `.0f`, a 20-digit id came back rounded past 2^53, and `00042` came back as `42`. An `id` is now written as it came, whether meta names it (`formatDescription.name`, now kept as `name`) or a spec names it.
+    2. **`link` and `imageUrl` values were grouped.** On axes, legends, tooltip headings, trellis titles and pivot headers, reference 12345 read "12,345". These formats now write values as they came. A new `rewritesValues` decides which formats reach a category, and `formatsOf` keeps `link`/`imageUrl` by name even where meta puts a number description beside them.
+    3. **An unreadable specifier's fallback used d3's default locale**, so a negative lost the plain minus. It now uses wechart's locale.
+    - Also: a time pattern's `%L` is the value's milliseconds, not "000".
+    - Loose assertions tightened:
+      - The e2e money patterns now reject a trailing-zero decimal, so the old fixed pennies can't pass.
+      - Two tooltip checks are exact rather than a substring.
+    - **Spec: the user's decision, 2026-09-21 ("Record it as the rule").** AC-046 now says a value axis shared by measures with different formats shows plain ticks, with every value keeping its own format elsewhere. T195 had decided this without asking.
+    - **Left as reported:**
+      - The editor's first-row preview is a raw JSON dump of the row, a debugging aid like the drawer's Query view, not an axis, label, tooltip or table.
+      - The docs commit `01de5af` also removed `time.ts`, which was staged at the time, so that one commit doesn't build; history was not rewritten.
+      - `panelOfTitleClick` reads a panel's title as its value, and titles are now formatted. That matters for AC-091 once markings are wired (deferred).
+      - Files beyond those planned: `axis.ts`, `legend.ts`, `tooltip.ts`, `trellis.ts`, `modelWriter.ts`, `PivotTable.tsx`, `chartSpec.ts`, the e2e specs and the research docs. `ChartEditor.test.tsx` was not needed; the drawer is shown in `e2e/editor-preview.spec.ts`.
   - **Left:**
-    - `imageUrl` and `link` formats have no rendering of their own; they fall back to the plain number or text.
+    - `imageUrl` and `link` formats have no rendering of their own; their values are written as they came.
     - `%n` and `%t` in a time pattern print as the letters, as d3 does (research open question).
     - `%Z`, `%s` and `%Q` assume the query's timezone is UTC, which is wechart's default.
 - [x] T032 (AC-034, AC-066) Open the editor from a tile as an overlay, preview at the tile's own size and filling the editor, and return with the tile updated

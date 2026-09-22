@@ -15,7 +15,7 @@
  * `imageUrl` and `link` mean nothing to an axis, and fall back to the plain
  * number, because refusing to draw would be worse than drawing a number.
  */
-import { format as d3Format, formatLocale } from 'd3-format';
+import { formatLocale } from 'd3-format';
 import { timeFormatLocale } from 'd3-time-format';
 
 /**
@@ -27,6 +27,23 @@ export interface MemberFormat {
   readonly specifier?: string;
   readonly currency?: string;
   readonly time?: string;
+  /** The format's name, as `formatDescription` gives it — `id`, `currency_0`… */
+  readonly name?: string;
+}
+
+/**
+ * Formats that say what a value *is*, not how to write a number: an id is a
+ * name, never rounded or grouped, and a link or image address is text. Each is
+ * written as it came (T201's review: through `.0f` a 20-digit id lost its last
+ * digits, and a `link` reference 12345 read "12,345").
+ */
+const AS_IT_CAME: ReadonlySet<string> = new Set(['id', 'link', 'imageUrl']);
+
+/** Whether a member's format writes its values differently from how they came. */
+export function rewritesValues(format: string | MemberFormat | undefined): boolean {
+  if (format === undefined) return false;
+  const name = typeof format === 'string' ? format : format.name;
+  return name === undefined || !AS_IT_CAME.has(name);
 }
 
 /**
@@ -127,12 +144,14 @@ function numberFormatter(format: string | MemberFormat | undefined): (value: num
   const key = `${currency ?? ''} ${specifier}`;
   const known = made.get(key);
   if (known !== undefined) return known;
+  const locale = localeFor(currency);
   let write: (value: number) => string;
   try {
-    write = localeFor(currency).format(specifier);
+    write = locale.format(specifier);
   } catch {
-    // Not a specifier d3 can read: Cube's plain number instead.
-    write = d3Format(PLAIN);
+    // Not a specifier d3 can read: Cube's plain number instead, in the same
+    // locale, so a negative keeps its plain minus.
+    write = locale.format(PLAIN);
   }
   made.set(key, write);
   return write;
@@ -188,9 +207,12 @@ export function formatterFor(
         : formatTime(String(value), granularity);
   }
 
-  // An id's specifier is Cube's `.0f`: never grouped, so order 1234 does not
-  // read "1,234" (T195).
-  const write = numberFormatter(formats[member]);
+  // An id, a link or an image address is written as it came (T195, T201's
+  // review); anything without a format of its own is Cube's plain number.
+  const declared = formats[member];
+  if (declared !== undefined && !rewritesValues(declared))
+    return (value) => (value === null || value === undefined ? '' : String(value));
+  const write = numberFormatter(declared);
 
   return (value) => {
     if (value === null || value === undefined || value === '') return '';
@@ -225,6 +247,8 @@ function dateOf(text: string): Date | undefined {
   const match = STAMP.exec(text);
   if (match === null) return undefined;
   const [, year = '', month = '', day = '', hour = '00', minute = '00', second = '00'] = match;
+  // Its milliseconds too, so a pattern's `%L` is the value's, not "000".
+  const millis = /\.(\d{1,3})/.exec(text.slice(match[0].length))?.[1] ?? '0';
   return new Date(
     Date.UTC(
       Number(year),
@@ -233,6 +257,7 @@ function dateOf(text: string): Date | undefined {
       Number(hour),
       Number(minute),
       Number(second),
+      Number(millis.padEnd(3, '0')),
     ),
   );
 }
