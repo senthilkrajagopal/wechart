@@ -545,7 +545,7 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
       Fails when: a listed driver is absent, or its form omits an authentication method the driver requires.
 - [ ] AC-161 WHEN a connection's settings change, THE SYSTEM SHALL say that Cube must restart before they take effect, and show whether the running Cube has picked them up.
       Fails when: the UI claims the change is live while Cube still uses the previous settings.
-- [ ] AC-162 WHEN the user assigns a cube to a data source, THE SYSTEM SHALL write `data_source` into that cube's model file.
+- [x] AC-162 WHEN the user assigns a cube to a data source, THE SYSTEM SHALL write `data_source` into that cube's model file.
       Fails when: the assignment is stored only in wechart and not in the model.
 - [ ] AC-163 THE SYSTEM SHALL record the result of each connection test over time and show that history per source.
       Fails when: a test result is missing from the history.

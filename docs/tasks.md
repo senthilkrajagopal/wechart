@@ -2467,10 +2467,23 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/workspaces/sources/RestartNotice.tsx`, `packages/api/src/sources/appliedState.test.ts`
   - Failing test: `appliedState.test.ts`: after a connection change the UI reports a restart is required and reports "not yet applied" while Cube still uses the previous settings (AC-161).
   - Depends on: T164
-- [ ] T168 (AC-162) Write `data_source` into a cube's model file when it is assigned
+- [x] T168 (AC-162) Write `data_source` into a cube's model file when it is assigned
   - Files: `packages/api/src/model/assignSource.ts`, `packages/api/src/model/assignSource.test.ts`
   - Failing test: `assignSource.test.ts`: assigning a cube writes `data_source` into that cube's YAML, not only into wechart's database (AC-162).
   - Depends on: T149, T163
+  - **Done 2026-09-22.** Files as built:
+    - Only `e2e/data-source.spec.ts`.
+    - `assignSource.ts` and its test weren't needed: the cube form's Data source field (T138, `form/schema.ts`) and publish (T142) already write the key into the model file.
+    - The dependency on T163 was dropped. With F18 deferred there is no source list to assign from, and Cube Core has no API for one. Assigning means setting the cube form's Data source, as the prototype and direction.md §7b have it.
+    - **Where it is stored:** only in the model file, `model_files`, which is the store Cube reads through `repositoryFactory`. Nothing else in wechart records a cube's source.
+    - **Never red:** the test passed on its first run, because the behaviour was already built. It fails if:
+      - the form lacks the field;
+      - the edit doesn't reach the YAML;
+      - the published file lacks the key on the cube.
+    - Left as found:
+      - Source names aren't checked against known sources.
+      - Whether Cube's compile refuses an unknown name is unobserved.
+    - AC-162 ticked on `e2e/data-source.spec.ts` (Chrome, Firefox, Safari against the compose Cube).
 - [ ] T169 (AC-163) Record connection test results over time and show the history per source
   - Files: `packages/api/src/repos/source-tests.ts`, `packages/api/src/repos/source-tests.test.ts`
   - Failing test: `source-tests.test.ts`: every test result is retained and listed under its source (AC-163).
