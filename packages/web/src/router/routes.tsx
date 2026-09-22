@@ -19,6 +19,7 @@ import { AppShell } from '../shell/AppShell';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { JobsPage } from '../workspaces/jobs/JobsPage';
 import { FileList } from '../workspaces/model/FileList';
+import { ModelFilePage } from '../workspaces/model/ModelFilePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
 import { WORKSPACES, type WorkspaceId } from '../shell/WorkspaceSwitcher';
 
@@ -78,17 +79,6 @@ const workspaceRoutes = WORKSPACES.map((workspace) =>
     ),
   }),
 );
-
-/** A surface that names the object the URL selected. */
-function SelectedObject({ workspace, label }: { workspace: WorkspaceId; label: string }) {
-  const params = useParams({ strict: false }) as { objectId?: string };
-  return (
-    <AppShell workspace={workspace}>
-      <h1>{label}</h1>
-      <p data-testid="selected-object">{decodeURIComponent(params.objectId ?? '')}</p>
-    </AppShell>
-  );
-}
 
 /**
  * The dashboard, in view mode with its saved pages, tiles and settings
@@ -269,7 +259,15 @@ const chartRoute = createRoute({
 const modelFileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/model/files/$objectId',
-  component: () => <SelectedObject workspace="model" label="Model file" />,
+  // A model file, open on its forms (T138, AC-132).
+  component: function ModelFileSurface() {
+    const params = useParams({ strict: false }) as { objectId?: string };
+    return (
+      <AppShell workspace="model">
+        <ModelFilePage path={decodeURIComponent(params.objectId ?? '')} />
+      </AppShell>
+    );
+  },
 });
 
 const routeTree = rootRoute.addChildren([

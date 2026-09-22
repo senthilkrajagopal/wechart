@@ -249,6 +249,74 @@ main { padding: var(--wc-surface-padding); }
   font-weight: 600;
 }
 .model-object__group ul { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; }
+.model-file__path a { color: inherit; }
+
+/* A model file's forms (T138, AC-132; direction.md §7b): the tabs as the edit
+   sidebar's, fields as the prototype's .field — two short ones to a row, SQL
+   and YAML the full width — and members as rows that open in place. */
+.model-file-page__path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 16px !important;
+}
+.model-form {
+  max-width: 960px;
+  margin-bottom: 16px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+.model-form__count { color: var(--wc-text-muted); font-weight: 400; }
+.model-form__panel { padding: 12px; }
+.model-form__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+.model-form__fields > .model-field:has(.model-field__sql),
+.model-form__fields > .model-field:has(.model-field__yaml),
+.model-form__fields > .model-field--object,
+.model-form__fields > .model-field--list,
+.model-form__legacy { grid-column: 1 / -1; }
+.model-field input,
+.model-field select { width: 100%; height: 28px; font-size: 12px; }
+.model-field__sql,
+.model-field__yaml {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.model-field__flag { display: flex; gap: 6px; }
+fieldset.model-field {
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+}
+fieldset.model-field > legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+}
+.model-form__legacy > summary,
+.model-member > summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.model-form__legacy[open] > summary { margin-bottom: 8px; }
+.model-members { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.model-member {
+  padding: 6px 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+}
+.model-member[open] > summary { margin-bottom: 8px; }
+.model-member__name { font-weight: 600; }
+.model-member__type {
+  margin-left: 8px;
+  color: var(--wc-text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 
 .explore__tree,
 .explore__contents {

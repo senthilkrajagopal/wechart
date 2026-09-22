@@ -1690,10 +1690,39 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - `FileList.test.tsx` (2): every kind, listed under its cube, in the rendered component; an unreadable file's problem, shown on it.
     - `e2e/model.spec.ts` (1 in each browser): on the real service, `/model` lists the seeded files. `cubes/orders.yml` shows cube `orders` with its measures, dimensions and joins; `customers.yml` and `products.yml` are there; `views/order_summary.yml` shows view `order_summary`.
       - The seed model declares no segments, hierarchies or pre-aggregations. Those kinds are shown in the same component by `FileList.test.tsx`.
-- [ ] T138 (AC-132) Generate a form for every key Cube's validator accepts, with the validator's own enumerations
+- [x] T138 (AC-132) Generate a form for every key Cube's validator accepts, with the validator's own enumerations
   - Files: `packages/web/src/workspaces/model/form/{schema,CubeForm}.tsx`, `packages/web/src/workspaces/model/form/schema.test.ts`
   - Failing test: `schema.test.ts`: every accepted key on a cube or view has a field, and each enumeration offers exactly the validator's allowed values (AC-132).
   - Depends on: T137
+  - **Built 2026-09-21.**
+    - **Schema (`form/schema.ts`):** every key the validator accepts on the file root, a cube, a view, and everything they hold. Each object is named by its section in the research inventory (`data-modeling.md`, Y.2–Y.14): joins, dimensions and their granularities, time shifts, case and links; measures and their rolling window, time shift, grain and multi-stage filter; segments, hierarchies, the view's cube entries, included members, default filters and folders; view groups, pre-aggregations and access policies.
+      - Each key has a kind: identifier, text, SQL, boolean-or-expression, strict boolean, number, enum, reference(s), format, a list or object of its own, or YAML for anything else.
+      - Legacy and undocumented keys are marked `legacy`.
+      - Enumerations carry the validator's values. A join's `relationship` offers the three documented ones; the validator also takes legacy and camelCase spellings, and offering fewer never offers one it rejects.
+    - **Form:**
+      - `ObjectForm` generates the fields from the schema, the legacy ones in a collapsed group of their own.
+      - `MemberList` shows each member as a row (its name and type) that opens in place into every field it has.
+      - `CubeForm` has a General tab and a tab per list, in direction.md §7b's order: for a cube Dimensions, Measures, Joins, Segments, Hierarchies, Pre-aggregations and Access policy; for a view Cubes, Dimensions, Measures, Folders, Default filters and Access policy. The tabs are APG, and each shows its count.
+      - Edits hand back the next object. Writing them to the YAML is T139's.
+    - **Page:** `/model/files/<path>` (`ModelFilePage`) opens a file on a form for each cube and view it defines; the file list links each path to it.
+      - This replaces the route's placeholder surface. Its heading keeps `data-testid="selected-object"`, so AC-002's deep-link test holds.
+      - Links are plain `<a href>`, as the rest of the app's are.
+  - **Tests, red first:**
+    - `schema.test.ts` (5) reads the research's tables back rather than copying them a second time.
+      - Every key in every table of Y.2–Y.14 has a field. It first failed on Y.2, the file root, which was then added.
+      - Every `enum:` the tables give is offered exactly.
+      - The default filters' operators equal Y.16's list, and the measure types equal Y.7's shapes.
+      - A guard fails the test if fewer than 100 rows are read, so a broken reader can't pass.
+    - `CubeForm.test.tsx` (5):
+      - every key on a cube or view has a labelled control in the rendered form, and the tabs are in order;
+      - a measure opens into every field, its type offering exactly the measure types;
+      - a join's relationship offers the three and shows its own;
+      - an edit hands back the object with that key changed.
+    - `e2e/model.spec.ts` (1 more in each browser), on the real service: from `/model`, `cubes/orders.yml` opens on the form for cube `orders`.
+      - General shows `sql_table` and the Refresh key group.
+      - Measures opens `total_amount`: its type is `sum` among exactly the measure types, and its format is `currency`.
+      - Joins opens `customers`: `many_to_one`, among exactly the three.
+  - The test-integrity hook flagged one edit to `CubeForm.test.tsx`, a new, uncommitted file, as weakening a matcher. That edit only scoped the queries so a nested object's same-named field is not found; the matchers were `toBeTruthy` and `toEqual` before and after.
 - [ ] T139 (AC-133) Synchronise the form and the YAML view in both directions
   - Files: `packages/web/src/workspaces/model/{YamlEditor,sync}.tsx`, `packages/web/src/workspaces/model/sync.test.ts`
   - Failing test: `sync.test.ts`: a form edit updates the YAML within one render, and a valid YAML edit updates the form within 500 ms (AC-133). Monaco is driven as a controlled editor per `docs/research/code-editor.md`; parsing uses `yaml` with Cube's own options.

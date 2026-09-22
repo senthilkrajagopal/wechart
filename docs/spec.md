@@ -426,7 +426,7 @@ Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[researc
 
 - [x] AC-131 WHEN the user opens the Model workspace, THE SYSTEM SHALL list the model files and show the cubes, views, measures, dimensions, segments, hierarchies, joins and pre-aggregations each file defines.
       Fails when: a file's object is missing from the listing.
-- [ ] AC-132 THE SYSTEM SHALL offer a form for every key Cube's validator accepts on a cube or a view, with enumerations offering exactly the validator's allowed values (direction.md rule 26).
+- [x] AC-132 THE SYSTEM SHALL offer a form for every key Cube's validator accepts on a cube or a view, with enumerations offering exactly the validator's allowed values (direction.md rule 26).
       Fails when: a key the validator accepts has no form field, or an enumeration offers a value the validator rejects.
 - [ ] AC-133 WHEN the user edits a field in the form, THE SYSTEM SHALL update the YAML view within one render, and WHEN the user edits valid YAML, THE SYSTEM SHALL update the form within 500 milliseconds (direction.md rule 27).
       Fails when: either view still shows the previous value after that point.

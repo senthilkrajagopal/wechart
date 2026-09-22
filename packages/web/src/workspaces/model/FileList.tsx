@@ -71,7 +71,10 @@ export function FileList() {
         const read = objectsOf(file.path, file.content);
         return (
           <section key={file.path} aria-label={file.path} className="model-file">
-            <h2 className="model-file__path">{file.path}</h2>
+            <h2 className="model-file__path">
+              {/* Opens the file on its forms (T138). */}
+              <a href={`/model/files/${encodeURIComponent(file.path)}`}>{file.path}</a>
+            </h2>
             {read.problem === undefined ? null : (
               <p role="alert" className="model-file__problem">
                 {read.problem}
