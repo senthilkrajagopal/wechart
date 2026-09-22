@@ -1696,10 +1696,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/editor/detach.ts`, `packages/web/src/editor/detach.test.ts`
   - Failing test: `detach.test.ts`: after detaching, the tile uses the copy with the edits made so far, and the shared chart is unchanged (AC-129).
   - Depends on: T134
-- [ ] T136 (AC-130) Change no other dashboard when a local chart is edited
+- [x] T136 (AC-130) Change no other dashboard when a local chart is edited
   - Files: `packages/web/src/editor/applyChanges.ts`, `e2e/local-chart-isolation.spec.ts`
   - Failing test: `e2e/local-chart-isolation.spec.ts`: editing a local chart leaves a second dashboard's rendering unchanged (AC-130).
   - Depends on: T132
+  - **Done 2026-09-22, with no new code.** The planned `applyChanges.ts` would duplicate what T132 and T192 built. A chart edited from a tile is a draft in that dashboard's session, written by that dashboard's save as its own chart (`PUT /api/dashboards/:id`). A local chart belongs to one dashboard (`localToDashboardId`), and the save refuses a chart local to another. File: `e2e/local-chart-isolation.spec.ts`.
+    - AC-130 ticked, on the real dashboards in all three browsers. Three dashboards share one chart definition: through a chart local to the first, through a library chart, and through a local chart of their own. The first's chart is edited to a line and saved. The other two still draw bars, the library chart is stored as a bar, and the edited chart is stored as a line.
+    - **Cold review (one round), verdict PASS.** Fixed: the test now also reads the edited chart back from storage, so it doesn't rest on the cache update made before the save. Not fixed, and noted:
+      - **"A local chart belongs to one dashboard" is enforced only by the browser.** Neither dashboard save route checks a tile's `chartId` against the chart's `localToDashboardId`, so a dashboard body sent straight to the API could point at another dashboard's local chart. No UI path does, and phase 1 is single-user.
+      - **No red phase.** No code was written, so the test was never seen failing.
 
 ## F15. Model editor (Cube YAML)
 
