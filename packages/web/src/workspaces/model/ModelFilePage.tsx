@@ -51,6 +51,33 @@ const entriesOf = (list: unknown): { at: number; value: Value }[] =>
     isPlain(value) ? [{ at, value }] : [],
   );
 
+/**
+ * The rollups a publish in this tab was last refused for (T207's review): kept
+ * for the tab, so the refused rollup's row says so when its own file is opened
+ * — each file opens as a page of its own. Storage may be refused; the
+ * refusal then shows on this page only.
+ */
+const REFUSED_ROLLUPS = 'wechart.model.refusedRollups';
+
+function readRefusedRollups(): readonly CubeProblem[] {
+  try {
+    const kept: unknown = JSON.parse(sessionStorage.getItem(REFUSED_ROLLUPS) ?? '[]');
+    return Array.isArray(kept) ? (kept as CubeProblem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function keepRefusedRollups(problems: readonly CubeProblem[]): readonly CubeProblem[] {
+  try {
+    if (problems.length === 0) sessionStorage.removeItem(REFUSED_ROLLUPS);
+    else sessionStorage.setItem(REFUSED_ROLLUPS, JSON.stringify(problems));
+  } catch {
+    // Kept on this page only.
+  }
+  return problems;
+}
+
 function FileEditor({ path, content }: { path: string; content: string }) {
   /** The YAML view's text, as typed. */
   const [text, setText] = useState(content);
@@ -185,6 +212,13 @@ function FileEditor({ path, content }: { path: string; content: string }) {
   const [publishing, setPublishing] = useState(false);
   /** Cube's reasons for refusing the last save, by file (AC-136). */
   const [cubeProblems, setCubeProblems] = useState<readonly CubeProblem[]>([]);
+  /**
+   * The rollups the last publish in this tab was refused for (T207, AC-189),
+   * whichever file they are in: a change to one file can leave another's
+   * rollup naming what the model no longer has, and that rollup's row says
+   * so when its file is opened.
+   */
+  const [refusedRollups, setRefusedRollups] = useState(readRefusedRollups);
   const [outcome, setOutcome] = useState<{ ok: boolean; text: string } | null>(null);
   const queryClient = useQueryClient();
   /** Something to publish, that parses, that the form has caught up with, and nothing held. */
@@ -235,13 +269,25 @@ function FileEditor({ path, content }: { path: string; content: string }) {
     if (result.kind === 'published') {
       setSaved(sent);
       setCubeProblems([]);
+      setRefusedRollups(keepRefusedRollups([]));
       setOutcome({ ok: true, text: 'Published. Cube is reading the new model.' });
       // The listing, and every field list, read the model afresh (AC-137).
       void queryClient.invalidateQueries({ queryKey: MODEL_FILES_QUERY.queryKey });
       void queryClient.invalidateQueries({ queryKey: META_QUERY.queryKey });
     } else if (result.kind === 'refused') {
       setCubeProblems(result.problems);
-      setOutcome({ ok: false, text: 'Cube refused the model, so nothing was published.' });
+      setRefusedRollups(
+        keepRefusedRollups(
+          result.problems.filter((problem) => problem.preAggregation !== undefined),
+        ),
+      );
+      setOutcome({
+        ok: false,
+        // wechart's refusal, not Cube's, when every problem is a rollup's unknown names (AC-189).
+        text: result.problems.every((problem) => problem.preAggregation !== undefined)
+          ? 'A pre-aggregation names members the model doesn’t have, so nothing was published.'
+          : 'Cube refused the model, so nothing was published.',
+      });
     } else {
       setOutcome({ ok: false, text: result.message });
     }
@@ -349,6 +395,10 @@ function FileEditor({ path, content }: { path: string; content: string }) {
             kind="cube"
             value={value}
             readOnly={readOnly}
+            // Its rollups a publish was refused for, on their rows (T207, AC-189).
+            rollupProblems={refusedRollups.filter(
+              (problem) => problem.path === path && problem.preAggregation?.cube === value['name'],
+            )}
             onChange={(next) => {
               edit('cubes', at, next);
             }}

@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from 'react';
 
-import { RollupFacts } from '../preagg/RollupList';
+import type { CubeProblem } from '../ProblemsPanel';
+import { RollupFacts, stillUnknown } from '../preagg/RollupList';
 import { MemberList, ObjectForm, schemaOf } from './ObjectForm';
 import { SCHEMA, type Field, type SectionId } from './schema';
 
@@ -36,6 +37,7 @@ export function CubeForm({
   value,
   onChange,
   readOnly = false,
+  rollupProblems = [],
 }: {
   kind: 'cube' | 'view';
   value: Value;
@@ -45,7 +47,18 @@ export function CubeForm({
    * the tabs and members can still be browsed.
    */
   readOnly?: boolean;
+  /** This cube's rollups a publish was refused for (T207, AC-189), shown on their rows. */
+  rollupProblems?: readonly CubeProblem[];
 }) {
+  const unknownIn = (rollup: Value) =>
+    rollupProblems.find((problem) => problem.preAggregation?.name === rollup['name'])
+      ?.preAggregation?.unknown;
+  /** Whether a rollup here still writes a name a publish was refused for: marked on the tab. */
+  const refused = (
+    Array.isArray(value['pre_aggregations']) ? (value['pre_aggregations'] as unknown[]) : []
+  )
+    .filter((rollup): rollup is Value => typeof rollup === 'object' && rollup !== null)
+    .some((rollup) => stillUnknown(rollup, unknownIn(rollup) ?? []).length > 0);
   const section: SectionId = kind === 'cube' ? 'Y.3' : 'Y.10';
   const tabs = [['general', 'General'], ...TABS[kind]] as const;
   const listed = new Set(TABS[kind].map(([key]) => key));
@@ -90,6 +103,16 @@ export function CubeForm({
             }}
           >
             {label}
+            {/* A rollup here was refused: said on the tab, before it is opened. */}
+            {key === 'pre_aggregations' && refused ? (
+              <>
+                {' '}
+                <span data-icon="error" aria-hidden="true">
+                  ⚠
+                </span>
+                <span className="visually-hidden"> (refused)</span>
+              </>
+            ) : null}
             {key === 'general' ? null : (
               <span className="model-form__count">
                 {' '}
@@ -124,7 +147,14 @@ export function CubeForm({
               // Each rollup listed with what it declares (T148, AC-142).
               describe={
                 open === 'pre_aggregations'
-                  ? (rollup: Value) => <RollupFacts rollup={rollup} />
+                  ? (rollup: Value) => {
+                      const unknown = unknownIn(rollup);
+                      return unknown === undefined ? (
+                        <RollupFacts rollup={rollup} />
+                      ) : (
+                        <RollupFacts rollup={rollup} unknown={unknown} />
+                      );
+                    }
                   : undefined
               }
               onChange={(items) => {

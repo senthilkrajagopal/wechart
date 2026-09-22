@@ -157,3 +157,69 @@ describe('what a rollup declares, in words', () => {
     ).toEqual(['Indexes', 'by_lower (sql: lower(status)), aggregate']);
   });
 });
+
+/**
+ * T207 / AC-189: IF a model change being published leaves a pre-aggregation
+ * naming a measure, dimension, segment, time dimension or index column that
+ * the model does not have, THEN THE SYSTEM SHALL refuse to publish the change
+ * and show each unknown name on that pre-aggregation's row.
+ */
+describe('a rollup refused for what it names', () => {
+  const refused = {
+    path: 'cubes/monthly_orders.yml',
+    message: 'Pre-aggregation by_status_month names what the model doesn’t have: …',
+    preAggregation: {
+      cube: 'monthly_orders',
+      name: 'by_status_month',
+      unknown: [
+        { list: 'dimensions', name: 'CUBE.no_such_member' },
+        { list: 'index by_status', name: 'status' },
+      ],
+    },
+  };
+  const broken = {
+    ...MONTHLY,
+    pre_aggregations: [
+      { ...MONTHLY.pre_aggregations[0], dimensions: ['status', 'CUBE.no_such_member'] },
+      ...MONTHLY.pre_aggregations.slice(1),
+    ],
+  };
+
+  it('shows each unknown name on that rollup’s row, and on no other', async () => {
+    render(<CubeForm kind="cube" value={broken} onChange={vi.fn()} rollupProblems={[refused]} />);
+    // The tab says a rollup there has a problem, before it is opened.
+    const tab = screen.getByRole('tab', { name: /^Pre-aggregations/ });
+    expect(tab.querySelector('[data-icon="error"]')).not.toBeNull();
+    await userEvent.click(tab);
+
+    const [first, ...others] = screen
+      .getByRole('list', { name: 'Pre-aggregations' })
+      .querySelectorAll<HTMLElement>(':scope > li');
+    const unknown = within(first as HTMLElement).getByTestId('rollup-unknown');
+    expect(unknown.textContent).toContain('CUBE.no_such_member (dimensions)');
+    expect(unknown.textContent).toContain('status (index by_status)');
+    // An icon with the words (direction.md rule 3).
+    expect(unknown.querySelector('[data-icon="error"]')).not.toBeNull();
+    for (const other of others) expect(within(other).queryByTestId('rollup-unknown')).toBeNull();
+  });
+
+  it('stops naming a name once the rollup no longer writes it', async () => {
+    render(<CubeForm kind="cube" value={MONTHLY} onChange={vi.fn()} rollupProblems={[refused]} />);
+    await userEvent.click(screen.getByRole('tab', { name: /^Pre-aggregations/ }));
+    const unknown = screen.getByTestId('rollup-unknown');
+    // `CUBE.no_such_member` was taken out; the index's `status` is still written.
+    expect(unknown.textContent).not.toContain('CUBE.no_such_member');
+    expect(unknown.textContent).toContain('status (index by_status)');
+  });
+
+  it('takes the tab’s mark away once no rollup writes a refused name (T207’s review)', () => {
+    const mended = {
+      ...MONTHLY,
+      pre_aggregations: [{ name: 'by_status_month', measures: ['count'] }],
+    };
+    render(<CubeForm kind="cube" value={mended} onChange={vi.fn()} rollupProblems={[refused]} />);
+    const tab = screen.getByRole('tab', { name: /^Pre-aggregations/ });
+    expect(tab.querySelector('[data-icon="error"]')).toBeNull();
+    expect(tab.textContent).not.toContain('refused');
+  });
+});

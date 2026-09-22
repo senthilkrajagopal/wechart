@@ -412,3 +412,123 @@ describe('publishing model changes', () => {
     await app.close();
   });
 });
+
+/**
+ * T207 / AC-189: IF a model change being published leaves a pre-aggregation
+ * naming a measure, dimension, segment, time dimension or index column that
+ * the model does not have, THEN THE SYSTEM SHALL refuse to publish the change
+ * and show each unknown name on that pre-aggregation's row.
+ *
+ * Cube compiles such a rollup — the stub here does, as the real one did —
+ * and then fails queries on its cube (research/cube/pre-aggregations.md,
+ * "Observed locally"), so wechart refuses it after Cube's compile.
+ */
+describe('publishing a rollup that names what the model doesn’t have', () => {
+  const CUSTOMERS = {
+    path: 'cubes/customers.yml',
+    content:
+      'cubes:\n  - name: customers\n    sql_table: t\n    dimensions:\n      - name: country\n        sql: country\n        type: string\n',
+  };
+  const withRollup = (dimensions: string) => ({
+    path: 'cubes/orders.yml',
+    content: `cubes:\n  - name: orders\n    sql_table: t\n    measures:\n      - name: count\n        type: count\n    pre_aggregations:\n      - name: by_country\n        measures: [CUBE.count]\n        dimensions: [${dimensions}]\n`,
+  });
+  const compiling = () => {
+    const holder: { app?: FastifyInstance } = {};
+    return { holder, ...cubeReading(holder, () => ({ cubes: [] })) };
+  };
+
+  it('is refused on the rollup, naming each unknown member, and nothing is published', async () => {
+    const store = memory([CUSTOMERS, ORDERS]);
+    const { holder, cube } = compiling();
+    const app = buildServer({ config, modelFiles: store, cube });
+    holder.app = app;
+
+    const response = await publish(app, [withRollup('customers.country, CUBE.no_such_member')]);
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toEqual({
+      errors: [
+        {
+          path: 'cubes/orders.yml',
+          line: 8,
+          message:
+            'Pre-aggregation by_country names what the model doesn’t have: CUBE.no_such_member (dimensions). Cube compiles it, then fails queries on orders.',
+          preAggregation: {
+            cube: 'orders',
+            name: 'by_country',
+            unknown: [{ list: 'dimensions', name: 'CUBE.no_such_member' }],
+          },
+        },
+      ],
+    });
+    expect(store.files).toEqual([CUSTOMERS, ORDERS]);
+    await app.close();
+  });
+
+  it('is refused when the change takes away a member another file’s rollup names', async () => {
+    const good = withRollup('customers.country');
+    const store = memory([CUSTOMERS, good]);
+    const { holder, cube } = compiling();
+    const app = buildServer({ config, modelFiles: store, cube });
+    holder.app = app;
+    const withoutCountry = {
+      ...CUSTOMERS,
+      content: 'cubes:\n  - name: customers\n    sql_table: t\n',
+    };
+
+    const response = await publish(app, [withoutCountry]);
+
+    expect(response.statusCode).toBe(422);
+    expect(
+      (response.json() as { errors: { path: string; preAggregation: unknown }[] }).errors.map(
+        ({ path, preAggregation }) => ({ path, preAggregation }),
+      ),
+    ).toEqual([
+      {
+        path: 'cubes/orders.yml',
+        preAggregation: {
+          cube: 'orders',
+          name: 'by_country',
+          unknown: [{ list: 'dimensions', name: 'customers.country' }],
+        },
+      },
+    ]);
+    expect(store.files).toEqual([CUSTOMERS, good]);
+    await app.close();
+  });
+
+  it('does not hold up a change to another file over a rollup already live and unchanged by it', async () => {
+    const broken = withRollup('CUBE.no_such_member');
+    const store = memory([CUSTOMERS, broken]);
+    const { holder, cube } = compiling();
+    const app = buildServer({ config, modelFiles: store, cube });
+    holder.app = app;
+    const titled = { ...CUSTOMERS, content: `${CUSTOMERS.content}    title: Customers\n` };
+
+    const response = await publish(app, [titled]);
+
+    expect(response.statusCode).toBe(200);
+    expect(store.files).toEqual([titled, broken]);
+    await app.close();
+  });
+
+  it('does not hold up a change that mends some of an untouched rollup’s names', async () => {
+    const broken = withRollup('customers.region, customers.segment');
+    const store = memory([CUSTOMERS, broken]);
+    const { holder, cube } = compiling();
+    const app = buildServer({ config, modelFiles: store, cube });
+    holder.app = app;
+    // `region` is added; `segment` was already missing and still is.
+    const withRegion = {
+      ...CUSTOMERS,
+      content: `${CUSTOMERS.content}      - name: region\n        sql: region\n        type: string\n`,
+    };
+
+    const response = await publish(app, [withRegion]);
+
+    expect(response.statusCode).toBe(200);
+    expect(store.files).toEqual([withRegion, broken]);
+    await app.close();
+  });
+});

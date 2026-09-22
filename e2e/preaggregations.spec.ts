@@ -141,9 +141,9 @@ test('a rollup edit Cube refuses is not published', async ({ page }, testInfo) =
 
   /**
    * A time dimension with its granularity cleared: one of the rollup mistakes
-   * Cube's compile refuses. An unknown member it lets through, to fail only
-   * when the rollup is built (research/cube/pre-aggregations.md, "Observed
-   * locally") — the same validation any model change gets, no more.
+   * Cube's compile refuses (research/cube/pre-aggregations.md, "Observed
+   * locally"). An unknown member it lets through is refused by wechart
+   * instead (T207, below).
    */
   await own('granularity').getByLabel('Granularity', { exact: true }).fill('');
   await expect(page.getByRole('textbox', { name: `${path}, as YAML` })).not.toContainText(
@@ -160,6 +160,101 @@ test('a rollup edit Cube refuses is not published', async ({ page }, testInfo) =
     .filter({ hasText: 'preAggregations.by_status.granularity) is required' });
   await expect(problem.locator('.model-problems__where')).toHaveText(path);
   expect(await storedFile(page, path)).toContain('granularity: month');
+});
+
+/**
+ * T207 / AC-189: IF a model change being published leaves a pre-aggregation
+ * naming a measure, dimension, segment, time dimension or index column that
+ * the model does not have, THEN THE SYSTEM SHALL refuse to publish the change
+ * and show each unknown name on that pre-aggregation's row in its cube's
+ * Pre-aggregations tab.
+ * Fails when: a change whose rollup names `CUBE.no_such_member` is published
+ * (the stored file changes), or the refusal does not show
+ * `CUBE.no_such_member` on that rollup's row.
+ *
+ * Against the real Cube, which compiles such a rollup and then fails queries
+ * on its cube (research/cube/pre-aggregations.md, "Observed locally").
+ */
+test('a rollup naming a member the model doesn’t have is refused, and the name shown on its row', async ({
+  page,
+}, testInfo) => {
+  const cube = `e2e_rollup_unknown_${testInfo.project.name}`;
+  const path = await ownCubeFile(page.request, cube, withRollup(cube));
+  await page.goto(`/model/files/${encodeURIComponent(path)}`);
+  const { rollup, own } = await openRollup(page, cube);
+
+  await own('dimensions')
+    .getByLabel('Dimensions', { exact: true })
+    .fill('status, CUBE.no_such_member');
+  await expect(page.getByRole('textbox', { name: `${path}, as YAML` })).toContainText(
+    'CUBE.no_such_member',
+  );
+  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'names members the model doesn’t have' }),
+  ).toBeVisible(PUBLISHED);
+  const unknown = rollup.getByTestId('rollup-unknown');
+  await expect(unknown).toContainText('CUBE.no_such_member (dimensions)');
+  await expect(unknown.locator('[data-icon="error"]')).toHaveCount(1);
+  // Said in the Problems panel too, on the file at the rollup's line (its `- name: by_status`).
+  await expect(
+    page
+      .getByRole('region', { name: 'Problems' })
+      .getByRole('listitem')
+      .filter({ hasText: 'CUBE.no_such_member' })
+      .locator('.model-problems__where'),
+  ).toHaveText(`${path}:22`);
+  expect(await storedFile(page, path)).not.toContain('no_such_member');
+});
+
+/**
+ * T207's review: a change to one file that leaves another file's rollup
+ * naming what the model no longer has is refused too — and that rollup's own
+ * row says so, when its file is opened from the refusal.
+ */
+test('taking away a member another file’s rollup names is refused, and that rollup’s row says so', async ({
+  page,
+}, testInfo) => {
+  const base = `e2e_rollup_base_${testInfo.project.name}`;
+  const user = `e2e_rollup_user_${testInfo.project.name}`;
+  const basePath = await ownCubeFile(
+    page.request,
+    base,
+    `cubes:\n  - name: ${base}\n    sql_table: public.orders\n    dimensions:\n      - name: status\n        sql: status\n        type: string\n      - name: region\n        sql: status\n        type: string\n    measures:\n      - name: count\n        type: count\n`,
+  );
+  const userPath = await ownCubeFile(
+    page.request,
+    user,
+    `cubes:\n  - name: ${user}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n    pre_aggregations:\n      - name: by_region\n        measures: [CUBE.count]\n        dimensions: [${base}.region]\n`,
+  );
+
+  await page.goto(`/model/files/${encodeURIComponent(basePath)}`);
+  const form = page.getByRole('region', { name: `Cube ${base}` });
+  await form.getByRole('tab', { name: /^Dimensions/ }).click();
+  await form.getByRole('button', { name: /^Remove .* region$/ }).click();
+  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'names members the model doesn’t have' }),
+  ).toBeVisible(PUBLISHED);
+  expect(await storedFile(page, basePath)).toContain('name: region');
+
+  // The refusal is about the other file's rollup: followed there, its row says what is missing.
+  await page
+    .getByRole('region', { name: 'Problems' })
+    .getByRole('link', { name: new RegExp(`^${userPath}`) })
+    .click();
+  await expect(page).toHaveURL(new RegExp(encodeURIComponent(userPath)));
+  const userForm = page.getByRole('region', { name: `Cube ${user}` });
+  const tab = userForm.getByRole('tab', { name: /^Pre-aggregations/ });
+  await expect(tab.locator('[data-icon="error"]')).toHaveCount(1);
+  await tab.click();
+  const rollup = userForm
+    .getByRole('list', { name: 'Pre-aggregations' })
+    .locator(':scope > li')
+    .filter({ has: page.locator('.model-member__name', { hasText: /^by_region$/ }) });
+  await expect(rollup.getByTestId('rollup-unknown')).toContainText(`${base}.region (dimensions)`);
 });
 
 /**

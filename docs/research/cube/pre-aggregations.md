@@ -308,6 +308,31 @@ Client types [src-client-types]:
     - a `partition_granularity` with no time dimension.
 
   Mistakes in the second list surface only when the rollup is built or matched, not at publish.
+- **What an unknown member in a rollup does once published, and which spellings Cube resolves (2026-09-22).** These were checked on a throwaway `cubejs/cube:v1.7.42` container (`CUBEJS_DEV_MODE=false`, `NODE_ENV=production`) on the compose network, reading a scratch model with one cube per case over `public.orders`, joined `many_to_one` to `customers`. Each cube was asked `/v1/sql` for `<cube>.count` by `<cube>.status`. All the cases compiled, and `/v1/meta` answered 200.
+  - **An unknown name breaks every query on its cube**, not only the rollup's own build or match. A query that doesn't touch the rollup's members failed too:
+    - a bare `nope` in `dimensions` gave 500 `ReferenceError: nope is not defined`;
+    - `nocube.status` gave 500 `ReferenceError: nocube is not defined`;
+    - `CUBE.nope`, `customers.nope`, `CUBE.nope_seg` in `segments`, and `CUBE.nope_at` as `time_dimension` each gave 500 ``TesseractUserError: Error in `CUBE.nope`: Cannot resolve: nope`` (with that name);
+    - `CUBE.count` in `dimensions` gave 500 `TesseractUserError: Pre-aggregation dimension must be a dimension`;
+    - an index column `CUBE.nope_col` gave 400 `p_x_index.nope_col cannot be resolved. There's no such member or cube.`
+  - **Resolved, and matched by the query that uses them:**
+    - bare `count`/`status`, `CUBE.count`, and the cube's own name (`p_own.count`);
+    - another cube's member, `customers.country`;
+    - a join path, `CUBE.customers.country` or `<cube>.customers.country`. The query that matches it names `customers.country`, and asking for `<cube>.customers.country` in a query gave 400 `'customers' not found for path '<cube>.customers'`;
+    - a `public: false` dimension and the primary key (`CUBE.id`);
+    - index columns `CUBE.status` and `CUBE.ordered_at.month`;
+    - an index column that is a dimension the rollup doesn't list (`CUBE.secret_status`).
+  - **A second round, on the same container:**
+    - `TABLE.count` and `TABLE.status` matched.
+    - `CUBE.ordered_at.day` failed in `dimensions` (500 `Pre-aggregation dimension must be a dimension`) and as `time_dimension` (500 `Pre-aggregation time dimension must be a dimension`).
+    - A `time_dimension` naming a `string` dimension failed the same way.
+    - A quoted `"'<cube>.count'"` in `measures` failed with 500 `'count' not found for path '<cube>.count' in pre-aggregation '<cube>.r'`.
+    - A cube with `extends: <parent>`, whose rollup names the parent's `CUBE.count` and `CUBE.status`, matched.
+    - A dimension listed under `measures` failed (500 `Pre-aggregation measure must be a measure`), and so did one listed under `segments` (500 `Pre-aggregation segment reference must be a member expression`).
+    - A dimension defined through a YAML merge key (`- <<: *status` plus its own `name`) resolved. A rollup naming it was used, and `/v1/sql` read it from the rollup's table.
+
+    What Cube's source says about these spellings is in `rollup-references.md`.
+  - **`/v1/meta` leaves hidden members out**, with or without `?extended=true`. The primary key `id` and the `public: false` dimension weren't listed, although a rollup may name both. So a rollup's names can't be checked against `/v1/meta`. `extended=true` gives each rollup's references as text (`dimensionReferences: "[CUBE.nope]"`), unresolved, and no `segmentReferences`.
 - **Whether a query would use a rollup, and what Cube matches on: `/v1/sql`, `/v1/dry-run`, `/v1/meta?extended=true`.** Each was asked with `?query=` (GET, the signed token) against the seed rollup `monthly_orders.by_status_month` (`count`, `total_amount` by `status`, `ordered_at` by month):
   - **`/v1/sql` → `sql.preAggregations`** lists what Cube will use, each with `preAggregationId` (`monthly_orders.by_status_month`), plus `sql.external: true`. It is `[]` with `external: false` when nothing matches. Seen empty for: `monthly_orders.count` by `ordered_at` **day**, which is finer than the rollup's month; `monthly_orders.count` by `monthly_orders.id`, which isn't in the rollup; and `orders.count` by status, on a cube with no rollups. Seen matching for count by status with no time dimension.
   - **`/v1/dry-run` → `transformedQueries[0]`** holds the facts the matcher uses (§2):

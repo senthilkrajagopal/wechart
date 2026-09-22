@@ -575,6 +575,18 @@ fieldset.model-field > legend {
   line-height: 16px;
 }
 .rollup-facts > div { display: contents; }
+/* The names a publish was refused for (T207, AC-189), under the rollup's facts. */
+.rollup-unknown {
+  grid-column: 1;
+  grid-row: 3;
+  margin: 0;
+  padding: 0 9px 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-primary);
+  overflow-wrap: anywhere;
+}
+.rollup-unknown [data-icon='error'] { color: var(--wc-status-error); }
 /* An index's columns, in their order, each moved by its own ↑ ↓ (T152). */
 .ordered-references { display: grid; gap: 6px; }
 .ordered-references__list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }

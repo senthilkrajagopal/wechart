@@ -2278,6 +2278,31 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - Setting the granularity to `day` puts `granularity: day` in the file's YAML and the rollup's listed facts at once. The stored model still says `month` until it is saved. After "Save & reload Cube" reports Published, the stored file says `day`.
       - Clearing the granularity is refused. Cube's reason, "(preAggregations.by_status.granularity) is required", is placed on the file, and the stored file keeps `month`.
     - **What the same validation doesn't catch.** Cube's compile lets an unknown member in a rollup through: a measure, dimension, time dimension or index column the cube doesn't have. So does a granularity that isn't one, and a partition with no time dimension. These fail only when the rollup is built or matched. Probed through the publish endpoint and recorded in `research/cube/pre-aggregations.md`, "Observed locally". The AC asks for the same validation as any model change, and that is what a rollup gets. Checking a rollup's references in wechart itself would be a new requirement, and is a question for the user.
+- [x] T207 (AC-189) Refuse to publish a rollup that names members the model doesn't have, and name them on its row
+  - Files: `packages/api/src/model/rollupReferences.ts`, `packages/api/src/model/rollupReferences.test.ts`, `packages/api/src/model/publish.ts`, `packages/web/src/workspaces/model/ModelFilePage.tsx`, `packages/web/src/workspaces/model/form/CubeForm.tsx`, `packages/web/src/workspaces/model/preagg/RollupList.tsx`, `e2e/preaggregations.spec.ts`
+  - Failing test: `rollupReferences.test.ts`: every form Cube resolves passes, and each unknown member is named on its rollup (AC-189); `e2e/preaggregations.spec.ts`: a rollup naming `CUBE.no_such_member` is refused, the stored file is unchanged, and the name shows on the rollup's row (AC-189).
+  - Depends on: T149
+  - Added 2026-09-22 at the user's decision ("Yes, refuse to publish"), which answers the question T149's record left open.
+  - **Done 2026-09-22.** Files as built:
+    - API: `model/rollupReferences.ts` (`rollupProblemsOf`) and its test; `model/publish.ts` (`unknownInRollups`, run after Cube compiles the draft); `model/validate.ts` (`CompileError.preAggregation`); `publish.test.ts`; `yaml@2.9.1` added to `package.json`, already researched in `research/yaml.md`.
+    - Web: `preagg/RollupList.tsx` (`stillUnknown`, and `RollupFacts` takes `unknown`) and its test; `form/CubeForm.tsx` (`rollupProblems`, and an icon on the Pre-aggregations tab); `ModelFilePage.tsx`; `ProblemsPanel.tsx`; `shell/styles.ts` (`.rollup-unknown`).
+    - e2e: `e2e/preaggregations.spec.ts` (two tests).
+    - Research: `research/cube/rollup-references.md` (new: Cube's source, on how a rollup's names resolve), and `research/cube/pre-aggregations.md`, "Observed locally" (probes on a throwaway Cube v1.7.42).
+    - **Why the model files, not `/v1/meta`.** Cube's `/v1/meta` leaves hidden members out, even with `?extended=true`, and a rollup may name them: a `public: false` dimension and the primary key both matched. So the check reads the draft's YAML the way Cube's js-yaml does, with `<<` merges resolved. Names are resolved as Cube resolved them in the probes: bare, `CUBE.`, `TABLE.` and the cube's own name are its own cube's; `other.member` is another cube's; a join path (`CUBE.customers.country`) is the member of the cube it ends at; and a cube has what it `extends`. Each name is held to its list's kind: a dimension under `measures` or `segments`, a measure under `dimensions`, and a string dimension as `time_dimension` all failed in Cube. Only an index column may carry a granularity. What wechart can't read gives no refusal, because a false refusal would stop a model Cube serves: a cube defined in code or a template, one extending such a cube, a view, a template-built name, or an index column's alias form.
+    - **Which problems refuse.** Every unknown name in a changed file. In a file the change leaves alone, only names the change newly makes unknown, compared name by name against the live model. So a rollup already broken in an untouched file doesn't hold up an unrelated change, or one that mends some of its names.
+    - **What the user sees.** The outcome line reads "A pre-aggregation names members the model doesn't have, so nothing was published." (wechart's refusal, not Cube's). The Problems panel lists the rollup at its line, without Cube's "Cube:" prefix, and links to the file when the rollup is in another one. The cube's Pre-aggregations tab carries the error icon while a rollup there still writes a refused name. That rollup's row reads "⚠ Not in the model, so not published: `CUBE.no_such_member` (dimensions)", and a name drops off as soon as the rollup stops writing it. The refusal is kept in session storage for the tab, because each model file opens as a page of its own, so a rollup in another file shows it when that file is opened. It is cleared by the next successful publish.
+    - AC-189 ticked, in all three browsers, on the real Cube:
+      - `e2e/preaggregations.spec.ts`, "a rollup naming a member the model doesn't have…": `CUBE.no_such_member` typed into a rollup's dimensions is refused; the stored file doesn't contain it; and the rollup's row shows it with its icon.
+      - "taking away a member another file's rollup names…": removing a dimension that another file's rollup names is refused, and that rollup's row shows the name once its file is opened from the Problems panel. Without the kept refusal this test fails.
+    - **Cold review (one round), verdict FAIL. Fixed:**
+      - YAML `<<` merges were read as plain keys, which gave false refusals. Now read as Cube reads them, and tested with a case that fails without `merge`.
+      - The live-versus-draft comparison was keyed on a rollup's whole list of names. It is now name by name.
+      - A refusal about another file's rollup never reached that rollup's row. It is now kept for the tab, and linked from the Problems panel.
+      - The Problems panel said "Cube:" for wechart's refusal.
+      - The kind checks had no evidence behind them. They were probed, and Cube refuses each.
+      - The tab's icon outlived the fix.
+      - This Files list.
+    - **Suite waits.** Cube compiles each publish's draft in 2.7–7.4 s while the suite runs in parallel, so publish-outcome waits now allow 20 s (`e2e/model-files.ts`, `PUBLISHED`, committed under T142).
 - [x] T150 (AC-144) Say whether a chart's query matches a pre-aggregation, and name the member that prevents it
   - Files: `packages/web/src/editor/AccelerationPanel.tsx`, `packages/api/src/cube/preaggMatch.ts`, `packages/api/src/cube/preaggMatch.test.ts`
   - Failing test: `preaggMatch.test.ts`: a matching query reports the rollup Cube actually uses, and a non-matching one names the member that blocks the match (AC-144).
@@ -2950,3 +2975,4 @@ Each task below measures its components' computed styles in `e2e/design-conforma
 | AC-045 | T043       | AC-090 | T096 | AC-135 | T141 | AC-180 | T001, T185 |
 | AC-181 | T187       | AC-182 | T191 | AC-183 | T192 | AC-184 | T197       |
 | AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205 | AC-188 | T206       |
+| AC-189 | T207       |        |      |        |      |        |            |

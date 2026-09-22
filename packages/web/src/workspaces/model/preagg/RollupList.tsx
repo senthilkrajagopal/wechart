@@ -101,15 +101,61 @@ export function rollupFacts(rollup: Value): [label: string, value: string][] {
 }
 
 /** One rollup's facts, under its name in the cube's list. */
-export function RollupFacts({ rollup }: { rollup: Value }) {
+/** Every string a rollup writes, at any depth: what a refused name may still be. */
+function written(value: unknown, into = new Set<string>()): Set<string> {
+  if (typeof value === 'string') into.add(value);
+  else if (Array.isArray(value)) for (const each of value) written(each, into);
+  else if (typeof value === 'object' && value !== null)
+    for (const each of Object.values(value)) written(each, into);
+  return into;
+}
+
+/** Of the names a publish was refused for, those the rollup still writes. */
+export function stillUnknown(
+  rollup: Value,
+  unknown: readonly { readonly list: string; readonly name: string }[],
+): readonly { readonly list: string; readonly name: string }[] {
+  const writes = written(rollup);
+  return unknown.filter(({ name }) => writes.has(name));
+}
+
+export function RollupFacts({
+  rollup,
+  unknown = [],
+}: {
+  rollup: Value;
+  /**
+   * What a publish was refused for: names this rollup wrote that the model
+   * doesn't have (T207, AC-189). One the rollup no longer writes is not shown.
+   */
+  unknown?: readonly { readonly list: string; readonly name: string }[];
+}) {
+  const still = stillUnknown(rollup, unknown);
   return (
-    <dl className="rollup-facts">
-      {rollupFacts(rollup).map(([label, value]) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          <dd>{value}</dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      <dl className="rollup-facts">
+        {rollupFacts(rollup).map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {still.length === 0 ? null : (
+        <p className="rollup-unknown" data-testid="rollup-unknown">
+          {/* Icon plus label, never colour alone (direction.md rule 3). */}
+          <span data-icon="error" aria-hidden="true">
+            ⚠
+          </span>{' '}
+          Not in the model, so not published:{' '}
+          {still.map(({ list, name }, at) => (
+            <span key={`${list} ${name}`}>
+              {at === 0 ? '' : ', '}
+              <code>{name}</code> ({list})
+            </span>
+          ))}
+        </p>
+      )}
+    </>
   );
 }

@@ -468,6 +468,9 @@ Traces to: `[R4]`, `[docs/inputs §1]`, direction.md §7c; `[research/cube/pre-a
       Fails when: a declared rollup or any of those attributes is missing.
 - [x] AC-143 WHEN the user edits a rollup in the form, THE SYSTEM SHALL write it into the model file as YAML, subject to the same validation and publishing as any model change.
       Fails when: the change is applied to Cube without being written to the model file.
+- [x] AC-189 IF a model change being published leaves a pre-aggregation naming a measure, dimension, segment, time dimension or index column that the model does not have, THEN THE SYSTEM SHALL refuse to publish the change and show each unknown name on that pre-aggregation's row in its cube's Pre-aggregations tab.
+      Fails when: a change whose rollup names `CUBE.no_such_member` is published (the stored file changes), or the refusal does not show `CUBE.no_such_member` on that rollup's row.
+      > Added 2026-09-22 at the user's decision ("Yes, refuse to publish"): Cube compiles a rollup that names members the model doesn't have, and every query on that cube then fails (research/cube/pre-aggregations.md, "Observed locally").
 - [x] AC-144 WHEN the user opens a chart's acceleration panel, THE SYSTEM SHALL say whether the chart's query matches a pre-aggregation, and when it does not, name the member that prevents the match.
       Fails when: the panel reports a match that Cube does not use, or names no reason for a miss.
 - [ ] AC-145 WHEN a rollup is partitioned, THE SYSTEM SHALL list its partitions with their build state and last build time, and allow a rebuild of selected partitions.
@@ -663,7 +666,7 @@ Copied from [requirements.md §7](./requirements.md):
 | Scope: quick calculations plus request flow `[R7]`                                            | AC-047 … AC-052                                                       |
 | Scope: model authoring with form and code `[docs/inputs §4b]`                                 | AC-131 … AC-141                                                       |
 | Scope: generate cubes from database tables `[R7]`                                             | AC-139                                                                |
-| Scope: pre-aggregations `[docs/inputs §1]`                                                    | AC-142 … AC-148                                                       |
+| Scope: pre-aggregations `[docs/inputs §1]`                                                    | AC-142 … AC-148, AC-189                                               |
 | Scope: jobs, builds, schedules, run history `[docs/inputs §1, §7]`                            | AC-149 … AC-156                                                       |
 | Scope: data sources with testing `[docs/inputs §1, §7]`                                       | AC-157 … AC-164                                                       |
 | Scope: security policies and context preview `[docs/inputs §1, §7]`                           | AC-165 … AC-170                                                       |

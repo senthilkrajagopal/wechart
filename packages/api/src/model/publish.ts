@@ -6,7 +6,8 @@ import { CubeError, type CubeClient } from '../cube/client';
 import type { MetaCache } from '../cube/meta-cache';
 import type { Config } from '../config';
 import type { ModelFile, ModelFileStore } from '../server';
-import { compileErrorsOf } from './validate';
+import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
+import { compileErrorsOf, type CompileError } from './validate';
 
 /**
  * The model, served to Cube and published through it (T142, AC-136).
@@ -45,6 +46,50 @@ const versionOf = (files: readonly ModelFile[]) =>
     .update(JSON.stringify(asCube(files)))
     .digest('hex')
     .slice(0, 16);
+
+/**
+ * Rollups naming what the model doesn't have (T207, AC-189): Cube compiles
+ * them, then fails queries on their cube (research/cube/pre-aggregations.md,
+ * "Observed locally"). Those in a changed file are refused, and those
+ * elsewhere that the change breaks; one already live in a file the change
+ * leaves alone does not hold it up.
+ */
+function unknownInRollups(
+  live: readonly ModelFile[],
+  draft: readonly ModelFile[],
+  changed: ReadonlySet<string>,
+): CompileError[] {
+  // Name by name: a change that mends some of a rollup's names leaves the rest as they were.
+  const keyOf = (problem: RollupProblem, { list, name }: { list: string; name: string }) =>
+    JSON.stringify([problem.path, problem.cube, problem.preAggregation, list, name]);
+  const before = new Set(
+    rollupProblemsOf(live).flatMap((problem) =>
+      problem.unknown.map((unknown) => keyOf(problem, unknown)),
+    ),
+  );
+  return rollupProblemsOf(draft)
+    .map((problem) =>
+      changed.has(problem.path)
+        ? problem
+        : {
+            ...problem,
+            unknown: problem.unknown.filter((each) => !before.has(keyOf(problem, each))),
+          },
+    )
+    .filter((problem) => problem.unknown.length > 0)
+    .map((problem) => ({
+      path: problem.path,
+      ...(problem.line === undefined ? {} : { line: problem.line }),
+      message: `Pre-aggregation ${problem.preAggregation} names what the model doesn’t have: ${problem.unknown
+        .map(({ list, name }) => `${name} (${list})`)
+        .join(', ')}. Cube compiles it, then fails queries on ${problem.cube}.`,
+      preAggregation: {
+        cube: problem.cube,
+        name: problem.preAggregation,
+        unknown: problem.unknown,
+      },
+    }));
+}
 
 export function registerModelPublishing(
   app: FastifyInstance,
@@ -172,6 +217,9 @@ export function registerModelPublishing(
       drafts.delete(id);
     }
     if (!held.read) return unread();
+
+    const rollups = unknownInRollups(live, draft, paths);
+    if (rollups.length > 0) return reply.status(422).send({ errors: rollups });
 
     await modelFiles.write(changed);
     // A model the user just published must not look stale to them (AC-137).

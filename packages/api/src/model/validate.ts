@@ -16,6 +16,15 @@ export interface CompileError {
   readonly message: string;
   /** The line, where Cube gives one. */
   readonly line?: number;
+  /**
+   * A rollup naming what the model doesn't have (T207, AC-189): which, and
+   * the names, for its row in the cube's Pre-aggregations tab.
+   */
+  readonly preAggregation?: {
+    readonly cube: string;
+    readonly name: string;
+    readonly unknown: readonly { readonly list: string; readonly name: string }[];
+  };
 }
 
 const COMPILE_ERRORS = /^Error: Compile errors:\n/;

@@ -29,6 +29,15 @@ export interface CubeProblem {
   readonly path: string;
   readonly message: string;
   readonly line?: number;
+  /**
+   * A rollup refused for naming what the model doesn't have (T207, AC-189):
+   * which, and the names, shown on its row in the Pre-aggregations tab.
+   */
+  readonly preAggregation?: {
+    readonly cube: string;
+    readonly name: string;
+    readonly unknown: readonly { readonly list: string; readonly name: string }[];
+  };
 }
 
 /**
@@ -85,12 +94,28 @@ export function ProblemsPanel({
             <li key={`cube ${String(index)}`}>
               <p className="model-problems__row">
                 <ErrorGlyph />
-                <span className="model-problems__message">Cube: {problem.message}</span>
-                <span className="model-problems__where">
-                  {problem.line === undefined
-                    ? problem.path
-                    : `${problem.path}:${String(problem.line)}`}
+                <span className="model-problems__message">
+                  {/* A rollup's unknown names are wechart's refusal, not Cube's (T207's review). */}
+                  {problem.preAggregation === undefined ? 'Cube: ' : ''}
+                  {problem.message}
                 </span>
+                {problem.path === path ? (
+                  <span className="model-problems__where">
+                    {problem.line === undefined
+                      ? problem.path
+                      : `${problem.path}:${String(problem.line)}`}
+                  </span>
+                ) : (
+                  // In another file: a way to it, where its rollup's row says what is wrong.
+                  <a
+                    className="model-problems__where"
+                    href={`/model/files/${encodeURIComponent(problem.path)}`}
+                  >
+                    {problem.line === undefined
+                      ? problem.path
+                      : `${problem.path}:${String(problem.line)}`}
+                  </a>
+                )}
               </p>
             </li>
           ))}
