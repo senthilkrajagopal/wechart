@@ -104,22 +104,25 @@ describe('building a pre-aggregation', () => {
     expect(asked).toBe(3);
   });
 
-  it.each(['missing_partition', 'failure: relation "orders" does not exist', 'not_found'])(
-    'stops following a job that reports %s',
-    async (final) => {
-      const { statusAsks } = serving(['processing', final]);
+  it.each([
+    ['missing_partition', 'Missing partition'],
+    ['failure: relation "orders" does not exist', 'Failed: relation "orders" does not exist'],
+    ['not_found', 'Not found'],
+  ])('stops following a job that reports %s, and says so in words', async (final, words) => {
+    const { statusAsks } = serving(['processing', final]);
 
-      await userEvent.click(
-        await screen.findByRole('button', { name: 'Build monthly_orders.by_status_month' }),
-      );
-      await vi.waitFor(() => {
-        expect(screen.getByTestId('job-state').getAttribute('data-state')).toBe(final);
-      });
-      const asked = statusAsks();
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      expect(statusAsks()).toBe(asked);
-    },
-  );
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Build monthly_orders.by_status_month' }),
+    );
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('job-state').getAttribute('data-state')).toBe(final);
+    });
+    // As the panel shows it, not only as the badge's own test reads it.
+    expect(screen.getByTestId('job-state').textContent).toBe(words);
+    const asked = statusAsks();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(statusAsks()).toBe(asked);
+  });
 
   it('shows every token of a build, one per partition', async () => {
     serving(['done'], ['aaa111', 'bbb222']);

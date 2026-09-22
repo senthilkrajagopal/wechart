@@ -1,3 +1,5 @@
+import { Status } from './StateBadge';
+
 /**
  * The query records in the Jobs workspace (AC-016).
  *
@@ -60,16 +62,16 @@ export function QueryLog({ records }: QueryLogProps) {
               </span>{' '}
               {record.accelerated ? (record.preAggregation ?? 'Accelerated') : 'Live'}
             </td>
-            <td>
+            <td className="query-log__outcome">
+              {/* An icon and words either way (T158, AC-152). */}
               {record.error ? (
-                <span className="query-log__error">
-                  <span data-icon="error" aria-hidden="true">
-                    ⚠
-                  </span>{' '}
-                  {record.error}
-                </span>
+                <Status
+                  kind="err"
+                  label={`Failed: ${record.error}`}
+                  testId={`query-outcome-${String(record.id)}`}
+                />
               ) : (
-                'Succeeded'
+                <Status kind="ok" label="Succeeded" testId={`query-outcome-${String(record.id)}`} />
               )}
             </td>
           </tr>

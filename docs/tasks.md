@@ -2396,7 +2396,12 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - Any raw queue state it passes through: shown as written, waiting.
       - "Asking Cube…" before the first answer.
     - **How.** Each state wears one of the prototype's five status icons (`prototype/ui.js`, `STATUS_SVG`). The icon is hidden from a screen reader, which reads the words. Its colour is the status token's, and never the only sign. The raw state is kept in `data-state`.
-    - **Schedules** are deferred (AC-153 to AC-155; spec F17), so there are none to show. The query log's states already paired an icon with words (T015).
+    - **Schedules** are deferred (AC-153 to AC-155; spec F17), so there are none to show.
+    - **Cold review (one round, 2026-09-22), verdict FAIL. Fixed:**
+      - **The query log's outcomes.** My note said they already paired an icon with words, which was false. "Succeeded" had no icon, and a failure's ⚠ was hidden from a screen reader with no word saying it failed. Both are now the same badge as a job: "Succeeded" with the ok icon, and "Failed: <Cube's message>" with the failed one. `QueryLog.test.tsx` checks both.
+      - **A long failure message wraps** where it stands, in a job or the log, instead of pushing the page sideways.
+      - **The panel's tests check the words** it shows for every finished state, not only the hidden `data-state`.
+      - Left as found: a raw queue state Cube might pass through reads as waiting, which the research doesn't settle. The accessibility sweep doesn't start a build before auditing `/jobs`; the status colours are held to contrast by the token audit.
     - AC-152 ticked. `StateBadge.test.tsx` checks every state's words, and that its icon is of its kind, a different drawing for each kind, and hidden from a screen reader. `e2e/jobs.spec.ts`, against the real Cube in all three browsers, shows the seed rollup's build job as "Done" with the ok icon.
 - [ ] T159 (AC-153) Create a cron schedule, show the next runs and run it at those times
   - Files: `packages/api/src/scheduler/{schedules,worker}.ts`, `packages/web/src/workspaces/schedules/ScheduleForm.tsx`, `packages/api/src/scheduler/schedules.test.ts`

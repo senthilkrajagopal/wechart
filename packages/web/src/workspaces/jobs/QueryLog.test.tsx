@@ -51,6 +51,28 @@ describe('query log in Jobs (AC-016)', () => {
     expect(within(row).getByTestId('duration-1').textContent).toBe('4.3 s');
   });
 
+  /**
+   * T158 / AC-152: THE SYSTEM SHALL show every job and schedule with an icon
+   * and a text label for its state, never colour alone. A query in the log
+   * ended one of two ways, and says which in words, with its icon — the words
+   * read to a screen reader, "Failed" included (T158's review).
+   */
+  it('shows each query’s outcome as an icon and words, never colour alone', () => {
+    render(
+      <QueryLog
+        records={[record(), record({ id: 2, error: "Can't find join path", accelerated: false })]}
+      />,
+    );
+
+    const succeeded = screen.getByTestId('query-outcome-1');
+    expect(succeeded.textContent).toBe('Succeeded');
+    expect(succeeded.querySelector('svg')?.getAttribute('data-icon')).toBe('ok');
+    expect(succeeded.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    const failed = screen.getByTestId('query-outcome-2');
+    expect(failed.textContent).toBe("Failed: Can't find join path");
+    expect(failed.querySelector('svg')?.getAttribute('data-icon')).toBe('err');
+  });
+
   it('says so when nothing has run yet, rather than showing an empty table', () => {
     render(<QueryLog records={[]} />);
 

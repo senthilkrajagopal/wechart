@@ -672,6 +672,10 @@ fieldset.model-field > legend {
   white-space: nowrap;
 }
 .status svg { flex: none; }
+/* A job's or query's failure carries Cube's message, which can be long: it
+   wraps where it stands rather than pushing the page sideways (T158's review). */
+.build-jobs__job .status,
+.query-log__outcome .status { white-space: normal; overflow-wrap: anywhere; align-items: flex-start; }
 .status--ok { color: var(--wc-status-success); }
 .status--warn { color: var(--wc-status-warning); }
 .status--err { color: var(--wc-status-error); }
