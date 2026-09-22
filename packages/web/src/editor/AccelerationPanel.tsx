@@ -50,21 +50,33 @@ export function AccelerationPanel({ query }: { query: Record<string, unknown> })
       </p>
     );
   return (
-    <p className="acceleration-panel" data-testid="acceleration-miss">
-      Not served from a pre-aggregation
-      {miss?.rollup ? (
-        <>
-          ; the nearest is <code>{miss.rollup}</code>.
-        </>
-      ) : (
-        '.'
-      )}
-      {miss === undefined ? null : (
-        <>
-          {' '}
-          Stopped by <code data-testid="acceleration-member">{miss.member}</code>: {miss.reason}
-        </>
-      )}
-    </p>
+    <>
+      <p className="acceleration-panel" data-testid="acceleration-miss">
+        Not served from a pre-aggregation
+        {miss?.rollup ? (
+          <>
+            ; the nearest is <code>{miss.rollup}</code>.
+          </>
+        ) : (
+          '.'
+        )}
+        {miss === undefined ? null : (
+          <>
+            {' '}
+            Stopped by <code data-testid="acceleration-member">{miss.member}</code>: {miss.reason}
+          </>
+        )}
+      </p>
+      {/*
+        T153 / AC-147: under rollup-only mode Cube refuses a query no
+        pre-aggregation serves, rather than falling back to the database
+        (research/cube/pre-aggregations.md §2, "No match"). A miss is exactly
+        such a chart. An icon beside the words, never colour alone.
+      */}
+      <p className="rollup-only-warning" role="status" data-testid="rollup-only-warning">
+        <span className="rollup-only-warning__icon" data-icon="warning" aria-hidden="true" />
+        Depends on the source database: in rollup-only mode, Cube would refuse this chart.
+      </p>
+    </>
   );
 }

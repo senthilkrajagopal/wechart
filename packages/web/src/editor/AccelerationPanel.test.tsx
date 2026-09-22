@@ -74,6 +74,36 @@ describe('a chart’s acceleration panel', () => {
     );
   });
 
+  /**
+   * T153 / AC-147: IF a query would fail under rollup-only mode, THEN THE
+   * SYSTEM SHALL warn on the chart that it depends on the source database.
+   * Fails when: such a chart shows no warning.
+   *
+   * Under rollup-only mode Cube refuses a query no pre-aggregation serves,
+   * rather than falling back to the database (research/cube/
+   * pre-aggregations.md §2, "No match") — so a miss is exactly such a chart.
+   */
+  it('warns that a chart no rollup serves depends on the source database', async () => {
+    answering({
+      matched: null,
+      miss: { rollup: null, member: 'orders.count', reason: 'orders has no pre-aggregations.' },
+    });
+
+    const warning = await screen.findByTestId('rollup-only-warning');
+    expect(warning.getAttribute('role')).toBe('status');
+    expect(warning.querySelector('[data-icon="warning"]')).not.toBeNull();
+    expect(warning.textContent).toBe(
+      'Depends on the source database: in rollup-only mode, Cube would refuse this chart.',
+    );
+  });
+
+  it('gives no such warning to a chart a rollup serves', async () => {
+    answering({ matched: 'monthly_orders.by_status_month' });
+
+    await screen.findByTestId('acceleration-matched');
+    expect(screen.queryByTestId('rollup-only-warning')).toBeNull();
+  });
+
   it('says so when the chart’s cubes have no rollups at all', async () => {
     answering({
       matched: null,

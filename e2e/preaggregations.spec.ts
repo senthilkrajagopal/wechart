@@ -288,3 +288,37 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
     cube,
   );
 });
+
+/**
+ * T153 / AC-147: IF a query would fail under rollup-only mode, THEN THE
+ * SYSTEM SHALL warn on the chart that it depends on the source database.
+ * Fails when: such a chart shows no warning.
+ *
+ * Under rollup-only mode Cube refuses what no pre-aggregation serves
+ * (research/cube/pre-aggregations.md §2): on the real Cube, a chart on
+ * `orders`, which has no rollups, is such a chart, and one the seed rollup
+ * serves is not.
+ */
+test('a chart no rollup serves is warned of depending on the source database', async ({ page }) => {
+  const cube = { timeout: 30_000 };
+  await page.goto('/explore/charts/seed-chart-empty/edit');
+  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByRole('button', { name: 'Results', exact: true }).click();
+  await page.getByTestId('drawer-tab-acceleration').click();
+
+  const warning = page.getByTestId('rollup-only-warning');
+  await expect(warning).toHaveText(
+    'Depends on the source database: in rollup-only mode, Cube would refuse this chart.',
+    cube,
+  );
+  await expect(warning).toHaveAttribute('role', 'status');
+  await expect(warning.locator('[data-icon="warning"]')).toHaveCount(1);
+
+  // A chart the rollup serves: no warning.
+  await page.getByLabel('Cube or view').selectOption({ value: 'monthly_orders' });
+  await page.getByTestId('add-measures').selectOption('monthly_orders.count');
+  await page.getByTestId('add-dimensions').selectOption('monthly_orders.status');
+  await expect(page.getByTestId('acceleration-matched')).toBeVisible(cube);
+  await expect(warning).toHaveCount(0);
+});

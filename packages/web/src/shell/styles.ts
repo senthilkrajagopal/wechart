@@ -447,6 +447,20 @@ button.model-problems__row { cursor: pointer; }
   font-size: 12px;
 }
 .model-editor__warnbar-text { flex: 1; min-width: 240px; }
+/* A chart no rollup serves, in its acceleration panel (T153, AC-147): the
+   warning bar's tint, and its icon beside the words. */
+.rollup-only-warning {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--wc-status-warning-icon) 16%, var(--wc-bg-surface));
+  color: var(--wc-text-primary);
+  font-size: 12px;
+}
+.rollup-only-warning__icon::before { content: '⚠'; color: var(--wc-status-warning); }
 /* What uses the members a save changes (T147): two short lists in the bar. */
 .model-references__lead { margin: 0 0 6px; }
 .model-references__head { margin: 6px 0 2px; font-size: 12px; font-weight: 600; }

@@ -2292,10 +2292,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - `e2e/preaggregations.spec.ts`.
     - **Why rows that move.** An index's column order is its sort order in Cube Store, so the columns are no longer a "member, member" text to retype. Each is a row with ↑, ↓ and ×; the first can't go up and the last can't go down. A column is added by name, and the columns are written in the order shown. Whether an index is aggregate stays the index's own Type (`regular` or `aggregate`), written as `type: aggregate`.
     - AC-146 ticked. `e2e/preaggregations.spec.ts` runs on a cube file of the browser's own, with a rollup indexed on `status, customer_id`, in all three browsers, against the real Cube. Moving `customer_id` up and setting Type to aggregate shows `customer_id, status` in the form and `type: aggregate` in the YAML. After "Save & reload Cube" reports Published, the stored file has the columns in that order and `type: aggregate`.
-- [ ] T153 (AC-147) Warn on a chart that would fail under rollup-only mode
+- [x] T153 (AC-147) Warn on a chart that would fail under rollup-only mode
   - Files: `packages/web/src/editor/AccelerationPanel.tsx`, `packages/api/src/cube/rollupOnly.test.ts`
   - Failing test: `rollupOnly.test.ts`: a chart whose query has no matching rollup carries a warning that it depends on the source database (AC-147).
   - Depends on: T150
+  - **Done 2026-09-21.** Files as built: `editor/AccelerationPanel.tsx` and its test (in place of the planned `rollupOnly.test.ts`, since the rule needs no code of its own in the API); `shell/styles.ts`; `e2e/preaggregations.spec.ts`.
+    - **Which charts.** Under rollup-only mode Cube refuses a query no pre-aggregation serves, rather than falling back to the database (`research/cube/pre-aggregations.md` §2, "No match"). So a chart would fail there exactly when Cube's own plan (`/v1/sql`, T150) uses no pre-aggregation. Its acceleration panel then says: "Depends on the source database: in rollup-only mode, Cube would refuse this chart." It is a status with a warning icon beside the words, never colour alone, tinted like the model editor's warning bar. A chart a rollup serves gets no warning.
+    - AC-147 ticked: `e2e/preaggregations.spec.ts`, in all three browsers against the real Cube. A chart on `orders`, which has no rollups, carries the warning. A chart the seed rollup serves does not.
 - [x] T154 (AC-148) Refresh a chart past wechart's cached result and show the new data-as-of time
   - Files: `packages/web/src/tiles/refresh.ts`, `packages/web/src/tiles/refresh.test.ts`
   - Failing test: `refresh.test.ts`: "Refresh now" re-queries Cube bypassing the cached result and the displayed as-of time advances (AC-148).

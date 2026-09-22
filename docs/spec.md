@@ -463,7 +463,7 @@ Traces to: `[R4]`, `[docs/inputs §1]`, direction.md §7c; `[research/cube/pre-a
       Fails when: a partition is missing, or a rebuild applies to partitions the user did not select.
 - [x] AC-146 WHEN the user defines an index on a rollup, THE SYSTEM SHALL let the columns be ordered and mark aggregate indexes as such.
       Fails when: the column order cannot be changed, or an aggregate index is written as a regular one.
-- [ ] AC-147 IF a query would fail under rollup-only mode, THEN THE SYSTEM SHALL warn on the chart that it depends on the source database.
+- [x] AC-147 IF a query would fail under rollup-only mode, THEN THE SYSTEM SHALL warn on the chart that it depends on the source database.
       Fails when: such a chart shows no warning.
 - [x] AC-148 WHEN the user asks to refresh a chart's data, THE SYSTEM SHALL re-query Cube bypassing wechart's cached result and show the new data-as-of time.
       Fails when: the previous result is shown again with an unchanged timestamp.
