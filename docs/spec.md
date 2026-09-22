@@ -453,6 +453,17 @@ Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[researc
 Purpose: make acceleration visible and editable, because data volumes vary widely.
 Traces to: `[R4]`, `[docs/inputs §1]`, direction.md §7c; `[research/cube/pre-aggregations.md]`.
 
+> **Status, 2026-09-21: AC-145 deferred, at the user's direction.**
+> Cube Core has no documented API that lists a rollup's partitions with their
+> build state and last build time (`research/cube/refresh-jobs-caching.md` §C).
+> There are two sources, and the user chose to defer both rather than depend on either:
+> - Cube's undocumented `/cubejs-system/*` routes, which need
+>   `CUBEJS_PLAYGROUND_AUTH_SECRET` and may change without notice;
+> - Cube Store's MySQL interface, which has no authentication and exposes
+>   destructive commands.
+>
+> The user's words: "defer both as per recommendation".
+
 - [x] AC-142 WHEN the user opens a cube's pre-aggregations, THE SYSTEM SHALL list each rollup with its measures, dimensions, time dimension, granularity, partition granularity and indexes.
       Fails when: a declared rollup or any of those attributes is missing.
 - [x] AC-143 WHEN the user edits a rollup in the form, THE SYSTEM SHALL write it into the model file as YAML, subject to the same validation and publishing as any model change.
@@ -481,8 +492,14 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
 > - a scheduler ("Core has no scheduler API"), with its ownership labels and
 >   suspension.
 >
-> Starting a build, the queue, the state badges and deployment health
-> (AC-149, AC-151, AC-152, AC-156) are Cube's own APIs and stay.
+> Starting a build, the state badges and deployment health (AC-149, AC-152,
+> AC-156) are Cube's own APIs and stay.
+>
+> **AC-151 deferred too, 2026-09-21, at the user's direction.** Cube's
+> documented jobs API starts builds and reports on tokens, but it can't list the
+> queue or cancel an entry. Only the undocumented `/cubejs-system/*` routes and
+> Cube Store's MySQL interface can, and the user deferred both (see F16's
+> status note, AC-145).
 
 - [ ] AC-149 WHEN the user starts a build for a pre-aggregation, THE SYSTEM SHALL submit it to Cube, show the job token, and poll until the job reports done, missing partition, failure or not found.
       Fails when: the job's terminal state is never shown, or the token is absent.

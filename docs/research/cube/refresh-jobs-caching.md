@@ -252,6 +252,12 @@ Worker behavior:
   - `not_found`: token not in the cache. Job records are stored under `PRE_AGG_JOB_<token>` with a TTL of 86400 s ([src-gateway][], [src-refresh-scheduler][])
   - `pre_agg_not_found`: the pre-aggregation is no longer in the compiled model ([src-gateway][])
   - Any other raw queue status string is passed through unchanged ([src-gateway][]).
+- **Observed locally (2026-09-21, compose Cube 1.7.42 with `contextToApiScopes` adding `jobs`, and the seed rollup `monthly_orders.by_status_month`, partitioned by year):**
+  - `post` with `contexts: [{ securityContext: {} }]`, `timezones: ["UTC"]` and `preAggregations: ["monthly_orders.by_status_month"]` → HTTP 200 and one token, since the data spans one year's partition.
+  - `get` with that token → `[{ token, table: "prod_pre_aggregations.monthly_orders_by_status_month20260101_…", status: "processing", selector: { cubes, preAggregations, contexts, timezones, dataSources } }]`, then `status: "done"` about 1.5 s later.
+  - `get` with an unknown token → HTTP 200 and `[{ token, status: "not_found" }]`.
+  - `post` naming a pre-aggregation the model doesn't have → HTTP 400 and `{ error: "A user's selector doesn't match any of the pre-aggregations defined in the data model." }`.
+  - `get`'s `selector.contexts` echoes the security context each token was built for.
 - **Example request** ([doc-rest-ref][]):
   ```json
   {
@@ -413,7 +419,7 @@ The caller did not ask for a comparison.
 
 ## Open questions / unverified
 
-- **Decision for the user:** may wechart depend on the undocumented `/cubejs-system/v1/pre-aggregations/*` routes, or on the raw Cube Store MySQL interface, for the pre-aggregation catalog, partitions, preview, build queue and cancel? Both are the only Core sources for these features. The first is an unstable API; the second has no authentication and exposes destructive commands.
+- **Decided by the user, 2026-09-21: neither.** The question was whether wechart may depend on the undocumented `/cubejs-system/v1/pre-aggregations/*` routes, or on the raw Cube Store MySQL interface, for the pre-aggregation catalog, partitions, preview, build queue and cancel. The first is an unstable API; the second has no authentication and exposes destructive commands. The user's answer: "defer both as per recommendation". AC-145 (partitions) and AC-151 (queue) are deferred, and wechart uses only the documented jobs API for builds.
 - UNVERIFIED: the HTTP status code of the `UserError` returned for a non-matching selector or an invalid job payload. I read the handler but not the `UserError` status mapping.
 - UNVERIFIED: whether `action:'post'` without `selector` passes validation (the schema marks it `.optional()`) and then fails in the handler, which dereferences `selector.contexts` ([src-query][], [src-gateway][]). Needs a runtime test.
 - UNVERIFIED: whether job status `get` works across per-tenant orchestrators (Gotcha 5). Needs an integration test.

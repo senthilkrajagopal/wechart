@@ -2289,6 +2289,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/workspaces/model/preagg/Partitions.tsx`, `packages/api/src/routes/preagg.ts`, `packages/api/src/routes/partitions.test.ts`
   - Failing test: `partitions.test.ts`: every partition is listed with its build state and last build time, and a rebuild targets exactly the selected partitions (AC-145).
   - Depends on: T148
+  - **Deferred by the user, 2026-09-21** ("defer both as per recommendation"). Not to be started unless the user asks. The only sources are Cube's undocumented `/cubejs-system/*` routes and Cube Store's unauthenticated MySQL interface (spec F16 status note).
 - [x] T152 (AC-146) Define an index with ordered columns and an aggregate flag
   - Files: `packages/web/src/workspaces/model/preagg/IndexEditor.tsx`, `packages/web/src/workspaces/model/preagg/IndexEditor.test.tsx`
   - Failing test: `IndexEditor.test.tsx`: column order can be changed and is preserved in the written YAML, and an aggregate index is written as `type: aggregate` (AC-146).
@@ -2344,6 +2345,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/workspaces/jobs/BuildQueue.tsx`, `packages/api/src/routes/jobs.ts`, `packages/api/src/jobs/queue.test.ts`
   - Failing test: `queue.test.ts`: every queued build appears with its pre-aggregation, partition, state and token, and cancelling removes it from the queue (AC-151).
   - Depends on: T155
+  - **Deferred by the user, 2026-09-21** ("defer both as per recommendation"). Not to be started unless the user asks. Listing Cube's queue and cancelling an entry both need the same undocumented or unauthenticated sources as T151 (spec F17 status note).
 - [ ] T158 (AC-152) Pair every job and schedule state with an icon and a text label
   - Files: `packages/web/src/workspaces/jobs/StateBadge.tsx`, `packages/web/src/workspaces/jobs/StateBadge.test.tsx`
   - Failing test: `StateBadge.test.tsx`: every job and schedule state renders an icon and a text label, and none is conveyed by colour alone (AC-152).
