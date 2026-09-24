@@ -1174,7 +1174,35 @@ main:has(.dashboard) {
    nor scrolls it, so it stretches the document and the window gains a second
    scrollbar behind the canvas's own. WebKit showed it first (AC-067's e2e
    test measured window.scrollY at 22 there). */
-.dashboard__canvas { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: auto; }
+.dashboard__canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  /* What scrolls into view stops below the fixed band (T217's review). */
+  scroll-padding-top: var(--dashboard-band, 0px);
+}
+/* The page tabs and filter bar, held at the top of the canvas while the tiles
+   scroll beneath (AC-196): the prototype's fixed .dash-tabs and .filterbar
+   rows. Opaque, so a tile scrolling under them does not show through. */
+.dashboard__fixed {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--wc-bg-page);
+}
+.filter-bar__hint { color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
+/* A page with no tiles (AC-207): the prototype's centred sentence. */
+.dashboard-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 24px;
+  color: var(--wc-text-secondary);
+  text-align: center;
+}
+.dashboard-empty p { margin: 0; }
 
 /* The settings gear (AC-069). In the header in both view and edit mode, so it
    sits between the title and whatever the mode puts on the right. */

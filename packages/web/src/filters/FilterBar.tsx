@@ -157,15 +157,25 @@ function FilterWidgetFor({
   }
 }
 
-/**
- * Nothing at all for a dashboard with no filters — not even a query for the
- * model, which a dashboard without filters has no use for.
- */
+/** The dashboard's filter bar: its filters, then the interaction group. */
 export function FilterBar(props: FilterBarProps) {
-  // A bar with neither filters nor chips is a rule across the top of the page
-  // saying nothing. With chips it has something to say, even where the
-  // dashboard carries no filters of its own (AC-119).
-  return props.filters.length === 0 && props.chips === undefined ? null : <Filters {...props} />;
+  /**
+   * Always a bar (AC-196): the dashboard's filters and the interaction group,
+   * which says how to mark or filter while nothing is set. With no filters it
+   * is only that group — and asks nothing of the model, which a dashboard
+   * without filters has no use for.
+   */
+  if (props.filters.length > 0) return <Filters {...props} />;
+  return (
+    <section aria-label="Filters" className="filter-bar">
+      {props.chips === undefined ? null : (
+        <>
+          <span className="filter-bar__spacer" />
+          {props.chips}
+        </>
+      )}
+    </section>
+  );
 }
 
 function Filters({

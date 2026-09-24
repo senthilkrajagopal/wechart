@@ -641,7 +641,7 @@ Explore:
 
 Dashboards:
 
-- [ ] AC-196 WHILE a dashboard is open, THE SYSTEM SHALL keep its header, page tabs and filter bar fixed above the scrolling tiles, and show the filter bar at all times, with a one-line hint on how to mark or filter while nothing is set.
+- [x] AC-196 WHILE a dashboard is open, THE SYSTEM SHALL keep its header, page tabs and filter bar fixed above the scrolling tiles, and show the filter bar at all times, with a one-line hint on how to mark or filter while nothing is set.
       Fails when: the page tabs or the filter bar scroll out of view with the tiles, or the filter bar appears only once something is set.
 - [x] AC-197 WHEN the user opens a dashboard's settings, THE SYSTEM SHALL let the user change its name, its folder and its description under General, and Explore SHALL show that description beneath the dashboard's name.
       Fails when: the folder or the description cannot be changed there, or a saved description does not appear in Explore.
@@ -663,7 +663,7 @@ Dashboards:
       Fails when: Duplicate or Delete must be scrolled to, or an item is missing.
 - [ ] AC-206 WHILE a dashboard is in edit mode, THE SYSTEM SHALL mark every tile as editable at rest — its drag grip visible and its outline dashed — title the page "Editing ‹name›", and offer "+ Page tab" in the tab row.
       Fails when: a tile's grip is visible only on hover, or either the title or "+ Page tab" is missing.
-- [ ] AC-207 WHEN a dashboard or one of its page tabs has no tiles, THE SYSTEM SHALL show a sentence saying so with a way to start editing, and SHALL show the page-tab strip.
+- [x] AC-207 WHEN a dashboard or one of its page tabs has no tiles, THE SYSTEM SHALL show a sentence saying so with a way to start editing, and SHALL show the page-tab strip.
       Fails when: an empty dashboard or tab renders a blank canvas, or the tab strip is hidden.
 - [ ] AC-208 THE SYSTEM SHALL render a markdown tile's headings, emphasis, lists and line breaks, and no raw HTML (`[R7]`).
       Fails when: a heading marker such as "##" or an emphasis marker is shown as text, or an HTML tag in the text renders as HTML.

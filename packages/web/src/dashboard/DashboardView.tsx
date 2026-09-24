@@ -1202,6 +1202,25 @@ let counter = 0;
  */
 const mintChartId = () => crypto.randomUUID();
 
+/**
+ * The filter bar's hint while nothing is marked or cross-filtered (AC-196):
+ * the prototype's sentences, by mode, and what is off while editing.
+ */
+function interactionHint(
+  mode: 'markings' | 'crossFilter',
+  editing: boolean,
+  previewing: boolean,
+): string {
+  if (mode === 'crossFilter') {
+    if (editing) return 'Cross-filtering is off while editing';
+    if (previewing) return 'Cross-filtering is off while previewing';
+    return 'Click a bar, slice or panel to cross-filter';
+  }
+  if (editing) return 'Marking is off while editing';
+  if (previewing) return 'Marking is off while previewing';
+  return 'Click, drag or Alt+drag to mark · Ctrl/⌘ adds or toggles · Esc unmarks';
+}
+
 /** One empty list, so "nothing selected" is the same value on every render. */
 const NO_SELECTIONS: readonly CrossSelection[] = [];
 
@@ -2839,43 +2858,38 @@ export function DashboardView({
                */
               filterBar={
                 <FilterBar
-                  // The cross-filters in effect, at the end of the bar
-                  // (AC-119, direction.md §7).
-                  {...(crossFiltering && crossSelections.length > 0
-                    ? {
-                        chips: (
-                          <CrossFilterChips
-                            selections={crossSelections}
-                            onClear={clearCrossFilter}
-                            memberTitle={memberTitle}
-                            tileName={tileNameOf}
+                  /**
+                   * The right-hand group (direction.md §7): the cross-filters
+                   * in effect (AC-119), or a chip per non-empty marking
+                   * (AC-098) — and, while nothing is set, the one-line hint
+                   * on how to mark or filter (AC-196), so the bar is always
+                   * there and says something.
+                   */
+                  chips={
+                    crossFiltering && crossSelections.length > 0 ? (
+                      <CrossFilterChips
+                        selections={crossSelections}
+                        onClear={clearCrossFilter}
+                        memberTitle={memberTitle}
+                        tileName={tileNameOf}
+                      />
+                    ) : marking && markings.some((each) => markedCountOf(each.id) > 0) ? (
+                      <>
+                        {markings.map((each) => (
+                          <MarkChip
+                            key={each.id}
+                            marking={each}
+                            colour={markingColour(each.slot, theme)}
+                            predicate={markingOf(marks, each.id)}
                           />
-                        ),
-                      }
-                    : {})}
-                  {...(marking && markings.some((each) => markedCountOf(each.id) > 0)
-                    ? {
-                        /**
-                         * A chip per non-empty marking, naming it and what it
-                         * holds (AC-098) — the same right-hand group the
-                         * cross-filter chips use in the other mode. Only where
-                         * something is marked: a bar of nothing is a rule
-                         * across the page saying nothing.
-                         */
-                        chips: (
-                          <>
-                            {markings.map((each) => (
-                              <MarkChip
-                                key={each.id}
-                                marking={each}
-                                colour={markingColour(each.slot, theme)}
-                                predicate={markingOf(marks, each.id)}
-                              />
-                            ))}
-                          </>
-                        ),
-                      }
-                    : {})}
+                        ))}
+                      </>
+                    ) : (
+                      <span className="filter-bar__hint">
+                        {interactionHint(interactions.mode, session.editing, preview !== undefined)}
+                      </span>
+                    )
+                  }
                   filters={session.document.filters ?? []}
                   dashboard={session.document}
                   chartTitleOf={chartTitleOf}
@@ -2896,6 +2910,7 @@ export function DashboardView({
               }
               session={session}
               charts={charts}
+              canEdit={preview === undefined}
               markSaid={markSaid}
               {...(marking ? { markKeys: { onKey: onTileMarkKey, itemsOn: markableItemsOf } } : {})}
               // A duplicate's chart is made from the stored one and what it
@@ -2992,6 +3007,7 @@ function DashboardPages({
   duplicateFrom,
   markSaid = '',
   markKeys,
+  canEdit = true,
 }: {
   session: EditSession<DashboardDocument>;
   charts: TileCharts;
@@ -3043,11 +3059,35 @@ function DashboardPages({
   where: { selected: string | null; addTarget: string | null; pageId: string };
   onAim: (next: { selected: string | null; addTarget: string | null }) => void;
   onOpenPage: (pageId: string) => void;
+  /** Whether the dashboard can be edited here — not while previewing (AC-207). */
+  canEdit?: boolean;
 }) {
   const { document, editing } = session;
   // Which page is open is owned above, so the Add panel adds to the page the
   // user is actually looking at.
   const open = where.pageId;
+
+  /**
+   * The fixed band's height, given to the canvas as its scroll padding
+   * (T217's review): a tile scrolled or focused into view would otherwise
+   * come to rest under the band, hidden (WCAG 2.4.11).
+   */
+  const band = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = band.current;
+    const canvas = node?.parentElement;
+    if (node === null || canvas === null || canvas === undefined) return undefined;
+    const measure = () => {
+      canvas.style.setProperty('--dashboard-band', `${String(node.offsetHeight)}px`);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const watching = new ResizeObserver(measure);
+    watching.observe(node);
+    return () => {
+      watching.disconnect();
+    };
+  }, []);
 
   /**
    * The URL naming a tile the editor is not open on — a reload, or the
@@ -3384,7 +3424,13 @@ function DashboardPages({
 
   return (
     <>
-      {document.pages.length > 1 ? (
+      {/**
+       * The page tabs and the filter bar, held at the top of the canvas while
+       * the tiles scroll beneath (AC-196): the prototype's fixed rows, so a
+       * marking's chips stay in sight on the way down to a details tile. The
+       * tab strip shows even for one page (AC-207), as the prototype's does.
+       */}
+      <div className="dashboard__fixed" ref={band}>
         <div role="tablist" aria-label="Pages" className="page-tabs">
           {document.pages.map((page) => (
             <button
@@ -3402,9 +3448,9 @@ function DashboardPages({
             </button>
           ))}
         </div>
-      ) : null}
 
-      {filterBar}
+        {filterBar}
+      </div>
 
       <div
         data-testid="dashboard-page"
@@ -3417,6 +3463,19 @@ function DashboardPages({
             containerKey={pageKey(showing.id)}
             affordances={affordances}
           />
+        ) : null}
+        {/* A page with nothing on it says so, and how to begin (AC-207). While
+            editing, the canvas's own drop zones and the Add panel are that. */}
+        {!editing && (showing?.items.length ?? 0) === 0 ? (
+          <div className="dashboard-empty">
+            <p>Nothing here yet. Edit the dashboard to add charts.</p>
+            {/* Not while previewing, where the dashboard cannot be edited. */}
+            {canEdit ? (
+              <button type="button" className="btn-primary" onClick={session.edit}>
+                Start editing
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </div>
 

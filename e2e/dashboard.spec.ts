@@ -1382,3 +1382,70 @@ test('a settings save that fails keeps the page, the entry and the reason', asyn
   await expect(page.getByTestId('dashboard-settings')).toBeVisible();
   await expect(name).toHaveValue(`Renamed ${unique}`);
 });
+
+/**
+ * T217 / AC-196: WHILE a dashboard is open, THE SYSTEM SHALL keep its header,
+ * page tabs and filter bar fixed above the scrolling tiles, and show the
+ * filter bar at all times, with a one-line hint on how to mark or filter while
+ * nothing is set.
+ * `Fails when: the page tabs or the filter bar scroll out of view with the
+ * tiles, or the filter bar appears only once something is set.`
+ */
+test('the page tabs and filter bar stay above the tiles as they scroll, the bar hinting how to mark', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 520 });
+  await open(page);
+  const tabs = page.getByRole('tablist', { name: 'Pages' });
+  const bar = page.getByRole('region', { name: 'Filters' });
+  // Nothing set, and the bar is there, saying how to mark.
+  await expect(bar).toContainText(
+    'Click, drag or Alt+drag to mark · Ctrl/⌘ adds or toggles · Esc unmarks',
+  );
+
+  const canvas = page.getByTestId('canvas-scroll');
+  await expect(page.getByTestId('chart-canvas').first()).toBeVisible();
+  const scrolled = await canvas.evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+    return node.scrollTop;
+  });
+  // The tiles really scrolled, and the tabs and the bar did not go with them.
+  expect(scrolled).toBeGreaterThan(100);
+  await expect(tabs).toBeInViewport({ ratio: 1 });
+  await expect(bar).toBeInViewport({ ratio: 1 });
+  const barTop = (await bar.boundingBox())?.y ?? 0;
+  expect(barTop).toBeGreaterThanOrEqual(48);
+  // A tile scrolled into view stops below the band, not under it.
+  const [padding, band] = await canvas.evaluate((node) => [
+    getComputedStyle(node).scrollPaddingTop,
+    `${String((node.querySelector('.dashboard__fixed') as HTMLElement).offsetHeight)}px`,
+  ]);
+  expect(padding).toBe(band);
+});
+
+/**
+ * T217 / AC-207: WHEN a dashboard or one of its page tabs has no tiles, THE
+ * SYSTEM SHALL show a sentence saying so with a way to start editing, and
+ * SHALL show the page-tab strip.
+ * `Fails when: an empty dashboard or tab renders a blank canvas, or the tab
+ * strip is hidden.`
+ */
+test('an empty dashboard says so, with its tab strip and a way to start editing', async ({
+  page,
+  request,
+}) => {
+  const unique = String(Date.now());
+  const created = (await (
+    await request.post('http://localhost:4100/api/documents', {
+      data: { kind: 'dashboard', title: `Empty ${unique}`, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  await page.goto(`/explore/dashboards/${created.id}`);
+  await expect(page.getByRole('heading', { name: `Empty ${unique}` })).toBeVisible();
+
+  await expect(page.getByRole('tablist', { name: 'Pages' }).getByRole('tab')).toHaveCount(1);
+  const empty = page.getByTestId('dashboard-page');
+  await expect(empty).toContainText('Nothing here yet. Edit the dashboard to add charts.');
+  await empty.getByRole('button', { name: 'Start editing' }).click();
+  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
+});

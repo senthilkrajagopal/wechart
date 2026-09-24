@@ -197,7 +197,8 @@ describe('adding a filter', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
 
-    expect(screen.queryByRole('region', { name: 'Filters' })).toBeNull();
+    // The bar stays — it is always shown (AC-196) — with no filter on it.
+    expect(within(bar()).queryAllByTestId(/^filter-/)).toHaveLength(0);
   });
 
   it('says a filter goes to the filter bar while its kinds are offered', async () => {
