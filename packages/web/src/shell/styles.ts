@@ -74,6 +74,15 @@ button:not([class]) {
   min-height: 32px;
   padding: 0 12px;
 }
+/* Every link, in the accent token (AC-005). With no rule, a link nothing had
+   styled drew in the browser's #0000ee — 1.63:1 on a dark surface — and its
+   visited purple likewise; the palette's results and Security's dashboard
+   list were both such links.
+   Wrapped in :where() so it has no specificity: a bare "a:visited" outranks a
+   one-class rule, and turned a visited Primary link tile's text into accent on
+   its accent fill (T210's review). Any component's own link colour wins. */
+:where(a),
+:where(a:visited) { color: var(--wc-accent); }
 button:hover:not(:disabled):not([aria-disabled='true']) { background: var(--wc-bg-hover); }
 button:disabled,
 button[aria-disabled='true'] { opacity: 0.5; cursor: not-allowed; }
@@ -2357,6 +2366,23 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   font-size: var(--wc-text-xs-size);
   line-height: var(--wc-text-xs-line);
 }
+
+/* The results, in the text tokens (AC-005). They were the browser's default
+   link blue — #0000ee, 1.63:1 on the dark palette — because nothing styled
+   them, and the audit only ever saw the palette closed. */
+.palette__results ul { margin: 0; padding: 0; list-style: none; }
+.palette__results a {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: var(--wc-text-primary);
+  text-decoration: none;
+}
+.palette__results a:hover,
+.palette__results a:focus-visible { background: var(--wc-bg-hover); }
+.palette__kind { color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
 
 :focus-visible {
   outline: 2px solid var(--wc-accent);

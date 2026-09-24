@@ -1,8 +1,9 @@
-import { echarts, itemClicks, optionFor } from '@wechart/charts';
+import { echarts, itemClicks, optionFor, themed } from '@wechart/charts';
 import { seriesOf, type RenderSpec } from '@wechart/core';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 
 import type { ClickedItem } from '../dashboard/crossfilter/clicked';
+import { useThemeName } from '../shell/ThemeProvider';
 
 /**
  * A drawn chart (AC-037).
@@ -28,6 +29,8 @@ export interface ChartCanvasProps {
 const DEFAULT_HEIGHT = 320;
 
 export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: ChartCanvasProps) {
+  /** The page's theme, which the chart is drawn in (AC-211). */
+  const theme = useThemeName();
   const node = useRef<HTMLDivElement | null>(null);
   const instance = useRef<ReturnType<typeof echarts.init> | null>(null);
   /** The latest, read by a click without rebinding the handlers each render. */
@@ -162,8 +165,9 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
 
     // notMerge: a chart type change replaces the option outright. Merging
     // would leave the previous type's series in place beside the new one.
-    chart.setOption(optionFor(spec), true);
-  }, [spec]);
+    // In the theme the page is in (AC-211), and again when it switches.
+    chart.setOption(themed(optionFor(spec), theme), true);
+  }, [spec, theme]);
 
   return (
     /**

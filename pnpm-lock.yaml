@@ -196,6 +196,9 @@ importers:
       '@wechart/core':
         specifier: workspace:*
         version: link:../packages/core
+      '@wechart/ui':
+        specifier: workspace:*
+        version: link:../packages/ui
     devDependencies:
       '@axe-core/playwright':
         specifier: 4.13.0

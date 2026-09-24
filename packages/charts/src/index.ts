@@ -11,6 +11,7 @@ export { pieOption, isPieType, type PieType } from './series/pie';
 export { treemapOption, isTreemapType } from './series/treemap';
 export { heatmapOption, isHeatmapType } from './series/heatmap';
 export { DRAWABLE_TYPES, isDrawable, optionFor } from './optionFor';
+export { themed, type ChartTheme } from './themed';
 export { applyAxes, axesOf, type AxesSettings, type AxisSettings, type NumberFormat } from './axis';
 export { assignColours, OTHER_COLOUR, type ColourAssignment } from './colorAssignment';
 export { legendFor, seriesCount } from './legend';
