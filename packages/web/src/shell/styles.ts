@@ -391,7 +391,9 @@ main { padding: var(--wc-surface-padding); }
 
 /* The Model workspace's files (T137, AC-131): each file a card, and under it
    the cubes and views it defines, their members grouped by kind. */
-.model-workspace h1 { margin: 0 0 16px; font-size: var(--wc-text-xl-size); line-height: var(--wc-text-xl-line); }
+/* Spacing only: its size is .workspace-title's, the page title every
+   workspace shares (AC-231). */
+.model-workspace h1 { margin: 0 0 16px; }
 .model-files { display: grid; gap: 12px; max-width: 960px; }
 .model-file {
   padding: 12px 16px;
@@ -669,10 +671,9 @@ button.model-problems__row { cursor: pointer; }
   color: var(--wc-text-secondary);
   cursor: not-allowed;
 }
-.model-file-page__path {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 16px !important;
-}
+/* The file's path is its title (AC-231): the page-title size and weight, in
+   the monospace a path is written in. */
+.model-file-page__path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .model-form {
   max-width: 960px;
   margin-bottom: 16px;
@@ -782,13 +783,15 @@ fieldset.model-field > legend {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.explore__tree,
-.explore__contents {
+.explore__tree {
   padding: 8px;
   border: 1px solid var(--wc-border-subtle);
   border-radius: 6px;
   background: var(--wc-bg-surface);
 }
+/* The contents sit on the page, and their table is the card (AC-231), as the
+   prototype draws it: a card around the card read as a frame in a frame. */
+.explore__contents { display: grid; gap: 12px; min-width: 0; }
 
 .folder-tree ul { margin: 0; padding-left: 12px; list-style: none; }
 .folder-tree > ul { padding-left: 0; }
@@ -813,11 +816,47 @@ fieldset.model-field > legend {
   font-weight: var(--wc-text-sm-strong-weight);
 }
 
+/* A workspace's page title (AC-231): the prototype's .admin-main h1, direction
+   §3's text-lg. It was the browser's default h1, 28 px at 700. */
+.workspace-title {
+  margin: 0;
+  font-size: var(--wc-text-lg-size);
+  line-height: var(--wc-text-lg-line);
+  font-weight: var(--wc-text-lg-weight);
+}
+
+/* A workspace's table (AC-231): the prototype's .card + .grid-table — a card,
+   a header band, 34 px rows, 12 px cells, tabular numerals (direction rule 1).
+   It sat bare on the page with 14 px cells and proportional figures.
+   The corners are rounded on the corner cells rather than clipped with
+   overflow: a table that clips becomes the scroller a sticky header sticks
+   to (T240), and browsers need not honour overflow on a table box at all. */
 .folder-contents,
 .query-log {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  font-variant-numeric: tabular-nums;
 }
+.folder-contents thead th,
+.query-log thead th { height: 28px; background: var(--wc-bg-subtle); }
+.folder-contents thead tr:first-child > :first-child,
+.query-log thead tr:first-child > :first-child { border-top-left-radius: 5px; }
+.folder-contents thead tr:first-child > :last-child,
+.query-log thead tr:first-child > :last-child { border-top-right-radius: 5px; }
+.folder-contents tbody tr:last-child > :first-child,
+.query-log tbody tr:last-child > :first-child { border-bottom-left-radius: 5px; }
+.folder-contents tbody tr:last-child > :last-child,
+.query-log tbody tr:last-child > :last-child { border-bottom-right-radius: 5px; }
+.folder-contents tbody td,
+.folder-contents tbody th,
+.query-log tbody td,
+.query-log tbody th { height: 34px; font-size: var(--wc-text-xs-size); }
+.folder-contents tbody tr:last-child > *,
+.query-log tbody tr:last-child > * { border-bottom: 0; }
 
 .folder-contents th,
 .folder-contents td,
@@ -829,13 +868,34 @@ fieldset.model-field > legend {
   font-weight: var(--wc-text-sm-weight);
   vertical-align: top;
 }
+.folder-contents th,
+.folder-contents td,
+.query-log th,
+.query-log td { padding: 4px 8px; vertical-align: middle; }
 
 .folder-contents thead th,
 .query-log thead th {
   font-weight: var(--wc-text-xs-strong-weight);
   font-size: var(--wc-text-xs-size);
-  color: var(--wc-text-secondary);
+  /* The prototype's header band text: primary, on bg-subtle. */
+  color: var(--wc-text-primary);
 }
+
+/* A workspace page that waits on a later phase (AC-233), and the prototype's
+   info bar that says so: an icon, the sentence, on the accent tint. */
+.admin-page { display: grid; gap: 12px; }
+.info-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 720px;
+  padding: 8px 12px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-text-primary);
+}
+.info-bar p { margin: 0; }
 
 .folder-contents__empty,
 .query-log__empty { color: var(--wc-text-secondary); }

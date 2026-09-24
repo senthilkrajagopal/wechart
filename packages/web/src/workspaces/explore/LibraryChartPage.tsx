@@ -109,7 +109,7 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
 
   return (
     <section className="chart-page">
-      <h1>Chart</h1>
+      <h1 className="workspace-title">Chart</h1>
       <p data-testid="selected-object">{chartId}</p>
 
       <h2>Used by</h2>

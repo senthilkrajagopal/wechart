@@ -3359,10 +3359,11 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Files: `packages/web/src/workspaces/model/ModelPage.tsx`, `packages/web/src/workspaces/model/validate.ts`, `e2e/model.spec.ts`
   - Failing test: `e2e/model.spec.ts`: an edit marks the header and the tree row, Discard restores the file, leaving asks first; `type: summ` lists a problem at its line (AC-226, AC-227).
   - Depends on: T234
-- [ ] T238 (AC-231, AC-233) Give every workspace page its title style and table cards, and give Schedules and Data sources their frame
-  - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/router/routes.tsx`, `packages/web/src/workspaces/admin/AdminPage.tsx`, `e2e/admin.spec.ts`
+- [x] T238 (AC-231, AC-233) Give every workspace page its title style and table cards, and give Schedules and Data sources their frame
+  - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/router/routes.tsx`, `packages/web/src/workspaces/admin/DeferredPage.tsx`, `packages/web/src/shell/{AppShell,WorkspaceSwitcher}.tsx`, the Jobs, Security, Model file and library chart pages' titles, `packages/ui/src/tokens.ts`, `e2e/admin.spec.ts`
   - Failing test: `e2e/admin.spec.ts`: Jobs' and Security's titles are 20 px/600 and their tables use tabular numerals; Schedules and Data sources show a title and a deferral note; "/sources" opens Data sources (AC-231, AC-233).
   - Depends on: none
+  - Done 2026-09-24: `.workspace-title` (text-lg, 20/26/600) on every workspace page and the pages inside one (Model file, library chart, chart editor); Explore's contents table and the `.query-log` tables are cards with a bg-subtle header band, 34 px rows, 12 px cells and tabular numerals — corners rounded on the corner cells, not clipped, so T240's sticky headers are not captured by the table; Schedules and Data sources are `DeferredPage`s with an info-bar note; `/sources` redirects; Not found marks no workspace current. Review fixed: a stray `.folder-contents,` selector that gave Explore's table the title's 20 px and dropped its width; three titles left at the browser's 28/700; the row-height assertion tightened to exactly 34 on a one-line row, the band compared with bg-subtle; text-primary on bg-accent-soft added to the token audit.
 - [ ] T239 (AC-228, AC-229) Give Jobs a docked inspector, and pre-aggregation rows their state, trigger and Model link
   - Files: `packages/web/src/workspaces/jobs/BuildPanel.tsx`, `packages/web/src/workspaces/jobs/JobsPage.tsx`, `e2e/jobs.spec.ts`
   - Failing test: `e2e/jobs.spec.ts`: selecting a pre-aggregation fills the full-height pane with its state, trigger, Build and "Open in Model"; the row shows its refresh key and links to Model (AC-228, AC-229).

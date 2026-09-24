@@ -183,6 +183,8 @@ export const FILLED_SURFACE_PAIRS = [
   { foreground: 'text-on-accent', background: 'accent' },
   // A selected row and a chart's icon chip: accent on its tint.
   { foreground: 'accent', background: 'bg-accent-soft' },
+  // The info bar's sentence (AC-233): primary text on the accent tint.
+  { foreground: 'text-primary', background: 'bg-accent-soft' },
   // A dashboard's icon chip and the preview banner: crossfilter on its tint.
   { foreground: 'crossfilter', background: 'bg-crossfilter-soft' },
 ] as const satisfies readonly {

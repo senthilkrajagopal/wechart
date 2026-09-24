@@ -25,7 +25,8 @@ export const WORKSPACES = [
 export type WorkspaceId = (typeof WORKSPACES)[number]['id'];
 
 export interface WorkspaceSwitcherProps {
-  readonly current: WorkspaceId;
+  /** None on a page in no workspace, such as Not found. */
+  readonly current?: WorkspaceId | undefined;
 }
 
 export function WorkspaceSwitcher({ current }: WorkspaceSwitcherProps) {

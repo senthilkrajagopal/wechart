@@ -504,7 +504,7 @@ export function ModelFilePage({ path }: { path: string }) {
   return (
     <div className="model-workspace model-file-page">
       {/* It names the object the URL selected, as every deep link does (AC-002). */}
-      <h1 className="model-file-page__path" data-testid="selected-object">
+      <h1 className="workspace-title model-file-page__path" data-testid="selected-object">
         {path}
       </h1>
       {files.isPending ? (

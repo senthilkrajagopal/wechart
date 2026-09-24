@@ -12,7 +12,8 @@ import { WorkspaceSwitcher, type WorkspaceId } from './WorkspaceSwitcher';
  * than added later (AC-176).
  */
 export interface AppShellProps {
-  readonly workspace: WorkspaceId;
+  /** The workspace the page belongs to; none for a page that is in none. */
+  readonly workspace?: WorkspaceId;
   readonly children?: React.ReactNode;
 }
 

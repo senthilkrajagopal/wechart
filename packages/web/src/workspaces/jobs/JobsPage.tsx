@@ -47,7 +47,7 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
   return (
     <div className="jobs-workspace">
       <div className="jobs-workspace__head">
-        <h1>Jobs</h1>
+        <h1 className="workspace-title">Jobs</h1>
         {/* Cube's health and the refresh worker's state (T162, AC-156). */}
         <Health />
       </div>

@@ -21,6 +21,7 @@ import { StateLine } from '../shell/StatusIcon';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { JobsPage } from '../workspaces/jobs/JobsPage';
 import { SecurityPage } from '../workspaces/security/SecurityPage';
+import { DataSourcesPage, SchedulesPage } from '../workspaces/admin/DeferredPage';
 import { FileList } from '../workspaces/model/FileList';
 import { ModelFilePage } from '../workspaces/model/ModelFilePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
@@ -42,8 +43,9 @@ import { WORKSPACES, type WorkspaceId } from '../shell/WorkspaceSwitcher';
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
   notFoundComponent: () => (
-    <AppShell workspace="explore">
-      <h1>Not found</h1>
+    // In no workspace: marking Explore current told the user they were in it.
+    <AppShell>
+      <h1 className="workspace-title">Not found</h1>
       <p>Nothing here matches that address.</p>
     </AppShell>
   ),
@@ -58,16 +60,28 @@ const indexRoute = createRoute({
   },
 });
 
+/** The prototype's name for Data sources' address, kept working (AC-233). */
+const sourcesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sources',
+  beforeLoad: () => {
+    throw redirect({ to: '/data-sources' });
+  },
+});
+
 const WORKSPACE_CONTENT: Partial<Record<string, () => React.ReactNode>> = {
   explore: () => <ExplorePage />,
   // The queries wechart has issued (AC-016), which T015 built and never mounted.
   jobs: () => <JobsPage />,
   // The model's access policies, as declared (T171, AC-165).
   security: () => <SecurityPage />,
+  // Their frames and what they are for; managing either waits (AC-233).
+  schedules: () => <SchedulesPage />,
+  'data-sources': () => <DataSourcesPage />,
   // The model's files and what each defines (T137, AC-131).
   model: () => (
     <div className="model-workspace">
-      <h1>Model</h1>
+      <h1 className="workspace-title">Model</h1>
       <FileList />
     </div>
   ),
@@ -245,7 +259,7 @@ function ChartEditorSurface() {
 
   return (
     <AppShell workspace="explore">
-      <h1>Chart editor</h1>
+      <h1 className="workspace-title">Chart editor</h1>
       <p data-testid="selected-object">{chartId}</p>
       {view.kind === 'loading' ? (
         <StateLine kind="run" testId="editor-loading">
@@ -292,6 +306,7 @@ const modelFileRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  sourcesRoute,
   ...workspaceRoutes,
   dashboardRoute,
   // Before chartRoute: the editor path is more specific than /charts/$objectId.

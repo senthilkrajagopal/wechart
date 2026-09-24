@@ -44,7 +44,7 @@ export function SecurityPage() {
   return (
     <div className="security-layout">
       <div className="security-workspace">
-        <h1>Access policies</h1>
+        <h1 className="workspace-title">Access policies</h1>
         {/* Whether Cube refuses requests nobody signed (T175, AC-169): said
             whatever becomes of the model's files, and in one place, so it is
             not put up again — and announced again — when they arrive. */}
