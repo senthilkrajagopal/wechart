@@ -103,6 +103,30 @@ session needs to know about:
 
 ## 4. Next steps, in the order I would take them
 
+0. **FIRST — the prototype-alignment pass (user's decision, 2026-09-24).** The
+   user compared the running Explore with `docs/design/prototype/` and found
+   it structurally different; asked when to fix it, they chose "now, before
+   more features … and after that continue with the handoff". Requirements R7
+   accepted the prototype's **structure, layout and interaction** (only
+   colours, type and density were left open), so these are deviations from an
+   accepted design. Method, per the ui-design skill's Phase D:
+   - Serve the prototype: `python3 -m http.server 5500` in
+     `docs/design/prototype/`, then `http://127.0.0.1:5500/index.html#explore`
+     (hash routes: `#explore #model #sources #jobs #schedules #security`;
+     dashboards and the chart editor open from Explore). The app is on :5400.
+   - One `design-critic` per surface group, **run one at a time** — they share
+     one Chrome-DevTools browser. Groups: shell + Explore; dashboard view, edit
+     and settings; chart editor; Model; Data sources, Jobs, Schedules and
+     Security. Each report is saved to
+     `docs/design/critiques/2026-09-24-<surface>.md`.
+   - Each finding is classed `AC` (breaks a criterion → fix), `STRUCTURE`
+     (deviates from the accepted prototype → fix, since the structure was
+     accepted) or `VISUAL` (tokens only → fix where direction.md is specific,
+     otherwise list for the user).
+   - **AC-019 was reopened** as part of this: it was ticked on the ⌘K palette,
+     but its trigger is "the Explore search box", which does not exist.
+   Then continue with step 1.
+
 1. **The cheap marking ACs that are probably already true and need only e2e
    evidence:** AC-106 (edit-mode click selects the tile, changes no marking —
    `marking` is already gated on `!sessionEditing`) and AC-120 (no marking
