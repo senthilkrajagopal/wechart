@@ -527,11 +527,15 @@ function LoadedDashboard({
     const data = meta.data;
     return (cube: string) => primaryKeyOf(data, cube);
   }, [meta.data]);
-  // Fields by the titles the filter bar shows, to name filters in words.
-  const memberTitle = useMemo(() => {
-    const titles = new Map(allMembers(meta.data).map((member) => [member.name, member.title]));
-    return (name: string) => titles.get(name);
-  }, [meta.data]);
+  /**
+   * Each member's title from the model: to name filters in words, and every
+   * member a chart shows — a legend, a tooltip, a table's headers (AC-220).
+   */
+  const titles = useMemo(
+    () => Object.fromEntries(allMembers(meta.data).map((member) => [member.name, member.title])),
+    [meta.data],
+  );
+  const memberTitle = useMemo(() => (name: string) => titles[name], [titles]);
 
   return (
     <>
@@ -562,6 +566,7 @@ function LoadedDashboard({
         reach={reach}
         primaryKey={primaryKey}
         memberTitle={memberTitle}
+        titles={titles}
         formats={formats}
         errors={charts.data?.errors ?? {}}
         loading={charts.isPending}

@@ -11,9 +11,11 @@ import { useState } from 'react';
  */
 export interface WhyThisChartProps {
   readonly explanation: Explanation;
+  /** Each member's title from the model: the trace names fields by them (AC-220). */
+  readonly titles?: Readonly<Record<string, string>>;
 }
 
-export function WhyThisChart({ explanation }: WhyThisChartProps) {
+export function WhyThisChart({ explanation, titles = {} }: WhyThisChartProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -36,7 +38,7 @@ export function WhyThisChart({ explanation }: WhyThisChartProps) {
             <tbody>
               {explanation.signature.map((field) => (
                 <tr key={field.name} data-testid={`trace-field-${field.name}`}>
-                  <th scope="row">{field.name}</th>
+                  <th scope="row">{titles[field.name] ?? field.name}</th>
                   <td>{field.kind}</td>
                   <td>{field.cardinality ?? 'unknown'}</td>
                 </tr>

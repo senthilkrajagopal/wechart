@@ -45,6 +45,13 @@ describe('a KPI with a value', () => {
     expect(screen.getByTestId('kpi-label').textContent).toBe(COUNT);
   });
 
+  // T232 / AC-220: by its title from the model, never "orders.count".
+  it('names the measure by its title where the model gives one', () => {
+    render(<Kpi spec={spec({ titles: { [COUNT]: 'Orders Count' } })} />);
+
+    expect(screen.getByTestId('kpi-label').textContent).toBe('Orders Count');
+  });
+
   it('reads the value Cube sent, which is a string over JSON', () => {
     render(<Kpi spec={spec({ rows: [{ [COUNT]: '80' }] })} />);
 

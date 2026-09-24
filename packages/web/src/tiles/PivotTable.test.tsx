@@ -205,3 +205,33 @@ describe('a spec that cannot be pivoted', () => {
     expect(screen.getByTestId('pivot-empty').textContent).toContain('dimension');
   });
 });
+
+/**
+ * T232 / AC-220: THE SYSTEM SHALL name every member by its title … table
+ * headers … and never by its internal name.
+ */
+describe('a pivot of two measures (AC-220)', () => {
+  it('heads each measure’s column by its title', () => {
+    const AMOUNT = 'orders.amount';
+    render(
+      <PivotTable
+        spec={spec({
+          encoding: { row: [REGION], column: [STATUS], y: [COUNT, AMOUNT] },
+          rows: [
+            { [REGION]: 'east', [STATUS]: 'paid', [COUNT]: 1, [AMOUNT]: 10 },
+            { [REGION]: 'west', [STATUS]: 'paid', [COUNT]: 2, [AMOUNT]: 20 },
+          ],
+          titles: { [COUNT]: 'Orders Count', [AMOUNT]: 'Orders Amount' },
+        })}
+      />,
+    );
+
+    const table = screen.getByRole('table');
+    const headers = within(table)
+      .getAllByRole('columnheader')
+      .map((header) => header.textContent);
+    expect(headers).toContain('Orders Count');
+    expect(headers).toContain('Orders Amount');
+    expect(headers).not.toContain(COUNT);
+  });
+});

@@ -51,7 +51,7 @@ import { signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { FieldList } from './FieldList';
 import { Wells } from './Wells';
-import { cubesFrom, formatsOf, membersOf, type Member } from './fields';
+import { cubesFrom, formatsOf, membersOf, titlesOf, type Member } from './fields';
 
 /**
  * The chart editor (AC-025, AC-026).
@@ -221,6 +221,11 @@ export function ChartEditor({
    * axis, in the tooltip and in the table without anyone setting it.
    */
   const formats = useMemo(() => formatsOf(meta.data), [meta.data]);
+  /**
+   * Each member's title (AC-220), so the preview's legend and tooltips, the
+   * results' headers and the trace name members as the model does.
+   */
+  const titles = useMemo(() => titlesOf(meta.data), [meta.data]);
 
   const query = useMemo(() => toCubeQuery(spec), [spec]);
 
@@ -371,10 +376,10 @@ export function ChartEditor({
     () =>
       isEmpty(spec) || shownType === null || missing.length > 0 || !result.isSuccess
         ? undefined
-        : compile(previewDocument, { rows, chartType: shownType, formats }),
+        : compile(previewDocument, { rows, chartType: shownType, formats, titles }),
     // `missing` is derived from `spec` and `shownType` alone.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [spec, shownType, result.isSuccess, previewDocument, rows, formats],
+    [spec, shownType, result.isSuccess, previewDocument, rows, formats, titles],
   );
   /** Its series, each with how a reader knows it: a member's title, or the value. */
   const drawnSeries = useMemo(() => {
@@ -382,13 +387,14 @@ export function ChartEditor({
     try {
       return seriesOf(drawnSpec).series.map((one) => ({
         name: one.name,
-        title: available.find((member) => member.name === one.name)?.title ?? one.name,
+        // Own keys only: a split's value may be "constructor" (T232's review).
+        title: (Object.hasOwn(titles, one.name) ? titles[one.name] : undefined) ?? one.name,
       }));
     } catch {
       // A type `seriesOf` does not lay out — a pie, a KPI — lists none here.
       return [];
     }
-  }, [drawnSpec, available]);
+  }, [drawnSpec, titles]);
 
   /** The chart's cube or view, as the model titles it. */
   const sourceTitle =
@@ -550,7 +556,7 @@ export function ChartEditor({
                     <ChartTile
                       spec={
                         drawnSpec ??
-                        compile(previewDocument, { rows, chartType: shownType, formats })
+                        compile(previewDocument, { rows, chartType: shownType, formats, titles })
                       }
                       {...(chartHeight === undefined ? {} : { height: chartHeight })}
                       // Held here, not in the tile: the tile unmounts whenever
@@ -580,6 +586,7 @@ export function ChartEditor({
             query={query}
             underlyingQuery={underlyingQuery}
             formats={formats}
+            titles={titles}
             granularities={granularitiesOf(spec.timeDimensions, spec.granularities)}
             open={drawer.open}
             view={drawer.view}
@@ -636,6 +643,7 @@ export function ChartEditor({
               <Wells
                 spec={spec}
                 available={available}
+                titles={titles}
                 dragging={dragging}
                 onAdd={(well, member) => setSpec((current) => addToWell(current, well, member))}
                 onRemove={(well, member) =>
@@ -720,7 +728,7 @@ export function ChartEditor({
                     </button>
                   ) : null}
 
-                  <WhyThisChart explanation={explanation} />
+                  <WhyThisChart explanation={explanation} titles={titles} />
 
                   {/*
                     Sorting (AC-044). "Cube's order" is the default and is not

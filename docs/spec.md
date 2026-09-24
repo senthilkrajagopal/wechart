@@ -692,9 +692,9 @@ Library charts and the chart editor:
       Fails when: a combo, or a pie drawn with more than 6 slices, shows no warning.
 - [x] AC-219 THE SYSTEM SHALL offer in the chart editor's Customize tab the axis settings — title, label rotation, include zero, logarithmic scale, gridlines, minimum and maximum — the legend's visibility and position, each series' colour and visibility and whether series stack, data labels, and the number format.
       Fails when: the legend's position, data labels or "include zero" cannot be set.
-- [ ] AC-220 THE SYSTEM SHALL name every member by its title from the model wherever a person reads it — legends, tooltips, table headers, well pills, marking chips and the "Why this chart?" trace — and never by its internal name.
+- [x] AC-220 THE SYSTEM SHALL name every member by its title from the model wherever a person reads it — legends, tooltips, table headers, well pills, marking chips and the "Why this chart?" trace — and never by its internal name.
       Fails when: a legend, table header, pill, chip or trace shows a name such as "orders.count".
-- [ ] AC-221 WHEN a pie or donut is drawn, THE SYSTEM SHALL list every slice in its legend.
+- [x] AC-221 WHEN a pie or donut is drawn, THE SYSTEM SHALL list every slice in its legend.
       Fails when: a slice has no legend entry.
 
 Model workspace:

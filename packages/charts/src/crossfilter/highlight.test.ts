@@ -107,6 +107,28 @@ describe('a fade of everything that is not the selection', () => {
     ]);
   });
 
+  // T232's review: a split pie's slices are named "a · b"; each is matched by
+  // the values it carries, by its category or by its split.
+  it('fades a split pie’s slices by the values they carry, category or split', () => {
+    const REGION = 'orders.region';
+    const splitPie: RenderSpec = {
+      chartType: 'pie',
+      encoding: { x: ['orders.status'], y: ['orders.count'], color: [REGION] },
+      rows: [
+        { 'orders.status': 'shipped', [REGION]: 'North', 'orders.count': 3 },
+        { 'orders.status': 'processing', [REGION]: 'South', 'orders.count': 5 },
+      ],
+    };
+    const opacities = (highlight: NonNullable<RenderSpec['highlight']>) =>
+      seriesOf(optionFor({ ...splitPie, highlight }))[0]?.data.map((each) => opacityOf(each) ?? 1);
+
+    expect(opacities({ member: 'orders.status', value: 'shipped', kind: 'fade' })).toEqual([
+      1,
+      FADED_OPACITY,
+    ]);
+    expect(opacities({ member: REGION, value: 'South', kind: 'fade' })).toEqual([FADED_OPACITY, 1]);
+  });
+
   it('fades the series that do not match, where the selection is the series', () => {
     const split: RenderSpec = {
       chartType: 'stackedBar',

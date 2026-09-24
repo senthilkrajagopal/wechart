@@ -102,6 +102,19 @@ export function membersOf(meta: unknown, cubeName: string): Member[] {
 }
 
 /**
+ * Each shown member's title, for every cube and view (AC-220): what a legend,
+ * a tooltip, a table's headers and the "Why this chart?" trace call it — a
+ * chart may name members of more than one cube, so not only the selected one.
+ */
+export function titlesOf(meta: unknown): Record<string, string> {
+  const titles: Record<string, string> = {};
+  for (const cube of cubesFrom(meta))
+    for (const member of membersOf(meta, cube.name))
+      if (!(member.name in titles)) titles[member.name] = member.title;
+  return titles;
+}
+
+/**
  * The `format` each member declares in the model, for every cube (AC-046).
  *
  * Across all cubes rather than the selected one: a chart names its members in

@@ -1,4 +1,5 @@
 import {
+  columnTitleOf,
   formatValue,
   markRowClick,
   matchesPredicate,
@@ -148,8 +149,9 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
         <thead>
           <tr aria-rowindex={1}>
             {columns.map((column) => (
+              // By its title (AC-220), never "orders.count".
               <th scope="col" key={column}>
-                {column}
+                {columnTitleOf(column, spec.titles)}
               </th>
             ))}
           </tr>

@@ -153,6 +153,23 @@ describe('the wells’ pills, Filters and Top N (AC-216)', () => {
     expect(screen.getByRole('button', { name: 'Remove Orders Count from Metrics' })).toBeTruthy();
   });
 
+  // T232's review / AC-220: a member of a cube other than the one chosen —
+  // a saved chart over joined cubes — by its title too.
+  it('names a member of another cube by its title', () => {
+    render(
+      <Wells
+        spec={{ ...spec, dimensions: ['customers.country'] }}
+        available={[measure, timeDimension]}
+        titles={{ 'customers.country': 'Customers Country' }}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+    const pill = screen.getByTestId('in-dimensions-customers.country');
+    expect(pill.textContent).toContain('Customers Country');
+    expect(pill.textContent).not.toContain('customers.country');
+  });
+
   it('changes a time field’s grain from its pill', async () => {
     const onGranularity = vi.fn();
     render(

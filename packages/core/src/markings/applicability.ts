@@ -36,6 +36,8 @@ export type Applicability =
 export function markingApplicability(
   predicate: MarkingPredicate,
   resolvableMembers: readonly string[],
+  /** A member's title from the model, which the label names it by (AC-220). */
+  titleOf?: (member: string) => string | undefined,
 ): Applicability {
   const wanted: string[] = [];
 
@@ -66,6 +68,8 @@ export function markingApplicability(
   return {
     linked: false,
     missing,
-    label: `Not linked to this marking: this tile cannot reach ${missing.join(', ')}.`,
+    label: `Not linked to this marking: this tile cannot reach ${missing
+      .map((member) => titleOf?.(member) ?? member)
+      .join(', ')}.`,
   };
 }

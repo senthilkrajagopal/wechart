@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from '../render-spec';
-import { csvOf, tableColumnsOf } from './csv';
+import { columnTitleOf, csvOf, tableColumnsOf } from './csv';
 
 /**
  * T177 / AC-171: WHEN the user exports a chart or a marked-rows view, THE
@@ -36,6 +36,41 @@ describe('the columns a tile’s table heads', () => {
         { 'orders.status': 'x', 'orders.id': '7' },
       ]),
     ).toEqual(['orders.status', 'orders.ordered_at.day', 'orders.ordered_at', 'orders.id']);
+  });
+});
+
+/**
+ * T232 / AC-220: THE SYSTEM SHALL name every member by its title from the
+ * model wherever a person reads it — … table headers … — and never by its
+ * internal name.
+ * `Fails when: a legend, table header, pill, chip or trace shows a name such
+ * as "orders.count".`
+ */
+describe('a column’s title (AC-220)', () => {
+  const titles = { 'orders.count': 'Orders Count', 'orders.ordered_at': 'Orders Ordered at' };
+
+  it('is its member’s title', () => {
+    expect(columnTitleOf('orders.count', titles)).toBe('Orders Count');
+  });
+
+  it('is a time member’s title with its grain, for the column Cube names by both', () => {
+    expect(columnTitleOf('orders.ordered_at.month', titles)).toBe('Orders Ordered at (month)');
+  });
+
+  it('is its name only where the model gives no title', () => {
+    expect(columnTitleOf('orders.city', titles)).toBe('orders.city');
+    expect(columnTitleOf('orders.count')).toBe('orders.count');
+  });
+
+  it('heads a CSV’s columns as its table does, a raw number’s among them (AC-171)', () => {
+    const spec: RenderSpec = {
+      ...SPEC,
+      measures: ['orders.count'],
+      titles: { 'orders.status': 'Orders Status', 'orders.count': 'Orders Count' },
+    };
+    expect(lines(csvOf(spec))[0]).toBe(
+      'Orders Status,orders.region,Orders Count,Orders Count (raw)',
+    );
   });
 });
 

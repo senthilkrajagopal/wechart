@@ -1,4 +1,5 @@
 import {
+  columnTitleOf,
   formatValue,
   granularityOf,
   UNDERLYING_ROW_LIMIT,
@@ -41,6 +42,8 @@ export interface ResultsDrawerProps {
   readonly formats?: MemberFormats;
   /** Each time member's granularity in the chart's query (AC-188). */
   readonly granularities?: MemberGranularities;
+  /** Each member's title from the model, for the tables' headers (AC-220). */
+  readonly titles?: Readonly<Record<string, string>>;
   readonly onOpenChange: (open: boolean) => void;
   readonly onViewChange: (view: DrawerView) => void;
 }
@@ -79,12 +82,15 @@ function RowTable({
   testId,
   formats,
   granularities,
+  titles,
   capped = false,
 }: {
   rows: readonly Record<string, unknown>[];
   testId: string;
   formats: MemberFormats;
   granularities: MemberGranularities;
+  /** Each member's title from the model, for the headers (AC-220). */
+  titles: Readonly<Record<string, string>>;
   /**
    * True when the rows came back from a capped query, so a full page is
    * evidence of more rows rather than of the total.
@@ -118,8 +124,9 @@ function RowTable({
         <thead>
           <tr>
             {columns.map((column) => (
+              // By its title (AC-220), never "orders.count".
               <th scope="col" key={column}>
-                {column}
+                {columnTitleOf(column, titles)}
               </th>
             ))}
           </tr>
@@ -146,6 +153,7 @@ export function ResultsDrawer({
   view,
   formats = {},
   granularities = {},
+  titles = {},
   onOpenChange,
   onViewChange,
 }: ResultsDrawerProps) {
@@ -198,6 +206,7 @@ export function ResultsDrawer({
                 testId="drawer-result-rows"
                 formats={formats}
                 granularities={granularities}
+                titles={titles}
               />
             </div>
           ) : null}
@@ -222,6 +231,7 @@ export function ResultsDrawer({
                   testId="drawer-underlying-rows"
                   formats={formats}
                   granularities={ungrouped(granularities)}
+                  titles={titles}
                   capped
                 />
               )}

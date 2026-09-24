@@ -157,4 +157,4 @@ export {
   type MarkingSlot,
 } from './markings/model';
 
-export { csvOf, exportNoteOf, rowsText, tableColumnsOf } from './export/csv';
+export { columnTitleOf, csvOf, exportNoteOf, rowsText, tableColumnsOf } from './export/csv';

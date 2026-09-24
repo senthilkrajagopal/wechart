@@ -1,7 +1,7 @@
 import type { RenderSpec } from '@wechart/core';
 import { describe, expect, it } from 'vitest';
 
-import { clickedValue } from './clicked';
+import { clickedName, clickedValue } from './clicked';
 
 /**
  * T123 / AC-117: what a click stands for, which is the first half of "clicks
@@ -72,5 +72,30 @@ describe('the member a clicked item stands for', () => {
     expect(
       clickedValue(spec('kpi', { y: ['orders.count'] }), { name: 'orders.count' }),
     ).toBeUndefined();
+  });
+});
+
+/**
+ * T232's review: a slice of a pie over two dimensions is named "shipped ·
+ * North" for its reader (AC-221), and carries the category it stands for
+ * apart — which a click must select by (AC-087, AC-117), or its marking and
+ * cross-filter match no row.
+ */
+describe('the name a click on an item carries', () => {
+  it('is a slice’s own category where it carries one', () => {
+    expect(
+      clickedName({ name: 'shipped · North', data: { category: 'shipped', split: 'North' } }),
+    ).toBe('shipped');
+    expect(
+      clickedValue(spec('pie', split), {
+        name: clickedName({ name: 'shipped · North', data: { category: 'shipped' } }),
+      }),
+    ).toEqual({ member: 'orders.status', value: 'shipped' });
+  });
+
+  it('is the item’s name otherwise', () => {
+    expect(clickedName({ name: 'shipped', data: 12 })).toBe('shipped');
+    expect(clickedName({ name: 'shipped', data: [0, 1] })).toBe('shipped');
+    expect(clickedName({})).toBe('');
   });
 });

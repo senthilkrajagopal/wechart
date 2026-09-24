@@ -1183,11 +1183,11 @@ test('a save failure does not hand the scrollbar back to the window', async ({ p
  * formats were not supplied: the same currency measure read "$…" where it was
  * built and a bare number on every tile.
  */
-/** The first row's value in the named column of a tile's table view. */
-async function tableValue(tile: import('@playwright/test').Locator, member: string) {
+/** The first row's value in the column a tile's table view heads by that title (AC-220). */
+async function tableValue(tile: import('@playwright/test').Locator, title: string) {
   await tile.getByTestId('toggle-table-view').click();
   const headers = await tile.locator('thead th').allTextContents();
-  const column = headers.indexOf(member);
+  const column = headers.indexOf(title);
   expect(column).toBeGreaterThanOrEqual(0);
   return tile.getByTestId('table-row').first().locator('td').nth(column);
 }
@@ -1213,7 +1213,7 @@ test('a dashboard tile writes a currency measure as money, on its axis and in it
   // trimmed — the user chose Cube's formats over fixed pennies (T201).
   // Exactly Cube's: a last decimal is never a trimmed zero, so "$1,234.50"
   // (the old fixed pennies) does not pass (T201's review).
-  await expect(await tableValue(tile, 'orders.total_amount')).toHaveText(/^\$[\d,]+(\.\d?[1-9])?$/);
+  await expect(await tableValue(tile, 'Orders Total Amount')).toHaveText(/^\$[\d,]+(\.\d?[1-9])?$/);
 });
 
 test('a dashboard tile’s tooltip writes a currency measure as money (AC-046, T201)', async ({
@@ -1262,7 +1262,7 @@ test('a measure with no declared format stays a plain number on a tile', async (
   await expect(tile.getByTestId('chart-canvas')).toBeVisible();
 
   await expect(tile.locator('svg text').filter({ hasText: /^\$/ })).toHaveCount(0);
-  await expect(await tableValue(tile, 'orders.count')).toHaveText(/^[\d,]+$/);
+  await expect(await tableValue(tile, 'Orders Count')).toHaveText(/^[\d,]+$/);
 });
 
 /**
@@ -1326,9 +1326,10 @@ test('a time axis and a time column are written by their granularity, never as a
 
   await tile.getByTestId('toggle-table-view').click();
   await expect(tile.getByTestId('table-row').first()).toBeVisible();
-  // The time's column, found by its header rather than by its place.
+  // The time's column, found by its header — its title (AC-220) — rather
+  // than by its place.
   const headers = await tile.locator('thead th').allTextContents();
-  const at = headers.findIndex((header) => header === 'orders.ordered_at');
+  const at = headers.findIndex((header) => header === 'Orders Ordered at');
   expect(at).toBeGreaterThanOrEqual(0);
   const times = await tile
     .getByTestId('table-row')

@@ -103,9 +103,21 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
     drawn.data !== undefined && 'spec' in drawn.data.chart ? drawn.data.chart.spec : undefined;
   const failure =
     drawn.data !== undefined && 'error' in drawn.data.chart ? drawn.data.chart.error : undefined;
-  /** Drawn with the model's formats — the same object until either changes (T226's review). */
+  /**
+   * Drawn with the model's formats and its members' titles (AC-220) — the
+   * same object until either changes (T226's review).
+   */
   const formatted = useMemo(
-    () => (spec === undefined ? undefined : { ...spec, formats: formatsFrom(meta.data) }),
+    () =>
+      spec === undefined
+        ? undefined
+        : {
+            ...spec,
+            formats: formatsFrom(meta.data),
+            titles: Object.fromEntries(
+              allMembers(meta.data).map((member) => [member.name, member.title]),
+            ),
+          },
     [spec, meta.data],
   );
   const hasFields =

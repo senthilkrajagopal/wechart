@@ -21,7 +21,8 @@ import {
 } from '@wechart/core';
 
 import type { EChartsOption } from './theme';
-import { nameWriter } from './modelWriter';
+import { nameWriter, seriesWriter, titleOf } from './modelWriter';
+import { isPieType } from './series/pie';
 
 /** Types where a shared crosshair reads better than a per-mark hit. */
 const CROSSHAIR_TYPES: readonly ChartType[] = ['line', 'multiLine', 'area', 'stackedArea', 'combo'];
@@ -49,14 +50,18 @@ function scatterTooltip(spec: RenderSpec): EChartsOption {
   const y = memberOn(spec.encoding, 'y') ?? '';
   const formats = spec.formats ?? {};
   const [fx, fy] = [formatterFor(x, formats), formatterFor(y, formats)];
-  const seriesName = nameWriter(spec, memberOn(spec.encoding, 'color'));
+  // Split, its series by the split's values; unsplit, its one series is the
+  // y measure, by its title (AC-220).
+  const seriesName = seriesWriter(spec, memberOn(spec.encoding, 'color'));
+  // Each axis's measure by its title (AC-220).
+  const [xTitle, yTitle] = [titleOf(spec, x), titleOf(spec, y)];
 
   const render = (params: Params) => {
     const [across, down] = Array.isArray(params.value) ? params.value : [];
     return [
       escapeHtml(seriesName(params.seriesName)),
-      `${escapeHtml(x)}: ${escapeHtml(fx(across))}`,
-      `${escapeHtml(y)}: ${escapeHtml(fy(down))}`,
+      `${escapeHtml(xTitle)}: ${escapeHtml(fx(across))}`,
+      `${escapeHtml(yTitle)}: ${escapeHtml(fy(down))}`,
     ]
       .filter((line) => line !== '')
       .join('<br/>');
@@ -84,7 +89,9 @@ function heatmapTooltip(spec: RenderSpec): EChartsOption {
   const render = (params: Params) => {
     const [at, down, value] = Array.isArray(params.value) ? params.value : [];
     const heading = `${column(columns[Number(at)])} · ${row(rows[Number(down)])}`;
-    return [escapeHtml(heading), `${escapeHtml(measure)}: ${escapeHtml(format(value))}`].join(
+    // The measure by its title (AC-220).
+    const named = titleOf(spec, measure);
+    return [escapeHtml(heading), `${escapeHtml(named)}: ${escapeHtml(format(value))}`].join(
       '<br/>',
     );
   };
@@ -117,11 +124,20 @@ export function tooltipFor(spec: RenderSpec): EChartsOption {
    * splits by — the colour, or a trellis's panel — so a time among them is
    * written by its granularity, not as Cube's timestamp (AC-188).
    */
-  const category = nameWriter(spec, memberOn(spec.encoding, 'x'));
-  const seriesName = nameWriter(
-    spec,
-    memberOn(spec.encoding, 'color') ?? memberOn(spec.encoding, 'facet'),
-  );
+  const pie = isPieType(spec.chartType);
+  // A pie's slice is named already, by every value it is grouped by (AC-221).
+  const category = pie
+    ? (value: unknown) => String(value ?? '')
+    : nameWriter(spec, memberOn(spec.encoding, 'x'));
+  /**
+   * A series per measure by the measure's title (AC-220). A pie's or a
+   * treemap's one series is its measure, whatever its parts are split by, and
+   * is named by it rather than by the series ECharts numbers.
+   */
+  const whole = pie || spec.chartType === 'treemap';
+  const seriesName = whole
+    ? () => titleOf(spec, measures[0] ?? '')
+    : seriesWriter(spec, memberOn(spec.encoding, 'color') ?? memberOn(spec.encoding, 'facet'));
 
   const render = (params: Params | Params[]) => {
     const rows = Array.isArray(params) ? params : [params];

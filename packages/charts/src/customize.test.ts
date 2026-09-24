@@ -117,6 +117,17 @@ describe('data labels, as each measure is written (AC-046)', () => {
     });
     expect(pie[0]?.label?.formatter?.({ name: 'paid', value: 110 })).toBe('110');
   });
+
+  // T232's review: the measure hidden on a bar, then the chart turned into a
+  // pie — whose Customize tab lists no series to show it again.
+  it('never hides a pie’s one series for a measure hidden on another type', () => {
+    const pie = series({
+      ...twoSeries({ series: { [COUNT]: { hidden: true } } }),
+      chartType: 'pie',
+      encoding: { x: [STATUS], y: [COUNT] },
+    });
+    expect(pie).toHaveLength(1);
+  });
 });
 
 describe('stacking, only where the tab offers it', () => {

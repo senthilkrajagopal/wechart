@@ -50,6 +50,21 @@ describe('whether a marking applies to a tile', () => {
     expect(result.linked === false && result.label).toContain('customers.region');
   });
 
+  // T232 / AC-220: by the member's title from the model, where it has one.
+  it('names it by its title, given the titles', () => {
+    const titles: Record<string, string> = { 'customers.region': 'Customers Region' };
+    const result = markingApplicability(
+      withItem(EMPTY_PREDICATE, region),
+      ordersOnly,
+      (member) => titles[member],
+    );
+
+    expect(result.linked === false && result.label).toBe(
+      'Not linked to this marking: this tile cannot reach Customers Region.',
+    );
+    expect(result.linked === false && result.missing).toEqual(['customers.region']);
+  });
+
   it('lists every unresolvable member, not just the first', () => {
     // Two missing joins are a different conversation from one, and finding
     // out about the second only after fixing the first is a poor way to have

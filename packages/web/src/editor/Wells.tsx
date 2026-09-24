@@ -90,6 +90,8 @@ export interface WellsProps {
   /** How many categories are kept before the rest fold into Other (AC-216, AC-041). */
   readonly topN?: number | undefined;
   readonly onTopN?: (n: number | undefined) => void;
+  /** Every member's title, of every cube (AC-220): a pill of another cube's member. */
+  readonly titles?: Readonly<Record<string, string>>;
 }
 
 export function Wells({
@@ -102,10 +104,17 @@ export function Wells({
   onFilters,
   topN,
   onTopN,
+  titles = {},
 }: WellsProps) {
   const ids = useId();
-  /** A member as a reader knows it: its title from the model (AC-216, AC-220). */
-  const titleOf = (name: string) => available.find((member) => member.name === name)?.title ?? name;
+  /**
+   * A member as a reader knows it: its title from the model (AC-216, AC-220)
+   * — from every cube's, for a chart naming members of more than one.
+   */
+  const titleOf = (name: string) =>
+    available.find((member) => member.name === name)?.title ??
+    (Object.hasOwn(titles, name) ? titles[name] : undefined) ??
+    name;
   const filters = spec.filters ?? [];
   const filterable = available.filter((member) => member.kind === 'dimension');
 

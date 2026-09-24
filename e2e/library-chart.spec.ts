@@ -141,6 +141,13 @@ test('a library chart’s page: its title, type, the chart drawn, what it is bui
   await expect(main.getByTestId('chart-type')).toHaveText('Bar');
   // Drawn, not described.
   await expect(main.getByTestId('chart-canvas')).toBeVisible();
+  // Its table names its members by their titles (T232, AC-220).
+  await main.getByTestId('toggle-table-view').click();
+  await expect(main.getByTestId('data-table').getByRole('columnheader')).toHaveText([
+    'Orders Status',
+    'Orders Count',
+  ]);
+  await main.getByTestId('toggle-table-view').click();
 
   const details = main.getByRole('complementary', { name: 'Chart details' });
   await expect(details.getByRole('region', { name: 'Built on' })).toContainText('cube: orders');

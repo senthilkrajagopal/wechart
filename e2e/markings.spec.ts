@@ -457,8 +457,10 @@ test('a tile that cannot reach the marked field says it is not linked', async ({
   await clickBar(page, tile(page, 'tile-status'), 'shipped');
   await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toContainText('1 marked');
 
-  // Unmarked, and said: silence would read as "none of it is in here".
-  await expect(apart.getByTestId('not-linked')).toContainText('orders.status');
+  // Unmarked, and said: silence would read as "none of it is in here" — the
+  // member by its title (AC-220).
+  await expect(apart.getByTestId('not-linked')).toContainText('Orders Status');
+  await expect(apart.getByTestId('not-linked')).not.toContainText('orders.status');
   await expect(apart.getByTestId('mark-badge')).toHaveCount(0);
   expect((await opacities(apart)).every((value) => value === 1)).toBe(true);
   // And no error on it either.

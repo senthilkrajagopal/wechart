@@ -78,6 +78,25 @@ describe('a chart drawing a marking', () => {
     expect(items[1]?.itemStyle?.borderColor).toBe(MARKING_COLOUR);
   });
 
+  // T232's review: a slice of a pie over two dimensions is named "a · b", which
+  // is no row's value; it is matched by the values it carries.
+  it('marks the right slice of a pie split by a second dimension', () => {
+    const REGION = 'orders.region';
+    const splitPie: RenderSpec = {
+      chartType: 'pie',
+      encoding: { x: ['orders.status'], y: ['orders.count'], color: [REGION] },
+      rows: [
+        { 'orders.status': 'shipped', [REGION]: 'North', 'orders.count': 3 },
+        { 'orders.status': 'shipped', [REGION]: 'South', 'orders.count': 4 },
+        { 'orders.status': 'processing', [REGION]: 'North', 'orders.count': 5 },
+      ],
+    };
+    const items = itemsOf(optionFor(marked(splitPie, ['shipped'])));
+
+    expect(items.map((item) => item.itemStyle?.opacity ?? 1)).toEqual([1, 1, UNMARKED_OPACITY]);
+    expect(items[0]?.itemStyle?.borderColor).toBe(MARKING_COLOUR);
+  });
+
   it('marks by the series where the chart is split by one', () => {
     const split: RenderSpec = {
       chartType: 'stackedBar',

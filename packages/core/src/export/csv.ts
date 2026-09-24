@@ -13,6 +13,26 @@ export function tableColumnsOf(rows: readonly Record<string, unknown>[]): string
   return [...new Set(rows.flatMap((row) => Object.keys(row)))];
 }
 
+/**
+ * A column as a reader knows it (AC-220): its member's title from the model —
+ * for a time column Cube names `member.granularity`, the member's title with
+ * its grain — and its name only where the model gives no title. One
+ * definition for the table's headers and its CSV's (AC-171).
+ */
+export function columnTitleOf(
+  column: string,
+  titles: Readonly<Record<string, string>> = {},
+): string {
+  const own = titles[column];
+  if (own !== undefined) return own;
+  const parts = column.split('.');
+  if (parts.length === 3) {
+    const member = titles[`${parts[0] ?? ''}.${parts[1] ?? ''}`];
+    if (member !== undefined) return `${member} (${parts[2] ?? ''})`;
+  }
+  return column;
+}
+
 /** A plain number as Cube sends one (a JSON string, research/cube/data-apis.md), signed or not. */
 const NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i;
 
@@ -33,7 +53,8 @@ function guarded(raw: unknown, written: string): string {
 /**
  * A chart as CSV (T177, AC-171): its tile's table — every row it holds,
  * already filtered, folded to its top N and sorted by `compile`; a column for
- * every key the rows carry (`tableColumnsOf`), headed by member; each value
+ * every key the rows carry (`tableColumnsOf`), headed as the table heads it
+ * (`columnTitleOf`); each value
  * written as the table writes it (`formatValue`'s formatter) — as RFC 4180
  * text by papaparse's `unparse` (research/supporting-utilities.md §3): CRLF
  * between records, a field quoted when it holds a comma, a quote or a line
@@ -46,9 +67,10 @@ export function csvOf(spec: RenderSpec): string {
     formatterFor(member, spec.formats ?? {}, spec.granularities ?? {}),
   );
   // A measure's raw number beside its formatted value (T179, AC-173).
-  const heads = columns.flatMap((member) =>
-    measures.has(member) ? [member, `${member} (raw)`] : [member],
-  );
+  const heads = columns.flatMap((member) => {
+    const title = columnTitleOf(member, spec.titles);
+    return measures.has(member) ? [title, `${title} (raw)`] : [title];
+  });
   const records = spec.rows.map((row) =>
     columns.flatMap((member, index) => {
       const raw = row[member];

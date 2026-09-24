@@ -3380,10 +3380,26 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Decided (overturnable): the settings are sparse keys of the chart's options (`legend`, `series`, `stacked`, `dataLabels`, `valueFormat`, `axes.*.includeZero`), applied for every renderer but the trellis. A series colour chosen in one chart wins over the colour the dashboard gives that member (AC-039) — the user's own choice for that chart — and "Auto" puts it back. Stacking is offered for bar, grouped bar, line, multi-series line and area with two or more series; data labels are written in each measure's format unless the Values section chooses one.
   - Failing test: `e2e/chart-editor.spec.ts`: moving the legend to the right, turning on data labels and turning off "include zero" each change the drawn chart (AC-219).
   - Depends on: T228
-- [ ] T232 (AC-220, AC-221) Name members by their titles everywhere a person reads them, and list every pie slice in its legend
-  - Files: `packages/charts/src/option.ts`, `packages/web/src/editor/ResultsDrawer.tsx`, `packages/web/src/dashboard/markings/MarkChip.tsx`, `e2e/chart-editor.spec.ts`
+- [x] T232 (AC-220, AC-221) Name members by their titles everywhere a person reads them, and list every pie slice in its legend
+  - Files: `packages/core/src/{render-spec,compile,index}.ts`, `packages/core/src/export/csv.ts` (`columnTitleOf`), `packages/core/src/markings/applicability.ts`, `packages/charts/src/{legend,tooltip,modelWriter}.ts`, `packages/charts/src/series/{pie,scatter}.ts`, `packages/charts/src/{marking/option,crossfilter/highlight}.ts`, `packages/web/src/editor/{ChartEditor,ResultsDrawer,WhyThisChart,Wells,fields}.tsx`, `packages/web/src/tiles/{DataTable,PivotTable,Kpi,TileUnavailable,ChartCanvas}.tsx`, `packages/web/src/dashboard/{DashboardPage,DashboardView}.tsx`, `packages/web/src/dashboard/crossfilter/clicked.ts`, `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, e2e in `chart-editor`, `table-view`, `dashboard`, `export`, `library-chart`, `markings`
   - Failing test: `e2e/chart-editor.spec.ts`: a two-measure legend and the results headers read the members' titles; a pie over two dimensions has a legend entry per slice (AC-220, AC-221).
   - Depends on: T228
+  - Done 2026-09-24. AC-220 ticked on `e2e/chart-editor.spec.ts` "a two-measure legend, the results headers and the trace read the members’ titles", with tile tables (`table-view.spec.ts`, `dashboard.spec.ts`), the library chart's table (`library-chart.spec.ts`), the CSV (`export.spec.ts`) and the "Not linked" label (`markings.spec.ts`), in all three browsers. Unit tests cover the KPI label, the pivot's measure headers, the scatter's axes and tooltip, and the heatmap, treemap and pie tooltips. Pills were already titled (T229), and marking chips too (AC-200). AC-221 ticked on "a pie over two dimensions has a legend entry per slice", with `pie.test.ts` covering three groupings, a blank value and Top N's Other.
+  - Titles come from `/v1/meta` for every cube and view, and travel on the render spec as `titles`.
+  - **Decided (overturnable):**
+    - A CSV heads its columns by title as its table does (AC-171), and a measure's raw column is "<title> (raw)".
+    - A pie over more than one grouping names each slice by every value, e.g. "paid · North", with a blank value written "(no value)". Its raw values ride on the slice, so click, marking and highlight still match rows by them.
+    - A pie of one slice keeps AC-038's no-legend rule for a single series.
+    - The pre-aggregation diagnosis in the editor's drawer ("Stopped by …") still names members by id. It quotes the rollup's own definition for the engineer who fixes it.
+    - A tile refused by a security context names the member by title where the context's metadata still gives one. Otherwise it uses the id Cube named.
+  - **The cold review failed the first cut, fixed:**
+    - A split pie's written names broke click marking, drawn marking and highlight.
+    - The pivot's measure headers, the scatter's and treemap's tooltips and the "Not linked" label still showed ids.
+    - A pie over three groupings, or with a blank value, lost legend entries.
+    - A measure hidden on a bar hid the pie it became.
+    - Top N's Other read "Other (3) · ".
+    - Pills of another cube's members were untitled.
+    - A value such as "constructor" was looked up as a title.
 - [x] T233 (AC-004) Raise the two 11 px rules to the 12 px floor, and open a problem and a tile note in the type audit
   - Files: `packages/web/src/shell/styles.ts`, `e2e/a11y-tokens.spec.ts`, `e2e/acceleration.spec.ts`, `e2e/security.spec.ts`
   - Failing test: `e2e/a11y-tokens.spec.ts`: a Model file with a parse error and a tile note with code in it render no text under 12 px (AC-004).

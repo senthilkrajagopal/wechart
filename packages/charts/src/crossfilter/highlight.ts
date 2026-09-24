@@ -47,8 +47,14 @@ const withStyle = (item: unknown, style: Record<string, unknown>) => {
  */
 function categoryOf(item: unknown, index: number, categories: readonly string[]) {
   if (Array.isArray(item)) return categories[Number(item[0])];
-  const named = (item as { name?: string } | null)?.name;
-  return named ?? categories[index];
+  // A pie's slice by the value it carries apart from its written name (AC-221).
+  const { name, category } = (item ?? {}) as { name?: string; category?: string };
+  return category ?? name ?? categories[index];
+}
+
+/** A pie's slice's split value, which it carries apart from its written name (AC-221). */
+function splitOf(item: unknown): string | undefined {
+  return Array.isArray(item) ? undefined : ((item ?? {}) as { split?: string }).split;
 }
 
 /**
@@ -66,6 +72,22 @@ function faded(option: EChartsOption, spec: RenderSpec): EChartsOption {
   const isSeries = memberOn(spec.encoding, 'color') === member;
   const isCategory =
     memberOn(spec.encoding, 'x') === member || memberOn(spec.encoding, 'facet') === member;
+
+  // A split pie has one series; its slices say which value of the split each is.
+  const splitItems = series.some((one) =>
+    (one.data ?? []).some((item) => splitOf(item) !== undefined),
+  );
+  if (isSeries && splitItems) {
+    return {
+      ...option,
+      series: series.map((one) => ({
+        ...one,
+        data: (one.data ?? []).map((item) =>
+          splitOf(item) === value ? item : withStyle(item, { opacity: FADED_OPACITY }),
+        ),
+      })),
+    };
+  }
 
   if (isSeries) {
     return {

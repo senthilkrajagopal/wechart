@@ -9,6 +9,7 @@
 import { distinctValues, memberOn, type RenderSpec } from '@wechart/core';
 
 import { colourFor } from '../colours';
+import { titleOf } from '../modelWriter';
 import { MARK, type EChartsOption } from '../theme';
 
 export function isScatterType(chartType: string): boolean {
@@ -61,8 +62,9 @@ export function scatterOption(spec: RenderSpec): EChartsOption {
     animation: false,
     // Both axes are value axes. A category axis would space the points evenly
     // and so misstate every distance the chart exists to show.
-    xAxis: { type: 'value', name: x },
-    yAxis: { type: 'value', name: y },
+    // Each named by its measure's title (AC-220).
+    xAxis: { type: 'value', name: titleOf(spec, x) },
+    yAxis: { type: 'value', name: titleOf(spec, y) },
     series: series.map((one, index) => ({
       type: 'scatter' as const,
       name: one.name,

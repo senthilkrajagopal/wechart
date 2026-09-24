@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import type { RenderSpec } from '@wechart/core';
 
 import { heatmapOption } from './heatmap';
+import { optionFor } from '../optionFor';
 import { treemapOption } from './treemap';
 import { cellsOf, marksOf, renderToSvg } from '../testing/renderToSvg';
 
@@ -35,6 +36,18 @@ describe('treemap', () => {
   };
 
   const draw = (next: RenderSpec) => marksOf(renderToSvg(treemapOption(next)), PALETTE);
+
+  // T232 / AC-220: the measure by its title — not "series0", the name ECharts
+  // gives a series given none.
+  it('names its measure by its title in the tooltip', () => {
+    const option = optionFor({ ...spec, titles: { [COUNT]: 'Orders Count' } }) as {
+      tooltip?: { formatter?: (params: unknown) => string };
+    };
+    expect(
+      option.tooltip?.formatter?.({ name: 'paid', seriesName: 'series\u00000', value: 60 }),
+    ).toBe('paid<br/>Orders Count: 60');
+  });
+
   const areaOf = (box: { left: number; right: number; top: number; bottom: number }) =>
     (box.right - box.left) * (box.bottom - box.top);
 
@@ -87,6 +100,16 @@ describe('heatmap', () => {
 
   it('draws one cell per row of the result', () => {
     expect(draw(spec)).toHaveLength(3);
+  });
+
+  // T232 / AC-220: a tooltip names the measure by its title, never its name.
+  it('names its measure by its title in the tooltip', () => {
+    const option = optionFor({ ...spec, titles: { [COUNT]: 'Orders Count' } }) as {
+      tooltip?: { formatter?: (params: unknown) => string };
+    };
+    expect(option.tooltip?.formatter?.({ value: [1, 0, 50] })).toBe(
+      'refunded · east<br/>Orders Count: 50',
+    );
   });
 
   it('makes a larger value a darker cell', () => {

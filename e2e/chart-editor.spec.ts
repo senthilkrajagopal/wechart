@@ -335,10 +335,10 @@ test('the drawer shows result rows, underlying rows and the query', async ({ pag
 
   // A row count alone would pass for the wrong query — a different cube, or
   // the chart's members dropped — so tie the rows to the chart's own query.
-  // Same columns as the chart asked for:
+  // Same columns as the chart asked for, by their titles (AC-220):
   expect(await underlying.locator('thead th').allTextContents()).toEqual([
-    'orders.status',
-    'orders.count',
+    'Orders Status',
+    'Orders Count',
   ]);
 
   // ...ungrouped, so each row carries a single order rather than a total...
@@ -381,8 +381,8 @@ test('the underlying rows work on a cube that publishes no primary key', async (
   const underlying = page.getByTestId('drawer-underlying-rows');
   await expect(underlying).toBeVisible();
   expect(await underlying.locator('thead th').allTextContents()).toEqual([
-    'customers.country',
-    'customers.count',
+    'Customers Country',
+    'Customers Count',
   ]);
   await expect(underlying.locator('tbody tr')).toHaveCount(4);
 });
@@ -903,13 +903,10 @@ test('the Customize tab moves the legend, writes data labels and lets the axis l
   await expect(canvas).toBeVisible();
   await page.getByRole('tab', { name: 'Customize' }).click();
 
-  // The legend, from above the plot to its right. Its entry for the average,
-  // however it names the member (its title is T232's, AC-220).
+  // The legend, from above the plot to its right: its entry for the average,
+  // by the measure's title (AC-220).
   const legendEntry = () =>
-    canvas
-      .locator('svg text')
-      .filter({ hasText: /average_amount|Average Amount/ })
-      .first();
+    canvas.locator('svg text').filter({ hasText: 'Orders Average Amount' }).first();
   const plotBox = await canvas.boundingBox();
   const above = await legendEntry().boundingBox();
   expect((above?.y ?? 0) - (plotBox?.y ?? 0)).toBeLessThan(40);
@@ -936,4 +933,75 @@ test('the Customize tab moves the legend, writes data labels and lets the axis l
   await expect(zero).not.toHaveCount(0);
   await page.getByRole('group', { name: 'Y axis' }).getByLabel('Include zero').uncheck();
   await expect(zero).toHaveCount(0);
+});
+
+/**
+ * T232 / AC-220: THE SYSTEM SHALL name every member by its title from the
+ * model wherever a person reads it — legends, tooltips, table headers, well
+ * pills, marking chips and the "Why this chart?" trace — and never by its
+ * internal name.
+ * `Fails when: a legend, table header, pill, chip or trace shows a name such
+ * as "orders.count".`
+ *
+ * The editor's legend, results headers and trace; its pills are T229's test,
+ * and a marking chip's is AC-200's.
+ */
+test('a two-measure legend, the results headers and the trace read the members’ titles', async ({
+  page,
+}) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-measures').selectOption('orders.total_amount');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  const canvas = page.getByTestId('chart-canvas');
+  await expect(canvas).toBeVisible();
+
+  // The legend.
+  const written = canvas.locator('svg text');
+  await expect(written.filter({ hasText: /^Orders Count$/ })).toHaveCount(1);
+  await expect(written.filter({ hasText: /^Orders Total Amount$/ })).toHaveCount(1);
+  await expect(written.filter({ hasText: /orders\.(count|total_amount)/ })).toHaveCount(0);
+
+  // The results' headers.
+  await page.getByRole('button', { name: 'Results' }).click();
+  const headers = page.getByTestId('drawer-result-rows').getByRole('columnheader');
+  await expect(headers).toHaveText(['Orders Status', 'Orders Count', 'Orders Total Amount']);
+
+  // The trace.
+  await page.getByRole('button', { name: 'Why this chart?' }).click();
+  await expect(page.getByTestId('trace-field-orders.count').getByRole('rowheader')).toHaveText(
+    'Orders Count',
+  );
+  await expect(page.getByTestId('why-this-chart')).not.toContainText('orders.count');
+});
+
+/**
+ * T232 / AC-221: WHEN a pie or donut is drawn, THE SYSTEM SHALL list every
+ * slice in its legend.
+ * `Fails when: a slice has no legend entry.`
+ *
+ * Four products in two categories: by category and name, a pie of four
+ * slices, whose legend had two entries when slices were named by their
+ * category alone. Its slices carry no labels, so its text is its legend.
+ */
+test('a pie over two dimensions has a legend entry per slice', async ({ page }) => {
+  await page.goto('/explore/charts/seed-chart-empty/edit');
+  await page.getByLabel('Cube or view').selectOption({ label: 'Products' });
+  await page.getByTestId('add-measures').selectOption('products.count');
+  await page.getByTestId('add-dimensions').selectOption('products.category');
+  await page.getByTestId('add-dimensions').selectOption('products.name');
+  await page.locator('#chart-type-picker').selectOption('pie');
+  const canvas = page.getByTestId('chart-canvas');
+  await expect(canvas).toBeVisible();
+
+  const written = canvas.locator('svg text');
+  for (const slice of [
+    'Components · Cable, 2m',
+    'Instruments · Control unit',
+    'Components · Mounting kit',
+    'Instruments · Sensor array',
+  ])
+    await expect(written.filter({ hasText: slice })).toHaveCount(1);
+  // Never a category alone, as the two-entry legend read.
+  await expect(written.filter({ hasText: /^(Components|Instruments)$/ })).toHaveCount(0);
 });

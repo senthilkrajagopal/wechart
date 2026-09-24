@@ -112,7 +112,8 @@ test('a tile’s CSV has the rows and columns the tile shows, its filter applied
   const raw = new Set(head.flatMap((name, index) => (name.endsWith(' (raw)') ? [index] : [])));
   const shownOf = (record: readonly string[]) => record.filter((_, index) => !raw.has(index));
   expect(shownOf(head)).toEqual(shown.head);
-  expect(head).toContain('products.name');
+  // By its title, as the table heads it (AC-220).
+  expect(head).toContain('Products Name');
   expect(rows.map(shownOf)).toEqual(shown.rows);
   // The filter's exclusions stay excluded.
   expect(file).not.toContain('completed');
@@ -144,7 +145,8 @@ test('a tile’s CSV writes each measure formatted, and its raw number beside it
   ]);
   const [head = [], ...rows] = records((await readFile(await download.path(), 'utf8')).slice(1));
 
-  for (const measure of ['orders.count', 'orders.total_amount']) {
+  // Each column by its title, as the table heads it (AC-220).
+  for (const measure of ['Orders Count', 'Orders Total Amount']) {
     const at = head.indexOf(measure);
     expect(at).toBeGreaterThanOrEqual(0);
     expect(head[at + 1]).toBe(`${measure} (raw)`);
@@ -156,9 +158,10 @@ test('a tile’s CSV writes each measure formatted, and its raw number beside it
     }
   }
   // Formatted by the model's own format: `total_amount` is currency.
-  expect(rows[0]?.[head.indexOf('orders.total_amount')]).toMatch(/^-?\$[\d,]+(\.\d+)?$/);
+  expect(rows[0]?.[head.indexOf('Orders Total Amount')]).toMatch(/^-?\$[\d,]+(\.\d+)?$/);
   // No raw column for a dimension.
-  expect(head).not.toContain('orders.status (raw)');
+  expect(head).toContain('Orders Status');
+  expect(head).not.toContain('Orders Status (raw)');
 });
 
 /**

@@ -7,6 +7,7 @@ import {
   groupMembers,
   matchesSearch,
   membersOf,
+  titlesOf,
 } from './fields';
 
 /**
@@ -245,5 +246,36 @@ describe('fields by cube, searched, with what each is (AC-215)', () => {
       'string',
       'time',
     ]);
+  });
+});
+
+/**
+ * T232 / AC-220: THE SYSTEM SHALL name every member by its title from the
+ * model wherever a person reads it … and never by its internal name.
+ * `Fails when: a legend, table header, pill, chip or trace shows a name such
+ * as "orders.count".`
+ *
+ * The titles the editor's preview, results and trace are written with, from
+ * every cube and view — a chart may name members of more than one.
+ */
+describe('every member’s title (AC-220)', () => {
+  it('gives each shown member of every cube and view its title', () => {
+    const summary = {
+      name: 'order_summary',
+      type: 'view',
+      title: 'Order summary',
+      measures: [{ name: 'order_summary.count', title: 'Order summary Count', type: 'number' }],
+      dimensions: [
+        { name: 'order_summary.category', title: 'Order summary Category', type: 'string' },
+      ],
+    };
+    expect(titlesOf({ cubes: [...meta.cubes, summary] })).toEqual({
+      'orders.count': 'Orders Count',
+      'orders.status': 'Orders Status',
+      'orders.ordered_at': 'Orders Ordered at',
+      'orders.completed': 'Completed',
+      'order_summary.count': 'Order summary Count',
+      'order_summary.category': 'Order summary Category',
+    });
   });
 });

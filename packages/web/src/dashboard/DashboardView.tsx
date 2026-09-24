@@ -270,6 +270,8 @@ export interface DashboardViewProps {
    * drafted tile is formatted like every other.
    */
   readonly formats?: MemberFormats | undefined;
+  /** Each member's title from the model, for every chart's names (AC-220). */
+  readonly titles?: Readonly<Record<string, string>> | undefined;
   /**
    * An edit has begun — an edit session, or the settings page opened in view
    * mode — for the page, which checks that edit's save against the version
@@ -411,8 +413,11 @@ function TileBody({
   badge,
   tableView,
   onTableViewChange,
+  memberTitle,
 }: {
   tile: Tile;
+  /** A member's title from the model, for what the tile says of one (AC-220). */
+  memberTitle?: ((member: string) => string | undefined) | undefined;
   /** The marked-items badge, for the chart's header row (AC-201). */
   badge?: ReactNode;
   /** Whether it shows its table, held above so its ⋯ menu can switch it (AC-199). */
@@ -499,7 +504,8 @@ function TileBody({
           );
         return <NothingMarked state={limited.state} message={limited.message} />;
       }
-      if (hidden !== undefined) return <TileUnavailable member={hidden} />;
+      if (hidden !== undefined)
+        return <TileUnavailable member={hidden} title={memberTitle?.(hidden)} />;
       // Gone, not failed: the missing-chart state, with nothing to retry.
       if (error === CHART_MISSING) return <TileMissing />;
       if (error !== undefined)
@@ -585,6 +591,8 @@ interface TileCharts {
   readonly carried?: readonly SearchFilter[] | undefined;
   /** A chart's title, which heads its tile (AC-187). */
   readonly titleOf?: ((chartId: string) => string | undefined) | undefined;
+  /** A member's title from the model, for what a tile says of one (AC-220). */
+  readonly memberTitle?: ((member: string) => string | undefined) | undefined;
   /** A chart's own type, from its document (T132). */
   readonly typeOf?: ((chartId: string) => ChartType | undefined) | undefined;
   /** What Cube said of each chart's answer (T154, T014). */
@@ -1007,6 +1015,7 @@ function Elements({
               editing={editing}
               carried={charts.carried}
               title={charts.titleOf?.(chartId)}
+              memberTitle={charts.memberTitle}
               answered={charts.answered?.[chartId]}
               limited={charts.limitedStates?.[chartId]}
               /**
@@ -1415,6 +1424,7 @@ export function DashboardView({
   primaryKey,
   memberTitle,
   formats,
+  titles,
   onEditStart,
   onDiscard,
   editTile,
@@ -1868,11 +1878,15 @@ export function DashboardView({
       });
   };
 
-  // Formatted after the drafts and filters are in, so those tiles are too.
-  const formatted = useMemo(
-    () => (formats === undefined ? withFiltered.specs : withFormats(withFiltered.specs, formats)),
-    [withFiltered.specs, formats],
-  );
+  // Formatted after the drafts and filters are in, so those tiles are too —
+  // and named by the model's titles (AC-220).
+  const formatted = useMemo(() => {
+    const written =
+      formats === undefined ? withFiltered.specs : withFormats(withFiltered.specs, formats);
+    return titles === undefined
+      ? written
+      : Object.fromEntries(Object.entries(written).map(([id, spec]) => [id, { ...spec, titles }]));
+  }, [withFiltered.specs, formats, titles]);
 
   /**
    * A click on a mark (AC-117): the selection from that tile, replacing
@@ -2189,11 +2203,12 @@ export function DashboardView({
       for (const item of predicate.items) for (const part of item) members.add(part.member);
       for (const range of predicate.ranges) members.add(range.member);
       const reachable = [...members].filter((member) => reachOf(member, chartId) !== false);
-      const applicability = markingApplicability(predicate, reachable);
+      // Naming what it cannot reach by its title (AC-220).
+      const applicability = markingApplicability(predicate, reachable, memberTitle);
       if (!applicability.linked) said[chartId] = applicability.label;
     }
     return said;
-  }, [markedSpecs, marks, reachOf]);
+  }, [markedSpecs, marks, reachOf, memberTitle]);
 
   /**
    * What a limited tile shows instead of its chart (AC-109, AC-111), by
@@ -2515,6 +2530,7 @@ export function DashboardView({
     inEffect,
     carried,
     titleOf: chartTitleOf,
+    memberTitle,
     typeOf: (chartId: string) => drawn.documents?.[chartId]?.chart.chartType,
     answered: withFiltered.answered,
     ...(onRefresh === undefined ? {} : { onRefresh: refreshTile }),

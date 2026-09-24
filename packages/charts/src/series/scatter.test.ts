@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import type { RenderSpec } from '@wechart/core';
 
 import { scatterOption } from './scatter';
+import { optionFor } from '../optionFor';
 import { pointsOf, renderToSvg, type Point } from '../testing/renderToSvg';
 
 const BLUE = '#123456';
@@ -105,5 +106,35 @@ describe('a scatter split by a dimension', () => {
 
   it('still draws every row, not one point per member', () => {
     expect(pointsOf(draw(split), PALETTE)).toHaveLength(3);
+  });
+});
+
+/**
+ * T232 / AC-220: THE SYSTEM SHALL name every member by its title from the
+ * model wherever a person reads it … and never by its internal name.
+ */
+describe('a scatter’s axes (AC-220)', () => {
+  it('are named by their measures’ titles, never their names', () => {
+    const titles = { [COUNT]: 'Orders Count', [AMOUNT]: 'Orders Total Amount' };
+    const option = scatterOption({ ...spec, titles }) as {
+      xAxis?: { name?: string };
+      yAxis?: { name?: string };
+    };
+    expect([option.xAxis?.name, option.yAxis?.name]).toEqual([
+      'Orders Count',
+      'Orders Total Amount',
+    ]);
+  });
+
+  // T232's review: unsplit, the one series is the y measure, and its tooltip
+  // heading read "orders.total_amount".
+  it('heads an unsplit point’s tooltip by the measure’s title', () => {
+    const titles = { [COUNT]: 'Orders Count', [AMOUNT]: 'Orders Total Amount' };
+    const option = optionFor({ ...spec, titles }) as {
+      tooltip?: { formatter?: (params: unknown) => string };
+    };
+    const said = option.tooltip?.formatter?.({ seriesName: AMOUNT, value: [10, 100] }) ?? '';
+    expect(said.split('<br/>')[0]).toBe('Orders Total Amount');
+    expect(said).not.toContain(AMOUNT);
   });
 });

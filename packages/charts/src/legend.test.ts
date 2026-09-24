@@ -105,3 +105,37 @@ describe('the legend itself', () => {
     expect(labels).not.toContain('paid');
   });
 });
+
+/**
+ * T232 / AC-220: THE SYSTEM SHALL name every member by its title from the
+ * model wherever a person reads it — legends, tooltips, table headers, well
+ * pills, marking chips and the "Why this chart?" trace — and never by its
+ * internal name.
+ * `Fails when: a legend, table header, pill, chip or trace shows a name such
+ * as "orders.count".`
+ */
+describe('a legend of measures names them by their titles (AC-220)', () => {
+  const titles = { [COUNT]: 'Orders Count', [AMOUNT]: 'Orders Amount' };
+
+  it('writes each measure series by its title, never its name', () => {
+    const labels = drawn({ ...cartesian([COUNT, AMOUNT]), titles });
+    expect(labels).toContain('Orders Count');
+    expect(labels).toContain('Orders Amount');
+    expect(labels).not.toContain(COUNT);
+    expect(labels).not.toContain(AMOUNT);
+  });
+
+  it('names them in the tooltip too', () => {
+    const option = optionFor({ ...cartesian([COUNT, AMOUNT]), titles }) as {
+      tooltip?: { formatter?: (params: unknown) => string };
+    };
+    const said =
+      option.tooltip?.formatter?.([
+        { name: 'paid', seriesName: COUNT, seriesIndex: 0, value: 10 },
+        { name: 'paid', seriesName: AMOUNT, seriesIndex: 1, value: 100 },
+      ]) ?? '';
+    expect(said).toContain('Orders Count');
+    expect(said).toContain('Orders Amount');
+    expect(said).not.toContain(COUNT);
+  });
+});

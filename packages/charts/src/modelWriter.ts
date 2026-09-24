@@ -25,3 +25,23 @@ export function modelWriter(spec: RenderSpec, member: string | undefined): Write
 export function nameWriter(spec: RenderSpec, member: string | undefined): Writer {
   return modelWriter(spec, member) ?? ((value) => String(value ?? ''));
 }
+
+/**
+ * How a series is named where a reader sees it (AC-220): by its split
+ * member's value, written as the model says; or — a series per measure, with
+ * nothing to split by — by the measure's title, never "orders.count".
+ */
+export function seriesWriter(spec: RenderSpec, splitBy: string | undefined): Writer {
+  if (splitBy !== undefined) return nameWriter(spec, splitBy);
+  return (value) => titleOf(spec, String(value ?? ''));
+}
+
+/**
+ * A member's title from the model (AC-220), or its name where the model
+ * gives none — by the titles' own keys, so a name such as "constructor" is
+ * never answered with something every object inherits.
+ */
+export function titleOf(spec: Pick<RenderSpec, 'titles'>, name: string): string {
+  const titles = spec.titles;
+  return titles !== undefined && Object.hasOwn(titles, name) ? (titles[name] ?? name) : name;
+}

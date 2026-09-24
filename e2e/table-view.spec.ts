@@ -50,7 +50,10 @@ for (const chartType of CHART_TYPES) {
 
     const table = page.getByTestId('data-table');
     await expect(table).toBeVisible();
-    // The table shows the chart's own members, not some other query's.
-    await expect(table.getByRole('columnheader', { name: 'orders.status' })).toBeVisible();
+    // The table shows the chart's own members, not some other query's — by
+    // their titles (AC-220).
+    await expect(
+      table.getByRole('columnheader', { name: 'Orders Status', exact: true }),
+    ).toBeVisible();
   });
 }

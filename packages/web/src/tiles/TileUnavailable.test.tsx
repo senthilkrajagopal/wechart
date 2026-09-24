@@ -44,4 +44,13 @@ describe('TileUnavailable', () => {
     expect(tile.textContent).not.toContain('Please make it visible');
     expect(screen.queryByRole('alert')).toBeNull();
   });
+
+  // T232 / AC-220: by the member's title, where the model gives one.
+  it('names the member by its title, given one', () => {
+    render(<TileUnavailable member="secured_orders.count" title="Secured orders Count" />);
+
+    const tile = screen.getByTestId('tile-unavailable');
+    expect(tile.textContent).toContain('Cube refuses it Secured orders Count, and may refuse');
+    expect(tile.textContent).not.toContain('secured_orders.count');
+  });
 });

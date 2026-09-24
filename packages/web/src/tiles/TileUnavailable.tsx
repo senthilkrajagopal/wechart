@@ -24,7 +24,14 @@ export function hiddenMemberOf(error: unknown): string | undefined {
  * secondary ink, rather than as Cube's advice to make the member public,
  * which is not what the author should do.
  */
-export function TileUnavailable({ member }: { member: string }) {
+export function TileUnavailable({
+  member,
+  title,
+}: {
+  member: string;
+  /** Its title from the model (AC-220), which it is named by where there is one. */
+  title?: string | undefined;
+}) {
   return (
     <div className="tile-empty" data-testid="tile-unavailable">
       <p>
@@ -34,7 +41,8 @@ export function TileUnavailable({ member }: { member: string }) {
         Not available to this security context
       </p>
       <p>
-        Cube refuses it <code>{member}</code>, and may refuse other fields this chart uses.
+        Cube refuses it {title ?? <code>{member}</code>}, and may refuse other fields this chart
+        uses.
       </p>
     </div>
   );

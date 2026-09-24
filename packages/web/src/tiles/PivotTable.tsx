@@ -1,4 +1,11 @@
-import { formatValue, membersOn, pivot, rewritesValues, type RenderSpec } from '@wechart/core';
+import {
+  columnTitleOf,
+  formatValue,
+  membersOn,
+  pivot,
+  rewritesValues,
+  type RenderSpec,
+} from '@wechart/core';
 
 /**
  * The pivot table (AC-037).
@@ -110,7 +117,8 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
               {[...columnHeaders, null].flatMap((_, columnIndex) =>
                 measures.map((measure) => (
                   <th scope="col" key={`${String(columnIndex)}-${measure}`}>
-                    {measure}
+                    {/* By its title (AC-220), never "orders.count". */}
+                    {columnTitleOf(measure, spec.titles)}
                   </th>
                 )),
               )}

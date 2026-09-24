@@ -14,7 +14,8 @@
 import { distinctValues, memberOn, seriesOf, type ChartType, type RenderSpec } from '@wechart/core';
 
 import type { EChartsOption } from './theme';
-import { modelWriter } from './modelWriter';
+import { modelWriter, seriesWriter } from './modelWriter';
+import { slicesOf } from './series/pie';
 
 /** Types whose colour says how much rather than which. */
 const COLOUR_IS_A_SCALE: readonly ChartType[] = ['heatmap'];
@@ -24,11 +25,15 @@ const NO_LEGEND: readonly ChartType[] = ['kpi', 'table', 'pivot', 'trellis'];
 
 /** Types whose coloured things are their categories, not their series. */
 const COLOURED_BY_CATEGORY: readonly ChartType[] = ['pie', 'donut', 'treemap'];
+const PIE_TYPES: readonly ChartType[] = ['pie', 'donut'];
 
 /** How many distinctly coloured things a chart draws. */
 export function seriesCount(spec: RenderSpec): number {
   if (NO_LEGEND.includes(spec.chartType) || COLOUR_IS_A_SCALE.includes(spec.chartType)) return 0;
 
+  // A pie's slices, each named by every value it is grouped by (AC-221).
+  if (PIE_TYPES.includes(spec.chartType))
+    return new Set(slicesOf(spec).map((slice) => slice.name)).size;
   if (COLOURED_BY_CATEGORY.includes(spec.chartType)) {
     const category = memberOn(spec.encoding, 'x');
     return category === undefined ? 0 : distinctValues(spec.rows, category).length;
@@ -56,7 +61,13 @@ export function legendFor(spec: RenderSpec): EChartsOption {
   const named = COLOURED_BY_CATEGORY.includes(spec.chartType)
     ? memberOn(spec.encoding, 'x')
     : memberOn(spec.encoding, 'color');
-  const write = modelWriter(spec, named);
+  // A series per measure is named by the measure's title (AC-220); a pie's
+  // slices come already written, by every value they are grouped by (AC-221).
+  const write = PIE_TYPES.includes(spec.chartType)
+    ? undefined
+    : named === undefined && spec.titles !== undefined
+      ? seriesWriter(spec, undefined)
+      : modelWriter(spec, named);
 
   return {
     legend: {

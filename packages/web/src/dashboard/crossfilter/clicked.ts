@@ -61,6 +61,21 @@ export interface ClickedItem {
 /** Chart types where a click means the series, not the category. */
 const BY_SERIES = new Set(['groupedBar', 'stackedBar', 'multiLine', 'stackedArea', 'combo']);
 
+/**
+ * The name a click on an item carries: a pie's slice carries the category it
+ * stands for apart from its written name — "shipped · North" is the slice's
+ * name for its reader (AC-221), and no row's value — so that, and otherwise
+ * the name ECharts reports.
+ */
+export function clickedName(params: { name?: string | undefined; data?: unknown }): string {
+  const { data } = params;
+  const own =
+    typeof data === 'object' && data !== null && !Array.isArray(data)
+      ? (data as { category?: unknown }).category
+      : undefined;
+  return typeof own === 'string' ? own : (params.name ?? '');
+}
+
 export interface ClickedValue {
   readonly member: string;
   readonly value: string;

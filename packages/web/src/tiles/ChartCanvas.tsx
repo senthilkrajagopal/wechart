@@ -2,7 +2,7 @@ import { echarts, itemClicks, optionFor, themed, type Canvas } from '@wechart/ch
 import { seriesOf, type RenderSpec } from '@wechart/core';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import type { ClickedItem } from '../dashboard/crossfilter/clicked';
+import { clickedName, type ClickedItem } from '../dashboard/crossfilter/clicked';
 import { useThemeName } from '../shell/ThemeProvider';
 
 /**
@@ -104,6 +104,7 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
     const at = (params: {
       name?: string;
       seriesName?: string;
+      data?: unknown;
       event?: {
         offsetX?: number;
         offsetY?: number;
@@ -111,8 +112,9 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
       };
     }) => ({
       // The pair carries both names; which one a click stands for is the
-      // dashboard's to decide, by chart type (`crossfilter/clicked.ts`).
-      item: `${params.name ?? ''}\u0000${params.seriesName ?? ''}`,
+      // dashboard's to decide, by chart type (`crossfilter/clicked.ts`). A
+      // pie's slice by the category it carries, not its written name.
+      item: `${clickedName(params)}\u0000${params.seriesName ?? ''}`,
       x: params.event?.offsetX ?? 0,
       y: params.event?.offsetY ?? 0,
       // zrender carries the browser's own event under `event.event`.

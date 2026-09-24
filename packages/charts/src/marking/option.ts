@@ -58,7 +58,19 @@ export function withMarks(option: EChartsOption, spec: RenderSpec): EChartsOptio
       ...one,
       data: (one.data ?? []).map((item, index) => {
         const object = asObject(item);
-        const row = rowFor(one.name, index, (object['name'] as string | undefined) ?? undefined);
+        /**
+         * A pie's slice carries the values it stands for apart from its
+         * written name — "paid · North" names the slice for its reader and
+         * is no row's value (AC-221) — and its split value in place of the
+         * series it is in.
+         */
+        const raw = typeof object['category'] === 'string' ? object['category'] : undefined;
+        const split = typeof object['split'] === 'string' ? object['split'] : undefined;
+        const row = rowFor(
+          split ?? one.name,
+          index,
+          raw ?? (object['name'] as string | undefined) ?? undefined,
+        );
         if (row === undefined) return item;
         const own = (object['itemStyle'] as { color?: string } | undefined)?.color;
         const style = markedItemStyle(row, own ?? colourOfSeries(one), marking);

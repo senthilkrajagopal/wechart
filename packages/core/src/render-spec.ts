@@ -135,6 +135,12 @@ export interface RenderSpec {
    */
   readonly formats?: MemberFormats;
   /**
+   * Each member's title from the model (AC-220), so a legend, a tooltip or a
+   * table header names it as a reader knows it — "Orders Count", never
+   * "orders.count". A member absent here is written as its name.
+   */
+  readonly titles?: Readonly<Record<string, string>>;
+  /**
    * Each time member's granularity in the query the rows answer (AC-188), so
    * every place a time value is written can write it by its bucket — "Jan
    * 2026" for a month — rather than as Cube's raw timestamp.
