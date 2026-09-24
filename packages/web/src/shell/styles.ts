@@ -1481,6 +1481,40 @@ button.filter-pill__clear {
 }
 .tile-busy > svg[data-icon] { color: var(--wc-accent); }
 .filter-bar__tiles { flex-basis: 100%; border: 0; margin: 0; padding: 0; }
+/* The interaction chips sit at the end of the bar (direction.md §7). */
+.filter-bar__spacer { flex: 1; }
+.cross-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* The prototype's .chip (AC-187): a 24 px pill in the cross-filter colour,
+   on a tint of it, with a dismiss at the end. */
+.cross-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--wc-crossfilter);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wc-crossfilter) 12%, var(--wc-bg-surface));
+  color: var(--wc-text-primary);
+  font-size: 12px;
+}
+.cross-chip__what { font-weight: 600; }
+/* Which tile it came from: present, but not competing with the value. */
+.cross-chip__from { color: var(--wc-text-secondary); }
+.cross-chip button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.cross-chip button:hover { background: color-mix(in srgb, var(--wc-crossfilter) 22%, transparent); }
 .filter-bar__tiles legend { color: var(--wc-text-secondary); }
 .filter-bar__tiles label { margin-right: 10px; white-space: nowrap; }
 fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }

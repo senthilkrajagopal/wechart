@@ -1673,10 +1673,16 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - The prototype's `.grid-table`, `.tscroll` and small select are added to the sheet here; this is the app's first table of that kind (AC-187).
     - **Tests:** `crossfilter/defaults.test.tsx` drives the real settings page inside `DashboardView` — the default shown, unset pairs following it, a set pair staying put, what is saved (sparse), and that the saved default is what `actionFor` then does; `e2e/crossfilter.spec.ts` sets a pair on the page, saves, clicks a bar and finds the tile obeys it.
     - AC-118 ticked on those.
-- [ ] T125 (AC-119) Show a cross-filter chip and clear it on dismiss or Escape
+- [x] T125 (AC-119) Show a cross-filter chip and clear it on dismiss or Escape
   - Files: `packages/web/src/dashboard/crossfilter/CrossFilterChip.tsx`, `packages/web/src/dashboard/crossfilter/CrossFilterChip.test.tsx`
   - Failing test: `CrossFilterChip.test.tsx`: the chip names the member, the value and the source tile, and dismissing it or pressing Escape leaves no tile filtered (AC-119).
   - Depends on: T123
+  - **Built 2026-09-23.**
+    - A chip per cross-filter, at the end of the filter bar, where direction.md §7 puts the interaction chips. Each names the field as the model titles it, the value, and the tile the click came from — the part a reader cannot work out, and the tile to click again to undo it. Superset names its emitting chart for the same reason; Looker shows only field and value (`docs/research/cross-highlight.md` §§5, 7).
+    - The bar now shows for a dashboard with chips but no filters of its own, and the prototype's `.chip` shape (a 24 px pill in the cross-filter colour on a tint of it) is added to the sheet.
+    - **Escape takes them all back**, as the bar's own "Clear all (Esc)" says. Not while a dialog, a menu or a filter's popover is open: Escape there means "close this", and taking the dashboard's cross-filters as well would be a keystroke doing two things at once.
+    - **Tests:** `CrossFilterChip.test.tsx` (what a chip says, what each control clears, and that nothing shows when nothing is active); `e2e/crossfilter.spec.ts` — the chip names the field, value and source tile on the real dashboard, dismissing it leaves the other tile unfiltered, and Escape does the same.
+    - AC-119 ticked on those.
 - [ ] T126 (AC-120) Offer no marking affordances in cross-filter mode
   - Files: `packages/web/src/dashboard/DashboardView.tsx`, `e2e/crossfilter-mode.spec.ts`
   - Failing test: `e2e/crossfilter-mode.spec.ts`: in cross-filter mode no marking control, chip or badge appears anywhere in the dashboard (AC-120).

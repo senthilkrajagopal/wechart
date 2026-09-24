@@ -283,6 +283,53 @@ test('the settings page shows the default, and a pair set there is what a click 
   expect(await valuesIn(category)).toEqual(before);
 });
 
+/**
+ * T125 / AC-119: WHEN a cross-filter is active, THE SYSTEM SHALL show a chip
+ * naming the member and value and the source tile, and clear it when the chip
+ * is dismissed or Escape is pressed.
+ * `Fails when: the chip omits the source tile, or dismissing it leaves a tile
+ * filtered.`
+ */
+test('a chip names the cross-filter, and dismissing it leaves nothing filtered', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await crossFilterDashboard(request, { defaultAction: 'filter' });
+  await open(page, id, title);
+
+  const category = tile(page, 'tile-category');
+  const before = await valuesIn(category);
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+  await expect.poll(async () => (await valuesIn(category)).join('|')).not.toBe(before.join('|'));
+
+  const chip = page.getByTestId('cross-filter-chip');
+  await expect(chip).toContainText('shipped');
+  // The field as the model names it, and the tile the click came from.
+  await expect(chip).toContainText('Orders Status');
+  await expect(chip).toContainText('By status');
+
+  await chip.getByRole('button', { name: /^Clear / }).click();
+
+  await expect(chip).toHaveCount(0);
+  await expect.poll(async () => (await valuesIn(category)).join('|')).toBe(before.join('|'));
+});
+
+test('Escape clears the cross-filters, as the bar says it does', async ({ page, request }) => {
+  const { id, title } = await crossFilterDashboard(request, { defaultAction: 'filter' });
+  await open(page, id, title);
+
+  const category = tile(page, 'tile-category');
+  const before = await valuesIn(category);
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+  await expect(page.getByTestId('cross-filter-chip')).toHaveCount(1);
+  await expect(page.getByTestId('clear-cross-filters')).toContainText('Esc');
+
+  await page.keyboard.press('Escape');
+
+  await expect(page.getByTestId('cross-filter-chip')).toHaveCount(0);
+  await expect.poll(async () => (await valuesIn(category)).join('|')).toBe(before.join('|'));
+});
+
 test('a pair set to None leaves the other tile untouched', async ({ page, request }) => {
   const { id, title } = await crossFilterDashboard(request, {
     defaultAction: 'filter',

@@ -59,6 +59,7 @@ import { GeneratedSql } from '../workspaces/security/GeneratedSql';
 import { coverageOf, type Reach } from '../filters/coverage';
 import { chartTilesOf } from '../filters/scope';
 import { effectsOn, type CrossEffects, type CrossSelection } from './crossfilter/apply';
+import { CrossFilterChips } from './crossfilter/CrossFilterChip';
 import { clickedValue, membersDrawn, seriesCountOf, type ClickedItem } from './crossfilter/clicked';
 import { interactionsOf } from './settings/interactionMode';
 import { describeFilter } from '../filters/describe';
@@ -1256,6 +1257,45 @@ export function DashboardView({
     [drawn.specs],
   );
 
+  /** One cross-filter, or all of them, taken back (AC-119). */
+  const clearCrossFilter = useCallback((selection?: CrossSelection) => {
+    setCrossSelections((before) =>
+      selection === undefined
+        ? []
+        : before.filter((each) => each.from !== selection.from || each.member !== selection.member),
+    );
+  }, []);
+
+  /**
+   * Escape takes them all back, as the prototype's "Clear (Esc)" says it
+   * does. Not while something is open over the dashboard — a dialog, a menu
+   * or a filter's popover — where Escape means "close this".
+   */
+  useEffect(() => {
+    if (!crossFiltering || crossSelections.length === 0) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const doc = window.document;
+      if (doc.querySelector('[aria-modal="true"], [role="menu"], .filter-popover') !== null) return;
+      setCrossSelections([]);
+    };
+    window.document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [crossFiltering, crossSelections.length]);
+
+  /** A tile's name: the title of the chart it draws (AC-119). */
+  const tileNameOf = useCallback(
+    (tileId: string) => {
+      const tile = chartTilesOf(live).find((each) => each.tileId === tileId);
+      return tile?.chartId === undefined ? undefined : chartTitleOf(tile.chartId);
+    },
+    // `chartTitleOf` reads `drawn`, which is what changes when a title does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [live, drawn],
+  );
+
   /**
    * What each highlighted tile draws over its own answer (AC-117): the same
    * question asked with the selection, which is a second answer from Cube —
@@ -1902,6 +1942,20 @@ export function DashboardView({
                */
               filterBar={
                 <FilterBar
+                  // The cross-filters in effect, at the end of the bar
+                  // (AC-119, direction.md §7).
+                  {...(crossFiltering
+                    ? {
+                        chips: (
+                          <CrossFilterChips
+                            selections={crossSelections}
+                            onClear={clearCrossFilter}
+                            memberTitle={memberTitle}
+                            tileName={tileNameOf}
+                          />
+                        ),
+                      }
+                    : {})}
                   filters={session.document.filters ?? []}
                   dashboard={session.document}
                   chartTitleOf={chartTitleOf}

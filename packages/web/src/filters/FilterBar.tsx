@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { DashboardDocument } from '../dashboard/model/document';
 import { cubesFrom, membersOf, type Member } from '../editor/fields';
@@ -41,6 +41,12 @@ export interface FilterBarProps {
   readonly editing: boolean;
   /** Change the filters themselves — their fields, which there are. Edit mode only. */
   readonly onFilters?: ((next: readonly DashboardFilter[]) => void) | undefined;
+  /**
+   * The interaction chips, at the end of the bar: the cross-filters in
+   * effect (AC-119), or a marking's chips in Markings mode (direction.md §7,
+   * "the right-hand group holds the interaction chips").
+   */
+  readonly chips?: ReactNode | undefined;
 }
 
 /** Every member of every cube and view, once each. */
@@ -156,7 +162,10 @@ function FilterWidgetFor({
  * model, which a dashboard without filters has no use for.
  */
 export function FilterBar(props: FilterBarProps) {
-  return props.filters.length === 0 ? null : <Filters {...props} />;
+  // A bar with neither filters nor chips is a rule across the top of the page
+  // saying nothing. With chips it has something to say, even where the
+  // dashboard carries no filters of its own (AC-119).
+  return props.filters.length === 0 && props.chips === undefined ? null : <Filters {...props} />;
 }
 
 function Filters({
@@ -167,6 +176,7 @@ function Filters({
   onValue,
   editing,
   onFilters,
+  chips,
 }: FilterBarProps) {
   const meta = useQuery(META_QUERY);
   const members = useMemo(() => allMembers(meta.data), [meta.data]);
@@ -395,6 +405,14 @@ function Filters({
           </div>
         );
       })}
+      {chips === undefined ? null : (
+        <>
+          {/* Pushes the chips to the end of the bar, as the prototype's own
+              spacer does (AC-187). */}
+          <span className="filter-bar__spacer" />
+          {chips}
+        </>
+      )}
     </section>
   );
 }
