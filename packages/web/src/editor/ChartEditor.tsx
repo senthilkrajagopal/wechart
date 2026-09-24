@@ -6,6 +6,7 @@ import {
   isEmpty,
   removeFromWell,
   granularitiesOf,
+  seriesOf,
   toCubeQuery,
   toUnderlyingQuery,
   wellFor,
@@ -24,9 +25,9 @@ import {
   type Signature,
 } from '@wechart/recommender';
 
-import type { AxesSettings, AxisSettings } from '@wechart/charts';
+import { DEFAULT_PALETTE, STACKABLE_TYPES } from '@wechart/charts';
 
-import { AxisPanel } from './AxisPanel';
+import { CustomizeTab } from './CustomizeTab';
 import { answerMetaOf } from '../query/answerMeta';
 import { loadTile } from '../query/loadTile';
 import { AccelerationBadge, accelerationOf } from '../tiles/AccelerationBadge';
@@ -93,6 +94,27 @@ const CARTESIAN_TYPES: readonly (ChartType | null)[] = [
   'heatmap',
   'combo',
 ];
+
+/**
+ * The types whose series the Customize tab lists, to colour and hide
+ * (AC-219): those drawing a series per measure or per split — not a pie's or a
+ * treemap's slices, nor a heatmap's scale.
+ */
+const SERIES_TYPES: readonly (ChartType | null)[] = [
+  'bar',
+  'hbar',
+  'groupedBar',
+  'stackedBar',
+  'line',
+  'multiLine',
+  'area',
+  'stackedArea',
+  'scatter',
+  'combo',
+];
+
+/** The types with no marks for a legend or a label: the Customize tab offers neither. */
+const UNDRAWN_TYPES: readonly (ChartType | null)[] = ['kpi', 'table', 'pivot', 'trellis', null];
 
 export interface ChartEditorProps {
   /**
@@ -250,13 +272,17 @@ export function ChartEditor({
     });
   };
 
-  /** The axis settings, sparse: absent means "leave it to the data". */
-  const axes = (options['axes'] ?? {}) as AxesSettings;
-  const setAxis = (axis: 'x' | 'y', next: AxisSettings) => {
-    change((current) => ({
-      ...current,
-      options: { ...current.options, axes: { ...axes, [axis]: next } },
-    }));
+  /**
+   * The Customize tab's settings (AC-219), each a key of the options set or
+   * cleared — cleared is absent, so the saved options stay sparse — as one
+   * undoable change (AC-035).
+   */
+  const setOptions = (patch: Readonly<Record<string, unknown>>) => {
+    change((current) => {
+      const next: Record<string, unknown> = { ...current.options, ...patch };
+      for (const [key, value] of Object.entries(patch)) if (value === undefined) delete next[key];
+      return { ...current, options: next };
+    });
   };
 
   /**
@@ -336,6 +362,33 @@ export function ChartEditor({
         timeDimensions: spec.timeDimensions.length,
       })
     : [];
+
+  /**
+   * The chart as drawn, once its fields can draw its type: the preview's, and
+   * what the Customize tab lists its series from (AC-219).
+   */
+  const drawnSpec = useMemo(
+    () =>
+      isEmpty(spec) || shownType === null || missing.length > 0 || !result.isSuccess
+        ? undefined
+        : compile(previewDocument, { rows, chartType: shownType, formats }),
+    // `missing` is derived from `spec` and `shownType` alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [spec, shownType, result.isSuccess, previewDocument, rows, formats],
+  );
+  /** Its series, each with how a reader knows it: a member's title, or the value. */
+  const drawnSeries = useMemo(() => {
+    if (drawnSpec === undefined) return [];
+    try {
+      return seriesOf(drawnSpec).series.map((one) => ({
+        name: one.name,
+        title: available.find((member) => member.name === one.name)?.title ?? one.name,
+      }));
+    } catch {
+      // A type `seriesOf` does not lay out — a pie, a KPI — lists none here.
+      return [];
+    }
+  }, [drawnSpec, available]);
 
   /** The chart's cube or view, as the model titles it. */
   const sourceTitle =
@@ -495,7 +548,10 @@ export function ChartEditor({
                 <PreviewFrame tile={tile}>
                   {(chartHeight) => (
                     <ChartTile
-                      spec={compile(previewDocument, { rows, chartType: shownType, formats })}
+                      spec={
+                        drawnSpec ??
+                        compile(previewDocument, { rows, chartType: shownType, formats })
+                      }
                       {...(chartHeight === undefined ? {} : { height: chartHeight })}
                       // Held here, not in the tile: the tile unmounts whenever
                       // the query re-runs, so a field change would flip the
@@ -689,32 +745,30 @@ export function ChartEditor({
                 </div>
               ) : null}
             </>
-          ) : CARTESIAN_TYPES.includes(shownType) ? (
-            /*
-              Customize › Axes (AC-040, direction.md §6). Only for the types
-              that have cartesian axes: a pie or a KPI has none, and offering
-              settings that cannot apply is worse than offering none.
-            */
-            <div data-testid="axes-section">
-              <AxisPanel
-                axis="x"
-                label="X axis"
-                settings={axes.x ?? {}}
-                onChange={(next) => {
-                  setAxis('x', next);
-                }}
-              />
-              <AxisPanel
-                axis="y"
-                label="Y axis"
-                settings={axes.y ?? {}}
-                onChange={(next) => {
-                  setAxis('y', next);
-                }}
-              />
-            </div>
           ) : (
-            <p className="panel-section__note">This chart type has no axes to set.</p>
+            /*
+              Customize (AC-219): the axes — only for the types that have
+              cartesian axes (AC-040), since a pie or a KPI has none and a
+              setting that cannot apply is worse than none — the legend, each
+              series, stacking and data labels.
+            */
+            <CustomizeTab
+              options={options}
+              onOptions={setOptions}
+              cartesian={CARTESIAN_TYPES.includes(shownType)}
+              // The values run along x for a horizontal bar, both ways for a
+              // scatter, and up y for the rest.
+              valueAxes={
+                shownType === 'hbar' ? ['x'] : shownType === 'scatter' ? ['x', 'y'] : ['y']
+              }
+              drawn={!UNDRAWN_TYPES.includes(shownType)}
+              stackable={shownType !== null && STACKABLE_TYPES.includes(shownType)}
+              series={SERIES_TYPES.includes(shownType) ? drawnSeries : []}
+              colourOf={(name) => {
+                const at = drawnSeries.findIndex((one) => one.name === name);
+                return DEFAULT_PALETTE[Math.max(0, at) % DEFAULT_PALETTE.length] ?? '#000000';
+              }}
+            />
           )}
         </div>
       </aside>

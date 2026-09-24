@@ -1,0 +1,174 @@
+/**
+ * The Customize tab's settings (AC-219), applied to a drawn option.
+ *
+ * Stored in the chart's `options` beside its axes, and applied here once for
+ * every renderer — as the axis settings are (`axis.ts`) — so no chart type is
+ * quietly exempt from a setting the tab offers:
+ *
+ * - `legend`: `{ show?, position? }`. Shown by the series count's rule
+ *   (AC-038) unless turned off; at the top unless placed elsewhere.
+ * - `series`: `{ [name]: { colour?, hidden? } }`. A colour is read by
+ *   `colourFor`; a hidden series is left undrawn.
+ * - `stacked`: the series of a bar or line chart stacked on one another.
+ * - `dataLabels`: each mark's value written on it.
+ */
+import { formatterFor, membersOn, type RenderSpec } from '@wechart/core';
+
+import type { EChartsOption } from './theme';
+
+export type LegendPosition = 'top' | 'right' | 'bottom' | 'left';
+
+export interface LegendSettings {
+  readonly show?: boolean;
+  readonly position?: LegendPosition;
+}
+
+export interface SeriesSettings {
+  readonly colour?: string;
+  readonly hidden?: boolean;
+}
+
+const record = (value: unknown): Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+export function legendSettingsOf(spec: RenderSpec): LegendSettings {
+  return record(spec.options?.['legend']) as LegendSettings;
+}
+
+export function seriesSettingsOf(spec: RenderSpec): Readonly<Record<string, SeriesSettings>> {
+  return record(spec.options?.['series']) as Record<string, SeriesSettings>;
+}
+
+/** Where a legend goes, and the room the plot leaves it. */
+const PLACED: Record<LegendPosition, { legend: object; grid: object }> = {
+  top: { legend: { top: 0 }, grid: { top: 32 } },
+  right: { legend: { right: 0, top: 'middle', orient: 'vertical' }, grid: { right: 120 } },
+  bottom: { legend: { bottom: 0 }, grid: { bottom: 56 } },
+  left: { legend: { left: 0, top: 'middle', orient: 'vertical' }, grid: { left: 120 } },
+};
+
+type Series = Record<string, unknown> & { name?: unknown; type?: unknown };
+
+/** An object less one key. */
+function without(value: Record<string, unknown>, key: string): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).filter(([each]) => each !== key));
+}
+
+/** Types whose series are what their legend names (not a pie's slices). */
+const SERIES_COLOURED = ['bar', 'line', 'scatter'];
+
+export function applyCustomize(option: EChartsOption, spec: RenderSpec): EChartsOption {
+  const legend = legendSettingsOf(spec);
+  const perSeries = seriesSettingsOf(spec);
+  const stacked = spec.options?.['stacked'] === true;
+  const labelled = spec.options?.['dataLabels'] === true;
+  let next: Record<string, unknown> = { ...option };
+
+  // A hidden series is not drawn at all; with one left, its legend goes too,
+  // as a single series has none (AC-038).
+  const drawnSeries = Array.isArray(next['series'])
+    ? (next['series'] as Series[]).filter(
+        (one) => typeof one.name !== 'string' || perSeries[one.name]?.hidden !== true,
+      )
+    : undefined;
+  const lonely =
+    drawnSeries !== undefined &&
+    drawnSeries.length < 2 &&
+    drawnSeries.every((one) => SERIES_COLOURED.includes(String(one.type)));
+
+  // The legend: off, or placed. Only where the chart has one (AC-038).
+  if (next['legend'] !== undefined) {
+    const grid = record(next['grid']);
+    if (legend.show === false || lonely) {
+      next = { ...without(next, 'legend'), grid: without(grid, 'top') };
+    } else if (legend.position !== undefined && legend.position !== 'top') {
+      next = {
+        ...next,
+        legend: { ...without(record(next['legend']), 'top'), ...PLACED[legend.position].legend },
+        grid: { ...without(grid, 'top'), ...PLACED[legend.position].grid },
+      };
+    }
+  }
+
+  if (drawnSeries !== undefined) {
+    // The cross-filter share drawn over a bar (AC-117) is not a series of the
+    // chart's: it is neither stacked nor labelled.
+    const isOverlay = (one: Series) => one['barGap'] === '-100%';
+    const own = drawnSeries.filter((one) => !isOverlay(one));
+    // Stacked only where the tab offers it, and where there is more than one
+    // series to stack (T231's review).
+    const stacking = stacked && STACKABLE_TYPES.includes(spec.chartType) && own.length > 1;
+    const inside = stacking || spec.chartType === 'stackedBar' || spec.chartType === 'stackedArea';
+    next = {
+      ...next,
+      series: drawnSeries.map((one) =>
+        isOverlay(one)
+          ? one
+          : {
+              ...one,
+              ...(stacking && (one.type === 'bar' || one.type === 'line')
+                ? { stack: 'total' }
+                : {}),
+              ...(labelled
+                ? { label: { ...record(one['label']), ...labelFor(spec, one, inside) } }
+                : {}),
+            },
+      ),
+    };
+  }
+
+  return next as EChartsOption;
+}
+
+/**
+ * The types whose series the Customize tab offers to stack (AC-219): bars and
+ * lines drawn side by side or over one another. Not the stacked types, which
+ * already are; not a horizontal bar or a combo, whose one bar series has
+ * nothing to stack on.
+ */
+export const STACKABLE_TYPES: readonly string[] = [
+  'bar',
+  'groupedBar',
+  'line',
+  'multiLine',
+  'area',
+];
+
+/**
+ * A mark's value written on it (AC-219), in its measure's format (AC-046) —
+ * or the Values section's number format, where one is chosen — placed where
+ * a value reads for the mark: past a horizontal bar's end, above a column,
+ * inside a stacked segment, a rectangle's cell or a slice's label.
+ */
+function labelFor(spec: RenderSpec, one: Series, inside: boolean): Record<string, unknown> {
+  const measures = membersOn(spec.encoding, 'y');
+  const name = typeof one.name === 'string' ? one.name : '';
+  const measure = measures.includes(name) ? name : (measures[0] ?? '');
+  const chosen = spec.options?.['valueFormat'];
+  const write =
+    (typeof chosen === 'string' ? VALUE_FORMATTERS[chosen] : undefined) ??
+    formatterFor(measure, spec.formats ?? {});
+  const valueOf = (value: unknown) => (Array.isArray(value) ? value[value.length - 1] : value);
+  const position =
+    one.type === 'pie' || one.type === 'treemap' || one.type === 'heatmap'
+      ? {}
+      : spec.chartType === 'hbar'
+        ? { position: 'right' }
+        : { position: inside ? 'inside' : 'top' };
+  return {
+    show: true,
+    ...position,
+    formatter: (params: { value?: unknown }) => write(valueOf(params.value)),
+  };
+}
+
+/** A value's number format chosen in the Values section (AC-219). */
+const VALUE_FORMATTERS: Record<string, (value: unknown) => string> = {
+  compact: (value) => new Intl.NumberFormat('en-US', { notation: 'compact' }).format(Number(value)),
+  full: (value) => new Intl.NumberFormat('en-US').format(Number(value)),
+  percent: (value) => new Intl.NumberFormat('en-US', { style: 'percent' }).format(Number(value)),
+  currency: (value) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value)),
+};

@@ -16,6 +16,7 @@ import { barOption, DEFAULT_CANVAS, isBarType, type Canvas } from './series/bar'
 import { withHighlight } from './crossfilter/highlight';
 import { withMarks } from './marking/option';
 import { applyAxes } from './axis';
+import { applyCustomize } from './customize';
 import { isTrellisType, trellisOption } from './layout/trellis';
 import { legendFor } from './legend';
 import { tooltipFor } from './tooltip';
@@ -63,7 +64,12 @@ export function optionFor(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
   // would be a chart type quietly exempt from it.
   const base = legendFor(spec);
   const drawn = (option: EChartsOption): EChartsOption => ({
-    ...applyAxes(withLegend(withMarks(withHighlight(option, spec), spec)), spec),
+    // The Customize tab's legend, series, stacking and labels (AC-219) last:
+    // they place and trim what the rest has drawn.
+    ...applyCustomize(
+      applyAxes(withLegend(withMarks(withHighlight(option, spec), spec)), spec),
+      spec,
+    ),
     // A tooltip has to exist before its values can carry member formats
     // (AC-046), and no renderer sets one.
     ...tooltipFor(spec),

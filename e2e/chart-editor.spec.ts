@@ -881,3 +881,59 @@ test('Top N keeps that many categories and folds the rest into Other', async ({ 
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(canvas.getByText(/^Other \(/)).toHaveCount(0);
 });
+
+/**
+ * T231 / AC-219: THE SYSTEM SHALL offer in the chart editor's Customize tab
+ * the axis settings — title, label rotation, include zero, logarithmic scale,
+ * gridlines, minimum and maximum — the legend's visibility and position, each
+ * series' colour and visibility and whether series stack, data labels, and
+ * the number format.
+ * `Fails when: the legend's position, data labels or "include zero" cannot be
+ * set.`
+ */
+test('the Customize tab moves the legend, writes data labels and lets the axis leave zero', async ({
+  page,
+}) => {
+  await openEditorOnOrders(page);
+  // Two measures by status: two series, so a legend.
+  await page.getByTestId('add-measures').selectOption('orders.total_amount');
+  await page.getByTestId('add-measures').selectOption('orders.average_amount');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  const canvas = page.getByTestId('chart-canvas');
+  await expect(canvas).toBeVisible();
+  await page.getByRole('tab', { name: 'Customize' }).click();
+
+  // The legend, from above the plot to its right. Its entry for the average,
+  // however it names the member (its title is T232's, AC-220).
+  const legendEntry = () =>
+    canvas
+      .locator('svg text')
+      .filter({ hasText: /average_amount|Average Amount/ })
+      .first();
+  const plotBox = await canvas.boundingBox();
+  const above = await legendEntry().boundingBox();
+  expect((above?.y ?? 0) - (plotBox?.y ?? 0)).toBeLessThan(40);
+  await page.getByLabel('Legend position').selectOption('right');
+  await expect
+    .poll(async () => ((await legendEntry().boundingBox())?.x ?? 0) - (plotBox?.x ?? 0))
+    .toBeGreaterThan((plotBox?.width ?? 0) * 0.6);
+
+  // Data labels: each bar's value written on it, where none was.
+  const labels = () => canvas.locator('svg text').allTextContents();
+  const before = await labels();
+  await page.getByLabel('Data labels').check();
+  await expect.poll(async () => (await labels()).length).toBeGreaterThan(before.length + 5);
+
+  // Include zero, off: the value axis no longer starts at 0 — a zero however
+  // the measure's format writes it ("$0", "0.00"). On one measure, labels
+  // off: the average's small values beside the totals would take the axis
+  // back to zero, and a label is not the axis.
+  await page.getByLabel('Data labels').uncheck();
+  await page.getByRole('tab', { name: 'Data' }).click();
+  await page.getByRole('button', { name: /Remove Orders Average Amount/ }).click();
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  const zero = canvas.locator('svg text', { hasText: /^\D*0(\.0+)?\D*$/ });
+  await expect(zero).not.toHaveCount(0);
+  await page.getByRole('group', { name: 'Y axis' }).getByLabel('Include zero').uncheck();
+  await expect(zero).toHaveCount(0);
+});

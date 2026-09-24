@@ -3375,8 +3375,9 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Files: `packages/web/src/editor/ChartTypeCard.tsx`, `packages/web/src/editor/ChartTypeGallery.tsx`, `e2e/chart-editor.spec.ts`
   - Failing test: `e2e/chart-editor.spec.ts`: the type reads "Auto · Bar"; Change opens a gallery where a line is greyed without a time field; choosing combo shows its warning; "Back to recommended" appears only after a manual pick (AC-217, AC-218).
   - Depends on: T228
-- [ ] T231 (AC-219) Add the Customize tab: axes, legend, series and values
-  - Files: `packages/web/src/editor/CustomizeTab.tsx`, `packages/core/src/chart-document.ts`, `packages/charts/src/option.ts`, `e2e/chart-editor.spec.ts`
+- [x] T231 (AC-219) Add the Customize tab: axes, legend, series and values
+  - Files: `packages/web/src/editor/{CustomizeTab,AxisPanel,ChartEditor}.tsx`, `packages/charts/src/{customize,axis,colours,optionFor,index}.ts`, `packages/web/src/shell/styles.ts`, `e2e/chart-editor.spec.ts`
+  - Decided (overturnable): the settings are sparse keys of the chart's options (`legend`, `series`, `stacked`, `dataLabels`, `valueFormat`, `axes.*.includeZero`), applied for every renderer but the trellis. A series colour chosen in one chart wins over the colour the dashboard gives that member (AC-039) — the user's own choice for that chart — and "Auto" puts it back. Stacking is offered for bar, grouped bar, line, multi-series line and area with two or more series; data labels are written in each measure's format unless the Values section chooses one.
   - Failing test: `e2e/chart-editor.spec.ts`: moving the legend to the right, turning on data labels and turning off "include zero" each change the drawn chart (AC-219).
   - Depends on: T228
 - [ ] T232 (AC-220, AC-221) Name members by their titles everywhere a person reads them, and list every pie slice in its legend

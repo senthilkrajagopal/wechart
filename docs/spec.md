@@ -690,7 +690,7 @@ Library charts and the chart editor:
       Fails when: a type is shown by an internal id such as "groupedBar", a type the fields cannot draw is not greyed with its requirement, or "Back to recommended" shows while the type is the recommended one.
 - [ ] AC-218 WHILE a manually chosen type is a combo, or exceeds a channel's capacity for the chart's fields, THE SYSTEM SHALL show a warning with an icon saying why, and offer to switch to the recommended type (direction.md rules 6, 30).
       Fails when: a combo, or a pie drawn with more than 6 slices, shows no warning.
-- [ ] AC-219 THE SYSTEM SHALL offer in the chart editor's Customize tab the axis settings — title, label rotation, include zero, logarithmic scale, gridlines, minimum and maximum — the legend's visibility and position, each series' colour and visibility and whether series stack, data labels, and the number format.
+- [x] AC-219 THE SYSTEM SHALL offer in the chart editor's Customize tab the axis settings — title, label rotation, include zero, logarithmic scale, gridlines, minimum and maximum — the legend's visibility and position, each series' colour and visibility and whether series stack, data labels, and the number format.
       Fails when: the legend's position, data labels or "include zero" cannot be set.
 - [ ] AC-220 THE SYSTEM SHALL name every member by its title from the model wherever a person reads it — legends, tooltips, table headers, well pills, marking chips and the "Why this chart?" trace — and never by its internal name.
       Fails when: a legend, table header, pill, chip or trace shows a name such as "orders.count".

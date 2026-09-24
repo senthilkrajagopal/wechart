@@ -16,13 +16,15 @@ export interface AxisPanelProps {
   readonly label: string;
   readonly settings: AxisSettings;
   readonly onChange: (next: AxisSettings) => void;
+  /** Whether this axis carries values, which "include zero" is about (AC-219). */
+  readonly values?: boolean;
 }
 
 const FORMATS: readonly NumberFormat[] = ['auto', 'compact', 'full', 'percent', 'currency'];
 /** direction.md offers exactly these three. */
 const ROTATIONS = [0, 45, 90] as const;
 
-export function AxisPanel({ axis, label, settings, onChange }: AxisPanelProps) {
+export function AxisPanel({ axis, label, settings, onChange, values = true }: AxisPanelProps) {
   const id = (name: string) => `axis-${axis}-${name}`;
 
   /** Absent rather than zero: an empty box means "leave it to the data". */
@@ -101,6 +103,22 @@ export function AxisPanel({ axis, label, settings, onChange }: AxisPanelProps) {
         />
         Gridlines
       </label>
+
+      {/* On unless turned off (AC-219): off, the axis spans only the data.
+          Only on an axis of values: a category axis has no zero. */}
+      {values ? (
+        <label htmlFor={id('zero')}>
+          <input
+            id={id('zero')}
+            type="checkbox"
+            checked={settings.includeZero ?? true}
+            onChange={(event) => {
+              set({ includeZero: event.target.checked ? undefined : false });
+            }}
+          />
+          Include zero
+        </label>
+      ) : null}
 
       <label htmlFor={id('rotation')}>Label rotation</label>
       <select

@@ -9,9 +9,14 @@
 import { OTHER_LABEL, type RenderSpec } from '@wechart/core';
 
 import { OTHER_COLOUR } from './colorAssignment';
+import { seriesSettingsOf } from './customize';
 import { DEFAULT_PALETTE } from './theme';
 
 export function colourFor(spec: RenderSpec, member: string, index: number): string {
+  // A colour chosen for this series in the Customize tab (AC-219) comes first.
+  const chosen = seriesSettingsOf(spec)[member]?.colour;
+  if (chosen !== undefined) return chosen;
+
   const assigned = spec.colours?.[member];
   if (assigned !== undefined) return assigned;
 

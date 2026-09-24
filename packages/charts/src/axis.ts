@@ -22,6 +22,11 @@ export interface AxisSettings {
   /** direction.md offers 0, 45 or 90. */
   readonly tickRotation?: number;
   readonly numberFormat?: NumberFormat;
+  /**
+   * Whether a value axis starts at zero (AC-219): on unless turned off, when
+   * it spans only the data.
+   */
+  readonly includeZero?: boolean;
 }
 
 export interface AxesSettings {
@@ -58,10 +63,13 @@ function axisFragment(settings: AxisSettings | undefined): Record<string, unknow
     gridlines,
     tickRotation,
     numberFormat: format = undefined,
+    includeZero,
   } = settings;
 
   return {
     ...(title === undefined ? {} : { name: title, nameLocation: 'middle', nameGap: 28 }),
+    // ECharts' `scale` is the inverse: a value axis spanning only the data.
+    ...(includeZero === false ? { scale: true } : {}),
     // A log axis is a different scale, not a styling of the linear one, so it
     // replaces the type rather than decorating it.
     ...(log === true ? { type: 'log' } : {}),

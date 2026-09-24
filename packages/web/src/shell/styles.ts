@@ -2899,6 +2899,28 @@ main:has(.chart-editor) {
   line-height: var(--wc-text-xs-line);
 }
 
+/* The chart editor's Customize tab (AC-219, the prototype's customizeTab):
+   a section each for the axes, the legend, the series and the values, headed
+   as the inspector's sections are. */
+.customize-tab { display: grid; gap: 12px; }
+.customize-tab__section { display: grid; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--wc-border-subtle); }
+.customize-tab__section:last-child { border-bottom: 0; }
+.customize-tab__section > h3 {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.customize-tab__check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.customize-tab__series { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.customize-tab__series li { display: flex; align-items: center; gap: 8px; }
+.customize-tab__series input[type='color'] { width: 28px; height: 20px; padding: 0; border: 1px solid var(--wc-border-subtle); border-radius: 4px; background: none; }
+.axis-panel { display: grid; gap: 4px; margin: 0 0 8px; padding: 8px; border: 1px solid var(--wc-border-subtle); border-radius: 6px; }
+.axis-panel > legend { padding: 0 4px; font-size: 12px; font-weight: 600; color: var(--wc-text-secondary); }
+.axis-panel > label { font-size: 12px; color: var(--wc-text-secondary); }
 .field-list { display: grid; gap: 8px; align-content: start; }
 .field-list > label { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--wc-text-secondary); }
 .field-list ul { margin: 0; padding: 0; list-style: none; }

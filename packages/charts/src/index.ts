@@ -13,6 +13,15 @@ export { heatmapOption, isHeatmapType } from './series/heatmap';
 export { DRAWABLE_TYPES, isDrawable, optionFor } from './optionFor';
 export { themed, type ChartTheme } from './themed';
 export { applyAxes, axesOf, type AxesSettings, type AxisSettings, type NumberFormat } from './axis';
+export {
+  applyCustomize,
+  legendSettingsOf,
+  seriesSettingsOf,
+  STACKABLE_TYPES,
+  type LegendPosition,
+  type LegendSettings,
+  type SeriesSettings,
+} from './customize';
 export { assignColours, OTHER_COLOUR, type ColourAssignment } from './colorAssignment';
 export { legendFor, seriesCount } from './legend';
 export { echarts } from './echarts';
