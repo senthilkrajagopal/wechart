@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 
 import { StateLine } from '../../shell/StatusIcon';
 import { BuildPanel } from './BuildPanel';
 import { Health } from './Health';
-import { QueryLog, type QueryRecord } from './QueryLog';
+import { FIRST_ASK, QueryLog, queryStringOf, type QueryLogAsk, type QueryRecord } from './QueryLog';
 
 /**
  * The Jobs workspace, in the prototype's tabs: the pre-aggregations, each
@@ -18,20 +18,26 @@ const TABS = [
 type Tab = (typeof TABS)[number][0];
 
 function Queries() {
-  // Refetched when opened again, so the queries a dashboard just issued are there.
-  const records = useQuery({
-    queryKey: ['jobs', 'queries'],
-    queryFn: async ({ signal }): Promise<QueryRecord[]> => {
-      const response = await fetch('/api/jobs/queries', { signal });
+  const [ask, setAsk] = useState<QueryLogAsk>(FIRST_ASK);
+  // Refetched when opened again, so the queries a dashboard just issued are
+  // there. A page, narrowed and sorted by the API over the whole log (AC-230);
+  // the one before stays in view while the next is read.
+  const found = useQuery({
+    queryKey: ['jobs', 'queries', ask],
+    queryFn: async ({ signal }): Promise<{ records: QueryRecord[]; total: number }> => {
+      const response = await fetch(`/api/jobs/queries/page?${queryStringOf(ask)}`, { signal });
       if (!response.ok)
         throw new Error(`The query log could not be read (${String(response.status)}).`);
-      return (await response.json()) as QueryRecord[];
+      return (await response.json()) as { records: QueryRecord[]; total: number };
     },
+    placeholderData: keepPreviousData,
     refetchOnMount: 'always',
   });
-  if (records.isPending) return <StateLine kind="run">Reading the query log…</StateLine>;
-  if (records.isError) return <StateLine kind="err">{records.error.message}</StateLine>;
-  return <QueryLog records={records.data} />;
+  if (found.isPending) return <StateLine kind="run">Reading the query log…</StateLine>;
+  if (found.isError) return <StateLine kind="err">{found.error.message}</StateLine>;
+  return (
+    <QueryLog records={found.data.records} total={found.data.total} ask={ask} onAsk={setAsk} />
+  );
 }
 
 /** `?tab=queries` opens the log: a link to it, and the accessibility sweep's. */

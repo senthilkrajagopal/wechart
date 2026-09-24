@@ -1051,6 +1051,34 @@ fieldset.model-field > legend {
   background: var(--wc-bg-surface);
 }
 .admin-pane__empty { margin: 0; color: var(--wc-text-secondary); }
+/* The query log (AC-230): the prototype's filter row of small selects, a
+   header kept in view under the app bar while the rows scroll, and a pager. */
+.query-log-view { display: grid; gap: 8px; }
+.query-log__filters { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.query-log__filters label { color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
+.query-log--sticky thead th {
+  position: sticky;
+  top: var(--wc-app-bar-height);
+  z-index: 2;
+}
+.sort-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.sort-button:hover { text-decoration: underline; }
+.query-log__pager {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: var(--wc-text-xs-size);
+  color: var(--wc-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
 .admin-pane__title {
   margin: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

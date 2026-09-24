@@ -211,3 +211,91 @@ test('selecting a pre-aggregation fills the full-height pane with its state, tri
   await expect(pane.getByTestId('pane-state')).toHaveText('Done');
   await expect(pane.getByRole('list', { name: `Jobs building ${ROLLUP}` })).toContainText('t-pane');
 });
+
+/**
+ * T240 / AC-230: THE SYSTEM SHALL let the user narrow the query log by
+ * outcome, source and time range and sort it, keep its column headers in view
+ * while it scrolls, and render no more than a page of rows at a time.
+ * `Fails when: the headers scroll out of view, a filter does not narrow the
+ * rows, or more than one page of rows is rendered at once.`
+ *
+ * Sixty records, answered here by a stand-in for the API's page — narrowing,
+ * sorting and paging as it is asked — so the log is long enough to page and
+ * to scroll whatever the shared database holds. That the API narrows the
+ * whole log is `packages/api/src/repos/query-log.test.ts`'s; this is that the
+ * page asks it to, and shows what comes back.
+ */
+test('the query log narrows, sorts and pages, its headers in view as it scrolls', async ({
+  page,
+}) => {
+  const now = Date.now();
+  const records = Array.from({ length: 60 }, (_, index) => ({
+    id: index + 1,
+    requestId: `r-${String(index)}`,
+    query: { measures: ['orders.count'], dimensions: ['orders.status'] },
+    durationMs: 100 + index * 10,
+    accelerated: index % 2 === 0,
+    preAggregation: index % 2 === 0 ? 'orders.main' : null,
+    error: index % 5 === 0 ? 'Timed out' : null,
+    createdAt: new Date(now - index * 60_000).toISOString(),
+  }));
+  const asked: URLSearchParams[] = [];
+  await page.route('**/api/jobs/queries/page*', (route) => {
+    const ask = new URL(route.request().url()).searchParams;
+    asked.push(ask);
+    const outcome = ask.get('outcome');
+    const kept = records.filter(
+      (record) => outcome === null || (outcome === 'failed') === (record.error !== null),
+    );
+    const by = ask.get('sort') === 'duration' ? 'durationMs' : 'id';
+    // Newest first is the lowest id here; longest first the highest duration.
+    const sign = (by === 'id' ? -1 : 1) * (ask.get('order') === 'asc' ? 1 : -1);
+    const sorted = [...kept].sort((a, b) => sign * (a[by] - b[by]));
+    const offset = Number(ask.get('offset'));
+    const limit = Number(ask.get('limit'));
+    return route.fulfill({
+      json: { records: sorted.slice(offset, offset + limit), total: sorted.length },
+    });
+  });
+  await page.setViewportSize({ width: 1280, height: 600 });
+  await page.goto('/jobs?tab=queries');
+  const log = page.getByRole('table', { name: /Queries wechart has issued/ });
+  const rows = log.locator('tbody tr');
+  const range = page.getByTestId('query-log-range');
+
+  // One page at a time, and the next.
+  await expect(rows).toHaveCount(25);
+  await expect(range).toHaveText('1–25 of 60');
+  expect(asked.at(-1)?.get('limit')).toBe('25');
+  await page.getByRole('button', { name: 'Next page' }).click();
+  await expect(range).toHaveText('26–50 of 60');
+  expect(asked.at(-1)?.get('offset')).toBe('25');
+
+  // Narrowed by outcome, asked of the API from the first page: failures only.
+  await page.getByLabel('Outcome').selectOption('failed');
+  await expect(range).toHaveText('1–12 of 12');
+  expect(asked.at(-1)?.get('outcome')).toBe('failed');
+  expect(asked.at(-1)?.get('offset')).toBe('0');
+  await expect(rows).toHaveCount(12);
+  for (const text of await rows.allTextContents()) expect(text).toContain('Failed');
+  await page.getByLabel('Outcome').selectOption('all');
+  await expect(range).toHaveText('1–25 of 60');
+
+  // Sorted by duration, longest first.
+  await log.getByRole('button', { name: /Duration/ }).click();
+  await expect(log.getByRole('columnheader', { name: /Duration/ })).toHaveAttribute(
+    'aria-sort',
+    'descending',
+  );
+  await expect(rows.first().getByTestId('duration-60')).toHaveText('690 ms');
+  expect(asked.at(-1)?.get('sort')).toBe('duration');
+
+  // Scrolled well past the header: the header is still in view, just under the bar.
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(200);
+  const header = log.locator('thead th').first();
+  await expect(header).toBeInViewport();
+  const top = (await header.boundingBox())?.y ?? 0;
+  expect(top).toBeGreaterThanOrEqual(47);
+  expect(top).toBeLessThanOrEqual(50);
+});

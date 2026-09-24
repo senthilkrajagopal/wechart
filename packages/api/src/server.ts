@@ -24,7 +24,7 @@ import { registerBuilds } from './jobs/build';
 import type { Config } from './config';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, type ReferenceDocument } from './model/references';
-import type { QueryLogEntry } from './repos/query-log';
+import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
 
 /**
  * The wechart API. The browser talks only to this, and this is the only thing
@@ -137,7 +137,12 @@ export interface QueryLogWriter {
   recent(limit?: number): Promise<unknown[]>;
   /** The records of these request ids (T180). */
   byRequestIds?(requestIds: readonly string[]): Promise<unknown[]>;
+  /** A page of the log, narrowed and sorted over all of it (T240). */
+  page?(ask: QueryLogPageAsk): Promise<{ records: unknown[]; total: number }>;
 }
+
+/** The query log's time ranges, in seconds (AC-230). */
+const WITHIN_SECONDS = { hour: 3_600, day: 86_400, week: 604_800 } as const;
 
 export function buildServer({
   config,
@@ -841,6 +846,44 @@ export function buildServer({
   app.get('/api/jobs/queries', async (request) => {
     const { limit } = request.query as { limit?: string };
     return log ? log.recent(Number(limit) || 100) : [];
+  });
+
+  /**
+   * A page of the log, narrowed and sorted over all of it (T240, AC-230): the
+   * database does it, so "Failed" finds a failure however many queries came
+   * after it, and the count is the log's rather than a window's.
+   */
+  app.get('/api/jobs/queries/page', async (request) => {
+    const q = request.query as Record<string, string | undefined>;
+    const oneOf = <T extends string>(key: string, allowed: readonly T[]): T | undefined => {
+      const value = q[key];
+      if (value === undefined) return undefined;
+      if (!(allowed as readonly string[]).includes(value))
+        throw new BadRequest(`${key} is one of ${allowed.join(', ')}.`);
+      return value as T;
+    };
+    const whole = (key: string, fallback: number, least: number, most: number): number => {
+      const value = q[key];
+      if (value === undefined) return fallback;
+      if (!/^\d+$/.test(value) || Number(value) < least || Number(value) > most)
+        throw new BadRequest(`${key} is a whole number from ${String(least)} to ${String(most)}.`);
+      return Number(value);
+    };
+
+    const outcome = oneOf('outcome', ['succeeded', 'failed'] as const);
+    const source = oneOf('source', ['live', 'accelerated'] as const);
+    const within = oneOf('within', ['hour', 'day', 'week'] as const);
+    const ask = {
+      ...(outcome === undefined ? {} : { outcome }),
+      ...(source === undefined ? {} : { source }),
+      ...(within === undefined ? {} : { withinSeconds: WITHIN_SECONDS[within] }),
+      sort: oneOf('sort', ['when', 'duration'] as const) ?? 'when',
+      descending: (oneOf('order', ['asc', 'desc'] as const) ?? 'desc') === 'desc',
+      offset: whole('offset', 0, 0, Number.MAX_SAFE_INTEGER),
+      // A page is what the Jobs workspace shows; a hundred is past any page.
+      limit: whole('limit', 25, 1, 100),
+    };
+    return log?.page ? log.page(ask) : { records: [], total: 0 };
   });
 
   /**

@@ -1,4 +1,4 @@
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 
 import type { Database } from '../db/schema';
 
@@ -22,6 +22,26 @@ export interface QueryLogEntry {
 export interface QueryLogRecord extends QueryLogEntry {
   readonly id: number;
   readonly createdAt: Date;
+}
+
+/** What a page of the log is asked for (AC-230); each part absent asks for all. */
+export interface QueryLogPageAsk {
+  readonly outcome?: 'succeeded' | 'failed';
+  readonly source?: 'live' | 'accelerated';
+  /** Only records made within this many seconds. */
+  readonly withinSeconds?: number;
+  /** By when (the default) or by how long. */
+  readonly sort?: 'when' | 'duration';
+  /** Largest first, the default. */
+  readonly descending?: boolean;
+  readonly offset?: number;
+  readonly limit?: number;
+}
+
+export interface QueryLogPage {
+  readonly records: QueryLogRecord[];
+  /** How many records match, over the whole log. */
+  readonly total: number;
 }
 
 export function queryLog(db: Kysely<Database>) {
@@ -54,6 +74,41 @@ export function queryLog(db: Kysely<Database>) {
         .execute();
 
       return rows.map(toRecord);
+    },
+
+    /**
+     * A page of the log, narrowed and sorted over all of it (AC-230), with how
+     * many records match in all. The time range is counted back from the
+     * database's clock, which stamped the records, not the browser's.
+     * Ties fall newest first, so a page follows on from the one before it.
+     */
+    async page(ask: QueryLogPageAsk = {}): Promise<QueryLogPage> {
+      let matching = db.selectFrom('query_log');
+      if (ask.outcome !== undefined)
+        matching = matching.where('error', ask.outcome === 'failed' ? 'is not' : 'is', null);
+      if (ask.source !== undefined)
+        matching = matching.where('accelerated', '=', ask.source === 'accelerated');
+      if (ask.withinSeconds !== undefined)
+        matching = matching.where(
+          'created_at',
+          '>=',
+          sql<Date>`now() - make_interval(secs => ${ask.withinSeconds})`,
+        );
+
+      const direction = ask.descending === false ? 'asc' : 'desc';
+      const [rows, counted] = await Promise.all([
+        matching
+          .selectAll()
+          .orderBy(ask.sort === 'duration' ? 'duration_ms' : 'created_at', direction)
+          .orderBy('created_at', 'desc')
+          .orderBy('id', 'desc')
+          .offset(ask.offset ?? 0)
+          .limit(ask.limit ?? 25)
+          .execute(),
+        matching.select((eb) => eb.fn.countAll<string>().as('total')).executeTakeFirstOrThrow(),
+      ]);
+
+      return { records: rows.map(toRecord), total: Number(counted.total) };
     },
 
     /**

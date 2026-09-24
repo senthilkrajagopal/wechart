@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { sql } from 'kysely';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getDb } from '../db/client';
@@ -103,5 +104,76 @@ describe('query log (AC-016)', () => {
 
     expect(found.map((entry) => entry.requestId).sort()).toEqual([...mine].sort());
     expect(await log().byRequestIds([])).toEqual([]);
+  });
+});
+
+/**
+ * T240 / AC-230: THE SYSTEM SHALL let the user narrow the query log by
+ * outcome, source and time range and sort it, keep its column headers in view
+ * while it scrolls, and render no more than a page of rows at a time.
+ * `Fails when: … a filter does not narrow the rows …`
+ *
+ * Narrowed, sorted and counted over the whole log, not over the latest
+ * hundred the page once read (T240's review): a failure behind a hundred newer
+ * successes is exactly what "Outcome: Failed" is for.
+ */
+describe('a page of the query log, narrowed and sorted over all of it (AC-230)', () => {
+  const made: string[] = [];
+  const recordOne = async (entry: Partial<Parameters<ReturnType<typeof log>['record']>[0]>) => {
+    const requestId = randomUUID();
+    made.push(requestId);
+    await log().record({ requestId, query: {}, durationMs: 5, accelerated: false, ...entry });
+    return requestId;
+  };
+
+  afterAll(async () => {
+    await getDb().deleteFrom('query_log').where('request_id', 'in', made).execute();
+  });
+
+  it('finds a failure behind more than a hundred newer queries, and only failures', async () => {
+    const failed = await recordOne({ error: 'Timed out' });
+    for (let i = 0; i < 110; i += 1) await recordOne({ accelerated: true });
+
+    const found = await log().page({ outcome: 'failed', limit: 1000 });
+
+    expect(found.records.map((entry) => entry.requestId)).toContain(failed);
+    expect(found.records.every((entry) => typeof entry.error === 'string')).toBe(true);
+    expect(found.total).toBe(found.records.length);
+  });
+
+  it('narrows by source, and by time by the database’s own clock', async () => {
+    const earlier = await recordOne({ accelerated: true });
+    await getDb()
+      .updateTable('query_log')
+      .set({ created_at: sql<Date>`now() - interval '2 hours'` })
+      .where('request_id', '=', earlier)
+      .execute();
+    const fresh = await recordOne({ accelerated: true });
+
+    const lastHour = await log().page({ source: 'accelerated', withinSeconds: 3600, limit: 1000 });
+    const ids = lastHour.records.map((entry) => entry.requestId);
+    expect(ids).toContain(fresh);
+    expect(ids).not.toContain(earlier);
+    expect(lastHour.records.every((entry) => entry.accelerated)).toBe(true);
+
+    const live = await log().page({ source: 'live', withinSeconds: 3600, limit: 1000 });
+    expect(live.records.map((entry) => entry.requestId)).not.toContain(fresh);
+  });
+
+  it('sorts by duration either way, and pages with the total', async () => {
+    const longest = await recordOne({ durationMs: 2_000_000_000 });
+
+    const longestFirst = await log().page({ sort: 'duration', descending: true, limit: 1 });
+    expect(longestFirst.records.map((entry) => entry.requestId)).toEqual([longest]);
+    const shortestFirst = await log().page({ sort: 'duration', descending: false, limit: 2 });
+    expect(shortestFirst.records[0]?.durationMs).toBeLessThanOrEqual(
+      shortestFirst.records[1]?.durationMs ?? 0,
+    );
+
+    const first = await log().page({ limit: 2, offset: 0 });
+    const second = await log().page({ limit: 2, offset: 1 });
+    expect(second.records[0]?.id).toBe(first.records[1]?.id);
+    expect(first.total).toBeGreaterThanOrEqual(made.length);
+    expect(first.records).toHaveLength(2);
   });
 });

@@ -32,7 +32,9 @@ function api(states: string[], tokens: string[], leftOut: string[] = []) {
       const url = String(input);
       asked.push(url);
       if (url === '/api/preaggregations') return new Response(JSON.stringify(BUILDABLE));
-      if (url === '/api/jobs/queries') return new Response(JSON.stringify([]));
+      // A page of the query log, as the API answers one (T240).
+      if (url.startsWith('/api/jobs/queries/page'))
+        return new Response(JSON.stringify({ records: [], total: 0 }));
       // The Jobs header's own ask (T162), answered and not counted.
       if (url === '/api/cube-health')
         return new Response(JSON.stringify({ cube: 'healthy', worker: 'healthy' }));

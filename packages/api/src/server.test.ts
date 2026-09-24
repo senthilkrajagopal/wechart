@@ -843,6 +843,51 @@ describe('recording every query (AC-016)', () => {
     await app.close();
   });
 
+  /**
+   * T240 (AC-230): a page of the log, narrowed and sorted by the database over
+   * all of it, rather than the page filtering the latest hundred.
+   */
+  it('reads a page of the log as asked, and refuses what it cannot ask', async () => {
+    const asked: unknown[] = [];
+    const queryLog = {
+      ...recordingLog(),
+      page: async (ask: unknown) => {
+        asked.push(ask);
+        return { records: [{ id: 1 }], total: 60 };
+      },
+    };
+    const app = buildServer({ config, queryLog, cube: stubCube(() => ({ data: [] })) });
+    const read = (query: string) =>
+      app.inject({ method: 'GET', url: `/api/jobs/queries/page${query}` });
+
+    const answer = await read(
+      '?outcome=failed&source=accelerated&within=day&sort=duration&order=asc&offset=25&limit=25',
+    );
+    const plain = await read('');
+    const refused = await Promise.all(
+      ['?outcome=maybe', '?within=year', '?sort=size', '?offset=-1', '?limit=0', '?limit=101'].map(
+        read,
+      ),
+    );
+
+    expect(answer.json()).toEqual({ records: [{ id: 1 }], total: 60 });
+    expect(asked).toEqual([
+      {
+        outcome: 'failed',
+        source: 'accelerated',
+        withinSeconds: 86_400,
+        sort: 'duration',
+        descending: false,
+        offset: 25,
+        limit: 25,
+      },
+      { sort: 'when', descending: true, offset: 0, limit: 25 },
+    ]);
+    expect(plain.statusCode).toBe(200);
+    expect(refused.map((response) => response.statusCode)).toEqual([400, 400, 400, 400, 400, 400]);
+    await app.close();
+  });
+
   /** T180 (AC-174): a page's own queries, by the request ids it sent. */
   it('finds the records of given request ids, and refuses anything else', async () => {
     const asked: (readonly string[])[] = [];

@@ -718,7 +718,7 @@ Jobs, Security, Schedules and Data sources:
       Fails when: selecting a pre-aggregation shows nothing, or the pane is not full height.
 - [x] AC-229 THE SYSTEM SHALL list each pre-aggregation in Jobs with its state as an icon and a label, the refresh key that triggers it, and its name linking to its definition in Model, and SHALL show a started build's progress in that row (direction.md rule 22).
       Fails when: a row has no state or no trigger, the name does not open Model, or a build's progress appears only outside its row.
-- [ ] AC-230 THE SYSTEM SHALL let the user narrow the query log by outcome, source and time range and sort it, keep its column headers in view while it scrolls, and render no more than a page of rows at a time.
+- [x] AC-230 THE SYSTEM SHALL let the user narrow the query log by outcome, source and time range and sort it, keep its column headers in view while it scrolls, and render no more than a page of rows at a time.
       Fails when: the headers scroll out of view, a filter does not narrow the rows, or more than one page of rows is rendered at once.
 - [x] AC-231 THE SYSTEM SHALL draw the workspaces' page titles in direction.md's page-title style, and their tables as cards with a header band, rows of 34 pixels, 12-pixel cells and tabular numerals (direction.md rule 1).
       Fails when: a workspace page title is not 20 px at weight 600, or a workspace table's numbers are not tabular.
