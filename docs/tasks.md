@@ -1664,22 +1664,22 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **"In effect" excludes the filters Cube refused to join** (AC-079), the same subtraction `inEffect` makes. Without it a tile whose only reaching filter was dropped was still told its marks were hidden by the filters. Found by the cold review.
   - **What it cannot distinguish, recorded:** "the filters exclude the marks" and "the marked items have no rows in this tile" both arrive as zero rows. Telling them apart needs a second query asking the same question unfiltered, which is AC-104's machinery; until that exists the message names the filters, which is right whenever any filter is in effect and is the case direction.md rule 55 is about.
   - **Limits apply in Markings mode only**, and `limitedStates` is gated the same way. The cold review found the gap: with the limit not applied but the state still computed, a limited tile that happened to return no rows under a *cross-filter* was told its marks were hidden by the filters when nothing was marked at all. Cross-filter mode has no markings anywhere (AC-120), so a marking limit has nothing to mean there.
-- [ ] T118 (AC-112) Create a details tile limited by the source tile's marking
-  - Files: `packages/web/src/dashboard/tiles/createDetails.ts`, `packages/web/src/dashboard/tiles/createDetails.test.ts`
-  - Failing test: `createDetails.test.ts`: the new tile is limited by that marking and carries a pre-filled nothing-marked message (AC-112).
-  - Depends on: T116
-- [ ] T119 (AC-113) Turn a marking into a removable filter, or its negation, and clear the marking
-  - Files: `packages/web/src/dashboard/markings/filterToMarked.ts`, `packages/web/src/dashboard/markings/filterToMarked.test.ts`
-  - Failing test: `filterToMarked.test.ts`: "Filter to marked" creates a removable dashboard filter whose rows equal the marked rows, "Filter out marked" its negation, and both clear the marking (AC-113).
-  - Depends on: T086, T113
-- [ ] T120 (AC-114) Show the rows behind the marked items, with a total and an export
-  - Files: `packages/web/src/dashboard/markings/MarkedRows.tsx`, `packages/web/src/dashboard/markings/MarkedRows.test.tsx`
-  - Failing test: `MarkedRows.test.tsx`: the rows match the marking, the total row count is stated, and an export is offered (AC-114).
-  - Depends on: T113, T041
-- [ ] T121 (AC-115) Invert a marking, or mark all, on one tile without disturbing other tiles' contributions
-  - Files: `packages/core/src/markings/apply.ts`, `packages/core/src/markings/invert.test.ts`
-  - Failing test: `invert.test.ts`: Invert marks exactly the tile's unmarked items, Mark all marks every visible item, and neither changes other tiles' contributions to that marking (AC-115).
-  - Depends on: T108
+- [ ] T118 (AC-112, AC-199) Create a details tile limited by the source tile's marking
+  - Files: `packages/web/src/dashboard/tiles/createDetails.ts`, `packages/web/src/dashboard/tiles/createDetails.test.ts`, and its item in the tile's ⋯ marked-rows group (`TileViewMenu.tsx`, `DashboardView.tsx`)
+  - Failing test: `createDetails.test.ts`: the new tile is limited by that marking and carries a pre-filled nothing-marked message (AC-112); `e2e/markings.spec.ts`: "Create details tile" from the tile's ⋯ group adds it (AC-199).
+  - Depends on: T116, T219
+- [ ] T119 (AC-113, AC-199) Turn a marking into a removable filter, or its negation, and clear the marking
+  - Files: `packages/web/src/dashboard/markings/filterToMarked.ts`, `packages/web/src/dashboard/markings/filterToMarked.test.ts`, and their items in the tile's ⋯ marked-rows group
+  - Failing test: `filterToMarked.test.ts`: "Filter to marked" creates a removable dashboard filter whose rows equal the marked rows, "Filter out marked" its negation, and both clear the marking (AC-113); `e2e/markings.spec.ts`: both, from the tile's ⋯ group (AC-199).
+  - Depends on: T086, T113, T219
+- [ ] T120 (AC-114, AC-199) Show the rows behind the marked items, with a total and an export
+  - Files: `packages/web/src/dashboard/markings/MarkedRows.tsx`, `packages/web/src/dashboard/markings/MarkedRows.test.tsx`, and its item in the tile's ⋯ marked-rows group
+  - Failing test: `MarkedRows.test.tsx`: the rows match the marking, the total row count is stated, and an export is offered (AC-114); `e2e/markings.spec.ts`: "View marked rows" from the tile's ⋯ group opens them (AC-199).
+  - Depends on: T113, T041, T219
+- [ ] T121 (AC-115, AC-199) Invert a marking, or mark all, on one tile without disturbing other tiles' contributions
+  - Files: `packages/core/src/markings/apply.ts`, `packages/core/src/markings/invert.test.ts`, and their items in the tile's ⋯ marked-rows group
+  - Failing test: `invert.test.ts`: Invert marks exactly the tile's unmarked items, Mark all marks every visible item, and neither changes other tiles' contributions to that marking (AC-115); `e2e/markings.spec.ts`: both, from the tile's ⋯ group — the last of AC-199's marked-rows actions, which ticks it (AC-199).
+  - Depends on: T108, T219
 - [ ] T122 (AC-116) Render marking and measure tokens in text tiles
   - Files: `packages/web/src/dashboard/tiles/TextTokens.ts`, `packages/web/src/dashboard/tiles/TextTokens.test.ts`
   - Failing test: `TextTokens.test.ts`: a marking token renders the summary or count, and a measure token limited by a marking shows the measure over the marked rows, or over all data when nothing is marked (AC-116).
@@ -3306,10 +3306,14 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Done 2026-09-24. AC-198 ticked on `e2e/markings.spec.ts` "Settings › Markings adds, renames, recolours, deletes and defaults markings, and sets each tile’s", all three browsers: every change is made on the page, saved, and read back from the stored dashboard; `markingsDraft.test.ts` and `model.test.ts` pin the rules.
   - The prototype's two tables: markings (colour slots, name, default, "Used by n · limits n", Delete) with "+ New marking", and "Tiles and markings" (every chart tile on every page and tab, its Marks with, its Limited by). Recolouring to a colour another marking wears swaps the two, so each of the four colours is worn once (AC-084). Deleting a marking sets the tiles that named it to none and takes it out of every limit, as the prototype's `mkdel` does; tiles that followed a deleted default follow the new one. While the dashboard cross-filters, the section says it is inactive, as the prototype does.
   - **The cold review passed; its findings are fixed:** a marking added after a delete took the deleted one's id — and would have inherited any marks still held under it — so settings now gives new markings a fresh id; default names skip names in use, and Save is refused, on the Markings section, while a name is empty or duplicated (the prototype's rule); making a marking the default, or deleting the default, lifts it from the limits of the tiles that now mark with it, which the page otherwise showed checked and disabled; the "four at most" sentence is the button's description.
-- [ ] T219 (AC-199, AC-201) Give a chart tile's view-mode menu its items, and put the marked badge in the header row
-  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/ChartTile.tsx`, `packages/web/src/dashboard/markings/MarkBadge.tsx`, `e2e/markings.spec.ts`
+- [x] T219 (AC-199, AC-201) Give a chart tile's view-mode menu its items, and put the marked badge in the header row
+  - Files: `packages/web/src/dashboard/{DashboardView,TileViewMenu,ViewQuery}.tsx`, `packages/web/src/tiles/ChartTile.tsx`, `packages/web/src/shell/styles.ts`, `e2e/markings.spec.ts`
   - Failing test: `e2e/markings.spec.ts`: the menu offers View as table, View query, Download CSV and Edit chart, and the marked-rows group only in Markings mode; the badge sits beside the title and not on a markdown tile (AC-199, AC-201).
   - Depends on: T217
+  - Done 2026-09-24. AC-201 ticked on `e2e/markings.spec.ts` "the marked badge sits beside the title in the tile’s header, and never on a text tile", all three browsers. **AC-199 stays open:** its menu items and its mode gating are demonstrated ("a chart tile’s menu offers its views, its query, a download and Edit chart, and its marking’s actions"; "outside Markings mode, a chart tile’s menu has no marked-rows actions"), but the marked-rows group holds only Unmark — direction.md's group also has Filter to/out marked, View marked rows, Invert and Mark all, whose criteria (AC-112–AC-115) are open. T118–T121 now each put their action in this group with an e2e test, and T121, the last, ticks AC-199.
+  - The badge is in `ChartTile`'s head row (a chart tile's only, and only when its marking holds something); the table view is held in `DashboardPages` so ⋯ can switch it; View query is its own dialog (`ViewQuery.tsx`): the Cube query as JSON and Cube's SQL for it, as the preview context when previewing; Unmark clears what the tile marks with, as Escape does.
+  - **The cold review failed the first cut, fixed:** the View query dialog had no styles, so a long SQL line pushed Close off-screen — it now scrolls its code as the SQL-as-context dialog does; Unmark from the menu was not announced (AC-101 regressed) — it is now; the query shown, and counted for an export, left out the marking limit a details tile runs — `queryOf` adds it; focus return read a test id — the ⋯ button has its own attribute; View query and Edit chart dropped focus when they did nothing — ⋯ takes it back first; View as table was offered where no table can show; the badge's empty element drew an empty head row; the menu's 200 px cap cut the new items off.
+  - **Recorded, not changed:** the badge now shows where `ChartTile` draws (with rows, empty or busy), not in a tile's error, skeleton or limited states, which draw no marks.
 - [ ] T220 (AC-200) Make the marking chip bordered, titled by members' titles, naming its source tile, with a menu and ×
   - Files: `packages/web/src/dashboard/markings/MarkChip.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `e2e/markings.spec.ts`
   - Failing test: `e2e/markings.spec.ts`: after marking, the chip reads the member's title and the source tile, and its × unmarks (AC-200).
@@ -3457,7 +3461,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225 | AC-188 | T206       |
 | AC-189 | T207       | AC-190 | T211 | AC-191 | T211 | AC-192 | T212       |
 | AC-193 | T213       | AC-194 | T214 | AC-195 | T216 | AC-196 | T217       |
-| AC-197 | T215       | AC-198 | T218 | AC-199 | T219 | AC-200 | T220       |
+| AC-197 | T215       | AC-198 | T218 | AC-199 | T219, T118–T121 | AC-200 | T220       |
 | AC-201 | T219       | AC-202 | T221 | AC-203 | T222 | AC-204 | T223       |
 | AC-205 | T223       | AC-206 | T223 | AC-207 | T217 | AC-208 | T221       |
 | AC-209 | T224       | AC-210 | T224 | AC-211 | T210 | AC-212 | T226       |

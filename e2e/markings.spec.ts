@@ -965,3 +965,140 @@ test('Settings › Markings adds, renames, recolours, deletes and defaults marki
   expect(items.find((item) => item.id === 'tile-category')?.marksWith).toBe('m1');
   expect(items.find((item) => item.id === 'tile-details')?.limitedBy).toEqual(['m1', region?.id]);
 });
+
+/**
+ * T219 / AC-199: WHEN the user opens a chart tile's menu in view mode, THE
+ * SYSTEM SHALL offer View as table, View query, Download CSV and Edit chart,
+ * and, while the dashboard is in Markings mode, the marked-rows actions headed
+ * by the tile's marking and its count.
+ * `Fails when: one of those items is missing, or the marked-rows actions
+ * appear outside Markings mode.`
+ */
+test('a chart tile’s menu offers its views, its query, a download and Edit chart, and its marking’s actions', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  await clickBar(page, status, 'shipped');
+  await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
+
+  const openMenu = async () => {
+    await status.getByRole('button', { name: 'Actions for By status' }).click();
+    return status.getByRole('list', { name: 'Actions for By status' });
+  };
+  let menu = await openMenu();
+  // The marked-rows group first, headed by the tile's marking and its count.
+  const marked = menu.getByRole('group', { name: 'Marking · 1 marked' });
+  await expect(marked.getByRole('button', { name: 'Unmark' })).toBeVisible();
+  await expect(menu.getByRole('button').filter({ hasNotText: 'Unmark' })).toHaveText([
+    'View as table',
+    'View query',
+    'Download CSV',
+    'Edit chart',
+  ]);
+
+  // View as table: the tile shows its rows.
+  await menu.getByRole('button', { name: 'View as table' }).click();
+  await expect(status.getByRole('table')).toBeVisible();
+
+  // View query: the Cube query, and the SQL it runs.
+  menu = await openMenu();
+  await menu.getByRole('button', { name: 'View query' }).click();
+  const dialog = page.getByRole('dialog', { name: /By status/ });
+  await expect(dialog).toContainText('"orders.count"');
+  await expect(dialog.getByTestId('generated-sql')).toContainText(/select/i);
+  // However long Cube's lines, Close stays in the dialog and in view.
+  const close = dialog.getByRole('button', { name: 'Close' });
+  await expect(close).toBeInViewport({ ratio: 1 });
+  const [dialogBox, closeBox] = [await dialog.boundingBox(), await close.boundingBox()];
+  expect((closeBox?.x ?? 0) + (closeBox?.width ?? 0)).toBeLessThanOrEqual(
+    (dialogBox?.x ?? 0) + (dialogBox?.width ?? 0) + 1,
+  );
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  // Back where it was opened from.
+  await expect(status.getByRole('button', { name: 'Actions for By status' })).toBeFocused();
+
+  // Unmark, from the marking's own group — and said, as every change is (AC-101).
+  menu = await openMenu();
+  await menu.getByRole('button', { name: 'Unmark' }).click();
+  await expect(status.getByTestId('mark-badge')).toHaveCount(0);
+  await expect(page.getByTestId('marking-announcer')).toContainText('Marking cleared');
+
+  // Edit chart opens the editor on it.
+  menu = await openMenu();
+  await menu.getByRole('button', { name: 'Edit chart' }).click();
+  await expect(page.getByRole('heading', { name: 'Chart editor' })).toBeVisible();
+});
+
+test('outside Markings mode, a chart tile’s menu has no marked-rows actions', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  // The same dashboard, cross-filtering.
+  const stored = (await (await request.get(`${API}/documents/dashboard/${id}`)).json()) as {
+    version: number;
+    body: { settings: Record<string, unknown> };
+  };
+  await request.put(`${API}/documents/dashboard/${id}`, {
+    data: {
+      version: stored.version,
+      body: {
+        ...stored.body,
+        settings: { ...stored.body.settings, interactions: { mode: 'crossFilter' } },
+      },
+    },
+  });
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  await status.getByRole('button', { name: 'Actions for By status' }).click();
+  const menu = status.getByRole('list', { name: 'Actions for By status' });
+  await expect(menu.getByRole('button', { name: 'Download CSV' })).toBeVisible();
+  await expect(menu.getByRole('group')).toHaveCount(0);
+  await expect(menu.getByRole('button', { name: 'Unmark' })).toHaveCount(0);
+});
+
+/**
+ * T219 / AC-201: THE SYSTEM SHALL show the marked-items badge in a chart
+ * tile's header row, beside its title, and only on chart tiles whose marking
+ * holds something.
+ * `Fails when: the badge pushes the title down, or appears on a tile that does
+ * not mark or whose marking is empty.`
+ */
+test('the marked badge sits beside the title in the tile’s header, and never on a text tile', async ({
+  page,
+}) => {
+  // The seeded dashboard has a text tile beside a bar chart.
+  await page.goto('/explore/dashboards/seed-root-dashboard-1');
+  const status = tile(page, 'tile-status');
+  const heading = status.getByRole('heading', { level: 3 });
+  await expect(status.getByTestId('chart-canvas')).toBeVisible();
+  // Measured within its tile: the filter bar above grows when its chip
+  // replaces the hint, and moves every tile down with it.
+  const titleInTile = async () =>
+    ((await heading.boundingBox())?.y ?? 0) - ((await status.boundingBox())?.y ?? 0);
+  const before = await titleInTile();
+
+  // Its bars are the product categories; the statuses are its legend.
+  await clickBar(page, status, 'Components');
+  const badge = status.getByTestId('mark-badge');
+  await expect(badge).toContainText('1 marked');
+  // In the header row, beside the title, and the title where it was.
+  await expect(status.locator('.tile-head').getByTestId('mark-badge')).toHaveCount(1);
+  expect(await titleInTile()).toBeCloseTo(before, 0);
+  const badgeBox = await badge.boundingBox();
+  const headingBox = await heading.boundingBox();
+  expect(
+    Math.abs(
+      (badgeBox?.y ?? 0) +
+        (badgeBox?.height ?? 0) / 2 -
+        ((headingBox?.y ?? 0) + (headingBox?.height ?? 0) / 2),
+    ),
+  ).toBeLessThan(6);
+  // Not on the text tile, which marks nothing — and the tile is there.
+  await expect(tile(page, 'tile-notes')).toBeVisible();
+  await expect(tile(page, 'tile-notes').getByTestId('mark-badge')).toHaveCount(0);
+});

@@ -651,7 +651,7 @@ Dashboards:
       Fails when: one of those items is missing, or the marked-rows actions appear outside Markings mode.
 - [ ] AC-200 THE SYSTEM SHALL show each non-empty marking in the filter bar as a chip bordered in the marking's colour, naming the marking, summarising its values by the members' titles, naming the tile it came from, and offering a menu and a control that unmarks it.
       Fails when: a chip shows a member's internal name, omits the source tile, or cannot unmark from the chip.
-- [ ] AC-201 THE SYSTEM SHALL show the marked-items badge in a chart tile's header row, beside its title, and only on chart tiles whose marking holds something.
+- [x] AC-201 THE SYSTEM SHALL show the marked-items badge in a chart tile's header row, beside its title, and only on chart tiles whose marking holds something.
       Fails when: the badge pushes the title down, or appears on a tile that does not mark or whose marking is empty.
 - [ ] AC-202 THE SYSTEM SHALL draw a section as a band with a header holding a collapse control, its title and its number of items, and SHALL collapse and expand it in view and edit mode.
       Fails when: a section has no collapse control, or cannot be collapsed in view mode.

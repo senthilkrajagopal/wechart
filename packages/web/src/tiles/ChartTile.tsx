@@ -1,6 +1,6 @@
 import { isDrawable } from '@wechart/charts';
 import type { ChartType, RenderSpec } from '@wechart/core';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import type { ClickedItem } from '../dashboard/crossfilter/clicked';
 import type { AnswerMeta } from '../query/answerMeta';
@@ -76,6 +76,11 @@ export interface ChartTileProps {
    * the answer is not Cube's own, as a draft's in the editor is not.
    */
   readonly served?: AnswerMeta | undefined;
+  /**
+   * The marked-items badge, in the header row beside the title (AC-201): the
+   * prototype's `.mbadge`, rather than a line above that pushed the title down.
+   */
+  readonly badge?: ReactNode;
 }
 
 interface ChartBodyProps {
@@ -140,6 +145,7 @@ export function ChartTile({
   served,
   onItemClick,
   rowMarking,
+  badge,
 }: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
@@ -186,9 +192,10 @@ export function ChartTile({
         data-testid="chart-tile"
         aria-busy={busy === true ? true : undefined}
       >
-        {heading === null && !saysOfData ? null : (
+        {heading === null && !saysOfData && badge == null ? null : (
           <div className="tile-head">
             {heading}
+            {badge}
             {dataAsOf}
           </div>
         )}
@@ -207,6 +214,7 @@ export function ChartTile({
           controls — here the table view, a small ghost button (AC-187). */}
       <div className="tile-head">
         {heading}
+        {badge}
         {dataAsOf}
         {canSwitch ? (
           <button

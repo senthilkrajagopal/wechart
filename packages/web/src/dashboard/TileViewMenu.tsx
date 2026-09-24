@@ -42,6 +42,11 @@ export function TileViewMenu({
   asking = false,
   countRows,
   save = saveFile,
+  tableView = false,
+  onTableView,
+  onViewQuery,
+  onEditChart,
+  marked,
 }: {
   tileId: string;
   title: string;
@@ -61,6 +66,18 @@ export function TileViewMenu({
     ((signal: AbortSignal) => Promise<{ returned: number; total: number } | undefined>) | undefined;
   /** How the file is handed over; the browser's download unless a test says. */
   save?: (name: string, text: string) => void;
+  /** Whether the tile shows its table (AC-178), and switching it (AC-199). */
+  tableView?: boolean;
+  onTableView?: ((showing: boolean) => void) | undefined;
+  /** The Cube query and SQL behind the tile (AC-199). */
+  onViewQuery?: (() => void) | undefined;
+  /** The chart editor, on this tile's chart (AC-199). */
+  onEditChart?: (() => void) | undefined;
+  /**
+   * In Markings mode, the tile's marking: the marked-rows group, headed by
+   * its name and count (AC-199). Absent in any other mode.
+   */
+  marked?: { name: string; count: number; onUnmark: () => void } | undefined;
 }) {
   const [open, setOpen] = useState(false);
   /**
@@ -117,6 +134,11 @@ export function TileViewMenu({
   const trigger = useRef<HTMLButtonElement>(null);
   const why = useId();
   const wrapper = useRef<HTMLDivElement>(null);
+  /** Put away, and back to ⋯. */
+  const close = () => {
+    setOpen(false);
+    trigger.current?.focus();
+  };
 
   useEffect(() => {
     if (!open) return undefined;
@@ -145,6 +167,9 @@ export function TileViewMenu({
         aria-label={`Actions for ${title}`}
         aria-expanded={open}
         data-testid={`tile-view-menu-${tileId}`}
+        // What focus returns to when View query closes: its own attribute, so
+        // a build that stripped test ids would not lose it.
+        data-view-menu={tileId}
         onClick={() => {
           // The menu and the note share the place under ⋯: opening it puts
           // the note away, so neither covers the other.
@@ -156,6 +181,57 @@ export function TileViewMenu({
       </button>
       {open ? (
         <ul className="tile-menu__list" aria-label={`Actions for ${title}`}>
+          {/* The marked-rows group first, as the prototype's: headed by the
+              tile's marking and how much it holds (AC-199). Shown with
+              nothing marked too, its action then unavailable. */}
+          {marked === undefined ? null : (
+            <li>
+              <div role="group" aria-labelledby={`${why}-marked`} className="tile-menu__group">
+                <span id={`${why}-marked`} className="tile-menu__heading">
+                  <span aria-hidden="true">● </span>
+                  {marked.name} · {marked.count} marked
+                </span>
+                <button
+                  type="button"
+                  disabled={marked.count === 0}
+                  onClick={() => {
+                    marked.onUnmark();
+                    close();
+                  }}
+                >
+                  Unmark
+                </button>
+              </div>
+            </li>
+          )}
+          {onTableView === undefined ? null : (
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  onTableView(!tableView);
+                  close();
+                }}
+              >
+                {tableView ? 'View as chart' : 'View as table'}
+              </button>
+            </li>
+          )}
+          {onViewQuery === undefined ? null : (
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  // Back to ⋯ first, so focus is never left on the page; the
+                  // dialog then takes it, and gives it back when it closes.
+                  close();
+                  onViewQuery();
+                }}
+              >
+                View query
+              </button>
+            </li>
+          )}
           <li>
             <button
               type="button"
@@ -180,6 +256,20 @@ export function TileViewMenu({
               </StateLine>
             ) : null}
           </li>
+          {onEditChart === undefined ? null : (
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  // As View query: ⋯ first, then the editor takes focus.
+                  close();
+                  onEditChart();
+                }}
+              >
+                Edit chart
+              </button>
+            </li>
+          )}
         </ul>
       ) : null}
       {/* Always there, so each message is announced as it changes. */}

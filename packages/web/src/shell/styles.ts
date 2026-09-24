@@ -1037,6 +1037,28 @@ fieldset.model-field > legend {
 .dialog .generated-sql__note { margin: 0; font-size: 12px; }
 .dialog .generated-sql__params { font: 12px/16px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .dialog .generated-sql__problem { color: var(--wc-status-error); overflow-wrap: anywhere; }
+/* A tile's View query (AC-199): the Cube query and its SQL, each scrolling in
+   its own box, so a long line never widens the dialog past Close — the rule
+   T174's review set for the SQL-as-context dialog. */
+.dialog.view-query {
+  width: min(760px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  grid-template-columns: minmax(0, 1fr);
+}
+.dialog.view-query h3 { margin: 8px 0 0; font-size: var(--wc-text-sm-size); font-weight: 600; }
+.view-query__code {
+  max-height: 280px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+  background: var(--wc-bg-subtle);
+  font: 12px/16px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.dialog .view-query__params { margin: 4px 0 0; font: 12px/16px ui-monospace, SFMono-Regular, Menlo, monospace; }
 /* A job's state (T158, AC-152): the prototype's .status — its icon, its words. */
 .status {
   display: inline-flex;
@@ -1905,6 +1927,26 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   font-size: var(--wc-text-xs-size);
   color: var(--wc-text-secondary);
 }
+/* In the tile's header row beside the title (AC-201): the prototype's .mbadge,
+   a 20 px pill, 12/600, bordered border-strong. */
+.mark-badge {
+  flex: 0 0 auto;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 999px;
+  color: var(--wc-text-primary);
+  font-weight: var(--wc-text-xs-strong-weight);
+  white-space: nowrap;
+}
+/* A tile menu's marked-rows group (AC-199), headed by its marking and count. */
+.tile-menu__group { display: grid; border-bottom: 1px solid var(--wc-border-subtle); }
+.tile-menu__heading {
+  padding: 4px 8px;
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
 .mark-badge__swatch,
 .mark-chip__swatch {
   width: 8px;
@@ -2104,7 +2146,9 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   right: 0;
   z-index: 3;
   min-width: 180px;
-  max-height: 200px;
+  /* Room for the view-mode menu's marked-rows group and its five items
+     (AC-199) without scrolling; 200 px cut them off (T219's review). */
+  max-height: 360px;
   margin: 0;
   padding: 4px;
   overflow: auto;

@@ -70,8 +70,9 @@ import { TileViewMenu } from './TileViewMenu';
 import { SettingsPage } from './settings/SettingsPage';
 import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
-import { activeFilters, withFilters, type ActiveFilter } from '../filters/apply';
+import { activeFilters, withFilters, withLimit, type ActiveFilter } from '../filters/apply';
 import { GeneratedSql } from '../workspaces/security/GeneratedSql';
+import { ViewQuery } from './ViewQuery';
 import { coverageOf, type Reach } from '../filters/coverage';
 import { chartTilesOf } from '../filters/scope';
 import { effectsOn, type CrossEffects, type CrossSelection } from './crossfilter/apply';
@@ -394,8 +395,16 @@ function TileBody({
   rowMarking,
   limited,
   onRetry,
+  badge,
+  tableView,
+  onTableViewChange,
 }: {
   tile: Tile;
+  /** The marked-items badge, for the chart's header row (AC-201). */
+  badge?: ReactNode;
+  /** Whether it shows its table, held above so its ⋯ menu can switch it (AC-199). */
+  tableView?: boolean | undefined;
+  onTableViewChange?: ((showing: boolean) => void) | undefined;
   /** Ask a failed chart again (AC-042): the tile's own "Refresh now". */
   onRetry?: (() => void) | undefined;
   /**
@@ -516,6 +525,9 @@ function TileBody({
           title={title}
           asOf={answered?.lastRefreshTime}
           served={answered}
+          badge={badge}
+          {...(tableView === undefined ? {} : { tableView })}
+          {...(onTableViewChange === undefined ? {} : { onTableViewChange })}
           {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
           {...(onItemClick === undefined ? {} : { onItemClick })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
@@ -609,11 +621,22 @@ interface TileCharts {
   readonly markingOn?:
     | ((tileId: string) => { marking: Marking; colour: string; markedCount: number } | undefined)
     | undefined;
+  /** Unmark what a tile marks with — its ⋯ menu's marked-rows group (AC-199). */
+  readonly onUnmark?: ((tileId: string) => void) | undefined;
+  /** The query a tile's chart asks, and its SQL (AC-199's View query). */
+  readonly onViewQuery?: ((chartId: string, tileId: string) => void) | undefined;
 }
 
 interface Affordances {
   readonly editing: boolean;
   readonly charts: TileCharts;
+  /**
+   * Which chart tiles show their table, held here rather than in each tile so
+   * the tile's ⋯ menu can switch it too (AC-199).
+   */
+  readonly tableViews?:
+    | { readonly showing: ReadonlySet<string>; readonly set: (tileId: string, on: boolean) => void }
+    | undefined;
   readonly onResize?: ((id: string, size: { w: number; h: number }) => void) | undefined;
   readonly drag?: CanvasProps['drag'];
   /** What a key does to the focused tile (AC-057). */
@@ -816,6 +839,47 @@ function Elements({
                     ? undefined
                     : (signal) => charts.countRows?.(chartId, signal) ?? Promise.resolve(undefined)
                 }
+                // The prototype's items (AC-199): its table, its query, its
+                // editor — and, in Markings mode, its marking's group.
+                tableView={affordances.tableViews?.showing.has(element.id) === true}
+                onTableView={
+                  // Only where the tile draws rows it could show as a table:
+                  // not a table already, nor an empty answer, nor a limited
+                  // tile showing its waiting state (T219's review).
+                  charts.specs[chartId]?.chartType === 'table' ||
+                  (charts.specs[chartId]?.rows.length ?? 0) === 0 ||
+                  charts.limitedStates?.[chartId] !== undefined
+                    ? undefined
+                    : (showing) => {
+                        affordances.tableViews?.set(element.id, showing);
+                      }
+                }
+                onViewQuery={
+                  charts.onViewQuery === undefined
+                    ? undefined
+                    : () => {
+                        charts.onViewQuery?.(chartId, element.id);
+                      }
+                }
+                onEditChart={
+                  affordances.onEditChart === undefined
+                    ? undefined
+                    : () => {
+                        affordances.onEditChart?.(element.id, chartId);
+                      }
+                }
+                marked={(() => {
+                  const shown = charts.markingOn?.(element.id);
+                  return shown === undefined || charts.onUnmark === undefined
+                    ? undefined
+                    : {
+                        name: shown.marking.name,
+                        count: shown.markedCount,
+                        onUnmark: () => {
+                          charts.onUnmark?.(element.id);
+                        },
+                      };
+                })()}
               />
             )}
             {affordances.moveTo === undefined ? null : (
@@ -861,18 +925,6 @@ function Elements({
                 {charts.notLinked[chartId]}
               </StateLine>
             )}
-            {/* What this tile is marking, in words and a count (AC-098): the
-                marking is not conveyed by colour alone. */}
-            {(() => {
-              const shown = charts.markingOn?.(element.id);
-              return shown === undefined ? null : (
-                <MarkBadge
-                  marking={shown.marking}
-                  colour={shown.colour}
-                  markedCount={shown.markedCount}
-                />
-              );
-            })()}
             {/* After a refresh, if a pre-aggregation answered it (T154, AC-148):
                 in view mode, as Refresh is — its Jobs link would leave an edit. */}
             {affordances.editing ||
@@ -922,6 +974,31 @@ function Elements({
               chartType={charts.typeOf?.(chartId) ?? element.chartType}
               // Named as the way in only where the pencil is offered.
               canEditChart={affordances.onEditChart !== undefined}
+              /**
+               * What this tile is marking, in words and a count (AC-098),
+               * beside its title (AC-201) — a chart tile's only: a text tile
+               * marks nothing, whatever the default marking holds.
+               */
+              badge={
+                element.kind !== 'chart'
+                  ? undefined
+                  : (() => {
+                      const shown = charts.markingOn?.(element.id);
+                      // Only when its marking holds something: an element
+                      // that renders nothing still makes the head row draw.
+                      return shown === undefined || shown.markedCount <= 0 ? undefined : (
+                        <MarkBadge
+                          marking={shown.marking}
+                          colour={shown.colour}
+                          markedCount={shown.markedCount}
+                        />
+                      );
+                    })()
+              }
+              tableView={affordances.tableViews?.showing.has(element.id) === true}
+              onTableViewChange={(showing) => {
+                affordances.tableViews?.set(element.id, showing);
+              }}
               {...(charts.onItemClick === undefined
                 ? {}
                 : {
@@ -1632,6 +1709,10 @@ export function DashboardView({
   const [refreshingFiltered, setRefreshingFiltered] = useState<ReadonlySet<string>>(new Set());
   /** The chart whose SQL as the previewed context is open (T174). */
   const [sqlFor, setSqlFor] = useState<{ chartId: string; tileId: string } | undefined>(undefined);
+  /** The tile whose View query is open (AC-199). */
+  const [queryFor, setQueryFor] = useState<{ chartId: string; tileId: string } | undefined>(
+    undefined,
+  );
   /**
    * The charts a refresh was asked for (T154, AC-148): once its answer is in,
    * one a pre-aggregation served says so — Cube read it from the rollup as
@@ -2244,8 +2325,35 @@ export function DashboardView({
           },
         }
       : {}),
+    // Only for a chart whose query can be read, as the SQL dialog's.
+    onViewQuery: (chartId: string, tileId: string) => {
+      if (queryOf(chartId) !== undefined) setQueryFor({ chartId, tileId });
+    },
     ...(marking
       ? {
+          /** Unmark what the tile marks with, as Escape on it does (AC-199). */
+          onUnmark: (tileId: string) => {
+            const element = elementAt(live, tileId);
+            if (element === null || !isTile(element)) return;
+            const markingId = marksWithOf(element);
+            if (markingId === undefined || markingId === '') return;
+            const cleared = markingOf(
+              clearTileMarking(marks, { ...element, marksWith: markingId }),
+              markingId,
+            );
+            setMarks((now) => withMarking(now, markingId, cleared));
+            // Said, as every other change to a marking is (AC-101).
+            const named = markings.find((each) => each.id === markingId);
+            if (named === undefined) return;
+            const from = element.chartId === undefined ? undefined : chartTitleOf(element.chartId);
+            setMarkSaid(
+              announceMarking({
+                marking: named,
+                markedCount: cleared.items.length + cleared.ranges.length,
+                ...(from === undefined ? {} : { tileName: from }),
+              }),
+            );
+          },
           markingOn: (tileId: string) => {
             const element = elementAt(live, tileId);
             if (element === null || !isTile(element)) return undefined;
@@ -2322,12 +2430,29 @@ export function DashboardView({
     const refused = filtered[chartId]?.uncovered ?? [];
     const applied = (reached[chartId] ?? []).filter(({ filter }) => !refused.includes(filter.id));
     try {
-      return withFilters(toCubeQuery(toChartSpec(chart)), applied);
+      // And the markings that limit it, as `FilteredCharts` adds them (AC-107):
+      // without, a details tile's query was shown, and counted, without the
+      // predicate it runs (T219's review).
+      return withLimit(
+        withFilters(toCubeQuery(toChartSpec(chart)), applied),
+        limitedTiles.asked[chartId],
+      );
     } catch {
       return undefined;
     }
   };
   const sqlQuery = sqlFor === undefined ? undefined : queryOf(sqlFor.chartId);
+  const viewedQuery = queryFor === undefined ? undefined : queryOf(queryFor.chartId);
+  const closeQuery = () => {
+    const opener = queryFor?.tileId ?? '';
+    setQueryFor(undefined);
+    // Back to the ⋯ menu it was opened from.
+    requestAnimationFrame(() => {
+      window.document
+        .querySelector<HTMLElement>(`[data-view-menu="${CSS.escape(opener)}"]`)
+        ?.focus();
+    });
+  };
   const closeSql = () => {
     const opener = sqlFor?.tileId ?? '';
     setSqlFor(undefined);
@@ -2497,6 +2622,14 @@ export function DashboardView({
   return (
     <SecurityPreview.Provider value={preview}>
       {preview === undefined ? null : <PreviewBanner context={preview} onExit={onExitPreview} />}
+      {queryFor === undefined || viewedQuery === undefined ? null : (
+        <ViewQuery
+          title={chartTitleOf(queryFor.chartId) ?? 'this chart'}
+          query={viewedQuery}
+          context={preview}
+          onClose={closeQuery}
+        />
+      )}
       {preview === undefined || sqlFor === undefined || sqlQuery === undefined ? null : (
         <GeneratedSql
           title={chartTitleOf(sqlFor.chartId) ?? 'this chart'}
@@ -3073,6 +3206,8 @@ function DashboardPages({
    * come to rest under the band, hidden (WCAG 2.4.11).
    */
   const band = useRef<HTMLDivElement>(null);
+  /** The chart tiles showing their table (AC-178), switched there or from ⋯ (AC-199). */
+  const [tableTiles, setTableTiles] = useState<ReadonlySet<string>>(() => new Set());
   useEffect(() => {
     const node = band.current;
     const canvas = node?.parentElement;
@@ -3144,6 +3279,17 @@ function DashboardPages({
   const affordances: Affordances = {
     editing,
     charts,
+    tableViews: {
+      showing: tableTiles,
+      set: (tileId, on) => {
+        setTableTiles((now) => {
+          const next = new Set(now);
+          if (on) next.add(tileId);
+          else next.delete(tileId);
+          return next;
+        });
+      },
+    },
     /**
      * A chart tile's pencil (T032). In view mode too — direction.md §2: "From
      * view mode, the pencil switches the dashboard into edit mode first" —
