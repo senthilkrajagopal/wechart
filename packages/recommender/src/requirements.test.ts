@@ -62,7 +62,8 @@ describe('what a chart needs (AC-033)', () => {
     const sentences = describeMissing('heatmap', counts(0, 0));
 
     expect(sentences).toHaveLength(2);
-    expect(sentences.some((sentence) => sentence.includes('Measures'))).toBe(true);
+    // The well as the editor names it (AC-216).
+    expect(sentences.some((sentence) => sentence.includes('Metrics'))).toBe(true);
     expect(sentences.some((sentence) => sentence.includes('Dimensions'))).toBe(true);
   });
 

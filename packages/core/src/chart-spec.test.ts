@@ -4,6 +4,7 @@ import {
   UNDERLYING_ROW_LIMIT,
   addToWell,
   emptySpec,
+  granularitiesOf,
   isEmpty,
   removeFromWell,
   toCubeQuery,
@@ -105,6 +106,71 @@ describe('the Cube query a spec asks for', () => {
     // AC-105 depends on this: the same request must be byte-identical so the
     // result can be served from cache.
     expect(JSON.stringify(toCubeQuery(a))).toBe(JSON.stringify(toCubeQuery(b)));
+  });
+});
+
+/**
+ * T229 / AC-216: … let the user change a time field's granularity from its
+ * pill, and offer a Filters well … `Fails when: … a time field's granularity
+ * cannot be changed from its pill, or the Filters well is missing.`
+ *
+ * The model half: a chosen grain and the chart's own filters reach the query.
+ */
+describe('a chosen grain and the chart’s own filters', () => {
+  const timed = {
+    ...addToWell(emptySpec('orders'), 'timeDimensions', 'orders.ordered_at'),
+    granularities: { 'orders.ordered_at': 'month' },
+  } as const;
+
+  it('asks each time member at its chosen grain, and at the day where none is chosen', () => {
+    expect(toCubeQuery(timed)['timeDimensions']).toEqual([
+      { dimension: 'orders.ordered_at', granularity: 'month' },
+    ]);
+    const both = addToWell(timed, 'timeDimensions', 'orders.shipped_at');
+    expect(toCubeQuery(both)['timeDimensions']).toEqual([
+      { dimension: 'orders.ordered_at', granularity: 'month' },
+      { dimension: 'orders.shipped_at', granularity: 'day' },
+    ]);
+    // What the labels are written by is the same grain (AC-188).
+    expect(granularitiesOf(both.timeDimensions, both.granularities)).toEqual({
+      'orders.ordered_at': 'month',
+      'orders.shipped_at': 'day',
+    });
+  });
+
+  it('forgets a removed time field’s grain, and keeps the others', () => {
+    const both = {
+      ...addToWell(timed, 'timeDimensions', 'orders.shipped_at'),
+      granularities: {
+        'orders.ordered_at': 'month' as const,
+        'orders.shipped_at': 'year' as const,
+      },
+    };
+    expect(removeFromWell(both, 'timeDimensions', 'orders.ordered_at').granularities).toEqual({
+      'orders.shipped_at': 'year',
+    });
+    expect(removeFromWell(timed, 'timeDimensions', 'orders.ordered_at')).not.toHaveProperty(
+      'granularities',
+    );
+  });
+
+  it('carries the chart’s filters with values, sorted, and drops one with none yet', () => {
+    const spec = {
+      ...addToWell(emptySpec('orders'), 'measures', 'orders.count'),
+      filters: [
+        { member: 'orders.status', operator: 'notEquals', values: ['refunded'] },
+        { member: 'orders.city', operator: 'equals', values: [] },
+        { member: 'orders.channel', operator: 'equals', values: ['web', 'store'] },
+      ],
+    } as const;
+
+    expect(toCubeQuery(spec)['filters']).toEqual([
+      { member: 'orders.channel', operator: 'equals', values: ['web', 'store'] },
+      { member: 'orders.status', operator: 'notEquals', values: ['refunded'] },
+    ]);
+    // The rows behind the chart are the rows it was filtered to (AC-036).
+    expect(toUnderlyingQuery(spec)['filters']).toEqual(toCubeQuery(spec)['filters']);
+    expect(toCubeQuery(emptySpec('orders'))).not.toHaveProperty('filters');
   });
 });
 

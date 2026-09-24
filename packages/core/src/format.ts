@@ -59,7 +59,8 @@ export type TimeGranularity =
 /** A time member's granularity in the query its values came from (AC-188). */
 export type MemberGranularities = Readonly<Record<string, TimeGranularity>>;
 
-const GRANULARITY_NAMES: readonly string[] = [
+/** Cube's predefined grains, finest first (research/cube/data-apis.md). */
+export const GRANULARITY_NAMES: readonly string[] = [
   'second',
   'minute',
   'hour',

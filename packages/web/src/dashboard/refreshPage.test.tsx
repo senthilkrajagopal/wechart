@@ -1,3 +1,4 @@
+import { CHART_DOCUMENT_VERSION } from '@wechart/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -26,7 +27,8 @@ const dashboardBody = {
 };
 
 const chartBody = (title: string) => ({
-  schemaVersion: 1,
+  // As the API serves a chart: upgraded to the current format on read.
+  schemaVersion: CHART_DOCUMENT_VERSION,
   title,
   chart: {
     source: { cube: 'orders' },

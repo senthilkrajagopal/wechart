@@ -156,6 +156,21 @@ describe('compiling a saved document', () => {
     expect(compile(withStatusAndCount, { rows: ROWS, chartType: 'bar' }).granularities).toEqual({});
   });
 
+  it('names a grain chosen from the pill, the one its query asks for (AC-216)', () => {
+    const document = documentFor((spec) => ({
+      ...addToWell(spec, 'timeDimensions', 'orders.ordered_at'),
+      granularities: { 'orders.ordered_at': 'month' as const },
+    }));
+    const asked = toCubeQuery(toChartSpec(document)) as {
+      timeDimensions: { dimension: string; granularity: string }[];
+    };
+
+    expect(asked.timeDimensions[0]?.granularity).toBe('month');
+    expect(compile(document, { rows: [], chartType: 'line' }).granularities).toEqual({
+      'orders.ordered_at': 'month',
+    });
+  });
+
   /**
    * T179 / AC-173: an export writes each measure's raw number as well as its
    * formatted value, so the spec says which of its members are measures —

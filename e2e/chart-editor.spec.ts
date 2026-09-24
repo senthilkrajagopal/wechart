@@ -58,7 +58,8 @@ test('removing a field re-runs the query too', async ({ page }) => {
   await page.getByTestId('add-dimensions').selectOption('orders.status');
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
 
-  await page.getByRole('button', { name: /Remove orders.status/ }).click();
+  // Named by its title (AC-216).
+  await page.getByRole('button', { name: /Remove Orders Status/ }).click();
 
   await expect(page.getByTestId('result-row-count')).toHaveText('1 rows');
 });
@@ -210,7 +211,8 @@ test('says what is missing, naming the well and the member type', async ({ page 
 
   const message = page.getByTestId('missing-fields');
   await expect(message).toBeVisible();
-  await expect(message).toContainText('Measures');
+  // The well as the editor names it (AC-216), and the member type it takes.
+  await expect(message).toContainText('Metrics');
   await expect(message).toContainText('measures');
   await expect(message).toContainText('add 1 more');
 });
@@ -794,4 +796,88 @@ test('over a dashboard, the editor’s one header row holds Back and Save dashbo
   const canvas = page.getByRole('region', { name: 'Preview' }).getByTestId('chart-canvas');
   await expect(canvas).toBeVisible();
   expect((await canvas.boundingBox())?.y ?? 900).toBeLessThan(900);
+});
+
+/**
+ * T229 / AC-215: THE SYSTEM SHALL group the chart editor's fields by the cube
+ * they belong to, with a search box, and show on each field its role, its
+ * aggregation, type or number of distinct values, and whether the chart uses
+ * it; clicking a field, or pressing Enter or Space on it, SHALL add it to the
+ * well its role belongs in.
+ * `Fails when: clicking or pressing Enter on a field adds nothing, or the
+ * search does not narrow the list.`
+ *
+ * T229 / AC-216: THE SYSTEM SHALL show each field in a well by its title with
+ * a tag for its aggregation or its time granularity, let the user change a
+ * time field's granularity from its pill, and offer a Filters well and a Top N
+ * setting beside the Metrics, Dimensions and Time wells.
+ * `Fails when: a pill shows a member's internal name, a time field's
+ * granularity cannot be changed from its pill, or the Filters well is missing.`
+ */
+test('fields by cube, searched and added by click or key; pills by title with a grain, Filters and Top N', async ({
+  page,
+}) => {
+  await openEditorOnOrders(page);
+  const fields = page.getByRole('complementary', { name: 'Fields' });
+  const orders = fields.getByRole('region', { name: 'Orders fields' });
+  await expect(orders).toBeVisible();
+  // Each field says what it is: a measure its aggregation, a time field "time".
+  await expect(orders.getByTestId('member-orders.count')).toContainText('count');
+  await expect(orders.getByTestId('member-orders.ordered_at')).toContainText('time');
+
+  // The search narrows the list.
+  const search = fields.getByLabel('Search fields');
+  await search.fill('amount');
+  await expect(fields.getByTestId('member-orders.count')).toHaveCount(0);
+  await expect(fields.getByTestId('member-orders.average_amount')).toBeVisible();
+
+  // A click adds a measure to Metrics, shown by its title, and marks the field used.
+  const average = fields.getByTestId('member-orders.average_amount');
+  await average.getByRole('button').click();
+  const pill = page.getByTestId('in-measures-orders.average_amount');
+  await expect(pill).toContainText('Orders Average Amount');
+  await expect(pill).not.toContainText('orders.average_amount');
+  await expect(average).toContainText('in the chart');
+
+  // Enter adds a dimension; Space adds a time field, each to its own well.
+  await search.fill('');
+  await fields.getByTestId('member-orders.status').getByRole('button').press('Enter');
+  await expect(page.getByTestId('in-dimensions-orders.status')).toBeVisible();
+  await fields.getByTestId('member-orders.ordered_at').getByRole('button').press(' ');
+  await expect(page.getByTestId('in-timeDimensions-orders.ordered_at')).toBeVisible();
+
+  // The time pill's grain is the query's grain.
+  await page.getByLabel('Grain of Orders Ordered at').selectOption('month');
+  await page.getByRole('button', { name: 'Results' }).click();
+  await page.getByTestId('drawer-tab-query').click();
+  await expect(page.getByTestId('drawer-query')).toContainText('"granularity": "month"');
+
+  // The Filters well holds the chart to a value the member has.
+  await page.getByTestId('add-filters').selectOption('orders.status');
+  await page.getByLabel('Value of Orders Status').selectOption('shipped');
+  await expect(page.getByTestId('drawer-query')).toContainText('"operator": "equals"');
+  await expect(page.getByTestId('drawer-query')).toContainText('"shipped"');
+
+  // And Top N, beside the wells.
+  await expect(page.getByLabel('Top N (+ Other)')).toBeVisible();
+});
+
+/** AC-216's Top N reaches the drawing: the rest fold into one Other (AC-041). */
+test('Top N keeps that many categories and folds the rest into Other', async ({ page }) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  const canvas = page.getByTestId('chart-canvas');
+  await expect(canvas).toBeVisible();
+  await expect(canvas.getByText(/^Other \(/)).toHaveCount(0);
+
+  const top = page.getByLabel('Top N (+ Other)');
+  await top.fill('2');
+  await top.press('Enter');
+  // Three statuses: two kept, one folded.
+  await expect(canvas.getByText('Other (1)')).toBeVisible();
+
+  // Undone in one step, as one change.
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(canvas.getByText(/^Other \(/)).toHaveCount(0);
 });

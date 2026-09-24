@@ -1,4 +1,5 @@
 import {
+  CHART_DOCUMENT_VERSION,
   chartDocumentOf,
   emptySpec,
   migrateChartDocument,
@@ -119,7 +120,7 @@ describe('loading a saved chart into the editor', () => {
     // Built the way it really arrives — a stored body through the same strict
     // reader the route uses — rather than cast past the type.
     const unknown = readChartDocument({
-      schemaVersion: 1,
+      schemaVersion: CHART_DOCUMENT_VERSION,
       title: 'From a later build',
       chart: {
         source: { cube: 'orders' },

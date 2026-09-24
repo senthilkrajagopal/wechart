@@ -43,11 +43,19 @@ const toVersion1: Upgrade = (body) => ({
 });
 
 /**
+ * Version 2 adds a chart's own filters and the grain chosen for each time
+ * field (AC-216). A version-1 body has neither, which reads as none chosen,
+ * so the step only raises the marker. The raise is what stops a version-1
+ * reader opening a filtered chart unfiltered (T229's review).
+ */
+const toVersion2: Upgrade = (body) => ({ ...body, schemaVersion: 2 });
+
+/**
  * Indexed by the version being left behind: `UPGRADES[0]` takes a version-0
  * body to version 1. Add a step here and raise `CHART_DOCUMENT_VERSION`
  * together; never renumber or remove one.
  */
-const UPGRADES: readonly Upgrade[] = [toVersion1];
+const UPGRADES: readonly Upgrade[] = [toVersion1, toVersion2];
 
 /** What version a stored body is, treating an absent marker as the oldest. */
 export function versionOf(body: Record<string, unknown>): number {
@@ -128,6 +136,35 @@ export const LEGACY_FIXTURES: readonly LegacyFixture[] = [
       dimensions: [],
       timeDimensions: [],
       chartType: undefined,
+    },
+  },
+  {
+    // A chart as T229's predecessors stored it: before a chart's own filters
+    // and chosen grains existed.
+    version: 1,
+    body: {
+      schemaVersion: 1,
+      title: 'Orders by status',
+      owner: 'admin',
+      folderId: 'seed-folder-0',
+      chart: {
+        source: { cube: 'orders' },
+        wells: {
+          measures: ['orders.count'],
+          dimensions: ['orders.status'],
+          timeDimensions: ['orders.ordered_at'],
+        },
+        chartType: 'bar',
+        options: { axes: { y: { title: 'Orders' } } },
+      },
+    },
+    expects: {
+      title: 'Orders by status',
+      cube: 'orders',
+      measures: ['orders.count'],
+      dimensions: ['orders.status'],
+      timeDimensions: ['orders.ordered_at'],
+      chartType: 'bar',
     },
   },
 ];

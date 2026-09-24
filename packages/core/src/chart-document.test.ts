@@ -124,4 +124,34 @@ describe('the document and the authoring shape agree', () => {
 
     expect(toChartSpec(chartDocumentOf({ title: 'x', spec })).chartType).toBe('hbar');
   });
+
+  /** T229 / AC-216: a chosen grain and the chart's own filters are saved with it. */
+  it('round-trips a chosen grain and the chart’s filters, through storage too', () => {
+    const spec = {
+      ...addToWell(emptySpec('orders'), 'timeDimensions', 'orders.ordered_at'),
+      granularities: { 'orders.ordered_at': 'quarter' as const },
+      filters: [{ member: 'orders.status', operator: 'notEquals' as const, values: ['refunded'] }],
+    };
+    const document = chartDocumentOf({ title: 'x', spec });
+
+    expect(toChartSpec(document)).toEqual(spec);
+    expect(roundTrip(document)).toEqual(document);
+  });
+
+  it('refuses a grain Cube does not have, and a filter that is not one', () => {
+    const grain = {
+      ...full,
+      chart: { ...full.chart, granularities: { 'orders.ordered_at': 'fortnight' } },
+    };
+    expect(() => readChartDocument(grain)).toThrow(/fortnight/);
+
+    const filter = {
+      ...full,
+      chart: {
+        ...full.chart,
+        filters: [{ member: 'orders.status', operator: 'like', values: [] }],
+      },
+    };
+    expect(() => readChartDocument(filter)).toThrow(/filter/i);
+  });
 });

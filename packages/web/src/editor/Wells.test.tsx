@@ -1,6 +1,8 @@
 import { emptySpec } from '@wechart/core';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { WELLS, Wells, rejectionReason } from './Wells';
 import type { Member } from './fields';
@@ -19,6 +21,8 @@ const measure: Member = {
   shortTitle: 'Count',
   kind: 'measure',
   type: 'number',
+  cube: 'orders',
+  aggType: 'count',
 };
 
 const timeDimension: Member = {
@@ -27,6 +31,7 @@ const timeDimension: Member = {
   shortTitle: 'Ordered at',
   kind: 'timeDimension',
   type: 'time',
+  cube: 'orders',
 };
 
 const wellsFor = (dragging: Member | null) =>
@@ -103,6 +108,176 @@ describe('rejectionReason', () => {
   });
 
   it('explains the mismatch otherwise', () => {
-    expect(rejectionReason(measuresWell, timeDimension)).toContain('Measures takes a measure');
+    // The well as the prototype names it (AC-216): Metrics.
+    expect(rejectionReason(measuresWell, timeDimension)).toContain('Metrics takes a measure');
+  });
+});
+
+/**
+ * T229 / AC-216: THE SYSTEM SHALL show each field in a well by its title with
+ * a tag for its aggregation or its time granularity, let the user change a
+ * time field's granularity from its pill, and offer a Filters well and a Top N
+ * setting beside the Metrics, Dimensions and Time wells.
+ * `Fails when: a pill shows a member's internal name, a time field's
+ * granularity cannot be changed from its pill, or the Filters well is missing.`
+ */
+describe('the wells’ pills, Filters and Top N (AC-216)', () => {
+  // A stub a failing test leaves behind must not answer the next one's fetch.
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+  const status: Member = {
+    name: 'orders.status',
+    title: 'Orders Status',
+    shortTitle: 'Status',
+    kind: 'dimension',
+    type: 'string',
+    cube: 'orders',
+  };
+  const spec = {
+    ...emptySpec('orders'),
+    measures: ['orders.count'],
+    timeDimensions: ['orders.ordered_at'],
+    granularities: { 'orders.ordered_at': 'month' as const },
+  };
+  const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+  it('shows each field by its title, a measure with its aggregation', () => {
+    render(
+      <Wells spec={spec} available={[measure, timeDimension]} onAdd={vi.fn()} onRemove={vi.fn()} />,
+    );
+    const pill = screen.getByTestId('in-measures-orders.count');
+    expect(pill.textContent).toContain('Orders Count');
+    expect(pill.textContent).toContain('count');
+    expect(pill.textContent).not.toContain('orders.count');
+    expect(screen.getByRole('button', { name: 'Remove Orders Count from Metrics' })).toBeTruthy();
+  });
+
+  it('changes a time field’s grain from its pill', async () => {
+    const onGranularity = vi.fn();
+    render(
+      <Wells
+        spec={spec}
+        available={[measure, timeDimension]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onGranularity={onGranularity}
+      />,
+    );
+    const grain = screen.getByLabelText('Grain of Orders Ordered at');
+    expect((grain as HTMLSelectElement).value).toBe('month');
+    await userEvent.selectOptions(grain, 'quarter');
+    expect(onGranularity).toHaveBeenCalledWith('orders.ordered_at', 'quarter');
+  });
+
+  it('adds a filter, and holds it to a value the member has', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({ data: [{ 'orders.status': 'shipped' }, { 'orders.status': 'refunded' }] }),
+      ),
+    );
+    const onFilters = vi.fn();
+    const { rerender } = render(
+      <QueryClientProvider client={client()}>
+        <Wells
+          spec={spec}
+          available={[measure, timeDimension, status]}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+          onFilters={onFilters}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByTestId('well-filters')).toBeTruthy();
+    await userEvent.selectOptions(screen.getByTestId('add-filters'), 'orders.status');
+    expect(onFilters).toHaveBeenLastCalledWith([
+      { member: 'orders.status', operator: 'equals', values: [] },
+    ]);
+
+    rerender(
+      <QueryClientProvider client={client()}>
+        <Wells
+          spec={{ ...spec, filters: [{ member: 'orders.status', operator: 'equals', values: [] }] }}
+          available={[measure, timeDimension, status]}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+          onFilters={onFilters}
+        />
+      </QueryClientProvider>,
+    );
+    const value = screen.getByLabelText('Value of Orders Status');
+    await screen.findByRole('option', { name: 'refunded' });
+    await userEvent.selectOptions(value, 'refunded');
+    expect(onFilters).toHaveBeenLastCalledWith([
+      { member: 'orders.status', operator: 'equals', values: ['refunded'] },
+    ]);
+  });
+
+  it('offers the value a chart is held to even when the member no longer has it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ data: [{ 'orders.status': 'shipped' }] })),
+    );
+    render(
+      <QueryClientProvider client={client()}>
+        <Wells
+          spec={{
+            ...spec,
+            filters: [{ member: 'orders.status', operator: 'notEquals', values: ['retired'] }],
+          }}
+          available={[measure, status]}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('option', { name: 'shipped' });
+    // Never "any value" while the chart is filtered.
+    expect((screen.getByLabelText('Value of Orders Status') as HTMLSelectElement).value).toBe(
+      'retired',
+    );
+    expect((screen.getByLabelText('How Orders Status is held') as HTMLSelectElement).value).toBe(
+      'notEquals',
+    );
+  });
+
+  it('keeps the top N the reader sets down, all for none, and ignores what is not a count', async () => {
+    const onTopN = vi.fn();
+    const { rerender } = render(
+      <Wells
+        spec={spec}
+        available={[measure]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onTopN={onTopN}
+      />,
+    );
+    const box = screen.getByLabelText('Top N (+ Other)');
+    // One change when set down, not one per keystroke.
+    await userEvent.type(box, '15');
+    expect(onTopN).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Enter}');
+    expect(onTopN).toHaveBeenLastCalledWith(15);
+    expect(onTopN).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <Wells
+        spec={spec}
+        available={[measure]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onTopN={onTopN}
+        topN={15}
+      />,
+    );
+    await userEvent.clear(box);
+    await userEvent.type(box, '3.5{Enter}');
+    expect(onTopN).toHaveBeenCalledTimes(1);
+    expect((box as HTMLInputElement).value).toBe('15');
+
+    await userEvent.clear(box);
+    await userEvent.keyboard('{Enter}');
+    expect(onTopN).toHaveBeenLastCalledWith(undefined);
   });
 });

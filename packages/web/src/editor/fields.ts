@@ -17,6 +17,13 @@ export interface Member {
   readonly shortTitle: string;
   readonly kind: MemberKind;
   readonly type: string;
+  /**
+   * The cube it belongs to (AC-215): its own, or — for a view's member — the
+   * cube its `aliasMember` names (research/cube/data-modeling.md).
+   */
+  readonly cube: string;
+  /** A measure's aggregation, as Cube reports it: count, sum, avg… */
+  readonly aggType?: string;
 }
 
 export interface CubeSummary {
@@ -32,6 +39,8 @@ interface RawMember {
   title?: string;
   shortTitle?: string;
   type?: string;
+  aggType?: string;
+  aliasMember?: string;
   isVisible?: boolean;
   public?: boolean;
 }
@@ -81,6 +90,8 @@ export function membersOf(meta: unknown, cubeName: string): Member[] {
       shortTitle: member.shortTitle ?? member.title ?? member.name ?? '',
       kind: kind === 'dimension' && member.type === 'time' ? 'timeDimension' : kind,
       type: member.type ?? 'string',
+      cube: (member.aliasMember ?? member.name ?? cubeName).split('.')[0] ?? cubeName,
+      ...(typeof member.aggType === 'string' ? { aggType: member.aggType } : {}),
     }));
 
   return [
@@ -159,4 +170,39 @@ export function groupMembers(members: readonly Member[]): [MemberKind, Member[]]
   return GROUP_ORDER.map(
     (kind) => [kind, members.filter((member) => member.kind === kind)] as [MemberKind, Member[]],
   ).filter(([, group]) => group.length > 0);
+}
+
+/**
+ * Members by the cube they belong to (AC-215), in the order the cubes first
+ * appear — the source's own first — and within each, by type (AC-025).
+ */
+export function groupByCube(members: readonly Member[]): [string, [MemberKind, Member[]][]][] {
+  const cubes = [...new Set(members.map((member) => member.cube))];
+  return cubes.map((cube) => [
+    cube,
+    groupMembers(members.filter((member) => member.cube === cube)),
+  ]);
+}
+
+/**
+ * Whether a member answers a search (AC-215): by any word of its titles or
+ * its name, ignoring case.
+ */
+export function matchesSearch(member: Member, search: string): boolean {
+  const needle = search.trim().toLowerCase();
+  if (needle === '') return true;
+  return [member.title, member.shortTitle, member.name].some((text) =>
+    text.toLowerCase().includes(needle),
+  );
+}
+
+/**
+ * What a field row says of a member besides its title (AC-215): a measure's
+ * aggregation, "time" for a time dimension, a dimension's type.
+ */
+export function fieldMetaOf(member: Member): string {
+  if (member.kind === 'measure') return member.aggType ?? member.type;
+  if (member.kind === 'timeDimension') return 'time';
+  if (member.kind === 'segment') return 'segment';
+  return member.type;
 }

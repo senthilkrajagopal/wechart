@@ -4,7 +4,15 @@ import { useState } from 'react';
 import { META_QUERY } from '../query/meta';
 import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
 import { StateLine } from '../shell/StatusIcon';
-import { GROUP_LABELS, cubesFrom, groupMembers, membersOf, type Member } from './fields';
+import {
+  GROUP_LABELS,
+  cubesFrom,
+  fieldMetaOf,
+  groupByCube,
+  matchesSearch,
+  membersOf,
+  type Member,
+} from './fields';
 
 /**
  * The chart editor's field list (AC-025): the cubes and views the model
@@ -30,17 +38,28 @@ export interface FieldListProps {
    * during `dragover`, so the editor keeps it rather than reading it back.
    */
   readonly onDragStateChange?: (member: Member | null) => void;
+  /** The members the chart uses, marked in the list (AC-215). */
+  readonly used?: ReadonlySet<string>;
+  /** A field clicked, or chosen with Enter or Space: into its role's well (AC-215). */
+  readonly onAdd?: (member: Member) => void;
 }
+
+const NONE_USED: ReadonlySet<string> = new Set();
 
 export function FieldList({
   cubeName: controlled,
   onCubeChange,
   onDragStateChange,
+  used = NONE_USED,
+  onAdd,
 }: FieldListProps = {}) {
+  const [search, setSearch] = useState('');
   const [own, setOwn] = useState('');
   const cubeName = controlled ?? own;
   const setCubeName = (next: string) => {
     setOwn(next);
+    // A search for the last cube's fields is not one for this one's.
+    setSearch('');
     onCubeChange?.(next);
   };
 
@@ -62,13 +81,24 @@ export function FieldList({
   }
 
   const cubes = cubesFrom(meta.data);
-  const groups = cubeName ? groupMembers(membersOf(meta.data, cubeName)) : [];
+  /**
+   * A cube as a reader knows it: its title, or — for one the model does not
+   * publish, whose members a view shows — its name written as words, never
+   * the identifier (T229's review).
+   */
+  const cubeTitle = (name: string) =>
+    cubes.find((cube) => cube.name === name)?.title ??
+    name.replace(/_/g, ' ').replace(/^./, (first) => first.toUpperCase());
+  const members = cubeName ? membersOf(meta.data, cubeName) : [];
+  const found = members.filter((member) => matchesSearch(member, search));
+  const byCube = groupByCube(found);
 
   return (
     <div className="field-list">
       <label htmlFor="cube-picker">Cube or view</label>
       <select
         id="cube-picker"
+        className="select-sm"
         value={cubeName}
         onChange={(event) => setCubeName(event.target.value)}
       >
@@ -84,36 +114,127 @@ export function FieldList({
       {cubeName === '' ? (
         <p data-testid="no-cube-chosen">Choose a cube or view to see its fields.</p>
       ) : (
-        groups.map(([kind, members]) => (
-          <section key={kind} data-testid={`group-${kind}`}>
-            <h3>{GROUP_LABELS[kind]}</h3>
-            <ul aria-label={GROUP_LABELS[kind]}>
-              {members.map((member) => (
-                <li
-                  key={member.name}
-                  data-testid={`member-${member.name}`}
-                  draggable
-                  // The pointer route into a well (AC-026). The keyboard route
-                  // is each well's "+" picker, not this.
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData('text/plain', member.name);
-                    event.dataTransfer.effectAllowed = 'copy';
-                    onDragStateChange?.(member);
-                  }}
-                  onDragEnd={() => onDragStateChange?.(null)}
-                >
-                  {/* Type shown as an icon and a group heading, never colour
-                      alone (direction.md rule 3). */}
-                  <span data-icon={kind} aria-hidden="true">
-                    {MEMBER_ICON[kind]}
-                  </span>{' '}
-                  {member.shortTitle}
-                </li>
+        <>
+          {/* Narrowed as it is typed (AC-215). */}
+          <input
+            type="search"
+            className="input-sm field-list__search"
+            aria-label="Search fields"
+            placeholder="Search fields"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          {found.length === 0 ? (
+            <p className="field-list__none">
+              {search.trim() === ''
+                ? 'This cube or view has no fields to show.'
+                : `No field matches “${search.trim()}”.`}
+            </p>
+          ) : null}
+          {/* By the cube each belongs to (AC-215), then by type (AC-025). */}
+          {byCube.map(([cube, groups]) => (
+            <section
+              key={cube}
+              className="field-list__cube"
+              aria-label={`${cubeTitle(cube)} fields`}
+            >
+              <h3 className="field-list__cube-head">
+                {cubeTitle(cube)}
+                <span className="field-list__count">
+                  {groups.reduce((sum, [, group]) => sum + group.length, 0)}
+                </span>
+              </h3>
+              {groups.map(([kind, group]) => (
+                <div key={kind} data-testid={`group-${kind}`} data-cube={cube}>
+                  <h4>{GROUP_LABELS[kind]}</h4>
+                  <ul aria-label={`${cubeTitle(cube)} ${GROUP_LABELS[kind]}`}>
+                    {group.map((member) => (
+                      <li key={member.name} data-testid={`member-${member.name}`}>
+                        <FieldRow
+                          member={member}
+                          used={used.has(member.name)}
+                          onAdd={onAdd}
+                          onDragStateChange={onDragStateChange}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
-          </section>
-        ))
+            </section>
+          ))}
+        </>
       )}
+    </div>
+  );
+}
+
+/**
+ * One field (AC-215): its type's icon, its title, its aggregation or type,
+ * and whether the chart uses it. A click, Enter or Space adds it to the well
+ * its role belongs in; a drag takes it to a well of the reader's choosing
+ * (AC-026). A segment goes in no well, so it is listed, not offered.
+ */
+function FieldRow({
+  member,
+  used,
+  onAdd,
+  onDragStateChange,
+}: {
+  member: Member;
+  used: boolean;
+  onAdd: ((member: Member) => void) | undefined;
+  onDragStateChange: ((member: Member | null) => void) | undefined;
+}) {
+  const addable = onAdd !== undefined && member.kind !== 'segment';
+  const content = (
+    <>
+      {/* Type shown as an icon and a group heading, never colour alone
+          (direction.md rule 3). */}
+      <span data-icon={member.kind} aria-hidden="true">
+        {MEMBER_ICON[member.kind]}
+      </span>
+      <span className="field-row__name">{member.shortTitle}</span>
+      <span className="field-row__meta">{fieldMetaOf(member)}</span>
+      {used ? (
+        <span className="field-row__used" title="In the chart">
+          <span aria-hidden="true">✓</span>
+          <span className="visually-hidden">, in the chart</span>
+        </span>
+      ) : null}
+    </>
+  );
+  const drag = {
+    draggable: true,
+    // The pointer route into a well (AC-026).
+    onDragStart: (event: React.DragEvent) => {
+      event.dataTransfer.setData('text/plain', member.name);
+      event.dataTransfer.effectAllowed = 'copy';
+      onDragStateChange?.(member);
+    },
+    onDragEnd: () => onDragStateChange?.(null),
+  };
+
+  return addable ? (
+    <div
+      role="button"
+      tabIndex={0}
+      className="field-row"
+      data-used={used ? 'true' : undefined}
+      title={`${member.title} · click to add`}
+      {...drag}
+      onClick={() => onAdd(member)}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onAdd(member);
+      }}
+    >
+      {content}
+    </div>
+  ) : (
+    <div className="field-row" data-used={used ? 'true' : undefined} {...drag}>
+      {content}
     </div>
   );
 }

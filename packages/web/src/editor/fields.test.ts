@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { cubesFrom, groupMembers, membersOf } from './fields';
+import {
+  cubesFrom,
+  fieldMetaOf,
+  groupByCube,
+  groupMembers,
+  matchesSearch,
+  membersOf,
+} from './fields';
 
 /**
  * AC-025: WHEN the user opens the chart editor, THE SYSTEM SHALL list the cubes
@@ -156,5 +163,87 @@ describe('grouping (AC-025)', () => {
   it('omits a group with no members rather than showing an empty heading', () => {
     const groups = groupMembers(membersOf(meta, 'revenue_view'));
     expect(groups).toEqual([]);
+  });
+});
+
+/**
+ * T229 / AC-215: THE SYSTEM SHALL group the chart editor's fields by the cube
+ * they belong to, with a search box, and show on each field its role, its
+ * aggregation, type or number of distinct values, and whether the chart uses
+ * it … `Fails when: … the search does not narrow the list.`
+ */
+describe('fields by cube, searched, with what each is (AC-215)', () => {
+  // A view's members, each with the cube member it stands for, as Cube 1.7.42
+  // reports it (`aliasMember`, research/cube/data-modeling.md).
+  const view = {
+    cubes: [
+      {
+        name: 'order_summary',
+        type: 'view',
+        title: 'Order summary',
+        measures: [
+          {
+            name: 'order_summary.count',
+            title: 'Order summary Count',
+            shortTitle: 'Count',
+            type: 'number',
+            aggType: 'count',
+            aliasMember: 'orders.count',
+          },
+        ],
+        dimensions: [
+          {
+            name: 'order_summary.category',
+            title: 'Order summary Category',
+            shortTitle: 'Category',
+            type: 'string',
+            aliasMember: 'products.category',
+          },
+          {
+            name: 'order_summary.ordered_at',
+            title: 'Order summary Ordered at',
+            shortTitle: 'Ordered at',
+            type: 'time',
+            aliasMember: 'orders.ordered_at',
+          },
+        ],
+      },
+    ],
+  };
+
+  it('groups a view’s fields by the cube each comes from, then by type', () => {
+    const grouped = groupByCube(membersOf(view, 'order_summary'));
+    expect(
+      grouped.map(([cube, kinds]) => [
+        cube,
+        kinds.map(([kind, members]) => [kind, members.map((member) => member.shortTitle)]),
+      ]),
+    ).toEqual([
+      [
+        'orders',
+        [
+          ['measure', ['Count']],
+          ['timeDimension', ['Ordered at']],
+        ],
+      ],
+      ['products', [['dimension', ['Category']]]],
+    ]);
+  });
+
+  it('narrows by any part of a field’s titles or name, ignoring case', () => {
+    const members = membersOf(view, 'order_summary');
+    expect(members.filter((member) => matchesSearch(member, 'categ')).map((m) => m.name)).toEqual([
+      'order_summary.category',
+    ]);
+    expect(members.filter((member) => matchesSearch(member, '  '))).toHaveLength(3);
+  });
+
+  it('says a measure’s aggregation, a time field’s “time”, a dimension’s type', () => {
+    const [count, category, orderedAt] = membersOf(view, 'order_summary');
+    expect([count, category, orderedAt].map((member) => member && fieldMetaOf(member))).toEqual([
+      'count',
+      'string',
+      'time',
+    ]);
   });
 });

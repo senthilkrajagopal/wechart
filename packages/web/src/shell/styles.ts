@@ -2864,8 +2864,67 @@ main:has(.chart-editor) {
   line-height: var(--wc-text-xs-line);
 }
 
+.field-list { display: grid; gap: 8px; align-content: start; }
+.field-list > label { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--wc-text-secondary); }
 .field-list ul { margin: 0; padding: 0; list-style: none; }
-.field-list li { padding: 2px 4px; cursor: grab; }
+.field-list h4 {
+  margin: 6px 0 2px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.field-list__none { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+/* A cube's fields under its name and count (AC-215, the prototype's .tgroup). */
+.field-list__cube { display: grid; }
+.field-list__cube-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--wc-text-primary);
+}
+.field-list__count { margin-left: auto; font-weight: 400; color: var(--wc-text-secondary); font-variant-numeric: tabular-nums; }
+/* One field (the prototype's .frow): icon, title, what it is, in the chart. */
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: grab;
+}
+.field-row[role='button']:hover { background: var(--wc-bg-subtle); }
+.field-row[data-used='true'] .field-row__name { font-weight: 600; }
+.field-row__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field-row__meta { font-size: 12px; color: var(--wc-text-secondary); }
+.field-row__used { color: var(--wc-accent); }
+/* A field in a well (AC-216, the prototype's .pill): its title, its tag or
+   grain, and ×. */
+.well__pills { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 12px;
+  background: var(--wc-bg-subtle);
+  font-size: 12px;
+}
+.pill__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill__tag { font-size: 12px; color: var(--wc-text-secondary); }
+.pill__grain { height: 20px; border: 0; background: none; color: var(--wc-text-secondary); font-size: 12px; }
+.pill__remove { border: 0; background: none; color: var(--wc-text-secondary); cursor: pointer; padding: 0 4px; }
 
 .palette-backdrop {
   position: fixed;

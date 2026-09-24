@@ -768,7 +768,7 @@ test('a section template lays out empty charts that say what they need', async (
   // nothing said before this task.
   const empty = page.getByTestId('tile-empty-chart');
   await expect(empty).toHaveCount(4);
-  await expect(empty.first()).toContainText('needs a measure in Measures');
+  await expect(empty.first()).toContainText('needs a measure in Metrics');
   await expect(page.getByTestId('tile-missing-chart')).toHaveCount(0);
 
   // One change for the whole layout, not one per tile.
@@ -1046,6 +1046,11 @@ test('the canvas and the sidebar scroll themselves, and hold position across an 
 }) => {
   await page.setViewportSize({ width: 1280, height: 420 });
   await open(page);
+  // The charts drawn, and with them their titles: a tile is named by its
+  // chart's title (AC-209), and the Add panel's line naming the selected tile
+  // grows when the title arrives — which, landing mid-test, moved the scrolled
+  // sidebar by its own height.
+  await expect(page.getByTestId('chart-canvas').first()).toBeVisible();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
   const canvas = page.getByTestId('canvas-scroll');

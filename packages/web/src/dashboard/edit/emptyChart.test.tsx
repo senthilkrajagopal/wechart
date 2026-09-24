@@ -33,12 +33,12 @@ describe('a chart tile with nothing in it', () => {
   it('names the well and the member type when it knows its type', () => {
     show(docWith([{ id: 'a', kind: 'chart', w: 3, h: 13, chartType: 'kpi' }]));
 
-    // AC-033's wording, reused: "A kpi needs a measure in Measures; add 1
+    // AC-033's wording, reused: "A kpi needs a measure in Metrics; add 1
     // more." The tile and the chart editor describe the same gap the same way.
     const said = screen.getByTestId('tile-empty-chart').textContent ?? '';
     expect(said).toMatch(/needs/);
     expect(said).toMatch(/measure/i);
-    expect(said).toMatch(/Measures/);
+    expect(said).toMatch(/Metrics/);
   });
 
   it('still says something when no type has been chosen', () => {

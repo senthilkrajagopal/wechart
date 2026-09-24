@@ -8,6 +8,7 @@ import {
   granularitiesOf,
   toCubeQuery,
   toUnderlyingQuery,
+  wellFor,
   type ChartSpec,
   type SortSettings,
 } from '@wechart/core';
@@ -200,6 +201,18 @@ export function ChartEditor({
   const formats = useMemo(() => formatsOf(meta.data), [meta.data]);
 
   const query = useMemo(() => toCubeQuery(spec), [spec]);
+
+  /** The members the chart uses, marked in the field list (AC-215). */
+  const used = useMemo<ReadonlySet<string>>(
+    () =>
+      new Set([
+        ...spec.measures,
+        ...spec.dimensions,
+        ...spec.timeDimensions,
+        ...(spec.filters ?? []).map((filter) => filter.member),
+      ]),
+    [spec],
+  );
 
   /**
    * The rows beneath the aggregate (AC-036): the chart's own query, ungrouped.
@@ -405,6 +418,14 @@ export function ChartEditor({
         <FieldList
           cubeName={cubeName}
           onDragStateChange={setDragging}
+          used={used}
+          // Into the well its role belongs in (AC-215).
+          onAdd={(member) => {
+            const well = wellFor(member.kind);
+            // Already there: nothing to add, so no change to undo (T229's review).
+            if (well === null || spec[well].includes(member.name)) return;
+            setSpec((current) => addToWell(current, well, member.name));
+          }}
           onCubeChange={(next) =>
             // Members belong to a cube; keeping them across a change would
             // build a query naming fields the new cube does not have.
@@ -503,7 +524,7 @@ export function ChartEditor({
             query={query}
             underlyingQuery={underlyingQuery}
             formats={formats}
-            granularities={granularitiesOf(spec.timeDimensions)}
+            granularities={granularitiesOf(spec.timeDimensions, spec.granularities)}
             open={drawer.open}
             view={drawer.view}
             onOpenChange={(open) => setDrawer((current) => ({ ...current, open }))}
@@ -563,6 +584,31 @@ export function ChartEditor({
                 onAdd={(well, member) => setSpec((current) => addToWell(current, well, member))}
                 onRemove={(well, member) =>
                   setSpec((current) => removeFromWell(current, well, member))
+                }
+                // A time field's grain, from its pill (AC-216).
+                onGranularity={(member, grain) =>
+                  setSpec((current) => ({
+                    ...current,
+                    granularities: { ...current.granularities, [member]: grain },
+                  }))
+                }
+                // The last filter removed leaves none stored, as there were.
+                onFilters={(filters) =>
+                  setSpec((current) => {
+                    if (filters.length > 0) return { ...current, filters };
+                    const { filters: _gone, ...rest } = current;
+                    void _gone;
+                    return rest;
+                  })
+                }
+                topN={typeof options['topN'] === 'number' ? options['topN'] : undefined}
+                onTopN={(n) =>
+                  change((current) => {
+                    const next = { ...current.options };
+                    if (n === undefined) delete next['topN'];
+                    else next['topN'] = n;
+                    return { ...current, options: next };
+                  })
                 }
               />
               {recommendation.top ? (

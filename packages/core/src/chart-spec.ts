@@ -16,6 +16,36 @@ export interface ChartSpec {
   readonly dimensions: readonly string[];
   readonly timeDimensions: readonly string[];
   readonly chartType?: ChartType;
+  /**
+   * The grain a time member is asked at, where the user chose one from its
+   * pill (AC-216); the day otherwise.
+   */
+  readonly granularities?: Readonly<Record<string, TimeGranularity>>;
+  /** The chart's own filters, from its Filters well (AC-216). */
+  readonly filters?: readonly ChartFilter[];
+}
+
+/**
+ * One of a chart's own filters (AC-216): a member held to, or kept from, some
+ * of its values. One with no values yet — just added to the well — narrows
+ * nothing, and is left out of the query.
+ */
+export interface ChartFilter {
+  readonly member: string;
+  readonly operator: 'equals' | 'notEquals';
+  readonly values: readonly string[];
+}
+
+/** The chart's filters as Cube takes them: those with values, by member. */
+function cubeFiltersOf(filters: readonly ChartFilter[] | undefined) {
+  return (filters ?? [])
+    .filter((filter) => filter.values.length > 0)
+    .map((filter) => ({
+      member: filter.member,
+      operator: filter.operator,
+      values: [...filter.values],
+    }))
+    .sort((a, b) => (a.member < b.member ? -1 : a.member > b.member ? 1 : 0));
 }
 
 export function emptySpec(cube = ''): ChartSpec {
@@ -35,7 +65,17 @@ export function addToWell(spec: ChartSpec, well: WellName, member: string): Char
 }
 
 export function removeFromWell(spec: ChartSpec, well: WellName, member: string): ChartSpec {
-  return { ...spec, [well]: spec[well].filter((existing) => existing !== member) };
+  const removed = { ...spec, [well]: spec[well].filter((existing) => existing !== member) };
+  // Its chosen grain goes with it, so none lingers in what is saved (T229's
+  // review) and the field comes back at the day if added again.
+  if (spec.granularities?.[member] === undefined) return removed;
+  const granularities = Object.fromEntries(
+    Object.entries(spec.granularities).filter(([name]) => name !== member),
+  );
+  if (Object.keys(granularities).length > 0) return { ...removed, granularities };
+  return Object.fromEntries(
+    Object.entries(removed).filter(([key]) => key !== 'granularities'),
+  ) as unknown as ChartSpec;
 }
 
 /** Which well a member belongs in, from its kind in the metadata. */
@@ -75,10 +115,14 @@ export function toCubeQuery(spec: ChartSpec): Record<string, unknown> {
   };
 
   if (spec.timeDimensions.length > 0) {
+    const grains = granularitiesOf(spec.timeDimensions, spec.granularities);
     query['timeDimensions'] = [...spec.timeDimensions]
       .sort()
-      .map((dimension) => ({ dimension, granularity: QUERY_GRANULARITY }));
+      .map((dimension) => ({ dimension, granularity: grains[dimension] ?? QUERY_GRANULARITY }));
   }
+
+  const filters = cubeFiltersOf(spec.filters);
+  if (filters.length > 0) query['filters'] = filters;
 
   return query;
 }
@@ -90,9 +134,17 @@ export function toCubeQuery(spec: ChartSpec): Record<string, unknown> {
  */
 export const QUERY_GRANULARITY: TimeGranularity = 'day';
 
-/** Each time member of the wells, with the granularity its query asks for. */
-export function granularitiesOf(timeDimensions: readonly string[]): MemberGranularities {
-  return Object.fromEntries(timeDimensions.map((member) => [member, QUERY_GRANULARITY]));
+/**
+ * Each time member of the wells, with the granularity its query asks for:
+ * the one chosen for it (AC-216), or the day.
+ */
+export function granularitiesOf(
+  timeDimensions: readonly string[],
+  chosen: Readonly<Record<string, TimeGranularity>> = {},
+): MemberGranularities {
+  return Object.fromEntries(
+    timeDimensions.map((member) => [member, chosen[member] ?? QUERY_GRANULARITY]),
+  );
 }
 
 /**
@@ -129,9 +181,12 @@ export function toUnderlyingQuery(
   spec: ChartSpec,
   limit: number = UNDERLYING_ROW_LIMIT,
 ): Record<string, unknown> {
+  const filters = cubeFiltersOf(spec.filters);
   return {
     measures: [...spec.measures].sort(),
     dimensions: [...spec.dimensions, ...spec.timeDimensions].sort(),
+    // The rows the chart was filtered to, not all of them (AC-216).
+    ...(filters.length === 0 ? {} : { filters }),
     ungrouped: true,
     limit,
   };

@@ -95,7 +95,8 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
       // business interpreting what a chart type does with its own options.
       ...(chart.options === undefined ? {} : { options: chart.options }),
       ...(options.formats === undefined ? {} : { formats: options.formats }),
-      granularities: granularitiesOf(chart.wells.timeDimensions),
+      // By the grain each was asked at, chosen or not (AC-188, AC-216).
+      granularities: granularitiesOf(chart.wells.timeDimensions, chart.granularities),
       measures: [...chart.wells.measures],
       ...(options.palette === undefined ? {} : { palette: options.palette }),
       ...(options.surface === undefined ? {} : { surface: options.surface }),

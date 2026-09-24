@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { CHART_DOCUMENT_VERSION } from '@wechart/core';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getDb } from '../db/client';
@@ -43,7 +44,7 @@ describe('persistence across a restart (AC-014)', () => {
       // the upgrade path has its own tests below.
       ...(kind === 'chart'
         ? {
-            schemaVersion: 1,
+            schemaVersion: CHART_DOCUMENT_VERSION,
             chart: {
               source: { cube: 'orders' },
               wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
@@ -68,7 +69,7 @@ describe('persistence across a restart (AC-014)', () => {
     const id = randomUUID();
     const chart = {
       title: 'chart',
-      schemaVersion: 1,
+      schemaVersion: CHART_DOCUMENT_VERSION,
       chart: {
         source: { cube: 'orders' },
         wells: { measures: [], dimensions: [], timeDimensions: [] },
@@ -196,7 +197,8 @@ describe('a chart saved in an earlier format (AC-181)', () => {
 
     const opened = await repo().get('chart', id);
 
-    expect(opened?.body['schemaVersion']).toBe(1);
+    // Up to the current format, through every step on the way.
+    expect(opened?.body['schemaVersion']).toBe(CHART_DOCUMENT_VERSION);
     expect(opened?.body['chart']).toEqual({
       source: { cube: '' },
       wells: { measures: [], dimensions: [], timeDimensions: [] },

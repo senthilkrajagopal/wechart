@@ -20,7 +20,8 @@
  * generates its `title`, `folder_id` and `owner` columns out of them.
  */
 
-import { emptySpec, type ChartSpec } from './chart-spec';
+import { emptySpec, type ChartFilter, type ChartSpec } from './chart-spec';
+import { GRANULARITY_NAMES, type TimeGranularity } from './format';
 import type { Channel, ChartType } from './render-spec';
 
 /**
@@ -28,7 +29,7 @@ import type { Channel, ChartType } from './render-spec';
  * way an older reader would get wrong; `chart-migrations.ts` carries one
  * upgrade step per raise.
  */
-export const CHART_DOCUMENT_VERSION = 1;
+export const CHART_DOCUMENT_VERSION = 2;
 
 /**
  * Which member the user pinned to which channel.
@@ -77,6 +78,10 @@ export interface ChartDefinition {
    * invalid, which is what lets a user switch type and switch back.
    */
   readonly options?: Record<string, unknown>;
+  /** The grain a time member is asked at, where one was chosen (AC-216). */
+  readonly granularities?: Readonly<Record<string, TimeGranularity>>;
+  /** The chart's own filters (AC-216). */
+  readonly filters?: readonly ChartFilter[];
 }
 
 export interface ChartDocument {
@@ -196,8 +201,47 @@ export function readChartDocument(body: unknown): ChartDocument {
       ...(definition['options'] === undefined
         ? {}
         : { options: definition['options'] as Record<string, unknown> }),
+      ...(definition['granularities'] === undefined
+        ? {}
+        : { granularities: grainsOf(definition['granularities']) }),
+      ...(definition['filters'] === undefined ? {} : { filters: filtersOf(definition['filters']) }),
     },
   };
+}
+
+/** A chart's chosen grains, each one Cube has (AC-216), or a refusal. */
+function grainsOf(value: unknown): Readonly<Record<string, TimeGranularity>> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new ChartDocumentError("The chart's granularities are not a map of members to grains.");
+  }
+  for (const [member, grain] of Object.entries(value)) {
+    if (typeof grain !== 'string' || !GRANULARITY_NAMES.includes(grain)) {
+      throw new ChartDocumentError(
+        `The chart asks for ${member} by "${String(grain)}", which is not a grain Cube has.`,
+      );
+    }
+  }
+  return { ...(value as Record<string, TimeGranularity>) };
+}
+
+/** A chart's own filters (AC-216), each a member, equals or not, and values; or a refusal. */
+function filtersOf(value: unknown): readonly ChartFilter[] {
+  if (!Array.isArray(value)) throw new ChartDocumentError("The chart's filters are not a list.");
+  return value.map((each: unknown) => {
+    const filter = (each ?? {}) as Record<string, unknown>;
+    const { member, operator, values } = filter;
+    if (
+      typeof member !== 'string' ||
+      (operator !== 'equals' && operator !== 'notEquals') ||
+      !Array.isArray(values) ||
+      !values.every((one) => typeof one === 'string')
+    ) {
+      throw new ChartDocumentError(
+        `A filter of the chart's is not a member held to, or kept from, some values.`,
+      );
+    }
+    return { member, operator, values: [...(values as string[])] };
+  });
 }
 
 /** The document for a chart the user is authoring. */
@@ -230,6 +274,8 @@ export function chartDocumentOf(input: {
       ...(spec.chartType === undefined ? {} : { chartType: spec.chartType }),
       ...(input.encoding === undefined ? {} : { encoding: input.encoding }),
       ...(input.options === undefined ? {} : { options: input.options }),
+      ...(spec.granularities === undefined ? {} : { granularities: { ...spec.granularities } }),
+      ...(spec.filters === undefined ? {} : { filters: [...spec.filters] }),
     },
   };
 }
@@ -244,5 +290,7 @@ export function toChartSpec(document: ChartDocument): ChartSpec {
     dimensions: [...chart.wells.dimensions],
     timeDimensions: [...chart.wells.timeDimensions],
     ...(chart.chartType === undefined ? {} : { chartType: chart.chartType }),
+    ...(chart.granularities === undefined ? {} : { granularities: { ...chart.granularities } }),
+    ...(chart.filters === undefined ? {} : { filters: [...chart.filters] }),
   };
 }

@@ -72,8 +72,9 @@ export function canDraw(chartType: ChartType, counts: FieldCounts): boolean {
   return missingFor(chartType, counts).length === 0;
 }
 
+/** Each well as the editor names it (AC-216: the prototype's Metrics). */
 const WELL_LABEL: Record<WellName, string> = {
-  measures: 'Measures',
+  measures: 'Metrics',
   dimensions: 'Dimensions',
   timeDimensions: 'Time',
 };

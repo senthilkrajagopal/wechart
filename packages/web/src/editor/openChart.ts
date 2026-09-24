@@ -227,6 +227,13 @@ export function chartDocumentWith(loaded: ChartDocument, state: EditorState): Ch
   if (chosen === null) delete chart['chartType'];
   else chart['chartType'] = chosen;
 
+  // The grains chosen from pills and the chart's own filters (AC-216): as the
+  // editor has them, and none where it has none.
+  if (state.spec.granularities === undefined) delete chart['granularities'];
+  else chart['granularities'] = { ...state.spec.granularities };
+  if (state.spec.filters === undefined) delete chart['filters'];
+  else chart['filters'] = [...state.spec.filters];
+
   // The editor holds "no settings" as {}; a chart that had none keeps none,
   // so writing an unchanged chart back really does give the same document.
   if (Object.keys(state.options).length === 0 && loaded.chart.options === undefined) {

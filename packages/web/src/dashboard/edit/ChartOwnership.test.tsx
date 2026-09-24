@@ -1,4 +1,4 @@
-import type { ChartDocument } from '@wechart/core';
+import { CHART_DOCUMENT_VERSION, type ChartDocument } from '@wechart/core';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -18,7 +18,8 @@ import { ChartOwnership, TileChartOwnership } from './ChartOwnership';
  * dashboard's Save (the user's decision, 2026-09-22), and the panel says where.
  */
 const LOCAL: ChartDocument = {
-  schemaVersion: 1,
+  // As the API serves a chart: upgraded to the current format on read.
+  schemaVersion: CHART_DOCUMENT_VERSION,
   title: 'By status',
   localToDashboardId: 'd1',
   chart: {
@@ -28,7 +29,7 @@ const LOCAL: ChartDocument = {
 };
 /** The same chart as a library chart's: in a folder, local to no dashboard. */
 const IN_SALES: ChartDocument = {
-  schemaVersion: 1,
+  schemaVersion: CHART_DOCUMENT_VERSION,
   title: LOCAL.title,
   folderId: 'sales',
   chart: LOCAL.chart,
@@ -171,7 +172,7 @@ describe('saving a tile’s chart to a folder, on the session', () => {
     expect(draft?.version).toBe(7);
     expect(draft?.wasLocalTo).toBe('d1');
     expect(draft?.document).toEqual({
-      schemaVersion: 1,
+      schemaVersion: CHART_DOCUMENT_VERSION,
       title: 'By status',
       chart: LOCAL.chart,
       futureField: 'kept',

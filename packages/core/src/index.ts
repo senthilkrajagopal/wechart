@@ -15,6 +15,7 @@ export {
   toCubeQuery,
   toUnderlyingQuery,
   wellFor,
+  type ChartFilter,
   type ChartSpec,
   type WellName,
 } from './chart-spec';
