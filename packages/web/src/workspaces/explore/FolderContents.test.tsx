@@ -287,7 +287,7 @@ describe("the contents' columns and row menu (AC-193)", () => {
     },
   ];
   const folders = [
-    { id: 'root', title: 'All folders', parentId: null },
+    { id: 'root', title: 'Shared', parentId: null },
     { id: 'home', title: 'Home', parentId: 'root' },
     { id: 'sub', title: 'Sub', parentId: 'home' },
     { id: 'inner', title: 'Inner', parentId: 'sub' },
@@ -350,7 +350,7 @@ describe("the contents' columns and row menu (AC-193)", () => {
     const offered = within(list)
       .getAllByRole('option')
       .map((option) => option.textContent);
-    expect(offered).toEqual(['Move to…', 'All folders', 'Sub', 'Inner', 'Elsewhere']);
+    expect(offered).toEqual(['Move to…', 'Shared', 'Sub', 'Inner', 'Elsewhere']);
 
     await userEvent.selectOptions(list, 'Elsewhere');
     expect(onMove).toHaveBeenCalledWith(expect.objectContaining({ id: 'auto' }), 'elsewhere');
@@ -363,7 +363,7 @@ describe("the contents' columns and row menu (AC-193)", () => {
     const offered = within(within(rowFor('sub')).getByRole('combobox'))
       .getAllByRole('option')
       .map((option) => option.textContent);
-    expect(offered).toEqual(['Move to…', 'All folders', 'Elsewhere']);
+    expect(offered).toEqual(['Move to…', 'Shared', 'Elsewhere']);
   });
 
   it('puts the Move list away with Escape, back on the row menu', async () => {

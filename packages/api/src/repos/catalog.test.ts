@@ -4,7 +4,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getDb } from '../db/client';
 import { referencesOf } from '../model/references';
-import { ROOT_FOLDER_ID, catalog } from './catalog';
+import { MY_WORKSPACE_ID, ROOT_FOLDER_ID, catalog } from './catalog';
 import { documents } from './documents';
 
 /**
@@ -642,5 +642,48 @@ describe('folder tree (AC-017)', () => {
 
     expect(found?.parentId).toBe(parent);
     expect(found?.title).toBe('Tree child');
+  });
+});
+
+/**
+ * T214 / AC-194: THE SYSTEM SHALL show the folder tree … holding a shared root
+ * and a personal "My workspace" root, each folder showing the number of items
+ * it holds including those in its subfolders.
+ * `Fails when: "My workspace" is missing, a count leaves out items in
+ * subfolders, …`
+ */
+describe('the tree’s counts and roots (AC-194)', () => {
+  it("gives each folder its items, counting its subfolders'", async () => {
+    const top = await folder('Tree counted');
+    const below = await folder('Tree counted below', top);
+    await repo().create({
+      kind: 'dashboard',
+      id: randomUUID(),
+      body: { title: 'd', folderId: top },
+    });
+    await repo().create({ kind: 'chart', id: randomUUID(), body: { title: 'c', folderId: below } });
+
+    const folders = await cat().folders();
+    expect(folders.find((node) => node.id === top)?.itemCount).toBe(2);
+    expect(folders.find((node) => node.id === below)?.itemCount).toBe(1);
+  });
+
+  it('counts each root, My workspace as well as the shared one, through their folders', async () => {
+    const before = await cat().rootCounts();
+    const mine = await folder('Mine counted', MY_WORKSPACE_ID);
+    await repo().create({
+      kind: 'dashboard',
+      id: randomUUID(),
+      body: { title: 'draft', folderId: MY_WORKSPACE_ID },
+    });
+    await repo().create({ kind: 'chart', id: randomUUID(), body: { title: 'c', folderId: mine } });
+
+    const after = await cat().rootCounts();
+    expect(after[MY_WORKSPACE_ID]).toBe((before[MY_WORKSPACE_ID] ?? 0) + 2);
+    expect(after[ROOT_FOLDER_ID]).toBe(before[ROOT_FOLDER_ID]);
+    // Its folder hangs from My workspace, not from the shared root.
+    expect((await cat().folders()).find((node) => node.id === mine)?.parentId).toBe(
+      MY_WORKSPACE_ID,
+    );
   });
 });

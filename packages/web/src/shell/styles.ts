@@ -783,18 +783,41 @@ fieldset.model-field > legend {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.explore__tree {
-  padding: 8px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 6px;
-  background: var(--wc-bg-surface);
-}
 /* The contents sit on the page, and their table is the card (AC-231), as the
    prototype draws it: a card around the card read as a frame in a frame. */
 .explore__contents { display: grid; gap: 12px; min-width: 0; }
 
+.folder-tree,
 .folder-tree ul { margin: 0; padding-left: 12px; list-style: none; }
-.folder-tree > ul { padding-left: 0; }
+.folder-tree { padding-left: 0; }
+/* A folder with its count at the end, the prototype's tree row. */
+.folder-tree__label { display: flex; width: 100%; align-items: center; gap: 8px; }
+.folder-tree__title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.folder-tree__count {
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+  font-variant-numeric: tabular-nums;
+}
+/* The docked Folders pane (AC-194), the prototype's .pane.left: full height
+   below the app bar with a rule on its right, not a card. It stays put while
+   the contents scroll; its head stays put while a long tree scrolls. */
+.explore__tree {
+  position: sticky;
+  top: calc(var(--wc-app-bar-height) + var(--wc-surface-padding));
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--wc-app-bar-height) - 2 * var(--wc-surface-padding));
+  padding-right: 8px;
+  border-right: 1px solid var(--wc-border-subtle);
+}
+.explore__pane-body { flex: 1; min-height: 0; overflow: auto; }
+.explore__pane-head { display: flex; align-items: center; gap: 8px; padding: 0 0 8px 6px; }
+.explore__pane-head h2 {
+  margin: 0;
+  font-size: var(--wc-text-sm-size);
+  font-weight: var(--wc-text-sm-strong-weight);
+}
+.explore__pane-head button { margin-left: auto; }
 
 .folder-tree__label,
 .link-button {

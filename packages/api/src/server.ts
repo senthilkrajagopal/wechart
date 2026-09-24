@@ -122,6 +122,8 @@ export const SINGLE_USER = 'admin';
 /** The slice of the catalog repository the server exposes. */
 export interface CatalogReader {
   folders(): Promise<unknown[]>;
+  /** The shared root's and My workspace's item counts (AC-194). */
+  rootCounts?(): Promise<Record<string, number>>;
   contents(folderId: string): Promise<unknown[]>;
   search(text: string, limit?: number): Promise<unknown[]>;
   dashboardsUsing?(chartId: string): Promise<unknown[]>;
@@ -361,6 +363,8 @@ export function buildServer({
 
   // Explore's folder tree and contents (AC-017).
   app.get('/api/folders', async () => (cat ? cat.folders() : []));
+  // The two roots' counts, which are no folder's (AC-194).
+  app.get('/api/folder-roots', async () => (cat?.rootCounts ? cat.rootCounts() : {}));
 
   app.get('/api/folders/:folderId/contents', async (request) => {
     const { folderId } = request.params as { folderId: string };

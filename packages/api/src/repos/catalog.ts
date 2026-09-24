@@ -39,10 +39,19 @@ export interface FolderNode {
   readonly id: string;
   readonly title: string;
   readonly parentId: string | null;
+  /** Its dashboards and charts, including those in its subfolders (AC-194). */
+  readonly itemCount: number;
 }
 
-/** The folder a document sits in when it sits at the top. */
+/** The folder a document sits in when it sits at the top of the shared tree. */
 export const ROOT_FOLDER_ID = 'root';
+/**
+ * The personal root, the prototype's "My workspace" (AC-194, R9): in phase 1,
+ * with one user, a place for personal and draft work. Like the shared root it
+ * is not a document — a document sits in it by carrying its id.
+ */
+export const MY_WORKSPACE_ID = 'mine';
+const ROOT_IDS = [ROOT_FOLDER_ID, MY_WORKSPACE_ID];
 
 export function catalog(db: Kysely<Database>) {
   const selectItems = () =>
@@ -82,7 +91,8 @@ export function catalog(db: Kysely<Database>) {
     if (folderIds.length === 0) return new Map();
     const result = await sql<{ root: string; count: string }>`
       with recursive tree(root, id) as (
-        select id, id from documents where kind = 'folder' and id in (${sql.join(folderIds)})
+        -- Any id: the roots are not documents, so they are not looked up.
+        select seed.id, seed.id from unnest(array[${sql.join(folderIds)}]::text[]) as seed(id)
         union
         select tree.root, d.id from documents d join tree on d.folder_id = tree.id
         where d.kind = 'folder'
@@ -106,11 +116,20 @@ export function catalog(db: Kysely<Database>) {
         .orderBy('title', 'asc')
         .execute();
 
+      // Each with its items, its subfolders' included (AC-194).
+      const counts = await itemCounts(rows.map((row) => row.id));
       return rows.map((row) => ({
         id: row.id,
         title: row.title ?? '(untitled)',
         parentId: row.folder_id,
+        itemCount: counts.get(row.id) ?? 0,
       }));
+    },
+
+    /** The shared root's and My workspace's items, everything beneath each counted (AC-194). */
+    async rootCounts(): Promise<Record<string, number>> {
+      const counts = await itemCounts(ROOT_IDS);
+      return Object.fromEntries(ROOT_IDS.map((id) => [id, counts.get(id) ?? 0]));
     },
 
     /**

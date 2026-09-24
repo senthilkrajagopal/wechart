@@ -6,6 +6,7 @@ import { StateLine } from '../../shell/StatusIcon';
 import { CreateMenu, DEFAULT_TITLES, type CreatableKind } from './CreateMenu';
 import { FolderContents, type CatalogItem } from './FolderContents';
 import { FolderTree, type FolderNode } from './FolderTree';
+import { ROOT_FOLDERS, SHARED_ROOT, rootTitleOf } from './roots';
 
 /**
  * Explore: the folder tree and the open folder (AC-017), laid out as the
@@ -15,8 +16,7 @@ import { FolderTree, type FolderNode } from './FolderTree';
  * Dashboards and charts live in folders here; there is no separate Dashboards
  * workspace (docs/inputs §8).
  */
-const ROOT = 'root';
-const ROOT_TITLE = 'All folders';
+const ROOT = SHARED_ROOT.id;
 /** What a folder renamed to nothing is called — the prototype's fallback. */
 const UNTITLED_FOLDER = 'Untitled folder';
 /**
@@ -36,17 +36,23 @@ interface CreatedObject {
   readonly id: string;
 }
 
-/** The folder and each folder above it, the root first. */
+/**
+ * The folder and each folder above it, the root it hangs from first — the
+ * shared root or My workspace (AC-194).
+ */
 function chainOf(folders: readonly FolderNode[], id: string): { id: string; title: string }[] {
   const out: { id: string; title: string }[] = [];
+  let above: string | null = id;
   let current = folders.find((folder) => folder.id === id);
   // Bounded by the number of folders: a cycle in stored data cannot hang it.
   for (let guard = 0; current !== undefined && guard <= folders.length; guard += 1) {
     out.unshift({ id: current.id, title: current.title });
-    const parent: string | null = current.parentId;
+    above = current.parentId;
+    const parent: string | null = above;
     current = folders.find((folder) => folder.id === parent);
   }
-  return [{ id: ROOT, title: ROOT_TITLE }, ...out];
+  const root = ROOT_FOLDERS.find((each) => each.id === above) ?? SHARED_ROOT;
+  return [{ id: root.id, title: root.title }, ...out];
 }
 
 export function ExplorePage() {
@@ -137,6 +143,8 @@ export function ExplorePage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
       await queryClient.invalidateQueries({ queryKey: ['folders'] });
+      // A move can change a root's count as well as its folders' (AC-194).
+      await queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
     },
   });
 
@@ -144,11 +152,22 @@ export function ExplorePage() {
   /**
    * Whether the open folder is one the tree knows. While the folders load,
    * or after one is deleted elsewhere, it is not — and borrowing the root's
-   * name for it would put "All folders" over a real folder's contents, with
-   * a Rename that renames the folder under a name it does not have.
+   * name for it would put "Shared" over a real folder's contents, with a
+   * Rename that renames the folder under a name it does not have.
    */
-  const known = folderId === ROOT || chain.at(-1)?.id === folderId;
-  const folderTitle = known ? (chain.at(-1)?.title ?? ROOT_TITLE) : '';
+  const isRoot = rootTitleOf(folderId) !== undefined;
+  const known = isRoot || chain.at(-1)?.id === folderId;
+  const folderTitle = known ? (chain.at(-1)?.title ?? SHARED_ROOT.title) : '';
+
+  /** The roots' counts, which are no folder's (AC-194). */
+  const rootCounts = useQuery({
+    queryKey: ['folder-roots'],
+    queryFn: () => getJson<Record<string, number>>('/api/folder-roots'),
+  });
+  const roots = ROOT_FOLDERS.map((root) => ({
+    ...root,
+    ...(rootCounts.data?.[root.id] === undefined ? {} : { itemCount: rootCounts.data[root.id] }),
+  }));
 
   /** Open a folder: the tree, a breadcrumb or a folder's row. */
   const openFolder = (id: string) => {
@@ -182,14 +201,27 @@ export function ExplorePage() {
 
   return (
     <div className="explore">
-      <aside className="explore__tree">
-        <FolderTree
-          folders={folders.data ?? []}
-          selectedId={searching ? '' : folderId}
-          onSelect={openFolder}
-          rootId={ROOT}
-          rootTitle={ROOT_TITLE}
-        />
+      {/* The prototype's docked Folders pane (AC-194), kept in view as the
+          contents scroll. */}
+      <aside className="explore__tree" aria-labelledby="explore-folders-heading">
+        <div className="explore__pane-head">
+          <h2 id="explore-folders-heading">Folders</h2>
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            onClick={() => create.mutate('folder')}
+          >
+            + Folder
+          </button>
+        </div>
+        <div className="explore__pane-body">
+          <FolderTree
+            folders={folders.data ?? []}
+            roots={roots}
+            selectedId={searching ? '' : folderId}
+            onSelect={openFolder}
+          />
+        </div>
       </aside>
       <section className="explore__contents" data-testid="explore-contents">
         <nav className="crumbs" aria-label="Breadcrumb">
@@ -241,8 +273,8 @@ export function ExplorePage() {
           ) : (
             <h1 className="explore__title">{searching ? 'Search' : folderTitle}</h1>
           )}
-          {/* The root is not a folder anyone named, so it has no Rename. */}
-          {!searching && renaming === null && folderId !== ROOT && known ? (
+          {/* A root is not a folder anyone named, so it has no Rename. */}
+          {!searching && renaming === null && !isRoot && known ? (
             <button
               type="button"
               className="btn-ghost btn-sm"
@@ -287,13 +319,16 @@ export function ExplorePage() {
         {shown.isSuccess ? (
           <FolderContents
             items={searching ? shown.data.slice(0, SEARCH_SHOWN) : shown.data}
-            // The top is somewhere to move to as well (AC-193).
-            folders={[{ id: ROOT, title: ROOT_TITLE, parentId: null }, ...(folders.data ?? [])]}
+            // Both roots are somewhere to move to as well (AC-193, AC-194).
+            folders={[
+              ...ROOT_FOLDERS.map((root) => ({ ...root, parentId: null })),
+              ...(folders.data ?? []),
+            ]}
             sourceKinds={sourceKinds}
             {...(searching
               ? {
                   folderNames: new Map([
-                    [ROOT, ROOT_TITLE],
+                    ...ROOT_FOLDERS.map((root) => [root.id, root.title] as const),
                     ...(folders.data ?? []).map((folder) => [folder.id, folder.title] as const),
                   ]),
                 }

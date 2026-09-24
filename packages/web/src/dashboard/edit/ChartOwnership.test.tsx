@@ -72,11 +72,13 @@ describe('a chart tile’s ownership', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save to folders…' }));
 
     const folder = screen.getByRole('combobox', { name: 'Folder' }) as HTMLSelectElement;
+    // Both roots, the shared one and My workspace (AC-194), then the folders.
     expect([...folder.options].map((option) => option.textContent)).toEqual([
-      'All folders',
+      'Shared',
+      'My workspace',
       'Sales',
     ]);
-    expect(folder.selectedOptions[0]?.textContent).toBe('All folders');
+    expect(folder.selectedOptions[0]?.textContent).toBe('Shared');
     await userEvent.click(screen.getByRole('button', { name: 'Save to this folder' }));
     expect(onSaveToFolder).toHaveBeenCalledWith('root');
   });

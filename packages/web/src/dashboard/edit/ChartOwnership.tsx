@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 
 import { loadChart } from '../../editor/openChart';
 import { StateLine } from '../../shell/StatusIcon';
+import { ROOT_FOLDERS, SHARED_ROOT, rootTitleOf } from '../../workspaces/explore/roots';
 import type { ChartDraft, DashboardDocument } from '../model/document';
 import { withDraft } from './chartDrafts';
 
@@ -12,11 +13,11 @@ interface Folder {
 }
 
 /**
- * The top level, which Explore calls "All folders" (`FolderTree`): no folder
- * document of its own, so `/api/folders` does not list it — offered first, by
- * name, so a dashboard there shows and saves what it says (T133's review).
+ * The shared root, and My workspace beside it (AC-194): no folder documents of
+ * their own, so `/api/folders` does not list them — offered first, by name, so
+ * a dashboard at the top shows and saves what it says (T133's review).
  */
-const TOP_LEVEL: Folder = { id: 'root', title: 'All folders' };
+const TOP_LEVEL: Folder = SHARED_ROOT;
 
 /** The folders a chart can be saved to, read once the panel shows; `'failed'` if they cannot be. */
 function useFolders(): readonly Folder[] | undefined | 'failed' {
@@ -178,7 +179,7 @@ export function ChartOwnership({
 
   if (chart === undefined) return null;
   const listed = folders === undefined || folders === 'failed' ? [] : folders;
-  const choices = [TOP_LEVEL, ...listed.filter((each) => each.id !== TOP_LEVEL.id)];
+  const choices = [...ROOT_FOLDERS, ...listed.filter((each) => rootTitleOf(each.id) === undefined)];
   const nameOf = (id: string | undefined) =>
     choices.find((each) => each.id === id)?.title ?? id ?? 'a folder';
 

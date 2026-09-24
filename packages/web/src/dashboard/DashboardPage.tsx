@@ -11,6 +11,7 @@ import { allMembers } from '../filters/FilterBar';
 import type { FilterValues } from '../filters/model';
 import { CHART_MISSING, formatsFrom, tileChartOf, type TileChart } from './chartSpec';
 import { StateLine } from '../shell/StatusIcon';
+import { ROOT_FOLDERS } from '../workspaces/explore/roots';
 import { DashboardView } from './DashboardView';
 import { chartWritesOf, drawnWithDrafts, withoutDrafts } from './edit/chartDrafts';
 import { saveDashboard } from './edit/save';
@@ -288,9 +289,9 @@ function LoadedDashboard({
       setSavedToFolders('');
       return;
     }
-    // By name where the folders can be read; by id, never not at all. The top
-    // level is no folder of its own, and Explore calls it "All folders".
-    const names = new Map<string, string>([['root', 'All folders']]);
+    // By name where the folders can be read; by id, never not at all. The
+    // roots are no folders of their own, so they are named from the one list.
+    const names = new Map<string, string>(ROOT_FOLDERS.map((root) => [root.id, root.title]));
     try {
       const response = await fetch('/api/folders');
       if (response.ok)

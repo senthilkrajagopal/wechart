@@ -5,6 +5,7 @@ import { CrossFilterMatrix } from './CrossFilterMatrix';
 import { isDirty } from './dirtyGuard';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
+import { ROOT_FOLDERS, rootTitleOf } from '../../workspaces/explore/roots';
 import { interactionsOf, labelOf, setMode, type InteractionMode } from './interactionMode';
 
 /**
@@ -392,12 +393,16 @@ export function SettingsPage({ document, onCancel, onSave, titleOf }: SettingsPa
                     );
                   }}
                 >
-                  <option value="root">All folders</option>
+                  {ROOT_FOLDERS.map((root) => (
+                    <option key={root.id} value={root.id}>
+                      {root.title}
+                    </option>
+                  ))}
                   {/* The folder it is in, offered before the list arrives —
                       or if it cannot — so the picker never shows the root
                       for a dashboard that lives elsewhere (T215's review). */}
                   {draft.folderId !== undefined &&
-                  draft.folderId !== 'root' &&
+                  rootTitleOf(draft.folderId) === undefined &&
                   !folders.some((folder) => folder.id === draft.folderId) ? (
                     <option value={draft.folderId}>Its current folder</option>
                   ) : null}

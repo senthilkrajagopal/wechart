@@ -121,9 +121,11 @@ test('a folder is named by its heading, under a breadcrumb of its ancestors', as
 test('creating is offered through one New menu: Dashboard, Chart and Folder', async ({ page }) => {
   await openFinance(page);
 
-  // No separate create buttons beside it.
+  // No separate create buttons beside it. Scoped to the header row: folders
+  // called "New folder", which other tests make, are buttons in the tree.
+  const header = heading(page).locator('xpath=..');
   for (const old of ['New folder', 'New dashboard', 'New chart'])
-    await expect(page.getByRole('button', { name: old, exact: true })).toHaveCount(0);
+    await expect(header.getByRole('button', { name: old, exact: true })).toHaveCount(0);
 
   // Exact: a row for a folder called "New folder …" also contains the word.
   await contentsOf(page).getByRole('button', { name: 'New', exact: true }).click();
@@ -302,7 +304,8 @@ test("rename and move are in each row's menu, and a move never offers where the 
   for (const excluded of [`Listed ${made.unique}`, `Sub ${made.unique}`, `Inner ${made.unique}`])
     await expect(folderTargets.getByRole('option', { name: excluded })).toHaveCount(0);
   // The top is somewhere a folder can go.
-  await expect(folderTargets.getByRole('option', { name: 'All folders' })).toHaveCount(1);
+  await expect(folderTargets.getByRole('option', { name: 'Shared', exact: true })).toHaveCount(1);
+  await expect(folderTargets.getByRole('option', { name: 'My workspace' })).toHaveCount(1);
 
   // Rename, from the menu, renames in place.
   await chartRow.getByRole('button', { name: `Actions for A typed ${made.unique}` }).click();
@@ -315,4 +318,117 @@ test("rename and move are in each row's menu, and a move never offers where the 
   await field.fill(`Renamed ${made.unique}`);
   await field.press('Enter');
   await expect(chartRow.getByRole('rowheader')).toHaveText(`Renamed ${made.unique}`);
+});
+
+/**
+ * T214 / AC-194: THE SYSTEM SHALL show the folder tree as a full-height pane
+ * headed "Folders" with a "+ Folder" action, holding a shared root and a
+ * personal "My workspace" root, each folder showing the number of items it
+ * holds including those in its subfolders.
+ * `Fails when: "My workspace" is missing, a count leaves out items in
+ * subfolders, or the tree scrolls away with the contents.`
+ */
+const pane = (page: Page) => page.getByRole('complementary', { name: 'Folders' });
+
+test('the tree is a pane headed Folders, with the shared root and My workspace, each counted', async ({
+  page,
+  request,
+}) => {
+  const unique = String(Date.now());
+  const drafts = await folderIn(request, 'mine', `Drafts ${unique}`);
+  const deeper = await folderIn(request, drafts, `Deeper ${unique}`);
+  await documentIn(request, 'dashboard', drafts, { title: `Draft board ${unique}` });
+  await documentIn(request, 'chart', deeper, { title: `Draft chart ${unique}` });
+
+  await page.goto('/explore');
+  await expect(pane(page).getByRole('heading', { level: 2 })).toHaveText('Folders');
+  const tree = pane(page).getByRole('tree');
+  // Two roots, the personal one among them.
+  await expect(tree.locator('[role="treeitem"][aria-level="1"]')).toHaveCount(2);
+  await expect(tree.getByRole('treeitem', { name: 'Shared', exact: true })).toHaveAttribute(
+    'aria-level',
+    '1',
+  );
+  const mine = tree.getByRole('treeitem', { name: 'My workspace', exact: true });
+  await expect(mine).toHaveAttribute('aria-level', '1');
+  // Drafts counts the chart in the folder beneath it, as well as its own dashboard.
+  const draftsCount = tree
+    .getByRole('treeitem', { name: `Drafts ${unique}`, exact: true })
+    .locator('.folder-tree__count')
+    .first();
+  await expect(draftsCount).toHaveText('2');
+
+  // My workspace opens like any folder, and holds Drafts.
+  await mine.getByRole('button').first().click();
+  await expect(heading(page)).toHaveText('My workspace');
+  await expect(page.getByTestId(`item-${drafts}`)).toBeVisible();
+});
+
+test('+ Folder in the pane makes a folder in the open one', async ({ page }) => {
+  await openFinance(page);
+  await pane(page).getByRole('button', { name: '+ Folder' }).click();
+  // Opened, named in the heading ready to type, and beneath Finance.
+  const name = contentsOf(page).getByRole('textbox', { name: 'Folder name' });
+  await expect(name).toBeFocused();
+  await expect(crumbs(page).getByRole('button')).toContainText(['Shared', 'Finance']);
+  // Named, so no "New folder" is left behind for other tests to trip on.
+  const unique = `Plus folder ${String(Date.now())}`;
+  await name.fill(unique);
+  await name.press('Enter');
+  await expect(heading(page)).toHaveText(unique);
+});
+
+test("a root's count is shown, and follows a move into it", async ({ page, request }) => {
+  const unique = String(Date.now());
+  const home = await folderIn(request, 'root', `Counted home ${unique}`);
+  const board = await documentIn(request, 'dashboard', home, { title: `Counted ${unique}` });
+
+  await page.goto('/explore');
+  const mine = pane(page).getByRole('treeitem', { name: 'My workspace', exact: true });
+  const count = mine.locator('.folder-tree__count').first();
+  const shown = async () => Number(await count.textContent());
+  const before = (
+    (await (await request.get(`${API}/folder-roots`)).json()) as Record<string, number>
+  )['mine'];
+  await expect(count).toHaveText(String(before));
+
+  // Moved into My workspace from the row's menu: its count goes up by one.
+  await page
+    .getByRole('tree')
+    .getByRole('button', { name: `Counted home ${unique}` })
+    .click();
+  await page
+    .getByTestId(`item-${board}`)
+    .getByRole('button', { name: /^Actions for / })
+    .click();
+  await page.getByRole('menuitem', { name: 'Move to…' }).click();
+  await page
+    .getByTestId(`item-${board}`)
+    .getByRole('combobox')
+    .selectOption({ label: 'My workspace' });
+  await expect.poll(shown).toBeGreaterThan(before ?? 0);
+});
+
+test('the tree is a full-height pane that stays put while the contents scroll', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 600 });
+  await page.goto('/explore');
+  const aside = pane(page);
+  const shared = aside.getByRole('treeitem', { name: 'Shared', exact: true });
+  await expect(shared).toBeVisible();
+  // The contents loaded, so the page is long enough to scroll: the seed alone
+  // puts thirty dashboards at the top.
+  await expect(contentsOf(page).getByRole('row').nth(20)).toBeVisible();
+
+  // Full height: from below the app bar to the bottom of the viewport.
+  const box = await aside.boundingBox();
+  expect((box?.y ?? 0) + (box?.height ?? 0)).toBeGreaterThan(600 - 24);
+
+  const before = (await aside.boundingBox())?.y ?? 0;
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  // Scrolled well past where the pane began, and the pane did not move with it.
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(before + 200);
+  expect((await aside.boundingBox())?.y).toBeCloseTo(before, 0);
+  await expect(shared).toBeInViewport();
 });

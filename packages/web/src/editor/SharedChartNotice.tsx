@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { StateLine } from '../shell/StatusIcon';
+import { SHARED_ROOT, rootTitleOf } from '../workspaces/explore/roots';
 
 /**
  * A library chart opened for editing from a dashboard (T134, AC-128;
@@ -41,11 +42,13 @@ export function SharedChartNotice({
       return (await response.json()) as { id: string; title: string }[];
     },
   });
-  // The top level is no folder of its own; Explore calls it "All folders".
+  // A root is no folder of its own; it is named from the one list.
   const folder =
-    folderId === 'root' || folderId === undefined
-      ? 'All folders'
-      : (folders.data?.find((each) => each.id === folderId)?.title ?? folderId);
+    folderId === undefined
+      ? SHARED_ROOT.title
+      : (rootTitleOf(folderId) ??
+        folders.data?.find((each) => each.id === folderId)?.title ??
+        folderId);
 
   // The other dashboards, and this one: whether its saved body shows the
   // chart yet or only this session does.
