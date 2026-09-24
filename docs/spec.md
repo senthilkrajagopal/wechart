@@ -302,7 +302,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
 
 - [x] AC-084 THE SYSTEM SHALL give every dashboard at least one marking and exactly one default marking, and SHALL allow at most four markings per dashboard (direction.md rules 43, 57; `[R7]`).
       Fails when: a dashboard has no default marking, or a fifth marking can be created.
-- [ ] AC-085 WHEN a chart tile is created, THE SYSTEM SHALL set it to mark with the dashboard's default marking, and the tile's Marking setting SHALL also offer "(None)" and every other marking (direction.md rule 44).
+- [x] AC-085 WHEN a chart tile is created, THE SYSTEM SHALL set it to mark with the dashboard's default marking, and the tile's Marking setting SHALL also offer "(None)" and every other marking (direction.md rule 44).
       Fails when: a new chart tile marks with no marking, or "(None)" is missing from the setting.
 - [x] AC-086 THE SYSTEM SHALL store a marking only as a predicate over Cube dimension members — tuples of member, granularity and value, or bounded ranges — and never as row numbers or result positions (direction.md rule 46).
       Fails when: a stored marking references a row index or a position in a result set.
@@ -322,7 +322,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: the stripe does not appear, or the bounds move when a filter changes.
 - [ ] AC-094 WHEN the user clicks an empty plot area, or presses Escape on a focused tile, THE SYSTEM SHALL unmark that tile's marking and leave other markings unchanged.
       Fails when: another marking is cleared, or the marking survives.
-- [ ] AC-095 WHEN a marking changes, THE SYSTEM SHALL update every tile that uses it or is limited by it, on every page tab of the dashboard (direction.md rule 48).
+- [x] AC-095 WHEN a marking changes, THE SYSTEM SHALL update every tile that uses it or is limited by it, on every page tab of the dashboard (direction.md rule 48).
       Fails when: a tile on another page tab still shows the previous marking state when opened.
 - [x] AC-096 WHEN a tile shows a marking, THE SYSTEM SHALL draw marked items in their own colour with an outline in the marking's colour and fade unmarked items (direction.md rule 49).
       Fails when: unmarked items render at full strength, or marked items carry no outline.

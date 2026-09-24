@@ -135,6 +135,7 @@ function focusAfterDeleting(id: string): () => void {
   };
 }
 import {
+  changeTile,
   chartIdOf,
   containersOf,
   elementAt,
@@ -158,6 +159,7 @@ import {
 } from './model/document';
 import { detach } from '../editor/detach';
 import { TileChartOwnership } from './edit/ChartOwnership';
+import { TileMarking } from './settings/TileMarking';
 import { duplicateChartTile } from './model/duplicate';
 import { withLocalCharts } from './model/localCharts';
 
@@ -891,7 +893,18 @@ function AddSlot({
           id === 'chart'
             ? withLocalCharts([placed.element], dashboardId, mintChartId)
             : { elements: [placed.element], drafts: {} };
-        const element = local.elements[0] ?? placed.element;
+        const made = local.elements[0] ?? placed.element;
+        /**
+         * A new chart tile marks with the dashboard's default marking
+         * (AC-085, direction.md rule 44). Written onto the tile rather than
+         * left to be defaulted on read, so the dashboard says what each tile
+         * marks with and a later change to the default leaves it where it is.
+         */
+        const defaultMarks = markingsFrom(document.markings).find((each) => each.isDefault);
+        const element =
+          made.kind === 'chart' && defaultMarks !== undefined
+            ? { ...made, marksWith: defaultMarks.id }
+            : made;
 
         session.change(withDrafts(insertElement(document, element, placed.at), local.drafts));
         setSaid(placed.message ?? '');
@@ -2114,25 +2127,38 @@ export function DashboardView({
                   session.update(apply);
                 }}
                 // Whose its chart is, and "Save to folders…" (T133, AC-127).
-                chartProperties={(tile) =>
-                  tile.chartId === undefined ? undefined : (
-                    <TileChartOwnership
-                      key={tile.id}
-                      dashboardId={dashboardId}
-                      dashboard={session.document}
-                      chartId={tile.chartId}
-                      stored={documents?.[tile.chartId]}
-                      drawn={
-                        specs[tile.chartId] === undefined
-                          ? { error: errors?.[tile.chartId] }
-                          : { spec: specs[tile.chartId] as RenderSpec }
-                      }
-                      onChange={(apply) => {
-                        session.update(apply);
+                chartProperties={(tile) => (
+                  <>
+                    {/* Which marking clicking in this tile changes (AC-085). */}
+                    <TileMarking
+                      key={`marking-${tile.id}`}
+                      markings={markingsFrom(session.document.markings)}
+                      marksWith={tile.marksWith}
+                      onChange={(marksWith) => {
+                        session.update((current) =>
+                          changeTile(current, tile.id, (each) => ({ ...each, marksWith })),
+                        );
                       }}
                     />
-                  )
-                }
+                    {tile.chartId === undefined ? null : (
+                      <TileChartOwnership
+                        key={tile.id}
+                        dashboardId={dashboardId}
+                        dashboard={session.document}
+                        chartId={tile.chartId}
+                        stored={documents?.[tile.chartId]}
+                        drawn={
+                          specs[tile.chartId] === undefined
+                            ? { error: errors?.[tile.chartId] }
+                            : { spec: specs[tile.chartId] as RenderSpec }
+                        }
+                        onChange={(apply) => {
+                          session.update(apply);
+                        }}
+                      />
+                    )}
+                  </>
+                )}
               />
               {/**
                * The dashboard's page tabs, each deletable (AC-060), as the

@@ -27,8 +27,11 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
  */
 const API = 'http://localhost:4100/api';
 
-/** A dashboard of its own, in Markings mode, with two bar tiles on one page. */
-async function markingDashboard(request: APIRequestContext) {
+/**
+ * A dashboard of its own, in Markings mode, with two bar tiles on one page —
+ * and, when asked, a third on a second page marking with the same marking.
+ */
+async function markingDashboard(request: APIRequestContext, { twoPages = false } = {}) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Markings ${unique}`;
   const dashboard = (await (
@@ -64,6 +67,7 @@ async function markingDashboard(request: APIRequestContext) {
 
   const status = await chartOn('By status', 'orders.status');
   const category = await chartOn('By category', 'products.category');
+  const elsewhere = twoPages ? await chartOn('Elsewhere by status', 'orders.status') : undefined;
   await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
     data: {
       version: 1,
@@ -83,6 +87,24 @@ async function markingDashboard(request: APIRequestContext) {
               { id: 'tile-category', kind: 'chart', w: 6, h: 40, chartId: category },
             ],
           },
+          ...(elsewhere === undefined
+            ? []
+            : [
+                {
+                  id: 'second',
+                  title: 'Second',
+                  items: [
+                    {
+                      id: 'tile-elsewhere',
+                      kind: 'chart',
+                      w: 6,
+                      h: 40,
+                      chartId: elsewhere,
+                      marksWith: 'm1',
+                    },
+                  ],
+                },
+              ]),
         ],
       },
     },
@@ -218,4 +240,71 @@ test('a click on empty plot area unmarks that tile’s marking', async ({ page, 
 
   await expect(status.getByTestId('mark-badge')).toHaveCount(0);
   expect((await opacities(status)).every((value) => value === 1)).toBe(true);
+});
+
+/**
+ * AC-095: WHEN a marking changes, THE SYSTEM SHALL update every tile that
+ * uses it or is limited by it, on every page tab of the dashboard.
+ * `Fails when: a tile on another page tab still shows the previous marking
+ * state when opened.`
+ *
+ * The tab that was never open while the marking changed is the case that
+ * matters: it is rendered for the first time afterwards, and has to agree
+ * with the tiles that were on screen.
+ */
+test('a marking reaches a tile on a page tab that was never open', async ({ page, request }) => {
+  const { id, title } = await markingDashboard(request, { twoPages: true });
+  await open(page, id, title);
+
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+  await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toContainText('1 marked');
+
+  await page.getByRole('tab', { name: 'Second' }).click();
+  const elsewhere = tile(page, 'tile-elsewhere');
+  await expect(elsewhere.getByTestId('chart-canvas')).toBeVisible();
+
+  // Drawn marked the moment it appears, and saying so.
+  await expect(elsewhere.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect
+    .poll(async () => (await opacities(elsewhere)).filter((value) => value < 1).length)
+    .toBeGreaterThan(0);
+});
+
+/**
+ * AC-085: WHEN a chart tile is created, THE SYSTEM SHALL set it to mark with
+ * the dashboard's default marking, and the tile's Marking setting SHALL also
+ * offer "(None)" and every other marking.
+ * `Fails when: a new tile marks with nothing, or the setting omits "(None)".`
+ */
+test('a tile’s Marking setting offers (None), and a new tile takes the default', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+
+  // The tile's own setting, in Properties.
+  await tile(page, 'tile-status').click();
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  await sidebar.getByRole('tab', { name: 'Properties' }).click();
+  const picker = sidebar.getByLabel('Marking');
+  await expect(picker).toHaveValue('m1');
+  await expect(picker.locator('option')).toHaveText(['(None)', 'Marking']);
+
+  // A tile added now marks with the dashboard's default from the start.
+  await sidebar.getByRole('tab', { name: 'Add' }).click();
+  await sidebar.getByTestId('add-chart').click();
+  await sidebar.getByRole('tab', { name: 'Properties' }).click();
+  await expect(sidebar.getByLabel('Marking')).toHaveValue('m1');
+
+  // And "(None)" is a tile that marks with nothing: chosen here, clicking in
+  // it changes no marking.
+  await tile(page, 'tile-status').click();
+  await sidebar.getByLabel('Marking').selectOption('');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+  await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toHaveCount(0);
 });
