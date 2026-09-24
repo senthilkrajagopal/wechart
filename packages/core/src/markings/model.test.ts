@@ -9,7 +9,9 @@ import {
   markingsFrom,
   problemsWith,
   removeMarking,
+  renameMarking,
   setDefaultMarking,
+  setMarkingSlot,
   type Marking,
 } from './model';
 
@@ -214,5 +216,50 @@ describe('a dashboard’s markings', () => {
       expect(problemsWith(defaultMarkings())).toEqual([]);
       expect(problemsWith(full())).toEqual([]);
     });
+  });
+});
+
+/**
+ * T218 / AC-198: … let the user add a marking (up to four), rename, recolour,
+ * delete and make one the default …
+ *
+ * Recolouring keeps "one per colour" (direction.md's four validated slots):
+ * choosing a colour another marking wears swaps the two.
+ */
+describe('renaming and recolouring a marking (AC-198)', () => {
+  it('renames one marking and no other', () => {
+    const two = addMarking(defaultMarkings());
+    expect(named(renameMarking(two, 'mk2', 'Region'))).toEqual(['Marking', 'Region']);
+  });
+
+  it('recolours to a free colour, and swaps with the marking that wears a taken one', () => {
+    const two = addMarking(defaultMarkings());
+    const free = setMarkingSlot(two, 'mk1', 'mk3');
+    expect(free.map((marking) => marking.slot)).toEqual(['mk3', 'mk2']);
+
+    const swapped = setMarkingSlot(two, 'mk1', 'mk2');
+    expect(swapped.map((marking) => marking.slot)).toEqual(['mk2', 'mk1']);
+    expect(problemsWith(swapped)).toEqual([]);
+  });
+
+  it('gives a new marking an id no marking has, even after recolouring', () => {
+    // mk1 recoloured to mk2 frees mk1's colour, but its id stays "mk1".
+    const moved = setMarkingSlot(defaultMarkings(), 'mk1', 'mk2');
+    const added = addMarking(moved);
+    const ids = added.map((marking) => marking.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(added.map((marking) => marking.slot)).toEqual(['mk2', 'mk1']);
+  });
+
+  it('takes an id from the caller, so a deleted marking’s id is never worn again (T218’s review)', () => {
+    const added = addMarking(defaultMarkings(), undefined, 'mk-fresh');
+    expect(added[1]?.id).toBe('mk-fresh');
+  });
+
+  it('names a new marking with a name no marking has', () => {
+    // "Marking 2" deleted from three: the next is not a second "Marking 3".
+    const three = addMarking(addMarking(defaultMarkings()));
+    const left = removeMarking(three, three[1]?.id ?? '');
+    expect(named(addMarking(left))).toEqual(['Marking', 'Marking 3', 'Marking 4']);
   });
 });

@@ -645,7 +645,7 @@ Dashboards:
       Fails when: the page tabs or the filter bar scroll out of view with the tiles, or the filter bar appears only once something is set.
 - [x] AC-197 WHEN the user opens a dashboard's settings, THE SYSTEM SHALL let the user change its name, its folder and its description under General, and Explore SHALL show that description beneath the dashboard's name.
       Fails when: the folder or the description cannot be changed there, or a saved description does not appear in Explore.
-- [ ] AC-198 WHEN the user opens Settings › Markings, THE SYSTEM SHALL list the dashboard's markings with their colour, name, whether each is the default and how many tiles mark with or are limited by it, let the user add a marking (up to four), rename, recolour, delete and make one the default, and show a table of every chart tile with the marking it marks with and the markings that limit it.
+- [x] AC-198 WHEN the user opens Settings › Markings, THE SYSTEM SHALL list the dashboard's markings with their colour, name, whether each is the default and how many tiles mark with or are limited by it, let the user add a marking (up to four), rename, recolour, delete and make one the default, and show a table of every chart tile with the marking it marks with and the markings that limit it.
       Fails when: any of those changes cannot be made on that page, or the tiles table is missing.
 - [ ] AC-199 WHEN the user opens a chart tile's menu in view mode, THE SYSTEM SHALL offer View as table, View query, Download CSV and Edit chart, and, while the dashboard is in Markings mode, the marked-rows actions headed by the tile's marking and its count.
       Fails when: one of those items is missing, or the marked-rows actions appear outside Markings mode.

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { DashboardDocument } from '../model/document';
 import { CrossFilterMatrix } from './CrossFilterMatrix';
+import { MarkingsSettings } from './MarkingsSettings';
+import { markingNameProblem } from './markingsDraft';
 import { isDirty } from './dirtyGuard';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
@@ -293,6 +295,14 @@ export function SettingsPage({ document, onCancel, onSave, titleOf }: SettingsPa
                * closes as it always did; in view mode it is a write, and the
                * page stays until that write has gone through.
                */
+              // Markings each need a name of their own (the prototype's rule
+              // on save): said on the Markings section, and nothing saved.
+              const named = markingNameProblem(draft);
+              if (named !== undefined) {
+                setOpen('Markings');
+                setFailed(named);
+                return;
+              }
               setFailed(undefined);
               const answer = onSave(draft);
               if (answer === undefined) return;
@@ -446,6 +456,21 @@ export function SettingsPage({ document, onCancel, onSave, titleOf }: SettingsPa
               onChoose={chooseMode}
               note="The configuration of the mode you are not using is kept, not cleared."
             />
+          ) : open === 'Markings' ? (
+            /**
+             * The markings and the tiles that use them (AC-198), in the draft
+             * until Save like everything else here. Said to be inactive, not
+             * hidden, while the dashboard cross-filters: the prototype's note.
+             */
+            <>
+              {interactions.mode === 'markings' ? null : (
+                <p className="settings-page__later" role="note">
+                  Inactive: this dashboard uses cross-filtering. These settings apply if you switch
+                  to Markings.
+                </p>
+              )}
+              <MarkingsSettings document={draft} titleOf={titleOf} onChange={setDraft} />
+            </>
           ) : open === 'Cross-filtering' ? (
             /**
              * The default action, and the matrix that overrides it per pair

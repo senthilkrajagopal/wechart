@@ -1260,6 +1260,22 @@ main:has(.dashboard) {
   background: var(--wc-bg-surface);
 }
 .settings-page__later { color: var(--wc-text-secondary); }
+/* Settings › Markings (AC-198): the prototype's colour slots, default radio,
+   and a tile's limit checkboxes, each with its marking's swatch. */
+.markings-table { margin-bottom: 8px; }
+.marking-slots,
+.marking-limits { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.marking-slot,
+.marking-limit,
+.marking-default { display: inline-flex; gap: 4px; align-items: center; }
+.marking-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--wc-border-subtle);
+}
+.markings-add { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
 
 /* "Limit data using markings" (AC-108). The reason sits beside the option it
    explains, not in a tooltip: a disabled control with no explanation is the

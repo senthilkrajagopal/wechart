@@ -53,17 +53,34 @@ const freeSlot = (markings: readonly Marking[]): MarkingSlot | undefined =>
  * would make "the button is disabled" and "the model refuses" two different
  * mechanisms for one rule.
  */
-export function addMarking(markings: readonly Marking[], name?: string): readonly Marking[] {
+export function addMarking(
+  markings: readonly Marking[],
+  name?: string,
+  givenId?: string,
+): readonly Marking[] {
   const slot = freeSlot(markings);
   if (slot === undefined) return markings;
+
+  // The caller's id when it has one — Settings gives a fresh one, so a
+  // deleted marking's id, and any marks still held under it, never come back
+  // (T218's review). Otherwise its slot's name, unless a recoloured marking
+  // already has that id: ids never change, so they stop matching slots once
+  // one is recoloured. With at most four markings a slot name is always free.
+  const taken = new Set(markings.map((marking) => marking.id));
+  const id =
+    givenId ?? (taken.has(slot) ? (MARKING_SLOTS.find((each) => !taken.has(each)) ?? slot) : slot);
+  // A name no marking has: after a deletion, the count alone repeats one.
+  const names = new Set(markings.map((marking) => marking.name));
+  let n = markings.length + 1;
+  while (names.has(`Marking ${String(n)}`)) n += 1;
 
   return [
     ...markings,
     {
-      id: slot,
+      id,
       // Named after its slot by default, so the list stays readable without
       // asking the user to name something before they have used it.
-      name: name ?? `Marking ${String(markings.length + 1)}`,
+      name: name ?? `Marking ${String(n)}`,
       slot,
       // Adding a marking is not a decision about which one new tiles use.
       isDefault: markings.length === 0,
@@ -84,6 +101,36 @@ export function removeMarking(markings: readonly Marking[], id: string): readonl
   if (left.length === markings.length) return markings;
 
   return withOneDefault(left);
+}
+
+/** One marking under a new name (AC-198); the others as they were. */
+export function renameMarking(
+  markings: readonly Marking[],
+  id: string,
+  name: string,
+): readonly Marking[] {
+  return markings.map((marking) => (marking.id === id ? { ...marking, name } : marking));
+}
+
+/**
+ * One marking in another of the four colours (AC-198). A colour another
+ * marking wears is swapped with it, so each colour is still worn once — the
+ * rule `markingsFrom` would otherwise repair by dropping a marking.
+ */
+export function setMarkingSlot(
+  markings: readonly Marking[],
+  id: string,
+  slot: MarkingSlot,
+): readonly Marking[] {
+  const moving = markings.find((marking) => marking.id === id);
+  if (moving === undefined || moving.slot === slot) return markings;
+  return markings.map((marking) =>
+    marking.id === id
+      ? { ...marking, slot }
+      : marking.slot === slot
+        ? { ...marking, slot: moving.slot }
+        : marking,
+  );
 }
 
 /** The same markings with a different one as the default, and only one. */

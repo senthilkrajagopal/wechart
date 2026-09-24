@@ -861,3 +861,107 @@ test('the same set of marks asks Cube the same question, whatever order it was m
   // order it was clicked in is the user's history, not part of what was asked.
   expect(second.at(-1)).toBe(first.at(-1));
 });
+
+/**
+ * T218 / AC-198: WHEN the user opens Settings › Markings, THE SYSTEM SHALL
+ * list the dashboard's markings with their colour, name, whether each is the
+ * default and how many tiles mark with or are limited by it, let the user add
+ * a marking (up to four), rename, recolour, delete and make one the default,
+ * and show a table of every chart tile with the marking it marks with and the
+ * markings that limit it.
+ * `Fails when: any of those changes cannot be made on that page, or the tiles
+ * table is missing.`
+ */
+test('Settings › Markings adds, renames, recolours, deletes and defaults markings, and sets each tile’s', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request, { limited: true });
+  await open(page, id, title);
+  await page.getByRole('button', { name: 'Dashboard settings' }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .locator('[data-section="Markings"]')
+    .click();
+  const panel = page.getByRole('region', { name: 'Markings settings' });
+  const markings = panel.getByRole('table', { name: 'Markings', exact: true });
+
+  // The one marking: its colour, name, default, and what uses it — the two
+  // masters follow the default, and the details tile is limited by it.
+  const first = markings.getByRole('row').nth(1);
+  await expect(first.getByRole('textbox', { name: 'Name of marking 1' })).toHaveValue('Marking');
+  await expect(first.getByRole('radio', { name: 'Colour 1' })).toBeChecked();
+  await expect(first.getByRole('radio', { name: 'Default marking' })).toBeChecked();
+  await expect(first).toContainText('Used by 2 · limits 1');
+
+  // Add one: named, recoloured, made the default.
+  await panel.getByRole('button', { name: '+ New marking' }).click();
+  const second = markings.getByRole('row').nth(2);
+  await second.getByRole('textbox', { name: 'Name of marking 2' }).fill('Region');
+  await second.getByRole('radio', { name: 'Colour 3' }).click();
+  await expect(second.getByRole('radio', { name: 'Colour 3' })).toBeChecked();
+  await second.getByRole('radio', { name: 'Default marking' }).click();
+  await expect(first.getByRole('radio', { name: 'Default marking' })).not.toBeChecked();
+
+  // Up to four; a fifth is refused, and says why.
+  await panel.getByRole('button', { name: '+ New marking' }).click();
+  await panel.getByRole('button', { name: '+ New marking' }).click();
+  await expect(markings.getByRole('row')).toHaveCount(5);
+  const more = panel.getByRole('button', { name: '+ New marking' });
+  await expect(more).toHaveAttribute('aria-disabled', 'true');
+  // Clicked anyway — Playwright will not click what says it is disabled.
+  await more.dispatchEvent('click');
+  await expect(markings.getByRole('row')).toHaveCount(5);
+  await expect(panel).toContainText('Four markings at most');
+
+  // Delete the fourth.
+  await markings
+    .getByRole('row')
+    .nth(4)
+    .getByRole('button', { name: /^Delete / })
+    .click();
+  await expect(markings.getByRole('row')).toHaveCount(4);
+
+  // The tiles table: every chart tile, what it marks with and what limits it.
+  const tiles = panel.getByRole('table', { name: 'Tiles and markings' });
+  await expect(tiles.getByRole('row')).toHaveCount(4);
+  await tiles.getByRole('combobox', { name: 'Marking for By category' }).selectOption({
+    label: 'Marking',
+  });
+  await tiles.getByRole('checkbox', { name: 'Details by status limited by Region' }).check();
+  // What each tile marks with, as shown: the details tile marks with none,
+  // and the other master follows the new default.
+  await expect(tiles.getByRole('combobox', { name: 'Marking for Details by status' })).toHaveValue(
+    '',
+  );
+  await expect(
+    tiles.getByRole('combobox', { name: 'Marking for By status' }).locator('option:checked'),
+  ).toHaveText('Region (default)');
+
+  // A marking with no name is refused on save, and nothing is saved.
+  const secondName = second.getByRole('textbox', { name: 'Name of marking 2' });
+  await secondName.fill('');
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.getByTestId('settings-save-failed')).toHaveText(
+    'Each marking needs a name of its own.',
+  );
+  await expect(page.getByTestId('dashboard-settings')).toBeVisible();
+  await secondName.fill('Region');
+
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.getByTestId('dashboard-settings')).toBeHidden();
+
+  // Saved as set.
+  const saved = (await (await request.get(`${API}/documents/dashboard/${id}`)).json()) as {
+    body: {
+      markings: { id: string; name: string; slot: string; isDefault: boolean }[];
+      pages: { items: { id: string; marksWith?: string; limitedBy?: string[] }[] }[];
+    };
+  };
+  const region = saved.body.markings.find((marking) => marking.name === 'Region');
+  expect(region).toMatchObject({ slot: 'mk3', isDefault: true });
+  expect(saved.body.markings).toHaveLength(3);
+  const items = saved.body.pages[0]?.items ?? [];
+  expect(items.find((item) => item.id === 'tile-category')?.marksWith).toBe('m1');
+  expect(items.find((item) => item.id === 'tile-details')?.limitedBy).toEqual(['m1', region?.id]);
+});

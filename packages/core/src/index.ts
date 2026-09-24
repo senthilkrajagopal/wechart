@@ -149,7 +149,9 @@ export {
   markingsFrom,
   problemsWith,
   removeMarking,
+  renameMarking,
   setDefaultMarking,
+  setMarkingSlot,
   type Marking,
   type MarkingSlot,
 } from './markings/model';
