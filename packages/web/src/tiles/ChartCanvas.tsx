@@ -1,6 +1,6 @@
-import { echarts, itemClicks, optionFor, themed } from '@wechart/charts';
+import { echarts, itemClicks, optionFor, themed, type Canvas } from '@wechart/charts';
 import { seriesOf, type RenderSpec } from '@wechart/core';
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { ClickedItem } from '../dashboard/crossfilter/clicked';
 import { useThemeName } from '../shell/ThemeProvider';
@@ -33,6 +33,7 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
   const theme = useThemeName();
   const node = useRef<HTMLDivElement | null>(null);
   const instance = useRef<ReturnType<typeof echarts.init> | null>(null);
+  const [canvas, setCanvas] = useState<Canvas | null>(null);
   /** The latest, read by a click without rebinding the handlers each render. */
   const clicked = useRef(onItemClick);
   /**
@@ -68,8 +69,22 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
     const chart = echarts.getInstanceByDom(element) ?? echarts.init(element, null, {});
     instance.current = chart;
 
+    /**
+     * The box it is drawn in, which the option is laid out for (AC-210): a
+     * bar keeps its surface gap only where it is wide enough to. Kept only
+     * when it changes, so a resize that ends the same size draws nothing again.
+     */
+    const measure = () => {
+      const next = { width: element.clientWidth, height: element.clientHeight };
+      setCanvas((was) =>
+        was !== null && was.width === next.width && was.height === next.height ? was : next,
+      );
+    };
+    measure();
+
     const observer = new ResizeObserver(() => {
       chart.resize();
+      measure();
     });
     observer.observe(element);
 
@@ -161,13 +176,14 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
 
   useLayoutEffect(() => {
     const chart = instance.current;
-    if (chart === null || chart.isDisposed()) return;
+    // Not before its box is known: the first option is drawn for it.
+    if (chart === null || chart.isDisposed() || canvas === null) return;
 
     // notMerge: a chart type change replaces the option outright. Merging
     // would leave the previous type's series in place beside the new one.
     // In the theme the page is in (AC-211), and again when it switches.
-    chart.setOption(themed(optionFor(spec), theme), true);
-  }, [spec, theme]);
+    chart.setOption(themed(optionFor(spec, canvas), theme), true);
+  }, [spec, theme, canvas]);
 
   return (
     /**

@@ -16,6 +16,7 @@ import { distinctValues, formatterFor, memberOn, type RenderSpec } from '@wechar
 
 import { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 import { modelWriter, nameWriter } from '../modelWriter';
+import { DEFAULT_CANVAS, gapFor, laidBarWidth, type Canvas } from '../series/bar';
 
 export function isTrellisType(chartType: string): boolean {
   return chartType === 'trellis';
@@ -39,7 +40,7 @@ function numberAt(row: Record<string, unknown>, member: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-export function trellisOption(spec: RenderSpec): EChartsOption {
+export function trellisOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EChartsOption {
   if (!isTrellisType(spec.chartType)) {
     throw new Error(`${spec.chartType} is not a trellis`);
   }
@@ -136,7 +137,10 @@ export function trellisOption(spec: RenderSpec): EChartsOption {
       itemStyle: {
         color: palette[0],
         borderColor: surface,
-        borderWidth: MARK.gapPx,
+        // The gap where it leaves each bar its colour (AC-210): a panel's
+        // category axis runs its cell's width, set here rather than by
+        // ECharts' default grid.
+        borderWidth: gapFor(laidBarWidth((canvas.width * cellWidth) / 100, categories.length, 1)),
         borderRadius: [MARK.cornerRadiusPx, MARK.cornerRadiusPx, 0, 0],
       },
     })),

@@ -1,4 +1,4 @@
-import type { DashboardDocument, Element_ } from '../model/document';
+import { elementAt, placeOf, type DashboardDocument, type Element_ } from '../model/document';
 
 /**
  * The edit sidebar's Outline (AC-053): the dashboard as a tree, the way the
@@ -70,6 +70,25 @@ export function outlineNameOf(
   if (trimmed === '') return kind;
   // A long markdown paragraph is not a name; its opening words are enough.
   return `${kind}: ${trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed}`;
+}
+
+/**
+ * How a tile is named wherever it is announced — its accessible name, its
+ * menus, a drag (AC-209): as the Outline names it, and for a tile with nothing
+ * of its own to go by, its kind and its place among its neighbours. Never its
+ * id.
+ */
+export function tileNameOf(
+  document: DashboardDocument,
+  id: string,
+  chartTitleOf: OutlineProps['chartTitleOf'],
+): string {
+  const element = elementAt(document, id);
+  if (element === null) return 'Tile';
+  const name = outlineNameOf(element, chartTitleOf);
+  if (name.includes(':')) return name;
+  const place = placeOf(document, id);
+  return place === null ? name : `${name} ${String(place.index + 1)} of ${String(place.of)}`;
 }
 
 export function Outline({ document, selected, onSelect, chartTitleOf }: OutlineProps) {

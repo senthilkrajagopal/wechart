@@ -4,7 +4,7 @@
  */
 export const PACKAGE_NAME = '@wechart/charts';
 
-export { barOption, isBarType, type BarType } from './series/bar';
+export { barOption, isBarType, type BarType, type Canvas } from './series/bar';
 export { lineOption, isLineType, type LineType } from './series/line';
 export { scatterOption, isScatterType } from './series/scatter';
 export { pieOption, isPieType, type PieType } from './series/pie';

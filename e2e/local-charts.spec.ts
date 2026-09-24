@@ -78,8 +78,9 @@ test('a chart added to a dashboard is its own, local, and in no folder or search
   expect(found.map((item) => item.id)).not.toContain(chartId);
 
   // Its fields can be added: the pencil opens the chart editor on it.
+  // The pencil, named for its tile — "Edit Chart: …" (AC-209).
   await page
-    .getByRole('button', { name: /^Edit chart/ })
+    .getByRole('button', { name: /^Edit Chart\b/ })
     .first()
     .click();
   await expect(page.getByLabel('Cube or view')).toBeVisible();

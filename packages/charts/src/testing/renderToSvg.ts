@@ -43,11 +43,16 @@ echarts.use([
 
 export const RENDER_SIZE = { width: 640, height: 400 } as const;
 
-export function renderToSvg(option: unknown): string {
+/** `size`: a canvas other than the default, as a tile narrower or shorter is. */
+export function renderToSvg(
+  option: unknown,
+  size: { readonly width: number; readonly height: number } = RENDER_SIZE,
+): string {
   const instance = echarts.init(null, null, {
     renderer: 'svg',
     ssr: true,
-    ...RENDER_SIZE,
+    width: size.width,
+    height: size.height,
   });
   try {
     // Animation off: an SSR snapshot is taken at frame zero, and an animating

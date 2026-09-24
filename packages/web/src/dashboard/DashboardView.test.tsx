@@ -250,7 +250,8 @@ describe('opening a saved dashboard (AC-018)', () => {
     // lazily, which is why only the open tab's tiles are drawn.
     view(withTabGroup);
 
-    const group = screen.getByRole('tablist', { name: /Tabs in/ });
+    // Named by its tabs, as the Outline names it, never its id (AC-209).
+    const group = screen.getByRole('tablist', { name: 'Tab group: A, B' });
     expect(
       within(group)
         .getAllByRole('tab')
@@ -309,7 +310,8 @@ describe('moving a tile without dragging it (AC-056)', () => {
     expect(region.getAttribute('aria-live')).toBe('polite');
 
     // And it is named for what it is, not for its id.
-    expect(grip.getAttribute('aria-label')).toBe('Move markdown: Notes for the quarter');
+    // As the Outline names it (AC-209): its kind, then its text.
+    expect(grip.getAttribute('aria-label')).toBe('Move Markdown: Notes for the quarter');
   });
 
   it('acts on a key only when the tile itself has focus', async () => {
@@ -468,9 +470,10 @@ describe('adding an element from the sidebar (AC-058)', () => {
     await userEvent.click(first);
 
     // Naming the container alone could not tell this from "the end of the
-    // page", which is exactly the distinction the criterion draws.
+    // page", which is exactly the distinction the criterion draws. A chart
+    // tile with no title is named by its kind and its place (AC-209).
     expect(screen.getByTestId('add-destination').textContent).toBe(
-      'Adds to Overview, after chart tile.',
+      'Adds to Overview, after Chart 1 of 3.',
     );
     await userEvent.click(screen.getByTestId('add-divider'));
 

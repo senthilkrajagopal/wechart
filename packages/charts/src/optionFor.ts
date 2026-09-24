@@ -12,7 +12,7 @@
  */
 import type { ChartType, RenderSpec } from '@wechart/core';
 
-import { barOption, isBarType } from './series/bar';
+import { barOption, DEFAULT_CANVAS, isBarType, type Canvas } from './series/bar';
 import { withHighlight } from './crossfilter/highlight';
 import { withMarks } from './marking/option';
 import { applyAxes } from './axis';
@@ -53,7 +53,11 @@ export function isDrawable(chartType: string): boolean {
   return (DRAWABLE_TYPES as readonly string[]).includes(chartType);
 }
 
-export function optionFor(spec: RenderSpec): EChartsOption {
+/**
+ * `canvas` is the box it will be drawn in: how wide a bar is laid out there
+ * decides whether it keeps its surface gap (AC-210).
+ */
+export function optionFor(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EChartsOption {
   // The legend is decided once, here, rather than in each renderer. AC-038 is
   // a rule about charts, not about bar charts, and a renderer that forgot it
   // would be a chart type quietly exempt from it.
@@ -75,7 +79,7 @@ export function optionFor(spec: RenderSpec): EChartsOption {
       : { grid: { ...(option['grid'] as object), ...(base['grid'] as object) } }),
   });
 
-  if (isBarType(spec.chartType)) return drawn(barOption(spec));
+  if (isBarType(spec.chartType)) return drawn(barOption(spec, canvas));
   if (isLineType(spec.chartType)) return drawn(lineOption(spec));
   if (isScatterType(spec.chartType)) return drawn(scatterOption(spec));
   if (isPieType(spec.chartType)) return drawn(pieOption(spec));
@@ -83,8 +87,10 @@ export function optionFor(spec: RenderSpec): EChartsOption {
   if (isHeatmapType(spec.chartType)) return drawn(heatmapOption(spec));
   // Its own axes (an array, per panel, formatted by the layout), and no
   // legend — but a tooltip like every other chart (AC-046, T195).
-  if (isTrellisType(spec.chartType)) return { ...trellisOption(spec), ...tooltipFor(spec) };
-  if (isComboType(spec.chartType)) return drawn(comboOption(spec));
+  if (isTrellisType(spec.chartType)) {
+    return { ...trellisOption(spec, canvas), ...tooltipFor(spec) };
+  }
+  if (isComboType(spec.chartType)) return drawn(comboOption(spec, canvas));
 
   // Reached only by the DOM-rendered types — KPI, table and pivot — which
   // `ChartTile` routes before this is called, and which ECharts genuinely

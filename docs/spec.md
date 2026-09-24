@@ -667,9 +667,9 @@ Dashboards:
       Fails when: an empty dashboard or tab renders a blank canvas, or the tab strip is hidden.
 - [x] AC-208 THE SYSTEM SHALL render a markdown tile's headings, emphasis, lists and line breaks, and no raw HTML (`[R7]`).
       Fails when: a heading marker such as "##" or an emphasis marker is shown as text, or an HTML tag in the text renders as HTML.
-- [ ] AC-209 THE SYSTEM SHALL name every tile, in its accessible name and its menu's, by its title — or, for a tile without one, by its kind and position — and never by an internal id.
+- [x] AC-209 THE SYSTEM SHALL name every tile, in its accessible name and its menu's, by its title — or, for a tile without one, by its kind and position — and never by an internal id.
       Fails when: a tile or its menu is announced by an id such as "tile-status" or "el-1790238490469-7".
-- [ ] AC-210 WHEN a chart's query returns rows, THE SYSTEM SHALL draw every row visibly, whatever the width of the tile.
+- [x] AC-210 WHEN a chart's query returns rows, THE SYSTEM SHALL draw every row visibly, whatever the width of the tile.
       Fails when: a chart with returned rows draws empty axes, as a 243-bar chart did at a tile width where each bar measured 0 px.
 - [x] AC-211 THE SYSTEM SHALL draw charts in the dark theme with the dark categorical palette and the dark theme's text and gridline tokens, and redraw them when the theme changes (direction.md rules 2, 24).
       Fails when: a chart in the dark theme uses a light-theme series colour, text colour or gridline colour.

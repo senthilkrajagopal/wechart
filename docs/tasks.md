@@ -3339,8 +3339,8 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Files: `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `e2e/dashboard-edit.spec.ts`
   - Failing test: `e2e/dashboard-edit.spec.ts`: Discard with no changes returns to view mode; the tile menu's Duplicate and Delete are visible without scrolling; grips show at rest; the title reads "Editing …" and "+ Page tab" is offered (AC-204, AC-205, AC-206).
   - Depends on: T222
-- [ ] T224 (AC-209, AC-210) Name tiles by their titles, and never draw an empty plot for returned rows
-  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/charts/src/option.ts`, `e2e/dashboard.spec.ts`
+- [x] T224 (AC-209, AC-210) Name tiles by their titles, and never draw an empty plot for returned rows
+  - Files: `packages/web/src/dashboard/{DashboardView.tsx,edit/Outline.tsx,edit/deletion.ts,grid/Canvas.tsx}`, `packages/web/src/tiles/ChartCanvas.tsx`, `packages/charts/src/{optionFor.ts,series/bar.ts,series/combo.ts,layout/trellis.ts}`, `docs/research/echarts-bar-density.md`, `e2e/dashboard.spec.ts`
   - Failing test: `e2e/dashboard.spec.ts`: every tile's accessible name is its title; a 243-bar chart at half width draws bars of non-zero width (AC-209, AC-210).
   - Depends on: T217
 - [x] T226 (AC-212) Rebuild the library chart page: title, type, the chart drawn, its fields, Used in, and Edit chart

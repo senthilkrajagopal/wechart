@@ -1557,3 +1557,107 @@ test('a markdown tile renders its headings, emphasis, lists and breaks, and no r
   await expect(tile).toContainText('<b>not bold</b>');
   await expect(tile.locator('b')).toHaveCount(0);
 });
+
+/**
+ * T224 / AC-209: THE SYSTEM SHALL name every tile, in its accessible name and
+ * its menu's, by its title — or, for a tile without one, by its kind and
+ * position — and never by an internal id.
+ * `Fails when: a tile or its menu is announced by an id such as "tile-status"
+ * or "el-1790238490469-7".`
+ */
+test('every tile and its menu are named by what the reader sees, never by an id', async ({
+  page,
+}) => {
+  await open(page);
+  await expect(page.getByTestId('chart-canvas').first()).toBeVisible();
+  const ids = /\b(tile-|section-|group-|tab-|page-|el-\d|seed-)/;
+  const named = async () =>
+    page
+      .locator('[data-testid="grid-item"][aria-label]')
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
+
+  // View mode: the tiles that answer keys are named, by their titles.
+  const reading = await named();
+  expect(reading.length).toBeGreaterThan(0);
+  for (const name of reading) expect(name).not.toMatch(ids);
+  expect(reading.some((name) => name.startsWith('Chart: Orders by category and status.'))).toBe(
+    true,
+  );
+
+  // Edit mode: every tile, and every tile's menu.
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
+  const editing = await named();
+  expect(editing.length).toBeGreaterThan(reading.length - 1);
+  for (const name of editing) expect(name).not.toMatch(ids);
+  expect(editing.some((name) => name.startsWith('Section: Detail.'))).toBe(true);
+  expect(editing.some((name) => name.startsWith('Markdown: Orders by status, this quarter.'))).toBe(
+    true,
+  );
+  const menus = await page
+    .locator('[data-testid="grid-item"] button[aria-label^="Actions for "]')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
+  expect(menus.length).toBeGreaterThan(0);
+  for (const name of menus) {
+    expect(name).not.toMatch(ids);
+    // Never merely the kind: "Actions for chart" names no tile in particular.
+    expect(name).not.toMatch(/^Actions for (chart|markdown|header)$/);
+  }
+  // A chart tile's pencil, by the chart it opens.
+  const pencils = await page
+    .locator('[data-testid="grid-item"] button[aria-label^="Edit "]')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
+  expect(pencils.length).toBeGreaterThan(0);
+  for (const name of pencils) expect(name).not.toMatch(ids);
+
+  // A tab group, on the Appendix, by its tabs.
+  await page.getByRole('tablist', { name: 'Pages' }).getByRole('tab', { name: 'Appendix' }).click();
+  await expect(page.locator('.tab-group [role="tablist"]').first()).toBeVisible();
+  const groups = await page
+    .locator('.tab-group [role="tablist"]')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
+  expect(groups.length).toBeGreaterThan(0);
+  for (const name of groups) {
+    expect(name).not.toMatch(ids);
+    expect(name).toMatch(/^Tab group: /);
+  }
+});
+
+/**
+ * T224 / AC-210: WHEN a chart's query returns rows, THE SYSTEM SHALL draw
+ * every row visibly, whatever the width of the tile.
+ * `Fails when: a chart with returned rows draws empty axes, as a 243-bar chart
+ * did at a tile width where each bar measured 0 px.`
+ *
+ * The seeded "Orders over time by status", in edit mode — the sidebar narrows
+ * the canvas — which is where the critique measured its bars at 0 px.
+ */
+test('a chart of many bars draws every bar, even narrowed by the edit sidebar', async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
+  const chart = page.locator('[data-tile="tile-region"]').getByTestId('chart-canvas');
+  await expect(chart).toBeVisible();
+
+  const bars = await chart.locator('svg path[fill]').evaluateAll((nodes) =>
+    nodes
+      .map((node) => {
+        const box = (node as SVGGraphicsElement).getBBox();
+        const style = getComputedStyle(node);
+        return {
+          width: box.width,
+          height: box.height,
+          fill: node.getAttribute('fill') ?? '',
+          stroke: Number(node.getAttribute('stroke-width') ?? style.strokeWidth ?? 0),
+        };
+      })
+      // The bars: filled, taller than a line, and not the plot's background.
+      .filter((bar) => bar.height > 2 && bar.fill !== 'none' && bar.fill !== 'transparent'),
+  );
+  expect(bars.length).toBeGreaterThan(100);
+  // Some of each one's own colour showing: its path less the surface stroke
+  // ECharts lays inside it, half past the path on each side.
+  for (const bar of bars) expect(bar.width - bar.stroke).toBeGreaterThan(0);
+});

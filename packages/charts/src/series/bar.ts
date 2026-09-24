@@ -58,7 +58,7 @@ function cornerRadii(horizontal: boolean, outermost: boolean, value: number | nu
   return negative ? [0, 0, r, r] : [r, r, 0, 0];
 }
 
-export function barOption(spec: RenderSpec): EChartsOption {
+export function barOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EChartsOption {
   if (!isBarType(spec.chartType)) {
     throw new Error(`${spec.chartType} is not a bar chart`);
   }
@@ -76,6 +76,19 @@ export function barOption(spec: RenderSpec): EChartsOption {
    * *series* and the topmost *segment* are not the same thing — a stack whose
    * top series is missing here would otherwise get a flat top.
    */
+  /**
+   * The surface gap, where the bars are wide enough on this canvas to keep
+   * it (AC-210): 243 grouped bars at a tile's width once drew blank axes, each
+   * bar painted out by its own gap.
+   */
+  const gap = gapFor(
+    laidBarWidth(
+      categoryAxisPx(canvas, horizontal),
+      categories.length,
+      stacked ? 1 : Math.max(1, series.length),
+    ),
+  );
+
   const outermostAt = (categoryIndex: number) => {
     if (!stacked) return series.length - 1;
     for (let index = series.length - 1; index >= 0; index -= 1) {
@@ -110,8 +123,53 @@ export function barOption(spec: RenderSpec): EChartsOption {
         // two adjacent marks' strokes land in the same band: each mark must
         // carry the full width to leave a gap that wide, not half of it.
         borderColor: surface,
-        borderWidth: MARK.gapPx,
+        borderWidth: gap,
       },
     })),
   };
+}
+
+/** The box a chart is drawn in, in CSS pixels. */
+export interface Canvas {
+  readonly width: number;
+  readonly height: number;
+}
+
+/** A chart drawn without being told its canvas: the headless renderer's. */
+export const DEFAULT_CANVAS: Canvas = { width: 640, height: 400 };
+
+/**
+ * How long the category axis of a chart on this canvas is, by ECharts' default
+ * grid (GridModel.js: 15% left and 10% right of the width; 65 px above and
+ * 80 px below). Slightly over rather than under where a legend or long labels
+ * move the grid, which only errs towards keeping a gap the colour still shows
+ * beside (research/echarts-bar-density.md).
+ */
+export function categoryAxisPx(canvas: Canvas, horizontal: boolean): number {
+  return horizontal ? canvas.height - 145 : canvas.width * 0.75;
+}
+
+/**
+ * How wide ECharts lays out each bar (barGrid.js, `calcBarWidthAndOffset`),
+ * for `columns` bars side by side in each of `categories` bands along an axis
+ * `axisPx` long: each band less its category gap — 35% less 4% for each
+ * column, never under 15% — shared among the columns, with 10% of a bar
+ * between two of them. Never under a pixel, ECharts' own `barMinWidth`.
+ */
+export function laidBarWidth(axisPx: number, categories: number, columns: number): number {
+  const band = Math.max(0, axisPx) / Math.max(1, categories);
+  const categoryGap = (Math.max(35 - columns * 4, 15) / 100) * band;
+  return Math.max(1, (band - categoryGap) / (columns + (columns - 1) * 0.1));
+}
+
+/**
+ * The surface gap a bar this wide is drawn with (AC-210). ECharts draws it as
+ * a border inside the bar on both sides (BarView.js: the bar is shrunk by its
+ * border), so a bar under two gaps wide shows no colour of its own at all.
+ * The gap is kept only where the colour left between its two sides is at
+ * least as wide as one of them; below that, the bars touch rather than vanish.
+ * Shared by every chart that draws bars — bar, combo and trellis.
+ */
+export function gapFor(barPx: number): number {
+  return barPx >= 3 * MARK.gapPx ? MARK.gapPx : 0;
 }

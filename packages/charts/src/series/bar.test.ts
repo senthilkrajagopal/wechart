@@ -12,6 +12,8 @@ import { describe, expect, it } from 'vitest';
 import type { RenderSpec } from '@wechart/core';
 
 import { barOption } from './bar';
+import { comboOption } from './combo';
+import { trellisOption } from '../layout/trellis';
 import { categoryLabelsOf, marksOf, renderToSvg, type Box } from '../testing/renderToSvg';
 
 /**
@@ -283,3 +285,113 @@ describe('marks follow direction.md §6', () => {
     for (const mark of marks) expect(mark.strokeWidthPx).toBe(2);
   });
 });
+
+/**
+ * T224 / AC-210: WHEN a chart's query returns rows, THE SYSTEM SHALL draw
+ * every row visibly, whatever the width of the tile.
+ * `Fails when: a chart with returned rows draws empty axes, as a 243-bar chart
+ * did at a tile width where each bar measured 0 px.`
+ *
+ * The seeded "Orders over time by status": 81 days × 3 statuses, grouped. At
+ * this width each bar is narrower than the 2 px surface-coloured gap drawn as
+ * its border, which then paints the whole bar in the background colour.
+ */
+describe('a dense bar chart (AC-210)', () => {
+  const STATUSES = ['shipped', 'processing', 'completed'];
+  const DAY = 'orders.ordered_at.day';
+  const rows = Array.from({ length: 81 }, (_, day) =>
+    STATUSES.map((status, at) => ({
+      [DAY]: `2026-01-${String(day + 1).padStart(3, '0')}`,
+      [STATUS]: status,
+      [COUNT]: 1 + ((day + at) % 5),
+    })),
+  ).flat();
+  const spec: RenderSpec = {
+    chartType: 'groupedBar',
+    encoding: { x: [DAY], y: [COUNT], color: [STATUS] },
+    rows,
+    palette: ['#111111', '#222222', '#333333'],
+    surface: SURFACE,
+  };
+
+  it('draws every bar with some of its own colour showing, not covered by its gap', () => {
+    const marks = marksOf(draw(spec), ['#111111', '#222222', '#333333']);
+    expect(marks).toHaveLength(243);
+    for (const mark of marks) expect(colourShown(mark, 'width')).toBeGreaterThan(0);
+  });
+
+  /**
+   * Whether a bar keeps its colour turns on how wide it is laid out, not on
+   * how many there are (T224's review): forty bars in the narrowest tile, or
+   * thirty on their side in a short one, are as thin as 243 in a wide one.
+   */
+  const bars = (chartType: RenderSpec['chartType'], count: number): RenderSpec => ({
+    chartType,
+    encoding: { x: [STATUS], y: [COUNT] },
+    rows: Array.from({ length: count }, (_, at) => ({ [STATUS]: `s${String(at)}`, [COUNT]: 3 })),
+    palette: [BLUE],
+    surface: SURFACE,
+  });
+
+  for (const count of [10, 20, 30, 40, 60, 120, 243]) {
+    for (const width of [160, 320, 640]) {
+      it(`shows the colour of each of ${String(count)} bars in a ${String(width)} px canvas`, () => {
+        const canvas = { width, height: 320 };
+        const marks = marksOf(renderToSvg(barOption(bars('bar', count), canvas), canvas), [BLUE]);
+        expect(marks).toHaveLength(count);
+        for (const mark of marks) expect(colourShown(mark, 'width')).toBeGreaterThan(0);
+      });
+    }
+    for (const height of [200, 320]) {
+      it(`shows the colour of each of ${String(count)} bars on their side, ${String(height)} px tall`, () => {
+        const canvas = { width: 480, height };
+        const marks = marksOf(renderToSvg(barOption(bars('hbar', count), canvas), canvas), [BLUE]);
+        expect(marks).toHaveLength(count);
+        for (const mark of marks) expect(colourShown(mark, 'height')).toBeGreaterThan(0);
+      });
+    }
+  }
+
+  it('keeps the 2 px surface gap wherever it leaves the bar its colour', () => {
+    const canvas = { width: 640, height: 320 };
+    const marks = marksOf(renderToSvg(barOption(bars('bar', 12), canvas), canvas), [BLUE]);
+    for (const mark of marks) expect(mark.strokeWidthPx).toBe(2);
+  });
+
+  it('shows the colour of every bar of a dense combo and of a dense trellis', () => {
+    const canvas = { width: 320, height: 320 };
+    const combo: RenderSpec = { ...bars('bar', 120), chartType: 'combo' };
+    const comboMarks = marksOf(renderToSvg(comboOption(combo, canvas), canvas), [BLUE]);
+    expect(comboMarks).toHaveLength(120);
+    for (const mark of comboMarks) expect(colourShown(mark, 'width')).toBeGreaterThan(0);
+
+    const trellis: RenderSpec = {
+      chartType: 'trellis',
+      encoding: { x: [STATUS], y: [COUNT], facet: [DAY] },
+      rows: ['a', 'b', 'c', 'd'].flatMap((panel) =>
+        Array.from({ length: 60 }, (_, at) => ({
+          [DAY]: panel,
+          [STATUS]: `s${String(at)}`,
+          [COUNT]: 3,
+        })),
+      ),
+      palette: [BLUE],
+      surface: SURFACE,
+    };
+    const panelMarks = marksOf(renderToSvg(trellisOption(trellis, canvas), canvas), [BLUE]);
+    expect(panelMarks).toHaveLength(240);
+    for (const mark of panelMarks) expect(colourShown(mark, 'width')).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * How much of a bar's own colour shows across it: its drawn path less the
+ * surface stroke, which ECharts lays inside the bar's box, half of it past
+ * the path on each side (research/echarts-bar-density.md). Any at all is a
+ * bar seen; the failure is none. Bars packed past their axis are drawn at
+ * ECharts' 1 px minimum, which the SVG writes as 0.6 to 1 px.
+ */
+function colourShown(mark: Box, across: 'width' | 'height'): number {
+  const extent = across === 'width' ? mark.right - mark.left : mark.bottom - mark.top;
+  return extent - (mark.strokeWidthPx ?? 0);
+}

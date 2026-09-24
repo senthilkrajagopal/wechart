@@ -85,6 +85,11 @@ export interface CanvasProps {
    * change, must not offer a gesture that goes nowhere.
    */
   readonly onResize?: ((id: string, size: TileSize) => void) | undefined;
+  /**
+   * A tile's name, as it is announced (AC-209): its title, never its id. In
+   * view mode as in edit mode — the drag's own name exists only while editing.
+   */
+  readonly nameOf?: ((id: string) => string) | undefined;
   readonly children: (tile: GridTile) => ReactNode;
 }
 
@@ -142,6 +147,7 @@ export function Canvas({
   describeItem,
   selection,
   addHere,
+  nameOf,
   children,
 }: CanvasProps) {
   const canvas = useRef<HTMLDivElement>(null);
@@ -307,7 +313,11 @@ export function Canvas({
             aria-label={
               onTileKeyDown === undefined
                 ? undefined
-                : [`${drag?.nameOf?.(tile.id) ?? tile.id}.`, describeItem?.(tile.id).keys ?? '']
+                : [
+                    // Its name, never its id (AC-209).
+                    `${nameOf?.(tile.id) ?? drag?.nameOf?.(tile.id) ?? 'Tile'}.`,
+                    describeItem?.(tile.id).keys ?? '',
+                  ]
                     .filter((part) => part !== '')
                     .join(' ')
             }
@@ -347,7 +357,7 @@ export function Canvas({
                  * `docs/research/dashboard-grid.md` makes a condition of
                  * building this drag ourselves instead of taking dnd-kit.
                  */
-                aria-label={`Move ${drag.nameOf?.(tile.id) ?? tile.id}`}
+                aria-label={`Move ${nameOf?.(tile.id) ?? drag.nameOf?.(tile.id) ?? 'tile'}`}
                 aria-roledescription="draggable tile"
                 aria-describedby={DRAG_INSTRUCTIONS_ID}
                 onPointerDown={(event) => {

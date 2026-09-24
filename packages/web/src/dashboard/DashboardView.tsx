@@ -61,7 +61,7 @@ import {
 import { DeleteSectionDialog } from './edit/DeleteSectionDialog';
 import { UndoToast } from './edit/UndoToast';
 import { EditChrome, type EditSession } from './edit/EditChrome';
-import { Outline } from './edit/Outline';
+import { Outline, tileNameOf } from './edit/Outline';
 import { openSidebarPanel } from './edit/EditSidebar';
 import { MoveToMenu } from './edit/MoveToMenu';
 import { NOTHING_CHOSEN, needsOf, templateElements } from './edit/templates';
@@ -112,10 +112,15 @@ import { MIN_ROWS, readoutFor } from './grid/resize';
  * both numbers; saying "third of five" is what tells a reader the move landed
  * and whether there is anywhere further to go.
  */
-function sayPlace(document: DashboardDocument, tileId: string): string {
+function sayPlace(
+  document: DashboardDocument,
+  tileId: string,
+  /** The tile's name, by its title (AC-209). */
+  nameOf: (id: string) => string,
+): string {
   const place = placeOf(document, tileId);
   if (place === null) return '';
-  return `${nameOfTile(document, tileId)}: position ${String(place.index + 1)} of ${String(place.of)}.`;
+  return `${nameOf(tileId)}: position ${String(place.index + 1)} of ${String(place.of)}.`;
 }
 
 const tileNode = (id: string) =>
@@ -159,7 +164,6 @@ import {
   isTileId,
   moveBy,
   moveTile,
-  nameOfTile,
   placeOf,
   pageKey,
   resizeTile,
@@ -649,6 +653,8 @@ interface Affordances {
   readonly describeItem?: CanvasProps['describeItem'];
   readonly selection?: CanvasProps['selection'];
   readonly addHere?: CanvasProps['addHere'];
+  /** A tile's name, as the reader knows it (AC-209): its title, never its id. */
+  readonly nameOf?: ((id: string) => string) | undefined;
   /** Deleting an element from its ⋯ menu, with an undo (AC-060). */
   readonly onDelete?: ((id: string) => void) | undefined;
   /** Duplicating a chart tile from its ⋯ menu, the copy with a chart of its own (AC-062). */
@@ -706,6 +712,7 @@ function Elements({
       describeItem={affordances.describeItem}
       selection={affordances.selection}
       addHere={affordances.addHere}
+      nameOf={affordances.nameOf}
     >
       {(item) => {
         const element = items.find((candidate) => candidate.id === item.id);
@@ -800,7 +807,7 @@ function Elements({
                  * document, not the tile, and giving tiles distinct accessible
                  * names is a fix for every tile control at once, not this one.
                  */
-                aria-label={`Edit ${element.text ?? element.kind}`}
+                aria-label={`Edit ${affordances.nameOf?.(element.id) ?? element.text ?? element.kind}`}
                 onClick={() => {
                   affordances.onEditChart?.(element.id, chartId);
                 }}
@@ -920,7 +927,8 @@ function Elements({
             {affordances.moveTo === undefined ? null : (
               <MoveToMenu
                 tileId={element.id}
-                tileLabel={element.text ?? element.kind}
+                // By its title, as the tile itself is named (AC-209).
+                tileLabel={affordances.nameOf?.(element.id) ?? element.text ?? element.kind}
                 containers={affordances.moveTo.containers}
                 currentKey={containerKey}
                 onMove={(to: string) => {
@@ -1120,7 +1128,8 @@ function TabGroupView({
 
   return (
     <div className="tab-group" data-tab-group={group.id}>
-      <div role="tablist" aria-label={`Tabs in ${group.id}`}>
+      {/* Named as the Outline names it, by its tabs, never its id (AC-209). */}
+      <div role="tablist" aria-label={affordances.nameOf?.(group.id) ?? 'Tabs'}>
         {group.tabs.map((tab) => (
           <button
             key={tab.id}
@@ -1177,10 +1186,13 @@ function AddSlot({
   session,
   dashboardId,
   where,
+  nameOf,
 }: {
   session: EditSession<DashboardDocument>;
   /** Whose local charts a new chart tile's are (T132). */
   dashboardId: string;
+  /** A tile's name, by its title (AC-209): what an insert goes after. */
+  nameOf: (id: string) => string;
   where: {
     pageId: string;
     selected: string | null;
@@ -1210,7 +1222,7 @@ function AddSlot({
       destination={
         at.index === null
           ? `the end of ${container}`
-          : `${container}, after ${nameOfTile(document, where.selected ?? '')}`
+          : `${container}, after ${nameOf(where.selected ?? '')}`
       }
       message={said}
       // A filter goes on the filter bar, not the grid (F9, AC-076): one
@@ -2063,7 +2075,7 @@ export function DashboardView({
   };
 
   /** A tile's name: the title of the chart it draws (AC-119). */
-  const tileNameOf = useCallback(
+  const chartTitleOfTile = useCallback(
     (tileId: string) => {
       const tile = chartTilesOf(live).find((each) => each.tileId === tileId);
       return tile?.chartId === undefined ? undefined : chartTitleOf(tile.chartId);
@@ -2196,7 +2208,7 @@ export function DashboardView({
           message:
             element.nothingMarkedMessage ??
             defaultNothingMarkedMessage(
-              masterTileNames(live, limitedBy, tileNameOf, defaultMarkingOf(live)?.id),
+              masterTileNames(live, limitedBy, chartTitleOfTile, defaultMarkingOf(live)?.id),
             ),
         };
         continue;
@@ -2221,7 +2233,7 @@ export function DashboardView({
       if (rows?.length === 0 && applied.length > 0) states[tile.chartId] = { kind: 'filtered-out' };
     }
     return states;
-  }, [interactions.mode, live, limitedTiles, filtered, reached, tileNameOf]);
+  }, [interactions.mode, live, limitedTiles, filtered, reached, chartTitleOfTile]);
 
   /** Each tile's spec with the highlight it draws, where a pair asks for one. */
   const withHighlights = useMemo(() => {
@@ -2925,7 +2937,14 @@ export function DashboardView({
           )
         }
         panels={(session) => ({
-          add: <AddSlot session={session} dashboardId={dashboardId} where={where} />,
+          add: (
+            <AddSlot
+              session={session}
+              dashboardId={dashboardId}
+              where={where}
+              nameOf={(id) => tileNameOf(session.document, id, chartTitleOf)}
+            />
+          ),
           // The dashboard as a tree (AC-053); a row selects its element.
           outline: (
             <Outline
@@ -3007,7 +3026,7 @@ export function DashboardView({
                                     masterTileNames(
                                       session.document,
                                       next.limitedBy ?? [],
-                                      tileNameOf,
+                                      chartTitleOfTile,
                                       defaultMarking?.id,
                                     ),
                                   ),
@@ -3093,7 +3112,7 @@ export function DashboardView({
                         selections={crossSelections}
                         onClear={clearCrossFilter}
                         memberTitle={memberTitle}
-                        tileName={tileNameOf}
+                        tileName={chartTitleOfTile}
                       />
                     ) : marking && markings.some((each) => markedCountOf(each.id) > 0) ? (
                       <>
@@ -3384,21 +3403,23 @@ function DashboardPages({
    * no canvas at all (AC-056).
    */
   const containers = containersOf(document);
+  /** A tile's name wherever it is announced (AC-209), as the Outline names it. */
+  const tileName = (id: string) => tileNameOf(document, id, (chartId) => charts.titleOf?.(chartId));
 
   const drag = useTileDrag({
     onMove: (tileId, to) => {
       session.change(moveTile(document, tileId, to));
     },
     // Ids are a poor thing to read aloud, so a container is announced by the
-    // name it shows in the Move-to menu and a tile by its kind.
+    // name it shows in the Move-to menu and a tile by its title (AC-209).
     nameOf: (idOrKey) =>
-      containers.find((container) => container.key === idOrKey)?.title ??
-      nameOfTile(document, idOrKey),
+      containers.find((container) => container.key === idOrKey)?.title ?? tileName(idOrKey),
   });
 
   const affordances: Affordances = {
     editing,
     charts,
+    nameOf: tileName,
     sections: {
       collapsed: collapsedSections,
       toggle: (id) => {
@@ -3461,7 +3482,7 @@ function DashboardPages({
       ? {
           ...drag,
           canDrag: (id) => isTileId(document, id),
-          nameOf: (id) => nameOfTile(document, id),
+          nameOf: tileName,
         }
       : undefined,
     /**
@@ -3518,7 +3539,7 @@ function DashboardPages({
             // Both routes back, as the criterion asks: the toast right here,
             // and the edit bar's Undo. They step the same history.
             const deletion = { kind: 'element', id: tile.id } as const;
-            const said = describeDeletion(document, deletion);
+            const said = describeDeletion(document, deletion, tileName);
             const next = deleteFromDashboard(document, deletion);
             if (next === document) return;
 
@@ -3556,8 +3577,10 @@ function DashboardPages({
           session.change(next);
           drag.say(
             action.kind === 'resize'
-              ? `${nameOfTile(document, tile.id)}: ${readoutFor(action.size.w, action.size.h)}.`
-              : sayPlace(next, tile.id),
+              ? `${tileName(tile.id)}: ${readoutFor(action.size.w, action.size.h)}.`
+              : sayPlace(next, tile.id, (id) =>
+                  tileNameOf(next, id, (chartId) => charts.titleOf?.(chartId)),
+                ),
           );
         }
       : markKeys === undefined
@@ -3583,7 +3606,7 @@ function DashboardPages({
           }
 
           const deletion = { kind: 'element', id } as const;
-          const said = describeDeletion(document, deletion);
+          const said = describeDeletion(document, deletion, tileName);
           const next = deleteFromDashboard(document, deletion);
           if (next === document) return;
 
@@ -3607,7 +3630,9 @@ function DashboardPages({
             // The copy selected, said, and focused, as an insert's tile is:
             // one insertion point, not two (T068's review).
             onAim({ selected: copied.tileId, addTarget: null });
-            drag.say(`${nameOfTile(copied.document, copied.tileId)} duplicated.`);
+            drag.say(
+              `${tileNameOf(copied.document, copied.tileId, (chartId) => charts.titleOf?.(chartId))} duplicated.`,
+            );
             requestAnimationFrame(() => {
               window.document
                 .querySelector<HTMLElement>(`[data-tile="${CSS.escape(copied.tileId)}"]`)
@@ -3792,7 +3817,7 @@ function DashboardPages({
           count={askedAbout.items.length}
           onDeleteContents={() => {
             const deletion = { kind: 'element', id: asking } as const;
-            const said = describeDeletion(document, deletion);
+            const said = describeDeletion(document, deletion, tileName);
             const refocus = focusAfterDeleting(asking);
             session.change(deleteFromDashboard(document, deletion));
             setAsking(null);

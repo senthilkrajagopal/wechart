@@ -16,13 +16,14 @@
 import { seriesOf, type RenderSpec } from '@wechart/core';
 
 import { colourFor } from '../colours';
+import { categoryAxisPx, DEFAULT_CANVAS, gapFor, laidBarWidth, type Canvas } from './bar';
 import { DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 
 export function isComboType(chartType: string): boolean {
   return chartType === 'combo';
 }
 
-export function comboOption(spec: RenderSpec): EChartsOption {
+export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EChartsOption {
   if (!isComboType(spec.chartType)) {
     throw new Error(`${spec.chartType} is not a combo chart`);
   }
@@ -47,7 +48,11 @@ export function comboOption(spec: RenderSpec): EChartsOption {
             itemStyle: {
               color: colour,
               borderColor: surface,
-              borderWidth: MARK.gapPx,
+              // One bar series, a bar per category, its gap kept only where
+              // it leaves the bar its colour on this canvas (AC-210).
+              borderWidth: gapFor(
+                laidBarWidth(categoryAxisPx(canvas, false), categories.length, 1),
+              ),
               borderRadius: [MARK.cornerRadiusPx, MARK.cornerRadiusPx, 0, 0],
             },
           }

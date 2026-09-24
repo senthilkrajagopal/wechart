@@ -116,7 +116,12 @@ export function sectionHasContents(document: DashboardDocument, sectionId: strin
  * makes an undo a decision rather than a guess — the criterion is explicit
  * that contents come back, and a reader has to know there were contents.
  */
-export function describeDeletion(document: DashboardDocument, deletion: Deletion): string {
+export function describeDeletion(
+  document: DashboardDocument,
+  deletion: Deletion,
+  /** How the dashboard names a tile — by its title (AC-209) — where it knows. */
+  nameOf: (id: string) => string = (id) => nameOfTile(document, id),
+): string {
   if (deletion.kind === 'page') {
     const page = document.pages.find((candidate) => candidate.id === deletion.id);
     return `Deleted page “${page?.title ?? deletion.id}”${withContents(countIn(page?.items ?? []))}`;
@@ -136,7 +141,7 @@ export function describeDeletion(document: DashboardDocument, deletion: Deletion
       ? element.tabs.reduce((total, tab) => total + countIn(tab.items), 0)
       : 0;
 
-  return `Deleted ${nameOfTile(document, deletion.id)}${withContents(inside)}`;
+  return `Deleted ${nameOf(deletion.id)}${withContents(inside)}`;
 }
 
 const withContents = (count: number) =>
