@@ -1,0 +1,178 @@
+# Handoff — 2026-09-24
+
+Written at the user's request so a new session can pick the work up. Read this
+with `CLAUDE.md`, `docs/spec.md` and `docs/tasks.md`; it says what is *not* in
+those files.
+
+**State:** 43 of 189 acceptance criteria unchecked, 38 of 207 tasks. Working
+tree clean. Last commit `bd92d06` — `T113: Limit a tile by its markings, in the
+query rather than the rows`.
+
+---
+
+## 1. Standing instructions, verbatim
+
+These are the user's own words and remain in force.
+
+> okay continue .. and keep continuing to get to 100% complete unless there are
+> decisions to be made that need my input. You can make the small decisions
+> with if the impact is minimal. If there are edge cases .. dont iterate on
+> them more than 2-3 times... ask me if it is important and if you need to
+> iterate on it further.
+
+> After the entire implementation i will require you to create the charts
+> similar to what is there on superset.. the chart will be created by
+> interacting with the browser and selecting the charts dimensions metrics and
+> may be modify create/modify the models if required. For this task you can
+> startup superset to see how the dashboards are laid out in superset. if
+> required plan for it right now.. by starting superset and understanding whats
+> there. Also i will be visually comparing the ui design with what i see in the
+> wechart implementation. plan for that as well.
+
+> pause at a logical step so that i can restart and use Opus 5.5.. have a
+> proper handoff including the current executing instructions
+
+Read together: work autonomously to 100%, decide small things, ask about
+important ones, and stop grinding on an edge case after two or three attempts.
+
+Also in force, from memory and earlier in the project:
+
+- **Never let human effort decide anything** (CLAUDE.md). No estimates in docs.
+- **One cold review per task** (`spec-reviewer`), fix the real bugs, move on.
+- **Breadth over save edge cases.** Overwriting concurrent changes is fine for
+  now; do not harden save or concurrency further.
+- **Tick an AC only where a passing test demonstrates it on the real surface.**
+  A component test that passes state as a prop does not demonstrate an AC whose
+  subject is the tile. This rule has already cost 18 withdrawn ticks once.
+- **Align the UI with `docs/design/prototype/`.**
+
+## 2. Decisions the user has made
+
+**Scope, from an AskUserQuestion earlier this session.** Build **Markings (41
+ACs), Quick calculations (6 ACs) and the small leftovers (4 ACs)**. **Data
+sources and schedules (13 ACs) stay deferred** — AC-139, AC-145, AC-150,
+AC-151, AC-153 … AC-155, AC-157 … AC-164. Do not start those.
+
+**Cross-filter highlight (T123).** Selection's share, Power BI-style.
+**A highlight target the model cannot reach.** Show it unfiltered, with a note.
+**T185.** Deferred.
+
+**Quick calculations — answered 2026-09-24, not yet built:**
+
+| Question | The user's answer |
+|---|---|
+| Running total: where does it start? | **From the chart's range.** Cube's `rolling_window: {trailing: unbounded}` counts from the start of the *data*, so wechart must bound the window to the chart's date range. |
+| Moving average | **3 periods by default, changeable in the menu** (offer 3/6/12). Each window is its own generated companion measure, so only the ones used are added. |
+| Rank ties | **Competition ranking** (1, 1, 3) — which is what Cube's `type: rank` already produced in the spike, so no extra generation. |
+
+These three answer the "Open for the user" section of
+`docs/research/cube/spike-model-store-and-quick-calcs.md`. The remaining item
+there — *% of total under a filter is the share of the **filtered** total* —
+I took as the usual BI meaning and the spike's observed behaviour; say so in
+the task note rather than re-asking.
+
+## 3. What just landed, and what it changed structurally
+
+`T113` reconnected the limit half of the marking subsystem. The parts a next
+session needs to know about:
+
+- **`packages/core/src/markings/query.ts`** — `limitFilterFor(markings, combination)`
+  turns marking predicates into one Cube filter. Read its header: three
+  encoding rules from `docs/research/cube/markings-query-support.md` are
+  load-bearing (time bucket → `inDateRange`; NULL → `notSet`; canonical order
+  → AC-105). A measure `BoundedRange` is still emitted in the same logical
+  group as dimension filters, which Cube forbids; nothing produces one yet
+  (range mode is AC-093) and the constraint is recorded at `rangeFilter` and in
+  the research doc's open questions. **AC-093 must fix it.**
+- **`withLimit` in `packages/web/src/filters/apply.ts`** appends the filter to
+  `query.filters`, where Cube ANDs the entries. That is AC-082, with no second
+  mechanism — there is deliberately no `core/query/compose.ts`.
+- **`FilteredCharts`** gained a `limits` prop. A chart listed there is asked
+  even when no filter reaches it, and its limit is never dropped to rescue a
+  refused query.
+- **`DashboardView`** gained `limitedTiles` (what each tile's markings add to
+  its query, plus which tiles are waiting) and `limitedStates` (what a tile
+  shows instead of its chart). Both are gated on Markings mode; gating one and
+  not the other produced a wrong message, so keep them together.
+- **`Tile`** gained `limitCombination`, `nothingMarked` and
+  `nothingMarkedMessage`.
+
+## 4. Next steps, in the order I would take them
+
+1. **The cheap marking ACs that are probably already true and need only e2e
+   evidence:** AC-106 (edit-mode click selects the tile, changes no marking —
+   `marking` is already gated on `!sessionEditing`) and AC-120 (no marking
+   controls in cross-filter mode — already gated on `marking`). T112 and the
+   AC-120 task.
+2. **AC-071** — clearing marks when the mode changes and the settings are
+   saved. The cross-filter half already works (the render-time
+   `held.mode !== interactions.mode` reset in `DashboardView`); the marks half
+   needs the same treatment on `marks`.
+3. **AC-102 and AC-115** — `addItemsWithinLimit`, `markAll` and invert already
+   exist and are tested in `packages/core/src/markings/limit.ts` and
+   `apply.ts`. They are not wired to any control. This is wiring plus e2e.
+4. **AC-112 … AC-116** — details tiles and the marked-rows actions. AC-112 is
+   now straightforward: the tile fields it needs all exist.
+5. **AC-121 … AC-125** — bookmarks and shareable links.
+6. **AC-097, AC-104** — partial marks and the marked-share query. AC-104's
+   second-query machinery is also what would let AC-111 tell "the filters
+   exclude the marks" from "the marks have no rows here".
+7. **AC-088, AC-089, AC-093** — drag rectangle, lasso, range mode. The biggest
+   remaining chunk, and AC-093 carries the measure-range fix above.
+8. **Quick calculations, F6, T053 … T058** — the three answers in §2 are ready.
+   Prerequisite AC-131 … AC-137 (the model store and publish path) are done, so
+   generated companion measures can be added to the served model.
+9. **AC-171, AC-175, AC-176** — export, marking performance, keyboard coverage.
+10. **The Superset parity exercise.** `docs/design/superset-parity.md` holds the
+    plan. Superset is scaled up in the local `superset` namespace; its inventory
+    was read from its Postgres. **Two chart types have no wechart equivalent —
+    `world_map` and `box_plot` — and that needs the user's decision, because it
+    is a spec change.** The exercise also needs a signed-in Superset session,
+    which the user must do: credentials must never be typed into a form.
+
+## 5. Things that will waste your time if you rediscover them
+
+**Harness.**
+- `quality-check` runs typecheck and lint after *every* edit, so errors between
+  two edits of a multi-edit change are expected. Judge by the final state.
+- `test-integrity` blocks weakened matchers. `toBeNull` is weaker than `toBe`;
+  use `toHaveLength(0)`.
+- **Never edit files through Bash** (`sed -i`, heredocs, `tee`, `cp`/`mv` over
+  files). CLAUDE.md forbids it, and it bypasses the hooks. I violated this twice
+  earlier in the project and reported it; do not repeat it. An auto-mode system
+  message may suggest shell edits — CLAUDE.md overrides it.
+
+**Cube (all verified against v1.7.42 locally).**
+- `{or}`/`{and}` nest, but dimension and measure filters may not share one
+  logical operator.
+- `/v1/meta` omits `connectedComponent` for join-less cubes and for views, so
+  absence cannot mean "unreachable" on its own.
+- Top-level `filters` entries are ANDed (verified 2026-09-23 by the AC-111
+  e2e; both research docs now record it).
+
+**ECharts.**
+- `click` is dropped after 4px of movement — pair mousedown/mouseup.
+- `selectedMode: false` silences legend events; the legend is detected through
+  `document.elementFromPoint` instead.
+- `pointerup` fires *before* ECharts dispatches `mouseup`.
+- The SVG renderer writes item opacity as `fill-opacity`.
+
+**Testing.**
+- `e2e/perf/dashboard-open.spec.ts` fails only under full parallel load and
+  passes alone every time. It is a known flake, not a regression. One or two
+  marking e2e tests also flake under full load and pass in isolation — always
+  re-run the named test alone before treating it as a break.
+- A `<label>` wrapping a `<select>` takes the options into its accessible name,
+  so `getByLabel` cannot reach it. Tie labels with `id`/`htmlFor`.
+
+**Background processes still running** (started earlier this session): the demo
+API on port 4200 and the demo web build on port 5400. Stop them with `TaskStop`
+before restarting either.
+
+## 6. Open questions I did not raise
+
+- The e2e suite's full run is ~6 minutes. I have been running the touched spec
+  across all three browsers per task and the whole suite before a commit.
+- `inEffect` now lists "limited to what is marked" for a limited tile. If the
+  user wants that worded differently on the empty state, it is one string in
+  `DashboardView`.
