@@ -10,6 +10,10 @@ import { expect, test } from '@playwright/test';
  */
 const SHORTCUT = process.platform === 'darwin' ? 'Meta+k' : 'Control+k';
 
+/** The palette itself — Explore and Security each have a search box of their own. */
+const palette = (page: import('@playwright/test').Page) =>
+  page.getByRole('dialog', { name: /search/i });
+
 test('opens from every workspace with focus in the input', async ({ page }) => {
   for (const path of ['/explore', '/jobs', '/security']) {
     await page.goto(path);
@@ -39,7 +43,8 @@ test('opens while focus is in another control', async ({ page }) => {
 
   await page.keyboard.press(SHORTCUT);
 
-  await expect(page.getByRole('searchbox')).toBeFocused();
+  // The palette's box: Explore has a search box of its own (AC-019).
+  await expect(palette(page).getByRole('searchbox')).toBeFocused();
 });
 
 test('Escape returns focus to where it came from', async ({ page }) => {
@@ -48,7 +53,7 @@ test('Escape returns focus to where it came from', async ({ page }) => {
   const toggle = page.getByRole('button', { name: /theme/i });
   await toggle.focus();
   await page.keyboard.press(SHORTCUT);
-  await expect(page.getByRole('searchbox')).toBeFocused();
+  await expect(palette(page).getByRole('searchbox')).toBeFocused();
 
   await page.keyboard.press('Escape');
 
@@ -63,8 +68,8 @@ test('typing into the palette does not trigger the shortcut again', async ({ pag
   await expect(page.getByRole('button', { name: /theme/i })).toBeVisible();
   await page.keyboard.press(SHORTCUT);
 
-  await page.getByRole('searchbox').fill('k');
+  await palette(page).getByRole('searchbox').fill('k');
 
-  await expect(page.getByRole('searchbox')).toHaveValue('k');
+  await expect(palette(page).getByRole('searchbox')).toHaveValue('k');
   await expect(page.getByRole('dialog', { name: /search/i })).toBeVisible();
 });

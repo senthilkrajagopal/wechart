@@ -85,7 +85,7 @@ Traces to: `[docs/inputs §8]`, direction.md §2.
       Fails when: the list omits an item in the folder, or a column is blank for an item that has that value.
 - [x] AC-018 WHEN the user opens a dashboard from Explore, THE SYSTEM SHALL open it in view mode with its saved page tabs, tiles and settings.
       Fails when: the dashboard opens in edit mode, or a saved tile or setting is missing.
-- [ ] AC-019 WHEN the user types in the Explore search box, THE SYSTEM SHALL list every dashboard and library chart whose title contains the text, and no dashboard-local chart.
+- [x] AC-019 WHEN the user types in the Explore search box, THE SYSTEM SHALL list every dashboard and library chart whose title contains the text, and no dashboard-local chart.
       Fails when: a matching library item is missing, or a dashboard-local chart appears in the results.
 - [x] AC-020 WHEN the user creates a folder, dashboard or chart from Explore, THE SYSTEM SHALL place it in the selected folder and open it.
       Fails when: the new object lands in a different folder, or is not opened.
@@ -630,7 +630,7 @@ Application shell and search:
 
 Explore:
 
-- [ ] AC-192 WHEN the user opens a folder in Explore, THE SYSTEM SHALL show a breadcrumb of its ancestors, the folder's name as the page heading with Rename beside it, the Explore search box, and a single "New" menu offering Dashboard, Chart and Folder.
+- [x] AC-192 WHEN the user opens a folder in Explore, THE SYSTEM SHALL show a breadcrumb of its ancestors, the folder's name as the page heading with Rename beside it, the Explore search box, and a single "New" menu offering Dashboard, Chart and Folder.
       Fails when: the folder's name is not the page heading, a breadcrumb ancestor does not open that folder, or creating is offered other than through the New menu.
 - [ ] AC-193 THE SYSTEM SHALL list a folder's contents under the columns Name, Type, Built on, Updated and Owner — subfolders first, then dashboards, then charts — showing a dashboard's description beneath its name and its number of page tabs, a chart's chart type and the cube or view it is built on, and a subfolder's item count, and SHALL offer rename and move through a menu on each row.
       Fails when: a column is missing, a chart's type reads only "Chart", a row shows a rename or move control before its menu is opened, or a move offers the item's own folder or, for a folder, itself or a folder inside it.

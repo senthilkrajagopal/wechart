@@ -289,6 +289,47 @@ describe('the API answers for Cube (AC-007)', () => {
   });
 });
 
+describe('searching the catalog (AC-019)', () => {
+  /**
+   * The Explore search box lists *every* match, so it asks for more than the
+   * palette's 50; a limit is still a bound, because a search is a query.
+   */
+  const searchWith = () => {
+    const asked: (number | undefined)[] = [];
+    const catalog = {
+      folders: async () => [],
+      contents: async () => [],
+      search: async (_text: string, limit?: number) => {
+        asked.push(limit);
+        return [];
+      },
+    };
+    const app = buildServer({ config, catalog, cube: stubCube(() => ({})) });
+    return { app, asked };
+  };
+
+  it('passes a requested limit through', async () => {
+    const { app, asked } = searchWith();
+    await app.inject({ method: 'GET', url: '/api/search?q=a&limit=1001' });
+    expect(asked).toEqual([1001]);
+  });
+
+  it('keeps the catalog default when none is asked', async () => {
+    const { app, asked } = searchWith();
+    await app.inject({ method: 'GET', url: '/api/search?q=a' });
+    expect(asked).toEqual([undefined]);
+  });
+
+  it('refuses a limit that is not a whole number from 1 to 5,000', async () => {
+    const { app, asked } = searchWith();
+    for (const limit of ['0', '5001', 'abc', '2.5']) {
+      const response = await app.inject({ method: 'GET', url: `/api/search?q=a&limit=${limit}` });
+      expect(response.statusCode).toBe(400);
+    }
+    expect(asked).toHaveLength(0);
+  });
+});
+
 describe('creating catalog objects (AC-020)', () => {
   function recordingDocuments() {
     const created: { kind: string; id: string; body: Record<string, unknown> }[] = [];

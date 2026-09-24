@@ -151,7 +151,11 @@ test.describe('T202: the app bar, workspace navigation, buttons and inputs', () 
   test('buttons, the primary button and inputs', async ({ page }) => {
     // .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong);
     //        background: var(--bg-surface) }
-    const plain = page.getByRole('button', { name: 'New dashboard' });
+    // A contents row's Rename is a plain button; its name field and Save, the
+    // input and primary button. (The old create buttons and their form went
+    // with the prototype's one New menu, AC-192.)
+    const row = page.getByTestId('explore-contents').getByRole('row').nth(1);
+    const plain = row.getByRole('button', { name: 'Rename', exact: true });
     expect(
       await style(
         plain,
@@ -174,7 +178,7 @@ test.describe('T202: the app bar, workspace navigation, buttons and inputs', () 
     await plain.click();
     // .input { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px;
     //          background: var(--bg-surface); padding: 0 8px }
-    const input = page.getByLabel('New dashboard in this folder');
+    const input = row.getByLabel(/^New name for /);
     expect(
       await style(
         input,
@@ -195,11 +199,8 @@ test.describe('T202: the app bar, workspace navigation, buttons and inputs', () 
     });
 
     // .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600 }
-    await input.fill('Anything');
-    // The form's own Create — other tests leave items whose names contain it.
-    const primary = page
-      .getByRole('form', { name: 'New dashboard' })
-      .getByRole('button', { name: 'Create', exact: true });
+    // The row's own Save — the rename is put away unsaved (nothing is typed).
+    const primary = row.getByRole('button', { name: 'Save', exact: true });
     expect(
       await style(
         primary,

@@ -1,79 +1,56 @@
-import { useEffect, useRef, useState } from 'react';
-
-import { StateLine } from '../../shell/StatusIcon';
+import { MenuButton } from '../../shell/MenuButton';
 
 /**
- * Creating a folder, dashboard or chart in the selected folder (AC-020).
+ * Creating a folder, dashboard or chart in the open folder (AC-020), through
+ * the prototype's one "＋ New ▾" menu (AC-192).
  *
- * The new object is placed in whichever folder is selected and then opened —
- * creating something and leaving the user where they were makes them hunt for
- * it.
+ * The prototype creates at once, under a default name — "Untitled dashboard",
+ * "Untitled chart", or "New folder" renamed in the folder's heading — rather
+ * than behind a form asking for a name first. A name is easier to choose once
+ * the thing exists and is on screen, and a form in the way of every create is
+ * a step between the user and what they came to make.
  */
 export type CreatableKind = 'folder' | 'dashboard' | 'chart';
 
+export const DEFAULT_TITLES: Record<CreatableKind, string> = {
+  dashboard: 'Untitled dashboard',
+  chart: 'Untitled chart',
+  folder: 'New folder',
+};
+
 export interface CreateMenuProps {
-  readonly folderId: string;
-  readonly onCreate: (kind: CreatableKind, title: string) => Promise<void> | void;
+  readonly onCreate: (kind: CreatableKind) => void;
   readonly busy?: boolean;
 }
 
-const LABELS: Record<CreatableKind, string> = {
-  folder: 'New folder',
-  dashboard: 'New dashboard',
-  chart: 'New chart',
-};
+/** The prototype's order: what most people came to make, first. */
+const OPTIONS: readonly { kind: CreatableKind; label: string; icon: string; chip: string }[] = [
+  { kind: 'dashboard', label: 'Dashboard', icon: '▦', chip: 'itemicon ic-dash' },
+  { kind: 'chart', label: 'Chart', icon: '◢', chip: 'itemicon ic-chart' },
+  { kind: 'folder', label: 'Folder', icon: '▣', chip: 'itemicon ic-folder' },
+];
 
-export function CreateMenu({ folderId, onCreate, busy = false }: CreateMenuProps) {
-  const [kind, setKind] = useState<CreatableKind | null>(null);
-  const [title, setTitle] = useState('');
-  const titleRef = useRef<HTMLInputElement>(null);
-
-  // Focus moves to the name field because the user just asked to create
-  // something and typing a name is the next step. That is focus management in
-  // response to an action, not `autoFocus` stealing focus on load.
-  useEffect(() => {
-    if (kind) titleRef.current?.focus();
-  }, [kind]);
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!kind || title.trim() === '') return;
-    await onCreate(kind, title.trim());
-    setKind(null);
-    setTitle('');
-  };
-
-  if (!kind) {
-    return (
-      <div className="create-menu">
-        {(Object.keys(LABELS) as CreatableKind[]).map((option) => (
-          <button key={option} type="button" onClick={() => setKind(option)}>
-            {LABELS[option]}
-          </button>
-        ))}
-      </div>
-    );
-  }
-
+export function CreateMenu({ onCreate, busy = false }: CreateMenuProps) {
   return (
-    <form className="create-menu" onSubmit={submit} aria-label={LABELS[kind]}>
-      <label htmlFor="create-title">{LABELS[kind]} in this folder</label>
-      <input
-        id="create-title"
-        name="title"
-        ref={titleRef}
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        data-folder={folderId}
-      />
-      <button type="submit" disabled={busy || title.trim() === ''}>
-        Create
-      </button>
-      <button type="button" onClick={() => setKind(null)}>
-        Cancel
-      </button>
-      {/* Under way, in words with its icon, not only by Create fading (T183, AC-177). */}
-      {busy ? <StateLine kind="run">Creating it…</StateLine> : null}
-    </form>
+    <MenuButton
+      label="New"
+      items={OPTIONS.map((option) => ({
+        key: option.kind,
+        label: (
+          <>
+            <span className={option.chip} aria-hidden="true">
+              {option.icon}
+            </span>
+            {option.label}
+          </>
+        ),
+        disabled: busy,
+        onSelect: () => {
+          onCreate(option.kind);
+        },
+      }))}
+    >
+      ＋ New ▾
+    </MenuButton>
   );
 }

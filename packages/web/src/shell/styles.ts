@@ -211,6 +211,94 @@ main { padding: var(--wc-surface-padding); }
   align-items: start;
 }
 
+/* Explore's header (AC-192), the prototype's .crumbs and browse() head row. */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-secondary);
+}
+.crumbs__step { display: inline-flex; align-items: center; gap: 4px; }
+.crumbs button {
+  border: 0;
+  background: none;
+  color: inherit;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font: inherit;
+}
+.crumbs button:hover:not(:disabled) { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
+.explore__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0 12px;
+}
+.explore__title,
+.explore__rename {
+  margin: 0;
+  font-size: var(--wc-text-lg-size);
+  line-height: 26px;
+  font-weight: var(--wc-text-lg-weight);
+}
+.explore__rename { height: 36px; max-width: 320px; }
+.explore__spacer { flex: 1; }
+.explore__search { max-width: 260px; height: 28px; font-size: var(--wc-text-xs-size); }
+
+/* The prototype's type chips: a dashboard's, a chart's and a folder's. */
+.itemicon {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  display: inline-grid;
+  place-items: center;
+  font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-strong-weight);
+  flex: none;
+}
+.itemicon.ic-dash { background: var(--wc-bg-crossfilter-soft); color: var(--wc-crossfilter); }
+.itemicon.ic-chart { background: var(--wc-bg-accent-soft); color: var(--wc-accent); }
+.itemicon.ic-folder { background: var(--wc-bg-subtle); color: var(--wc-text-secondary); }
+
+/* A menu button's menu, the prototype's .picker. */
+.menu-button { position: relative; display: inline-flex; }
+.menu-button__menu {
+  position: absolute;
+  top: 100%;
+  z-index: 20;
+  margin-top: 4px;
+  min-width: 220px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 4px;
+  background: var(--wc-bg-raised);
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  box-shadow: var(--wc-shadow-pop);
+}
+.menu-button__menu--end { right: 0; }
+.menu-button__menu--start { left: 0; }
+.menu-button__item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-size: var(--wc-text-xs-size);
+  text-align: left;
+}
+.menu-button__item:hover:not(:disabled),
+.menu-button__item:focus-visible { background: var(--wc-bg-hover); }
+.menu-button__item.is-danger { color: var(--wc-status-error); }
+
 /* The Model workspace's files (T137, AC-131): each file a card, and under it
    the cubes and views it defines, their members grouped by kind. */
 .model-workspace h1 { margin: 0 0 16px; font-size: var(--wc-text-xl-size); line-height: var(--wc-text-xl-line); }

@@ -116,7 +116,7 @@ export interface DocumentWriter {
 export interface CatalogReader {
   folders(): Promise<unknown[]>;
   contents(folderId: string): Promise<unknown[]>;
-  search(text: string): Promise<unknown[]>;
+  search(text: string, limit?: number): Promise<unknown[]>;
   dashboardsUsing?(chartId: string): Promise<unknown[]>;
   /** Every chart and dashboard, with its body: what uses a member (T147). */
   referenceDocuments?(): Promise<readonly ReferenceDocument[]>;
@@ -810,8 +810,18 @@ export function buildServer({
   });
 
   app.get('/api/search', async (request) => {
-    const { q } = request.query as { q?: string };
-    return cat ? cat.search(q ?? '') : [];
+    const { q, limit } = request.query as { q?: string; limit?: string };
+    /**
+     * The palette takes the catalog's default; the Explore search box asks
+     * for more, because AC-019 lists *every* match there. Still bounded: a
+     * search is a query, and five thousand rows is past what a list is for.
+     */
+    if (limit !== undefined && !/^[1-9]\d*$/.test(limit))
+      throw new BadRequest('limit is a whole number.');
+    const most = limit === undefined ? undefined : Number(limit);
+    if (most !== undefined && most > 5000) throw new BadRequest('limit is at most 5,000.');
+    if (!cat) return [];
+    return most === undefined ? cat.search(q ?? '') : cat.search(q ?? '', most);
   });
 
   app.get('/api/jobs/queries', async (request) => {

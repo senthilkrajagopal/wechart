@@ -27,6 +27,8 @@ export interface FolderContentsProps {
   readonly onRename?: (item: CatalogItem, title: string) => void;
   readonly onMove?: (item: CatalogItem, folderId: string) => void;
   readonly folders?: readonly FolderMove[];
+  /** What an empty list says: a folder's, or a search's (AC-019). */
+  readonly emptyText?: string;
 }
 
 const TYPE_LABEL: Record<CatalogItem['kind'], string> = {
@@ -47,6 +49,7 @@ export function FolderContents({
   onRename,
   onMove,
   folders = [],
+  emptyText = 'This folder is empty.',
 }: FolderContentsProps) {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -102,7 +105,7 @@ export function FolderContents({
   };
 
   if (items.length === 0) {
-    return <p className="folder-contents__empty">This folder is empty.</p>;
+    return <p className="folder-contents__empty">{emptyText}</p>;
   }
 
   return (

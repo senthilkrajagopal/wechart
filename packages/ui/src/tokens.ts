@@ -39,7 +39,12 @@ export const COLORS = {
     'text-secondary': '#5c5b57',
     'text-muted': '#6e6c67',
     accent: '#1f6f86',
+    // The prototype's tints: a selected row, a chart's icon chip (accent), a
+    // dashboard's icon chip and the preview banner (crossfilter). Their text
+    // is the matching strong colour, audited as FILLED_SURFACE_PAIRS below.
+    'bg-accent-soft': '#e3f0f4',
     crossfilter: '#7a3fb0',
+    'bg-crossfilter-soft': '#f1e9f8',
     mk1: '#151107',
     mk2: '#2d025e',
     mk3: '#5b3106',
@@ -74,7 +79,9 @@ export const COLORS = {
     'text-secondary': '#b4b3ab',
     'text-muted': '#97958e',
     accent: '#4fb3d1',
+    'bg-accent-soft': '#173640',
     crossfilter: '#b58be0',
+    'bg-crossfilter-soft': '#33253f',
     mk1: '#f2f2f2',
     mk2: '#b6bcd8',
     mk3: '#fab72a',
@@ -174,6 +181,10 @@ export const AUDIT_TYPE_TOKEN: TypeTokenName = 'text-sm';
  */
 export const FILLED_SURFACE_PAIRS = [
   { foreground: 'text-on-accent', background: 'accent' },
+  // A selected row and a chart's icon chip: accent on its tint.
+  { foreground: 'accent', background: 'bg-accent-soft' },
+  // A dashboard's icon chip and the preview banner: crossfilter on its tint.
+  { foreground: 'crossfilter', background: 'bg-crossfilter-soft' },
 ] as const satisfies readonly {
   foreground: ColorTokenName;
   background: ColorTokenName;
