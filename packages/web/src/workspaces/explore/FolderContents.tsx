@@ -13,6 +13,8 @@ export interface CatalogItem {
   readonly title: string;
   readonly owner: string | null;
   readonly updatedAt: string;
+  /** A dashboard's description, beneath its name (AC-197); absent is none. */
+  readonly description?: string | null;
 }
 
 export interface FolderMove {
@@ -162,9 +164,15 @@ export function FolderContents({
                   <button type="submit">Save</button>
                 </form>
               ) : (
-                <button type="button" className="link-button" onClick={() => onOpen?.(item)}>
-                  {item.title}
-                </button>
+                <>
+                  <button type="button" className="link-button" onClick={() => onOpen?.(item)}>
+                    {item.title}
+                  </button>
+                  {/* The prototype's second line: what the dashboard is for. */}
+                  {item.kind === 'dashboard' && item.description ? (
+                    <span className="folder-contents__description">{item.description}</span>
+                  ) : null}
+                </>
               )}
             </th>
             <td>

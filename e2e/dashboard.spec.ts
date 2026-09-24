@@ -649,6 +649,41 @@ test('the dashboard is painted at the width the setting asks for', async ({ page
 });
 
 /**
+ * T215 / AC-197: WHEN the user opens a dashboard's settings, THE SYSTEM SHALL
+ * let the user change its name, its folder and its description under General,
+ * and Explore SHALL show that description beneath the dashboard's name.
+ * `Fails when: the folder or the description cannot be changed there, or a
+ * saved description does not appear in Explore.`
+ */
+test('General settings move a dashboard and describe it, and Explore shows both', async ({
+  page,
+  request,
+}) => {
+  const created = (await (
+    await request.post('http://localhost:4100/api/documents', {
+      data: { kind: 'dashboard', title: `Settled ${String(Date.now())}`, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  await page.goto(`/explore/dashboards/${created.id}`);
+  await page.getByRole('button', { name: 'Dashboard settings' }).click();
+
+  const panel = page.getByRole('region', { name: 'General settings' });
+  await panel.getByLabel('Folder').selectOption({ label: 'Finance' });
+  await panel.getByLabel('Description').fill('Revenue and orders since July 1996');
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  // Saved before leaving: the page closes once the save has landed, and
+  // navigating while it is still out could cancel it.
+  await expect(page.getByTestId('dashboard-settings')).toBeHidden();
+
+  // In Finance now, not at the root, with its description beneath its name.
+  await page.goto('/explore');
+  await page.getByRole('tree').getByRole('button', { name: 'Finance' }).click();
+  await expect(page.getByTestId(`item-${created.id}`)).toContainText(
+    'Revenue and orders since July 1996',
+  );
+});
+
+/**
  * T075 / AC-069. The page itself is plain DOM and jsdom covers it; what jsdom
  * cannot show is that the gear is reachable in the assembled app at all, and
  * that a full-viewport page really does take the dashboard's place rather than

@@ -182,6 +182,8 @@ export interface DashboardDocument {
   readonly schemaVersion: number;
   readonly title: string;
   readonly folderId?: string;
+  /** What the dashboard is for, shown beneath its name in Explore (AC-197). */
+  readonly description?: string;
   readonly owner?: string;
   readonly pages: readonly Page[];
   readonly settings: DashboardSettings;

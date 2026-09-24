@@ -127,8 +127,62 @@ export interface SettingsPageProps {
   readonly titleOf?: ((chartId: string) => string | undefined) | undefined;
 }
 
+/** The document without one optional field — absent, not set to undefined. */
+function without(document: DashboardDocument, key: 'folderId' | 'description'): DashboardDocument {
+  const copy: Partial<Record<keyof DashboardDocument, unknown>> = { ...document };
+  delete copy[key];
+  return copy as DashboardDocument;
+}
+
+interface FolderChoice {
+  readonly id: string;
+  /** Its ancestors and its own name, so two folders of one name are told apart. */
+  readonly path: string;
+}
+
+/**
+ * The folders a dashboard can be moved to (AC-197), each by its path. A plain
+ * fetch, so the page renders where no query client is provided (its tests);
+ * until the list arrives, only the root and the current folder are offered.
+ */
+function useFolders(): readonly FolderChoice[] {
+  const [folders, setFolders] = useState<readonly FolderChoice[]>([]);
+  useEffect(() => {
+    const asked = new AbortController();
+    fetch('/api/folders', { signal: asked.signal })
+      .then(async (response) =>
+        response.ok
+          ? ((await response.json()) as { id: string; title: string; parentId: string | null }[])
+          : [],
+      )
+      .then((all) => {
+        const byId = new Map(all.map((folder) => [folder.id, folder]));
+        const pathOf = (id: string): string => {
+          const names: string[] = [];
+          let at = byId.get(id);
+          for (let guard = 0; at !== undefined && guard <= all.length; guard += 1) {
+            names.unshift(at.title);
+            at = at.parentId === null ? undefined : byId.get(at.parentId);
+          }
+          return names.join(' / ');
+        };
+        setFolders(
+          all
+            .map((folder) => ({ id: folder.id, path: pathOf(folder.id) }))
+            .sort((one, other) => one.path.localeCompare(other.path)),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      asked.abort();
+    };
+  }, []);
+  return folders;
+}
+
 export function SettingsPage({ document, onCancel, onSave, titleOf }: SettingsPageProps) {
   const [open, setOpen] = useState<SettingsSection>('General');
+  const folders = useFolders();
 
   /**
    * The edits live here and nowhere else until Save. That is the whole of
@@ -306,16 +360,71 @@ export function SettingsPage({ document, onCancel, onSave, titleOf }: SettingsPa
             {open}
           </h2>
           {open === 'General' ? (
-            <label className="settings-field">
-              Name
-              <input
-                type="text"
-                value={draft.title}
-                onChange={(event) => {
-                  setDraft({ ...draft, title: event.target.value });
-                }}
-              />
-            </label>
+            /**
+             * direction.md §2: "General: name, folder, description" (AC-197).
+             * The folder is the dashboard's `folderId`, the same field a move
+             * from Explore writes; Explore lists by it, so saving here moves
+             * the dashboard there.
+             */
+            <>
+              <label className="settings-field">
+                Name
+                <input
+                  type="text"
+                  value={draft.title}
+                  onChange={(event) => {
+                    setDraft({ ...draft, title: event.target.value });
+                  }}
+                />
+              </label>
+              <label className="settings-field">
+                Folder
+                <select
+                  value={draft.folderId ?? 'root'}
+                  onChange={(event) => {
+                    const chosen = event.target.value;
+                    // The root chosen for a dashboard that never named a
+                    // folder is no change — the dirty guard must not ask.
+                    setDraft(
+                      chosen === 'root' && document.folderId === undefined
+                        ? without(draft, 'folderId')
+                        : { ...draft, folderId: chosen },
+                    );
+                  }}
+                >
+                  <option value="root">All folders</option>
+                  {/* The folder it is in, offered before the list arrives —
+                      or if it cannot — so the picker never shows the root
+                      for a dashboard that lives elsewhere (T215's review). */}
+                  {draft.folderId !== undefined &&
+                  draft.folderId !== 'root' &&
+                  !folders.some((folder) => folder.id === draft.folderId) ? (
+                    <option value={draft.folderId}>Its current folder</option>
+                  ) : null}
+                  {folders.map((folder) => (
+                    <option key={folder.id} value={folder.id}>
+                      {folder.path}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="settings-field">
+                Description
+                <textarea
+                  rows={3}
+                  value={draft.description ?? ''}
+                  onChange={(event) => {
+                    // Emptied is none, not "": typing and clearing is no
+                    // change, and an empty string is never stored.
+                    setDraft(
+                      event.target.value === '' && document.description === undefined
+                        ? without(draft, 'description')
+                        : { ...draft, description: event.target.value },
+                    );
+                  }}
+                />
+              </label>
+            </>
           ) : open === 'Interactions' ? (
             /**
              * direction.md: "Markings or Cross-filtering and cross-highlighting,

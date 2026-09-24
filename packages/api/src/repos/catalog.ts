@@ -16,6 +16,11 @@ export interface CatalogItem {
   readonly updatedAt: Date;
   /** Set on a chart that belongs to one dashboard rather than to a folder. */
   readonly localToDashboardId: string | null;
+  /**
+   * A dashboard's description, shown beneath its name in Explore (AC-197) —
+   * read from the body like the other columns, so it cannot go stale.
+   */
+  readonly description: string | null;
 }
 
 export interface FolderNode {
@@ -31,7 +36,8 @@ export function catalog(db: Kysely<Database>) {
   const selectItems = () =>
     db
       .selectFrom('documents')
-      .select(['kind', 'id', 'title', 'owner', 'updated_at', 'folder_id', 'local_to_dashboard_id']);
+      .select(['kind', 'id', 'title', 'owner', 'updated_at', 'folder_id', 'local_to_dashboard_id'])
+      .select(sql<string | null>`body ->> 'description'`.as('description'));
 
   return {
     /** Every folder, for the tree. */
@@ -151,6 +157,7 @@ interface Row {
   owner: string | null;
   updated_at: Date;
   local_to_dashboard_id: string | null;
+  description: string | null;
 }
 
 function toItem(row: Row): CatalogItem {
@@ -161,5 +168,7 @@ function toItem(row: Row): CatalogItem {
     owner: row.owner,
     updatedAt: row.updated_at,
     localToDashboardId: row.local_to_dashboard_id,
+    // A blank description is none: the line beneath the name would be empty.
+    description: row.description?.trim() ? row.description : null,
   };
 }

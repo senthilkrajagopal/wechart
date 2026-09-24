@@ -839,6 +839,16 @@ fieldset.model-field > legend {
 
 .folder-contents__empty,
 .query-log__empty { color: var(--wc-text-secondary); }
+/* A dashboard's description beneath its name (AC-197): the prototype's
+   second line, 12 px muted. */
+.folder-contents__description {
+  display: block;
+  padding: 0 6px;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-weight);
+  color: var(--wc-text-muted);
+}
 /* The Jobs workspace's tabs, and its pre-aggregations with their builds (T155). */
 .jobs-workspace__tabs { margin-bottom: 12px; }
 /* Its header: the title, then Cube's health and the refresh worker's (T162). */

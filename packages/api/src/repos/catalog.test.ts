@@ -52,6 +52,27 @@ describe('folder contents (AC-017)', () => {
     expect(contents.map((item) => item.kind).sort()).toEqual(['chart', 'dashboard']);
   });
 
+  it('lists a dashboard with its description, and one without as having none (AC-197)', async () => {
+    // Explore shows a dashboard's description beneath its name, as the
+    // prototype does; the listing is where it comes from.
+    const here = await folder('Described');
+    const described = randomUUID();
+    const plain = randomUUID();
+    await repo().create({
+      kind: 'dashboard',
+      id: described,
+      body: { title: 'Sales', folderId: here, description: 'Revenue and orders since 1996' },
+    });
+    await repo().create({ kind: 'dashboard', id: plain, body: { title: 'Plain', folderId: here } });
+
+    const contents = await cat().contents(here);
+
+    expect(contents.find((item) => item.id === described)?.description).toBe(
+      'Revenue and orders since 1996',
+    );
+    expect(contents.find((item) => item.id === plain)?.description).toBe(null);
+  });
+
   it('omits nothing that is in the folder', async () => {
     const here = await folder('Busy');
     const titles = ['A', 'B', 'C', 'D'];
