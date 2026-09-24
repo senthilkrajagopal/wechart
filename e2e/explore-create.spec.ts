@@ -56,8 +56,9 @@ test('creates a chart in the selected folder and opens it', async ({ page }) => 
 
   await createIn(page, 'Chart');
 
-  await expect(page).toHaveURL(/\/explore\/charts\//);
-  const id = decodeURIComponent(page.url().split('/').pop() ?? '');
+  // Opened in the chart editor, to be built (AC-213).
+  await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit$/);
+  const id = decodeURIComponent(page.url().split('/').at(-2) ?? '');
   await listedIn(page, 'Finance', id);
 });
 

@@ -124,7 +124,10 @@ export function ExplorePage() {
         setRenameOf({ folder: created.id, text: DEFAULT_TITLES.folder });
         return;
       }
-      globalThis.location.assign(`/explore/${created.kind}s/${encodeURIComponent(created.id)}`);
+      // A chart opens in the editor, to be built (AC-213); a dashboard, itself.
+      globalThis.location.assign(
+        `/explore/${created.kind}s/${encodeURIComponent(created.id)}${created.kind === 'chart' ? '/edit' : ''}`,
+      );
     },
   });
 

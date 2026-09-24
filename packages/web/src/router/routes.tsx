@@ -7,12 +7,12 @@ import {
   useParams,
   useRouter,
 } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
-import { useCallback, useRef } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useCallback, useRef, useState } from 'react';
 
 import { DashboardPage } from '../dashboard/DashboardPage';
 import { ChartEditor } from '../editor/ChartEditor';
-import { editorViewOf, loadEditorState } from '../editor/openChart';
+import { chartDocumentWith, editorViewOf, loadChart, type EditorState } from '../editor/openChart';
 import type { FilterValues } from '../filters/model';
 import { valuesFromSearch, valuesToSearch, type SearchFilter } from '../filters/url';
 import { previewClaimsOf } from '../query/securityPreview';
@@ -237,7 +237,9 @@ function ChartEditorSurface() {
 
   const chart = useQuery({
     queryKey: ['chart-editor', chartId],
-    queryFn: () => loadEditorState(chartId),
+    // The stored document and its version too, so Save can write it back
+    // (AC-213) — refused, not overwritten, if it changed meanwhile (T192).
+    queryFn: () => loadChart(chartId),
     /**
      * Fetched once per opening, and never again while the editor is open.
      *
@@ -255,12 +257,71 @@ function ChartEditorSurface() {
     staleTime: Infinity,
     gcTime: 0,
   });
-  const view = editorViewOf({ data: chart.data, error: chart.error });
+  const view = editorViewOf({ data: chart.data?.state, error: chart.error });
+
+  /** The editor's state as the user leaves it, for Save. */
+  const [edited, setEdited] = useState<EditorState | undefined>(undefined);
+  /**
+   * Save chart (AC-213): the edit written over the chart as read, at the
+   * version read, then its page — where a new chart from New › Chart lands,
+   * in the folder it was made in.
+   */
+  const save = useMutation({
+    mutationFn: async () => {
+      const loaded = chart.data;
+      // Refused, not a silent success that goes to the page with nothing
+      // written (T227's review).
+      if (loaded === undefined || edited === undefined)
+        throw new Error('The chart has not finished opening, so there is nothing to save yet.');
+      if (loaded.version === undefined)
+        throw new Error('This chart was read without its version, so it cannot be saved safely.');
+      const response = await fetch(`/api/documents/chart/${encodeURIComponent(chartId)}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          version: loaded.version,
+          body: chartDocumentWith(loaded.document, edited),
+        }),
+      });
+      if (response.status === 409)
+        throw new Error('This chart was changed elsewhere since it was opened. Reopen it to see.');
+      if (!response.ok) throw new Error(`Could not save the chart (${String(response.status)}).`);
+    },
+    onSuccess: () => {
+      globalThis.location.assign(`/explore/charts/${encodeURIComponent(chartId)}`);
+    },
+  });
 
   return (
     <AppShell workspace="explore">
-      <h1 className="workspace-title">Chart editor</h1>
-      <p data-testid="selected-object">{chartId}</p>
+      {/* The library chart page's head row (AC-212): title, then the action. */}
+      <div className="chart-page__head">
+        <h1 className="workspace-title">Chart editor</h1>
+        {chart.data === undefined ? null : (
+          <span className="chart-editor-route__title">{chart.data.document.title}</span>
+        )}
+        <span className="chart-page__spacer" />
+        {view.kind !== 'editor' ? null : chart.data?.document.localToDashboardId !== undefined ? (
+          // A chart of one dashboard's is saved with that dashboard, in its
+          // edit session — never on its own here (T227's review).
+          <span className="chart-page__none">
+            This chart belongs to a dashboard; edit and save it there.
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={save.isPending || edited === undefined}
+            onClick={() => save.mutate()}
+          >
+            {save.isPending ? 'Saving…' : 'Save chart'}
+          </button>
+        )}
+      </div>
+      {save.isError ? <StateLine kind="err">{save.error.message}</StateLine> : null}
+      <p data-testid="selected-object" hidden>
+        {chartId}
+      </p>
       {view.kind === 'loading' ? (
         <StateLine kind="run" testId="editor-loading">
           Opening the chart…
@@ -272,7 +333,7 @@ function ChartEditorSurface() {
       ) : (
         // Keyed by chart id: the editor reads `initial` once, to seed its
         // history, so a different chart has to be a different editor.
-        <ChartEditor key={chartId} initial={view.initial} />
+        <ChartEditor key={chartId} initial={view.initial} onChange={setEdited} />
       )}
     </AppShell>
   );
