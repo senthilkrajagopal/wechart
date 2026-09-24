@@ -31,7 +31,10 @@ const API = 'http://localhost:4100/api';
  * A dashboard of its own, in Markings mode, with two bar tiles on one page —
  * and, when asked, a third on a second page marking with the same marking.
  */
-async function markingDashboard(request: APIRequestContext, { twoPages = false } = {}) {
+async function markingDashboard(
+  request: APIRequestContext,
+  { twoPages = false, split = false, table = false } = {},
+) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Markings ${unique}`;
   const dashboard = (await (
@@ -40,7 +43,7 @@ async function markingDashboard(request: APIRequestContext, { twoPages = false }
     })
   ).json()) as { id: string };
 
-  const chartOn = async (chartTitle: string, dimension: string) => {
+  const chartOn = async (chartTitle: string, dimensions: readonly string[], chartType = 'bar') => {
     const chart = (await (
       await request.post(`${API}/documents`, {
         data: { kind: 'chart', title: chartTitle, folderId: 'root' },
@@ -56,8 +59,12 @@ async function markingDashboard(request: APIRequestContext, { twoPages = false }
           localToDashboardId: dashboard.id,
           chart: {
             source: { cube: 'orders' },
-            wells: { measures: ['orders.count'], dimensions: [dimension], timeDimensions: [] },
-            chartType: 'bar',
+            wells: {
+              measures: chartType === 'table' ? [] : ['orders.count'],
+              dimensions: [...dimensions],
+              timeDimensions: [],
+            },
+            chartType,
           },
         },
       },
@@ -65,9 +72,17 @@ async function markingDashboard(request: APIRequestContext, { twoPages = false }
     return chart.id;
   };
 
-  const status = await chartOn('By status', 'orders.status');
-  const category = await chartOn('By category', 'products.category');
-  const elsewhere = twoPages ? await chartOn('Elsewhere by status', 'orders.status') : undefined;
+  const status = await chartOn('By status', ['orders.status']);
+  const category = await chartOn('By category', ['products.category']);
+  const elsewhere = twoPages ? await chartOn('Elsewhere by status', ['orders.status']) : undefined;
+  // Split by a second dimension, so its legend names categories to mark.
+  const splitChart = split
+    ? await chartOn('Split by category', ['orders.status', 'products.category'], 'stackedBar')
+    : undefined;
+  // A table of rows, each identified by the cube's primary key.
+  const tableChart = table
+    ? await chartOn('Orders', ['orders.id', 'orders.status'], 'table')
+    : undefined;
   await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
     data: {
       version: 1,
@@ -85,6 +100,12 @@ async function markingDashboard(request: APIRequestContext, { twoPages = false }
             items: [
               { id: 'tile-status', kind: 'chart', w: 6, h: 40, chartId: status },
               { id: 'tile-category', kind: 'chart', w: 6, h: 40, chartId: category },
+              ...(splitChart === undefined
+                ? []
+                : [{ id: 'tile-split', kind: 'chart', w: 12, h: 40, chartId: splitChart }]),
+              ...(tableChart === undefined
+                ? []
+                : [{ id: 'tile-table', kind: 'chart', w: 12, h: 40, chartId: tableChart }]),
             ],
           },
           ...(elsewhere === undefined
@@ -240,6 +261,64 @@ test('a click on empty plot area unmarks that tile’s marking', async ({ page, 
 
   await expect(status.getByTestId('mark-badge')).toHaveCount(0);
   expect((await opacities(status)).every((value) => value === 1)).toBe(true);
+});
+
+/**
+ * AC-090: WHEN the user clicks a legend entry's text in a tile that marks,
+ * THE SYSTEM SHALL mark every item of that category, and Ctrl-click or
+ * ⌘-click SHALL add further categories; series visibility SHALL be changed
+ * elsewhere.
+ * `Fails when: a legend click hides the series, or does not mark it.`
+ */
+test('a legend entry marks its whole category, and does not hide the series', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request, { split: true });
+  await open(page, id, title);
+  const split = tile(page, 'tile-split');
+  await expect(split.getByTestId('chart-canvas')).toBeVisible();
+
+  const bars = await split.locator('svg path[fill]').count();
+  await split.locator('svg text', { hasText: 'Components' }).first().click();
+
+  // Marked, not hidden: the same marks are drawn, some of them faded.
+  await expect(split.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(page.getByTestId('mark-chip')).toContainText('Components');
+  expect(await split.locator('svg path[fill]').count()).toBe(bars);
+  await expect
+    .poll(async () => (await opacities(split)).filter((value) => value < 1).length)
+    .toBeGreaterThan(0);
+
+  // Ctrl-click adds a further category, where Ctrl on an item toggles one.
+  await page.keyboard.down('Control');
+  await split.locator('svg text', { hasText: 'Instruments' }).first().click();
+  await page.keyboard.up('Control');
+  await expect(split.getByTestId('mark-badge')).toContainText('2 marked');
+});
+
+/**
+ * AC-092: WHEN the user clicks a row in a table tile, THE SYSTEM SHALL mark
+ * it; Shift-click SHALL mark the range from the anchor row; and rows SHALL be
+ * markable only when the cube's primary key is available.
+ * `Fails when: Shift-click marks a single row, or rows are markable without a
+ * primary key.`
+ */
+test('a table’s rows mark, and a Shift-click marks the range', async ({ page, request }) => {
+  const { id, title } = await markingDashboard(request, { table: true });
+  await open(page, id, title);
+  const table = tile(page, 'tile-table');
+  await expect(table.getByTestId('table-row').first()).toBeVisible();
+
+  const rows = table.getByTestId('table-row');
+  await rows.nth(0).click();
+  await expect(table.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true');
+
+  // Shift extends from the anchor, rather than marking one row.
+  await rows.nth(2).click({ modifiers: ['Shift'] });
+  await expect(table.getByTestId('mark-badge')).toContainText('3 marked');
+  await expect(rows.nth(1)).toHaveAttribute('aria-selected', 'true');
 });
 
 /**

@@ -1,6 +1,6 @@
 import { echarts, itemClicks, optionFor } from '@wechart/charts';
-import type { RenderSpec } from '@wechart/core';
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { seriesOf, type RenderSpec } from '@wechart/core';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 
 import type { ClickedItem } from '../dashboard/crossfilter/clicked';
 
@@ -40,6 +40,18 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
    * wrapper's own release, which bubbles up after ECharts has dispatched.
    */
   const onItem = useRef(false);
+  /**
+   * What the legend lists, so a release on one of those words is read as a
+   * legend click rather than as a click on empty plot area.
+   */
+  const seriesNames = useMemo<ReadonlySet<string>>(() => {
+    try {
+      return new Set(seriesOf(spec).series.map((one) => one.name));
+    } catch {
+      // A type `seriesOf` does not lay out has no legend of series names.
+      return new Set<string>();
+    }
+  }, [spec]);
   useEffect(() => {
     clicked.current = onItemClick;
   }, [onItemClick]);
@@ -165,10 +177,21 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
         onItem.current = false;
       }}
       onMouseUp={(event) => {
-        // A release that no item took: empty plot area, which unmarks this
-        // tile's marking (AC-094). Reported as a click with nothing in it.
         if (onItem.current) return;
-        clicked.current?.({}, event.ctrlKey || event.metaKey);
+        /**
+         * A release no mark took. Two things it can be: a legend entry,
+         * which marks every item of that category (AC-090), or empty plot
+         * area, which unmarks this tile's marking (AC-094).
+         *
+         * Read from the DOM rather than from ECharts' own legend events:
+         * with `selectedMode: false` — which is what stops a legend click
+         * hiding a series — those did not arrive, and a marking gesture that
+         * sometimes does nothing is worse than none.
+         */
+        const under = window.document.elementFromPoint(event.clientX, event.clientY);
+        const said = under?.textContent?.trim() ?? '';
+        const toggle = event.ctrlKey || event.metaKey;
+        clicked.current?.(said !== '' && seriesNames.has(said) ? { legend: said } : {}, toggle);
       }}
     />
   );

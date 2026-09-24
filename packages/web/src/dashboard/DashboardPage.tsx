@@ -6,6 +6,7 @@ import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
 import { loadTile } from '../query/loadTile';
 import { META_QUERY } from '../query/meta';
 import { reachFrom } from '../filters/coverage';
+import { primaryKeyOf } from './markings/primaryKey';
 import { allMembers } from '../filters/FilterBar';
 import type { FilterValues } from '../filters/model';
 import { formatsFrom, tileChartOf, type TileChart } from './chartSpec';
@@ -508,6 +509,15 @@ function LoadedDashboard({
   // Which fields reach which cubes and views, for filters (AC-079). Until the
   // model arrives it cannot say, and no filter is applied or marked.
   const reach = useMemo(() => reachFrom(meta.data), [meta.data]);
+  /**
+   * Which dimension identifies a cube's rows, so a table tile knows whether
+   * its rows can be marked at all (AC-092). Read here, with the rest of the
+   * model, rather than queried again inside the dashboard.
+   */
+  const primaryKey = useMemo(() => {
+    const data = meta.data;
+    return (cube: string) => primaryKeyOf(data, cube);
+  }, [meta.data]);
   // Fields by the titles the filter bar shows, to name filters in words.
   const memberTitle = useMemo(() => {
     const titles = new Map(allMembers(meta.data).map((member) => [member.name, member.title]));
@@ -541,6 +551,7 @@ function LoadedDashboard({
         specs={charts.data?.specs ?? {}}
         documents={charts.data?.documents}
         reach={reach}
+        primaryKey={primaryKey}
         memberTitle={memberTitle}
         formats={formats}
         errors={charts.data?.errors ?? {}}

@@ -45,6 +45,11 @@ export interface ClickedItem {
   readonly name?: string | undefined;
   /** The series, as the legend writes it. */
   readonly seriesName?: string | undefined;
+  /**
+   * The legend entry clicked, where the click was on the legend rather than
+   * on a mark (AC-090): every item of that category, not one of them.
+   */
+  readonly legend?: string | undefined;
 }
 
 /** Chart types where a click means the series, not the category. */
@@ -56,6 +61,17 @@ export interface ClickedValue {
 }
 
 export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue | undefined {
+  /**
+   * A legend entry names a category of the split — the member the legend was
+   * drawn from. A chart with no split lists its measures there, and a
+   * measure is not a value of anything (AC-090).
+   */
+  if (item.legend !== undefined) {
+    const split = memberOn(spec.encoding, 'color') ?? memberOn(spec.encoding, 'facet');
+    return split === undefined || item.legend === ''
+      ? undefined
+      : { member: split, value: item.legend };
+  }
   const bySeries = BY_SERIES.has(spec.chartType);
   const channel = spec.chartType === 'trellis' ? 'facet' : bySeries ? 'color' : 'x';
   /**

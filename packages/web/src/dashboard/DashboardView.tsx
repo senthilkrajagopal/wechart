@@ -1,8 +1,10 @@
+import { markFromLegend } from '@wechart/charts';
 import { COLORS } from '@wechart/ui';
 import {
   applyItemClick,
   markingsFrom,
   type Marking,
+  type MarkingPredicate,
   type MarkingSlot,
   toChartSpec,
   toCubeQuery,
@@ -25,7 +27,7 @@ import type { TileSize } from '../editor/PreviewFrame';
 import type { AnswerMeta } from '../query/answerMeta';
 import { loadTile } from '../query/loadTile';
 import { SecurityPreview } from '../query/securityPreview';
-import { ChartTile } from '../tiles/ChartTile';
+import { ChartTile, type ChartTileProps } from '../tiles/ChartTile';
 import { TileError } from '../tiles/TileError';
 import { hiddenMemberOf, TileUnavailable } from '../tiles/TileUnavailable';
 import { accelerationOf } from '../tiles/AccelerationBadge';
@@ -226,6 +228,11 @@ export interface DashboardViewProps {
    * is taken to reach every chart.
    */
   readonly reach?: Reach | undefined;
+  /**
+   * The dimension that identifies a cube's rows, from the model (AC-092).
+   * Rows are markable only where there is one; absent, no table marks.
+   */
+  readonly primaryKey?: ((cube: string) => string | undefined) | undefined;
   /** A field's title in the model, which names a filter in words (AC-043). */
   readonly memberTitle?: ((member: string) => string | undefined) | undefined;
   /**
@@ -293,10 +300,13 @@ function TileBody({
   chartType = tile.chartType,
   canEditChart = false,
   onItemClick,
+  rowMarking,
 }: {
   tile: Tile;
-  /** A click on its chart, while the dashboard cross-filters (AC-117). */
-  onItemClick?: ((item: ClickedItem) => void) | undefined;
+  /** A click on its chart: cross-filtering it (AC-117) or marking it (AC-087). */
+  onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
+  /** Marking its rows, where it draws a table (AC-092). */
+  rowMarking?: ChartTileProps['rowMarking'];
   spec: RenderSpec | undefined;
   error: unknown;
   loading: boolean;
@@ -373,6 +383,7 @@ function TileBody({
           served={answered}
           {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
           {...(onItemClick === undefined ? {} : { onItemClick })}
+          {...(rowMarking === undefined ? {} : { rowMarking })}
         />
       );
     case 'markdown':
@@ -445,6 +456,12 @@ interface TileCharts {
    */
   readonly onMarkClick?:
     ((tileId: string, chartId: string, item: ClickedItem, toggle: boolean) => void) | undefined;
+  /**
+   * Marking a table tile's rows (AC-092): the marking it shows, the key that
+   * identifies its rows, and where a row click goes.
+   */
+  readonly rowMarkingOn?:
+    ((tileId: string, chartId: string) => ChartTileProps['rowMarking']) | undefined;
   /** The marking a tile shows, its colour and how many items it holds (AC-098). */
   readonly markingOn?:
     | ((tileId: string) => { marking: Marking; colour: string; markedCount: number } | undefined)
@@ -751,6 +768,10 @@ function Elements({
                       charts.onMarkClick?.(element.id, chartId, item, toggle);
                     },
                   })}
+              {...(() => {
+                const rows = charts.rowMarkingOn?.(element.id, chartId);
+                return rows === undefined ? {} : { rowMarking: rows };
+              })()}
             />
           </>
         );
@@ -1017,6 +1038,7 @@ export function DashboardView({
   onExitPreview,
   documents,
   reach,
+  primaryKey,
   memberTitle,
   formats,
   onEditStart,
@@ -1448,7 +1470,19 @@ export function DashboardView({
            * helper would then find nothing to clear.
            */
           markingOf(clearTileMarking(marks, { ...tile, marksWith: markingId }), markingId)
-        : applyItemClick(before, [{ member: clicked.member, value: clicked.value }], { toggle });
+        : item.legend !== undefined
+          ? /**
+             * A legend entry marks every item of that category, and Ctrl
+             * there *adds* a further category rather than toggling one
+             * (AC-090 against AC-087 — the criteria differ, and Spotfire
+             * behaves the same way round).
+             */
+            markFromLegend(
+              before,
+              { member: clicked.member, value: clicked.value },
+              { add: toggle },
+            )
+          : applyItemClick(before, [{ member: clicked.member, value: clicked.value }], { toggle });
     if (after === before) return;
 
     setMarks((now) => withMarking(now, markingId, after));
@@ -1666,6 +1700,41 @@ export function DashboardView({
      */
     ...(crossFiltering ? { onItemClick } : {}),
     ...(marking ? { onMarkClick } : {}),
+    ...(marking
+      ? {
+          /**
+           * A table tile's rows, markable only where the cube has a primary
+           * key to identify them by (AC-092). The key comes from the model,
+           * not from the rows: a column that happens to be unique in one
+           * answer is not an identity.
+           */
+          rowMarkingOn: (tileId: string, chartId: string) => {
+            const element = elementAt(live, tileId);
+            if (element === null || !isTile(element)) return undefined;
+            const markingId = marksWithOf(element);
+            if (markingId === undefined) return undefined;
+            const cube = drawn.documents?.[chartId]?.chart.source.cube;
+            const key = cube === undefined ? undefined : primaryKey?.(cube);
+            return {
+              predicate: markingOf(marks, markingId),
+              ...(key === undefined ? {} : { primaryKey: key }),
+              onMark: (predicate: MarkingPredicate) => {
+                setMarks((now) => withMarking(now, markingId, predicate));
+                const named = markings.find((each) => each.id === markingId);
+                const from = chartTitleOf(chartId);
+                if (named === undefined) return;
+                setMarkSaid(
+                  announceMarking({
+                    marking: named,
+                    markedCount: predicate.items.length + predicate.ranges.length,
+                    ...(from === undefined ? {} : { tileName: from }),
+                  }),
+                );
+              },
+            };
+          },
+        }
+      : {}),
     ...(marking
       ? {
           markingOn: (tileId: string) => {

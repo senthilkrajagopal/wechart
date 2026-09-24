@@ -8,7 +8,7 @@ import { StateLine, StatusIcon } from '../shell/StatusIcon';
 import { AccelerationBadge } from './AccelerationBadge';
 import { ChartCanvas } from './ChartCanvas';
 import { DataAsOf } from './DataAsOf';
-import { DataTable } from './DataTable';
+import { DataTable, type DataTableProps } from './DataTable';
 import { Kpi } from './Kpi';
 import { PivotTable } from './PivotTable';
 import { TileEmpty } from './TileEmpty';
@@ -30,11 +30,13 @@ export interface ChartTileProps {
   readonly spec: RenderSpec;
   readonly height?: number;
   /**
-   * A click on one of the chart's items, while the dashboard cross-filters
-   * (AC-117). Absent — in Markings mode, or while editing — the chart takes
-   * no clicks.
+   * A click on one of the chart's items: it cross-filters (AC-117) or marks
+   * (AC-087), by the dashboard's mode. Absent while editing, where a click
+   * picks the tile up.
    */
-  readonly onItemClick?: ((item: ClickedItem) => void) | undefined;
+  readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
+  /** Marking this tile's rows, where it draws a table (AC-092). */
+  readonly rowMarking?: DataTableProps['marking'];
   /**
    * Whether the table view is showing, when the owner wants to keep that
    * across a re-render.
@@ -80,7 +82,12 @@ interface ChartBodyProps {
   readonly spec: RenderSpec;
   readonly height?: number;
   /** A click on one of its items, while the dashboard cross-filters (AC-117). */
-  readonly onItemClick?: ((item: ClickedItem) => void) | undefined;
+  readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
+  /**
+   * Marking this tile's rows, where it draws a table and the cube has a
+   * primary key to identify them by (AC-092).
+   */
+  readonly rowMarking?: DataTableProps['marking'];
 }
 
 /** Types wechart draws as DOM rather than handing to ECharts. */
@@ -90,10 +97,17 @@ const DOM_TYPES: Partial<Record<ChartType, (props: ChartBodyProps) => React.Reac
   pivot: PivotTable,
 };
 
-function ChartBody({ spec, height, onItemClick }: ChartBodyProps) {
+function ChartBody({ spec, height, onItemClick, rowMarking }: ChartBodyProps) {
   const DomChart = DOM_TYPES[spec.chartType];
   if (DomChart !== undefined) {
-    return <DomChart spec={spec} {...(height === undefined ? {} : { height })} />;
+    return (
+      <DomChart
+        spec={spec}
+        {...(height === undefined ? {} : { height })}
+        // Only a table has rows to mark; the others take no marking prop.
+        {...(rowMarking === undefined || spec.chartType !== 'table' ? {} : { marking: rowMarking })}
+      />
+    );
   }
 
   if (!isDrawable(spec.chartType)) {
@@ -125,6 +139,7 @@ export function ChartTile({
   asOf,
   served,
   onItemClick,
+  rowMarking,
 }: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
@@ -217,6 +232,7 @@ export function ChartTile({
           spec={spec}
           {...(height === undefined ? {} : { height })}
           {...(onItemClick === undefined ? {} : { onItemClick })}
+          {...(rowMarking === undefined ? {} : { rowMarking })}
         />
       )}
     </div>
