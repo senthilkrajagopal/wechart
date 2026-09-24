@@ -3281,10 +3281,38 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/charts/src/option.ts`, `e2e/dashboard.spec.ts`
   - Failing test: `e2e/dashboard.spec.ts`: every tile's accessible name is its title; a 243-bar chart at half width draws bars of non-zero width (AC-209, AC-210).
   - Depends on: T217
-- [ ] T225 (AC-187) Re-run the design critique on Explore and dashboards, and tick AC-187 only on measured conformance
+- [ ] T226 (AC-212) Rebuild the library chart page: title, type, the chart drawn, its fields, Used in, and Edit chart
+  - Files: `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, `e2e/library-chart.spec.ts`
+  - Failing test: `e2e/library-chart.spec.ts`: a seeded library chart's page draws the chart under its title, lists its source, measures and dimensions, and Edit chart opens the editor on it (AC-212).
+  - Depends on: T216
+- [ ] T227 (AC-213) Open the chart editor from New › Chart, and land a saved new chart on its page in the open folder
+  - Files: `packages/web/src/workspaces/explore/ExplorePage.tsx`, `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, `e2e/library-chart.spec.ts`
+  - Failing test: `e2e/library-chart.spec.ts`: New › Chart in Finance opens the editor titled "Untitled chart"; after adding a field and saving, the chart's page shows and Finance lists it (AC-213).
+  - Depends on: T212, T226
+- [ ] T228 (AC-214) Lay the chart editor out as the prototype's three panes, with the preview always in view and one header row
+  - Files: `packages/web/src/editor/ChartEditor.tsx`, `packages/web/src/dashboard/edit/ChartEditorOverlay.tsx`, `packages/web/src/shell/styles.ts`, `e2e/chart-editor.spec.ts`
+  - Failing test: `e2e/chart-editor.spec.ts`: at 1440×900 the preview's top edge is above the fold, the title is editable in the header, and no result JSON appears outside the drawer (AC-214).
+  - Depends on: T226
+- [ ] T229 (AC-215, AC-216) Group fields by cube with search and click-to-add, and give well pills titles, tags, granularity, a Filters well and Top N
+  - Files: `packages/web/src/editor/FieldList.tsx`, `packages/web/src/editor/Wells.tsx`, `e2e/chart-editor.spec.ts`
+  - Failing test: `e2e/chart-editor.spec.ts`: clicking "Average Amount" adds it to Metrics; searching narrows the list; a time pill's granularity changes the query's grain; the Filters well is there (AC-215, AC-216).
+  - Depends on: T228
+- [ ] T230 (AC-217, AC-218) Show the chart type by name with a searchable gallery, and warn on a manual combo or an over-capacity pick
+  - Files: `packages/web/src/editor/ChartTypeCard.tsx`, `packages/web/src/editor/ChartTypeGallery.tsx`, `e2e/chart-editor.spec.ts`
+  - Failing test: `e2e/chart-editor.spec.ts`: the type reads "Auto · Bar"; Change opens a gallery where a line is greyed without a time field; choosing combo shows its warning; "Back to recommended" appears only after a manual pick (AC-217, AC-218).
+  - Depends on: T228
+- [ ] T231 (AC-219) Add the Customize tab: axes, legend, series and values
+  - Files: `packages/web/src/editor/CustomizeTab.tsx`, `packages/core/src/chart-document.ts`, `packages/charts/src/option.ts`, `e2e/chart-editor.spec.ts`
+  - Failing test: `e2e/chart-editor.spec.ts`: moving the legend to the right, turning on data labels and turning off "include zero" each change the drawn chart (AC-219).
+  - Depends on: T228
+- [ ] T232 (AC-220, AC-221) Name members by their titles everywhere a person reads them, and list every pie slice in its legend
+  - Files: `packages/charts/src/option.ts`, `packages/web/src/editor/ResultsDrawer.tsx`, `packages/web/src/dashboard/markings/MarkChip.tsx`, `e2e/chart-editor.spec.ts`
+  - Failing test: `e2e/chart-editor.spec.ts`: a two-measure legend and the results headers read the members' titles; a pie over two dimensions has a legend entry per slice (AC-220, AC-221).
+  - Depends on: T228
+- [ ] T225 (AC-187) Re-run the design critique on every surface, and tick AC-187 only on measured conformance
   - Files: `docs/design/critiques/`
   - Failing test: the `design-critic` report finds no `STRUCTURE` or AC-187 finding on the surfaces above (AC-187).
-  - Depends on: T208–T224
+  - Depends on: T208–T232
 
 ---
 
@@ -3344,6 +3372,9 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-197 | T215       | AC-198 | T218 | AC-199 | T219 | AC-200 | T220       |
 | AC-201 | T219       | AC-202 | T221 | AC-203 | T222 | AC-204 | T223       |
 | AC-205 | T223       | AC-206 | T223 | AC-207 | T217 | AC-208 | T221       |
-| AC-209 | T224       | AC-210 | T224 | AC-211 | T210 |        |            |
+| AC-209 | T224       | AC-210 | T224 | AC-211 | T210 | AC-212 | T226       |
+| AC-213 | T227       | AC-214 | T228 | AC-215 | T229 | AC-216 | T229       |
+| AC-217 | T230       | AC-218 | T230 | AC-219 | T231 | AC-220 | T232       |
+| AC-221 | T232       |        |      |        |      |        |            |
 
 Reopened 2026-09-24 and now also covered by the prototype-alignment tasks: AC-005 → T008, T210 · AC-019 → T017, T212 · AC-042 → T049, T208 · AC-053 → T059, T209.

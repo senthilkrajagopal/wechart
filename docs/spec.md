@@ -674,6 +674,29 @@ Dashboards:
 - [ ] AC-211 THE SYSTEM SHALL draw charts in the dark theme with the dark categorical palette and the dark theme's text and gridline tokens, and redraw them when the theme changes (direction.md rules 2, 24).
       Fails when: a chart in the dark theme uses a light-theme series colour, text colour or gridline colour.
 
+Library charts and the chart editor:
+
+- [ ] AC-212 WHEN the user opens a library chart from Explore, THE SYSTEM SHALL show its title as the page heading, its chart type, the chart drawn, the cube or view it is built on, its measures and dimensions, the dashboards it is used on, and an Edit chart action that opens the chart editor on it.
+      Fails when: the chart is not drawn, its title is not the heading, or there is no way to open it in the chart editor.
+- [ ] AC-213 WHEN the user chooses New › Chart in Explore, THE SYSTEM SHALL open the chart editor on a new library chart titled "Untitled chart" in the open folder, and saving it SHALL open that chart's page.
+      Fails when: New › Chart ends anywhere but the chart editor, or the saved chart is not in the folder that was open.
+- [ ] AC-214 WHILE the chart editor is open, THE SYSTEM SHALL show the field list on the left, the preview in the centre above a drawer of results, underlying rows and the Cube query, and an inspector on the right with Data and Customize tabs, the preview's top edge visible without scrolling at 1,440 × 900, and a single header row holding the chart's editable title, its source and row count, whether it is local or shared, Undo, Redo, Discard and the save action.
+      Fails when: the preview's top edge is below the fold at 1,440 × 900, the title cannot be edited in the editor, or result rows are printed anywhere outside the drawer.
+- [ ] AC-215 THE SYSTEM SHALL group the chart editor's fields by the cube they belong to, with a search box, and show on each field its role, its aggregation, type or number of distinct values, and whether the chart uses it; clicking a field, or pressing Enter or Space on it, SHALL add it to the well its role belongs in.
+      Fails when: clicking or pressing Enter on a field adds nothing, or the search does not narrow the list.
+- [ ] AC-216 THE SYSTEM SHALL show each field in a well by its title with a tag for its aggregation or its time granularity, let the user change a time field's granularity from its pill, and offer a Filters well and a Top N setting beside the Metrics, Dimensions and Time wells.
+      Fails when: a pill shows a member's internal name, a time field's granularity cannot be changed from its pill, or the Filters well is missing.
+- [ ] AC-217 THE SYSTEM SHALL show the chart's type by its name — "Auto" with the recommended type, or "Chosen manually" — with a Change action opening a gallery of every type that can be searched, groups types by purpose, states what each needs and greys those the chart's fields cannot draw, and SHALL show "Back to recommended" only while a type is chosen manually (direction.md rules 9, 10).
+      Fails when: a type is shown by an internal id such as "groupedBar", a type the fields cannot draw is not greyed with its requirement, or "Back to recommended" shows while the type is the recommended one.
+- [ ] AC-218 WHILE a manually chosen type is a combo, or exceeds a channel's capacity for the chart's fields, THE SYSTEM SHALL show a warning with an icon saying why, and offer to switch to the recommended type (direction.md rules 6, 30).
+      Fails when: a combo, or a pie drawn with more than 6 slices, shows no warning.
+- [ ] AC-219 THE SYSTEM SHALL offer in the chart editor's Customize tab the axis settings — title, label rotation, include zero, logarithmic scale, gridlines, minimum and maximum — the legend's visibility and position, each series' colour and visibility and whether series stack, data labels, and the number format.
+      Fails when: the legend's position, data labels or "include zero" cannot be set.
+- [ ] AC-220 THE SYSTEM SHALL name every member by its title from the model wherever a person reads it — legends, tooltips, table headers, well pills, marking chips and the "Why this chart?" trace — and never by its internal name.
+      Fails when: a legend, table header, pill, chip or trace shows a name such as "orders.count".
+- [ ] AC-221 WHEN a pie or donut is drawn, THE SYSTEM SHALL list every slice in its legend.
+      Fails when: a slice has no legend entry.
+
 ---
 
 ## Non-goals (phase 1)
@@ -737,4 +760,4 @@ Copied from [requirements.md §7](./requirements.md):
 | Scope: export `[R6]`                                                                          | AC-171 … AC-173                                                       |
 | Scope: filters `[docs/inputs §2]`                                                             | AC-076 … AC-083                                                       |
 | Scope: chart rendering and customisation `[docs/inputs §2]`                                   | AC-037 … AC-046                                                       |
-| Scope: following the prototype's structure, "My workspace", global search scope `[R7, R9]`   | AC-187, AC-190 … AC-211                                               |
+| Scope: following the prototype's structure, "My workspace", global search scope `[R7, R9]`   | AC-187, AC-190 … AC-221                                               |
