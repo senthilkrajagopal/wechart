@@ -382,7 +382,7 @@ function FieldRow({
   if (shaped && field.kind === 'object' && field.of !== undefined) {
     const inner = (own ?? {}) as Value;
     return (
-      <fieldset className="model-field model-field--object">
+      <fieldset className="model-field model-field--object" data-key={field.key}>
         <legend>{field.label}</legend>
         <ObjectForm
           schema={schemaOf(field)}
@@ -396,7 +396,7 @@ function FieldRow({
   }
   if (shaped && field.kind === 'list' && (field.of !== undefined || field.fields !== undefined)) {
     return (
-      <fieldset className="model-field model-field--list">
+      <fieldset className="model-field model-field--list" data-key={field.key}>
         <legend>{field.label}</legend>
         <MemberList
           schema={schemaOf(field)}
@@ -432,13 +432,41 @@ export function ObjectForm({
   /** Which fields to show; all by default. */
   only?: (field: Field) => boolean;
 }) {
-  const fields = schema.fields.filter((field) => only?.(field) ?? true);
+  // Only what applies to this member (AC-225) — and whatever the file writes.
+  const applies = (field: Field) =>
+    field.applies === undefined || field.applies(value) || read(value, field.key) !== undefined;
+  const fields = schema.fields.filter((field) => (only?.(field) ?? true) && applies(field));
   const current = fields.filter((field) => field.legacy !== true);
   const legacy = fields.filter((field) => field.legacy === true);
+  // In their named groups, in the order the schema first names each (AC-225).
+  const groups = new Map<string, Field[]>();
+  for (const field of current)
+    if (field.group !== undefined)
+      groups.set(field.group, [...(groups.get(field.group) ?? []), field]);
+  const ungrouped = current.filter((field) => field.group === undefined);
+  const id = useId();
   return (
     <div className="model-form__fields">
-      {current.map((field) => (
+      {ungrouped.map((field) => (
         <FieldRow key={field.key} field={field} value={value} onChange={onChange} />
+      ))}
+      {[...groups.entries()].map(([name, inside]) => (
+        // Named by its title, said once; not a heading, in a pane headed by the file.
+        <section
+          key={name}
+          role="group"
+          aria-labelledby={`${id}-${name}`}
+          className="model-form__group"
+        >
+          <p id={`${id}-${name}`} className="model-form__group-title">
+            {name}
+          </p>
+          <div className="model-form__fields">
+            {inside.map((field) => (
+              <FieldRow key={field.key} field={field} value={value} onChange={onChange} />
+            ))}
+          </div>
+        </section>
       ))}
       {legacy.length === 0 ? null : (
         <details className="model-form__legacy">
@@ -452,6 +480,37 @@ export function ObjectForm({
   );
 }
 
+/**
+ * What a member is defined by, in a line for its collapsed row (AC-225): its
+ * SQL; or, defined some other way, what defines it — a CASE, a point, its
+ * switch values.
+ */
+function previewOf(item: Value): string | undefined {
+  if (typeof item['sql'] === 'string') return item['sql'];
+  if (item['case'] !== undefined) return 'CASE …';
+  const sqlOf = (key: string) => {
+    const at = item[key];
+    return isPlain(at) && typeof at['sql'] === 'string' ? at['sql'] : undefined;
+  };
+  const [latitude, longitude] = [sqlOf('latitude'), sqlOf('longitude')];
+  if (latitude !== undefined || longitude !== undefined)
+    return [latitude ?? '?', longitude ?? '?'].join(', ');
+  if (Array.isArray(item['values'])) return (item['values'] as unknown[]).map(String).join(', ');
+  return undefined;
+}
+
+/** A member's badges (AC-225): primary key, hidden from the API, its format. */
+function badgesOf(item: Value): string[] {
+  return [
+    item['primary_key'] === true ? 'PK' : undefined,
+    // A primary key is hidden unless it says otherwise (Y.6, `public`).
+    item['public'] === false || (item['primary_key'] === true && item['public'] === undefined)
+      ? 'hidden'
+      : undefined,
+    typeof item['format'] === 'string' ? item['format'] : undefined,
+  ].filter((badge): badge is string => badge !== undefined);
+}
+
 /** A new member's name, `segment_1`, the first not taken; none for an object without one. */
 function newItem(schema: ObjectSchema, items: readonly Value[]): Value {
   if (!schema.fields.some((field) => field.key === 'name')) return {};
@@ -463,9 +522,9 @@ function newItem(schema: ObjectSchema, items: readonly Value[]): Value {
 }
 
 /**
- * A list of members — each a row showing its name and type, which expands in
- * place into every field it has (direction.md §7b, "Rows") — with a member
- * added at its end, or one removed.
+ * A list of members — each a row showing its name, type, SQL and badges,
+ * which expands in place into the fields that apply to it (direction.md §7b,
+ * "Rows"; AC-225) — with a member added at its end, or one removed.
  */
 export function MemberList({
   schema,
@@ -493,13 +552,28 @@ export function MemberList({
           const name =
             typeof item['name'] === 'string' ? item['name'] : `${title} ${String(index + 1)}`;
           const type = typeof item['type'] === 'string' ? item['type'] : undefined;
+          const preview = previewOf(item);
+          const badges = badgesOf(item);
           return (
             // Positions, not names: a member's name is one of the fields it edits.
             <li key={index} className="model-members__item">
               <details className="model-member">
+                {/* Collapsed, still read (AC-225): its type, its SQL, its badges. */}
                 <summary>
                   <span className="model-member__name">{name}</span>
+                  {badges.map((badge) => (
+                    <span key={badge} className="model-member__badge">
+                      {badge}
+                    </span>
+                  ))}
                   {type === undefined ? null : <span className="model-member__type">{type}</span>}
+                  {preview === undefined ? null : (
+                    // Not read out as the row's name each time it is reached:
+                    // the SQL is in its field when the row opens.
+                    <span className="model-member__sql" aria-hidden="true">
+                      {preview}
+                    </span>
+                  )}
                 </summary>
                 <ObjectForm
                   schema={schema}

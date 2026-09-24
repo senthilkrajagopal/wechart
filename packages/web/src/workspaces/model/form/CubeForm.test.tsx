@@ -27,6 +27,16 @@ const ORDERS = {
 const optionsOf = (select: HTMLElement) =>
   [...select.querySelectorAll('option')].map((option) => option.value).filter((v) => v !== '');
 
+/**
+ * A member's own field, not a nested object's: in its named group (T236,
+ * AC-225), or ungrouped.
+ */
+const ownRow = (key: string, inside = '') =>
+  [
+    `.model-member > .model-form__fields > [data-key="${key}"]${inside}`,
+    `.model-member > .model-form__fields > .model-form__group > .model-form__fields > [data-key="${key}"]${inside}`,
+  ].join(', ');
+
 describe('a cube’s form', () => {
   it('has a labelled control for every key on a cube, lists on their own tabs', async () => {
     render(<CubeForm kind="cube" value={ORDERS} onChange={vi.fn()} />);
@@ -80,10 +90,13 @@ describe('a cube’s form', () => {
     // Each key's own row: nested objects (rolling_window, filter) have their own `type`.
     const own = (key: string) =>
       measure.querySelector(
-        `.model-member > .model-form__fields > [data-key="${key}"], .model-member > .model-form__fields > details > [data-key="${key}"]`,
+        `${ownRow(key)}, .model-member > .model-form__fields > details > [data-key="${key}"]`,
       ) as HTMLElement;
+    // Every key but the multi-stage ones, which a count is not (§Y.17, AC-225)
+    // — each reached on a multi-stage measure (memberRows.test.tsx).
+    const staged = ['group_by', 'reduce_by', 'add_group_by'];
     for (const field of SCHEMA['Y.7'].fields.filter(
-      (each) => each.kind !== 'object' && each.kind !== 'list',
+      (each) => each.kind !== 'object' && each.kind !== 'list' && !staged.includes(each.key),
     )) {
       expect(within(own(field.key)).getByLabelText(field.label, { exact: true })).toBeTruthy();
     }
@@ -106,9 +119,7 @@ describe('a cube’s form', () => {
     await userEvent.click(screen.getByText('ranked', { selector: '.model-member__name' }));
 
     const measure = screen.getByRole('list', { name: 'Measures' });
-    const type = measure.querySelector(
-      '.model-member > .model-form__fields > [data-key="type"] select',
-    );
+    const type = measure.querySelector(ownRow('type', ' select'));
     expect(optionsOf(type as HTMLElement)).toEqual([...MEASURE_TYPES]);
     expect((type as HTMLSelectElement).value).toBe('rank');
     // Its order_by, a list written inside the key's type, has fields of its own.
@@ -162,9 +173,7 @@ describe('a cube’s form', () => {
     await userEvent.click(screen.getByText('count', { selector: '.model-member__name' }));
 
     const measure = screen.getByRole('list', { name: 'Measures' });
-    const type = measure.querySelector(
-      '.model-member > .model-form__fields > [data-key="type"] select',
-    ) as HTMLSelectElement;
+    const type = measure.querySelector(ownRow('type', ' select')) as HTMLSelectElement;
     expect(type.value).toBe('countDistinct');
     expect(type.selectedOptions[0]?.textContent).toBe('countDistinct (as written)');
   });
@@ -182,7 +191,7 @@ describe('a cube’s form', () => {
 
     const format = screen
       .getByRole('list', { name: 'Dimensions' })
-      .querySelector('.model-member > .model-form__fields > [data-key="format"] textarea');
+      .querySelector(ownRow('format', ' textarea'));
     expect((format as HTMLTextAreaElement).value).toBe('type: link\nlabel: Open');
   });
 

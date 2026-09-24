@@ -3454,8 +3454,8 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Files: `packages/web/src/workspaces/model/form/MemberPicker.tsx`, `packages/web/src/workspaces/model/form/`, `e2e/model.spec.ts`
   - Failing test: `e2e/model.spec.ts`: a pre-aggregation's measures are chosen from a picker listing the cube's measures, and a join's target from its cubes; neither accepts typed text (AC-224).
   - Depends on: T234
-- [ ] T236 (AC-225) Give member rows their type, SQL preview and badges, and show only the fields that apply when expanded
-  - Files: `packages/web/src/workspaces/model/form/MemberRow.tsx`, `e2e/model.spec.ts`
+- [x] T236 (AC-225) Give member rows their type, SQL preview and badges, and show only the fields that apply when expanded
+  - Files: `packages/web/src/workspaces/model/form/{ObjectForm.tsx,schema.ts,memberRows.test.tsx,CubeForm.test.tsx}`, `packages/web/src/shell/styles.ts`, `e2e/model.spec.ts`, `e2e/publish-model.spec.ts`
   - Failing test: `e2e/model.spec.ts`: `orders.id` shows a PK badge and its SQL collapsed; expanded, a number dimension offers no CASE, switch or geo fields (AC-225).
   - Depends on: T234
 - [ ] T237 (AC-226, AC-227) Show unpublished changes with Discard and a leave warning, and validate enums and required keys on every parse

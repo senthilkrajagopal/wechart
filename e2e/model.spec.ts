@@ -152,7 +152,10 @@ test('a model change Cube refuses is not published, and Cube’s reason is on it
     .getByRole('listitem')
     .filter({ has: page.locator('.model-member__name', { hasText: /^measure_1$/ }) });
   const own = (key: string) =>
-    measure.locator(`.model-member > .model-form__fields > [data-key="${key}"]`);
+    // In its named group (T236, AC-225).
+    measure.locator(
+      `.model-member > .model-form__fields > .model-form__group > .model-form__fields > [data-key="${key}"]`,
+    );
   await own('type').getByLabel('Type', { exact: true }).selectOption('number');
   await own('sql').getByLabel('SQL', { exact: true }).fill('{no_such_member}');
 
@@ -307,7 +310,10 @@ test('a save that edits a member charts use lists them first, and saves only if 
     .getByRole('listitem')
     .filter({ has: page.locator('.model-member__name', { hasText: /^count$/ }) });
   await count
-    .locator('.model-member > .model-form__fields > [data-key="title"]')
+    // In its named group (T236, AC-225).
+    .locator(
+      '.model-member > .model-form__fields > .model-form__group > .model-form__fields > [data-key="title"]',
+    )
     .getByLabel('Title', { exact: true })
     .fill('Order lines');
 
@@ -641,4 +647,49 @@ test('Model is one workspace: a tree beside full-height form and code panes, Pro
   await expect(page).toHaveURL(/\/model\/files\/views%2Fnew_view_1\.yml$/);
   // The cube made first is still there to come back to.
   await expect(tree.getByRole('link', { name: /^new_cube_1\.yml/ })).toBeVisible();
+});
+
+/**
+ * T236 / AC-225: THE SYSTEM SHALL show each member in a row with its name,
+ * its type, a preview of its SQL and badges for primary key, public and
+ * format, and when expanded, only the fields that apply to its type and to
+ * how it is defined, in named groups.
+ * `Fails when: a collapsed row omits its type or SQL, a primary key carries no
+ * badge, or an expanded number dimension offers fields for a CASE, a switch or
+ * a geographic point.`
+ */
+test('a member’s row shows its type, SQL and badges, and opens on the fields that apply', async ({
+  page,
+}) => {
+  await page.goto('/model/files/cubes%2Forders.yml');
+  const form = page.getByRole('region', { name: 'Cube orders' });
+  await form.getByRole('tab', { name: /^Dimensions/ }).click();
+  const id = form
+    .getByRole('listitem')
+    .filter({ has: page.locator('.model-member__name', { hasText: /^id$/ }) });
+
+  // Collapsed: its type, its SQL, its primary-key badge.
+  await expect(id.locator('.model-member__type')).toHaveText('number');
+  await expect(id.locator('.model-member__sql')).toHaveText('id');
+  await expect(id.locator('.model-member__sql')).toBeVisible();
+  await expect(id.locator('.model-member__badge')).toHaveText(['PK']);
+  // Its caret says it opens, and then that it is open.
+  const caret = () =>
+    id
+      .locator('.model-member > summary')
+      .evaluate((summary) => getComputedStyle(summary, '::before').content.slice(0, 3));
+  expect(await caret()).toBe('"▸"');
+
+  // Expanded: its groups, and none for a CASE, a switch or a point.
+  await id.locator('.model-member__name').click();
+  expect(await caret()).toBe('"▾"');
+  const groups = id.locator('.model-form__group');
+  await expect(groups.first()).toHaveAccessibleName('Basics');
+  const named = await groups.locator('.model-form__group-title').allTextContents();
+  expect(named).toContain('Formatting');
+  for (const absent of ['CASE / WHEN', 'Switch', 'Geography', 'Time'])
+    expect(named).not.toContain(absent);
+  await expect(id.getByLabel('Latitude', { exact: true })).toHaveCount(0);
+  await expect(id.getByLabel('Values', { exact: true })).toHaveCount(0);
+  await expect(id.getByRole('group', { name: 'Case' })).toHaveCount(0);
 });

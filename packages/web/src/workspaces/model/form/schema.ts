@@ -61,6 +61,17 @@ export interface Field {
   readonly fields?: readonly Field[];
   /** Accepted by the validator but undocumented or legacy (research: "legacy"). */
   readonly legacy?: boolean;
+  /**
+   * The named group an expanded member shows it in (AC-225), as the
+   * prototype's rows group theirs (docs/design/prototype/schema.js).
+   */
+  readonly group?: string;
+  /**
+   * Whether it applies to this member — its type, how it is defined — so an
+   * expanded row offers only what does (AC-225). A key the file writes is
+   * shown whatever this says: nothing written is hidden.
+   */
+  readonly applies?: (owner: Readonly<Record<string, unknown>>) => boolean;
 }
 
 export type SectionId =
@@ -109,6 +120,44 @@ const f = (key: string, kind: FieldKind, extra: Partial<Field> = {}): Field => (
   ...extra,
 });
 const legacy = (key: string, kind: FieldKind = 'yaml') => f(key, kind, { legacy: true });
+
+type Owner = Readonly<Record<string, unknown>>;
+
+/**
+ * How a dimension is defined, as the prototype's "Defined by" reads it: a
+ * CASE, a geographic point, switch values, or SQL.
+ */
+export function dimensionShape(d: Owner): 'case' | 'geo' | 'switch' | 'sql' {
+  if (d['case'] !== undefined) return 'case';
+  if (d['type'] === 'geo') return 'geo';
+  if (d['type'] === 'switch') return 'switch';
+  return 'sql';
+}
+
+/** A member computed in stages: its multi-stage keys apply (§Y.17). */
+const multiStage = (m: Owner) => m['multi_stage'] === true;
+
+/** A measure that is a number — a currency applies (Y.7) — not a string, boolean or time. */
+const numericMeasure = (m: Owner) =>
+  m['type'] === undefined || !['string', 'boolean', 'time'].includes(String(m['type']));
+
+/**
+ * A dimension not defined by SQL, a point or switch values — so a CASE may
+ * define it (Y.6 shape B, which forbids `sql`), whatever its type.
+ */
+const mayCase = (d: Owner) =>
+  d['sql'] === undefined && d['type'] !== 'geo' && d['type'] !== 'switch';
+
+/**
+ * Y.6 shape F: a switch dimension takes its name, its type and its values,
+ * and every other key is refused — so none other applies to one.
+ */
+const exceptOnSwitch = (fields: readonly Field[]): Field[] =>
+  fields.map((field) =>
+    ['name', 'type', 'values'].includes(field.key)
+      ? field
+      : { ...field, applies: (d) => d['type'] !== 'switch' && (field.applies?.(d) ?? true) },
+  );
 
 /** Y.16: the filter operators, without and with `measureFilter`. */
 const OPERATORS = [
@@ -223,39 +272,54 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
   },
   'Y.6': {
     title: 'Dimension',
-    fields: [
-      f('name', 'identifier'),
-      f('type', 'enum', { options: ['string', 'number', 'boolean', 'time', 'geo', 'switch'] }),
-      f('sql', 'sql'),
-      f('title', 'text'),
-      f('description', 'text'),
-      f('public', 'flag'),
-      f('primary_key', 'flag'),
-      f('order', 'enum', { options: ['asc', 'desc'] }),
-      f('format', 'format'),
-      f('currency', 'text'),
-      f('meta', 'yaml'),
-      f('mask', 'yaml'),
-      f('sub_query', 'flag'),
-      f('propagate_filters_to_sub_query', 'flag'),
-      f('case', 'object', { of: 'Y.6c' }),
-      f('latitude', 'yaml'),
-      f('longitude', 'yaml'),
-      f('granularities', 'list', { of: 'Y.6a' }),
-      f('time_shift', 'list', { of: 'Y.6b' }),
-      f('links', 'list', { of: 'Y.6d' }),
-      f('values', 'yaml'),
-      f('multi_stage', 'boolean'),
-      f('add_group_by', 'references'),
-      f('filter', 'object', { of: 'Y.7d' }),
-      f('key', 'reference'),
-      f('suggest_filter_values', 'boolean'),
+    // In the prototype's groups (schema.js, `dimension`), each field only
+    // where it applies (Y.6's shapes): SQL for a member not defined another
+    // way, a CASE for one without SQL, a point for `geo`, only values for
+    // `switch`, granularities for `time`.
+    fields: exceptOnSwitch([
+      f('name', 'identifier', { group: 'Basics' }),
+      f('type', 'enum', {
+        options: ['string', 'number', 'boolean', 'time', 'geo', 'switch'],
+        group: 'Basics',
+      }),
+      f('sql', 'sql', { group: 'Basics', applies: (d) => dimensionShape(d) === 'sql' }),
+      f('title', 'text', { group: 'Basics' }),
+      f('description', 'text', { group: 'Basics' }),
+      f('primary_key', 'flag', { group: 'Basics' }),
+      f('public', 'flag', { group: 'Basics' }),
+      f('order', 'enum', { options: ['asc', 'desc'], group: 'Basics' }),
+      f('case', 'object', { of: 'Y.6c', group: 'CASE / WHEN', applies: mayCase }),
+      f('latitude', 'yaml', { group: 'Geography', applies: (d) => d['type'] === 'geo' }),
+      f('longitude', 'yaml', { group: 'Geography', applies: (d) => d['type'] === 'geo' }),
+      f('values', 'yaml', { group: 'Switch', applies: (d) => d['type'] === 'switch' }),
+      f('format', 'format', { group: 'Formatting' }),
+      f('currency', 'text', { group: 'Formatting', applies: (d) => d['type'] === 'number' }),
+      f('mask', 'yaml', { group: 'Formatting' }),
+      f('granularities', 'list', {
+        of: 'Y.6a',
+        group: 'Time',
+        applies: (d) => d['type'] === 'time',
+      }),
+      f('time_shift', 'list', { of: 'Y.6b', group: 'Time', applies: (d) => d['type'] === 'time' }),
+      f('sub_query', 'flag', { group: 'Sub-query', applies: (d) => dimensionShape(d) === 'sql' }),
+      f('propagate_filters_to_sub_query', 'flag', {
+        group: 'Sub-query',
+        applies: (d) => d['sub_query'] !== undefined && d['sub_query'] !== false,
+      }),
+      f('links', 'list', { of: 'Y.6d', group: 'Links' }),
+      f('multi_stage', 'boolean', { group: 'Multi-stage' }),
+      f('add_group_by', 'references', { group: 'Multi-stage', applies: multiStage }),
+      f('filter', 'object', { of: 'Y.7d', group: 'Multi-stage', applies: multiStage }),
+      f('meta', 'yaml', { group: 'More' }),
+      f('suggest_filter_values', 'boolean', { group: 'More' }),
+      // Undocumented (Y.6), and tied to no shape: offered on any.
+      f('key', 'reference', { group: 'More' }),
       legacy('shown', 'flag'),
       legacy('aliases'),
       legacy('field_type', 'text'),
       legacy('values_as_segments'),
       legacy('enable_suggestions', 'boolean'),
-    ],
+    ]),
   },
   'Y.6a': {
     title: 'Granularity',
@@ -297,7 +361,7 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
   'Y.7': {
     title: 'Measure',
     fields: [
-      f('name', 'identifier'),
+      f('name', 'identifier', { group: 'Basics' }),
       f('type', 'enum', {
         options: MEASURE_TYPES,
         // §Y.17: Joi takes these two only with `multi_stage: true`.
@@ -305,30 +369,34 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
           number_agg: { key: 'multi_stage', value: true },
           rank: { key: 'multi_stage', value: true },
         },
+        group: 'Basics',
       }),
-      f('sql', 'sql'),
-      f('title', 'text'),
-      f('description', 'text'),
-      f('public', 'flag'),
-      f('format', 'format'),
-      f('currency', 'text'),
-      f('meta', 'yaml'),
-      f('mask', 'yaml'),
-      f('filters', 'yaml'),
-      f('drill_members', 'references'),
-      f('rolling_window', 'object', { of: 'Y.7a' }),
-      f('multi_stage', 'boolean'),
-      f('time_shift', 'list', { of: 'Y.7b' }),
-      f('grain', 'object', { of: 'Y.7c' }),
-      f('group_by', 'references'),
-      f('reduce_by', 'references'),
-      f('add_group_by', 'references'),
-      f('filter', 'object', { of: 'Y.7d' }),
-      f('case', 'object', { of: 'Y.6c' }),
+      f('sql', 'sql', { group: 'Basics' }),
+      f('title', 'text', { group: 'Basics' }),
+      f('description', 'text', { group: 'Basics' }),
+      f('public', 'flag', { group: 'Basics' }),
+      f('format', 'format', { group: 'Formatting' }),
+      f('currency', 'text', { group: 'Formatting', applies: numericMeasure }),
+      f('mask', 'yaml', { group: 'Formatting' }),
+      f('filters', 'yaml', { group: 'Filters and drill' }),
+      f('drill_members', 'references', { group: 'Filters and drill' }),
+      // On any type: Y.7 ties a rolling window to none.
+      f('rolling_window', 'object', { of: 'Y.7a', group: 'Rolling window' }),
+      f('multi_stage', 'boolean', { group: 'Multi-stage' }),
+      f('time_shift', 'list', { of: 'Y.7b', group: 'Multi-stage', applies: multiStage }),
+      f('grain', 'object', { of: 'Y.7c', group: 'Multi-stage', applies: multiStage }),
+      f('group_by', 'references', { group: 'Multi-stage', applies: multiStage }),
+      f('reduce_by', 'references', { group: 'Multi-stage', applies: multiStage }),
+      f('add_group_by', 'references', { group: 'Multi-stage', applies: multiStage }),
+      f('filter', 'object', { of: 'Y.7d', group: 'Multi-stage', applies: multiStage }),
+      f('case', 'object', { of: 'Y.6c', group: 'Multi-stage', applies: multiStage }),
       // "list of `{sql (required), dir: asc or desc}`".
       f('order_by', 'list', {
         fields: [f('sql', 'sql'), f('dir', 'enum', { options: ['asc', 'desc'] })],
+        group: 'Multi-stage',
+        applies: multiStage,
       }),
+      f('meta', 'yaml', { group: 'More' }),
       legacy('cumulative', 'boolean'),
       legacy('drill_filters'),
       legacy('aliases'),

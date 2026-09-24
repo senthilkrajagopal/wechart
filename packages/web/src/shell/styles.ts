@@ -854,6 +854,45 @@ fieldset.model-field > legend {
   color: var(--wc-text-secondary);
   font-family: var(--wc-font-code);
 }
+/* A member's row, collapsed (T236, AC-225), as the prototype's .mrow-head:
+   its name and badges, its type, and a line of its SQL. */
+.model-member > summary { display: flex; flex-wrap: nowrap; gap: 6px; align-items: baseline; min-width: 0; list-style: none; }
+/* A flex summary draws no marker of its own: the prototype's caret
+   (model.js), closed and open, silent to a screen reader, which hears the
+   row's expanded state instead. */
+.model-member > summary::-webkit-details-marker { display: none; }
+.model-member > summary::before { content: '▸' / ''; flex: none; width: 10px; color: var(--wc-text-muted); }
+.model-member[open] > summary::before { content: '▾' / ''; }
+.model-member__badge {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 999px;
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.model-member__sql {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--wc-text-muted);
+  font: 12px/16px var(--wc-font-code);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An expanded member's fields, in the prototype's named groups. */
+.model-form__group { grid-column: 1 / -1; display: grid; gap: 6px; }
+.model-form__group-title {
+  margin: 8px 0 0;
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.model-form__group:first-child .model-form__group-title { margin-top: 0; }
 
 /* The contents sit on the page, and their table is the card (AC-231), as the
    prototype draws it: a card around the card read as a frame in a frame. */

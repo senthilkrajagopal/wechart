@@ -44,7 +44,10 @@ test('a measure published in the Model workspace is in the chart builder’s fie
     .getByRole('listitem')
     .filter({ has: page.locator('.model-member__name', { hasText: /^measure_1$/ }) });
   const own = (key: string) =>
-    measure.locator(`.model-member > .model-form__fields > [data-key="${key}"]`);
+    // In its named group (T236, AC-225).
+    measure.locator(
+      `.model-member > .model-form__fields > .model-form__group > .model-form__fields > [data-key="${key}"]`,
+    );
   await own('type').getByLabel('Type', { exact: true }).selectOption('count');
   await own('name').getByLabel('Name', { exact: true }).fill('published');
   await page.getByRole('button', { name: 'Save & reload Cube' }).click();
