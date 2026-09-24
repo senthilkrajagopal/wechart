@@ -716,7 +716,7 @@ Jobs, Security, Schedules and Data sources:
 
 - [ ] AC-228 THE SYSTEM SHALL lay out Jobs and Security as a list beside a full-height inspector pane, and WHEN the user selects a pre-aggregation in Jobs, THE SYSTEM SHALL show in that pane its state, its trigger, a Build action and a way to open it in Model.
       Fails when: selecting a pre-aggregation shows nothing, or the pane is not full height.
-- [ ] AC-229 THE SYSTEM SHALL list each pre-aggregation in Jobs with its state as an icon and a label, the refresh key that triggers it, and its name linking to its definition in Model, and SHALL show a started build's progress in that row (direction.md rule 22).
+- [x] AC-229 THE SYSTEM SHALL list each pre-aggregation in Jobs with its state as an icon and a label, the refresh key that triggers it, and its name linking to its definition in Model, and SHALL show a started build's progress in that row (direction.md rule 22).
       Fails when: a row has no state or no trigger, the name does not open Model, or a build's progress appears only outside its row.
 - [ ] AC-230 THE SYSTEM SHALL let the user narrow the query log by outcome, source and time range and sort it, keep its column headers in view while it scrolls, and render no more than a page of rows at a time.
       Fails when: the headers scroll out of view, a filter does not narrow the rows, or more than one page of rows is rendered at once.

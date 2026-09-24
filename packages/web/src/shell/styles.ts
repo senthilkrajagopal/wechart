@@ -1021,7 +1021,51 @@ fieldset.model-field > legend {
 /* Its header: the title, then Cube's health and the refresh worker's (T162). */
 .jobs-workspace__head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
 .jobs-health { display: flex; flex-wrap: wrap; gap: 12px; }
-.build-panel { display: grid; gap: 12px; }
+/* The list beside the prototype's docked 400 px pane (AC-228): the pane runs
+   the window's height below the app bar, stays put while the list scrolls,
+   and scrolls on its own. */
+.build-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 16px;
+  align-items: start;
+}
+.build-panel__list { display: grid; gap: 12px; min-width: 0; }
+.build-panel__row { cursor: pointer; }
+.build-panel__row[aria-selected='true'] { background: var(--wc-bg-accent-soft); }
+.admin-pane {
+  position: sticky;
+  /* Where it starts on the page (set by the pane), else below the app bar. */
+  top: var(--pane-top, calc(var(--wc-app-bar-height) + var(--wc-surface-padding)));
+  box-sizing: border-box;
+  height: calc(
+    100vh - var(--pane-top, calc(var(--wc-app-bar-height) + var(--wc-surface-padding))) -
+      var(--wc-surface-padding)
+  );
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 12px 16px;
+  overflow: auto;
+  border-left: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
+}
+.admin-pane__empty { margin: 0; color: var(--wc-text-secondary); }
+.admin-pane__title {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--wc-text-sm-size);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.admin-pane__facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; margin: 0; }
+.admin-pane__facts dt { color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
+.admin-pane__facts dd { margin: 0; }
+.admin-pane__actions { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+@media (max-width: 1000px) {
+  .build-panel { grid-template-columns: minmax(0, 1fr); }
+  .admin-pane { position: static; height: auto; border-left: 0; }
+}
 .build-panel__head { margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
 .build-panel__builds,
 .build-jobs__list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }

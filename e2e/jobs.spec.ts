@@ -101,3 +101,113 @@ test('the Jobs header shows Cube’s health and the refresh worker’s, and a de
   await expect(cube.locator('svg[data-icon="err"]')).toHaveCount(1);
   await expect(worker).toHaveText('Refresh worker down');
 });
+
+/**
+ * T239 / AC-229: THE SYSTEM SHALL list each pre-aggregation in Jobs with its
+ * state as an icon and a label, the refresh key that triggers it, and its name
+ * linking to its definition in Model, and SHALL show a started build's
+ * progress in that row (direction.md rule 22).
+ * `Fails when: a row has no state or no trigger, the name does not open Model,
+ * or a build's progress appears only outside its row.`
+ *
+ * T239 / AC-228 (Jobs' half): … a list beside a full-height inspector pane,
+ * and WHEN the user selects a pre-aggregation in Jobs, THE SYSTEM SHALL show
+ * in that pane its state, its trigger, a Build action and a way to open it in
+ * Model.
+ * `Fails when: selecting a pre-aggregation shows nothing, or the pane is not
+ * full height.`
+ */
+const ROLLUP = 'monthly_orders.by_status_month';
+
+test('each pre-aggregation’s row has its state, its trigger, and its name leading to Model', async ({
+  page,
+}) => {
+  await page.goto('/jobs');
+  const row = page
+    .getByRole('table', { name: 'Pre-aggregations' })
+    .getByRole('row')
+    .filter({ hasText: ROLLUP });
+  await expect(row).toBeVisible();
+  // Its state, as an icon and a label: not started from here yet.
+  const state = row.getByTestId('row-state');
+  await expect(state).toHaveText('Not built here');
+  await expect(state.locator('svg[data-icon]')).toHaveCount(1);
+  // What rebuilds it: the model's refresh key, as the seed declares it.
+  await expect(row.getByRole('cell').nth(2)).toHaveText('Every 1 hour');
+
+  // A build's progress is said in its own row: processing, then done — over
+  // two partitions, the second behind the first, so "Done" waits for both.
+  // Cube's build is answered here, not asked for: the real build is AC-149's
+  // test's, and another build of this one rollup at once makes Cube report a
+  // partition missing to one of them (meta-extended-pre-aggregations.md).
+  let asked = 0;
+  await page.route('**/api/builds', (route) =>
+    route.fulfill({ json: { tokens: ['t-2025', 't-2026'] } }),
+  );
+  await page.route('**/api/builds/status', (route) => {
+    asked += 1;
+    return route.fulfill({
+      json:
+        asked < 2
+          ? [{ token: 't-2025', status: 'processing', finished: false }]
+          : asked < 3
+            ? [
+                { token: 't-2025', status: 'done', finished: true },
+                { token: 't-2026', status: 'scheduled', finished: false },
+              ]
+            : [
+                { token: 't-2025', status: 'done', finished: true },
+                { token: 't-2026', status: 'done', finished: true },
+              ],
+    });
+  });
+  await row.getByRole('button', { name: `Build ${ROLLUP}` }).click();
+  await expect(state).toHaveText('Processing');
+  await expect(state).toHaveText('Scheduled');
+  await expect(state).toHaveAttribute('data-state', 'done');
+  await expect(state).toHaveText('Done');
+  await expect(state.locator('svg[data-icon="ok"]')).toHaveCount(1);
+
+  // Its name opens its definition in Model.
+  await row.getByRole('link', { name: ROLLUP }).click();
+  await expect(page).toHaveURL(/\/model\/files\/cubes%2Fmonthly_orders\.yml$/);
+});
+
+test('selecting a pre-aggregation fills the full-height pane with its state, trigger, Build and Model link', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/jobs');
+  const row = page
+    .getByRole('table', { name: 'Pre-aggregations' })
+    .getByRole('row')
+    .filter({ hasText: ROLLUP });
+  // By the keyboard: the row focused, and Enter.
+  await row.focus();
+  await page.keyboard.press('Enter');
+  await expect(row).toHaveAttribute('aria-selected', 'true');
+
+  const pane = page.getByRole('complementary', { name: 'Pre-aggregation details' });
+  await expect(pane.getByRole('heading', { level: 2 })).toHaveText(ROLLUP);
+  await expect(pane.getByTestId('pane-state')).toHaveText('Not built here');
+  await expect(pane.locator('dd').nth(1)).toHaveText('Every 1 hour');
+  await expect(pane.getByRole('link', { name: 'Open in Model' })).toHaveAttribute(
+    'href',
+    '/model/files/cubes%2Fmonthly_orders.yml',
+  );
+  // Full height: below the app bar, and down to the window's bottom — not past it.
+  const box = await pane.boundingBox();
+  expect(box?.y ?? 0).toBeGreaterThanOrEqual(48);
+  const bottom = (box?.y ?? 0) + (box?.height ?? 0);
+  expect(bottom).toBeGreaterThan(900 - 24);
+  expect(bottom).toBeLessThanOrEqual(900);
+
+  // Build now starts a build of it, followed in the pane (answered here, as above).
+  await page.route('**/api/builds', (route) => route.fulfill({ json: { tokens: ['t-pane'] } }));
+  await page.route('**/api/builds/status', (route) =>
+    route.fulfill({ json: [{ token: 't-pane', status: 'done', finished: true }] }),
+  );
+  await pane.getByRole('button', { name: 'Build now' }).click();
+  await expect(pane.getByTestId('pane-state')).toHaveText('Done');
+  await expect(pane.getByRole('list', { name: `Jobs building ${ROLLUP}` })).toContainText('t-pane');
+});

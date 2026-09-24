@@ -3401,15 +3401,19 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Failing test: `e2e/admin.spec.ts`: Jobs' and Security's titles are 20 px/600 and their tables use tabular numerals; Schedules and Data sources show a title and a deferral note; "/sources" opens Data sources (AC-231, AC-233).
   - Depends on: none
   - Done 2026-09-24: `.workspace-title` (text-lg, 20/26/600) on every workspace page and the pages inside one (Model file, library chart, chart editor); Explore's contents table and the `.query-log` tables are cards with a bg-subtle header band, 34 px rows, 12 px cells and tabular numerals — corners rounded on the corner cells, not clipped, so T240's sticky headers are not captured by the table; Schedules and Data sources are `DeferredPage`s with an info-bar note; `/sources` redirects; Not found marks no workspace current. Review fixed: a stray `.folder-contents,` selector that gave Explore's table the title's 20 px and dropped its width; three titles left at the browser's 28/700; the row-height assertion tightened to exactly 34 on a one-line row, the band compared with bg-subtle; text-primary on bg-accent-soft added to the token audit.
-- [ ] T239 (AC-228, AC-229) Give Jobs a docked inspector, and pre-aggregation rows their state, trigger and Model link
-  - Files: `packages/web/src/workspaces/jobs/BuildPanel.tsx`, `packages/web/src/workspaces/jobs/JobsPage.tsx`, `e2e/jobs.spec.ts`
+- [x] T239 (AC-228, AC-229) Give Jobs a docked inspector, and pre-aggregation rows their state, trigger and Model link
+  - Files: `packages/web/src/workspaces/jobs/BuildPanel.tsx` (+test), `packages/api/src/jobs/build.ts` (+test), `packages/web/src/shell/styles.ts`, `e2e/jobs.spec.ts`, `docs/research/cube/meta-extended-pre-aggregations.md`
   - Failing test: `e2e/jobs.spec.ts`: selecting a pre-aggregation fills the full-height pane with its state, trigger, Build and "Open in Model"; the row shows its refresh key and links to Model (AC-228, AC-229).
   - Depends on: T238
+  - Done 2026-09-24. AC-229 ticked on `e2e/jobs.spec.ts` "each pre-aggregation’s row has its state, its trigger, and its name leading to Model", all three browsers; `buildStateOf` and `triggerOf` are unit-tested. **AC-228 stays open:** its Jobs half is demonstrated ("selecting a pre-aggregation fills the full-height pane…"), and its Security half is now T241's.
+  - The trigger and the file come from Cube's extended metadata — each pre-aggregation's `refreshKey` and `scheduledRefresh`, its cube's `fileName` — checked against the local Cube and recorded in a sibling research note (the existing doc named `refreshKey` for cubes only). A row's state is its latest build here, as one state over its partitions; a row is selected by pointer or Enter/Space, and the docked 400 px pane holds its state, trigger, Build now, Open in Model and the build's jobs. The row tests answer Cube's build calls themselves: the real build is AC-149's test's, and builds of one rollup at once made Cube report a partition missing (recorded in the note).
+  - **The cold review failed the first cut, fixed:** a build of several partitions read "Done" while one was unanswered or waiting — the state is now the first partition not done; a failure to follow a build showed only in the pane — the row says it; a refresh key with both `sql` and `every` lost its SQL, and one in an unread shape was called Cube's default — the SQL leads, and the default is said only when none is declared; the pane ran past the window's bottom — it is sized from where it starts; the tests now check the trigger exactly, two partitions, keyboard selection, Build now, and the pane's both edges.
+  - **Recorded, not changed:** the row, the pane and the job list each keep their own poll timer on the one shared query; `aria-selected` on a plain table's row is a grid pattern with thin screen-reader support; builds started here are forgotten on leaving Jobs.
 - [ ] T240 (AC-230) Filter, sort and page the query log, with its headers kept in view
   - Files: `packages/web/src/workspaces/jobs/QueryLog.tsx`, `e2e/jobs.spec.ts`
   - Failing test: `e2e/jobs.spec.ts`: filtering by failed shows only failures; after scrolling the log the headers are in view; one page of rows is rendered (AC-230).
   - Depends on: T238
-- [ ] T241 (AC-232) Dock Security's preview with presets, effective access, a bounded dashboard list and Model links
+- [ ] T241 (AC-228, AC-232) Dock Security's preview with presets, effective access, a bounded dashboard list and Model links
   - Files: `packages/web/src/workspaces/security/ContextPreview.tsx`, `packages/web/src/workspaces/security/SecurityPage.tsx`, `e2e/security.spec.ts`
   - Failing test: `e2e/security.spec.ts`: choosing the "finance" preset lists each cube's access with a reason; a search with no match says so; a policy's source opens its file in Model; the context survives a preview (AC-232).
   - Depends on: T238
@@ -3480,7 +3484,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-213 | T227       | AC-214 | T228 | AC-215 | T229 | AC-216 | T229       |
 | AC-217 | T230       | AC-218 | T230 | AC-219 | T231 | AC-220 | T232       |
 | AC-221 | T232       | AC-222 | T234 | AC-223 | T234 | AC-224 | T235       |
-| AC-225 | T236       | AC-226 | T237 | AC-227 | T237 | AC-228 | T239       |
+| AC-225 | T236       | AC-226 | T237 | AC-227 | T237 | AC-228 | T239, T241 |
 | AC-229 | T239       | AC-230 | T240 | AC-231 | T238 | AC-232 | T241       |
 | AC-233 | T238       |        |      |        |      |        |            |
 

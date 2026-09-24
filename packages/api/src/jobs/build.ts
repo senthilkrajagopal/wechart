@@ -50,6 +50,43 @@ export interface Buildable {
   readonly id: string;
   readonly type: string;
   readonly partitionGranularity?: string;
+  /** What rebuilds it, in words: its refresh key (AC-229). */
+  readonly trigger: string;
+  /** The model file its cube is defined in, for the link to Model (AC-229). */
+  readonly fileName?: string;
+}
+
+/**
+ * A pre-aggregation's refresh key in words (AC-229). Its `every`, or the SQL
+ * whose answer changing rebuilds it; with `incremental` and `updateWindow`
+ * said as such. None declared is Cube's default, `every: 1 hour`
+ * (research/cube/refresh-jobs-caching.md: "`refresh_key` (`every` default
+ * `1 hour`…)"), said as the default. `scheduled_refresh: false` means the
+ * refresh worker leaves it alone, which is said too.
+ */
+export function triggerOf(each: Record<string, unknown>): string {
+  const key = each['refreshKey'];
+  const declared =
+    typeof key === 'object' && key !== null ? (key as Record<string, unknown>) : undefined;
+  let text: string;
+  if (key === undefined || key === null) {
+    // None declared: Cube's default, and only then (T239's review).
+    text = 'Every 1 hour (Cube’s default)';
+  } else if (declared !== undefined && typeof declared['sql'] === 'string') {
+    // The SQL is the trigger; an `every` beside it is how often it is asked.
+    text = `When ${declared['sql']} changes`;
+    if (typeof declared['every'] === 'string') text += `, checked every ${declared['every']}`;
+  } else if (declared !== undefined && typeof declared['every'] === 'string') {
+    text = `Every ${declared['every']}`;
+    if (declared['incremental'] === true) text += ', incrementally';
+    if (typeof declared['updateWindow'] === 'string')
+      text += `, updating the last ${declared['updateWindow']}`;
+  } else {
+    // Declared, in a shape this build does not read: not claimed to be the
+    // default, which it is not.
+    text = 'As its refresh key in the model says';
+  }
+  return each['scheduledRefresh'] === false ? `${text} · not scheduled` : text;
 }
 
 /**
@@ -62,22 +99,27 @@ export interface Buildable {
 export function buildablesFrom(meta: unknown): Buildable[] {
   const cubes = (meta as { cubes?: unknown } | null)?.cubes;
   if (!Array.isArray(cubes)) return [];
-  return (cubes as { name?: unknown; preAggregations?: unknown }[]).flatMap((cube) =>
-    typeof cube.name === 'string' && Array.isArray(cube.preAggregations)
-      ? (cube.preAggregations as Record<string, unknown>[])
-          .filter(
-            (each) =>
-              typeof each['name'] === 'string' &&
-              BUILDABLE_TYPES.includes(typeof each['type'] === 'string' ? each['type'] : 'rollup'),
-          )
-          .map((each) => ({
-            id: `${String(cube.name)}.${String(each['name'])}`,
-            type: typeof each['type'] === 'string' ? each['type'] : 'rollup',
-            ...(typeof each['partitionGranularity'] === 'string'
-              ? { partitionGranularity: each['partitionGranularity'] }
-              : {}),
-          }))
-      : [],
+  return (cubes as { name?: unknown; fileName?: unknown; preAggregations?: unknown }[]).flatMap(
+    (cube) =>
+      typeof cube.name === 'string' && Array.isArray(cube.preAggregations)
+        ? (cube.preAggregations as Record<string, unknown>[])
+            .filter(
+              (each) =>
+                typeof each['name'] === 'string' &&
+                BUILDABLE_TYPES.includes(
+                  typeof each['type'] === 'string' ? each['type'] : 'rollup',
+                ),
+            )
+            .map((each) => ({
+              id: `${String(cube.name)}.${String(each['name'])}`,
+              type: typeof each['type'] === 'string' ? each['type'] : 'rollup',
+              ...(typeof each['partitionGranularity'] === 'string'
+                ? { partitionGranularity: each['partitionGranularity'] }
+                : {}),
+              trigger: triggerOf(each),
+              ...(typeof cube.fileName === 'string' ? { fileName: cube.fileName } : {}),
+            }))
+        : [],
   );
 }
 

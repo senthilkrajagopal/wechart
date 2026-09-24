@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { BuildPanel } from './BuildPanel';
+import { BuildPanel, buildStateOf } from './BuildPanel';
 import { JobsPage } from './JobsPage';
 
 /**
@@ -196,5 +196,29 @@ describe('the Jobs workspace (T155’s review)', () => {
       expect(screen.getByTestId('job-state').getAttribute('data-state')).toBe('done');
     });
     expect(statusAsks()).toBe(4);
+  });
+});
+
+/**
+ * T239 / AC-229: … SHALL show a started build's progress in that row.
+ *
+ * One state for a build of several partitions: never "Done" while a
+ * partition has not answered, or is still waiting (T239's review).
+ */
+describe('a build as one state, for its row (AC-229)', () => {
+  const job = (token: string, status: string) => ({ token, status, finished: status === 'done' });
+
+  it('is done only when every partition is', () => {
+    expect(buildStateOf(['a', 'b'], [job('a', 'done'), job('b', 'done')])).toBe('done');
+    expect(buildStateOf(['a', 'b'], [job('a', 'done')])).toBe('');
+    expect(buildStateOf(['a', 'b'], [job('a', 'done'), job('b', 'scheduled')])).toBe('scheduled');
+    expect(buildStateOf(['a', 'b'], [job('a', 'done'), job('b', 'not_found')])).toBe('not_found');
+  });
+
+  it('is failed if any partition failed, and processing while any is', () => {
+    expect(buildStateOf(['a', 'b'], [job('a', 'failure: timeout'), job('b', 'processing')])).toBe(
+      'failure: timeout',
+    );
+    expect(buildStateOf(['a', 'b'], [job('a', 'done'), job('b', 'processing')])).toBe('processing');
   });
 });

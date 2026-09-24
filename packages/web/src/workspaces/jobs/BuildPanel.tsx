@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 
 import { missingScopeOf, ScopeUnavailable, useScopes } from '../../query/scopes';
 import { StateLine } from '../../shell/StatusIcon';
-import { StateBadge } from './StateBadge';
+import { StateBadge, stateOf, Status } from './StateBadge';
 
 /**
  * Building a pre-aggregation (T155, AC-149), as the prototype's Jobs page lists
@@ -15,7 +15,14 @@ interface Buildable {
   readonly id: string;
   readonly type: string;
   readonly partitionGranularity?: string;
+  /** What rebuilds it, in words: its refresh key (AC-229). */
+  readonly trigger?: string;
+  /** The model file its cube is defined in (AC-229). */
+  readonly fileName?: string;
 }
+
+/** Where a pre-aggregation is defined, in the Model workspace (AC-229). */
+const modelHref = (fileName: string) => `/model/files/${encodeURIComponent(fileName)}`;
 
 interface JobStatus {
   readonly token: string;
@@ -43,17 +50,12 @@ async function send<T>(url: string, init?: { body: unknown; signal?: AbortSignal
   return body;
 }
 
-/** One build's jobs, followed until each has finished. */
-function BuildJobs({
-  id,
-  tokens,
-  pollMs,
-}: {
-  id: string;
-  tokens: readonly string[];
-  pollMs: number;
-}) {
-  const jobs = useQuery({
+/**
+ * A build's jobs, followed until each has finished. One definition, under one
+ * key, so the row's state and the pane's list of jobs share one poll.
+ */
+function useBuildStatus(tokens: readonly string[], pollMs: number) {
+  return useQuery({
     queryKey: ['build-status', tokens],
     queryFn: ({ signal }) => send<JobStatus[]>('/api/builds/status', { body: { tokens }, signal }),
     // Stopped once every token asked about has finished — not merely every
@@ -65,6 +67,67 @@ function BuildJobs({
     // A build that started no job has nothing to follow.
     enabled: tokens.length > 0,
   });
+}
+
+/**
+ * A build as one state, for its pre-aggregation's row (AC-229, rule 22):
+ * failed if any partition failed, done when every one is, processing while
+ * any is, and otherwise what the first says — "Asking Cube…" before any
+ * answer.
+ */
+export function buildStateOf(
+  tokens: readonly string[],
+  jobs: readonly JobStatus[] | undefined,
+): string {
+  const answered = new Map((jobs ?? []).map((job) => [job.token, job.status]));
+  const states = tokens.map((token) => answered.get(token) ?? '');
+  const failed = states.find(
+    (state) =>
+      state.startsWith('failure') || state === 'missing_partition' || state === 'pre_agg_not_found',
+  );
+  if (failed !== undefined) return failed;
+  if (states.length > 0 && states.every((state) => state === 'done')) return 'done';
+  if (states.includes('processing')) return 'processing';
+  // Otherwise the first partition not done — not merely the first answered,
+  // which read "Done" while another was unanswered or waiting (T239's
+  // review); `''` is "Asking Cube…".
+  return states.find((state) => state !== 'done') ?? '';
+}
+
+/** A pre-aggregation's state: its latest build's here, or none started. */
+function BuildState({
+  build,
+  pollMs,
+  testId,
+}: {
+  build: { tokens: string[] } | undefined;
+  pollMs: number;
+  testId: string;
+}) {
+  const jobs = useBuildStatus(build?.tokens ?? [], pollMs);
+  if (build === undefined)
+    return <Status kind="idle" label="Not built here" testId={testId} state="none" />;
+  if (build.tokens.length === 0)
+    return <Status kind="warn" label="No job started" testId={testId} state="empty" />;
+  // Following it failed: said in the row, not only in the pane (T239's review).
+  if (jobs.isError && jobs.data === undefined)
+    return <Status kind="err" label="Could not follow the build" testId={testId} state="unknown" />;
+  const state = buildStateOf(build.tokens, jobs.data);
+  const { kind, label } = stateOf(state);
+  return <Status kind={kind} label={label} testId={testId} state={state} />;
+}
+
+/** One build's jobs, followed until each has finished. */
+function BuildJobs({
+  id,
+  tokens,
+  pollMs,
+}: {
+  id: string;
+  tokens: readonly string[];
+  pollMs: number;
+}) {
+  const jobs = useBuildStatus(tokens, pollMs);
   const byToken = new Map((jobs.data ?? []).map((job) => [job.token, job]));
   return (
     <li className="build-jobs">
@@ -128,6 +191,9 @@ export function BuildPanel({ pollMs = 1500 }: { pollMs?: number }) {
   // Newest first, as a run history reads; numbered, not timed, so two builds
   // started together are still two.
   const [builds, setBuilds] = useState<{ id: string; tokens: string[]; n: number }[]>([]);
+  /** The pre-aggregation whose details the pane shows (AC-228). */
+  const [selected, setSelected] = useState<string | null>(null);
+  const latestOf = (id: string) => builds.find((build) => build.id === id);
   const started = useRef(0);
   const start = useMutation({
     mutationFn: (id: string) =>
@@ -155,66 +221,151 @@ export function BuildPanel({ pollMs = 1500 }: { pollMs?: number }) {
       <ScopeUnavailable scope={lacking} what="Listing pre-aggregations" />
     );
   }
+  const shown = buildable.data.find((each) => each.id === selected);
+  const shownBuilds = builds.filter((build) => build.id === selected);
+
   return (
     <div className="build-panel">
-      {buildable.data.length === 0 ? (
-        <p>The model declares no pre-aggregations.</p>
-      ) : (
-        <table className="query-log" aria-label="Pre-aggregations">
-          <thead>
-            <tr>
-              <th scope="col">Pre-aggregation</th>
-              <th scope="col">Type</th>
-              <th scope="col">Partitions</th>
-              <th scope="col">
-                <span className="visually-hidden">Build</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {buildable.data.map(({ id, type, partitionGranularity }) => (
-              <tr key={id}>
-                <td className="query-log__query">{id}</td>
-                <td>{type}</td>
-                <td>{partitionGranularity ?? 'none'}</td>
-                <td>
-                  <button
-                    type="button"
-                    className="btn-sm"
-                    aria-label={`Build ${id}`}
-                    // One start at a time, so each start's answer — a refusal
-                    // included — is the one shown (T155's review).
-                    disabled={start.isPending}
-                    onClick={() => {
-                      start.mutate(id);
-                    }}
-                  >
-                    Build
-                  </button>
-                </td>
+      <div className="build-panel__list">
+        {buildable.data.length === 0 ? (
+          <p>The model declares no pre-aggregations.</p>
+        ) : (
+          <table className="query-log" aria-label="Pre-aggregations">
+            <thead>
+              <tr>
+                <th scope="col">Pre-aggregation</th>
+                <th scope="col">Status</th>
+                <th scope="col">Trigger</th>
+                <th scope="col">Partition granularity</th>
+                <th scope="col">
+                  <span className="visually-hidden">Build</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {/* Starting, in words with its icon, not only by the buttons fading (AC-177). */}
-      {start.isPending ? <StateLine kind="run">Asking Cube to start the build…</StateLine> : null}
-      {start.isError ? <StateLine kind="err">{start.error.message}</StateLine> : null}
-      {builds.length === 0 ? null : (
-        <section aria-label="Builds">
-          <h2 className="build-panel__head">Builds</h2>
-          <ul className="build-panel__builds">
-            {builds.map((build) => (
-              <BuildJobs key={build.n} id={build.id} tokens={build.tokens} pollMs={pollMs} />
-            ))}
-          </ul>
-          {/* research/cube/refresh-jobs-caching.md, gotcha 3. */}
-          <p className="build-panel__note">
-            States are Cube&rsquo;s own. Cube 1.7.42 reports <code>done</code> once the
-            partition&rsquo;s table exists, which a failed import can leave behind.
+            </thead>
+            <tbody>
+              {buildable.data.map(({ id, partitionGranularity, trigger, fileName }) => (
+                <tr
+                  key={id}
+                  // Selecting a row shows it in the pane (AC-228): by pointer
+                  // anywhere in it, or Enter or Space on the row itself.
+                  aria-selected={selected === id}
+                  tabIndex={0}
+                  className="build-panel__row"
+                  onClick={() => {
+                    setSelected(id);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    setSelected(id);
+                  }}
+                >
+                  <td className="query-log__query">
+                    {/* Its definition, in Model (AC-229). */}
+                    {fileName === undefined ? id : <a href={modelHref(fileName)}>{id}</a>}
+                  </td>
+                  <td>
+                    {/* Its latest build's state here, in its own row (rule 22). */}
+                    <BuildState build={latestOf(id)} pollMs={pollMs} testId="row-state" />
+                  </td>
+                  <td>{trigger ?? '—'}</td>
+                  <td>{partitionGranularity ?? 'none'}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn-sm"
+                      aria-label={`Build ${id}`}
+                      // One start at a time, so each start's answer — a refusal
+                      // included — is the one shown (T155's review).
+                      disabled={start.isPending}
+                      onClick={() => {
+                        start.mutate(id);
+                      }}
+                    >
+                      Build
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {/* Starting, in words with its icon, not only by the buttons fading (AC-177). */}
+        {start.isPending ? <StateLine kind="run">Asking Cube to start the build…</StateLine> : null}
+        {start.isError ? <StateLine kind="err">{start.error.message}</StateLine> : null}
+      </div>
+
+      {/* The prototype's docked pane (AC-228): the selected pre-aggregation. */}
+      <aside
+        className="admin-pane"
+        aria-label="Pre-aggregation details"
+        /**
+         * Held where it starts, and as tall as the window below that
+         * (T239's review): sized from the app bar alone, it ran past the
+         * window's bottom by the height of the title and tabs above it.
+         */
+        ref={(node) => {
+          if (node === null) return;
+          const box = node.getBoundingClientRect();
+          // Hidden behind the Queries tab it measures nothing: the default holds.
+          if (box.height === 0) return;
+          const top = box.top + window.scrollY;
+          node.style.setProperty('--pane-top', `${String(Math.round(top))}px`);
+        }}
+      >
+        {shown === undefined ? (
+          <p className="admin-pane__empty">
+            Select a pre-aggregation to see its state, what rebuilds it, and to build it.
           </p>
-        </section>
-      )}
+        ) : (
+          <>
+            <h2 className="admin-pane__title">{shown.id}</h2>
+            <dl className="admin-pane__facts">
+              <dt>State</dt>
+              <dd>
+                <BuildState build={latestOf(shown.id)} pollMs={pollMs} testId="pane-state" />
+              </dd>
+              <dt>Trigger</dt>
+              <dd>{shown.trigger ?? '—'}</dd>
+              <dt>Type</dt>
+              <dd>{shown.type}</dd>
+              <dt>Partition granularity</dt>
+              <dd>{shown.partitionGranularity ?? 'none'}</dd>
+            </dl>
+            <div className="admin-pane__actions">
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={start.isPending}
+                onClick={() => {
+                  start.mutate(shown.id);
+                }}
+              >
+                Build now
+              </button>
+              {shown.fileName === undefined ? null : (
+                <a href={modelHref(shown.fileName)}>Open in Model</a>
+              )}
+            </div>
+            {shownBuilds.length === 0 ? null : (
+              <section aria-label="Builds">
+                <h3 className="build-panel__head">Builds</h3>
+                <ul className="build-panel__builds">
+                  {shownBuilds.map((build) => (
+                    <BuildJobs key={build.n} id={build.id} tokens={build.tokens} pollMs={pollMs} />
+                  ))}
+                </ul>
+                {/* research/cube/refresh-jobs-caching.md, gotcha 3. */}
+                <p className="build-panel__note">
+                  States are Cube&rsquo;s own. Cube 1.7.42 reports <code>done</code> once the
+                  partition&rsquo;s table exists, which a failed import can leave behind.
+                </p>
+              </section>
+            )}
+          </>
+        )}
+      </aside>
     </div>
   );
 }

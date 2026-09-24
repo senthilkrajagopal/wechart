@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CubeClient } from '../cube/client';
 import { buildServer } from '../server';
-import { isFinished } from './build';
+import { buildablesFrom, isFinished } from './build';
 
 /**
  * T155 / AC-149: WHEN the user starts a build for a pre-aggregation, THE
@@ -202,11 +202,87 @@ describe('what can be built (AC-149)', () => {
 
     const response = await app.inject({ method: 'GET', url: '/api/preaggregations' });
 
+    // Each with its trigger too (AC-229): none declared here, so Cube's default.
     expect(response.json()).toEqual([
-      { id: 'monthly_orders.by_status_month', type: 'rollup', partitionGranularity: 'year' },
-      { id: 'monthly_orders.cached', type: 'originalSql' },
+      {
+        id: 'monthly_orders.by_status_month',
+        type: 'rollup',
+        partitionGranularity: 'year',
+        trigger: 'Every 1 hour (Cube’s default)',
+      },
+      {
+        id: 'monthly_orders.cached',
+        type: 'originalSql',
+        trigger: 'Every 1 hour (Cube’s default)',
+      },
     ]);
     await app.close();
+  });
+});
+
+/**
+ * T239 / AC-229: THE SYSTEM SHALL list each pre-aggregation in Jobs with its
+ * state as an icon and a label, the refresh key that triggers it, and its name
+ * linking to its definition in Model …
+ *
+ * The trigger and the file are Cube's extended metadata's: each
+ * pre-aggregation's `refreshKey` and `scheduledRefresh`, and its cube's
+ * `fileName` (docs/research/cube/meta-extended-pre-aggregations.md).
+ */
+describe('what triggers a pre-aggregation, and where it is defined (AC-229)', () => {
+  it('says its refresh key in words, Cube’s default where it declares none, and names its file', () => {
+    const listed = buildablesFrom({
+      cubes: [
+        {
+          name: 'monthly_orders',
+          fileName: 'cubes/monthly_orders.yml',
+          preAggregations: [
+            { name: 'hourly', type: 'rollup', refreshKey: { every: '1 hour' } },
+            {
+              name: 'incremental',
+              type: 'rollup',
+              refreshKey: { every: '1 day', incremental: true, updateWindow: '7 day' },
+            },
+            { name: 'by_sql', type: 'rollup', refreshKey: { sql: 'SELECT MAX(id) FROM orders' } },
+            { name: 'plain', type: 'rollup' },
+            { name: 'manual', type: 'rollup', scheduledRefresh: false },
+            // Both, and one this build cannot read (T239's review).
+            {
+              name: 'checked',
+              type: 'rollup',
+              refreshKey: { sql: 'SELECT MAX(id) FROM orders', every: '10 minute' },
+            },
+            { name: 'odd', type: 'rollup', refreshKey: { sql: { compiled: true } } },
+          ],
+        },
+      ],
+    });
+
+    expect(listed.map((each) => [each.id, each.trigger, each.fileName])).toEqual([
+      ['monthly_orders.hourly', 'Every 1 hour', 'cubes/monthly_orders.yml'],
+      [
+        'monthly_orders.incremental',
+        'Every 1 day, incrementally, updating the last 7 day',
+        'cubes/monthly_orders.yml',
+      ],
+      [
+        'monthly_orders.by_sql',
+        'When SELECT MAX(id) FROM orders changes',
+        'cubes/monthly_orders.yml',
+      ],
+      ['monthly_orders.plain', 'Every 1 hour (Cube’s default)', 'cubes/monthly_orders.yml'],
+      [
+        'monthly_orders.manual',
+        'Every 1 hour (Cube’s default) · not scheduled',
+        'cubes/monthly_orders.yml',
+      ],
+      [
+        'monthly_orders.checked',
+        'When SELECT MAX(id) FROM orders changes, checked every 10 minute',
+        'cubes/monthly_orders.yml',
+      ],
+      ['monthly_orders.odd', 'As its refresh key in the model says', 'cubes/monthly_orders.yml'],
+    ]);
   });
 });
 
