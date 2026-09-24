@@ -1067,9 +1067,13 @@ main:has(.dashboard) {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.grid-table th {
+/* Only the column heads stick: a row header is in the body, and pinning it
+   would park every row's name at the top of its column (T124's review). */
+.grid-table thead th {
   position: sticky;
   top: 0;
+}
+.grid-table th {
   height: 28px;
   padding: 0 8px;
   border-bottom: 1px solid var(--wc-border-subtle);
@@ -1086,7 +1090,8 @@ main:has(.dashboard) {
 }
 .grid-table tbody tr:hover td { background: var(--wc-bg-hover); }
 .grid-table__self { color: var(--wc-text-muted); }
-/* The prototype's .select.sm, 24 px, for a control inside a table row. */
+/* The prototype's .select.sm, at this table's own 24 px row height rather
+   than its 28 px, so a select does not stretch the row it sits in. */
 .select-sm {
   height: 24px;
   padding: 0 6px;

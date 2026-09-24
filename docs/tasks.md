@@ -1674,6 +1674,12 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - The prototype's `.grid-table`, `.tscroll` and small select are added to the sheet here; this is the app's first table of that kind (AC-187).
     - **Tests:** `crossfilter/defaults.test.tsx` drives the real settings page inside `DashboardView` — the default shown, unset pairs following it, a set pair staying put, what is saved (sparse), and that the saved default is what `actionFor` then does; `e2e/crossfilter.spec.ts` sets a pair on the page, saves, clicks a bar and finds the tile obeys it.
     - AC-118 ticked on those.
+    - **Cold review (one round), verdict PASS. Fixed anyway:**
+      - **A tile with no chart, and a chart on two tiles, were offered as pairs.** The first can never act, and the second gave two selects the same name — a control that lies about what it will do. Chartless tiles are left out, and tiles sharing a chart carry their own id.
+      - **Choosing the default already chosen made a clean dashboard dirty**, because it wrote `interactions` into a dashboard saved before that key existed. It now returns early, as the mode switch beside it does (AC-074).
+      - **The sticky header pinned row headers too**, since they are `th` in the body; only the column heads stick now.
+      - **Coverage added:** the per-page split, a page with one tile, and a chartless tile. The e2e now sets the default on the page and proves a click *does* act once a pair says Filter, so "unchanged" cannot pass for a click that missed.
+    - **Recorded, not changed:** both handlers rebuild `CrossFilterConfig` rather than spreading it, so a field added to that type later would be dropped here; a pair set before the default moved to the same value stays stored while one set after would not; and the prototype's KPI exclusion and "inactive" warnbar are not reproduced (the nav's Active/Inactive label covers the second, AC-070).
 - [x] T125 (AC-119) Show a cross-filter chip and clear it on dismiss or Escape
   - Files: `packages/web/src/dashboard/crossfilter/CrossFilterChip.tsx`, `packages/web/src/dashboard/crossfilter/CrossFilterChip.test.tsx`
   - Failing test: `CrossFilterChip.test.tsx`: the chip names the member, the value and the source tile, and dismissing it or pressing Escape leaves no tile filtered (AC-119).

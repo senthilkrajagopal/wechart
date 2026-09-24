@@ -1053,7 +1053,13 @@ export function DashboardView({
     [reach, drawn.documents],
   );
   const interactions = interactionsOf(live.settings);
-  /** What is selected *in this mode*; a saved mode change leaves it behind. */
+  /**
+   * What is selected *in this mode*, dropped the moment the mode changes —
+   * during render, React's own way of adjusting state when what it was
+   * derived from changes. Merely hiding it would bring it back on the way
+   * out and in again, which is the thing AC-071 forbids.
+   */
+  if (held.mode !== interactions.mode) setHeld({ mode: interactions.mode, selections: [] });
   const crossSelections = held.mode === interactions.mode ? held.selections : NO_SELECTIONS;
   const mode = interactions.mode;
   const setCrossSelections = useCallback(
@@ -1290,13 +1296,18 @@ export function DashboardView({
   );
 
   /** One cross-filter, or all of them, taken back (AC-119). */
-  const clearCrossFilter = useCallback((selection?: CrossSelection) => {
-    setCrossSelections((before) =>
-      selection === undefined
-        ? []
-        : before.filter((each) => each.from !== selection.from || each.member !== selection.member),
-    );
-  }, [setCrossSelections]);
+  const clearCrossFilter = useCallback(
+    (selection?: CrossSelection) => {
+      setCrossSelections((before) =>
+        selection === undefined
+          ? []
+          : before.filter(
+              (each) => each.from !== selection.from || each.member !== selection.member,
+            ),
+      );
+    },
+    [setCrossSelections],
+  );
 
   /**
    * Escape takes them all back, as the prototype's "Clear (Esc)" says it

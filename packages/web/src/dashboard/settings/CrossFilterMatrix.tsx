@@ -1,4 +1,4 @@
-import { chartTilesOf } from '../../filters/scope';
+import { chartTilesOf, tileName } from '../../filters/scope';
 import { pairKey } from '../crossfilter/apply';
 import type { DashboardDocument } from '../model/document';
 import type { CrossFilterConfig, Interactions, PairAction } from './interactionMode';
@@ -37,9 +37,26 @@ export function CrossFilterMatrix({
   titleOf,
 }: CrossFilterMatrixProps) {
   const { defaultAction, pairs } = interactions.crossFilter;
-  const tiles = chartTilesOf(document);
-  const nameOf = (tileId: string, chartId: string | undefined) =>
-    (chartId === undefined ? undefined : titleOf?.(chartId)) ?? tileId;
+  /**
+   * Only tiles a click can actually reach: a chart tile with no chart yet is
+   * a saved shape (`model/document.ts`), and nothing cross-filters through
+   * it, so offering a control for it would be a control that does nothing
+   * (T124's review).
+   */
+  const tiles = chartTilesOf(document).filter((tile) => tile.chartId !== undefined);
+  const drawnTwice = new Set(
+    tiles.map((tile) => tile.chartId).filter((chartId, at, all) => all.indexOf(chartId) !== at),
+  );
+  /**
+   * Named by the chart it draws, as the filter bar names a tile. Where one
+   * chart is on two tiles the titles would be the same word twice, which
+   * neither a reader nor a screen reader could tell apart, so the tile's own
+   * id settles it.
+   */
+  const nameOf = (tile: { tileId: string; chartId?: string | undefined }) => {
+    const name = tileName(tile as Parameters<typeof tileName>[0], (id) => titleOf?.(id));
+    return drawnTwice.has(tile.chartId) ? `${name} (${tile.tileId})` : name;
+  };
 
   const setPair = (source: string, target: string, action: PairAction) => {
     const key = pairKey(source, target);
@@ -68,6 +85,10 @@ export function CrossFilterMatrix({
               type="button"
               aria-pressed={value === defaultAction}
               onClick={() => {
+                // Choosing what is already chosen changes nothing, and must
+                // not make a clean dashboard dirty: the mode switch beside it
+                // keeps the same rule (AC-074, and T124's review).
+                if (value === defaultAction) return;
                 // The pairs set by hand stay as they are; the rest follow.
                 onChange({
                   defaultAction: value,
@@ -96,7 +117,7 @@ export function CrossFilterMatrix({
                     <th scope="col">Source ↓ · Target →</th>
                     {on.map((target) => (
                       <th key={target.tileId} scope="col">
-                        {nameOf(target.tileId, target.chartId)}
+                        {nameOf(target)}
                       </th>
                     ))}
                   </tr>
@@ -104,7 +125,7 @@ export function CrossFilterMatrix({
                 <tbody>
                   {on.map((source) => (
                     <tr key={source.tileId}>
-                      <th scope="row">{nameOf(source.tileId, source.chartId)}</th>
+                      <th scope="row">{nameOf(source)}</th>
                       {on.map((target) =>
                         source.tileId === target.tileId ? (
                           <td key={target.tileId} className="grid-table__self">
@@ -115,7 +136,7 @@ export function CrossFilterMatrix({
                           <td key={target.tileId}>
                             <select
                               className="select-sm"
-                              aria-label={`${nameOf(source.tileId, source.chartId)} to ${nameOf(target.tileId, target.chartId)}`}
+                              aria-label={`${nameOf(source)} to ${nameOf(target)}`}
                               value={
                                 pairs?.[pairKey(source.tileId, target.tileId)] ?? defaultAction
                               }

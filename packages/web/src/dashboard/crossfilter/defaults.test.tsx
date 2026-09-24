@@ -120,6 +120,62 @@ describe('the dashboard’s default pair action', () => {
     expect(crossFilter?.pairs).toEqual({ [pairKey('tile-a', 'tile-b')]: 'none' });
   });
 
+  it('offers a matrix per page tab, and none for a tab with one tile', async () => {
+    // A click reaches the tiles beside it, not another page's (rule 13), so
+    // a pair across pages is not offered — it could never act.
+    render(
+      <DashboardView
+        dashboardId="d1"
+        document={{
+          ...DOC,
+          pages: [
+            ...DOC.pages,
+            {
+              id: 'p2',
+              title: 'Detail',
+              items: [{ id: 'tile-c', kind: 'chart', w: 6, h: 40, chartId: 'c-c' }],
+            },
+          ],
+        }}
+        specs={{}}
+        documents={{ 'c-a': chart('Tile A'), 'c-b': chart('Tile B'), 'c-c': chart('Tile C') }}
+        onSave={vi.fn()}
+      />,
+    );
+    await openCrossFiltering();
+
+    expect(screen.getByRole('region', { name: 'Tile pairs on Overview' })).toBeTruthy();
+    // One tile on its own has nothing to pair with.
+    expect(screen.queryByRole('region', { name: 'Tile pairs on Detail' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Tile A to Tile C' })).toBeNull();
+  });
+
+  it('offers no pair for a tile that has no chart yet', async () => {
+    // A saved shape, and nothing cross-filters through it: a control for it
+    // would be one that does nothing (T124's review).
+    render(
+      <DashboardView
+        dashboardId="d1"
+        document={{
+          ...DOC,
+          pages: [
+            {
+              ...DOC.pages[0]!,
+              items: [...DOC.pages[0]!.items, { id: 'tile-empty', kind: 'chart', w: 6, h: 40 }],
+            },
+          ],
+        }}
+        specs={{}}
+        documents={{ 'c-a': chart('Tile A'), 'c-b': chart('Tile B') }}
+        onSave={vi.fn()}
+      />,
+    );
+    await openCrossFiltering();
+
+    expect(screen.getAllByRole('combobox')).toHaveLength(2);
+    expect(screen.queryByRole('combobox', { name: /tile-empty/ })).toBeNull();
+  });
+
   it('is what an unset pair actually does, not only what the page says', async () => {
     const onSave = show();
     await openCrossFiltering();

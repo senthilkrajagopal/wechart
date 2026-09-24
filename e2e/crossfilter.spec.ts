@@ -127,9 +127,17 @@ async function valuesIn(target: Locator) {
 async function clickBar(page: Page, target: Locator, category: string) {
   const label = target.locator('svg text', { hasText: category }).first();
   await expect(label).toBeVisible();
-  const box = await label.boundingBox();
-  if (box === null) throw new Error(`No box for ${category}`);
-  await page.mouse.click(box.x + box.width / 2, box.y - 10);
+  // Laid out, not merely present: a chart redrawn a moment ago — after a
+  // save, say — has its labels in the DOM before WebKit has placed them.
+  let box: Awaited<ReturnType<Locator['boundingBox']>> = null;
+  await expect
+    .poll(async () => {
+      box = await label.boundingBox();
+      return box !== null && box.width > 0;
+    })
+    .toBe(true);
+  const at = box as unknown as { x: number; y: number; width: number };
+  await page.mouse.click(at.x + at.width / 2, at.y - 10);
 }
 
 async function open(page: Page, id: string, title: string) {
@@ -270,7 +278,9 @@ test('the settings page shows the default, and a pair set there is what a click 
   const pair = page.getByRole('combobox', { name: 'By status to By category' });
   await expect(pair).toHaveValue('filter');
 
-  await pair.selectOption('none');
+  // The default chosen here, not through the API: every unset pair follows.
+  await chosen.getByRole('button', { name: 'None' }).click();
+  await expect(pair).toHaveValue('none');
   await page.getByRole('button', { name: 'Save settings' }).click();
   await expect(page.getByTestId('dashboard-settings')).toHaveCount(0);
 
@@ -281,6 +291,18 @@ test('the settings page shows the default, and a pair set there is what a click 
   // What the page said is what the click does.
   await page.waitForLoadState('networkidle');
   expect(await valuesIn(category)).toEqual(before);
+
+  // And the other way, so "unchanged" above cannot be a click that missed:
+  // with the pair set to Filter, a click does change the tile. A different
+  // bar, because the same one again would take the selection back.
+  await page.getByRole('button', { name: 'Dashboard settings' }).click();
+  await page.getByRole('button', { name: /^Cross-filtering/ }).click();
+  await page.getByRole('combobox', { name: 'By status to By category' }).selectOption('filter');
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.getByTestId('dashboard-settings')).toHaveCount(0);
+
+  await clickBar(page, tile(page, 'tile-status'), 'completed');
+  await expect.poll(async () => (await valuesIn(category)).join('|')).not.toBe(before.join('|'));
 });
 
 /**
