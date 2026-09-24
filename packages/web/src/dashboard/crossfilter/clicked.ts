@@ -59,7 +59,15 @@ export interface ClickedItem {
 }
 
 /** Chart types where a click means the series, not the category. */
-const BY_SERIES = new Set(['groupedBar', 'stackedBar', 'multiLine', 'stackedArea', 'combo']);
+// A scatter's x is a measure: a point stands for the series it is in (T242).
+const BY_SERIES = new Set([
+  'groupedBar',
+  'stackedBar',
+  'multiLine',
+  'stackedArea',
+  'combo',
+  'scatter',
+]);
 
 /**
  * The name a click on an item carries: a pie's slice carries the category it

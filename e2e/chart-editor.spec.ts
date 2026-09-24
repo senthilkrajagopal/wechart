@@ -455,6 +455,67 @@ test('no chart type is left undrawn', async ({ page }) => {
 });
 
 /**
+ * T242 / AC-037: … scatter, heatmap … trellis (small multiples) … from a
+ * chart spec. Built from the editor's wells, each drew an empty canvas — its
+ * channels encoded as a bar's — which the test above, asking only that none
+ * says it is undrawn, never saw. Each is read here by what it draws.
+ */
+test('a scatter, a heatmap, small multiples and a pivot draw from the wells', async ({ page }) => {
+  const canvas = page.getByTestId('chart-canvas');
+  const texts = () => canvas.locator('svg text').allTextContents();
+  // Marks with a colour of their own: bars, points, cells — and legend icons.
+  const painted = () => canvas.locator('svg path[fill^="#"]').count();
+
+  // Small multiples: a panel per status over time, each with its bars.
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
+  await chooseChartType(page, 'trellis');
+  await expect.poll(texts).toEqual(expect.arrayContaining(['shipped', 'completed', 'processing']));
+  await expect.poll(painted).toBeGreaterThan(3);
+  // One grouping is not enough for them: said, not drawn empty (AC-033).
+  await page.getByRole('button', { name: /Remove Orders Ordered at/ }).click();
+  await expect(page.getByTestId('missing-fields')).toContainText(
+    'Small multiples needs 2 dimensions, or a time dimension and a dimension',
+  );
+
+  // A scatter: count against amount on its axes, a series per status.
+  await page.getByTestId('add-measures').selectOption('orders.total_amount');
+  await chooseChartType(page, 'scatter');
+  await expect
+    .poll(texts)
+    .toEqual(
+      expect.arrayContaining([
+        'shipped',
+        'completed',
+        'processing',
+        'Orders Count',
+        'Orders Total Amount',
+      ]),
+    );
+  // Three points and their three legend icons.
+  await expect.poll(painted).toBeGreaterThanOrEqual(6);
+
+  // A heatmap: products' categories across, their names down, a cell each.
+  await page.getByLabel('Cube or view').selectOption({ label: 'Products' });
+  await page.getByTestId('add-measures').selectOption('products.count');
+  await page.getByTestId('add-dimensions').selectOption('products.category');
+  await page.getByTestId('add-dimensions').selectOption('products.name');
+  await chooseChartType(page, 'heatmap');
+  await expect
+    .poll(texts)
+    .toEqual(expect.arrayContaining(['Components', 'Instruments', 'Cable, 2m', 'Sensor array']));
+  // Its cells are filled from the colour ramp, as `rgb(…)`.
+  await expect.poll(() => canvas.locator('svg path[fill^="rgb("]').count()).toBe(4);
+
+  // A pivot: categories down its rows, names across its columns.
+  await chooseChartType(page, 'pivot');
+  await expect(page.getByTestId('pivot-row-header')).toHaveText(['Components', 'Instruments']);
+  await expect(page.getByTestId('pivot-column-header')).toHaveCount(4);
+});
+
+/**
  * AC-040: WHEN the user edits an axis, THE SYSTEM SHALL apply minimum,
  * maximum, logarithmic scale, gridlines, tick rotation, number format and axis
  * title to the rendered chart.

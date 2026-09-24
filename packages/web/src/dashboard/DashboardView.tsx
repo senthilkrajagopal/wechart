@@ -2017,6 +2017,8 @@ export function DashboardView({
     if (marksWithOf(element) === undefined) return [];
     const spec = drawn.specs[element.chartId];
     if (spec === undefined || memberOn(spec.encoding, 'x') === undefined) return [];
+    // A scatter's x is a measure, not items to step between (T242's review).
+    if (spec.chartType === 'scatter') return [];
     try {
       return seriesOf(spec).categories;
     } catch {

@@ -121,3 +121,32 @@ describe('gaps and the folded tail', () => {
     expect(order(applySort(folded)).at(-1)).toBe('Other (3)');
   });
 });
+
+/**
+ * T242's review: a heatmap's measure is its colour, not y (its second
+ * grouping); a scatter's x is a measure, with no labels to sort by.
+ */
+describe('the types that read their channels otherwise', () => {
+  it('sorts a heatmap’s columns by the measure it colours by', () => {
+    const REGION = 'orders.region';
+    const heatmap = spec({
+      chartType: 'heatmap',
+      encoding: { x: [STATUS], y: [REGION], color: [COUNT] },
+      rows: [
+        { [STATUS]: 'banana', [REGION]: 'n', [COUNT]: 20 },
+        { [STATUS]: 'apple', [REGION]: 'n', [COUNT]: 30 },
+        { [STATUS]: 'cherry', [REGION]: 'n', [COUNT]: 10 },
+      ],
+      options: { sort: { by: 'value', direction: 'desc' } },
+    });
+    expect(order(applySort(heatmap))).toEqual(['apple', 'banana', 'cherry']);
+  });
+
+  it('leaves a scatter as it came', () => {
+    const scatter = spec({
+      chartType: 'scatter',
+      options: { sort: { by: 'label', direction: 'asc' } },
+    });
+    expect(applySort(scatter)).toBe(scatter);
+  });
+});

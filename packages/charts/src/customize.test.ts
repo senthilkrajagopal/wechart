@@ -88,6 +88,21 @@ describe('data labels, as each measure is written (AC-046)', () => {
       }
     ).series ?? [];
 
+  // T242's review: a heatmap's measure is its colour; its y is a grouping.
+  it('writes a heatmap cell’s label in the format of the measure it colours by', () => {
+    const heatmap = series({
+      chartType: 'heatmap',
+      encoding: { x: [STATUS], y: ['orders.region'], color: [AMOUNT] },
+      rows: [{ [STATUS]: 'paid', 'orders.region': 'North', [AMOUNT]: 130 }],
+      palette: PALETTE,
+      formats: { [AMOUNT]: 'currency' },
+      options: { dataLabels: true },
+    });
+    expect(heatmap[0]?.label?.formatter?.({ value: [0, 0, 130] })).toBe(
+      formatterFor(AMOUNT, { [AMOUNT]: 'currency' })(130),
+    );
+  });
+
   it('writes a label in its measure’s format, or the one chosen for values', () => {
     const money = { ...twoSeries({ dataLabels: true }), formats: { [AMOUNT]: 'currency' } };
     const amount = series(money).find((one) => one.name === AMOUNT);

@@ -3488,6 +3488,23 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - The search, over 50 dashboards and charts together, could say "No dashboard matches" falsely, and called a failure "no match". It now asks `/api/search?kind=dashboard` for one more than it shows.
     - Unread files' cubes were missing without a word.
     - Verdict and reason ran together as one word.
+- [x] T242 (AC-037) Encode a scatter, a heatmap and small multiples for the channels they read, so each draws from the editor's wells
+  - Files: `packages/core/src/{compile,topN,sort}.ts`, `packages/recommender/src/{requirements,warnings}.ts`, `packages/charts/src/customize.ts`, `packages/web/src/dashboard/crossfilter/clicked.ts`, `packages/web/src/dashboard/DashboardView.tsx`, `e2e/chart-editor.spec.ts`
+  - Failing test: `e2e/chart-editor.spec.ts`: built from the wells, small multiples draw a panel per status, a scatter a series per status, and a heatmap its categories across and names down (AC-037).
+  - Depends on: none
+  - Found 2026-09-24 in T230's review. `compile` encoded every type as a bar: a dimension on x, the measures on y, the split as colour. A scatter reads two measures from x and y, a heatmap its second grouping from y and its measure from colour, and small multiples a facet. So all three drew an empty canvas from the editor. AC-037's test, "no chart type is left undrawn", asked only that none said it was undrawn.
+  - Done 2026-09-24. The test "a scatter, a heatmap, small multiples and a pivot draw from the wells" passes in all three browsers and fails without the fix. It counts the marks each type draws: a scatter's points and its measures on the axes, a heatmap's cells, small multiples' panels and bars, a pivot's rows and columns. AC-037 stays ticked.
+  - `defaultEncoding(chart, chartType)` now encodes each of these for the channels its renderer reads. An encoding saved with a chart still wins, channel by channel.
+  - **The cold review failed the first cut, fixed:**
+    - A pivot drew nothing from the wells either.
+    - Small multiples from one dimension and no time drew an empty canvas. They now ask for two groupings, a time counting as one (AC-033).
+    - A scatter's colour warning (AC-218) disagreed with its colour.
+    - Top N and sort read a heatmap's measure from its grouping and a scatter's category from a measure. Top N now leaves both alone, and sort orders a heatmap by its colour.
+    - A heatmap's data labels took the wrong format.
+    - A click on a scatter point selected nothing; it now selects its series.
+    - The keyboard offered a scatter's measure values as items.
+    - The e2e didn't prove marks.
+  - **Recorded, not changed:** Top N stays offered for a scatter and a heatmap, where it now does nothing.
 - [ ] T225 (AC-187) Re-run the design critique on every surface, and tick AC-187 only on measured conformance
   - Files: `docs/design/critiques/`
   - Failing test: the `design-critic` report finds no `STRUCTURE` or AC-187 finding on the surfaces above (AC-187).
@@ -3535,7 +3552,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-034 | T032, T193 | AC-079 | T085 | AC-124 | T130 | AC-169 | T175       |
 | AC-035 | T033       | AC-080 | T086 | AC-125 | T131 | AC-170 | T176       |
 | AC-036 | T034       | AC-081 | T087 | AC-126 | T132 | AC-171 | T177       |
-| AC-037 | T035–T044, T186, T188 | AC-082 | T088 | AC-127 | T133 | AC-172 | T178 |
+| AC-037 | T035–T044, T186, T188, T242 | AC-082 | T088 | AC-127 | T133 | AC-172 | T178 |
 | AC-038 | T045       | AC-083 | T089 | AC-128 | T134 | AC-173 | T179       |
 | AC-039 | T046, T023 | AC-084 | T090 | AC-129 | T135 | AC-174 | T180       |
 | AC-040 | T047       | AC-085 | T091 | AC-130 | T136 | AC-175 | T181       |

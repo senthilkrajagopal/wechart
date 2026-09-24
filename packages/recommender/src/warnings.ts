@@ -23,7 +23,15 @@ export function warningsFor(
   const [category, split] =
     times[0] === undefined ? [dimensions[0], dimensions[1]] : [times[0], dimensions[0]];
 
-  const candidate = candidateFor(chartType, measures, category, split, signature.rowCount, topN);
+  const candidate = candidateFor(
+    chartType,
+    measures,
+    category,
+    split,
+    signature.rowCount,
+    topN,
+    dimensions[0],
+  );
   if (candidate === undefined) return [];
   return checkLegality(candidate).flatMap((outcome) =>
     outcome.passed || outcome.reason === undefined ? [] : [outcome.reason],
@@ -37,6 +45,7 @@ function candidateFor(
   split: Field | undefined,
   rowCount: number | undefined,
   topN: number | undefined,
+  firstDimension: Field | undefined,
 ): Candidate | undefined {
   const at = (parts: Partial<Candidate>): Candidate => ({
     chartType,
@@ -68,10 +77,11 @@ function candidateFor(
     case 'trellis':
       return at(split === undefined ? {} : { facetField: split });
     case 'scatter':
-      // Both measures on the axes; coloured by the split, as for any type.
+      // Both measures on the axes, coloured by the first dimension — as
+      // `compile` colours a scatter, whatever else there is (T242).
       return at({
         valueFields: measures.slice(0, 2),
-        ...(split === undefined ? {} : { colorField: split }),
+        ...(firstDimension === undefined ? {} : { colorField: firstDimension }),
       });
     default:
       return at(split === undefined ? {} : { colorField: split });

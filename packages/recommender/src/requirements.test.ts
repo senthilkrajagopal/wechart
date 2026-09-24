@@ -33,6 +33,17 @@ describe('what a chart needs (AC-033)', () => {
     expect(canDraw('scatter', counts(1))).toBe(false);
   });
 
+  // T242's review: small multiples need a panel per member of one grouping
+  // and an axis of another — two dimensions, or a time and a dimension.
+  it('asks small multiples for two groupings, time counting as one', () => {
+    expect(canDraw('trellis', counts(1, 1))).toBe(false);
+    expect(describeMissing('trellis', counts(1, 1))).toEqual([
+      'Small multiples needs 2 dimensions, or a time dimension and a dimension, in Dimensions; add 1 more.',
+    ]);
+    expect(canDraw('trellis', counts(1, 2))).toBe(true);
+    expect(canDraw('trellis', counts(1, 1, 1))).toBe(true);
+  });
+
   it('reports a line without a time dimension', () => {
     const missing = missingFor('line', counts(1));
 

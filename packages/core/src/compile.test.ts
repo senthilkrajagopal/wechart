@@ -71,6 +71,76 @@ describe('the default encoding follows from the wells', () => {
   });
 });
 
+/**
+ * T242 / AC-037: … scatter, heatmap … trellis (small multiples) … from a
+ * chart spec. Each draws from the channels it reads: a scatter from two
+ * measures on its axes, a heatmap from two groupings across and down with the
+ * measure as its colour, small multiples from a panel per split. Encoded as a
+ * bar is, each drew nothing from the editor's wells.
+ */
+describe('the default encoding of the types that read their channels differently', () => {
+  const twoMeasuresTwoDimensions = documentFor((spec) => {
+    let next = addToWell(spec, 'measures', 'orders.count');
+    next = addToWell(next, 'measures', 'orders.total');
+    next = addToWell(next, 'dimensions', 'orders.status');
+    return addToWell(next, 'dimensions', 'orders.region');
+  });
+  const overTime = documentFor((spec) => {
+    let next = addToWell(spec, 'measures', 'orders.count');
+    next = addToWell(next, 'dimensions', 'orders.status');
+    return addToWell(next, 'timeDimensions', 'orders.ordered_at');
+  });
+
+  it('puts a scatter’s two measures on its axes, coloured by the first dimension', () => {
+    expect(defaultEncoding(twoMeasuresTwoDimensions.chart, 'scatter')).toEqual({
+      x: ['orders.count'],
+      y: ['orders.total'],
+      color: ['orders.status'],
+    });
+  });
+
+  it('puts a heatmap’s groupings across and down, its measure as the colour', () => {
+    expect(defaultEncoding(twoMeasuresTwoDimensions.chart, 'heatmap')).toEqual({
+      x: ['orders.status'],
+      y: ['orders.region'],
+      color: ['orders.count'],
+    });
+    expect(defaultEncoding(overTime.chart, 'heatmap')).toEqual({
+      x: ['orders.ordered_at'],
+      y: ['orders.status'],
+      color: ['orders.count'],
+    });
+  });
+
+  it('draws small multiples a panel per split, of the one measure each panel draws', () => {
+    expect(defaultEncoding(overTime.chart, 'trellis')).toEqual({
+      x: ['orders.ordered_at'],
+      y: ['orders.count'],
+      facet: ['orders.status'],
+    });
+    // Its renderer draws the first measure; a second would take the first's
+    // place in the tooltip's formats (T242's review).
+    expect(defaultEncoding(twoMeasuresTwoDimensions.chart, 'trellis').y).toEqual(['orders.count']);
+  });
+
+  // T242's review: a pivot reads rows and columns, which nothing filled.
+  it('lays a pivot’s groupings down its rows and across its columns', () => {
+    expect(defaultEncoding(twoMeasuresTwoDimensions.chart, 'pivot')).toEqual({
+      row: ['orders.status'],
+      column: ['orders.region'],
+      y: ['orders.count', 'orders.total'],
+    });
+  });
+
+  it('encodes every other type as before, and a compile uses the type it draws', () => {
+    expect(defaultEncoding(twoMeasuresTwoDimensions.chart, 'groupedBar')).toEqual(
+      defaultEncoding(twoMeasuresTwoDimensions.chart),
+    );
+    const spec = compile(twoMeasuresTwoDimensions, { rows: [], chartType: 'heatmap' });
+    expect(spec.encoding.color).toEqual(['orders.count']);
+  });
+});
+
 describe('compiling a saved document', () => {
   it('produces a RenderSpec the renderers consume', () => {
     const spec = compile(withStatusAndCount, { rows: ROWS, chartType: 'bar' });

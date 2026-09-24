@@ -29,6 +29,21 @@ describe('the member a clicked item stands for', () => {
     });
   });
 
+  // T242's review: a scatter's x is a measure; a point stands for its series.
+  it('is the series a scatter’s point is in, never its x', () => {
+    const scatter = { x: ['orders.count'], y: ['orders.total'], color: ['orders.status'] };
+    expect(clickedValue(spec('scatter', scatter), { name: '', seriesName: 'shipped' })).toEqual({
+      member: 'orders.status',
+      value: 'shipped',
+    });
+    expect(
+      clickedValue(spec('scatter', { x: ['orders.count'], y: ['orders.total'] }), {
+        name: '',
+        seriesName: 'orders.total',
+      }),
+    ).toBeUndefined();
+  });
+
   it('is the category on a pie', () => {
     expect(clickedValue(spec('pie', byCategory), { name: 'shipped' })).toEqual({
       member: 'orders.status',

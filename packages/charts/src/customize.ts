@@ -143,7 +143,8 @@ export const STACKABLE_TYPES: readonly string[] = [
  * inside a stacked segment, a rectangle's cell or a slice's label.
  */
 function labelFor(spec: RenderSpec, one: Series, inside: boolean): Record<string, unknown> {
-  const measures = membersOn(spec.encoding, 'y');
+  // A heatmap's measure is its colour; its y is a grouping (T242's review).
+  const measures = membersOn(spec.encoding, spec.chartType === 'heatmap' ? 'color' : 'y');
   const name = typeof one.name === 'string' ? one.name : '';
   const measure = measures.includes(name) ? name : (measures[0] ?? '');
   const chosen = spec.options?.['valueFormat'];

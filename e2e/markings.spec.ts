@@ -79,8 +79,8 @@ async function markingDashboard(
               timeDimensions: [],
             },
             chartType,
-            // A trellis needs its panels named: two dimensions alone become
-            // an axis and a colour split, never a facet.
+            // An encoding given here wins over the one `compile` works out
+            // for the type (T242), so a test can name exactly what it draws.
             ...(encoding === undefined ? {} : { encoding }),
           },
         },

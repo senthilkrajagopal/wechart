@@ -16,6 +16,8 @@ export interface Requirement {
   readonly atLeast: number;
   /** What to put there, in the words the field list uses. */
   readonly memberType: string;
+  /** Time dimensions count towards it as well: a grouping of either kind (T242). */
+  readonly timeCounts?: boolean;
 }
 
 export interface FieldCounts {
@@ -34,6 +36,17 @@ const dimensions = (atLeast: number): Requirement => ({
   well: 'dimensions',
   atLeast,
   memberType: atLeast === 1 ? 'a dimension' : `${String(atLeast)} dimensions`,
+});
+
+/**
+ * Groupings of either kind: dimensions, time among them. Small multiples need
+ * one to panel by and one along each panel's axis (T242's review).
+ */
+const groupings = (atLeast: number): Requirement => ({
+  well: 'dimensions',
+  atLeast,
+  memberType: `${String(atLeast)} dimensions, or a time dimension and a dimension,`,
+  timeCounts: true,
 });
 
 const time = (): Requirement => ({
@@ -59,14 +72,19 @@ export const REQUIREMENTS: Record<ChartType, readonly Requirement[]> = {
   heatmap: [measures(1), dimensions(2)],
   table: [],
   pivot: [dimensions(2)],
-  trellis: [measures(1), dimensions(1)],
+  trellis: [measures(1), groupings(2)],
   combo: [measures(2)],
 };
+
+/** How many fields the chart has towards a requirement. */
+function have(requirement: Requirement, counts: FieldCounts): number {
+  return counts[requirement.well] + (requirement.timeCounts === true ? counts.timeDimensions : 0);
+}
 
 /** The requirements this chart does not yet meet. Empty when it can be drawn. */
 export function missingFor(chartType: ChartType, counts: FieldCounts): Requirement[] {
   return REQUIREMENTS[chartType].filter(
-    (requirement) => counts[requirement.well] < requirement.atLeast,
+    (requirement) => have(requirement, counts) < requirement.atLeast,
   );
 }
 
@@ -87,8 +105,8 @@ const WELL_LABEL: Record<WellName, string> = {
  */
 export function describeMissing(chartType: ChartType, counts: FieldCounts): string[] {
   return missingFor(chartType, counts).map((requirement) => {
-    const have = counts[requirement.well];
-    const short = requirement.atLeast - have;
+    const had = have(requirement, counts);
+    const short = requirement.atLeast - had;
     // The type by its name, never its id (AC-217).
     return `${CHART_TYPE_NAMES[chartType]} needs ${requirement.memberType} in ${WELL_LABEL[requirement.well]}; add ${String(short)} more.`;
   });

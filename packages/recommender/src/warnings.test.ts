@@ -75,18 +75,24 @@ describe('what a chosen type warns of (AC-218)', () => {
     ]);
   });
 
-  // T230's review: a scatter is coloured by its split, as `compile` places it
-  // — never by its time, which is on x.
-  it('warns of a scatter’s colours by the member it is split by', () => {
+  // T230's review: a scatter's colour is never its time. T242's: it is its
+  // first dimension, as `compile` colours it — not the second.
+  it('warns of a scatter’s colours by its first dimension, as it is drawn', () => {
     expect(
       warningsFor('scatter', signature(measure(), measure('orders.total_amount'), time)),
     ).toEqual([]);
     expect(
       warningsFor(
         'scatter',
-        signature(measure(), measure('orders.total_amount'), dimension(3), dimension(12, 'b')),
+        signature(measure(), measure('orders.total_amount'), dimension(12), dimension(3, 'b')),
       ),
     ).toEqual(['Colour carries 8 categories at most; this needs 12.']);
+    expect(
+      warningsFor(
+        'scatter',
+        signature(measure(), measure('orders.total_amount'), dimension(3), dimension(12, 'b')),
+      ),
+    ).toEqual([]);
   });
 
   it('warns of nothing a chart can show as it is', () => {

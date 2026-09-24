@@ -45,7 +45,7 @@ export interface CompileOptions {
  * series than fighting it for x. A channel nothing fills is left out rather
  * than set to an empty list, because empty means "the user cleared this".
  */
-export function defaultEncoding(chart: ChartDefinition): Encoding {
+export function defaultEncoding(chart: ChartDefinition, chartType?: ChartType): Encoding {
   const { measures, dimensions, timeDimensions } = chart.wells;
 
   const [firstTime] = timeDimensions;
@@ -56,6 +56,38 @@ export function defaultEncoding(chart: ChartDefinition): Encoding {
   // second becomes the series.
   const x = firstTime ?? firstDimension;
   const color = firstTime === undefined ? secondDimension : firstDimension;
+
+  /**
+   * The types that read their channels otherwise (T242, AC-037): a scatter
+   * plots two measures, coloured by the first dimension; a heatmap lays its
+   * two groupings across and down, coloured by its measure; small multiples
+   * draw a panel per member of the split. Encoded as a bar is, each drew
+   * nothing from the editor's wells.
+   */
+  const [firstMeasure, secondMeasure] = measures;
+  const channel = (member: string | undefined) => (member === undefined ? undefined : [member]);
+  const encoded = (channels: Partial<Record<keyof Encoding, readonly string[] | undefined>>) =>
+    Object.fromEntries(
+      Object.entries(channels).filter(([, members]) => members !== undefined),
+    ) as Encoding;
+  if (chartType === 'scatter')
+    return encoded({
+      x: channel(firstMeasure),
+      y: channel(secondMeasure),
+      color: channel(firstDimension),
+    });
+  if (chartType === 'heatmap')
+    return encoded({ x: channel(x), y: channel(color), color: channel(firstMeasure) });
+  // Its renderer draws the first measure in every panel.
+  if (chartType === 'trellis')
+    return encoded({ x: channel(x), y: channel(firstMeasure), facet: channel(color) });
+  // Its groupings down the rows and across the columns, its measures in the cells.
+  if (chartType === 'pivot')
+    return encoded({
+      row: channel(x),
+      column: channel(color),
+      y: measures.length === 0 ? undefined : [...measures],
+    });
 
   return {
     ...(x === undefined ? {} : { x: [x] }),
@@ -72,7 +104,8 @@ export function defaultEncoding(chart: ChartDefinition): Encoding {
  */
 export function compile(document: ChartDocument, options: CompileOptions): RenderSpec {
   const { chart } = document;
-  const defaults = defaultEncoding(chart);
+  // Encoded for the type it draws (T242).
+  const defaults = defaultEncoding(chart, chart.chartType ?? options.chartType);
   const overrides = chart.encoding ?? {};
 
   const encoding: Encoding = {};

@@ -43,9 +43,14 @@ function settingsOf(spec: RenderSpec): SortSettings | null {
 export function applySort(spec: RenderSpec): RenderSpec {
   const settings = settingsOf(spec);
   const category = memberOn(spec.encoding, 'x');
-  const measure = membersOn(spec.encoding, 'y')[0];
+  // A heatmap's measure is its colour; its y is a second grouping (T242).
+  const measure =
+    spec.chartType === 'heatmap'
+      ? memberOn(spec.encoding, 'color')
+      : membersOn(spec.encoding, 'y')[0];
 
-  if (settings === null || category === undefined) return spec;
+  // A scatter's x is a measure: it has no labels, and its points no order.
+  if (settings === null || category === undefined || spec.chartType === 'scatter') return spec;
 
   const labelOf = (row: Record<string, unknown>) => String(row[category] ?? '');
   const isOther = (row: Record<string, unknown>) => labelOf(row).startsWith(`${OTHER_LABEL} (`);

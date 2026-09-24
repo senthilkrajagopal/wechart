@@ -136,3 +136,62 @@ describe('a chart drawing a marking', () => {
     expect(plain.every((item) => item.itemStyle?.color === undefined)).toBe(true);
   });
 });
+
+/**
+ * T242's review: a heatmap's cell and a scatter's point are no category's
+ * index — a cell is a column and a row, a point its two values in its series
+ * — and each is matched to the row it was drawn from by those.
+ */
+describe('marking the types that draw from x and y otherwise', () => {
+  const REGION = 'orders.region';
+
+  it('marks the heatmap cells of the marked rows', () => {
+    const heatmap = marked(
+      {
+        chartType: 'heatmap',
+        encoding: { x: ['orders.status'], y: [REGION], color: ['orders.count'] },
+        rows: [
+          // A row with no measure draws no cell: indices would shift past it.
+          { 'orders.status': 'processing', [REGION]: 'North', 'orders.count': null },
+          { 'orders.status': 'processing', [REGION]: 'South', 'orders.count': 3 },
+          { 'orders.status': 'shipped', [REGION]: 'North', 'orders.count': 5 },
+        ],
+      },
+      ['shipped'],
+    );
+    const cells = itemsOf(optionFor(heatmap)) as unknown as {
+      value: number[];
+      itemStyle?: { opacity?: number };
+    }[];
+    expect(cells.map((cell) => [cell.value[2], cell.itemStyle?.opacity ?? 1])).toEqual([
+      [3, UNMARKED_OPACITY],
+      [5, 1],
+    ]);
+  });
+
+  it('marks a scatter’s points by their series and their values', () => {
+    const scatter = marked(
+      {
+        chartType: 'scatter',
+        encoding: { x: ['orders.count'], y: ['orders.total'], color: ['orders.status'] },
+        rows: [
+          { 'orders.status': 'processing', 'orders.count': 1, 'orders.total': 10 },
+          { 'orders.status': 'shipped', 'orders.count': 2, 'orders.total': 20 },
+          { 'orders.status': 'shipped', 'orders.count': 3, 'orders.total': 30 },
+        ],
+      },
+      ['shipped'],
+    );
+    const series = (
+      optionFor(scatter) as {
+        series: { name: string; data: { itemStyle?: { opacity?: number } }[] }[];
+      }
+    ).series;
+    expect(
+      series.map((one) => [one.name, one.data.map((point) => point.itemStyle?.opacity ?? 1)]),
+    ).toEqual([
+      ['processing', [UNMARKED_OPACITY]],
+      ['shipped', [1, 1]],
+    ]);
+  });
+});

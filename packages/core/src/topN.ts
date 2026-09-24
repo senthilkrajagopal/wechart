@@ -51,6 +51,12 @@ export function applyTopN(spec: RenderSpec): RenderSpec {
   const measures = membersOn(spec.encoding, 'y');
 
   if (typeof limit !== 'number' || limit < 1 || category === undefined) return spec;
+  /**
+   * A scatter's x is a measure, and a heatmap's y its second grouping with
+   * its measure the colour: neither has a category ranked by a measure on y,
+   * and folding either drew points and cells no row holds (T242's review).
+   */
+  if (spec.chartType === 'scatter' || spec.chartType === 'heatmap') return spec;
 
   // One entry per category, in the order they arrived, with what to rank by.
   const byCategory = new Map<string, Record<string, unknown>[]>();

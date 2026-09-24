@@ -125,3 +125,18 @@ describe('gaps', () => {
     expect(categoriesOf(applyTopN(withGap))[0]).toBe('b');
   });
 });
+
+/**
+ * T242's review: a scatter's x is a measure, and a heatmap's y a second
+ * grouping with its measure the colour — neither has a category ranked by a
+ * measure on y, and folding either into "Other" drew points and cells no row
+ * holds. Each is left as it came.
+ */
+describe('the types with no category ranked on y', () => {
+  it('leaves a scatter and a heatmap as they came', () => {
+    for (const chartType of ['scatter', 'heatmap'] as const) {
+      const unfolded = spec({ chartType });
+      expect(applyTopN(unfolded)).toBe(unfolded);
+    }
+  });
+});
