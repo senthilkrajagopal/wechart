@@ -75,7 +75,9 @@ test('a local chart saved to a folder becomes a library chart there, and the pag
   await expect(sidebar.getByText(/Only on this dashboard/)).toBeVisible();
   // A local chart's editor says nothing of sharing (T134's review).
   await tile.getByRole('button', { name: /^Edit / }).click();
-  await expect(page.getByTestId('chart-editor-overlay').getByLabel('Chart type')).toBeVisible();
+  await expect(
+    page.getByTestId('chart-editor-overlay').getByTestId('chart-type-change'),
+  ).toBeVisible();
   await expect(page.locator('.shared-chart-notice')).toHaveCount(0);
   await page.getByTestId('editor-back').click();
   await tile.click();
@@ -93,7 +95,7 @@ test('a local chart saved to a folder becomes a library chart there, and the pag
    */
   await tile.getByRole('button', { name: /^Edit / }).click();
   const overlay = page.getByTestId('chart-editor-overlay');
-  await expect(overlay.getByLabel('Chart type')).toBeVisible();
+  await expect(overlay.getByTestId('chart-type-change')).toBeVisible();
   await expect(overlay.locator('.shared-chart-notice')).toHaveCount(0);
   await page.getByTestId('editor-back').click();
   await expect(overlay).toHaveCount(0);

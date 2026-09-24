@@ -1,6 +1,8 @@
 import { CHART_TYPES } from '@wechart/core';
 import { expect, test, type Page } from '@playwright/test';
 
+import { chooseChartType } from './chartType';
+
 /**
  * AC-178: THE SYSTEM SHALL provide a table view of every chart's data,
  * reachable from the tile (direction.md rule 5).
@@ -28,7 +30,7 @@ async function openEditorWithEveryWellFilled(page: Page, chartType: string) {
   await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
   await expect(page.getByTestId('result-row-count')).toBeVisible();
 
-  await page.getByLabel('Chart type').selectOption(chartType);
+  await chooseChartType(page, chartType);
   // Every type must be drawable from these fields, or the fixture is wrong.
   await expect(page.getByTestId('missing-fields')).toBeHidden();
 }

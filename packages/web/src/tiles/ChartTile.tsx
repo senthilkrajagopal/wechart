@@ -1,5 +1,5 @@
 import { isDrawable } from '@wechart/charts';
-import type { ChartType, RenderSpec } from '@wechart/core';
+import { CHART_TYPE_NAMES, type ChartType, type RenderSpec } from '@wechart/core';
 import { useState, type ReactNode } from 'react';
 
 import type { ClickedItem } from '../dashboard/crossfilter/clicked';
@@ -119,7 +119,8 @@ function ChartBody({ spec, height, onItemClick, rowMarking }: ChartBodyProps) {
     // Saying so beats drawing something the spec never asked for.
     return (
       <StateLine kind="warn" testId="chart-not-drawable">
-        {spec.chartType} charts are not drawn yet.
+        {/* By its name, never its id (AC-217). */}
+        {CHART_TYPE_NAMES[spec.chartType]} charts are not drawn yet.
       </StateLine>
     );
   }

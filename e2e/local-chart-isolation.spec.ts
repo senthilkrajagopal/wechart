@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+import { chooseChartType } from './chartType';
+
 const API = 'http://localhost:4100/api';
 
 /**
@@ -95,7 +97,7 @@ test('editing a local chart changes no other dashboard', async ({ page, request 
     .locator('[data-tile="tile"]')
     .getByRole('button', { name: /^Edit / })
     .click();
-  await page.getByLabel('Chart type').selectOption('line');
+  await chooseChartType(page, 'line');
   await page.getByTestId('editor-back').click();
   await page
     .getByRole('toolbar', { name: 'Dashboard editing' })

@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page, type Route } from '@playwright/test';
 
+import { chooseChartType, expectChartType } from './chartType';
+
 /**
  * T192 / AC-183: WHEN a chart edited from a dashboard tile is applied, THE
  * SYSTEM SHALL hold the edit in the dashboard's edit session and write the
@@ -109,7 +111,7 @@ async function editToStacked(page: Page) {
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'bar');
   await page.getByTestId('edit-chart-tile-save').click();
   await expect(editor(page)).toBeVisible();
-  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await chooseChartType(page, 'stackedBar');
   await page.getByTestId('editor-back').click();
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
 }
@@ -197,7 +199,7 @@ test('the edit is held, not written, until the dashboard is saved', async ({ pag
   await barButton(page, 'Redo').click();
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
   await page.getByTestId('edit-chart-tile-save').click();
-  await expect(page.getByTestId('chart-type')).toHaveText('stackedBar');
+  await expectChartType(page, 'stackedBar');
   await page.getByTestId('editor-back').click();
   await expect(editor(page)).toBeHidden();
 
@@ -248,7 +250,7 @@ test('the editor’s Save dashboard applies the chart and saves the dashboard', 
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'bar');
   await addHeading(page);
   await page.getByTestId('edit-chart-tile-save').click();
-  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await chooseChartType(page, 'stackedBar');
 
   await saveDashboard(page).click();
 
@@ -321,7 +323,7 @@ test('the editor says a library chart is shared and on how many dashboards, and 
   await expect(notice).toHaveText(/Shared chart · on 2 dashboards · edits change all of them/);
   await expect(notice.locator('[data-icon="warn"]')).toHaveCount(1);
 
-  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await chooseChartType(page, 'stackedBar');
   await expect(saveDashboard(page)).toHaveAttribute('aria-disabled', 'false');
   await expect(editor(page).getByTestId('editor-save-blocked')).toHaveText('');
   // Nothing written until saved (AC-183; T134's review).
@@ -390,7 +392,7 @@ test('a chart load still running from the last save does not put that chart back
   // is held too, so the fetch can be let back before it.
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.getByTestId('edit-chart-tile-save').click();
-  await page.getByLabel('Chart type').selectOption('hbar');
+  await chooseChartType(page, 'hbar');
   await page.getByTestId('editor-back').click();
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'hbar');
 
@@ -455,8 +457,8 @@ test('a chart reopened from its draft is still checked against the version first
   await changeElsewhere(request, chartId);
   await page.getByTestId('edit-chart-tile-save').click();
   // Reopened on the draft, not on what is stored now.
-  await expect(page.getByTestId('chart-type')).toHaveText('stackedBar');
-  await page.getByLabel('Chart type').selectOption('hbar');
+  await expectChartType(page, 'stackedBar');
+  await chooseChartType(page, 'hbar');
   await page.getByTestId('editor-back').click();
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'hbar');
 
@@ -556,7 +558,7 @@ test.describe('a save that fails keeps the session (AC-184)', () => {
     await page.goto(`/explore/dashboards/${dashboardId}`);
     await addHeading(page);
     await page.getByTestId('edit-chart-tile-save').click();
-    await page.getByLabel('Chart type').selectOption('stackedBar');
+    await chooseChartType(page, 'stackedBar');
 
     await changeElsewhere(request, chartId);
     await saveDashboard(page).click();
@@ -705,22 +707,22 @@ test('a local copy of a shared chart takes the tile and the edits so far, and le
   const notice = editor(page).locator('.shared-chart-notice');
   await expect(notice).toContainText('on 2 dashboards');
   // An edit made before the copy: it goes with it.
-  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await chooseChartType(page, 'stackedBar');
   await notice.getByRole('button', { name: 'Make a local copy' }).click();
 
   await expect(editor(page).getByTestId('local-copy-made')).toContainText(
     'The shared chart is unchanged',
   );
   await expect(editor(page).getByRole('button', { name: 'Make a local copy' })).toHaveCount(0);
-  await expect(page.getByTestId('chart-type')).toHaveText('stackedBar');
+  await expectChartType(page, 'stackedBar');
   // Focus on what was done, not dropped to the page (T135's review).
   await expect(editor(page).getByTestId('local-copy-made')).toBeFocused();
   // The editor's history goes on through the copy: Undo reaches the edit
   // made before it, and Redo brings it back (AC-035; T135's review).
   await editor(page).getByRole('button', { name: 'Undo', exact: true }).click();
-  await expect(page.getByTestId('chart-type')).toHaveText('bar');
+  await expectChartType(page, 'bar');
   await editor(page).getByRole('button', { name: 'Redo', exact: true }).click();
-  await expect(page.getByTestId('chart-type')).toHaveText('stackedBar');
+  await expectChartType(page, 'stackedBar');
 
   await page.getByTestId('editor-back').click();
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');

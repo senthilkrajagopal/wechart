@@ -26,3 +26,4 @@ export {
   type Requirement,
 } from './requirements';
 export type { Candidate, ChartType, Field, FieldKind, RuleOutcome, Signature } from './types';
+export { warningsFor } from './warnings';

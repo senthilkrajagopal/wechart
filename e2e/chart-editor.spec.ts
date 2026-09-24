@@ -1,6 +1,8 @@
 import { CHART_TYPES } from '@wechart/core';
 import { expect, test } from '@playwright/test';
 
+import { chooseChartType, expectChartType } from './chartType';
+
 /**
  * AC-026: WHEN the user drags a field onto a well, or adds it with the well's
  * "+" picker, THE SYSTEM SHALL add it to that well and re-run the chart's
@@ -114,7 +116,9 @@ test('recommends a chart with a runner-up, and explains why', async ({ page }) =
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
 
   // Three statuses is a small category: a bar.
-  await expect(page.getByTestId('recommended-type')).toHaveText('bar');
+  // By its name (AC-217), carrying its id.
+  await expect(page.getByTestId('recommended-type')).toHaveText('Recommended: Bar');
+  await expect(page.getByTestId('recommended-type')).toHaveAttribute('data-chart-type', 'bar');
   await expect(page.getByTestId('recommended-reason')).not.toBeEmpty();
   // AC-028: at least one runner-up, and it is a different chart.
   const runnersUp = page.locator('[data-testid^="runner-up-"]');
@@ -154,16 +158,16 @@ test('a manually chosen chart type survives field changes', async ({ page }) => 
   await openEditorOnOrders(page);
   await page.getByTestId('add-measures').selectOption('orders.count');
   await page.getByTestId('add-dimensions').selectOption('orders.status');
-  await expect(page.getByTestId('chart-type')).toHaveText('bar');
+  await expectChartType(page, 'bar');
 
   // Pick something the recommender did not choose.
-  await page.getByLabel('Chart type').selectOption('pie');
-  await expect(page.getByTestId('chart-type')).toHaveText('pie');
+  await chooseChartType(page, 'pie');
+  await expectChartType(page, 'pie');
 
   // A field change moves the recommendation on; the chart must not follow.
   await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
-  await expect(page.getByTestId('recommended-type')).not.toHaveText('pie');
-  await expect(page.getByTestId('chart-type')).toHaveText('pie');
+  await expect(page.getByTestId('recommended-type')).not.toHaveAttribute('data-chart-type', 'pie');
+  await expectChartType(page, 'pie');
 });
 
 test('"Back to recommended" hands the choice back', async ({ page }) => {
@@ -171,16 +175,16 @@ test('"Back to recommended" hands the choice back', async ({ page }) => {
   await page.getByTestId('add-measures').selectOption('orders.count');
   await page.getByTestId('add-dimensions').selectOption('orders.status');
 
-  await page.getByLabel('Chart type').selectOption('pie');
-  await expect(page.getByTestId('chart-type')).toHaveText('pie');
+  await chooseChartType(page, 'pie');
+  await expectChartType(page, 'pie');
 
   await page.getByTestId('back-to-recommended').click();
 
-  await expect(page.getByTestId('chart-type')).toHaveText('bar');
+  await expectChartType(page, 'bar');
   // And it follows the recommendation again from here on.
   await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
-  const recommended = await page.getByTestId('recommended-type').textContent();
-  await expect(page.getByTestId('chart-type')).toHaveText(recommended!);
+  const recommended = await page.getByTestId('recommended-type').getAttribute('data-chart-type');
+  await expectChartType(page, recommended!);
 });
 
 test('the option to go back appears only after a manual choice', async ({ page }) => {
@@ -190,7 +194,7 @@ test('the option to go back appears only after a manual choice', async ({ page }
 
   await expect(page.getByTestId('back-to-recommended')).toBeHidden();
 
-  await page.getByLabel('Chart type').selectOption('pie');
+  await chooseChartType(page, 'pie');
 
   await expect(page.getByTestId('back-to-recommended')).toBeVisible();
 });
@@ -207,7 +211,7 @@ test('says what is missing, naming the well and the member type', async ({ page 
   await page.getByTestId('add-dimensions').selectOption('orders.status');
 
   // A scatter needs two measures and there is one.
-  await page.getByLabel('Chart type').selectOption('scatter');
+  await chooseChartType(page, 'scatter');
 
   const message = page.getByTestId('missing-fields');
   await expect(message).toBeVisible();
@@ -220,7 +224,7 @@ test('says what is missing, naming the well and the member type', async ({ page 
 test('the message goes away once the field is added', async ({ page }) => {
   await openEditorOnOrders(page);
   await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByLabel('Chart type').selectOption('scatter');
+  await chooseChartType(page, 'scatter');
   await expect(page.getByTestId('missing-fields')).toBeVisible();
 
   await page.getByTestId('add-measures').selectOption('orders.total_amount');
@@ -233,7 +237,7 @@ test('names every missing requirement, not only the first', async ({ page }) => 
   await page.getByTestId('add-measures').selectOption('orders.count');
 
   // A heatmap wants a measure and two dimensions; there are no dimensions.
-  await page.getByLabel('Chart type').selectOption('heatmap');
+  await chooseChartType(page, 'heatmap');
 
   await expect(page.getByTestId('missing-fields')).toContainText('Dimensions');
 });
@@ -260,12 +264,12 @@ test('undoes every kind of change, including the chart type and the cube', async
   await openEditorOnOrders(page);
   await page.getByTestId('add-measures').selectOption('orders.count');
   await page.getByTestId('add-dimensions').selectOption('orders.status');
-  await page.getByLabel('Chart type').selectOption('pie');
-  await expect(page.getByTestId('chart-type')).toHaveText('pie');
+  await chooseChartType(page, 'pie');
+  await expectChartType(page, 'pie');
 
   // Back through the type change...
   await page.getByTestId('undo').click();
-  await expect(page.getByTestId('chart-type')).not.toHaveText('pie');
+  await expect(page.getByTestId('chart-type')).not.toHaveAttribute('data-chart-type', 'pie');
   // ...the dimension...
   await page.getByTestId('undo').click();
   await expect(page.getByTestId('in-dimensions-orders.status')).toBeHidden();
@@ -282,7 +286,7 @@ test('discard restores the chart as it opened', async ({ page }) => {
   await openEditorOnOrders(page);
   await page.getByTestId('add-measures').selectOption('orders.count');
   await page.getByTestId('add-dimensions').selectOption('orders.status');
-  await page.getByLabel('Chart type').selectOption('pie');
+  await chooseChartType(page, 'pie');
 
   await page.getByTestId('discard').click();
 
@@ -445,7 +449,7 @@ test('no chart type is left undrawn', async ({ page }) => {
   // and stopped being true at T044, when the last of the eighteen arrived.
   // The guard itself is still covered by the unit test in optionFor.test.ts.
   for (const chartType of CHART_TYPES) {
-    await page.getByLabel('Chart type').selectOption(chartType);
+    await chooseChartType(page, chartType);
     await expect(page.getByTestId('chart-not-drawable')).toBeHidden();
   }
 });
@@ -575,7 +579,7 @@ test.describe('opening a saved chart (AC-182)', () => {
     await page.goto(SAVED);
 
     // The second failing state: "a chart type other than the one saved".
-    await expect(page.getByTestId('chart-type')).toHaveText('bar');
+    await expectChartType(page, 'bar');
     /**
      * A saved type is a choice the user made, so it must load as manual.
      * Loaded as the recommendation it would be silently replaced the next
@@ -635,7 +639,7 @@ test.describe('opening a saved chart (AC-182)', () => {
     await expect(page.getByTestId('in-dimensions-orders.id')).toBeHidden();
     await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
     await expect(page.getByTestId('in-dimensions-orders.status')).toBeVisible();
-    await expect(page.getByTestId('chart-type')).toHaveText('bar');
+    await expectChartType(page, 'bar');
   });
 
   test('a chart nobody has built yet opens empty', async ({ page }) => {
@@ -990,7 +994,7 @@ test('a pie over two dimensions has a legend entry per slice', async ({ page }) 
   await page.getByTestId('add-measures').selectOption('products.count');
   await page.getByTestId('add-dimensions').selectOption('products.category');
   await page.getByTestId('add-dimensions').selectOption('products.name');
-  await page.locator('#chart-type-picker').selectOption('pie');
+  await chooseChartType(page, 'pie');
   const canvas = page.getByTestId('chart-canvas');
   await expect(canvas).toBeVisible();
 
@@ -1004,4 +1008,100 @@ test('a pie over two dimensions has a legend entry per slice', async ({ page }) 
     await expect(written.filter({ hasText: slice })).toHaveCount(1);
   // Never a category alone, as the two-entry legend read.
   await expect(written.filter({ hasText: /^(Components|Instruments)$/ })).toHaveCount(0);
+});
+
+/**
+ * T230 / AC-217: THE SYSTEM SHALL show the chart's type by its name — "Auto"
+ * with the recommended type, or "Chosen manually" — with a Change action
+ * opening a gallery of every type that can be searched, groups types by
+ * purpose, states what each needs and greys those the chart's fields cannot
+ * draw, and SHALL show "Back to recommended" only while a type is chosen
+ * manually (direction.md rules 9, 10).
+ * `Fails when: a type is shown by an internal id such as "groupedBar", a type
+ * the fields cannot draw is not greyed with its requirement, or "Back to
+ * recommended" shows while the type is the recommended one.`
+ */
+test('the type reads by name; Change opens a gallery that greys what these fields cannot draw', async ({
+  page,
+}) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+
+  await expect(page.getByTestId('chart-type')).toHaveText('Auto · Bar');
+  await expect(page.getByTestId('chart-type-change')).toContainText('Picked by the recommender');
+  await expect(page.getByTestId('back-to-recommended')).toHaveCount(0);
+  // The trace names its candidates by name too (T230's review).
+  await page.getByRole('button', { name: 'Why this chart?' }).click();
+  await expect(page.getByTestId('trace-hbar')).toContainText('Bar, horizontal');
+  await expect(page.getByTestId('why-this-chart')).not.toContainText(/\bhbar\b/);
+
+  const change = page.getByTestId('chart-type-change');
+  await change.click();
+  const gallery = page.getByRole('dialog', { name: 'Choose chart type' });
+  await expect(gallery.getByRole('searchbox', { name: 'Search chart types' })).toBeFocused();
+  // The recommender's suggestions first, each by its name.
+  await expect(gallery.getByTestId('type-card-bar')).toContainText('Suggested');
+  await expect(gallery).not.toContainText('groupedBar');
+  // By purpose: a line is for time, and without a time field it is greyed,
+  // saying what it lacks.
+  await gallery.getByRole('button', { name: 'Evolution over time' }).click();
+  const line = gallery.getByTestId('type-card-line');
+  await expect(line).toHaveAttribute('data-drawable', 'false');
+  await expect(line).toContainText('Line needs a time dimension in Time; add 1 more.');
+  // Greyed: not on the surface a card it can draw sits on.
+  const background = (node: Element) => getComputedStyle(node).backgroundColor;
+  expect(await line.evaluate(background)).not.toBe(await gallery.evaluate(background));
+  // Searched across every type.
+  await gallery.getByRole('searchbox', { name: 'Search chart types' }).fill('side-by-side');
+  await expect(gallery.getByTestId(/^type-card-/)).toHaveCount(1);
+  await gallery.getByTestId('type-card-groupedBar').click();
+
+  // Chosen: by its name, said to be manual, with the way back — and focus back
+  // on Change.
+  await expect(gallery).toHaveCount(0);
+  await expect(change).toBeFocused();
+  await expect(page.getByTestId('chart-type')).toHaveText('Grouped bar');
+  await expect(change).toContainText('Chosen manually');
+  await page.getByTestId('back-to-recommended').click();
+  await expect(page.getByTestId('chart-type')).toHaveText('Auto · Bar');
+  await expect(page.getByTestId('back-to-recommended')).toHaveCount(0);
+});
+
+/**
+ * T230 / AC-218: WHILE a manually chosen type is a combo, or exceeds a
+ * channel's capacity for the chart's fields, THE SYSTEM SHALL show a warning
+ * with an icon saying why, and offer to switch to the recommended type
+ * (direction.md rules 6, 30).
+ * `Fails when: a combo, or a pie drawn with more than 6 slices, shows no
+ * warning.`
+ */
+test('a manual combo, or a pie of too many slices, warns why and offers the recommended type', async ({
+  page,
+}) => {
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-measures').selectOption('orders.total_amount');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await expect(page.getByTestId('type-warning')).toHaveCount(0);
+
+  await chooseChartType(page, 'combo');
+  const warning = page.getByTestId('type-warning');
+  await expect(warning).toContainText('Two value axes');
+  await expect(warning.locator('svg[data-icon="warn"]')).toHaveCount(1);
+  // Switching back is offered, and taken.
+  const recommended = await page.getByTestId('recommended-type').getAttribute('data-chart-type');
+  await warning.getByRole('button', { name: /^Use / }).click();
+  await expectChartType(page, recommended!);
+  await expect(page.getByTestId('type-warning')).toHaveCount(0);
+
+  // 240 orders, one slice each.
+  await page.getByRole('button', { name: /Remove Orders Total Amount/ }).click();
+  await page.getByRole('button', { name: /Remove Orders Status/ }).click();
+  await page.getByTestId('add-dimensions').selectOption('orders.id');
+  await expect(page.getByTestId('result-row-count')).toHaveText('240 rows');
+  await chooseChartType(page, 'pie');
+  await expect(page.getByTestId('type-warning')).toContainText(
+    'A pie is readable up to 6 slices; this has 240.',
+  );
 });

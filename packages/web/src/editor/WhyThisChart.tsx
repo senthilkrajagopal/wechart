@@ -1,3 +1,4 @@
+import { CHART_TYPE_NAMES, type ChartType } from '@wechart/core';
 import type { Explanation } from '@wechart/recommender';
 import { useState } from 'react';
 
@@ -55,7 +56,8 @@ export function WhyThisChart({ explanation, titles = {} }: WhyThisChartProps) {
                   <span data-icon={candidate.legal ? 'pass' : 'fail'} aria-hidden="true">
                     {candidate.legal ? '✓' : '✗'}
                   </span>{' '}
-                  {candidate.chartType} —{' '}
+                  {/* By its name, never its id (AC-217). */}
+                  {CHART_TYPE_NAMES[candidate.chartType as ChartType] ?? candidate.chartType} —{' '}
                   {candidate.legal ? `allowed, cost ${String(candidate.score ?? 0)}` : 'rejected'}
                 </p>
                 <ul>

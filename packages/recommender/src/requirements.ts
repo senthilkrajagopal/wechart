@@ -1,3 +1,5 @@
+import { CHART_TYPE_NAMES } from '@wechart/core';
+
 import type { ChartType } from './types';
 
 /**
@@ -87,6 +89,7 @@ export function describeMissing(chartType: ChartType, counts: FieldCounts): stri
   return missingFor(chartType, counts).map((requirement) => {
     const have = counts[requirement.well];
     const short = requirement.atLeast - have;
-    return `A ${chartType} needs ${requirement.memberType} in ${WELL_LABEL[requirement.well]}; add ${String(short)} more.`;
+    // The type by its name, never its id (AC-217).
+    return `${CHART_TYPE_NAMES[chartType]} needs ${requirement.memberType} in ${WELL_LABEL[requirement.well]}; add ${String(short)} more.`;
   });
 }

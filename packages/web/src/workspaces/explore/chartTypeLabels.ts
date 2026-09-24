@@ -1,33 +1,11 @@
-import type { ChartType } from '@wechart/core';
+import { CHART_TYPE_NAMES } from '@wechart/core';
 
 /**
- * Each chart type's name as a reader sees it — the prototype's `RECO.TYPES`
- * labels (docs/design/prototype/reco.js), with Pie added, which the prototype
- * draws only as a donut.
- *
- * A Record over the union, so a type added to `ChartType` without a name here
- * is a type error rather than a raw identifier on screen.
+ * Each chart type's name as a reader sees it — the one list in
+ * `@wechart/core` (AC-217), so the library page, the editor's type card and
+ * the gallery cannot name a type two ways (T230's review).
  */
-export const CHART_TYPE_LABEL: Readonly<Record<ChartType, string>> = {
-  bar: 'Bar',
-  hbar: 'Bar, horizontal',
-  groupedBar: 'Grouped bar',
-  stackedBar: 'Stacked bar',
-  line: 'Line',
-  multiLine: 'Multi-series line',
-  area: 'Area',
-  stackedArea: 'Stacked area',
-  scatter: 'Scatter',
-  pie: 'Pie',
-  donut: 'Donut',
-  treemap: 'Treemap',
-  heatmap: 'Heatmap',
-  kpi: 'KPI',
-  table: 'Table',
-  pivot: 'Pivot table',
-  trellis: 'Small multiples',
-  combo: 'Combo (bar + line)',
-};
+export const CHART_TYPE_LABEL = CHART_TYPE_NAMES;
 
 /**
  * What a listed chart's Type column says (AC-193): its saved type; "Automatic"

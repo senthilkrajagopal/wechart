@@ -1,5 +1,6 @@
 import {
   addToWell,
+  CHART_TYPE_NAMES,
   chartDocumentOf,
   compile,
   emptySpec,
@@ -17,16 +18,18 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import {
-  REQUIREMENTS,
   describeMissing,
   explain,
   recommend,
+  warningsFor,
   type ChartType,
   type Signature,
 } from '@wechart/recommender';
 
 import { DEFAULT_PALETTE, STACKABLE_TYPES } from '@wechart/charts';
 
+import { ChartTypeCard } from './ChartTypeCard';
+import { ChartTypeGallery } from './ChartTypeGallery';
 import { CustomizeTab } from './CustomizeTab';
 import { answerMetaOf } from '../query/answerMeta';
 import { loadTile } from '../query/loadTile';
@@ -60,9 +63,6 @@ import { cubesFrom, formatsOf, membersOf, titlesOf, type Member } from './fields
  * row count and a preview until the renderer lands (F5); what the criterion
  * asks for is that the result changes, not yet how it is drawn.
  */
-/** Every type the recommender knows about, so the override is a real one. */
-const ALL_CHART_TYPES = Object.keys(REQUIREMENTS).sort() as ChartType[];
-
 /**
  * The sort choices (AC-044). "Cube's order" is the default and a real choice:
  * Cube was asked for an ordering and returned one, and leaving it is not the
@@ -198,8 +198,12 @@ export function ChartEditor({
   const setSpec = (next: (current: ChartSpec) => ChartSpec) =>
     change((current) => ({ ...current, spec: next(current.spec) }));
 
-  const setChartTypeState = (next: ChartTypeState) =>
+  // A choice that changes nothing — Auto while following, the type already
+  // chosen — is no undo step (T230's review).
+  const setChartTypeState = (next: ChartTypeState) => {
+    if (next.manual === chartTypeState.manual) return;
     change((current) => ({ ...current, chartType: next }));
+  };
 
   /**
    * Not part of the history: a drag in progress is a pointer position, not a
@@ -350,10 +354,21 @@ export function ChartEditor({
   // the same type on a tile as here.
   const recommended = topTypeOf(recommendation);
   const shownType = effectiveType(chartTypeState, recommended);
-  const alternatives = [
-    ...(recommendation.top ? [recommendation.top] : []),
-    ...recommendation.runnersUp,
+  /** The recommender's pick and runners-up, suggested in the gallery (AC-217). */
+  const suggested = [
+    ...new Set(
+      [...(recommendation.top ? [recommendation.top] : []), ...recommendation.runnersUp].map(
+        (alternative) => alternative.candidate.chartType,
+      ),
+    ),
   ];
+  /** Whether the type gallery is open (AC-217), and Change, to give focus back to. */
+  const [gallery, setGallery] = useState(false);
+  const changeType = useRef<HTMLButtonElement>(null);
+  const closeGallery = () => {
+    setGallery(false);
+    changeType.current?.focus();
+  };
 
   /**
    * AC-033: when the chosen type cannot be drawn from these fields, say what is
@@ -367,6 +382,29 @@ export function ChartEditor({
         timeDimensions: spec.timeDimensions.length,
       })
     : [];
+
+  /**
+   * What a manual choice strains (AC-218): a combo's two value axes, or more
+   * slices, colours, panels or cells than can be told apart — by the rules the
+   * recommender rejects its own candidates with, on these fields.
+   */
+  const topN = typeof options['topN'] === 'number' ? options['topN'] : undefined;
+  const typeWarnings = useMemo(
+    () =>
+      // Only of a chart these fields draw — what they lack is said apart
+      // (AC-033) — and of rows that have come: while the query runs there is
+      // nothing to count (T230's review).
+      isManual(chartTypeState) &&
+      shownType !== null &&
+      missing.length === 0 &&
+      result.isSuccess &&
+      rows.length > 0
+        ? warningsFor(shownType, signature, { topN })
+        : [],
+    // `missing` is derived from `spec` and `shownType`, and `signature` from `rows`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chartTypeState, shownType, signature, result.isSuccess, rows, topN],
+  );
 
   /**
    * The chart as drawn, once its fields can draw its type: the preview's, and
@@ -640,6 +678,20 @@ export function ChartEditor({
         >
           {inspector === 'data' ? (
             <>
+              {/* The type by its name, and Change into the gallery (AC-217). */}
+              <ChartTypeCard
+                shown={shownType}
+                manual={isManual(chartTypeState)}
+                recommended={recommended}
+                warnings={typeWarnings}
+                changeRef={changeType}
+                onChange={() => setGallery(true)}
+                onBack={() => {
+                  setChartTypeState(backToRecommended());
+                  // The button pressed goes with the manual choice: to Change.
+                  changeType.current?.focus();
+                }}
+              />
               <Wells
                 spec={spec}
                 available={available}
@@ -665,7 +717,7 @@ export function ChartEditor({
                     return rest;
                   })
                 }
-                topN={typeof options['topN'] === 'number' ? options['topN'] : undefined}
+                topN={topN}
                 onTopN={(n) =>
                   change((current) => {
                     const next = { ...current.options };
@@ -677,9 +729,10 @@ export function ChartEditor({
               />
               {recommendation.top ? (
                 <div className="chart-editor__type" data-testid="recommendation">
-                  <h3>Chart type</h3>
-                  <p data-testid="chart-type">{shownType}</p>
-                  <p data-testid="recommended-type">{recommended}</p>
+                  {/* Each type by its name (AC-217), never its id. */}
+                  <p data-testid="recommended-type" data-chart-type={recommended ?? undefined}>
+                    Recommended: {recommended === null ? '' : CHART_TYPE_NAMES[recommended]}
+                  </p>
                   <p data-testid="recommended-reason">{recommendation.top.reason}</p>
 
                   <h4>Or</h4>
@@ -689,44 +742,10 @@ export function ChartEditor({
                         key={runnerUp.candidate.chartType}
                         data-testid={`runner-up-${runnerUp.candidate.chartType}`}
                       >
-                        {runnerUp.candidate.chartType} — {runnerUp.reason}
+                        {CHART_TYPE_NAMES[runnerUp.candidate.chartType]} — {runnerUp.reason}
                       </li>
                     ))}
                   </ul>
-
-                  <label htmlFor="chart-type-picker">Chart type</label>
-                  <select
-                    id="chart-type-picker"
-                    value={shownType ?? ''}
-                    onChange={(event) =>
-                      setChartTypeState(chooseType(event.target.value as typeof shownType & string))
-                    }
-                  >
-                    {/* Every type, not only the recommended ones: an override
-                  limited to the runners-up is barely an override, and a type
-                  the fields cannot yet produce is answered by the message
-                  above rather than by hiding it (AC-033). */}
-                    {ALL_CHART_TYPES.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                        {alternatives.some(
-                          (alternative) => alternative.candidate.chartType === option,
-                        )
-                          ? ' (suggested)'
-                          : ''}
-                      </option>
-                    ))}
-                  </select>
-
-                  {isManual(chartTypeState) ? (
-                    <button
-                      type="button"
-                      data-testid="back-to-recommended"
-                      onClick={() => setChartTypeState(backToRecommended())}
-                    >
-                      Back to recommended
-                    </button>
-                  ) : null}
 
                   <WhyThisChart explanation={explanation} titles={titles} />
 
@@ -780,6 +799,29 @@ export function ChartEditor({
           )}
         </div>
       </aside>
+      {gallery ? (
+        // Every type, searched or by purpose (AC-217): an override limited
+        // to the suggestions is barely one, and a type these fields cannot
+        // draw is greyed and chosen anyway says what to add (AC-033).
+        <ChartTypeGallery
+          current={shownType}
+          suggested={suggested}
+          counts={{
+            measures: spec.measures.length,
+            dimensions: spec.dimensions.length,
+            timeDimensions: spec.timeDimensions.length,
+          }}
+          onChoose={(type) => {
+            setChartTypeState(chooseType(type));
+            closeGallery();
+          }}
+          onAuto={() => {
+            setChartTypeState(backToRecommended());
+            closeGallery();
+          }}
+          onClose={closeGallery}
+        />
+      ) : null}
     </div>
   );
 }

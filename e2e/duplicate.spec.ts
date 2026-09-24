@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { chooseChartType } from './chartType';
+
 const API = 'http://localhost:4100/api';
 
 /**
@@ -77,7 +79,7 @@ test('a duplicated chart tile has a chart of its own, and editing it leaves the 
 
   // The copy edited: a line chart.
   await copy.getByRole('button', { name: /^Edit / }).click();
-  await page.getByLabel('Chart type').selectOption('line');
+  await chooseChartType(page, 'line');
   await page.getByTestId('editor-back').click();
   await expect(copy.getByTestId('chart-canvas')).toHaveAttribute('data-chart-type', 'line');
   await expect(tiles.first().getByTestId('chart-canvas')).toHaveAttribute('data-chart-type', 'bar');

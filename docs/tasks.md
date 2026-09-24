@@ -3371,10 +3371,30 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Decided (overturnable): a chart's own filters and the grain chosen for each time field are stored in its definition (`filters`, `granularities`), raising the chart format to version 2 with a step that only raises the marker; a filter holds its member to, or keeps it from, one value, chosen from the member's first 500 values in order; the pill offers the grains hour to year (a grain saved finer is still shown); dimension rows show their type, not a count of distinct values, which `/v1/meta` does not give; a cube a view draws on that the model does not publish is headed by its name written as words. `e2e/dashboard.spec.ts`'s scroll test now waits for the charts, whose titles name the tiles (AC-209).
   - Failing test: `e2e/chart-editor.spec.ts`: clicking "Average Amount" adds it to Metrics; searching narrows the list; a time pill's granularity changes the query's grain; the Filters well is there (AC-215, AC-216).
   - Depends on: T228
-- [ ] T230 (AC-217, AC-218) Show the chart type by name with a searchable gallery, and warn on a manual combo or an over-capacity pick
-  - Files: `packages/web/src/editor/ChartTypeCard.tsx`, `packages/web/src/editor/ChartTypeGallery.tsx`, `e2e/chart-editor.spec.ts`
+- [x] T230 (AC-217, AC-218) Show the chart type by name with a searchable gallery, and warn on a manual combo or an over-capacity pick
+  - Files: `packages/web/src/editor/{ChartTypeCard,ChartTypeGallery,ChartEditor,WhyThisChart}.tsx`, `packages/web/src/editor/chartTypeCatalog.ts`, `packages/core/src/chart-type-names.ts`, `packages/recommender/src/{warnings,slices,recommend,requirements}.ts`, `packages/web/src/{tiles/ChartTile.tsx,workspaces/explore/chartTypeLabels.ts,shell/styles.ts}`, `e2e/chartType.ts` (helpers) and the eight e2e specs that chose a type from the old select
   - Failing test: `e2e/chart-editor.spec.ts`: the type reads "Auto · Bar"; Change opens a gallery where a line is greyed without a time field; choosing combo shows its warning; "Back to recommended" appears only after a manual pick (AC-217, AC-218).
   - Depends on: T228
+  - Done 2026-09-24, all three browsers:
+    - AC-217 is ticked on `e2e/chart-editor.spec.ts` "the type reads by name; Change opens a gallery that greys what these fields cannot draw". The trace names types too. The gallery's Escape stays inside the gallery: see "Esc that closes the chart type gallery leaves the editor open, focus on Change".
+    - AC-218 is ticked on "a manual combo, or a pie of too many slices, warns why and offers the recommended type".
+    - Unit tests cover the card, the gallery, the catalog, the names and the warnings (Top N, a split pie, scatter colour).
+  - The select, which offered types by id, is gone. Tests choose a type as a person does, through `e2e/chartType.ts`. One list of type names lives in `@wechart/core`, and the missing-fields sentence (AC-033) uses it too.
+  - **Decided (overturnable):**
+    - A type these fields can't draw is greyed and still choosable, as the prototype's gallery allows. It then says what to add.
+    - "Back to recommended" shows while the choice is manual, even when it equals the recommendation (AC-217's own text).
+    - A warning is shown only once the fields can draw the type and its rows are in.
+  - **The cold review failed the first cut, fixed:**
+    - The trace named types by id.
+    - Escape in the gallery also closed the dashboard's editor.
+    - Focus fell to the page after "Back to recommended".
+    - A pie's warning ignored Top N and counted no rows as unknown.
+    - A pie with no measure warned of "no fields".
+    - The recommender suggested a split pie it would then warn about; one slice count is now shared.
+    - A scatter was warned of colours by its time.
+    - A second list of type names existed.
+    - A choice that changed nothing was an undo step.
+  - **Found, not T230's:** with `compile`'s default encoding, the heatmap reads a dimension from `y` and the trellis a `facet` that nothing sets. Their warnings follow the drawing they are meant to have. Verify both types draw as intended (AC-037) with the next critique.
 - [x] T231 (AC-219) Add the Customize tab: axes, legend, series and values
   - Files: `packages/web/src/editor/{CustomizeTab,AxisPanel,ChartEditor}.tsx`, `packages/charts/src/{customize,axis,colours,optionFor,index}.ts`, `packages/web/src/shell/styles.ts`, `e2e/chart-editor.spec.ts`
   - Decided (overturnable): the settings are sparse keys of the chart's options (`legend`, `series`, `stacked`, `dataLabels`, `valueFormat`, `axes.*.includeZero`), applied for every renderer but the trellis. A series colour chosen in one chart wins over the colour the dashboard gives that member (AC-039) — the user's own choice for that chart — and "Auto" puts it back. Stacking is offered for bar, grouped bar, line, multi-series line and area with two or more series; data labels are written in each measure's format unless the Values section chooses one.

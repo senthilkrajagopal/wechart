@@ -58,6 +58,13 @@ describe('what a chart needs (AC-033)', () => {
     expect(sentences[0]).toContain('add 1 more');
   });
 
+  // T230 / AC-217: the type by its name, never its id ("groupedBar").
+  it('names the type as a person knows it', () => {
+    expect(describeMissing('groupedBar', counts(1, 1))).toEqual([
+      'Grouped bar needs 2 dimensions in Dimensions; add 1 more.',
+    ]);
+  });
+
   it('writes a sentence naming the well for every unmet requirement', () => {
     const sentences = describeMissing('heatmap', counts(0, 0));
 

@@ -1,5 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
+import { chooseChartType, expectChartType } from './chartType';
+
 /**
  * T032 / AC-034: WHEN the editor is opened from a dashboard tile, THE SYSTEM
  * SHALL offer a preview at the tile's own size and a preview that fills the
@@ -108,7 +110,7 @@ test.describe('the chart editor in the URL (AC-002)', () => {
     await open(page);
     await openEditorFromPencil(page);
     await expect.poll(() => editUrl(page)).toBe('tile-status');
-    await page.getByLabel('Chart type').selectOption('stackedBar');
+    await chooseChartType(page, 'stackedBar');
 
     await page.goBack();
 
@@ -134,7 +136,7 @@ test.describe('the chart editor in the URL (AC-002)', () => {
     await open(page);
     await openEditorFromPencil(page);
     await expect.poll(() => editUrl(page)).toBe('tile-status');
-    await page.getByLabel('Chart type').selectOption('stackedBar');
+    await chooseChartType(page, 'stackedBar');
 
     const held: Route[] = [];
     const hold = { on: true };
@@ -253,7 +255,7 @@ test('going back shows the change on the tile', async ({ page }) => {
   await open(page);
   await openEditorFromPencil(page);
 
-  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await chooseChartType(page, 'stackedBar');
   await page.getByTestId('editor-back').click();
 
   // The criterion's second failing state: "the dashboard tile does not
@@ -274,7 +276,7 @@ test('Discard takes the chart back as well (AC-066)', async ({ page }) => {
    */
   await open(page);
   await openEditorFromPencil(page);
-  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await chooseChartType(page, 'stackedBar');
   await page.getByTestId('editor-back').click();
   await expect(page.locator(TILE).getByTestId('chart-canvas')).toHaveAttribute(
     'data-chart-type',
@@ -292,7 +294,7 @@ test('Discard takes the chart back as well (AC-066)', async ({ page }) => {
 test('Esc goes back and keeps the change', async ({ page }) => {
   await open(page);
   await openEditorFromPencil(page);
-  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await chooseChartType(page, 'stackedBar');
 
   await page.getByTestId('editor-back').focus();
   await page.keyboard.press('Escape');
@@ -325,13 +327,13 @@ test('a chart edited once opens on that edit the second time', async ({ page }) 
    */
   await open(page);
   await openEditorFromPencil(page);
-  await page.getByLabel('Chart type').selectOption('stackedBar');
+  await chooseChartType(page, 'stackedBar');
   await page.getByTestId('editor-back').click();
   await expect(overlay(page)).toBeHidden();
 
   await openEditorFromPencil(page);
 
-  await expect(page.getByTestId('chart-type')).toHaveText('stackedBar');
+  await expectChartType(page, 'stackedBar');
 });
 
 // Saving a chart edited from its tile — written with the dashboard for a
@@ -343,8 +345,8 @@ test('changing the chart and changing it back records nothing', async ({ page })
   // A new state object with the same content is not a change to the chart.
   await open(page);
   await openEditorFromPencil(page);
-  await page.getByLabel('Chart type').selectOption('stackedBar');
-  await page.getByLabel('Chart type').selectOption('bar');
+  await chooseChartType(page, 'stackedBar');
+  await chooseChartType(page, 'bar');
 
   await page.getByTestId('editor-back').click();
 
@@ -355,13 +357,11 @@ test('Esc straight after choosing a type goes back and keeps it', async ({ page 
   // The realistic case: focus still on the list just used, not on Back.
   await open(page);
   await openEditorFromPencil(page);
-  const picker = page.getByLabel('Chart type');
-  // Focused explicitly and checked: choosing an option does not move focus by
-  // itself, so without this the test would press Esc from the Back button —
-  // the same as the test above, not the case this one names.
-  await picker.focus();
-  await picker.selectOption('stackedBar');
-  await expect(picker).toBeFocused();
+  // Chosen from the gallery, which gives focus back to Change: Esc is pressed
+  // from there, not from the Back button — the test above's case, not this
+  // one's.
+  await chooseChartType(page, 'stackedBar');
+  await expect(page.getByTestId('chart-type-change')).toBeFocused();
 
   await page.keyboard.press('Escape');
 
@@ -386,6 +386,27 @@ test('Esc that closes the search palette leaves the editor open', async ({ page 
 
   await expect(page.getByRole('dialog', { name: /search/i })).toBeHidden();
   await expect(overlay(page)).toBeVisible();
+});
+
+/**
+ * T230's review: the type gallery opens inside the editor over a dashboard,
+ * and Esc was heard by both — closing the gallery went back from the editor
+ * too, applying the draft.
+ */
+test('Esc that closes the chart type gallery leaves the editor open, focus on Change', async ({
+  page,
+}) => {
+  await open(page);
+  await openEditorFromPencil(page);
+  await overlay(page).getByTestId('chart-type-change').click();
+  const gallery = page.getByRole('dialog', { name: 'Choose chart type' });
+  await expect(gallery).toBeVisible();
+
+  await page.keyboard.press('Escape');
+
+  await expect(gallery).toHaveCount(0);
+  await expect(overlay(page)).toBeVisible();
+  await expect(overlay(page).getByTestId('chart-type-change')).toBeFocused();
 });
 
 test('going back returns focus to what opened the editor', async ({ page }) => {
@@ -459,7 +480,7 @@ test('a chart edited from its tile keeps its number format there', async ({ page
 
   await page.getByTestId('edit-chart-tile-revenue').click();
   await expect(overlay(page)).toBeVisible();
-  await page.getByLabel('Chart type').selectOption('hbar');
+  await chooseChartType(page, 'hbar');
   await page.getByTestId('editor-back').click();
   await expect(revenue.getByTestId('chart-canvas')).toHaveAttribute('data-chart-type', 'hbar');
 

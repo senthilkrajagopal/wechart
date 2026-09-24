@@ -1154,6 +1154,69 @@ fieldset.model-field > legend {
 .context-preview__object { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
 .context-preview__why { flex-basis: 100%; color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 .context-preview__source { overflow-wrap: anywhere; }
+/* The chart type card (AC-217), the prototype's reco-row: the type by name,
+   how it was chosen, and Change; and a manual choice's warning (AC-218). */
+.type-card-field { display: grid; gap: 6px; margin-bottom: 12px; }
+.type-card-field__label { font-size: var(--wc-text-xs-size); font-weight: var(--wc-text-xs-strong-weight); color: var(--wc-text-secondary); }
+.type-card-field__change {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.type-card-field__change:hover { border-color: var(--wc-accent); }
+.type-card-field__name { font-weight: var(--wc-text-sm-strong-weight); }
+.type-card-field__why { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.type-card-field > .btn-sm { justify-self: start; }
+.type-card-field__warning {
+  flex-wrap: wrap;
+  padding: 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--wc-status-warning-icon) 14%, var(--wc-bg-surface));
+  font-size: 12px;
+  line-height: 16px;
+}
+/* The gallery (AC-217): the prototype's "Choose chart type" — a search and
+   Close above, purposes down the left, the types as cards. */
+.dialog.type-gallery {
+  width: min(920px, calc(100vw - 32px));
+  max-width: none;
+  height: min(600px, calc(100vh - 64px));
+  padding: 0;
+  gap: 0;
+  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+.type-gallery__head { grid-column: 1 / -1; display: flex; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--wc-border-subtle); }
+.type-gallery__head h2 { font-size: var(--wc-text-lg-size); }
+.type-gallery__head input { flex: 1; max-width: 280px; }
+.type-gallery__head .btn-sm { margin-left: auto; }
+.type-gallery__shelves { display: grid; align-content: start; gap: 2px; padding: 8px; overflow: auto; border-right: 1px solid var(--wc-border-subtle); }
+.dialog .type-gallery__shelves button { height: auto; min-height: 28px; padding: 4px 8px; border: 0; text-align: left; }
+.dialog .type-gallery__shelves button[aria-pressed='true'] { background: var(--wc-bg-accent-soft); color: var(--wc-accent); font-weight: var(--wc-text-sm-strong-weight); }
+.type-gallery__cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; align-content: start; padding: 12px; overflow: auto; }
+.dialog .type-card { display: grid; gap: 6px; align-content: start; height: auto; padding: 12px; border-color: var(--wc-border-subtle); border-radius: 6px; text-align: left; }
+.dialog .type-card:hover { border-color: var(--wc-accent); }
+.dialog .type-card[aria-current='true'] { border-color: var(--wc-accent); box-shadow: 0 0 0 1px var(--wc-accent); }
+/* Greyed: these fields cannot draw it, and it says what it lacks. */
+.dialog .type-card[data-drawable='false'] { background: var(--wc-bg-subtle); }
+.dialog .type-card[data-drawable='false'] .type-card__name { color: var(--wc-text-secondary); }
+.type-card__top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.type-card__name { font-weight: var(--wc-text-sm-strong-weight); }
+.type-card__badge { padding: 0 6px; border-radius: 999px; background: var(--wc-bg-accent-soft); color: var(--wc-accent); font-size: 12px; line-height: 18px; }
+.type-card__about { display: grid; gap: 4px; }
+.type-card__description, .type-card__needs, .type-card__missing { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.type-card__missing { color: var(--wc-text-primary); }
+.type-gallery__none { margin: 0; color: var(--wc-text-secondary); }
+.type-gallery__foot { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--wc-border-subtle); }
+.dialog .type-gallery__foot p { flex: 1; margin: 0; font-size: 12px; line-height: 16px; }
 /* A dashboard previewed as a security context (T172, AC-166): the prototype's
    .viewas bar, pinned while the page scrolls (direction.md rule 21). */
 .preview-banner {

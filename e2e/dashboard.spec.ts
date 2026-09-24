@@ -1283,7 +1283,8 @@ test('a chart following its recommendation draws on the dashboard as it does in 
   // Recommended from the rows, so wait for them before reading the type —
   // before the query settles the editor is recommending from none.
   await expect(page.getByTestId('result-row-count')).not.toHaveText('0 rows');
-  const inEditor = await page.getByTestId('chart-type').textContent();
+  // The type the card names, by the id it carries (AC-217 writes it by name).
+  const inEditor = await page.getByTestId('chart-type').getAttribute('data-chart-type');
   expect(inEditor).toMatch(/\S/);
   /**
    * A guard on the fixture, not on the recommender: the chart is seeded over

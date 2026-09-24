@@ -1,4 +1,5 @@
 import { isLegal } from './legality';
+import { pieSlicesField } from './slices';
 import type { Candidate, ChartType, Field, Signature } from './types';
 
 /**
@@ -95,7 +96,13 @@ export function enumerate(signature: Signature): Candidate[] {
     const [first, second] = dimensions;
     candidates.push(build('bar', { valueFields: measures.slice(0, 1), categoryField: first! }));
     candidates.push(build('hbar', { valueFields: measures.slice(0, 1), categoryField: first! }));
-    candidates.push(build('pie', { valueFields: measures.slice(0, 1), categoryField: first! }));
+    // Its slices as it draws them: a slice per row when split (AC-221).
+    candidates.push(
+      build('pie', {
+        valueFields: measures.slice(0, 1),
+        categoryField: pieSlicesField(first!, second, signature.rowCount),
+      }),
+    );
     candidates.push(build('treemap', { valueFields: measures.slice(0, 1), categoryField: first! }));
 
     if (second) {

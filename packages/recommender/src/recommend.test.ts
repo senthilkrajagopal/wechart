@@ -125,6 +125,18 @@ describe('nothing offered breaks a hard rule (AC-030, AC-031)', () => {
     expect(types).not.toContain('pie');
   });
 
+  // T230's review: split by a second dimension a pie draws a slice per row
+  // (AC-221) — three statuses by 240 orders is 240 slices, not three.
+  it('never offers a pie whose second dimension makes too many slices (AC-031)', () => {
+    const { top, runnersUp } = recommend({
+      ...signature(measure(), dimension(3), dimension(240, 'b')),
+      rowCount: 240,
+    });
+    const types = [top!.candidate.chartType, ...runnersUp.map((r) => r.candidate.chartType)];
+
+    expect(types).not.toContain('pie');
+  });
+
   it('never offers a heatmap once there are too many cells (AC-031)', () => {
     const { top, runnersUp } = recommend(signature(measure(), dimension(30), dimension(30, 'b')));
     const types = [top!.candidate.chartType, ...runnersUp.map((r) => r.candidate.chartType)];

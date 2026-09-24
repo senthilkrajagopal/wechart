@@ -37,6 +37,7 @@ export {
   versionOf,
   type LegacyFixture,
 } from './chart-migrations';
+export { CHART_TYPE_NAMES, chartTypeName } from './chart-type-names';
 
 export {
   CHANNELS,
