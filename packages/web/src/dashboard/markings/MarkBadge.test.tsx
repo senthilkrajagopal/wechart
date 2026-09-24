@@ -1,6 +1,7 @@
 import { EMPTY_PREDICATE, withItem, withRange } from '@wechart/core';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 
 import { MarkBadge } from './MarkBadge';
 import { MarkChip, summariseMarking } from './MarkChip';
@@ -131,5 +132,61 @@ describe('summarising what a marking holds', () => {
 
   it('is empty for an empty marking', () => {
     expect(summariseMarking(EMPTY_PREDICATE)).toBe('');
+  });
+});
+
+/**
+ * T220 / AC-200: THE SYSTEM SHALL show each non-empty marking in the filter bar
+ * as a chip bordered in the marking's colour, naming the marking, summarising
+ * its values by the members' titles, naming the tile it came from, and
+ * offering a menu and a control that unmarks it.
+ * `Fails when: a chip shows a member's internal name, omits the source tile,
+ * or cannot unmark from the chip.`
+ */
+describe('the marking chip, as the prototype draws it (AC-200)', () => {
+  const titleOf = (member: string) =>
+    ({ 'orders.status': 'Status', 'orders.count': 'Count' })[member];
+
+  it('summarises by the members’ titles, as “Title: values”', () => {
+    const mixed = withRange(withItem(withItem(EMPTY_PREDICATE, paid), shipped), {
+      member: 'orders.count',
+      from: 1,
+      to: 9,
+    });
+    expect(summariseMarking(mixed, titleOf)).toBe('Status: paid, shipped, Count 1 to 9');
+  });
+
+  it('names at most a few values and counts the rest, as the prototype’s “+n”', () => {
+    const many = ['a', 'b', 'c', 'd', 'e'].reduce(
+      (predicate, value) => withItem(predicate, [{ member: 'orders.status', value }]),
+      EMPTY_PREDICATE,
+    );
+    expect(summariseMarking(many, titleOf, 2)).toBe('Status: a, b +3');
+  });
+
+  it('is bordered in its colour, names its source tile, and unmarks from its × and its menu', async () => {
+    const onUnmark = vi.fn();
+    render(
+      <MarkChip
+        marking={marking}
+        colour="#151107"
+        predicate={withItem(EMPTY_PREDICATE, paid)}
+        titleOf={titleOf}
+        from="Orders by status"
+        onUnmark={onUnmark}
+      />,
+    );
+    const chip = screen.getByTestId('mark-chip');
+    expect(chip.style.borderColor).toBe('rgb(21, 17, 7)');
+    expect(chip.textContent).toContain('Status: paid');
+    expect(chip.textContent).not.toContain('orders.status');
+    expect(chip.textContent).toContain('from Orders by status');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Unmark Marking' }));
+    expect(onUnmark).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Marking menu' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Unmark' }));
+    expect(onUnmark).toHaveBeenCalledTimes(2);
   });
 });

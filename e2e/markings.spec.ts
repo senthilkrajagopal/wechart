@@ -1102,3 +1102,57 @@ test('the marked badge sits beside the title in the tile’s header, and never o
   await expect(tile(page, 'tile-notes')).toBeVisible();
   await expect(tile(page, 'tile-notes').getByTestId('mark-badge')).toHaveCount(0);
 });
+
+/**
+ * T220 / AC-200: THE SYSTEM SHALL show each non-empty marking in the filter bar
+ * as a chip bordered in the marking's colour, naming the marking, summarising
+ * its values by the members' titles, naming the tile it came from, and
+ * offering a menu and a control that unmarks it.
+ * `Fails when: a chip shows a member's internal name, omits the source tile,
+ * or cannot unmark from the chip.`
+ */
+test('the marking’s chip names its values by title and its tile, is bordered in its colour, and unmarks', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  await clickBar(page, status, 'shipped');
+
+  // In the filter bar.
+  const bar = page.getByRole('region', { name: 'Filters' });
+  const chip = bar.getByTestId('mark-chip');
+  await expect(chip).toContainText('Marking');
+  await expect(chip).toContainText('Orders Status: shipped');
+  await expect(chip).not.toContainText('orders.status');
+  await expect(chip).toContainText('from By status');
+  // Bordered in the marking's own colour: its swatch's.
+  const [border, swatch, width] = await chip.evaluate((node) => [
+    getComputedStyle(node).borderTopColor,
+    getComputedStyle(node.querySelector('[data-testid="mark-chip-swatch"]') as HTMLElement)
+      .backgroundColor,
+    getComputedStyle(node).borderTopWidth,
+  ]);
+  expect(border).toBe(swatch);
+  // The prototype's 1.5 px border, drawn — which browsers round to whole
+  // device pixels, so 1 px at a scale of one.
+  expect(parseFloat(width ?? '0')).toBeGreaterThanOrEqual(1);
+
+  // Its ×: the marking is emptied, and every trace of it goes.
+  await page.getByRole('button', { name: 'Unmark Marking' }).click();
+  await expect(chip).toHaveCount(0);
+  await expect(status.getByTestId('mark-badge')).toHaveCount(0);
+  await expect(page.getByTestId('marking-announcer')).toContainText('Marking cleared');
+  // The × went with its chip; focus did not fall to the page.
+  await expect(bar).toBeFocused();
+
+  // And its menu's Unmark, said as well.
+  await clickBar(page, status, 'completed');
+  await expect(chip).toContainText('completed');
+  await expect(page.getByTestId('marking-announcer')).not.toContainText('cleared');
+  await page.getByRole('button', { name: 'Marking menu' }).click();
+  await page.getByRole('menuitem', { name: 'Unmark' }).click();
+  await expect(chip).toHaveCount(0);
+  await expect(page.getByTestId('marking-announcer')).toContainText('Marking cleared');
+});

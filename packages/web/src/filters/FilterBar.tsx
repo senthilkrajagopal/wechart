@@ -167,7 +167,9 @@ export function FilterBar(props: FilterBarProps) {
    */
   if (props.filters.length > 0) return <Filters {...props} />;
   return (
-    <section aria-label="Filters" className="filter-bar">
+    // Focusable by script only: where focus goes when a chip it held unmarks
+    // itself and goes (T220's review).
+    <section aria-label="Filters" className="filter-bar" tabIndex={-1}>
       {props.chips === undefined ? null : (
         <>
           <span className="filter-bar__spacer" />
@@ -240,7 +242,7 @@ function Filters({
   }, [openId]);
 
   return (
-    <section aria-label="Filters" className="filter-bar" ref={bar}>
+    <section aria-label="Filters" className="filter-bar" ref={bar} tabIndex={-1}>
       {filters.map((filter, index) => {
         const member = members.find((candidate) => candidate.name === filter.member);
         const kind = FILTER_WIDGETS.find((entry) => entry.widget === filter.widget);

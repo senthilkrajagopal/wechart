@@ -2024,16 +2024,39 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   border-radius: 2px;
   flex: 0 0 auto;
 }
-/* references-markings.md fixes the chip: 24px high, 999px radius, 12px at 600. */
+/* The prototype's .mchip (AC-200): 24 px high, 999 px radius, 12 px, bordered
+   1.5 px in the marking's colour (set inline) on the surface; the name at 600
+   and the rest at 400 — the prototype's weights, where references-markings.md
+   had the whole chip at 600. */
 .mark-chip {
   height: 24px;
-  padding: 0 10px;
+  padding: 0 4px 0 10px;
+  border: 1.5px solid var(--wc-border-strong);
   border-radius: 999px;
-  background: var(--wc-bg-subtle);
+  background: var(--wc-bg-surface);
   color: var(--wc-text-primary);
   font-size: var(--wc-text-xs-size);
-  font-weight: var(--wc-text-xs-strong-weight);
+  white-space: nowrap;
 }
+.mark-chip { max-width: 520px; }
+.mark-chip__name { font-weight: var(--wc-text-xs-strong-weight); }
+/* The summary gives way first: bounded to two values and "+n" already, and
+   ellipsised past the chip's width, the whole of it in its title. */
+.mark-chip__summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mark-chip__from { color: var(--wc-text-secondary); }
+.mark-chip .menu-button { display: inline-flex; position: relative; }
+.mark-chip__button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--wc-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.mark-chip__button:hover { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
 
 /* AC-059's explanation. Marked out, because it reports something the user did
    not ask for rather than describing what they are about to do. */

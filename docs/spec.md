@@ -649,7 +649,7 @@ Dashboards:
       Fails when: any of those changes cannot be made on that page, or the tiles table is missing.
 - [ ] AC-199 WHEN the user opens a chart tile's menu in view mode, THE SYSTEM SHALL offer View as table, View query, Download CSV and Edit chart, and, while the dashboard is in Markings mode, the marked-rows actions headed by the tile's marking and its count.
       Fails when: one of those items is missing, or the marked-rows actions appear outside Markings mode.
-- [ ] AC-200 THE SYSTEM SHALL show each non-empty marking in the filter bar as a chip bordered in the marking's colour, naming the marking, summarising its values by the members' titles, naming the tile it came from, and offering a menu and a control that unmarks it.
+- [x] AC-200 THE SYSTEM SHALL show each non-empty marking in the filter bar as a chip bordered in the marking's colour, naming the marking, summarising its values by the members' titles, naming the tile it came from, and offering a menu and a control that unmarks it.
       Fails when: a chip shows a member's internal name, omits the source tile, or cannot unmark from the chip.
 - [x] AC-201 THE SYSTEM SHALL show the marked-items badge in a chart tile's header row, beside its title, and only on chart tiles whose marking holds something.
       Fails when: the badge pushes the title down, or appears on a tile that does not mark or whose marking is empty.

@@ -1472,6 +1472,40 @@ export function DashboardView({
   const theme = useThemeName();
   const markings = markingsFrom(live.markings);
   const [marks, setMarks] = useState<MarkingState>({});
+  /**
+   * The tile each marking was last marked from, which its chip names (AC-200,
+   * the prototype's "from ‹tile›"). View state, like the marks themselves.
+   */
+  const [markSources, setMarkSources] = useState<Readonly<Record<string, string>>>({});
+  const noteSource = (markingId: string, tileId: string) => {
+    setMarkSources((now) => (now[markingId] === tileId ? now : { ...now, [markingId]: tileId }));
+  };
+  /** The title of the tile a marking was last marked from, for its chip. */
+  const markSourceTitle = (markingId: string): string | undefined => {
+    const tileId = markSources[markingId];
+    const element = tileId === undefined ? null : elementAt(live, tileId);
+    if (element === null || !isTile(element) || element.chartId === undefined) return undefined;
+    return chartTitleOf(element.chartId);
+  };
+  /**
+   * A marking emptied from its chip (AC-200) — every tile's contribution, as
+   * the chip is the marking's, not a tile's — and said (AC-101).
+   */
+  const unmarkAll = (marking: Marking) => {
+    setMarks((now) => withMarking(now, marking.id, EMPTY_PREDICATE));
+    setMarkSaid(announceMarking({ marking, markedCount: 0 }));
+    /**
+     * The chip goes with its marking, and the control that had focus with it
+     * (T220's review): on to the next chip's ×, or else the filter bar, so a
+     * keyboard is never left on the page.
+     */
+    requestAnimationFrame(() => {
+      const next = window.document.querySelector<HTMLElement>(
+        '[data-testid="mark-chip"] button[aria-label^="Unmark "]',
+      );
+      (next ?? window.document.querySelector<HTMLElement>('section.filter-bar'))?.focus();
+    });
+  };
   /** The last marking change, for the polite live region (AC-101). */
   const [markSaid, setMarkSaid] = useState('');
   /** How many items a marking holds now: its items and its ranges. */
@@ -1845,6 +1879,7 @@ export function DashboardView({
     if (after === before) return;
 
     setMarks((now) => withMarking(now, markingId, after));
+    noteSource(markingId, tileId);
     const named = markings.find((each) => each.id === markingId);
     if (named !== undefined) {
       // Said in the live region, with its count and where from (AC-101).
@@ -1957,6 +1992,7 @@ export function DashboardView({
           toggle: result.action === 'toggle',
         });
         setMarks((now) => withMarking(now, markingId, after));
+        noteSource(markingId, tileId);
         say(after);
         return;
       }
@@ -1968,6 +2004,7 @@ export function DashboardView({
         }
         const after = addItemsWithinLimit({ ...EMPTY_PREDICATE }, reach);
         setMarks((now) => withMarking(now, markingId, after.predicate));
+        noteSource(markingId, tileId);
         say(after.predicate, after.message === undefined ? '' : ` ${after.message}`);
         return;
       }
@@ -2310,6 +2347,7 @@ export function DashboardView({
               ...(key === undefined ? {} : { primaryKey: key }),
               onMark: (predicate: MarkingPredicate) => {
                 setMarks((now) => withMarking(now, markingId, predicate));
+                noteSource(markingId, tileId);
                 const named = markings.find((each) => each.id === markingId);
                 const from = chartTitleOf(chartId);
                 if (named === undefined) return;
@@ -3014,6 +3052,12 @@ export function DashboardView({
                             marking={each}
                             colour={markingColour(each.slot, theme)}
                             predicate={markingOf(marks, each.id)}
+                            // By the members' titles, from its tile (AC-200).
+                            titleOf={memberTitle}
+                            from={markSourceTitle(each.id)}
+                            onUnmark={() => {
+                              unmarkAll(each);
+                            }}
                           />
                         ))}
                       </>
