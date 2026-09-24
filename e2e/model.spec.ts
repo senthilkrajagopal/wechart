@@ -165,6 +165,12 @@ test('a model change Cube refuses is not published, and Cube’s reason is on it
     .getByRole('listitem')
     .filter({ hasText: 'Cube: no_such_member is not defined' });
   await expect(problem.locator('.model-problems__where')).toHaveText('cubes/orders.yml');
+  // And the file is marked in the tree (T234's review, AC-222).
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Model files' })
+      .getByRole('link', { name: /^orders\.yml/ }),
+  ).toContainText('problems');
 
   // Nothing published: the stored file, and the model Cube serves, as they were.
   const stored = await page.request.get('/api/model/files');
@@ -538,4 +544,101 @@ test('a model file opens on a form for its cube, its enumerations the validator�
     'hasMany',
     'hasOne',
   ]);
+});
+
+/**
+ * T234 / AC-222: WHILE the Model workspace is open, THE SYSTEM SHALL show a
+ * tree of the model's files beside the editor, open the chosen file in place
+ * with its path in the URL, offer New cube and New view from the tree, and
+ * mark each file that has problems.
+ * `Fails when: moving to another file requires leaving the editor, New cube or
+ * New view is missing, or a file with an error carries no mark in the tree.`
+ *
+ * AC-223: THE SYSTEM SHALL lay the model editor out as full-height panes,
+ * each with its own header row and scrolling — the form, and the code with
+ * its Problems panel docked beneath it counting errors and warnings — with
+ * code and file paths in direction.md's code face.
+ * `Fails when: the page itself scrolls at 1,440 × 900, Problems gives no count
+ * of warnings, or code is set in a face other than IBM Plex Mono.`
+ */
+test('Model is one workspace: a tree beside full-height form and code panes, Problems docked', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/model/files/cubes%2Forders.yml');
+  const tree = page.getByRole('navigation', { name: 'Model files' });
+  const yaml = page.getByRole('textbox', { name: 'cubes/orders.yml, as YAML' });
+  await expect(yaml).toContainText('sql_table: public.orders');
+  await expect(tree.getByRole('link', { name: /^orders\.yml/ })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+
+  // AC-223: the page does not scroll; the panes do, each under its header.
+  const scrolls = await page.evaluate(() => {
+    const root = document.scrollingElement ?? document.documentElement;
+    return root.scrollHeight > root.clientHeight;
+  });
+  expect(scrolls).toBe(false);
+  const form = page.getByRole('region', { name: 'Form editor' });
+  const code = page.getByRole('region', { name: 'YAML and join diagram' });
+  for (const pane of [form, code]) {
+    const box = await pane.boundingBox();
+    expect((box?.y ?? 0) + (box?.height ?? 0)).toBeGreaterThan(900 - 24);
+    expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(900);
+  }
+  await expect(form.locator('.model-editor__head')).toContainText('cubes/orders.yml');
+  await expect(code.getByRole('group', { name: 'Right pane view' })).toBeVisible();
+  // Problems beneath the code, counting warnings as well as errors.
+  const problems = code.getByRole('region', { name: 'Problems' });
+  await expect(problems.getByRole('heading')).toHaveText('Problems · 0 errors · 0 warnings');
+  // Docked: below where the code ends, not merely below where it starts.
+  const editor = code.locator('.cm-editor');
+  const [codeBox, problemsBox] = [await editor.boundingBox(), await problems.boundingBox()];
+  expect(problemsBox?.y ?? 0).toBeGreaterThanOrEqual(
+    Math.floor((codeBox?.y ?? 0) + (codeBox?.height ?? 0)),
+  );
+  // Each pane scrolls on its own: the form is longer than its pane.
+  const formBody = form.locator('.model-editor__form');
+  await formBody.evaluate((node) => {
+    node.scrollTop = 200;
+  });
+  expect(await formBody.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => document.scrollingElement?.scrollTop ?? 0)).toBe(0);
+  // Code and paths in the code face.
+  for (const set of [page.locator('.cm-content'), form.locator('.model-editor__path')])
+    expect(await set.first().evaluate((node) => getComputedStyle(node).fontFamily)).toMatch(
+      /^"?IBM Plex Mono"?,/,
+    );
+
+  // AC-222: another file, opened in place — the page never reloads.
+  await page.evaluate(() => {
+    (window as unknown as { stayed?: boolean }).stayed = true;
+  });
+  await tree.getByRole('link', { name: /^customers\.yml/ }).click();
+  await expect(page).toHaveURL(/\/model\/files\/cubes%2Fcustomers\.yml$/);
+  await expect(page.getByRole('textbox', { name: 'cubes/customers.yml, as YAML' })).toContainText(
+    'name: customers',
+  );
+  expect(await page.evaluate(() => (window as unknown as { stayed?: boolean }).stayed)).toBe(true);
+
+  // A file that stops parsing is marked in the tree, in words.
+  await page.locator('.cm-line', { hasText: 'sql_table:' }).first().click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(': x');
+  await expect(tree.getByRole('link', { name: /^customers\.yml/ })).toContainText('problems');
+  await expect(tree.getByRole('link', { name: /^orders\.yml/ })).not.toContainText('problems');
+
+  // New cube and New view: a file of its own, open, and said to be unpublished.
+  await tree.getByRole('button', { name: 'New cube' }).click();
+  await expect(page).toHaveURL(/\/model\/files\/cubes%2Fnew_cube_1\.yml$/);
+  await expect(page.getByRole('textbox', { name: 'cubes/new_cube_1.yml, as YAML' })).toContainText(
+    'name: new_cube_1',
+  );
+  await expect(tree.getByRole('link', { name: /^new_cube_1\.yml/ })).toContainText('unpublished');
+  await expect(page.getByRole('button', { name: 'Save & reload Cube' })).toBeEnabled();
+  await tree.getByRole('button', { name: 'New view' }).click();
+  await expect(page).toHaveURL(/\/model\/files\/views%2Fnew_view_1\.yml$/);
+  // The cube made first is still there to come back to.
+  await expect(tree.getByRole('link', { name: /^new_cube_1\.yml/ })).toBeVisible();
 });

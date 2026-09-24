@@ -19,7 +19,7 @@ describe('the problems panel', () => {
 
     const panel = screen.getByRole('region', { name: 'Problems' });
     expect(within(panel).getByRole('heading').textContent).toBe(
-      `Problems · ${String(problems.length)} ${problems.length === 1 ? 'error' : 'errors'}`,
+      `Problems · ${String(problems.length)} ${problems.length === 1 ? 'error' : 'errors'} · 0 warnings`,
     );
     const items = within(panel).getAllByRole('listitem');
     expect(items).toHaveLength(problems.length);
@@ -51,7 +51,7 @@ describe('the problems panel', () => {
     );
 
     const panel = screen.getByRole('region', { name: 'Problems' });
-    expect(within(panel).getByRole('heading').textContent).toBe('Problems · 2 errors');
+    expect(within(panel).getByRole('heading').textContent).toBe('Problems · 2 errors · 0 warnings');
     expect(
       within(panel)
         .getAllByRole('listitem')
@@ -63,6 +63,29 @@ describe('the problems panel', () => {
       ['Cube: no_such_member is not defined', 'cubes/orders.yml'],
       ['Cube: YAMLException: missed comma (2:3)', 'cubes/products.yml:2'],
     ]);
+  });
+
+  /**
+   * T234 / AC-223: … the code with its Problems panel docked beneath it
+   * counting errors and warnings …
+   * `Fails when: … Problems gives no count of warnings …`
+   */
+  it('counts warnings apart from errors, each with its own icon', () => {
+    const warning = {
+      path: 'cubes/x.yml',
+      line: 3,
+      column: 5,
+      message: 'A warning',
+      from: 10,
+      to: 12,
+      severity: 'warning' as const,
+    };
+    render(<ProblemsPanel path="cubes/x.yml" problems={[warning]} />);
+
+    const panel = screen.getByRole('region', { name: 'Problems' });
+    expect(within(panel).getByRole('heading').textContent).toBe('Problems · 0 errors · 1 warning');
+    const [item] = within(panel).getAllByRole('listitem');
+    expect(item?.querySelector('svg')?.getAttribute('data-icon')).toBe('warn');
   });
 
   it('says there are none when the file parses', () => {

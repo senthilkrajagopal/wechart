@@ -14,6 +14,9 @@ const SHELL_CSS = `
 /* A popover's lift, the prototype's --shadow-pop in each theme. Not a colour
    text sits on, so it is kept here rather than among the audited tokens. */
 :root { --wc-shadow-pop: 0 8px 24px rgba(20, 20, 18, 0.14), 0 1px 3px rgba(20, 20, 18, 0.1); }
+/* direction.md §3's code face, for code and file paths (AC-223): IBM Plex
+   Mono, then the platform's monospace — named, as Inter is, not shipped. */
+:root { --wc-font-code: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
 :root[data-theme='dark'] { --wc-shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4); }
 
 /* Form controls do not inherit type by default, and Safari's default button
@@ -408,7 +411,7 @@ main { padding: var(--wc-surface-padding); }
 }
 .model-file__path {
   margin: 0 0 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--wc-font-code);
   font-size: 13px;
   font-weight: 600;
 }
@@ -453,12 +456,69 @@ main { padding: var(--wc-surface-padding); }
    and YAML the full width — and members as rows that open in place. */
 /* direction.md §7b: the form as the main working area, the YAML on the right. */
 .model-editor {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
-  gap: 16px;
-  align-items: start;
 }
-.model-editor__yaml { position: sticky; top: 0; }
+/* The Model workspace as one page (T234, AC-222, AC-223): the prototype's
+   three panes — the file tree, the form, the code with Problems docked —
+   each full height under its own header row, each scrolling on its own; the
+   page itself never scrolls. */
+main:has(.model-page) {
+  height: calc(100vh - var(--wc-app-bar-height));
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+.model-page { flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr); }
+.model-page__main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.model-page__main > .state-line { margin: 16px; }
+.model-page__overview { flex: 1; min-height: 0; overflow: auto; padding: var(--wc-surface-padding); }
+.model-page__note { margin: 0 0 12px; color: var(--wc-text-secondary); }
+.model-tree { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--wc-border-subtle); background: var(--wc-bg-surface); }
+.model-tree__head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 48px; padding: 8px 12px; border-bottom: 1px solid var(--wc-border-subtle); }
+.model-tree__head h2 { flex: 1 0 100%; margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: var(--wc-text-sm-strong-weight); }
+.model-tree__body { flex: 1; min-height: 0; overflow: auto; padding: 8px; }
+.model-tree__folder ul { margin: 0; padding: 0; list-style: none; }
+.model-tree__dir { margin: 8px 0 2px; padding: 0 8px; color: var(--wc-text-secondary); font: 12px/16px var(--wc-font-code); }
+.model-tree__folder:first-child .model-tree__dir { margin-top: 0; }
+.model-tree__file {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 28px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--wc-text-primary);
+  font: 12px/16px var(--wc-font-code);
+  text-decoration: none;
+}
+.model-tree__file:hover { background: var(--wc-bg-hover); }
+.model-tree__file[aria-current='page'] { background: var(--wc-bg-accent-soft); color: var(--wc-accent); font-weight: 600; }
+.model-tree__name { min-width: 0; overflow-wrap: anywhere; }
+.model-tree__tag,
+.model-tree__mark {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  font: 12px/16px Inter, system-ui, sans-serif;
+  font-weight: 400;
+}
+.model-tree__tag { color: var(--wc-text-secondary); }
+.model-tree__mark { margin-left: auto; color: var(--wc-status-error); }
+.model-editor__pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.model-editor__pane + .model-editor__pane { border-left: 1px solid var(--wc-border-subtle); }
+.model-editor__form { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.model-editor__code { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px; overflow: hidden; }
+.model-editor__yaml-view:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* A page with no editor — code, a file there is none of, one being read —
+   headed as the editor is, its body scrolling beneath. */
+.model-page__solo { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.model-page__body { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+/* Code in the Model workspace, in the code face (AC-223). */
+.model-workspace code { font-family: var(--wc-font-code); }
+.model-editor__sync { margin-left: auto; color: var(--wc-text-muted); font-size: 12px; }
 /* The prototype's .seg: a two-way toggle, the pressed side in the accent. */
 .seg {
   display: inline-flex;
@@ -482,7 +542,9 @@ main { padding: var(--wc-surface-padding); }
   color: var(--wc-accent);
   font-weight: 600;
 }
-.model-editor__view { margin-bottom: 8px; }
+.model-editor__view { margin: 0; }
+/* Scrolled within the pane, with room for its controls' focus rings (AC-176). */
+.model-editor__code > .join-editor { overflow: auto; padding: 6px; }
 /* The join diagram (T144, AC-138): the prototype's boxes and arrows, in SVG
    from the tokens. */
 .join-editor { display: grid; gap: 12px; }
@@ -506,7 +568,7 @@ main { padding: var(--wc-surface-padding); }
 .join-editor__cube[data-missing='true'] rect { stroke-dasharray: 4 3; }
 .join-editor__name {
   fill: var(--wc-text-primary);
-  font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 600 13px var(--wc-font-code);
 }
 .join-editor__holds { fill: var(--wc-text-secondary); font-size: 12px; }
 .join-editor__edge { fill: none; stroke: var(--wc-text-secondary); stroke-width: 1.5; }
@@ -538,12 +600,18 @@ main { padding: var(--wc-surface-padding); }
 .join-editor__add button { justify-self: start; }
 /* The prototype's editor head: the file's one action, and how it went (T142). */
 .model-editor__head {
-  grid-column: 1 / -1;
+  flex: none;
   display: flex;
   gap: 12px;
   align-items: center;
-  justify-content: flex-end;
+  min-height: 48px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
 }
+/* The file's path heads its form: the page title's size (AC-231), in the
+   code face a path is written in (AC-223). */
+.model-workspace .model-editor__path { flex: 1; min-width: 0; margin: 0; font-family: var(--wc-font-code); overflow-wrap: anywhere; }
 .model-editor__outcome { margin: 0; color: var(--wc-text-secondary); font-size: 12px; }
 .model-editor__outcome--failed { color: var(--wc-status-error); }
 .yaml-editor .cm-editor {
@@ -559,7 +627,7 @@ main { padding: var(--wc-surface-padding); }
    scrolled to (research/code-editor.md, "Scrolling"; T139's review). */
 .yaml-editor .cm-scroller {
   overflow: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--wc-font-code);
 }
 .yaml-editor .cm-gutters {
   background: var(--wc-bg-subtle);
@@ -567,14 +635,16 @@ main { padding: var(--wc-surface-padding); }
   border-right: 1px solid var(--wc-border-subtle);
 }
 .yaml-editor .cm-focused { outline: 2px solid var(--wc-accent); }
-/* The YAML leaves room for the Problems panel beneath it. */
-.model-editor__yaml .yaml-editor .cm-editor { max-height: calc(100vh - 330px); }
+/* The YAML fills its pane, above the Problems panel docked beneath it. */
+.model-editor__code .yaml-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.model-editor__code .yaml-editor .cm-editor { flex: 1; min-height: 0; max-height: none; }
 
 /* Problems (T141, AC-135), the prototype's .problems and .prob: a header as a
    selected tab, then a row a problem, 28 px, glyph · message · file:line. */
 .model-problems {
+  flex: none;
   max-height: 150px;
-  margin-top: 8px;
+  margin: 0 8px 8px;
   overflow: auto;
   border: 1px solid var(--wc-border-subtle);
   border-radius: 4px;
@@ -616,7 +686,7 @@ button.model-problems__row { cursor: pointer; }
   color: var(--wc-text-muted);
   /* The floor, not below it (AC-004): direction.md §3 has no size under 12. */
   font-size: var(--wc-text-xs-size);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--wc-font-code);
 }
 /* The prototype's .warnbar (T140, AC-134): a form edit that would lose
    something, named, with Apply anyway and Keep the file. */
@@ -676,9 +746,6 @@ button.model-problems__row { cursor: pointer; }
   color: var(--wc-text-secondary);
   cursor: not-allowed;
 }
-/* The file's path is its title (AC-231): the page-title size and weight, in
-   the monospace a path is written in. */
-.model-file-page__path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .model-form {
   max-width: 960px;
   margin-bottom: 16px;
@@ -705,7 +772,7 @@ button.model-problems__row { cursor: pointer; }
 .model-field__sql,
 .model-field__yaml {
   width: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--wc-font-code);
   font-size: 12px;
 }
 .model-field__flag { display: flex; gap: 6px; }
@@ -785,7 +852,7 @@ fieldset.model-field > legend {
 .model-member__type {
   margin-left: 8px;
   color: var(--wc-text-secondary);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--wc-font-code);
 }
 
 /* The contents sit on the page, and their table is the card (AC-231), as the
@@ -846,7 +913,7 @@ fieldset.model-field > legend {
   line-height: var(--wc-text-xs-line);
   font-weight: var(--wc-text-xs-strong-weight);
 }
-.chart-page__source { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.chart-page__source { margin: 0; font-family: var(--wc-font-code); }
 .chart-page__none { margin: 0; color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
 .chart-page__pills,
 .chart-page__used { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
@@ -1081,7 +1148,7 @@ fieldset.model-field > legend {
 }
 .admin-pane__title {
   margin: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--wc-font-code);
   font-size: var(--wc-text-sm-size);
   font-weight: 600;
   overflow-wrap: anywhere;
@@ -1139,7 +1206,7 @@ fieldset.model-field > legend {
   background: var(--wc-bg-surface);
 }
 .context-preview h2 { margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
-.context-preview textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.context-preview textarea { font-family: var(--wc-font-code); font-size: 12px; }
 .context-preview__note { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .context-preview__problem { font-size: 12px; line-height: 16px; color: var(--wc-status-error); }
 .context-preview__found { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
@@ -1151,7 +1218,7 @@ fieldset.model-field > legend {
 .context-preview__access h3 { margin: 0 0 6px; font-size: var(--wc-text-xs-size); font-weight: 600; color: var(--wc-text-secondary); }
 .context-preview__access ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .context-preview__access li { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: center; font-size: 12px; line-height: 16px; }
-.context-preview__object { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.context-preview__object { font-family: var(--wc-font-code); font-weight: 600; }
 .context-preview__why { flex-basis: 100%; color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 .context-preview__source { overflow-wrap: anywhere; }
 /* The chart type card (AC-217), the prototype's reco-row: the type by name,
@@ -1251,7 +1318,7 @@ fieldset.model-field > legend {
   font-size: 12px;
 }
 .dialog .generated-sql__note { margin: 0; font-size: 12px; }
-.dialog .generated-sql__params { font: 12px/16px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.dialog .generated-sql__params { font: 12px/16px var(--wc-font-code); }
 .dialog .generated-sql__problem { color: var(--wc-status-error); overflow-wrap: anywhere; }
 /* A tile's View query (AC-199): the Cube query and its SQL, each scrolling in
    its own box, so a long line never widens the dialog past Close — the rule
@@ -1272,9 +1339,9 @@ fieldset.model-field > legend {
   border: 1px solid var(--wc-border-subtle);
   border-radius: 4px;
   background: var(--wc-bg-subtle);
-  font: 12px/16px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 12px/16px var(--wc-font-code);
 }
-.dialog .view-query__params { margin: 4px 0 0; font: 12px/16px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.dialog .view-query__params { margin: 4px 0 0; font: 12px/16px var(--wc-font-code); }
 /* A job's state (T158, AC-152): the prototype's .status — its icon, its words. */
 .status {
   display: inline-flex;
@@ -1446,7 +1513,7 @@ main:has(.dashboard) {
   padding: 0 4px;
   border-radius: 3px;
   background: var(--wc-bg-subtle);
-  font: 12px/16px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 12px/16px var(--wc-font-code);
 }
 .markdown > :first-child { margin-top: 0; }
 .markdown > :last-child { margin-bottom: 0; }
@@ -1832,7 +1899,7 @@ main:has(.dashboard) {
 /* A chart tile's Chart section (AC-203): its title strong, its type and
    source beneath with the source in the code face, and Edit chart. */
 .chart-section__title { margin: 0; font-size: 13px; line-height: 20px; font-weight: 600; color: var(--wc-text-primary); }
-.chart-section__source { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.chart-section__source { font-family: var(--wc-font-code); }
 .chart-section > button { justify-self: start; }
 /* A sized tile's Layout, collapsed as the prototype's is: its summary set as
    a section heading, at the same inset. */

@@ -22,7 +22,6 @@ import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { JobsPage } from '../workspaces/jobs/JobsPage';
 import { SecurityPage } from '../workspaces/security/SecurityPage';
 import { DataSourcesPage, SchedulesPage } from '../workspaces/admin/DeferredPage';
-import { FileList } from '../workspaces/model/FileList';
 import { ModelFilePage } from '../workspaces/model/ModelFilePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
 import { WORKSPACES, type WorkspaceId } from '../shell/WorkspaceSwitcher';
@@ -78,13 +77,8 @@ const WORKSPACE_CONTENT: Partial<Record<string, () => React.ReactNode>> = {
   // Their frames and what they are for; managing either waits (AC-233).
   schedules: () => <SchedulesPage />,
   'data-sources': () => <DataSourcesPage />,
-  // The model's files and what each defines (T137, AC-131).
-  model: () => (
-    <div className="model-workspace">
-      <h1 className="workspace-title">Model</h1>
-      <FileList />
-    </div>
-  ),
+  // The model's files as a tree beside the editor, none open yet (T234, AC-222).
+  model: () => <ModelFilePage />,
 };
 
 const workspaceRoutes = WORKSPACES.map((workspace) =>

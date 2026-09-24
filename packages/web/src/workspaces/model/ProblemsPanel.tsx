@@ -57,16 +57,21 @@ export function ProblemsPanel({
   /** A problem picked: the editor goes to where it is. */
   onPick?: (problem: Problem) => void;
 }) {
-  const errors = problems.length + cubeProblems.length;
+  // Counted apart (AC-223), as the prototype's head does.
+  const warnings = problems.filter((problem) => problem.severity === 'warning').length;
+  const errors = problems.length - warnings + cubeProblems.length;
   return (
     <section className="model-problems" aria-label="Problems">
       <h2 className="model-problems__head">
-        Problems · {errors} {errors === 1 ? 'error' : 'errors'}
+        Problems · {errors} {errors === 1 ? 'error' : 'errors'} · {warnings}{' '}
+        {warnings === 1 ? 'warning' : 'warnings'}
       </h2>
-      {errors === 0 ? (
+      {errors + warnings === 0 ? (
         <p className="model-problems__row">
           <OkGlyph />
-          <span>No problems in {path}</span>
+          <span>
+            No problems in <code>{path}</code>
+          </span>
         </p>
       ) : (
         <ul className="model-problems__list">
@@ -80,7 +85,7 @@ export function ProblemsPanel({
                   onPick?.(problem);
                 }}
               >
-                <ErrorGlyph />
+                {problem.severity === 'warning' ? <StatusIcon kind="warn" /> : <ErrorGlyph />}
                 <span className="model-problems__message">{problem.message}</span>
                 <span className="model-problems__where">
                   {problem.path}:{problem.line}

@@ -1,10 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
 
 import { META_QUERY } from '../../query/meta';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { MODEL_FILES_QUERY } from './FileList';
+import { FileList, MODEL_FILES_QUERY } from './FileList';
+import { FileTree, fileHref } from './FileTree';
 import { objectsOf } from './objects';
 import { CubeForm } from './form/CubeForm';
 import { JoinEditor } from './JoinEditor';
@@ -79,7 +81,28 @@ function keepRefusedRollups(problems: readonly CubeProblem[]): readonly CubeProb
   return problems;
 }
 
-function FileEditor({ path, content }: { path: string; content: string }) {
+/** A problem that stops the file being read and published; a warning does not (AC-223). */
+const isError = (problem: Problem) => problem.severity !== 'warning';
+
+function FileEditor({
+  path,
+  content,
+  published = true,
+  onProblems,
+  onText,
+}: {
+  path: string;
+  content: string;
+  /** False for a file made here and not yet published: there is nothing to go back to. */
+  published?: boolean;
+  /**
+   * The errors this editor knows of, by file, for the tree's marks (AC-222):
+   * this file's own, and those Cube gave for any file on its last refusal.
+   */
+  onProblems?: (byPath: Readonly<Record<string, number>>) => void;
+  /** Each change to the text, for a file made here to keep until it is published. */
+  onText?: (text: string) => void;
+}) {
   /** The YAML view's text, as typed. */
   const [text, setText] = useState(content);
   /** The text the form reads: the last that parsed, once typing paused. */
@@ -103,7 +126,8 @@ function FileEditor({ path, content }: { path: string; content: string }) {
         setProblems(found.length === 0 ? NONE : found);
         // Checked: the next keystroke starts the next wait.
         since.current = null;
-        if (found.length === 0 && text !== read) setRead(text);
+        // A warning does not stop it; an error does.
+        if (!found.some(isError) && text !== read) setRead(text);
       },
       Math.max(0, Math.min(YAML_PAUSE_MS, cap)),
     );
@@ -111,6 +135,15 @@ function FileEditor({ path, content }: { path: string; content: string }) {
       clearTimeout(timer);
     };
   }, [path, text, read]);
+
+  // A file made here keeps what is typed until it is published (AC-222).
+  const keepText = useRef(onText);
+  useEffect(() => {
+    keepText.current = onText;
+  }, [onText]);
+  useEffect(() => {
+    keepText.current?.(text);
+  }, [text]);
 
   const model = useMemo(() => modelOf(read).model ?? {}, [read]);
   const cubes = entriesOf(model.cubes);
@@ -172,10 +205,11 @@ function FileEditor({ path, content }: { path: string; content: string }) {
    * the typing, from the text before it — and while an edit waits to be
    * applied or kept.
    */
-  const readOnly = problems.length > 0 || text !== read || pending !== null || references !== null;
+  const errors = problems.filter(isError);
+  const readOnly = errors.length > 0 || text !== read || pending !== null || references !== null;
   /** Where a picked problem sends the editor's cursor. */
   const [goTo, setGoTo] = useState<{ at: number }>();
-  const [first] = problems;
+  const [first] = errors;
 
   /** The right pane: the YAML, or the join diagram (T144). */
   const [view, setView] = useState<'yaml' | 'joins'>('yaml');
@@ -208,8 +242,11 @@ function FileEditor({ path, content }: { path: string; content: string }) {
     .map(({ value }) => value['name'])
     .filter((name): name is string => typeof name === 'string');
 
-  /** The text last published, or as it was read from the store (T142). */
-  const [saved, setSaved] = useState(content);
+  /**
+   * The text last published, or as it was read from the store (T142) — none
+   * for a file made here, so it has something to publish from the start.
+   */
+  const [saved, setSaved] = useState(published ? content : '');
   const [publishing, setPublishing] = useState(false);
   /** Cube's reasons for refusing the last save, by file (AC-136). */
   const [cubeProblems, setCubeProblems] = useState<readonly CubeProblem[]>([]);
@@ -226,10 +263,27 @@ function FileEditor({ path, content }: { path: string; content: string }) {
   const canPublish =
     text !== saved &&
     text === read &&
-    problems.length === 0 &&
+    errors.length === 0 &&
     pending === null &&
     references === null &&
     !publishing;
+
+  /**
+   * The errors this editor knows of, by file, for the tree (AC-222): this
+   * file's own, Cube's reasons for its last refusal, and the rollups refused
+   * in this tab — each on the file it is about.
+   */
+  const reportProblems = useRef(onProblems);
+  useEffect(() => {
+    reportProblems.current = onProblems;
+  }, [onProblems]);
+  const ownErrors = errors.length;
+  useEffect(() => {
+    const byPath: Record<string, number> = { [path]: ownErrors };
+    for (const problem of [...cubeProblems, ...refusedRollups])
+      byPath[problem.path] = (byPath[problem.path] ?? 0) + 1;
+    reportProblems.current?.(byPath);
+  }, [path, ownErrors, cubeProblems, refusedRollups]);
 
   /**
    * Publish this file — after listing the charts and dashboards that use the
@@ -296,182 +350,200 @@ function FileEditor({ path, content }: { path: string; content: string }) {
 
   return (
     <div className="model-editor">
-      {/* The prototype's editor head (model.js): the file's one action. */}
-      <div className="model-editor__head">
-        {outcome === null ? null : (
-          <StateLine
-            kind={outcome.ok ? 'ok' : 'err'}
-            className={`model-editor__outcome${outcome.ok ? '' : ' model-editor__outcome--failed'}`}
-          >
-            {outcome.text}
-          </StateLine>
-        )}
-        <button
-          ref={saveButton}
-          type="button"
-          className="btn-sm btn-primary"
-          disabled={!canPublish}
-          onClick={() => {
-            void publish();
-          }}
-        >
-          {publishing ? (
-            // Under way, with its icon as well as its word (T183, AC-177).
-            <>
-              <StatusIcon kind="run" />
-              Saving…
-            </>
-          ) : (
-            'Save & reload Cube'
+      {/*
+        Two full-height panes, each with its own header row and scrolling
+        (AC-223), as the prototype's (model.js, `mount`): the form, headed by
+        the file and its one action; and the code, headed by its view, with
+        Problems docked beneath it.
+      */}
+      <section className="model-editor__pane" aria-label="Form editor">
+        <div className="model-editor__head">
+          {/* It names the object the URL selected, as every deep link does (AC-002). */}
+          <h1 className="workspace-title model-editor__path" data-testid="selected-object">
+            {path}
+          </h1>
+          {outcome === null ? null : (
+            <StateLine
+              kind={outcome.ok ? 'ok' : 'err'}
+              className={`model-editor__outcome${outcome.ok ? '' : ' model-editor__outcome--failed'}`}
+            >
+              {outcome.text}
+            </StateLine>
           )}
-        </button>
-      </div>
-      <div
-        // Shown locked only for a parse error: the lock while typing catches up is brief.
-        className={`model-editor__form${first === undefined ? '' : ' model-editor__form--frozen'}`}
-      >
-        {references === null ? null : (
-          <ReferencesWarning
-            found={references.found}
-            onSave={() => {
-              const { text: checked } = references;
-              setReferences(null);
-              saveButton.current?.focus();
-              // Changed since it was checked: checked again, not saved unchecked.
-              void publish(checked === text ? checked : undefined);
+          <button
+            ref={saveButton}
+            type="button"
+            className="btn-sm btn-primary"
+            disabled={!canPublish}
+            onClick={() => {
+              void publish();
             }}
-            onCancel={() => {
-              setReferences(null);
-              saveButton.current?.focus();
-            }}
-          />
-        )}
-        {pending === null ? null : (
-          <LossWarning
-            lost={pending.lost}
-            onApply={() => {
-              apply(pending.written);
-              setPending(null);
-            }}
-            onKeep={() => {
-              setPending(null);
-            }}
-          />
-        )}
-        {refused === null ? null : (
-          <p className="model-editor__warnbar" role="alert">
-            <StatusIcon kind="warn" />
-            <span className="model-editor__warnbar-text">
-              This edit can’t be written into the file: {refused}.
-            </span>
+          >
+            {publishing ? (
+              // Under way, with its icon as well as its word (T183, AC-177).
+              <>
+                <StatusIcon kind="run" />
+                Saving…
+              </>
+            ) : (
+              'Save & reload Cube'
+            )}
+          </button>
+        </div>
+        <div
+          // Shown locked only for a parse error: the lock while typing catches up is brief.
+          className={`model-editor__form${first === undefined ? '' : ' model-editor__form--frozen'}`}
+        >
+          {references === null ? null : (
+            <ReferencesWarning
+              found={references.found}
+              onSave={() => {
+                const { text: checked } = references;
+                setReferences(null);
+                saveButton.current?.focus();
+                // Changed since it was checked: checked again, not saved unchecked.
+                void publish(checked === text ? checked : undefined);
+              }}
+              onCancel={() => {
+                setReferences(null);
+                saveButton.current?.focus();
+              }}
+            />
+          )}
+          {pending === null ? null : (
+            <LossWarning
+              lost={pending.lost}
+              onApply={() => {
+                apply(pending.written);
+                setPending(null);
+              }}
+              onKeep={() => {
+                setPending(null);
+              }}
+            />
+          )}
+          {refused === null ? null : (
+            <p className="model-editor__warnbar" role="alert">
+              <StatusIcon kind="warn" />
+              <span className="model-editor__warnbar-text">
+                This edit can’t be written into the file: {refused}.
+              </span>
+              <button
+                type="button"
+                className="btn-sm"
+                onClick={() => {
+                  setRefused(null);
+                }}
+              >
+                Dismiss
+              </button>
+            </p>
+          )}
+          {first === undefined ? null : (
+            // The prototype's read-only veil (model.js), over the forms.
+            <p className="model-editor__veil" role="status">
+              <StatusIcon kind="err" />
+              <span>
+                The YAML doesn’t parse (line {first.line}).{' '}
+                {cubes.length + views.length > 0
+                  ? 'The form is read-only until the code is fixed.'
+                  : // Broken when it was opened: there is no form yet to hold.
+                    'Its form shows once the code is fixed.'}
+              </span>
+            </p>
+          )}
+          {cubes.map(({ at, value }) => (
+            <CubeForm
+              // The cube's place in the file: its name is a field it edits.
+              key={`cube ${String(at)}`}
+              kind="cube"
+              value={value}
+              readOnly={readOnly}
+              // Its rollups a publish was refused for, on their rows (T207, AC-189).
+              rollupProblems={refusedRollups.filter(
+                (problem) =>
+                  problem.path === path && problem.preAggregation?.cube === value['name'],
+              )}
+              onChange={(next) => {
+                edit('cubes', at, next);
+              }}
+            />
+          ))}
+          {views.map(({ at, value }) => (
+            <CubeForm
+              key={`view ${String(at)}`}
+              kind="view"
+              value={value}
+              readOnly={readOnly}
+              onChange={(next) => {
+                edit('views', at, next);
+              }}
+            />
+          ))}
+        </div>
+      </section>
+      <section className="model-editor__pane model-editor__yaml" aria-label="YAML and join diagram">
+        <div className="model-editor__head">
+          {/* The prototype's right-pane toggle (model.js): the YAML, or the join diagram. */}
+          <div className="seg model-editor__view" role="group" aria-label="Right pane view">
             <button
               type="button"
-              className="btn-sm"
+              aria-pressed={view === 'yaml'}
               onClick={() => {
-                setRefused(null);
+                setView('yaml');
               }}
             >
-              Dismiss
+              YAML
             </button>
-          </p>
-        )}
-        {first === undefined ? null : (
-          // The prototype's read-only veil (model.js), over the forms.
-          <p className="model-editor__veil" role="status">
-            <StatusIcon kind="err" />
-            <span>
-              The YAML doesn’t parse (line {first.line}).{' '}
-              {cubes.length + views.length > 0
-                ? 'The form is read-only until the code is fixed.'
-                : // Broken when it was opened: there is no form yet to hold.
-                  'Its form shows once the code is fixed.'}
-            </span>
-          </p>
-        )}
-        {cubes.map(({ at, value }) => (
-          <CubeForm
-            // The cube's place in the file: its name is a field it edits.
-            key={`cube ${String(at)}`}
-            kind="cube"
-            value={value}
-            readOnly={readOnly}
-            // Its rollups a publish was refused for, on their rows (T207, AC-189).
-            rollupProblems={refusedRollups.filter(
-              (problem) => problem.path === path && problem.preAggregation?.cube === value['name'],
-            )}
-            onChange={(next) => {
-              edit('cubes', at, next);
-            }}
-          />
-        ))}
-        {views.map(({ at, value }) => (
-          <CubeForm
-            key={`view ${String(at)}`}
-            kind="view"
-            value={value}
-            readOnly={readOnly}
-            onChange={(next) => {
-              edit('views', at, next);
-            }}
-          />
-        ))}
-      </div>
-      <div className="model-editor__yaml">
-        {/* The prototype's right-pane toggle (model.js): the YAML, or the join diagram. */}
-        <div className="seg model-editor__view" role="group" aria-label="Right pane view">
-          <button
-            type="button"
-            aria-pressed={view === 'yaml'}
-            onClick={() => {
-              setView('yaml');
-            }}
-          >
-            YAML
-          </button>
-          <button
-            type="button"
-            aria-pressed={view === 'joins'}
-            onClick={() => {
-              setView('joins');
-            }}
-          >
-            Join diagram
-          </button>
+            <button
+              type="button"
+              aria-pressed={view === 'joins'}
+              onClick={() => {
+                setView('joins');
+              }}
+            >
+              Join diagram
+            </button>
+          </div>
+          <span className="model-editor__sync">Edits in either side stay in sync</span>
         </div>
-        {view === 'joins' && graph !== undefined ? (
-          <JoinEditor
-            graph={graph}
-            cube={cubeNames[0]}
-            cubes={cubeNames}
-            // Locked as the form is (AC-135): an edit then would be written over the typing.
-            readOnly={readOnly}
-            onAdd={(name, join) => {
-              const entry = cubes.find(({ value }) => value['name'] === name);
-              if (entry === undefined) return false;
-              const joins = Array.isArray(entry.value['joins'])
-                ? (entry.value['joins'] as unknown[])
-                : [];
-              return (
-                edit('cubes', entry.at, { ...entry.value, joins: [...joins, join] }) === 'applied'
-              );
-            }}
-          />
-        ) : null}
-        {/* Hidden, not gone, while the diagram shows: its undo history stays. */}
-        <div hidden={view !== 'yaml'}>
-          <YamlEditor
-            value={text}
-            onChange={(next) => {
-              // Typing in the YAML answers a held or refused form edit: it was of the text before.
-              setPending(null);
-              setRefused(null);
-              setText(next);
-            }}
-            label={`${path}, as YAML`}
-            problems={problems}
-            goTo={goTo}
-          />
+        <div className="model-editor__code">
+          {view === 'joins' && graph !== undefined ? (
+            <JoinEditor
+              graph={graph}
+              cube={cubeNames[0]}
+              cubes={cubeNames}
+              // Locked as the form is (AC-135): an edit then would be written over the typing.
+              readOnly={readOnly}
+              onAdd={(name, join) => {
+                const entry = cubes.find(({ value }) => value['name'] === name);
+                if (entry === undefined) return false;
+                const joins = Array.isArray(entry.value['joins'])
+                  ? (entry.value['joins'] as unknown[])
+                  : [];
+                return (
+                  edit('cubes', entry.at, { ...entry.value, joins: [...joins, join] }) === 'applied'
+                );
+              }}
+            />
+          ) : null}
+          {/* Hidden, not gone, while the diagram shows: its undo history stays. */}
+          <div className="model-editor__yaml-view" hidden={view !== 'yaml'}>
+            <YamlEditor
+              value={text}
+              onChange={(next) => {
+                // Typing in the YAML answers a held or refused form edit: it was of the text before.
+                setPending(null);
+                setRefused(null);
+                setText(next);
+              }}
+              label={`${path}, as YAML`}
+              problems={problems}
+              goTo={goTo}
+            />
+          </div>
         </div>
+        {/* Docked beneath the code, its own scroll (AC-223). */}
         <ProblemsPanel
           path={path}
           problems={problems}
@@ -482,40 +554,220 @@ function FileEditor({ path, content }: { path: string; content: string }) {
             setGoTo({ at: problem.from });
           }}
         />
-      </div>
+      </section>
     </div>
   );
 }
 
-function FileBody({ path, content }: { path: string; content: string }) {
+/**
+ * A page with no editor — a file that is code, one there is none of, one
+ * still being read — headed as the editor is, by its path (AC-002, AC-231).
+ */
+function Solo({ path, children }: { path: string; children: ReactNode }) {
+  return (
+    <div className="model-page__solo">
+      <div className="model-editor__head">
+        <h1 className="workspace-title model-editor__path" data-testid="selected-object">
+          {path}
+        </h1>
+      </div>
+      <div className="model-page__body">{children}</div>
+    </div>
+  );
+}
+
+function FileBody({
+  path,
+  content,
+  published,
+  onProblems,
+  onText,
+}: {
+  path: string;
+  content: string;
+  published: boolean;
+  onProblems: (byPath: Readonly<Record<string, number>>) => void;
+  onText?: ((text: string) => void) | undefined;
+}) {
   const read = useMemo(() => objectsOf(path, content), [path, content]);
   // Code or a template: its text in the code view, read-only, with the reason (T146, AC-140).
   if (read.code !== undefined)
-    return <ReadOnlyFile key={path} path={path} content={content} code={read.code} />;
+    return (
+      <Solo path={path}>
+        <ReadOnlyFile key={path} path={path} content={content} code={read.code} />
+      </Solo>
+    );
   // A file that does not parse opens too: its problems are listed, to be fixed.
   // Keyed by the file: another file is another text, not this one's state.
-  return <FileEditor key={path} path={path} content={content} />;
+  return (
+    <FileEditor
+      key={path}
+      path={path}
+      content={content}
+      published={published}
+      onProblems={onProblems}
+      {...(onText === undefined ? {} : { onText })}
+    />
+  );
 }
 
-export function ModelFilePage({ path }: { path: string }) {
+/**
+ * Files made with New cube or New view and not yet published, as last typed:
+ * kept for the tab (AC-222), in the query cache for the page and in session
+ * storage past a reload — storage may be refused, and then the page alone
+ * keeps them.
+ */
+const DRAFTS_KEY = ['model-drafts'] as const;
+const DRAFTS_STORAGE = 'wechart.model.drafts';
+
+function readDrafts(): Record<string, string> {
+  try {
+    const kept: unknown = JSON.parse(sessionStorage.getItem(DRAFTS_STORAGE) ?? '{}');
+    return isPlain(kept)
+      ? Object.fromEntries(
+          Object.entries(kept).filter(
+            (entry): entry is [string, string] => typeof entry[1] === 'string',
+          ),
+        )
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function keepDrafts(drafts: Readonly<Record<string, string>>) {
+  try {
+    sessionStorage.setItem(DRAFTS_STORAGE, JSON.stringify(drafts));
+  } catch {
+    // Kept on this page only.
+  }
+}
+
+/** A new file's name, the next free in its folder, and its first text (the prototype's). */
+export function newFileOf(
+  kind: 'cube' | 'view',
+  taken: ReadonlySet<string>,
+  firstCube: string | undefined,
+): { path: string; content: string } {
+  const folder = kind === 'cube' ? 'cubes' : 'views';
+  let n = 1;
+  while (taken.has(`${folder}/new_${kind}_${String(n)}.yml`)) n += 1;
+  const name = `new_${kind}_${String(n)}`;
+  return {
+    path: `${folder}/${name}.yml`,
+    content:
+      kind === 'cube'
+        ? `cubes:\n  - name: ${name}\n    sql_table: public.table_name\n    dimensions:\n      - name: id\n        sql: id\n        type: number\n        primary_key: true\n    measures:\n      - name: count\n        type: count\n`
+        : `views:\n  - name: ${name}\n    cubes:\n      - join_path: ${firstCube ?? 'orders'}\n        includes: "*"\n`,
+  };
+}
+
+/**
+ * The Model workspace (T234, AC-222, AC-223; direction.md §7b), as the
+ * prototype lays it out: the model's files as a tree beside the editor —
+ * which opens the chosen file in place, its path in the URL — and New cube
+ * and New view, which make a file here to be published.
+ */
+export function ModelFilePage({ path }: { path?: string | undefined }) {
   const files = useQuery(MODEL_FILES_QUERY);
-  const file = files.data?.find((each) => each.path === path);
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const drafts = useQuery({
+    queryKey: DRAFTS_KEY,
+    queryFn: readDrafts,
+    initialData: readDrafts,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
+  }).data;
+  const setDrafts = (next: Readonly<Record<string, string>>) => {
+    queryClient.setQueryData(DRAFTS_KEY, next);
+    keepDrafts(next);
+  };
+  const stored = files.data ?? [];
+  // A draft once published is a stored file: the store's copy wins.
+  const unpublished = Object.entries(drafts)
+    .filter(([draft]) => !stored.some((file) => file.path === draft))
+    .map(([draftPath, content]) => ({ path: draftPath, content }));
+  const all = [...stored, ...unpublished];
+  const file = path === undefined ? undefined : all.find((each) => each.path === path);
+  const isDraft = file !== undefined && !stored.some((each) => each.path === file.path);
+  /** The errors the open file's editor reports, by file, for the tree's marks. */
+  const [reported, setReported] = useState<{
+    from: string;
+    byPath: Readonly<Record<string, number>>;
+  }>();
+
+  const open = (next: string) => {
+    router.history.push(fileHref(next));
+  };
+  const makeNew = (kind: 'cube' | 'view') => {
+    const firstCube = stored
+      .flatMap((each) => objectsOf(each.path, each.content).objects)
+      .find((object) => object.kind === 'cube')?.name;
+    const made = newFileOf(kind, new Set(all.map((each) => each.path)), firstCube);
+    setDrafts({ ...drafts, [made.path]: made.content });
+    open(made.path);
+  };
+
+  /**
+   * Opened from the overview, the page is a new one and what was pressed is
+   * gone: focus goes to the opened file's row in the tree rather than to the
+   * page, so a keyboard user keeps their place (T234's review).
+   */
+  const page = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (path === undefined || document.activeElement !== document.body) return;
+    page.current?.querySelector<HTMLElement>('.model-tree__file[aria-current="page"]')?.focus();
+  }, [path, files.isSuccess]);
 
   return (
-    <div className="model-workspace model-file-page">
-      {/* It names the object the URL selected, as every deep link does (AC-002). */}
-      <h1 className="workspace-title model-file-page__path" data-testid="selected-object">
-        {path}
-      </h1>
-      {files.isPending ? (
-        <StateLine kind="run">Reading the model…</StateLine>
-      ) : files.isError ? (
-        <StateLine kind="err">{files.error.message}</StateLine>
-      ) : file === undefined ? (
-        <StateLine kind="err">There is no model file {path}.</StateLine>
-      ) : (
-        <FileBody path={file.path} content={file.content} />
-      )}
+    <div ref={page} className="model-workspace model-page">
+      <FileTree
+        files={all}
+        current={path}
+        reported={reported?.from === path ? reported?.byPath : undefined}
+        drafts={new Set(unpublished.map((each) => each.path))}
+        onOpen={open}
+        onNew={makeNew}
+      />
+      <div className="model-page__main">
+        {files.isPending ? (
+          // Untitled while it reads: the title comes once, with what it heads.
+          <StateLine kind="run">Reading the model…</StateLine>
+        ) : files.isError ? (
+          <StateLine kind="err">{files.error.message}</StateLine>
+        ) : path === undefined ? (
+          // No file open: what each defines (AC-131), beside the tree.
+          <div className="model-page__overview">
+            <h1 className="workspace-title">Model</h1>
+            <p className="model-page__note">
+              Choose a file in the tree to edit it, or make a new cube or view.
+            </p>
+            <FileList />
+          </div>
+        ) : file === undefined ? (
+          <Solo path={path}>
+            <StateLine kind="err">There is no model file {path}.</StateLine>
+          </Solo>
+        ) : (
+          <FileBody
+            path={file.path}
+            content={file.content}
+            published={!isDraft}
+            onProblems={(byPath) => {
+              setReported({ from: file.path, byPath });
+            }}
+            // A new file keeps what is typed in it until it is published.
+            onText={
+              isDraft
+                ? (text) => {
+                    if (drafts[file.path] !== text) setDrafts({ ...drafts, [file.path]: text });
+                  }
+                : undefined
+            }
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -3426,10 +3426,30 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Depends on: none
   - Done 2026-09-24. AC-004 re-ticked. **Three rules, not two**: after the critique's two (`.model-problems__where` and `.tile-note code`, both 11 px), a search of every package for a size under 12 found a third — the "SQL" a tile shows while a security context is previewed, at 10 px. Each state gets its own check where a test already reaches it: the Model with a problem listed runs the full type sweep (`e2e/a11y-tokens.spec.ts`); the rollup note's code (`e2e/acceleration.spec.ts`) and the preview's SQL button (`e2e/security.spec.ts`) are measured in place. Each failed first — 11, 11 and 10 px — and passes now in all three browsers. The three rules now use `--wc-text-xs-size`, the token, rather than a number.
   - **The pattern worth keeping:** the sweep covers the pages it opens, and every one of these was a state those pages do not open. A grep of the stylesheets for any size under 12 px is cheaper than finding the next one by critique.
-- [ ] T234 (AC-222, AC-223) Make Model one workspace: a file tree beside full-height form and code panes, Problems docked
-  - Files: `packages/web/src/workspaces/model/ModelPage.tsx`, `packages/web/src/workspaces/model/FileTree.tsx`, `packages/web/src/shell/styles.ts`, `e2e/model.spec.ts`
+- [x] T234 (AC-222, AC-223) Make Model one workspace: a file tree beside full-height form and code panes, Problems docked
+  - Files: `packages/web/src/workspaces/model/{ModelFilePage,FileTree,ProblemsPanel}.tsx`, `packages/web/src/workspaces/model/problems.ts` (`severity`), `packages/web/src/router/routes.tsx`, `packages/web/src/shell/styles.ts` (`--wc-font-code`, the panes), `e2e/{model,admin}.spec.ts`, `docs/research/fontsource-ibm-plex-mono.md`
   - Failing test: `e2e/model.spec.ts`: from one file the tree opens another without leaving the editor; the page does not scroll at 1440×900; a file with a parse error is marked in the tree; Problems counts warnings (AC-222, AC-223).
   - Depends on: none
+  - Done 2026-09-24, all three browsers. **AC-222** is ticked on `e2e/model.spec.ts` "Model is one workspace: a tree beside full-height form and code panes, Problems docked" and on AC-136's refusal test, which now also sees the tree mark the refused file. That e2e covers:
+    - opening another file in place, with no reload;
+    - a file that stops parsing marked in the tree;
+    - New cube and New view making unpublished files.
+
+    `FileTree.test.tsx` covers marks on files not open.
+  - **AC-223 stays open.** The panes, their header rows and scrolling, the page not scrolling, and Problems counting warnings are all demonstrated. The code face is `--wc-font-code`, IBM Plex Mono first, but the font is named and not shipped. Wherever it isn't installed, code is drawn in the fallback, which is AC-223's Fails-when. Shipping it is a licensing call for the user (the research: IBM reserves the font name "Plex").
+  - The workspace is one page for `/model` and `/model/files/<path>`: the tree, then the file's editor or the per-file overview (AC-131).
+  - New cube and New view make the prototype's skeleton as an unpublished file, kept for the tab, publishable with Save.
+  - **The cold review failed the first cut, fixed:**
+    - Files Cube refused, and rollups refused in this tab, weren't marked in the tree.
+    - Read-only and missing files lost their page title (AC-231). Both are now in AC-231's test.
+    - Join-editor focus rings were clipped.
+    - A warning would have locked the form and the publish.
+    - A new file's edits were lost on leaving it.
+    - Leaving the overview dropped focus to the page.
+    - Marks were an icon alone.
+    - The tree re-parsed every file on every render.
+    - The Problems-docked check could not fail.
+  - **Known flake:** `keyboard-coverage.spec.ts` "a tile’s table can be reached and scrolled from the keyboard" fails under full load in Safari and passes alone.
 - [ ] T235 (AC-224) Edit member references with pickers, and a join's target with a list of cubes
   - Files: `packages/web/src/workspaces/model/form/MemberPicker.tsx`, `packages/web/src/workspaces/model/form/`, `e2e/model.spec.ts`
   - Failing test: `e2e/model.spec.ts`: a pre-aggregation's measures are chosen from a picker listing the cube's measures, and a join's target from its cubes; neither accepts typed text (AC-224).
@@ -3439,7 +3459,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Failing test: `e2e/model.spec.ts`: `orders.id` shows a PK badge and its SQL collapsed; expanded, a number dimension offers no CASE, switch or geo fields (AC-225).
   - Depends on: T234
 - [ ] T237 (AC-226, AC-227) Show unpublished changes with Discard and a leave warning, and validate enums and required keys on every parse
-  - Files: `packages/web/src/workspaces/model/ModelPage.tsx`, `packages/web/src/workspaces/model/validate.ts`, `e2e/model.spec.ts`
+  - Files: `packages/web/src/workspaces/model/ModelFilePage.tsx`, `packages/web/src/workspaces/model/validate.ts`, `e2e/model.spec.ts`
   - Failing test: `e2e/model.spec.ts`: an edit marks the header and the tree row, Discard restores the file, leaving asks first; `type: summ` lists a problem at its line (AC-226, AC-227).
   - Depends on: T234
 - [x] T238 (AC-231, AC-233) Give every workspace page its title style and table cards, and give Schedules and Data sources their frame

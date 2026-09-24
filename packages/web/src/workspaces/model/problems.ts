@@ -14,6 +14,11 @@ export interface Problem {
   /** Where in the text: offsets the editor underlines. */
   readonly from: number;
   readonly to: number;
+  /**
+   * An error stops the file being read or published; a warning does not
+   * (AC-223 counts each). Absent is an error, as every parse problem is.
+   */
+  readonly severity?: 'error' | 'warning';
 }
 
 /** An offset's line and column, from 1. */

@@ -56,6 +56,9 @@ for (const path of [
   '/explore',
   // A page inside a workspace is titled the same way.
   '/model/files/cubes%2Forders.yml',
+  // A file that is code, and one there is none of (T234's review).
+  '/model/files/cubes%2Fproduct_catalog.yml',
+  '/model/files/cubes%2Fno_such_file.yml',
   '/explore/charts/seed-chart-status',
   // Not the chart editor: its title is the chart's own, an editable field in
   // its one header row (AC-214), as the prototype's editor has it.
