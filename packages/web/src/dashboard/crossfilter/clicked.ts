@@ -1,4 +1,4 @@
-import { memberOn, seriesOf, type RenderSpec } from '@wechart/core';
+import { distinctValues, memberOn, seriesOf, type RenderSpec } from '@wechart/core';
 
 /**
  * Which member value a click on a chart item stands for (AC-117).
@@ -50,6 +50,12 @@ export interface ClickedItem {
    * on a mark (AC-090): every item of that category, not one of them.
    */
   readonly legend?: string | undefined;
+  /**
+   * The trellis panel whose header was clicked, by its place among the
+   * panels (AC-091). Its index rather than its title, because a panel of
+   * time is titled by its granularity and that is not the value.
+   */
+  readonly panelIndex?: number | undefined;
 }
 
 /** Chart types where a click means the series, not the category. */
@@ -66,6 +72,12 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
    * drawn from. A chart with no split lists its measures there, and a
    * measure is not a value of anything (AC-090).
    */
+  if (item.panelIndex !== undefined) {
+    const facet = memberOn(spec.encoding, 'facet');
+    const panel =
+      facet === undefined ? undefined : distinctValues(spec.rows, facet)[item.panelIndex];
+    return facet === undefined || panel === undefined ? undefined : { member: facet, value: panel };
+  }
   if (item.legend !== undefined) {
     const split = memberOn(spec.encoding, 'color') ?? memberOn(spec.encoding, 'facet');
     return split === undefined || item.legend === ''

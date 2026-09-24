@@ -117,9 +117,37 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
     chart.on('mousedown', 'series', onDown);
     chart.on('mouseup', 'series', onUp);
 
+    /**
+     * A click on a trellis panel's header marks every item in that panel
+     * (AC-091). The titles carry `triggerEvent` for this; the panel is taken
+     * by its index rather than by the words shown, because a panel of time
+     * is titled by its granularity and the title is not the value.
+     */
+    const panelClicks = itemClicks(({ item, toggle }) => {
+      if (item === null) return;
+      onItem.current = true;
+      clicked.current?.({ panelIndex: Number(item) }, toggle);
+    });
+    const panelAt = (params: { componentIndex?: number }) => ({
+      item: String(params.componentIndex ?? 0),
+      x: 0,
+      y: 0,
+      toggle: false,
+    });
+    const onTitleDown = (params: unknown) => {
+      panelClicks.down(panelAt(params as { componentIndex?: number }));
+    };
+    const onTitleUp = (params: unknown) => {
+      panelClicks.up(panelAt(params as { componentIndex?: number }));
+    };
+    chart.on('mousedown', 'title', onTitleDown);
+    chart.on('mouseup', 'title', onTitleUp);
+
     return () => {
       chart.off('mousedown', onDown);
       chart.off('mouseup', onUp);
+      chart.off('mousedown', onTitleDown);
+      chart.off('mouseup', onTitleUp);
       observer.disconnect();
       // "Once disposed, the instance can not be used again" — so the ref goes
       // with it, or the next render would call setOption on a dead instance.

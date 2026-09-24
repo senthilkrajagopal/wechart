@@ -1,4 +1,4 @@
-import { markFromLegend } from '@wechart/charts';
+import { markFromLegend, markFromPanel } from '@wechart/charts';
 import { COLORS } from '@wechart/ui';
 import {
   applyItemClick,
@@ -1470,19 +1470,28 @@ export function DashboardView({
            * helper would then find nothing to clear.
            */
           markingOf(clearTileMarking(marks, { ...tile, marksWith: markingId }), markingId)
-        : item.legend !== undefined
+        : item.panelIndex !== undefined && !toggle
           ? /**
-             * A legend entry marks every item of that category, and Ctrl
-             * there *adds* a further category rather than toggling one
-             * (AC-090 against AC-087 — the criteria differ, and Spotfire
-             * behaves the same way round).
+             * A trellis panel's header marks every item in that panel
+             * (AC-091): the facet value alone, which is what makes "every
+             * item" true whatever else varies inside it.
              */
-            markFromLegend(
-              before,
-              { member: clicked.member, value: clicked.value },
-              { add: toggle },
-            )
-          : applyItemClick(before, [{ member: clicked.member, value: clicked.value }], { toggle });
+            markFromPanel({ member: clicked.member, value: clicked.value })
+          : item.legend !== undefined || item.panelIndex !== undefined
+            ? /**
+               * A legend entry marks every item of that category, and Ctrl
+               * there *adds* a further category rather than toggling one
+               * (AC-090 against AC-087 — the criteria differ, and Spotfire
+               * behaves the same way round).
+               */
+              markFromLegend(
+                before,
+                { member: clicked.member, value: clicked.value },
+                { add: toggle },
+              )
+            : applyItemClick(before, [{ member: clicked.member, value: clicked.value }], {
+                toggle,
+              });
     if (after === before) return;
 
     setMarks((now) => withMarking(now, markingId, after));

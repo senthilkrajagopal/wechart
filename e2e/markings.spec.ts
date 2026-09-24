@@ -33,7 +33,7 @@ const API = 'http://localhost:4100/api';
  */
 async function markingDashboard(
   request: APIRequestContext,
-  { twoPages = false, split = false, table = false } = {},
+  { twoPages = false, split = false, table = false, trellis = false } = {},
 ) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Markings ${unique}`;
@@ -43,7 +43,12 @@ async function markingDashboard(
     })
   ).json()) as { id: string };
 
-  const chartOn = async (chartTitle: string, dimensions: readonly string[], chartType = 'bar') => {
+  const chartOn = async (
+    chartTitle: string,
+    dimensions: readonly string[],
+    chartType = 'bar',
+    encoding?: Record<string, readonly string[]>,
+  ) => {
     const chart = (await (
       await request.post(`${API}/documents`, {
         data: { kind: 'chart', title: chartTitle, folderId: 'root' },
@@ -65,6 +70,9 @@ async function markingDashboard(
               timeDimensions: [],
             },
             chartType,
+            // A trellis needs its panels named: two dimensions alone become
+            // an axis and a colour split, never a facet.
+            ...(encoding === undefined ? {} : { encoding }),
           },
         },
       },
@@ -82,6 +90,14 @@ async function markingDashboard(
   // A table of rows, each identified by the cube's primary key.
   const tableChart = table
     ? await chartOn('Orders', ['orders.id', 'orders.status'], 'table')
+    : undefined;
+  // One panel per category, each with its own header to mark from.
+  const trellisChart = trellis
+    ? await chartOn('Per category', ['orders.status', 'products.category'], 'trellis', {
+        x: ['orders.status'],
+        y: ['orders.count'],
+        facet: ['products.category'],
+      })
     : undefined;
   await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
     data: {
@@ -106,6 +122,9 @@ async function markingDashboard(
               ...(tableChart === undefined
                 ? []
                 : [{ id: 'tile-table', kind: 'chart', w: 12, h: 40, chartId: tableChart }]),
+              ...(trellisChart === undefined
+                ? []
+                : [{ id: 'tile-trellis', kind: 'chart', w: 12, h: 60, chartId: trellisChart }]),
             ],
           },
           ...(elsewhere === undefined
@@ -295,6 +314,29 @@ test('a legend entry marks its whole category, and does not hide the series', as
   await split.locator('svg text', { hasText: 'Instruments' }).first().click();
   await page.keyboard.up('Control');
   await expect(split.getByTestId('mark-badge')).toContainText('2 marked');
+});
+
+/**
+ * AC-091: WHEN the user clicks a trellis panel header, THE SYSTEM SHALL mark
+ * every item in that panel.
+ * `Fails when: the click marks a single item, or nothing.`
+ */
+test('a trellis panel header marks the whole panel', async ({ page, request }) => {
+  const { id, title } = await markingDashboard(request, { trellis: true });
+  await open(page, id, title);
+  const panels = tile(page, 'tile-trellis');
+  await expect(panels.getByTestId('chart-canvas')).toBeVisible();
+
+  // The header of the first panel, which is the category it stands for.
+  await panels.locator('svg text', { hasText: 'Components' }).first().click();
+
+  // The panel's category, not one bar inside it: one item in the marking,
+  // and every bar of the other panel faded.
+  await expect(panels.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(page.getByTestId('mark-chip')).toContainText('Components');
+  await expect
+    .poll(async () => (await opacities(panels)).filter((value) => value < 1).length)
+    .toBeGreaterThan(0);
 });
 
 /**
