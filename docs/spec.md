@@ -623,9 +623,9 @@ Traces to: `[R7]`, `[R9]`; the critiques in `docs/design/critiques/2026-09-24-*.
 
 Application shell and search:
 
-- [ ] AC-190 THE SYSTEM SHALL show at the right of the top bar a search field that names the platform's shortcut (⌘K or Ctrl+K) and opens the search palette when clicked, and an identity avatar at the far right.
+- [x] AC-190 THE SYSTEM SHALL show at the right of the top bar a search field that names the platform's shortcut (⌘K or Ctrl+K) and opens the search palette when clicked, and an identity avatar at the far right.
       Fails when: the top bar offers no visible way to open search, or the avatar is missing.
-- [ ] AC-191 WHEN the user types in the search palette, THE SYSTEM SHALL list the matching dashboards, library charts, Cube fields and model files, each with its type, move the active result with the arrow keys, open it with Enter, and return focus to where it was when the palette closes (`[R9]`).
+- [x] AC-191 WHEN the user types in the search palette, THE SYSTEM SHALL list the matching dashboards, library charts, Cube fields and model files, each with its type, move the active result with the arrow keys, open it with Enter, and return focus to where it was when the palette closes (`[R9]`).
       Fails when: a matching field or model file is missing, a result has no type, the arrow keys do not move the active result, or focus is not returned on close.
 
 Explore:

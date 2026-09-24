@@ -112,6 +112,13 @@ export interface DocumentWriter {
   ): Promise<readonly { id: string; version: number }[]>;
 }
 
+/**
+ * Phase 1 has one user and no login (requirements §4, "Single user, no
+ * login"): the owner of everything created, and the name the top bar's
+ * avatar shows. Users arrive in phase 2, and this is where they replace it.
+ */
+export const SINGLE_USER = 'admin';
+
 /** The slice of the catalog repository the server exposes. */
 export interface CatalogReader {
   folders(): Promise<unknown[]>;
@@ -193,6 +200,9 @@ export function buildServer({
   app.get('/api/health', () => ({ status: 'ok' }));
 
   app.get('/api/meta', async () => meta.meta());
+
+  /** Who is signed in: phase 1's single user (AC-190), named once, here. */
+  app.get('/api/me', async () => ({ name: SINGLE_USER }));
 
   /**
    * The Cube API scopes wechart's own context has (T176, AC-170), each probed
@@ -375,7 +385,7 @@ export function buildServer({
     if (!docs) throw new BadRequest('Persistence is not configured');
 
     const folderId = body?.folderId ?? 'root';
-    const owner = 'admin';
+    const owner = SINGLE_USER;
 
     /**
      * A dashboard is created with its interaction mode and its default

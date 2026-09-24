@@ -200,7 +200,50 @@ textarea { height: auto; padding: 6px 8px; }
   font-weight: var(--wc-text-sm-strong-weight);
 }
 
-.theme-toggle { margin-left: auto; }
+/* The spacer pushes search, theme and avatar to the right, as the prototype's
+   .spacer does; the toggle no longer has to. */
+.app-bar__spacer { flex: 1; }
+
+/* The top bar's search field (AC-190), the prototype's .search. */
+.app-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 300px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-muted);
+  font-size: 13px;
+  text-align: left;
+  cursor: text;
+}
+.app-search span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-search kbd {
+  font-family: inherit;
+  font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-strong-weight);
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  padding: 0 4px;
+  color: var(--wc-text-secondary);
+}
+
+/* Who is signed in (AC-190), the prototype's .avatar. */
+.app-avatar {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
 
 main { padding: var(--wc-surface-padding); }
 
@@ -2370,19 +2413,28 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* The results, in the text tokens (AC-005). They were the browser's default
    link blue — #0000ee, 1.63:1 on the dark palette — because nothing styled
    them, and the audit only ever saw the palette closed. */
-.palette__results ul { margin: 0; padding: 0; list-style: none; }
-.palette__results a {
-  display: flex;
+.palette__results ul { margin: 0; padding: 0; list-style: none; max-height: 360px; overflow: auto; }
+/* A result: its type, its title, and where it lives (AC-191). The active one
+   — the arrows' — is drawn as the prototype draws a selected row. */
+.palette__option {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  column-gap: 8px;
   align-items: baseline;
-  gap: 4px;
   padding: 4px 6px;
   border-radius: 4px;
   color: var(--wc-text-primary);
-  text-decoration: none;
+  cursor: pointer;
 }
-.palette__results a:hover,
-.palette__results a:focus-visible { background: var(--wc-bg-hover); }
+.palette__option:hover { background: var(--wc-bg-hover); }
+.palette__option[aria-selected='true'] { background: var(--wc-bg-accent-soft); color: var(--wc-accent); }
 .palette__kind { color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
+.palette__option[aria-selected='true'] .palette__kind { color: var(--wc-accent); }
+.palette__detail {
+  grid-column: 2;
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+}
 
 :focus-visible {
   outline: 2px solid var(--wc-accent);

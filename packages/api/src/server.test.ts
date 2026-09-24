@@ -289,6 +289,17 @@ describe('the API answers for Cube (AC-007)', () => {
   });
 });
 
+describe('who is signed in (AC-190)', () => {
+  it('names phase 1’s single user, the owner every new document is given', async () => {
+    // One user, no login (requirements §4) — the avatar reads the name here
+    // rather than repeating it, so the two cannot disagree.
+    const app = buildServer({ config, cube: stubCube(() => ({})) });
+    const response = await app.inject({ method: 'GET', url: '/api/me' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ name: 'admin' });
+  });
+});
+
 describe('searching the catalog (AC-019)', () => {
   /**
    * The Explore search box lists *every* match, so it asks for more than the

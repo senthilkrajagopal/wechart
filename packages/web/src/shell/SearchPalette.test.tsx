@@ -32,7 +32,7 @@ describe('search palette (AC-006)', () => {
 
     await userEvent.keyboard('{Meta>}k{/Meta}');
 
-    const input = screen.getByRole('searchbox');
+    const input = screen.getByRole('combobox');
     expect(screen.getByRole('dialog')).toBeTruthy();
     expect(document.activeElement).toBe(input);
   });
@@ -43,7 +43,7 @@ describe('search palette (AC-006)', () => {
     await userEvent.keyboard('{Control>}k{/Control}');
 
     expect(screen.getByRole('dialog')).toBeTruthy();
-    expect(document.activeElement).toBe(screen.getByRole('searchbox'));
+    expect(document.activeElement).toBe(screen.getByRole('combobox'));
   });
 
   it('opens while focus is inside another control', async () => {
@@ -60,7 +60,7 @@ describe('search palette (AC-006)', () => {
 
     await userEvent.keyboard('{Control>}k{/Control}');
 
-    expect(document.activeElement).toBe(screen.getByRole('searchbox'));
+    expect(document.activeElement).toBe(screen.getByRole('combobox'));
   });
 
   it('closes on Escape and gives focus back to where it was', async () => {

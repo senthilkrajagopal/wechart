@@ -337,8 +337,12 @@ for (const theme of THEMES)
     await openInTheme(page, '/explore', theme);
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
     const palette = page.getByRole('dialog', { name: 'Search' });
-    await palette.getByRole('searchbox').fill('Company');
-    await expect(palette.getByRole('list', { name: 'Search results' })).toBeVisible();
+    await palette.getByRole('combobox').fill('Company');
+    await expect(
+      palette.getByRole('listbox', { name: 'Search results' }).getByRole('option').first(),
+    ).toBeVisible();
+    // With one result active, so the highlighted row is audited too.
+    await page.keyboard.press('ArrowDown');
 
     const results = await new AxeBuilder({ page })
       .include('.palette')

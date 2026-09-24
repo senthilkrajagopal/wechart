@@ -122,8 +122,8 @@ test('the ⌘K palette finds the same library items', async ({ page }) => {
   await page.keyboard.press(SHORTCUT);
   // Inside the palette: Explore's own box has the same name.
   const palette = page.getByRole('dialog', { name: 'Search' });
-  await palette.getByRole('searchbox').fill('Finance chart');
+  await palette.getByRole('combobox').fill('Finance chart');
 
-  const results = palette.getByRole('list', { name: /search results/i });
-  await expect(results.getByRole('listitem').first()).toContainText('Finance chart');
+  const results = palette.getByRole('listbox', { name: /search results/i });
+  await expect(results.getByRole('option').first()).toContainText('Finance chart');
 });
