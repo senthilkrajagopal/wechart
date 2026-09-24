@@ -73,3 +73,122 @@ test('offers to add the chart to another dashboard, and the list then includes i
 
   await expect(page.getByTestId(`using-${dashboard.id}`)).toBeVisible();
 });
+
+/**
+ * T226 / AC-212: WHEN the user opens a library chart from Explore, THE SYSTEM
+ * SHALL show its title as the page heading, its chart type, the chart drawn,
+ * the cube or view it is built on, its measures and dimensions, the dashboards
+ * it is used on, and an Edit chart action that opens the chart editor on it.
+ * `Fails when: the chart is not drawn, its title is not the heading, or there
+ * is no way to open it in the chart editor.`
+ *
+ * The prototype's `chartPage()` (docs/design/prototype/explore.js).
+ */
+async function drawnChart(request: APIRequestContext) {
+  const unique = String(Date.now());
+  const title = `Orders by status ${unique}`;
+  const chart = await create(request, 'chart', title);
+  const stored = (await (await request.get(`${API}/api/documents/chart/${chart.id}`)).json()) as {
+    version: number;
+    body: Record<string, unknown>;
+  };
+  await request.put(`${API}/api/documents/chart/${chart.id}`, {
+    data: {
+      version: stored.version,
+      body: {
+        ...stored.body,
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+          chartType: 'bar',
+        },
+      },
+    },
+  });
+  // A dashboard it is on, by a tile.
+  const board = `Uses it ${unique}`;
+  const dashboard = await create(request, 'dashboard', board);
+  const boardStored = (await (
+    await request.get(`${API}/api/documents/dashboard/${dashboard.id}`)
+  ).json()) as { version: number; body: Record<string, unknown> };
+  await request.put(`${API}/api/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: boardStored.version,
+      body: {
+        ...boardStored.body,
+        pages: [
+          {
+            id: 'p',
+            title: 'Page 1',
+            items: [{ id: 't', kind: 'chart', w: 6, h: 40, chartId: chart.id }],
+          },
+        ],
+      },
+    },
+  });
+  return { id: chart.id, title, board };
+}
+
+test('a library chart’s page: its title, type, the chart drawn, what it is built on, where it is used', async ({
+  page,
+  request,
+}) => {
+  const chart = await drawnChart(request);
+  await page.goto(`/explore/charts/${chart.id}`);
+  const main = page.getByRole('main');
+
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText(chart.title);
+  await expect(main.getByTestId('chart-type')).toHaveText('Bar');
+  // Drawn, not described.
+  await expect(main.getByTestId('chart-canvas')).toBeVisible();
+
+  const details = main.getByRole('complementary', { name: 'Chart details' });
+  await expect(details.getByRole('region', { name: 'Built on' })).toContainText('cube: orders');
+  await expect(details.getByRole('region', { name: 'Metrics' })).toContainText('Orders Count');
+  await expect(details.getByRole('region', { name: 'Dimensions' })).toContainText('Orders Status');
+  // In its list of dashboards — not the add-to picker's options beside it.
+  await expect(
+    details
+      .getByRole('list', { name: 'Dashboards using this chart' })
+      .getByRole('link', { name: chart.board }),
+  ).toBeVisible();
+});
+
+test('Edit chart opens the chart editor on it', async ({ page, request }) => {
+  const chart = await drawnChart(request);
+  await page.goto(`/explore/charts/${chart.id}`);
+  await page.getByRole('main').getByRole('link', { name: 'Edit chart' }).click();
+  await expect(page).toHaveURL(new RegExp(`/explore/charts/${chart.id}/edit$`));
+  await expect(page.getByRole('heading', { name: 'Chart editor' })).toBeVisible();
+  // On this chart: loaded, with its cube chosen.
+  await expect(page.getByTestId('editor-load-error')).toHaveCount(0);
+  await expect(page.getByLabel('Cube or view')).toHaveValue('orders');
+});
+
+test('a chart with no fields yet says what to do, not that something failed', async ({
+  page,
+  request,
+}) => {
+  const chart = await create(request, 'chart', `Empty ${String(Date.now())}`);
+  await page.goto(`/explore/charts/${chart.id}`);
+  const main = page.getByRole('main');
+  await expect(main.getByTestId('chart-page-empty')).toContainText('Use Edit chart to finish it');
+  await expect(main.getByTestId('chart-type')).toHaveText('Incomplete');
+  await expect(main.getByRole('alert')).toHaveCount(0);
+});
+
+test('a chart whose type the recommender picks says so', async ({ page, request }) => {
+  const chart = await drawnChart(request);
+  // Its saved type taken away: the recommender's pick.
+  const stored = (await (await request.get(`${API}/api/documents/chart/${chart.id}`)).json()) as {
+    version: number;
+    body: { chart: Record<string, unknown> };
+  };
+  const { chartType: _type, ...untyped } = stored.body.chart;
+  expect(_type).toBe('bar');
+  await request.put(`${API}/api/documents/chart/${chart.id}`, {
+    data: { version: stored.version, body: { ...stored.body, chart: untyped } },
+  });
+  await page.goto(`/explore/charts/${chart.id}`);
+  await expect(page.getByRole('main').getByTestId('chart-type')).toHaveText(/ · auto$/);
+});

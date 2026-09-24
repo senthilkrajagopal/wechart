@@ -792,6 +792,76 @@ fieldset.model-field > legend {
    prototype draws it: a card around the card read as a frame in a frame. */
 .explore__contents { display: grid; gap: 12px; min-width: 0; }
 
+/* A library chart's page (AC-212), the prototype's chartPage(): a head row
+   with the title, its type and Edit chart; the chart; a 300 px details pane
+   with 12/600 section heads. */
+.chart-page { display: grid; gap: 12px; }
+.chart-page__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.chart-page__head .item-crumbs { flex-basis: 100%; }
+.chart-page__spacer { flex: 1; }
+.chart-page__head a.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  text-decoration: none;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 999px;
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
+.chart-page__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+}
+.chart-page__tile {
+  padding: 12px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+.chart-page__details { display: grid; gap: 16px; }
+.chart-page__section { display: grid; gap: 6px; }
+.chart-page__section h2 {
+  margin: 0;
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
+.chart-page__source { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.chart-page__none { margin: 0; color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
+.chart-page__pills,
+.chart-page__used { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.chart-page__used { display: grid; }
+.field-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--wc-bg-subtle);
+  font-size: var(--wc-text-xs-size);
+}
+.chart-page__add { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+@media (max-width: 900px) {
+  .chart-page__body { grid-template-columns: minmax(0, 1fr); }
+}
+
 .folder-tree,
 .folder-tree ul { margin: 0; padding-left: 12px; list-style: none; }
 .folder-tree { padding-left: 0; }

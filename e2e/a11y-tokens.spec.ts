@@ -30,6 +30,8 @@ const SURFACES = [
   '/model',
   '/model/files/cubes%2Forders.yml',
   '/security',
+  // A library chart's page: its type badge, field pills and section heads (T226).
+  '/explore/charts/seed-chart-status',
 ];
 
 const MIN_FONT_SIZE_PX = 12;

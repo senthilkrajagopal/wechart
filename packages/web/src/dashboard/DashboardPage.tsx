@@ -597,14 +597,15 @@ function LoadedDashboard({
 }
 
 /**
- * One tile's chart, ready to render: the saved chart document, read strictly,
+ * One tile's chart, ready to render — and a library chart's own page's (AC-212),
+ * so the chart is drawn the same there: the saved chart document, read strictly,
  * then drawn by `tileChartOf` — the same recommendation the editor makes, so a
  * chart looks the same on a dashboard as it did where it was built (T193).
  *
  * `readChartDocument` is strict, so a body in an older or broken format is
  * refused here rather than drawn as an empty chart.
  */
-async function specFor(
+export async function specFor(
   chartId: string,
   /** `no-cache` for a tile's "Refresh now": asked past Cube's cache (T154, AC-148). */
   cache?: 'no-cache',

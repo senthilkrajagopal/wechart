@@ -676,7 +676,7 @@ Dashboards:
 
 Library charts and the chart editor:
 
-- [ ] AC-212 WHEN the user opens a library chart from Explore, THE SYSTEM SHALL show its title as the page heading, its chart type, the chart drawn, the cube or view it is built on, its measures and dimensions, the dashboards it is used on, and an Edit chart action that opens the chart editor on it.
+- [x] AC-212 WHEN the user opens a library chart from Explore, THE SYSTEM SHALL show its title as the page heading, its chart type, the chart drawn, the cube or view it is built on, its measures and dimensions, the dashboards it is used on, and an Edit chart action that opens the chart editor on it.
       Fails when: the chart is not drawn, its title is not the heading, or there is no way to open it in the chart editor.
 - [ ] AC-213 WHEN the user chooses New › Chart in Explore, THE SYSTEM SHALL open the chart editor on a new library chart titled "Untitled chart" in the open folder, and saving it SHALL open that chart's page.
       Fails when: New › Chart ends anywhere but the chart editor, or the saved chart is not in the folder that was open.
