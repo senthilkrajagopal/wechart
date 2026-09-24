@@ -1,3 +1,5 @@
+import type { CubeFilter } from '@wechart/core';
+
 import type { DashboardDocument } from '../dashboard/model/document';
 import { valueKeyOf, type DashboardFilter, type FilterValue, type FilterValues } from './model';
 import { coverageOf } from './coverage';
@@ -146,6 +148,24 @@ export function withFilters(query: CubeQuery, applied: readonly ActiveFilter[]):
     ...(added.length === 0 ? {} : { filters: [...existingFilters, ...added] }),
     ...(timeChanged ? { timeDimensions } : {}),
   };
+}
+
+/**
+ * A marking limit added to a tile's query (AC-107, AC-082).
+ *
+ * One filter, already combined as the tile is set (`limitFilterFor`), appended
+ * to `query.filters` — where Cube ANDs the entries. That is AC-082's "combine
+ * dashboard, tab and tile filters with marking limits using AND" with no
+ * second mechanism: the limit is a filter, and it lands where filters land.
+ *
+ * Returned by identity when there is nothing to add, so an unlimited tile's
+ * query is the one it always was and its cache entry is unchanged.
+ */
+export function withLimit(query: CubeQuery, limit: CubeFilter | undefined): CubeQuery {
+  if (limit === undefined) return query;
+
+  const existing = (query['filters'] as readonly unknown[] | undefined) ?? [];
+  return { ...query, filters: [...existing, limit] };
 }
 
 /**

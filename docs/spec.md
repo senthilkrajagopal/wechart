@@ -271,7 +271,7 @@ Traces to: `[docs/inputs §2]`, direction.md §7, rule 14.
       Fails when: any tile still reflects the cleared filter.
 - [x] AC-081 WHEN filters are active, THE SYSTEM SHALL include them in the dashboard's URL so that opening that URL reproduces them.
       Fails when: opening the URL in a new session produces different filter values.
-- [ ] AC-082 THE SYSTEM SHALL combine dashboard, tab and tile filters with marking limits using AND (direction.md rule 20).
+- [x] AC-082 THE SYSTEM SHALL combine dashboard, tab and tile filters with marking limits using AND (direction.md rule 20).
       Fails when: a tile's rows satisfy only one of the two and are still shown.
 - [x] AC-083 WHEN a date filter uses a relative preset such as "last 30 days", THE SYSTEM SHALL send it to Cube as that relative range rather than as fixed dates.
       Fails when: the query contains fixed dates for a relative preset.
@@ -342,7 +342,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: the tile shows a query error, or is silently left unbrushed with no label.
 - [ ] AC-104 WHEN a tile needs the marked share and the marking's members are not among its own groupings, THE SYSTEM SHALL obtain it with one additional query per tile and keep the unmarked result cached across marking changes.
       Fails when: more than one extra query per tile is issued for a marking change, or the base result is re-fetched when only the marking changed.
-- [ ] AC-105 WHEN the same set of items is marked again, THE SYSTEM SHALL produce an identical Cube query to the previous time, so the result can be served from cache.
+- [x] AC-105 WHEN the same set of items is marked again, THE SYSTEM SHALL produce an identical Cube query to the previous time, so the result can be served from cache.
       Fails when: two identical markings produce different query JSON.
 - [ ] AC-106 WHILE a dashboard is in edit mode, THE SYSTEM SHALL select the tile on click and change no marking.
       Fails when: clicking a chart in edit mode changes a marking.
@@ -352,15 +352,15 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
 Purpose: Spotfire's master-detail workflow and the operations on a selection.
 Traces to: `[docs/inputs §11]`, direction.md §7a, rules 33, 53, 55.
 
-- [ ] AC-107 WHEN a tile is limited by one or more markings, THE SYSTEM SHALL restrict its query to those markings, combined as All markings (AND) or Any marking (OR) according to its setting, and SHALL skip markings that are empty (direction.md rule 33).
+- [x] AC-107 WHEN a tile is limited by one or more markings, THE SYSTEM SHALL restrict its query to those markings, combined as All markings (AND) or Any marking (OR) according to its setting, and SHALL skip markings that are empty (direction.md rule 33).
       Fails when: a tile limited by two markings with one empty returns no rows, or OR behaves as AND.
-- [ ] AC-108 THE SYSTEM SHALL prevent a tile from being limited by the marking it marks with, and SHALL state the reason where that option is offered (direction.md rule 45).
+- [x] AC-108 THE SYSTEM SHALL prevent a tile from being limited by the marking it marks with, and SHALL state the reason where that option is offered (direction.md rule 45).
       Fails when: a tile can be limited by its own marking.
-- [ ] AC-109 WHEN every marking limiting a tile is empty, THE SYSTEM SHALL show the tile's nothing-marked state: all data, an empty visualization, or a message on an empty background, as set on the tile (direction.md rule 33).
+- [x] AC-109 WHEN every marking limiting a tile is empty, THE SYSTEM SHALL show the tile's nothing-marked state: all data, an empty visualization, or a message on an empty background, as set on the tile (direction.md rule 33).
       Fails when: the tile shows a state other than the one configured.
-- [ ] AC-110 WHEN a tile is first limited by a marking, THE SYSTEM SHALL set its nothing-marked state to the message option and pre-fill the message with the names of the tiles that mark with those markings (direction.md rule 58).
+- [x] AC-110 WHEN a tile is first limited by a marking, THE SYSTEM SHALL set its nothing-marked state to the message option and pre-fill the message with the names of the tiles that mark with those markings (direction.md rule 58).
       Fails when: the default is another option, or the message is empty.
-- [ ] AC-111 IF a limiting marking is not empty but its items are excluded by the active filters, THEN THE SYSTEM SHALL say the marked items are hidden by the filters rather than showing the nothing-marked state (direction.md rule 55).
+- [x] AC-111 IF a limiting marking is not empty but its items are excluded by the active filters, THEN THE SYSTEM SHALL say the marked items are hidden by the filters rather than showing the nothing-marked state (direction.md rule 55).
       Fails when: the tile shows its nothing-marked state in that situation.
 - [ ] AC-112 WHEN the user chooses "Create details tile" on a tile, THE SYSTEM SHALL add a tile limited by that tile's marking, with its nothing-marked message pre-filled.
       Fails when: the new tile is not limited by the marking, or has no message.

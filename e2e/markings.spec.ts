@@ -33,7 +33,15 @@ const API = 'http://localhost:4100/api';
  */
 async function markingDashboard(
   request: APIRequestContext,
-  { twoPages = false, split = false, table = false, trellis = false, apart = false } = {},
+  {
+    twoPages = false,
+    split = false,
+    table = false,
+    trellis = false,
+    apart = false,
+    limited = false,
+    second = false,
+  } = {},
 ) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Markings ${unique}`;
@@ -105,6 +113,13 @@ async function markingDashboard(
         'monthly_orders',
       )
     : undefined;
+  /**
+   * A details tile: it marks with nothing, and shows only what the master
+   * tile has marked (AC-107). Charted on the same dimension the master marks
+   * on, so "restricted to the marking" is countable — the whole axis, or the
+   * one marked value.
+   */
+  const detailsChart = limited ? await chartOn('Details by status', ['orders.status']) : undefined;
   // One panel per category, each with its own header to mark from.
   const trellisChart = trellis
     ? await chartOn('Per category', ['orders.status', 'products.category'], 'trellis', {
@@ -122,14 +137,57 @@ async function markingDashboard(
         folderId: 'root',
         owner: 'admin',
         settings: { width: 'fixed', interactions: { mode: 'markings' } },
-        markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
+        markings: [
+          { id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true },
+          // A second marking, so a tile can be limited by two and the
+          // empty-is-skipped rule has something to skip (AC-107).
+          ...(second ? [{ id: 'm2', name: 'Comparison', slot: 'mk2', isDefault: false }] : []),
+        ],
+        /**
+         * A filter to exclude the marked items with (AC-111). Its value is
+         * the reader's, so the test sets it in the URL.
+         *
+         * Scoped to the details tile alone, so the master still draws every
+         * bar — there has to be something to mark that the filter then
+         * excludes, which a dashboard-wide filter would hide as well.
+         */
+        filters: [
+          {
+            id: 'f-status',
+            widget: 'checkbox',
+            member: 'orders.status',
+            scope: { kind: 'tiles', tileIds: ['tile-details'] },
+          },
+        ],
         pages: [
           {
             id: 'only',
             title: 'Only',
             items: [
               { id: 'tile-status', kind: 'chart', w: 6, h: 40, chartId: status },
-              { id: 'tile-category', kind: 'chart', w: 6, h: 40, chartId: category },
+              {
+                id: 'tile-category',
+                kind: 'chart',
+                w: 6,
+                h: 40,
+                chartId: category,
+                // With a second marking, this is the other master.
+                ...(second ? { marksWith: 'm2' } : {}),
+              },
+              ...(detailsChart === undefined
+                ? []
+                : [
+                    {
+                      id: 'tile-details',
+                      kind: 'chart',
+                      w: 12,
+                      h: 40,
+                      chartId: detailsChart,
+                      // It marks with nothing and follows the master(s).
+                      marksWith: '',
+                      limitedBy: second ? ['m1', 'm2'] : ['m1'],
+                    },
+                  ]),
               ...(splitChart === undefined
                 ? []
                 : [{ id: 'tile-split', kind: 'chart', w: 12, h: 40, chartId: splitChart }]),
@@ -495,7 +553,8 @@ test('a tile’s Marking setting offers (None), and a new tile takes the default
   await tile(page, 'tile-status').click();
   const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
   await sidebar.getByRole('tab', { name: 'Properties' }).click();
-  const picker = sidebar.getByLabel('Marking');
+  // Exactly "Marking": the limit list below it names each marking too.
+  const picker = sidebar.getByLabel('Marking', { exact: true });
   await expect(picker).toHaveValue('m1');
   await expect(picker.locator('option')).toHaveText(['(None)', 'Marking']);
 
@@ -503,15 +562,302 @@ test('a tile’s Marking setting offers (None), and a new tile takes the default
   await sidebar.getByRole('tab', { name: 'Add' }).click();
   await sidebar.getByTestId('add-chart').click();
   await sidebar.getByRole('tab', { name: 'Properties' }).click();
-  await expect(sidebar.getByLabel('Marking')).toHaveValue('m1');
+  await expect(sidebar.getByLabel('Marking', { exact: true })).toHaveValue('m1');
 
   // And "(None)" is a tile that marks with nothing: chosen here, clicking in
   // it changes no marking.
   await tile(page, 'tile-status').click();
-  await sidebar.getByLabel('Marking').selectOption('');
+  await sidebar.getByLabel('Marking', { exact: true }).selectOption('');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
 
   await clickBar(page, tile(page, 'tile-status'), 'shipped');
   await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toHaveCount(0);
+});
+
+/**
+ * AC-107: WHEN a tile is limited by one or more markings, THE SYSTEM SHALL
+ * restrict its query to those markings, combined as All markings (AND) or Any
+ * marking (OR) according to its setting, and SHALL skip markings that are
+ * empty.
+ * `Fails when: a tile limited by two markings with one empty returns no rows,
+ * or OR behaves as AND.`
+ * AC-109: WHEN every marking limiting a tile is empty, THE SYSTEM SHALL show
+ * the tile's nothing-marked state.
+ * `Fails when: an unmarked dashboard shows a limited tile's full data with no
+ * indication.`
+ * AC-110: WHEN a tile is first limited by a marking, THE SYSTEM SHALL set its
+ * nothing-marked state to the message option and pre-fill the message with
+ * the names of the tiles that mark with those markings.
+ * `Fails when: the message is empty or names no tile.`
+ * AC-111: IF a limiting marking is not empty but its items are excluded by the
+ * active filters, THEN THE SYSTEM SHALL say the marked items are hidden by
+ * the filters rather than showing the nothing-marked state.
+ * `Fails when: the tile shows "nothing is marked" while something is marked.`
+ */
+
+/** The axis labels a tile draws, which say what its query returned. */
+async function axisLabels(target: Locator) {
+  return target
+    .locator('svg text')
+    .evaluateAll((nodes) => nodes.map((node) => node.textContent ?? '').filter((text) => text));
+}
+
+test('a limited tile shows only what is marked, and says so while nothing is', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request, { limited: true });
+  await open(page, id, title);
+
+  const details = tile(page, 'tile-details');
+  /**
+   * AC-109 first, because it is the state the dashboard opens in: nothing is
+   * marked anywhere, so the details tile is waiting. The message names the
+   * tile to go and click — which may be on a page tab that is not open, and
+   * is the part a reader cannot work out for themselves.
+   */
+  await expect(details.getByTestId('nothing-marked')).toContainText('By status');
+  await expect(details.getByTestId('chart-canvas')).toHaveCount(0);
+
+  // Every status the master draws — the value axis's own ticks dropped, so
+  // this is the set the details tile is measured against.
+  const statuses = (await axisLabels(tile(page, 'tile-status'))).filter(
+    (text) => !/^[\d.,]+$/.test(text),
+  );
+  expect(statuses.length).toBeGreaterThan(1);
+
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+
+  // AC-107: restricted to the marking — one status, not all of them. The
+  // master still draws every bar; only the limited tile narrows.
+  await expect(details.getByTestId('chart-canvas')).toBeVisible();
+  await expect
+    .poll(async () => (await axisLabels(details)).filter((text) => statuses.includes(text)))
+    .toEqual(['shipped']);
+  await expect(details.getByTestId('nothing-marked')).toHaveCount(0);
+});
+
+test('an empty marking limiting a tile is skipped, not intersected', async ({ page, request }) => {
+  /**
+   * The criterion's own failing state. Two markings limit the tile, combined
+   * with AND, and only one of them has anything in it. Read naively the tile
+   * would intersect against an empty set and go blank the moment someone
+   * started working — with "go and mark something in the other master tile
+   * as well" as a remedy nobody would guess (direction.md rule 33).
+   */
+  const { id, title } = await markingDashboard(request, { limited: true, second: true });
+  await open(page, id, title);
+
+  const details = tile(page, 'tile-details');
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+
+  await expect(details.getByTestId('chart-canvas')).toBeVisible();
+  await expect(details.getByTestId('nothing-marked')).toHaveCount(0);
+  await expect.poll(async () => (await axisLabels(details)).includes('shipped')).toBe(true);
+});
+
+test('Any marking widens a limited tile where All markings narrows it', async ({
+  page,
+  request,
+}) => {
+  /**
+   * The other half of AC-107's failing state: "or OR behaves as AND". Two
+   * markings limit the tile, each holding a different status. Under AND the
+   * tile can show nothing — no row is both — and under OR it shows both.
+   *
+   * Without this the setting was inert: hard-coding `'all'` in the dashboard
+   * left every test green, because the unit test drives `limitFilterFor`
+   * directly and the component test only checks that the select emits a patch.
+   */
+  const { id, title } = await markingDashboard(request, { limited: true, second: true });
+  await open(page, id, title);
+  const details = tile(page, 'tile-details');
+
+  // The statuses the details tile could draw, measured on the master so the
+  // chart's own title and value-axis ticks are never counted as data.
+  const statuses = (await axisLabels(tile(page, 'tile-status'))).filter(
+    (text) => !/^[\d.,]+$/.test(text),
+  );
+  const shown = async () => (await axisLabels(details)).filter((text) => statuses.includes(text));
+
+  // tile-status marks with m1; tile-category marks with m2, and marking a
+  // category there puts a `products.category` item in m2.
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+  const category = (await axisLabels(tile(page, 'tile-category'))).find(
+    (text) => !/^[\d.,]+$/.test(text) && !statuses.includes(text),
+  );
+  await clickBar(page, tile(page, 'tile-category'), category as string);
+
+  // AND: shipped orders of that category — one status.
+  await expect(details.getByTestId('chart-canvas')).toBeVisible();
+  await expect.poll(shown).toEqual(['shipped']);
+
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  await details.click();
+  await sidebar.getByRole('tab', { name: 'Properties' }).click();
+  await sidebar.getByLabel('Combine markings').selectOption('any');
+
+  // OR: every shipped order, *plus* every order of that category — which
+  // brings back statuses the AND excluded.
+  await expect.poll(async () => (await shown()).length).toBeGreaterThan(1);
+});
+
+test('the nothing-marked state is the one set on the tile, not one state for all', async ({
+  page,
+  request,
+}) => {
+  // AC-109's failing state is "a state other than the one configured", so
+  // each of the three has to be reachable from the tile's own setting.
+  const { id, title } = await markingDashboard(request, { limited: true });
+  await open(page, id, title);
+  const details = tile(page, 'tile-details');
+  await expect(details.getByTestId('nothing-marked')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  await details.click();
+  await sidebar.getByRole('tab', { name: 'Properties' }).click();
+  const state = sidebar.getByLabel('When nothing is marked');
+
+  // Empty visualization: the tile holds its place and says nothing.
+  await state.selectOption('empty');
+  await expect(details.getByTestId('nothing-marked-empty')).toBeVisible();
+  await expect(details.getByTestId('nothing-marked')).toHaveCount(0);
+
+  // All data: the tile draws, exactly as an unlimited one would.
+  await state.selectOption('all');
+  await expect(details.getByTestId('chart-canvas')).toBeVisible();
+  await expect(details.getByTestId('nothing-marked-empty')).toHaveCount(0);
+});
+
+test('a tile cannot be limited by the marking it marks with, and is told why', async ({
+  page,
+  request,
+}) => {
+  // AC-108, at the control: the master tile marks with m1, so m1 is not a
+  // limit it can take — a tile limited by its own marking would lock itself.
+  const { id, title } = await markingDashboard(request, { limited: true });
+  await open(page, id, title);
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+
+  await tile(page, 'tile-status').click();
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  await sidebar.getByRole('tab', { name: 'Properties' }).click();
+
+  const own = sidebar.getByLabel('Limit by Marking');
+  await expect(own).toBeDisabled();
+  await expect(sidebar.getByTestId('limit-m1')).toContainText('marks with this');
+});
+
+test('a tile limited for the first time starts with a message naming its master', async ({
+  page,
+  request,
+}) => {
+  // AC-110. The tile marks with nothing, so m1 is a limit it may take.
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  await tile(page, 'tile-category').click();
+  await sidebar.getByRole('tab', { name: 'Properties' }).click();
+  await sidebar.getByLabel('Marking', { exact: true }).selectOption('');
+  await sidebar.getByLabel('Limit by Marking').check();
+
+  /**
+   * The message, pre-filled with the tile that marks with m1.
+   *
+   * Only this assertion is made. Checking the *state* reads "message" here
+   * whether or not the patch ever stored it, because the control falls back
+   * to `NOTHING_MARKED_DEFAULT` — an assertion that cannot fail is worse than
+   * none, since it reads as cover. The message is empty without the patch.
+   */
+  await expect(sidebar.getByLabel('Message')).toHaveValue(/By status/);
+});
+
+test('a marking whose items the filters exclude says so, not “nothing is marked”', async ({
+  page,
+  request,
+}) => {
+  /**
+   * AC-111. The two states want different things of the reader — one wants a
+   * mark, the other wants a filter changed — so telling someone to go and
+   * mark something that *is* marked sends them looking for a bug.
+   */
+  const { id, title } = await markingDashboard(request, { limited: true });
+
+  // A filter on the details tile alone, keeping a status other than the one
+  // about to be marked. Marks are the reader's view state, so this is set
+  // before marking rather than by navigating away from a mark.
+  const filters = JSON.stringify([
+    { id: 'f-status', member: 'orders.status', value: { kind: 'values', values: ['completed'] } },
+  ]);
+  await page.goto(`/explore/dashboards/${id}?filters=${encodeURIComponent(filters)}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await expect(tile(page, 'tile-status').getByTestId('chart-canvas')).toBeVisible();
+
+  const details = tile(page, 'tile-details');
+  await expect(details.getByTestId('nothing-marked')).toBeVisible();
+
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+
+  await expect(details.getByTestId('marks-filtered-out')).toBeVisible();
+  await expect(details.getByTestId('nothing-marked')).toHaveCount(0);
+});
+
+/**
+ * AC-105: WHEN the same set of items is marked again, THE SYSTEM SHALL produce
+ * an identical Cube query to the previous time, so the result can be served
+ * from cache.
+ * `Fails when: marking the same two items in the other order asks Cube a
+ * different question.`
+ */
+test('the same set of marks asks Cube the same question, whatever order it was marked in', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request, { limited: true });
+
+  // Every query the page sends, as sent.
+  const asked: string[] = [];
+  await page.route('**/api/load', async (route) => {
+    const body = route.request().postData();
+    if (body !== null) asked.push(body);
+    await route.continue();
+  });
+
+  await open(page, id, title);
+  const details = tile(page, 'tile-details');
+  const master = tile(page, 'tile-status');
+
+  // shipped, then completed.
+  await clickBar(page, master, 'shipped');
+  await clickBar(page, master, 'completed', ['Control']);
+  await expect(details.getByTestId('chart-canvas')).toBeVisible();
+  // Generously, because this waits on a round trip to Cube under whatever
+  // load the rest of the suite is putting on it.
+  await expect
+    .poll(() => asked.filter((body) => body.includes('completed')).length, { timeout: 20_000 })
+    .toBeGreaterThan(0);
+  const first = asked.filter((body) => body.includes('completed') && body.includes('shipped'));
+
+  // The other order, from a clean marking.
+  await page.reload();
+  await expect(master.getByTestId('chart-canvas')).toBeVisible();
+  asked.length = 0;
+  await clickBar(page, master, 'completed');
+  await clickBar(page, master, 'shipped', ['Control']);
+  await expect(details.getByTestId('chart-canvas')).toBeVisible();
+  await expect
+    .poll(() => asked.filter((body) => body.includes('shipped')).length, { timeout: 20_000 })
+    .toBeGreaterThan(0);
+  const second = asked.filter((body) => body.includes('completed') && body.includes('shipped'));
+
+  expect(first.length).toBeGreaterThan(0);
+  expect(second.length).toBeGreaterThan(0);
+  // The same question, character for character: a marking is a set, and the
+  // order it was clicked in is the user's history, not part of what was asked.
+  expect(second.at(-1)).toBe(first.at(-1));
 });

@@ -27,7 +27,11 @@ const markings = [
   { id: 'mk3', name: 'Outliers', slot: 'mk3' as const, isDefault: false },
 ];
 
-const show = (marksWith: string | undefined, limitedBy: readonly string[] = []) => {
+const show = (
+  marksWith: string | undefined,
+  limitedBy: readonly string[] = [],
+  rest: Partial<React.ComponentProps<typeof TileLimits>> = {},
+) => {
   const onChange = vi.fn();
   render(
     <TileLimits
@@ -35,6 +39,7 @@ const show = (marksWith: string | undefined, limitedBy: readonly string[] = []) 
       marksWith={marksWith}
       limitedBy={limitedBy}
       onChange={onChange}
+      {...rest}
     />,
   );
   return onChange;
@@ -88,16 +93,97 @@ describe('the limit list on a tile', () => {
 
     await userEvent.click(screen.getByRole('checkbox', { name: /Comparison/ }));
 
-    expect(onChange).toHaveBeenCalledWith(['mk2']);
+    expect(onChange).toHaveBeenCalledWith({ limitedBy: ['mk2'] });
   });
 
   it('disables nothing when the tile marks with nothing', () => {
     // A "(None)" tile has no own marking, so every limit is available to it.
-    show(undefined);
+    // `''`, not absent: absent means "follow the dashboard's default", which
+    // is a marking, and the tile is then barred from limiting by that one.
+    show('');
 
     for (const box of screen.getAllByRole('checkbox')) {
       expect((box as HTMLInputElement).disabled).toBe(false);
     }
+  });
+
+  it('bars the default marking on a tile that names none, since that is what it marks with', () => {
+    /**
+     * Most tiles never touch the Marking setting, so rule 45 read off the
+     * stored field alone would go unenforced on nearly every tile on a
+     * dashboard — and each of those could lock itself.
+     */
+    show(undefined);
+
+    const byDefault = screen.getByRole('checkbox', { name: 'Limit by Marking' });
+    expect((byDefault as HTMLInputElement).disabled).toBe(true);
+  });
+});
+
+/**
+ * T113 / AC-107: "…combined as All markings (AND) or Any marking (OR)
+ * **according to its setting**". The setting has to be somewhere the user can
+ * reach; this is where.
+ */
+describe('how several limits combine', () => {
+  it('offers the choice once there are two limits to combine', async () => {
+    const onChange = show('mk1', ['mk2', 'mk3']);
+
+    await userEvent.selectOptions(screen.getByLabelText('Combine markings'), 'any');
+
+    expect(onChange).toHaveBeenCalledWith({ limitCombination: 'any' });
+  });
+
+  it('does not offer it for a single limit, where the two mean the same', () => {
+    // A control that changes nothing is worse than none: it invites the
+    // reader to look for the difference.
+    show('mk1', ['mk2']);
+
+    expect(screen.queryByLabelText('Combine markings')).toBeNull();
+  });
+});
+
+/**
+ * T115 / AC-109: WHEN every marking limiting a tile is empty, THE SYSTEM SHALL
+ * show the tile's nothing-marked state: all data, an empty visualization, or a
+ * message on an empty background, **as set on the tile**.
+ */
+describe('what the tile does while nothing is marked', () => {
+  it('offers the three states once the tile is limited', () => {
+    show('mk1', ['mk2']);
+
+    const labels = [...screen.getByLabelText('When nothing is marked').querySelectorAll('option')];
+    expect(labels.map((option) => option.textContent)).toEqual([
+      'All data',
+      'Empty visualization',
+      'Message on an empty background',
+    ]);
+  });
+
+  it('is not offered on a tile no marking limits, which waits for nothing', () => {
+    show('mk1', []);
+
+    expect(screen.queryByLabelText('When nothing is marked')).toBeNull();
+  });
+
+  it('edits the message where the message is what the tile shows', async () => {
+    const onChange = show('mk1', ['mk2'], {
+      nothingMarked: 'message',
+      nothingMarkedMessage: 'Nothing is marked in Revenue.',
+    });
+
+    await userEvent.type(screen.getByLabelText('Message'), '!');
+
+    expect(onChange).toHaveBeenCalledWith({
+      nothingMarkedMessage: 'Nothing is marked in Revenue.!',
+    });
+  });
+
+  it('hides the message box for a state that shows no message', () => {
+    // A tile switched to another state must not leak the text it still holds.
+    show('mk1', ['mk2'], { nothingMarked: 'empty' });
+
+    expect(screen.queryByLabelText('Message')).toBeNull();
   });
 });
 

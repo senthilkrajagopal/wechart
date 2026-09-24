@@ -1,11 +1,11 @@
-import type { ChartDocument } from '@wechart/core';
+import type { ChartDocument, CubeFilter } from '@wechart/core';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useImperativeHandle, type Ref } from 'react';
 
 import { tileChartOf, type TileChart } from '../dashboard/chartSpec';
 import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
 import { loadTile } from '../query/loadTile';
-import { withFilters, type ActiveFilter } from './apply';
+import { withFilters, withLimit, type ActiveFilter } from './apply';
 
 /**
  * A reached chart as filtered.
@@ -92,6 +92,8 @@ export function filteredQueryKey(
   applied: readonly ActiveFilter[],
   /** The security context asked as, when previewing one (T172). */
   context?: Readonly<Record<string, unknown>>,
+  /** What the markings limiting this tile add to its query (T113, AC-107). */
+  limit?: CubeFilter,
 ): readonly unknown[] {
   return [
     'filtered-chart',
@@ -99,6 +101,10 @@ export function filteredQueryKey(
     document,
     applied.map(({ filter, value }) => [filter.member, value]),
     context ?? null,
+    // The limit is in the key because it is in the question. It arrives
+    // canonical (`limitFilterFor`), so the same marks marked again are the
+    // same key and the answer comes from the cache — AC-105.
+    limit ?? null,
   ];
 }
 
@@ -117,16 +123,40 @@ export async function filteredChart(
   cache?: 'no-cache',
   /** A previewed security context, asked as (T172, AC-166). */
   context?: Readonly<Record<string, unknown>>,
+  /**
+   * What the markings limiting this tile add to its query (T113, AC-107) —
+   * one filter, already combined as the tile is set.
+   *
+   * It joins `query.filters`, where Cube ANDs the entries, so a limited tile
+   * shows the marked rows *of* what the dashboard, tab and tile filters left:
+   * AC-082's "combine … using AND", with no separate mechanism.
+   *
+   * Unlike a dashboard filter it is never dropped to rescue a query. A filter
+   * that cannot be joined is a filter the user did not aim at this tile; a
+   * limit they did, and a tile that quietly dropped it would show unmarked
+   * rows in a tile whose whole purpose is to show marked ones.
+   *
+   * **So a limit Cube cannot join leaves the tile showing Cube's error**, and
+   * that is deliberate rather than settled elsewhere: AC-103's `notLinked` is
+   * computed from the marking a tile *shows*, not from the markings limiting
+   * it, so it does not cover this. An error naming an unjoinable cube is a
+   * worse message than AC-103's, but it is a true one; showing the tile's
+   * unlimited data instead would be a false one.
+   */
+  limit?: CubeFilter,
 ): Promise<{ chart: TileChart | undefined; uncovered: string[]; answered?: AnswerMeta }> {
   const source = document.chart.source.cube;
   let asked = [...applied];
   const uncovered: string[] = [];
-  while (asked.length > 0) {
+  // A tile limited by a marking is asked even when no filter reaches it — the
+  // limit is the question — and goes on being asked once every filter has
+  // been dropped, so the limit is never what gets dropped.
+  while (asked.length > 0 || limit !== undefined) {
     const current = asked;
     let answered: AnswerMeta | undefined;
     const chart = await tileChartOf(document, async (query) => {
       const result = (await loadTile({
-        query: withFilters(query, current),
+        query: withLimit(withFilters(query, current), limit),
         signal,
         ...(cache === undefined ? {} : { cache }),
         ...(context === undefined ? {} : { context }),
@@ -135,7 +165,9 @@ export async function filteredChart(
       return result.data ?? [];
     });
     const refused = 'error' in chart ? refusedJoin(chart.error) : undefined;
-    if (refused === undefined)
+    // Nothing left to drop: the cause is the limit or the chart's own query,
+    // and neither is ours to remove. The tile shows what Cube said.
+    if (refused === undefined || current.length === 0)
       return answered === undefined ? { chart, uncovered } : { chart, uncovered, answered };
     // The filters on a cube Cube named, other than the chart's own; if it
     // named none of them, every filter, since one of them has to be the cause.
@@ -173,6 +205,7 @@ export function FilteredCharts({
   onResults,
   ref,
   context,
+  limits,
 }: {
   reached: Readonly<Record<string, readonly ActiveFilter[]>>;
   documents: Readonly<Record<string, ChartDocument>> | undefined;
@@ -181,10 +214,19 @@ export function FilteredCharts({
   ref?: Ref<FilteredChartsHandle>;
   /** A previewed security context, every filtered chart asked as (T172). */
   context?: Readonly<Record<string, unknown>> | undefined;
+  /**
+   * What the markings limiting each chart's tile add to its query, by chart
+   * (T113, AC-107). A chart listed here is asked even when no filter reaches
+   * it, so `reached` need not carry an empty entry for it.
+   */
+  limits?: Readonly<Record<string, CubeFilter>> | undefined;
 }) {
-  const charts = Object.entries(reached).flatMap(([chartId, applied]) => {
+  const ids = [...new Set([...Object.keys(reached), ...Object.keys(limits ?? {})])];
+  const charts = ids.flatMap((chartId) => {
     const document = documents?.[chartId];
-    return document === undefined ? [] : [{ chartId, document, applied }];
+    return document === undefined
+      ? []
+      : [{ chartId, document, applied: reached[chartId] ?? [], limit: limits?.[chartId] }];
   });
 
   /**
@@ -203,10 +245,11 @@ export function FilteredCharts({
       refresh: async (chartId) => {
         const found = charts.find((each) => each.chartId === chartId);
         if (found === undefined) return;
-        const { document, applied } = found;
+        const { document, applied, limit } = found;
         await queryClient.fetchQuery({
-          queryKey: filteredQueryKey(chartId, document, applied, context),
-          queryFn: ({ signal }) => filteredChart(document, applied, signal, 'no-cache', context),
+          queryKey: filteredQueryKey(chartId, document, applied, context, limit),
+          queryFn: ({ signal }) =>
+            filteredChart(document, applied, signal, 'no-cache', context, limit),
           staleTime: 0,
         });
       },
@@ -215,10 +258,10 @@ export function FilteredCharts({
   );
 
   const answers = useQueries({
-    queries: charts.map(({ chartId, document, applied }) => ({
-      queryKey: filteredQueryKey(chartId, document, applied, context),
+    queries: charts.map(({ chartId, document, applied, limit }) => ({
+      queryKey: filteredQueryKey(chartId, document, applied, context, limit),
       queryFn: ({ signal }: { signal: AbortSignal }) =>
-        filteredChart(document, applied, signal, undefined, context),
+        filteredChart(document, applied, signal, undefined, context, limit),
     })),
   });
 

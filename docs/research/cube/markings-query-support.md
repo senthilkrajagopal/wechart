@@ -504,7 +504,8 @@ The caller asked for a comparison of partial-highlight strategies; it is the tab
 - UNVERIFIED: `ResultSet.drillDown`/`dayRange().snapTo()` for **custom** granularities, which affects computing bucket ends ([src-rs]).
 - UNVERIFIED: whether multi-stage `filter.exclude` keeps marks that have zero marked rows (option E).
 - UNVERIFIED: `PatchMeasure` semantics and support status (internal; [i10294]).
-- UNVERIFIED: whether top-level `filters` entries are always ANDed. Evidence exists (correction 4), but the docs don't say it. Integration test needed.
+- **VERIFIED 2026-09-23: top-level `filters` entries are ANDed.** The integration test this line asked for now exists and runs against the local Cube v1.7.42: `e2e/markings.spec.ts`, "a marking whose items the filters exclude says so, not 'nothing is marked'". A details tile is sent a dashboard filter `orders.status equals ['completed']` and, as a separate top-level entry, a marking limit `orders.status equals ['shipped']`. Cube returns **zero rows**, which only an AND does — an OR would have returned both statuses and drawn a chart. The test asserts the tile's "marked items are hidden by the filters" state, which is a pure function of the row count being zero. This is what AC-082 is ticked on.
+- UNVERIFIED: whether a `BoundedRange` over a **measure** can be emitted at all from a marking, given "You can not put dimensions and measures filters in the same logical operator" ([data-apis] gotcha 13). `limitFilterFor` currently ORs a range with the marking's item filters, which is wrong for a measure range; nothing produces one yet (range mode is AC-093). AC-093 must supply the member kinds and split the groups.
 - Not researched: a GraphQL encoding of markings (REST is the chosen transport, [data-apis]).
 
 [input]: ../../inputs/2026-09-19-product-direction.md

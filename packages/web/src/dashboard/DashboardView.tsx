@@ -4,7 +4,9 @@ import {
   addItemsWithinLimit,
   applyItemClick,
   EMPTY_PREDICATE,
+  type CubeFilter,
   isEmptyPredicate,
+  limitFilterFor,
   markingApplicability,
   markingsFrom,
   memberOn,
@@ -167,7 +169,15 @@ import {
 } from './model/document';
 import { detach } from '../editor/detach';
 import { TileChartOwnership } from './edit/ChartOwnership';
+import { allowedLimits, TileLimits } from './settings/TileLimits';
 import { TileMarking } from './settings/TileMarking';
+import {
+  allLimitsEmpty,
+  defaultNothingMarkedMessage,
+  NothingMarked,
+  NOTHING_MARKED_DEFAULT,
+  type NothingMarkedState,
+} from './tiles/NothingMarked';
 import { duplicateChartTile } from './model/duplicate';
 import { withLocalCharts } from './model/localCharts';
 
@@ -292,6 +302,67 @@ export interface DashboardViewProps {
   ) => void | Promise<unknown>;
 }
 
+/**
+ * Why a marking-limited tile is not showing its data.
+ *
+ * Two states, kept apart because their remedies are (direction.md: "If a
+ * limiting marking isn't empty but its items are all filtered out, the tile
+ * says so instead of showing the nothing-marked state"). `'waiting'` wants a
+ * mark; `'filtered-out'` wants a filter changed, and someone told to go and
+ * mark something that *is* marked would look for a bug.
+ */
+type LimitedState =
+  | { readonly kind: 'waiting'; readonly state: NothingMarkedState; readonly message: string }
+  | { readonly kind: 'filtered-out' };
+
+/**
+ * The marking a tile marks with when it names none (direction.md rule 44):
+ * the dashboard's default, or its first marking where none is marked default.
+ *
+ * Derived from the document rather than held in a variable, so the memos that
+ * need it depend on the document and nothing else — which is also what lets
+ * React's compiler keep them memoized.
+ */
+function defaultMarkingOf(document: DashboardDocument): Marking | undefined {
+  const all = markingsFrom(document.markings);
+  return all.find((each) => each.isDefault) ?? all[0];
+}
+
+/**
+ * The tiles a limited tile is waiting on: those that mark with the markings
+ * limiting it (AC-110, direction.md rule 58).
+ *
+ * By name, deduplicated and in the dashboard's own order, because the message
+ * reads them out — "Nothing is marked in Revenue by region or Orders" — and
+ * the tile to go and click may be on a page tab the user has not opened.
+ * A tile with no chart, and so no title, contributes nothing rather than an
+ * empty name in the list.
+ */
+function masterTileNames(
+  document: DashboardDocument,
+  limitedBy: readonly string[],
+  nameOf: (tileId: string) => string | undefined,
+  /**
+   * The dashboard's default marking, which a tile marks with when it names
+   * none. Passed in rather than assumed absent: most tiles never touch the
+   * setting, so a master found only by an explicit `marksWith` would be no
+   * master at all, and the message would name nobody.
+   */
+  defaultMarkingId: string | undefined,
+): string[] {
+  const names = new Set<string>();
+  for (const tile of chartTilesOf(document)) {
+    const element = elementAt(document, tile.tileId);
+    if (element === null || !isTile(element)) continue;
+    // `''` is "(None)": a tile that marks with nothing is nobody's master.
+    const marksWith = element.marksWith ?? defaultMarkingId;
+    if (marksWith === undefined || marksWith === '' || !limitedBy.includes(marksWith)) continue;
+    const name = nameOf(tile.tileId);
+    if (name !== undefined) names.add(name);
+  }
+  return [...names];
+}
+
 function TileBody({
   tile,
   spec,
@@ -307,8 +378,15 @@ function TileBody({
   canEditChart = false,
   onItemClick,
   rowMarking,
+  limited,
 }: {
   tile: Tile;
+  /**
+   * What a marking-limited tile shows instead of its chart (AC-109, AC-111),
+   * or undefined when it shows its chart — including the `'all'`
+   * nothing-marked state, which *is* the chart.
+   */
+  limited?: LimitedState | undefined;
   /** A click on its chart: cross-filtering it (AC-117) or marking it (AC-087). */
   onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
   /** Marking its rows, where it draws a table (AC-092). */
@@ -363,6 +441,24 @@ function TileBody({
             )}
           </div>
         );
+      }
+      /**
+       * Before loading, missing and broken, and before the chart: a tile
+       * waiting on a mark has nothing to load, and one whose marked items the
+       * filters exclude has an answer — an empty one — that would otherwise
+       * draw as an empty chart with no explanation.
+       *
+       * `'all'` never reaches here: the dashboard leaves `limited` undefined
+       * for it, because "All data" means the tile draws normally.
+       */
+      if (limited !== undefined) {
+        if (limited.kind === 'filtered-out')
+          return (
+            <StateLine kind="idle" role="status" testId="marks-filtered-out">
+              The marked items are hidden by the filters in effect.
+            </StateLine>
+          );
+        return <NothingMarked state={limited.state} message={limited.message} />;
       }
       if (hidden !== undefined) return <TileUnavailable member={hidden} />;
       if (error !== undefined) return <TileError error={error} />;
@@ -470,6 +566,12 @@ interface TileCharts {
     ((tileId: string, chartId: string) => ChartTileProps['rowMarking']) | undefined;
   /** Why a tile is not marked: its cube cannot reach the marking's members (AC-103). */
   readonly notLinked?: Readonly<Record<string, string>> | undefined;
+  /**
+   * Why a marking-limited tile is showing something other than its chart
+   * (AC-109, AC-111), by chart. A limited tile that has data to show is not
+   * here — it draws its limited answer like any other chart.
+   */
+  readonly limitedStates?: Readonly<Record<string, LimitedState>> | undefined;
   /** The marking a tile shows, its colour and how many items it holds (AC-098). */
   readonly markingOn?:
     | ((tileId: string) => { marking: Marking; colour: string; markedCount: number } | undefined)
@@ -763,6 +865,7 @@ function Elements({
               carried={charts.carried}
               title={charts.titleOf?.(chartId)}
               answered={charts.answered?.[chartId]}
+              limited={charts.limitedStates?.[chartId]}
               // The chart's own type, where it has one (T132's review): the
               // editor changes the document's, not the tile's.
               chartType={charts.typeOf?.(chartId) ?? element.chartType}
@@ -1200,7 +1303,7 @@ export function DashboardView({
     return predicate.items.length + predicate.ranges.length;
   };
   const marking = interactions.mode === 'markings' && !sessionEditing && preview === undefined;
-  const defaultMarking = markings.find((each) => each.isDefault) ?? markings[0];
+  const defaultMarking = defaultMarkingOf(live);
   /**
    * Which marking a tile marks with: its own, or the dashboard's default for
    * a tile saved before the setting existed. "(None)" is a tile that marks
@@ -1319,6 +1422,52 @@ export function DashboardView({
     }));
   }, [crossEffects, live]);
 
+  /**
+   * What the markings limiting each tile do to it (AC-107, direction.md rule
+   * 33), by chart.
+   *
+   * Two outcomes, because they are different states and not degrees of one:
+   * a tile with something to show is *asked a narrower question* — the limit
+   * goes into its Cube query, not into its rows, so its aggregates are over
+   * what it draws — and a tile whose limiting markings are all empty is not
+   * asked at all. It is waiting, and AC-109 says what waiting looks like.
+   *
+   * Empty markings are skipped rather than intersected (rule 33). Under AND
+   * the other reading empties a details tile the moment a second marking is
+   * added to it, and "go and mark something in the other master tile too" is
+   * not a remedy anyone would guess.
+   */
+  const limitedTiles = useMemo(() => {
+    const asked: Record<string, CubeFilter> = {};
+    const waiting: Record<string, true> = {};
+    if (interactions.mode !== 'markings') return { asked, waiting };
+
+    for (const tile of chartTilesOf(live)) {
+      const element = elementAt(live, tile.tileId);
+      if (tile.chartId === undefined || element === null || !isTile(element)) continue;
+      // Enforced here as well as where the option is offered: a stored
+      // document can arrive hand-edited, or from a build older than rule 45
+      // (AC-108). Against the marking the tile actually marks with, which for
+      // a tile that names none is the dashboard's default.
+      const limitedBy = allowedLimits(
+        element.limitedBy ?? [],
+        element.marksWith ?? defaultMarkingOf(live)?.id,
+      );
+      if (limitedBy.length === 0) continue;
+
+      const predicates = limitedBy.map((markingId) => markingOf(marks, markingId));
+      // The raw list, empty markings included — `limitingMarkings` strips
+      // exactly what `allLimitsEmpty` asks about, so the two never compose.
+      if (allLimitsEmpty(predicates)) {
+        waiting[tile.chartId] = true;
+        continue;
+      }
+      const filter = limitFilterFor(predicates, element.limitCombination ?? 'all');
+      if (filter !== undefined) asked[tile.chartId] = filter;
+    }
+    return { asked, waiting };
+  }, [interactions.mode, live, marks]);
+
   const { reached, notCovered } = useMemo(
     () =>
       coverageOf(
@@ -1334,7 +1483,11 @@ export function DashboardView({
     setFiltered((before) => keepLastAnswers(before, results));
   }, []);
   const withFiltered = useMemo(() => {
-    const ids = Object.keys(reached).filter((id) => drawn.documents?.[id] !== undefined);
+    // A tile limited by a marking draws a filtered answer too, even with no
+    // filter reaching it: the limit is what it was asked.
+    const ids = [...new Set([...Object.keys(reached), ...Object.keys(limitedTiles.asked)])].filter(
+      (id) => drawn.documents?.[id] !== undefined,
+    );
     if (ids.length === 0) return { ...drawn, pending: new Set<string>() };
     const shown: Record<string, RenderSpec> = { ...drawn.specs };
     const failed: Record<string, unknown> = { ...drawn.errors };
@@ -1368,7 +1521,7 @@ export function DashboardView({
       else said[id] = result.answered;
     }
     return { specs: shown, errors: failed, answered: said, pending };
-  }, [drawn, reached, filtered]);
+  }, [drawn, reached, filtered, limitedTiles.asked]);
 
   /**
    * "Refresh now" on a tile (T154, AC-148) asks again what the tile draws: a
@@ -1726,6 +1879,81 @@ export function DashboardView({
     return said;
   }, [markedSpecs, marks, reachOf]);
 
+  /**
+   * What a limited tile shows instead of its chart (AC-109, AC-111), by
+   * chart. A tile with marked data to show is not here: it draws the limited
+   * answer like any other chart.
+   *
+   * AC-111 before AC-109, as direction.md asks — "if a limiting marking isn't
+   * empty but its items are all filtered out, the tile says so instead of
+   * showing the nothing-marked state". They cannot both apply to one tile
+   * here, because the first branch returns, but the order is the one to keep:
+   * telling someone to go and mark something that *is* marked sends them
+   * looking for a bug.
+   */
+  const limitedStates = useMemo(() => {
+    const states: Record<string, LimitedState> = {};
+    /**
+     * Gated on the mode exactly as `limitedTiles` is, and it has to be: with
+     * the limit not applied, `waiting` is never set, and a limited tile that
+     * happened to return no rows under a *cross-filter* would be told its
+     * marks were hidden by the filters when nothing is marked at all.
+     *
+     * Cross-filter mode has no markings anywhere in the dashboard (AC-120),
+     * so a marking limit has nothing to mean there.
+     */
+    if (interactions.mode !== 'markings') return states;
+
+    for (const tile of chartTilesOf(live)) {
+      const element = elementAt(live, tile.tileId);
+      if (tile.chartId === undefined || element === null || !isTile(element)) continue;
+      const limitedBy = allowedLimits(
+        element.limitedBy ?? [],
+        element.marksWith ?? defaultMarkingOf(live)?.id,
+      );
+      if (limitedBy.length === 0) continue;
+
+      if (limitedTiles.waiting[tile.chartId] === true) {
+        const state = element.nothingMarked ?? NOTHING_MARKED_DEFAULT;
+        // "All data" is the tile drawing normally, so it is not a state to
+        // render — it is the absence of one.
+        if (state === 'all') continue;
+        states[tile.chartId] = {
+          kind: 'waiting',
+          state,
+          // The stored message (AC-110 writes one when the tile is first
+          // limited); composed here only for a tile limited before that, or
+          // by hand.
+          message:
+            element.nothingMarkedMessage ??
+            defaultNothingMarkedMessage(
+              masterTileNames(live, limitedBy, tileNameOf, defaultMarkingOf(live)?.id),
+            ),
+        };
+        continue;
+      }
+
+      /**
+       * Marked, but nothing came back. Said only while a filter is actually
+       * *in effect* on the tile: with no filters, an empty answer means the
+       * marked items have no data here, and blaming the filters would send
+       * the user to clear filters that do not exist.
+       *
+       * "In effect" excludes the ones Cube refused to join and left off the
+       * query (AC-079) — the same subtraction `inEffect` makes below. A tile
+       * whose only reaching filter was dropped is not being filtered by it.
+       */
+      const answer = filtered[tile.chartId]?.chart;
+      const rows = answer !== undefined && 'spec' in answer ? answer.spec.rows : undefined;
+      const refused = filtered[tile.chartId]?.uncovered ?? [];
+      const applied = (reached[tile.chartId] ?? []).filter(
+        ({ filter }) => !refused.includes(filter.id),
+      );
+      if (rows?.length === 0 && applied.length > 0) states[tile.chartId] = { kind: 'filtered-out' };
+    }
+    return states;
+  }, [interactions.mode, live, limitedTiles, filtered, reached, tileNameOf]);
+
   /** Each tile's spec with the highlight it draws, where a pair asks for one. */
   const withHighlights = useMemo(() => {
     if (Object.keys(crossEffects.perChart).length === 0) return formatted;
@@ -1781,21 +2009,32 @@ export function DashboardView({
    */
   const inEffect = useMemo(() => {
     const setOn = new Map((live.filters ?? []).map((filter) => [filter.id, filter.member ?? '']));
+    /**
+     * A marking limit is a filter in effect too (T088's note), and the empty
+     * state has to name it. Without this a limited tile that returns no rows
+     * with no dashboard filter on it shows AC-043's "no data matches" naming
+     * nothing at all — leaving the reader to guess that the marking they made
+     * in another tile is what emptied this one.
+     */
+    const marked = new Set(Object.keys(limitedTiles.asked));
     return Object.fromEntries(
-      Object.entries(reached).map(([chartId, applied]) => {
+      [...new Set([...Object.keys(reached), ...marked])].map((chartId) => {
         const refused = filtered[chartId]?.uncovered ?? [];
         return [
           chartId,
-          applied
-            .filter(({ filter }) => !refused.includes(filter.id))
-            .map(({ filter, value }) => {
-              const field = setOn.get(filter.id) ?? filter.member ?? '';
-              return describeFilter(memberTitle?.(field) ?? field, value);
-            }),
+          [
+            ...(reached[chartId] ?? [])
+              .filter(({ filter }) => !refused.includes(filter.id))
+              .map(({ filter, value }) => {
+                const field = setOn.get(filter.id) ?? filter.member ?? '';
+                return describeFilter(memberTitle?.(field) ?? field, value);
+              }),
+            ...(marked.has(chartId) ? ['limited to what is marked'] : []),
+          ],
         ];
       }),
     );
-  }, [reached, filtered, live.filters, memberTitle]);
+  }, [reached, filtered, live.filters, memberTitle, limitedTiles.asked]);
 
   /**
    * What a link tile passes on (AC-064): the filters in effect, and only
@@ -1863,6 +2102,13 @@ export function DashboardView({
      */
     ...(crossFiltering ? { onItemClick } : {}),
     ...(marking ? { onMarkClick, notLinked } : {}),
+    /**
+     * Not gated on `marking`: a limited tile explains itself while the
+     * dashboard is being edited too, where clicking selects the tile rather
+     * than marking (AC-106). An author who could not see the nothing-marked
+     * state would be laying out a tile whose real appearance they never see.
+     */
+    limitedStates,
     ...(marking
       ? {
           /**
@@ -2159,10 +2405,13 @@ export function DashboardView({
           onClose={closeSql}
         />
       )}
-      {Object.keys(reached).length === 0 ? null : (
+      {Object.keys(reached).length === 0 && Object.keys(limitedTiles.asked).length === 0 ? null : (
         <FilteredCharts
           ref={filteredCharts}
           reached={reached}
+          // What each limited tile's markings add to its query (AC-107): a
+          // tile listed here is asked even when no filter reaches it.
+          limits={limitedTiles.asked}
           documents={drawn.documents}
           onResults={onFiltered}
           context={preview}
@@ -2374,6 +2623,54 @@ export function DashboardView({
                       onChange={(marksWith) => {
                         session.update((current) =>
                           changeTile(current, tile.id, (each) => ({ ...each, marksWith })),
+                        );
+                      }}
+                    />
+                    {/* Which markings limit what it shows (AC-107, AC-108),
+                        and what it does while they are empty (AC-109). */}
+                    <TileLimits
+                      key={`limits-${tile.id}`}
+                      markings={markingsFrom(session.document.markings)}
+                      marksWith={tile.marksWith}
+                      limitedBy={tile.limitedBy ?? []}
+                      combination={tile.limitCombination ?? 'all'}
+                      nothingMarked={tile.nothingMarked ?? NOTHING_MARKED_DEFAULT}
+                      nothingMarkedMessage={tile.nothingMarkedMessage ?? ''}
+                      onChange={(next) => {
+                        session.update((current) =>
+                          changeTile(current, tile.id, (each) => ({
+                            ...each,
+                            ...next,
+                            /**
+                             * AC-110: a tile limited for the first time gets
+                             * the message state and a message naming the
+                             * tiles it now waits on.
+                             *
+                             * **Only while the tile has no message of its
+                             * own**, not merely on every 0→1 transition.
+                             * Switching which marking a tile follows is two
+                             * clicks — uncheck one, check another — and the
+                             * second is a 0→1 transition on a tile whose
+                             * message the user may have written themselves.
+                             * The message box is hidden between the clicks,
+                             * so overwriting it there is invisible until
+                             * afterwards.
+                             */
+                            ...(each.nothingMarkedMessage === undefined &&
+                            (next.limitedBy ?? []).length > 0
+                              ? {
+                                  nothingMarked: NOTHING_MARKED_DEFAULT,
+                                  nothingMarkedMessage: defaultNothingMarkedMessage(
+                                    masterTileNames(
+                                      session.document,
+                                      next.limitedBy ?? [],
+                                      tileNameOf,
+                                      defaultMarking?.id,
+                                    ),
+                                  ),
+                                }
+                              : {}),
+                          })),
                         );
                       }}
                     />

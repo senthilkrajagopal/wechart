@@ -16,11 +16,18 @@
  * the render spec's, and this is a persisted document model, so it should name
  * the same owner `chart-document.ts` does.
  */
-import type { ChartDocument, ChartType, Marking, RenderSpec } from '@wechart/core';
+import type {
+  ChartDocument,
+  ChartType,
+  LimitCombination,
+  Marking,
+  RenderSpec,
+} from '@wechart/core';
 
 import type { DashboardFilter } from '../../filters/model';
 import type { GridTile } from '../grid/geometry';
 import type { Interactions } from '../settings/interactionMode';
+import type { NothingMarkedState } from '../tiles/NothingMarked';
 
 export const DASHBOARD_DOCUMENT_VERSION = 1;
 
@@ -85,6 +92,25 @@ export interface Tile extends GridTile {
    * because AC-098 combines them with AND/OR.
    */
   readonly limitedBy?: readonly string[];
+  /**
+   * How several limiting markings combine (AC-107): All markings (AND) or Any
+   * marking (OR). Absent is `'all'`, the narrower of the two — a tile that
+   * shows too little is a question the user asks, and one that shows too much
+   * is a wrong answer they may not notice.
+   */
+  readonly limitCombination?: LimitCombination;
+  /**
+   * What the tile shows when every marking limiting it is empty (AC-109), and
+   * the message it shows in the `'message'` state.
+   *
+   * Absent is `'message'` for a limited tile — direction.md rule 58, the
+   * user's decision of 2026-09-19 — but the field is written explicitly the
+   * moment a tile is first limited (AC-110), together with a message naming
+   * the master tiles, so that what the user then edits is a stored value and
+   * not a default that would overwrite them.
+   */
+  readonly nothingMarked?: NothingMarkedState;
+  readonly nothingMarkedMessage?: string;
 }
 
 /**

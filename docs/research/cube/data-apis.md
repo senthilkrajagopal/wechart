@@ -781,7 +781,7 @@ The caller did not request a comparison. Among Cube's own APIs, the choice of RE
 ## Open questions / unverified
 
 - **npm vs tag commit.** npm `gitHead` for all three packages is `919434f42b50183179e97d1eed85696bafb05ae2` ([npm-core]). The caller gave tag sha `68eeb0e7`. That may be the annotated-tag object rather than the commit; not checked.
-- **Top-level filter semantics.** The docs don't say that top-level `filters` entries are ANDed ([rest-qf]). Confirm with an integration test before building cross-filter rewriting on that assumption.
+- ~~**Top-level filter semantics.**~~ **Resolved 2026-09-23: they are ANDed.** The docs still don't say so ([rest-qf]), but the integration test this asked for now exists and runs against the local Cube v1.7.42 — `e2e/markings.spec.ts`, "a marking whose items the filters exclude says so, not 'nothing is marked'": two top-level entries on the same member with disjoint values return zero rows, which only an AND does. Recorded in full in `markings-query-support.md`'s open questions.
 - **`total` and pre-aggregations.** Unknown whether the `total` count query can be served by a pre-aggregation. Tried: read the `gateway.ts` total path only.
 - **compareDateRange label format.** The exact timestamp format inside the `compareDateRange` row value (for example `2024-01-01T00:00:00.000 - …`) is unverified. The source shows only the join with `" - "`.
 - **Cancellation ID matching.** Unknown whether `DELETE /v1/running-query/{id}` matches the full `-span-N` ID or a prefix, and which span to use after Continue-wait retries.
