@@ -61,7 +61,7 @@ import { chartTilesOf } from '../filters/scope';
 import { effectsOn, type CrossEffects, type CrossSelection } from './crossfilter/apply';
 import { CrossFilterChips } from './crossfilter/CrossFilterChip';
 import { clickedValue, membersDrawn, seriesCountOf, type ClickedItem } from './crossfilter/clicked';
-import { interactionsOf } from './settings/interactionMode';
+import { interactionsOf, type InteractionMode } from './settings/interactionMode';
 import { describeFilter } from '../filters/describe';
 import { NotCovered } from '../filters/NotCovered';
 import { PageTabsProperties, TileProperties } from './edit/TileProperties';
@@ -925,6 +925,9 @@ let counter = 0;
  */
 const mintChartId = () => crypto.randomUUID();
 
+/** One empty list, so "nothing selected" is the same value on every render. */
+const NO_SELECTIONS: readonly CrossSelection[] = [];
+
 /** The session's chart drafts with new ones added: a new tile's local chart (T132). */
 function withDrafts(
   document: DashboardDocument,
@@ -1022,7 +1025,20 @@ export function DashboardView({
    * the dashboard is left, and so does the prototype
    * (`docs/research/cross-highlight.md` §7).
    */
-  const [crossSelections, setCrossSelections] = useState<readonly CrossSelection[]>([]);
+  /**
+   * Held with the mode they were made in, so a saved mode change clears them
+   * (AC-071, direction.md §2: "Switching clears current marks and
+   * cross-filters"). Each mode's *configuration* is kept — that is AC-070 —
+   * but what a reader had selected in it is not, and coming back to
+   * cross-filtering must not restore a selection made before they left.
+   *
+   * Read during render rather than cleared in an effect: an effect would
+   * render the stale selection once before taking it away.
+   */
+  const [held, setHeld] = useState<{
+    readonly mode: InteractionMode;
+    readonly selections: readonly CrossSelection[];
+  }>({ mode: interactionsOf(document.settings).mode, selections: [] });
   /**
    * Whether a chart's own cube or view can be asked about a member, and by
    * what name (AC-079). One answer for filters and cross-filters alike: they
@@ -1037,6 +1053,22 @@ export function DashboardView({
     [reach, drawn.documents],
   );
   const interactions = interactionsOf(live.settings);
+  /** What is selected *in this mode*; a saved mode change leaves it behind. */
+  const crossSelections = held.mode === interactions.mode ? held.selections : NO_SELECTIONS;
+  const mode = interactions.mode;
+  const setCrossSelections = useCallback(
+    (
+      next:
+        | readonly CrossSelection[]
+        | ((before: readonly CrossSelection[]) => readonly CrossSelection[]),
+    ) => {
+      setHeld((was) => {
+        const before = was.mode === mode ? was.selections : NO_SELECTIONS;
+        return { mode, selections: typeof next === 'function' ? next(before) : next };
+      });
+    },
+    [mode],
+  );
   const crossFiltering =
     interactions.mode === 'crossFilter' && !sessionEditing && preview === undefined;
   /**
@@ -1254,7 +1286,7 @@ export function DashboardView({
         return same ? others : [...others, { from: tileId, ...value }];
       });
     },
-    [drawn.specs],
+    [drawn.specs, setCrossSelections],
   );
 
   /** One cross-filter, or all of them, taken back (AC-119). */
@@ -1264,7 +1296,7 @@ export function DashboardView({
         ? []
         : before.filter((each) => each.from !== selection.from || each.member !== selection.member),
     );
-  }, []);
+  }, [setCrossSelections]);
 
   /**
    * Escape takes them all back, as the prototype's "Clear (Esc)" says it
@@ -1283,7 +1315,7 @@ export function DashboardView({
     return () => {
       window.document.removeEventListener('keydown', onKeyDown);
     };
-  }, [crossFiltering, crossSelections.length]);
+  }, [crossFiltering, crossSelections.length, setCrossSelections]);
 
   /** A tile's name: the title of the chart it draws (AC-119). */
   const tileNameOf = useCallback(

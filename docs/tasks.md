@@ -1209,6 +1209,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/dashboard/settings/interactionMode.ts`, `packages/web/src/dashboard/settings/modeSwitch.test.ts`
   - Failing test: `modeSwitch.test.ts`: after saving a mode change, no mark or cross-filter from the previous mode affects any tile (AC-071).
   - Depends on: T076, T090
+  - **Half built 2026-09-23, with T125.** The cross-filter half is done and shown: selections are held with the mode they were made in, so a saved mode change leaves them behind and coming back to cross-filtering restores none of them (`e2e/crossfilter.spec.ts`, "switching the interaction mode and back leaves no cross-filter behind"). Read during render rather than cleared in an effect, which would draw the stale selection once before taking it away. **AC-071 stays unticked** until marks exist to clear as well (T190, deferred).
 - [x] T078 (AC-072) Default a new dashboard to Markings with one default marking named "Marking"
   - Files: `packages/core/src/dashboard-document.ts`, `packages/core/src/dashboard-document.test.ts`, `packages/core/src/index.ts`, `packages/api/src/server.ts`, `packages/api/src/server.test.ts`, `packages/web/src/dashboard/settings/interactionMode.ts`
   - Failing test: `newDashboard.test.ts`: a new dashboard's interaction mode is Markings and it carries exactly one marking, named "Marking", flagged default (AC-072).

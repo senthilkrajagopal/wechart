@@ -330,6 +330,37 @@ test('Escape clears the cross-filters, as the bar says it does', async ({ page, 
   await expect.poll(async () => (await valuesIn(category)).join('|')).toBe(before.join('|'));
 });
 
+/**
+ * T077 / AC-071, the half of it cross-filters can answer: WHEN the
+ * interaction mode changes and the settings are saved, THE SYSTEM SHALL clear
+ * current marks and cross-filters. Marking is deferred, so AC-071 stays
+ * unticked until the other half can be shown too.
+ */
+test('switching the interaction mode and back leaves no cross-filter behind', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await crossFilterDashboard(request, { defaultAction: 'filter' });
+  await open(page, id, title);
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+  await expect(page.getByTestId('cross-filter-chip')).toHaveCount(1);
+
+  const setMode = async (label: string | RegExp) => {
+    await page.getByRole('button', { name: 'Dashboard settings' }).click();
+    await page.getByRole('button', { name: /^Interactions/ }).click();
+    await page.getByRole('radio', { name: label }).check();
+    await page.getByRole('button', { name: 'Save settings' }).click();
+    await expect(page.getByTestId('dashboard-settings')).toHaveCount(0);
+  };
+
+  await setMode('Markings');
+  await setMode(/^Cross-filtering/);
+
+  // Back in cross-filter mode with nothing selected: what was clicked before
+  // the dashboard changed mode does not come back with it.
+  await expect(page.getByTestId('cross-filter-chip')).toHaveCount(0);
+});
+
 test('a pair set to None leaves the other tile untouched', async ({ page, request }) => {
   const { id, title } = await crossFilterDashboard(request, {
     defaultAction: 'filter',
