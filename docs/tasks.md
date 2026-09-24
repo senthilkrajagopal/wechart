@@ -74,7 +74,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Done 2026-09-19. **AC-003 stays unchecked**: the route half and the repaint half are demonstrated (computed `background-color` on `body` and `.app-bar`, in both directions, and across a reload), but the criterion also says "without losing scroll position" and no surface is long enough to scroll yet. Asserting that against a page that cannot scroll would prove nothing. T016 builds the Explore contents list and ticks AC-003 with the scroll assertion added.
   - Both palettes ship in one stylesheet and the switch is a `data-theme` attribute on the document element, so nothing remounts and no navigation happens — which is *why* the route and scroll survive, rather than something that needs defending per surface. The stylesheet is generated from the tokens by `@wechart/ui`'s `themeCss()`, so what the browser paints and what the contrast audit checks are the same values.
 - [ ] T008 (AC-004, AC-005) Apply the tokens across the shell and run the audit over rendered surfaces
-  - **Reopened 2026-09-24, and AC-005 unticked** (AC-004 stands). Two surfaces the audit never reached fail it: **chart text in the dark theme** — ECharts draws axis and legend labels in its light-theme `#54555a` on the dark tile `#1c1c1b`, **2.3:1** (dashboard critique F30; the renderer is given neither the dark tokens nor the dark categorical palette) — and **the ⌘K palette's results**, browser-default link blue on `bg-raised`, **1.63:1** in dark (shell critique F1). The audit ran over text nodes in the DOM with the palette closed; SVG text inside a chart and a dialog that is not open were both outside what it looked at. Coming back needs the renderer themed, the palette styled, and the audit extended to open the palette and to include SVG `<text>`.
+  - **AC-004 reopened too, the same day**, after the Model critique measured the Problems panel's `file:line` at 11 px. Confirmed in `shell/styles.ts`: `.model-problems__where { font-size: 11px }` and `.tile-note code { font-size: 11px }` — both on surfaces the audit's pages never rendered (a Model file with a problem; a tile note with code in it). The rule is one line each; the lesson is that the audit is only as wide as the states it opens.
+  - **Reopened 2026-09-24, and AC-005 unticked. Two surfaces the audit never reached fail it: **chart text in the dark theme** — ECharts draws axis and legend labels in its light-theme `#54555a` on the dark tile `#1c1c1b`, **2.3:1** (dashboard critique F30; the renderer is given neither the dark tokens nor the dark categorical palette) — and **the ⌘K palette's results**, browser-default link blue on `bg-raised`, **1.63:1** in dark (shell critique F1). The audit ran over text nodes in the DOM with the palette closed; SVG text inside a chart and a dialog that is not open were both outside what it looked at. Coming back needs the renderer themed, the palette styled, and the audit extended to open the palette and to include SVG `<text>`.
   - Files: `packages/web/src/shell/styles.ts`, `e2e/a11y-tokens.spec.ts`, `e2e/tsconfig.json`
   - Failing test: `e2e/a11y-tokens.spec.ts`: on the rendered shell in both themes, every text node computes to at least 12 px and meets its contrast threshold (AC-004, AC-005).
   - Depends on: T002, T007
@@ -3313,10 +3314,46 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Files: `packages/charts/src/option.ts`, `packages/web/src/editor/ResultsDrawer.tsx`, `packages/web/src/dashboard/markings/MarkChip.tsx`, `e2e/chart-editor.spec.ts`
   - Failing test: `e2e/chart-editor.spec.ts`: a two-measure legend and the results headers read the members' titles; a pie over two dimensions has a legend entry per slice (AC-220, AC-221).
   - Depends on: T228
+- [ ] T233 (AC-004) Raise the two 11 px rules to the 12 px floor, and open a problem and a tile note in the type audit
+  - Files: `packages/web/src/shell/styles.ts`, `e2e/a11y-tokens.spec.ts`
+  - Failing test: `e2e/a11y-tokens.spec.ts`: a Model file with a parse error and a tile note with code in it render no text under 12 px (AC-004).
+  - Depends on: none
+- [ ] T234 (AC-222, AC-223) Make Model one workspace: a file tree beside full-height form and code panes, Problems docked
+  - Files: `packages/web/src/workspaces/model/ModelPage.tsx`, `packages/web/src/workspaces/model/FileTree.tsx`, `packages/web/src/shell/styles.ts`, `e2e/model.spec.ts`
+  - Failing test: `e2e/model.spec.ts`: from one file the tree opens another without leaving the editor; the page does not scroll at 1440×900; a file with a parse error is marked in the tree; Problems counts warnings (AC-222, AC-223).
+  - Depends on: none
+- [ ] T235 (AC-224) Edit member references with pickers, and a join's target with a list of cubes
+  - Files: `packages/web/src/workspaces/model/form/MemberPicker.tsx`, `packages/web/src/workspaces/model/form/`, `e2e/model.spec.ts`
+  - Failing test: `e2e/model.spec.ts`: a pre-aggregation's measures are chosen from a picker listing the cube's measures, and a join's target from its cubes; neither accepts typed text (AC-224).
+  - Depends on: T234
+- [ ] T236 (AC-225) Give member rows their type, SQL preview and badges, and show only the fields that apply when expanded
+  - Files: `packages/web/src/workspaces/model/form/MemberRow.tsx`, `e2e/model.spec.ts`
+  - Failing test: `e2e/model.spec.ts`: `orders.id` shows a PK badge and its SQL collapsed; expanded, a number dimension offers no CASE, switch or geo fields (AC-225).
+  - Depends on: T234
+- [ ] T237 (AC-226, AC-227) Show unpublished changes with Discard and a leave warning, and validate enums and required keys on every parse
+  - Files: `packages/web/src/workspaces/model/ModelPage.tsx`, `packages/web/src/workspaces/model/validate.ts`, `e2e/model.spec.ts`
+  - Failing test: `e2e/model.spec.ts`: an edit marks the header and the tree row, Discard restores the file, leaving asks first; `type: summ` lists a problem at its line (AC-226, AC-227).
+  - Depends on: T234
+- [ ] T238 (AC-231, AC-233) Give every workspace page its title style and table cards, and give Schedules and Data sources their frame
+  - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/router/routes.tsx`, `packages/web/src/workspaces/admin/AdminPage.tsx`, `e2e/admin.spec.ts`
+  - Failing test: `e2e/admin.spec.ts`: Jobs' and Security's titles are 20 px/600 and their tables use tabular numerals; Schedules and Data sources show a title and a deferral note; "/sources" opens Data sources (AC-231, AC-233).
+  - Depends on: none
+- [ ] T239 (AC-228, AC-229) Give Jobs a docked inspector, and pre-aggregation rows their state, trigger and Model link
+  - Files: `packages/web/src/workspaces/jobs/BuildPanel.tsx`, `packages/web/src/workspaces/jobs/JobsPage.tsx`, `e2e/jobs.spec.ts`
+  - Failing test: `e2e/jobs.spec.ts`: selecting a pre-aggregation fills the full-height pane with its state, trigger, Build and "Open in Model"; the row shows its refresh key and links to Model (AC-228, AC-229).
+  - Depends on: T238
+- [ ] T240 (AC-230) Filter, sort and page the query log, with its headers kept in view
+  - Files: `packages/web/src/workspaces/jobs/QueryLog.tsx`, `e2e/jobs.spec.ts`
+  - Failing test: `e2e/jobs.spec.ts`: filtering by failed shows only failures; after scrolling the log the headers are in view; one page of rows is rendered (AC-230).
+  - Depends on: T238
+- [ ] T241 (AC-232) Dock Security's preview with presets, effective access, a bounded dashboard list and Model links
+  - Files: `packages/web/src/workspaces/security/ContextPreview.tsx`, `packages/web/src/workspaces/security/SecurityPage.tsx`, `e2e/security.spec.ts`
+  - Failing test: `e2e/security.spec.ts`: choosing the "finance" preset lists each cube's access with a reason; a search with no match says so; a policy's source opens its file in Model; the context survives a preview (AC-232).
+  - Depends on: T238
 - [ ] T225 (AC-187) Re-run the design critique on every surface, and tick AC-187 only on measured conformance
   - Files: `docs/design/critiques/`
   - Failing test: the `design-critic` report finds no `STRUCTURE` or AC-187 finding on the surfaces above (AC-187).
-  - Depends on: T208–T232
+  - Depends on: T208–T241
 
 ---
 
@@ -3379,6 +3416,9 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-209 | T224       | AC-210 | T224 | AC-211 | T210 | AC-212 | T226       |
 | AC-213 | T227       | AC-214 | T228 | AC-215 | T229 | AC-216 | T229       |
 | AC-217 | T230       | AC-218 | T230 | AC-219 | T231 | AC-220 | T232       |
-| AC-221 | T232       |        |      |        |      |        |            |
+| AC-221 | T232       | AC-222 | T234 | AC-223 | T234 | AC-224 | T235       |
+| AC-225 | T236       | AC-226 | T237 | AC-227 | T237 | AC-228 | T239       |
+| AC-229 | T239       | AC-230 | T240 | AC-231 | T238 | AC-232 | T241       |
+| AC-233 | T238       |        |      |        |      |        |            |
 
-Reopened 2026-09-24 and now also covered by the prototype-alignment tasks: AC-005 → T008, T210 · AC-019 → T017, T212 · AC-042 → T049, T208 · AC-053 → T059, T209.
+Reopened 2026-09-24 and now also covered by the prototype-alignment tasks: AC-004 → T008, T233 · AC-005 → T008, T210 · AC-019 → T017, T212 · AC-042 → T049, T208 (re-ticked) · AC-053 → T059, T209.

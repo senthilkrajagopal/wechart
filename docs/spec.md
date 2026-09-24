@@ -41,7 +41,7 @@ Traces to: `[R2]`, `[docs/inputs §8]`, direction.md §2.
       Fails when: after reload the application shows a different workspace, dashboard, chart or file than the URL names.
 - [x] AC-003 WHEN the user switches the theme, THE SYSTEM SHALL re-render the current surface in the other theme without changing the route or losing scroll position.
       Fails when: the route changes, the scroll position resets, or any element keeps the previous theme's background colour after the switch.
-- [x] AC-004 THE SYSTEM SHALL render every text node at a computed font size of at least 12 px (direction.md rule 1).
+- [ ] AC-004 THE SYSTEM SHALL render every text node at a computed font size of at least 12 px (direction.md rule 1).
       Fails when: any rendered text node has a computed font-size below 12 px.
 - [ ] AC-005 THE SYSTEM SHALL meet WCAG AA contrast for text in both themes: at least 4.5:1, or 3:1 for text of at least 18.66 px bold or 24 px (direction.md rule 2).
       Fails when: any text node's contrast ratio against its own background is below its threshold.
@@ -697,6 +697,36 @@ Library charts and the chart editor:
 - [ ] AC-221 WHEN a pie or donut is drawn, THE SYSTEM SHALL list every slice in its legend.
       Fails when: a slice has no legend entry.
 
+Model workspace:
+
+- [ ] AC-222 WHILE the Model workspace is open, THE SYSTEM SHALL show a tree of the model's files beside the editor, open the chosen file in place with its path in the URL, offer New cube and New view from the tree, and mark each file that has problems.
+      Fails when: moving to another file requires leaving the editor, New cube or New view is missing, or a file with an error carries no mark in the tree.
+- [ ] AC-223 THE SYSTEM SHALL lay the model editor out as full-height panes, each with its own header row and scrolling — the form, and the code with its Problems panel docked beneath it counting errors and warnings — with code and file paths in direction.md's code face.
+      Fails when: the page itself scrolls at 1,440 × 900, Problems gives no count of warnings, or code is set in a face other than IBM Plex Mono.
+- [ ] AC-224 THE SYSTEM SHALL edit every field that refers to model members — pre-aggregation measures, dimensions, segments, rollups and time dimension, drill members, hierarchy levels, a view's includes and excludes — with a picker of the members it may refer to, and a join's target with a list of cubes (direction.md §7b).
+      Fails when: any of those fields accepts free text.
+- [ ] AC-225 THE SYSTEM SHALL show each member in a row with its name, its type, a preview of its SQL and badges for primary key, public and format, and when expanded, only the fields that apply to its type and to how it is defined, in named groups.
+      Fails when: a collapsed row omits its type or SQL, a primary key carries no badge, or an expanded number dimension offers fields for a CASE, a switch or a geographic point.
+- [ ] AC-226 WHEN a model file has changes not yet published, THE SYSTEM SHALL say so in the editor's header and on the file's row in the tree, offer Discard, and ask before leaving the file with them unpublished.
+      Fails when: an edit shows no unpublished marker, or leaving the file loses it without asking.
+- [ ] AC-227 WHEN the model's code parses, THE SYSTEM SHALL list in Problems, with the line, every value outside the set Cube's validator allows and every required key that is missing, before the user publishes (direction.md rule 26).
+      Fails when: a measure of type "summ" leaves Problems empty.
+
+Jobs, Security, Schedules and Data sources:
+
+- [ ] AC-228 THE SYSTEM SHALL lay out Jobs and Security as a list beside a full-height inspector pane, and WHEN the user selects a pre-aggregation in Jobs, THE SYSTEM SHALL show in that pane its state, its trigger, a Build action and a way to open it in Model.
+      Fails when: selecting a pre-aggregation shows nothing, or the pane is not full height.
+- [ ] AC-229 THE SYSTEM SHALL list each pre-aggregation in Jobs with its state as an icon and a label, the refresh key that triggers it, and its name linking to its definition in Model, and SHALL show a started build's progress in that row (direction.md rule 22).
+      Fails when: a row has no state or no trigger, the name does not open Model, or a build's progress appears only outside its row.
+- [ ] AC-230 THE SYSTEM SHALL let the user narrow the query log by outcome, source and time range and sort it, keep its column headers in view while it scrolls, and render no more than a page of rows at a time.
+      Fails when: the headers scroll out of view, a filter does not narrow the rows, or more than one page of rows is rendered at once.
+- [ ] AC-231 THE SYSTEM SHALL draw the workspaces' page titles in direction.md's page-title style, and their tables as cards with a header band, rows of 34 pixels, 12-pixel cells and tabular numerals (direction.md rule 1).
+      Fails when: a workspace page title is not 20 px at weight 600, or a workspace table's numbers are not tabular.
+- [ ] AC-232 WHEN the user opens Security, THE SYSTEM SHALL offer a preset context for each group the policies name, list every cube and view with the access the current context gives it and why, start a dashboard preview from a bounded list of dashboards that says when nothing matches, link each policy to its file in Model, and keep the edited context for the session.
+      Fails when: effective access is missing, a search with no match shows nothing, a policy's source does not open Model, or the context is reset after a preview.
+- [ ] AC-233 WHEN the user opens Schedules or Data sources, THE SYSTEM SHALL show the page's title and a note saying what the page is for and that managing it is not part of this phase, and SHALL treat "/sources" as Data sources.
+      Fails when: either page renders nothing, or "/sources" shows Not found.
+
 ---
 
 ## Non-goals (phase 1)
@@ -760,4 +790,4 @@ Copied from [requirements.md §7](./requirements.md):
 | Scope: export `[R6]`                                                                          | AC-171 … AC-173                                                       |
 | Scope: filters `[docs/inputs §2]`                                                             | AC-076 … AC-083                                                       |
 | Scope: chart rendering and customisation `[docs/inputs §2]`                                   | AC-037 … AC-046                                                       |
-| Scope: following the prototype's structure, "My workspace", global search scope `[R7, R9]`   | AC-187, AC-190 … AC-221                                               |
+| Scope: following the prototype's structure, "My workspace", global search scope `[R7, R9]`   | AC-187, AC-190 … AC-233                                               |
