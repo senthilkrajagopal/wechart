@@ -62,6 +62,33 @@ export interface SaveOptions {
    */
   readonly charts?: readonly ChartWrite[];
   readonly fetchImpl?: typeof fetch;
+  /**
+   * How long to wait for an answer before treating the save as failed
+   * (AC-186). Decided with the user on 2026-09-21: a time limit, then fail,
+   * at 60 seconds — a save that hangs leaves someone watching a spinner with
+   * no way on, and the session keeps their work either way (AC-184).
+   */
+  readonly timeoutMs?: number;
+}
+
+export const SAVE_TIMEOUT_MS = 60_000;
+
+/**
+ * The save was abandoned because nothing answered (AC-186).
+ *
+ * **It does not say the work is safe only here.** The request may have
+ * reached the service and been written after the browser stopped waiting, so
+ * telling someone to save again could write over their own save, and telling
+ * them to reload "and lose yours" could be untrue. It says what is known and
+ * what to check.
+ */
+export class SaveTimeoutError extends Error {
+  constructor(seconds: number) {
+    super(
+      `Could not save: the server did not answer within ${String(seconds)} seconds. Your work is still here. The save may still have gone through — reload in another tab to see whether it did before saving again.`,
+    );
+    this.name = 'SaveTimeoutError';
+  }
 }
 
 export async function saveDashboard({
@@ -70,8 +97,18 @@ export async function saveDashboard({
   version,
   charts = [],
   fetchImpl = fetch,
+  timeoutMs = SAVE_TIMEOUT_MS,
 }: SaveOptions): Promise<SaveResult> {
   let response: Response;
+  /**
+   * Its own controller and timer rather than `AbortSignal.timeout`, so the
+   * clock is the one the tests can drive: `AbortSignal.timeout` runs on the
+   * platform's timer, which fake timers do not reach.
+   */
+  const giveUp = new AbortController();
+  const timer = setTimeout(() => {
+    giveUp.abort();
+  }, timeoutMs);
   try {
     // With no chart to write, exactly the request it always was.
     response =
@@ -80,6 +117,7 @@ export async function saveDashboard({
             method: 'PUT',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ body: document, version }),
+            signal: giveUp.signal,
           })
         : await fetchImpl(`/api/dashboards/${encodeURIComponent(dashboardId)}`, {
             method: 'PUT',
@@ -92,8 +130,11 @@ export async function saveDashboard({
                 version: chart.version,
               })),
             }),
+            signal: giveUp.signal,
           });
   } catch {
+    // Nothing answered in time: failed, and said as such (AC-186).
+    if (giveUp.signal.aborted) throw new SaveTimeoutError(Math.round(timeoutMs / 1000));
     /**
      * The request never got an answer — offline, or the connection dropped.
      * Each browser words that its own way, and none says what to do; the
@@ -102,6 +143,9 @@ export async function saveDashboard({
     throw new Error(
       'Could not save: the server could not be reached. Check the connection, then save again.',
     );
+  } finally {
+    // Whatever happened, nothing is left ticking behind the save.
+    clearTimeout(timer);
   }
 
   if (response.status === 409) throw new StaleSaveError(await staleKind(response));

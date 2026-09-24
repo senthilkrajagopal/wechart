@@ -30,6 +30,101 @@ const DOC = {
 const ok = (version = 2) =>
   vi.fn(async () => new Response(JSON.stringify({ version }), { status: 200 }));
 
+/**
+ * T200 / AC-186: IF a dashboard save has had no answer 60 seconds after it
+ * was sent, THEN THE SYSTEM SHALL treat it as failed — keeping the edit
+ * session as AC-184 requires, or the settings page as AC-185 requires — and
+ * say that the save timed out.
+ * `Fails when: a save with no answer leaves the user waiting with no way on.`
+ *
+ * The user decided the shape on 2026-09-21 (T197's review): a time limit,
+ * then fail, at 60 seconds. The request may still land after the browser has
+ * given up, so the reason must not tell anyone their work is the only copy:
+ * it says the save may have gone through.
+ */
+describe('a save that is never answered', () => {
+  const never = () =>
+    vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(init.signal?.reason ?? new Error('aborted'));
+          });
+        }),
+    );
+
+  it('fails after 60 seconds, saying so', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = never();
+      const saving = saveDashboard({
+        dashboardId: 'd1',
+        document: DOC,
+        version: 1,
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      });
+      const settled = saving.then(
+        () => 'saved',
+        (reason: unknown) => reason,
+      );
+
+      // Not yet: a slow save is still a save.
+      await vi.advanceTimersByTimeAsync(59_000);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      const reason = await settled;
+
+      expect(reason).toBeInstanceOf(Error);
+      expect((reason as Error).message).toContain('60 seconds');
+      // And it does not claim the work is gone: the request may have landed.
+      expect((reason as Error).message).toMatch(/may (still )?have/i);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('abandons the request, rather than leaving it running', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = never();
+      const saving = saveDashboard({
+        dashboardId: 'd1',
+        document: DOC,
+        version: 1,
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      });
+      const settled = saving.catch((reason: unknown) => reason);
+      await vi.advanceTimersByTimeAsync(61_000);
+      await settled;
+
+      const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+      expect(init.signal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves a save that answers in time exactly as it was', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = ok(7);
+      const saved = await saveDashboard({
+        dashboardId: 'd1',
+        document: DOC,
+        version: 1,
+        fetchImpl,
+      });
+
+      expect(saved).toEqual({ version: 7 });
+      // The timer is cleared, so nothing is left pending behind it.
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('what goes to the server', () => {
   it('sends the whole document, layout and settings together', async () => {
     const fetchImpl = ok();

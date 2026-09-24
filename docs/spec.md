@@ -227,7 +227,7 @@ Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
       Fails when: after a failed save the dashboard is out of edit mode, a change made before the save is missing from the dashboard or from Undo, or no reason for the failure is shown.
 - [x] AC-185 WHEN the user saves the dashboard settings page in view mode, THE SYSTEM SHALL keep the page open until the save has gone through, and IF the save fails, keep the settings as entered on the page and show why the save failed.
       Fails when: the page closes before the save has gone through, or after a failed save the settings entered are missing from the page or no reason for the failure is shown.
-- [ ] AC-186 IF a dashboard save has had no answer 60 seconds after it was sent, THEN THE SYSTEM SHALL treat it as failed — keeping the edit session as AC-184 requires, or the settings page as AC-185 requires — and say that the save timed out.
+- [x] AC-186 IF a dashboard save has had no answer 60 seconds after it was sent, THEN THE SYSTEM SHALL treat it as failed — keeping the edit session as AC-184 requires, or the settings page as AC-185 requires — and say that the save timed out.
       Fails when: 60 seconds after a save with no answer, "Saving…" is still shown, an edit session it was saving is out of edit mode, or the reason shown does not say the save timed out.
 - [x] AC-067 WHEN the dashboard re-renders during editing, THE SYSTEM SHALL keep the canvas and sidebar scroll positions (direction.md rule 40).
       Fails when: either scroll position resets after a re-render.

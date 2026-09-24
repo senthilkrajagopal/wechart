@@ -778,3 +778,47 @@ test('a library chart edited from its tile is saved with the dashboard, for ever
   await page.goto(`/explore/dashboards/${other}`);
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
 });
+
+/**
+ * T200 / AC-186: IF a dashboard save has had no answer 60 seconds after it was
+ * sent, THEN THE SYSTEM SHALL treat it as failed — keeping the edit session as
+ * AC-184 requires — and say that the save timed out.
+ * `Fails when: a save with no answer leaves the edit session waiting for ever.`
+ *
+ * The real minute, on the real clock: the limit is the behaviour, and a test
+ * that shortened it would be testing a different promise. The fake-timer
+ * version of the same rule is `dashboard/edit/save.test.ts`.
+ */
+test('a save nothing answers is given up on, with the session and its work kept', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  const { dashboardId, chartId } = await makeDashboard(request);
+  void chartId;
+
+  /**
+   * The save is held for ever — never fulfilled, never continued — while
+   * everything else, the dashboard's own GET included, goes through.
+   */
+  const holdSaves = async (route: Route) => {
+    if (route.request().method() === 'PUT') return;
+    await route.continue();
+  };
+  await page.route(`**/api/dashboards/${dashboardId}`, holdSaves);
+  await page.route(`**/api/documents/dashboard/${dashboardId}`, holdSaves);
+
+  await page.goto(`/explore/dashboards/${dashboardId}`);
+  await editToStacked(page);
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  // A minute later: failed, said in words, and the work still on the page.
+  await expect(page.getByTestId('save-failed')).toContainText('60 seconds', {
+    timeout: 90_000,
+  });
+  await expect(page.getByTestId('save-failed')).toContainText(/may still have gone through/i);
+  // The session is still open — Save is still there to press — and the edit
+  // it was carrying is still drawn (AC-184).
+  await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
+  await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
+});
