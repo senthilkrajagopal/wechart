@@ -3323,10 +3323,12 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Files: `packages/charts/src/option.ts`, `packages/web/src/editor/ResultsDrawer.tsx`, `packages/web/src/dashboard/markings/MarkChip.tsx`, `e2e/chart-editor.spec.ts`
   - Failing test: `e2e/chart-editor.spec.ts`: a two-measure legend and the results headers read the members' titles; a pie over two dimensions has a legend entry per slice (AC-220, AC-221).
   - Depends on: T228
-- [ ] T233 (AC-004) Raise the two 11 px rules to the 12 px floor, and open a problem and a tile note in the type audit
-  - Files: `packages/web/src/shell/styles.ts`, `e2e/a11y-tokens.spec.ts`
+- [x] T233 (AC-004) Raise the two 11 px rules to the 12 px floor, and open a problem and a tile note in the type audit
+  - Files: `packages/web/src/shell/styles.ts`, `e2e/a11y-tokens.spec.ts`, `e2e/acceleration.spec.ts`, `e2e/security.spec.ts`
   - Failing test: `e2e/a11y-tokens.spec.ts`: a Model file with a parse error and a tile note with code in it render no text under 12 px (AC-004).
   - Depends on: none
+  - Done 2026-09-24. AC-004 re-ticked. **Three rules, not two**: after the critique's two (`.model-problems__where` and `.tile-note code`, both 11 px), a search of every package for a size under 12 found a third — the "SQL" a tile shows while a security context is previewed, at 10 px. Each state gets its own check where a test already reaches it: the Model with a problem listed runs the full type sweep (`e2e/a11y-tokens.spec.ts`); the rollup note's code (`e2e/acceleration.spec.ts`) and the preview's SQL button (`e2e/security.spec.ts`) are measured in place. Each failed first — 11, 11 and 10 px — and passes now in all three browsers. The three rules now use `--wc-text-xs-size`, the token, rather than a number.
+  - **The pattern worth keeping:** the sweep covers the pages it opens, and every one of these was a state those pages do not open. A grep of the stylesheets for any size under 12 px is cheaper than finding the next one by critique.
 - [ ] T234 (AC-222, AC-223) Make Model one workspace: a file tree beside full-height form and code panes, Problems docked
   - Files: `packages/web/src/workspaces/model/ModelPage.tsx`, `packages/web/src/workspaces/model/FileTree.tsx`, `packages/web/src/shell/styles.ts`, `e2e/model.spec.ts`
   - Failing test: `e2e/model.spec.ts`: from one file the tree opens another without leaving the editor; the page does not scroll at 1440×900; a file with a parse error is marked in the tree; Problems counts warnings (AC-222, AC-223).

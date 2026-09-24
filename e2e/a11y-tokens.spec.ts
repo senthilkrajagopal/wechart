@@ -101,6 +101,28 @@ for (const theme of THEMES) {
   });
 }
 
+/**
+ * T233 / AC-004, reopened 2026-09-24: the surfaces above are swept as they
+ * open, and some text only exists in a state they never reach. The Model
+ * critique measured one — a problem's `file:line`, at 11 px — which appears
+ * only once the YAML stops parsing.
+ */
+test('renders no text below 12 px with a problem listed in the Model (AC-004)', async ({
+  page,
+}) => {
+  await page.goto('/model/files/cubes%2Forders.yml');
+  const problems = page.getByRole('region', { name: 'Problems' });
+  await expect(problems).toContainText('No problems in cubes/orders.yml');
+
+  // The same break as model.spec's parse-error test: a nested mapping.
+  await page.locator('.cm-line', { hasText: 'sql_table: public.orders' }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(': x');
+  await expect(problems.getByRole('listitem')).toHaveCount(1);
+
+  expect(await page.evaluate(FONT_SIZE_SWEEP)).toEqual([]);
+});
+
 test('the font-size sweep detects a violation, so a pass means something', async ({ page }) => {
   await openInTheme(page, '/explore', 'light');
 

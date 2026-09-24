@@ -151,6 +151,13 @@ test('refreshing a tile a pre-aggregation serves says its data is as of the last
   await expect(note.locator('[data-icon]')).toHaveCount(1);
   await expect(note.getByRole('link', { name: 'Jobs' })).toHaveAttribute('href', '/jobs');
   await expect(live.getByTestId('rollup-refresh-note')).toHaveCount(0);
+  // AC-004 (T233): the rollup's name in the note is text like any other —
+  // it was set at 11 px, on a state the type audit's pages never reach.
+  expect(
+    Number.parseFloat(
+      await note.locator('code').evaluate((node) => getComputedStyle(node).fontSize),
+    ),
+  ).toBeGreaterThanOrEqual(12);
 
   await note.getByRole('button', { name: 'Dismiss' }).click();
   await expect(note).toHaveCount(0);

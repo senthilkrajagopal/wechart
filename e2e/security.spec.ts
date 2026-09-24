@@ -222,6 +222,11 @@ test('a previewed tile shows Cube’s SQL as the context, with the row filter it
   const tile = page.locator('[data-tile="tile-secured"]');
   await expect(tile.getByRole('table')).toContainText('shipped', { timeout: 15_000 });
   const opener = tile.getByRole('button', { name: 'SQL for Secured by status as this context' });
+  // AC-004 (T233): its "SQL" is text at the floor — it was 10 px, on a state
+  // the type audit's pages never opened.
+  expect(
+    Number.parseFloat(await opener.evaluate((node) => getComputedStyle(node).fontSize)),
+  ).toBeGreaterThanOrEqual(12);
   await opener.click();
 
   const dialog = page.getByRole('dialog', { name: 'SQL for Secured by status as this context' });

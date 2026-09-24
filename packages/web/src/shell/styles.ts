@@ -555,7 +555,8 @@ p.model-problems__row { border-top: 1px solid var(--wc-border-subtle); border-bo
 button.model-problems__row { cursor: pointer; }
 .model-problems__where {
   color: var(--wc-text-muted);
-  font-size: 11px;
+  /* The floor, not below it (AC-004): direction.md §3 has no size under 12. */
+  font-size: var(--wc-text-xs-size);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 /* The prototype's .warnbar (T140, AC-134): a form edit that would lose
@@ -1560,7 +1561,7 @@ button.filter-pill__clear {
   line-height: 16px;
   color: var(--wc-text-primary);
 }
-.tile-note code { font-size: 11px; overflow-wrap: anywhere; }
+.tile-note code { font-size: var(--wc-text-xs-size); overflow-wrap: anywhere; }
 .tile-note a { color: var(--wc-accent); }
 .tile-note button {
   margin-left: auto;
@@ -2261,7 +2262,9 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   width: auto;
   min-width: 26px;
   padding: 0 2px;
-  font-size: 10px;
+  /* At the floor (AC-004); it was 10 px, on a state — previewing a security
+     context — that the type audit's pages never opened. */
+  font-size: var(--wc-text-xs-size);
   font-weight: 600;
 }
 /* Where the chart's answer came from (T014, AC-013) and when its data is from
