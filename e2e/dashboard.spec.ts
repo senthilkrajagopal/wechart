@@ -48,6 +48,122 @@ test('opens in view mode with its saved pages, tiles and settings', async ({ pag
   expect(await surface.evaluate((node) => getComputedStyle(node).maxWidth)).toBe('1440px');
 });
 
+/**
+ * AC-042 (reopened 2026-09-24): WHEN a chart … fails, THE SYSTEM SHALL show an
+ * error state offering Retry and the error details.
+ * `Fails when: … the error state offers no Retry or no details.`
+ *
+ * The component always could; the dashboard never passed it `onRetry`, so on
+ * a dashboard — where every chart a user sees is drawn — there was no Retry.
+ */
+test('a tile still loading shows a skeleton in the shape of its chart', async ({ page }) => {
+  // AC-042's first half: "loading shows an empty tile" is its failing state.
+  const held: import('@playwright/test').Route[] = [];
+  let released = false;
+  await page.route('**/api/load', async (route) => {
+    if (released) await route.continue();
+    else held.push(route);
+  });
+  await page.goto(DASHBOARD);
+
+  const skeleton = page.getByTestId('tile-skeleton').first();
+  await expect(skeleton).toBeVisible();
+  // Shaped, not a generic spinner: the skeleton names the chart it stands for.
+  await expect(skeleton).toHaveAttribute('data-shape', /\w+/);
+
+  // Released, the skeleton gives way to the chart.
+  released = true;
+  for (const route of held.splice(0)) await route.continue();
+  await expect(page.getByTestId('chart-canvas').first()).toBeVisible();
+  await expect(page.getByTestId('tile-skeleton')).toHaveCount(0);
+});
+
+test('a tile whose query fails offers Retry and the error, and Retry draws it', async ({
+  page,
+}) => {
+  // Every query refused, as a Cube that is down refuses it.
+  await page.route('**/api/load', (route) =>
+    route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: '{"error":"Cube is down"}',
+    }),
+  );
+  await open(page);
+
+  const failed = page.getByRole('alert').filter({ hasText: 'Could not load this chart' }).first();
+  await expect(failed).toBeVisible();
+  await expect(failed).toContainText('Cube is down');
+  // The tile keeps its title, so the reader knows which chart failed.
+  const tile = page
+    .getByTestId('grid-item')
+    .filter({ has: page.getByRole('alert') })
+    .first();
+  await expect(tile.getByRole('heading', { level: 3 })).not.toHaveText('');
+  // The details the criterion names: the query that failed, one control away.
+  await failed.getByRole('button', { name: 'Show query' }).click();
+  await expect(failed.getByTestId('tile-error-query')).toContainText('measures');
+
+  // Cube is back; Retry asks again, and the chart is drawn in its place.
+  await page.unroute('**/api/load');
+  await failed.getByRole('button', { name: 'Retry' }).click();
+  await expect(page.getByTestId('chart-canvas').first()).toBeVisible();
+});
+
+test('a chart that cannot be read for a network failure is not called missing', async ({
+  page,
+}) => {
+  /**
+   * "This chart is no longer available" is for a chart that is gone. A
+   * request that never reached the server says nothing about whether it is,
+   * and telling someone their chart was deleted when their network dropped
+   * sends them looking for who deleted it.
+   */
+  await open(page);
+  await expect(page.getByTestId('chart-canvas').first()).toBeVisible();
+
+  // The network drops, then the reader refreshes a tile — the path that
+  // reads the chart again, and where the dropped request was taken for a
+  // deleted chart.
+  await page.route('**/api/documents/chart/**', (route) => route.abort('internetdisconnected'));
+  await page
+    .getByRole('button', { name: /^Refresh / })
+    .first()
+    .click();
+
+  const failed = page.getByRole('alert').filter({ hasText: 'Could not load this chart' }).first();
+  await expect(failed).toBeVisible();
+  // Not its sentence inside the error: the critique found "Could not load
+  // this chart / This chart is no longer available." for a request that
+  // never reached the server.
+  await expect(failed).not.toContainText('no longer available');
+
+  // The network is back; Retry reads the chart again and draws it.
+  await page.unroute('**/api/documents/chart/**');
+  await failed.getByRole('button', { name: 'Retry' }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Could not load this chart' }),
+  ).toHaveCount(0);
+});
+
+test('a chart that is gone says so, and offers no Retry that could only fail', async ({ page }) => {
+  await open(page);
+  await expect(page.getByTestId('chart-canvas').first()).toBeVisible();
+
+  // The server says the chart does not exist.
+  await page.route('**/api/documents/chart/**', (route) =>
+    route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"Not found"}' }),
+  );
+  await page
+    .getByRole('button', { name: /^Refresh / })
+    .first()
+    .click();
+
+  const missing = page.getByTestId('tile-missing-chart').first();
+  await expect(missing).toHaveText(/no longer available/);
+  await expect(page.getByRole('button', { name: 'Retry' })).toHaveCount(0);
+});
+
 test('opens the other saved page tab', async ({ page }) => {
   await open(page);
   await page.getByRole('tablist', { name: 'Pages' }).getByRole('tab', { name: 'Appendix' }).click();

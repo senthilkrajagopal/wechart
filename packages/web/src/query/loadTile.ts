@@ -95,16 +95,32 @@ export async function loadTile({
       signal?.throwIfAborted();
       started = true;
 
-      const response = await fetchImpl('/api/load', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-request-id': requestId },
-        body: JSON.stringify({
+      let response: Response;
+      try {
+        response = await fetchImpl('/api/load', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-request-id': requestId },
+          body: JSON.stringify({
+            query,
+            ...(cache === undefined ? {} : { cache }),
+            ...(context === undefined ? {} : { context }),
+          }),
+          ...(signal ? { signal } : {}),
+        });
+      } catch (failure) {
+        // A cancelled request stays a cancellation: the caller asked for it.
+        if (signal?.aborted === true) throw failure;
+        /**
+         * The request never reached the server. Carried as a TileLoadError so
+         * the tile can still offer the query that was being asked (AC-042's
+         * "error details") — a bare TypeError("Failed to fetch") left the
+         * error state with a message and nothing else to look at.
+         */
+        throw new TileLoadError(
+          'Could not reach the server. Check the connection, then retry.',
           query,
-          ...(cache === undefined ? {} : { cache }),
-          ...(context === undefined ? {} : { context }),
-        }),
-        ...(signal ? { signal } : {}),
-      });
+        );
+      }
 
       const body: unknown = await response.json().catch(() => null);
 

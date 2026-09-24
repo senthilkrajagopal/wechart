@@ -147,7 +147,7 @@ Traces to: `[docs/inputs §2]`, direction.md §6, rules 4–7, 18–19.
       Fails when: any of those settings has no effect on the rendered axis.
 - [x] AC-041 WHEN a categorical chart exceeds its top-N setting, THE SYSTEM SHALL aggregate the remainder into a single "Other (n)" item and label it with the number of members it covers.
       Fails when: the chart renders more categories than the setting, or the remainder is unlabelled.
-- [ ] AC-042 WHEN a chart is loading, THE SYSTEM SHALL show a skeleton in the shape of the chart, and WHEN it fails, an error state offering Retry and the error details (direction.md rule 18).
+- [x] AC-042 WHEN a chart is loading, THE SYSTEM SHALL show a skeleton in the shape of the chart, and WHEN it fails, an error state offering Retry and the error details (direction.md rule 18).
       Fails when: loading shows an empty tile, or the error state offers no Retry or no details.
 - [x] AC-043 WHEN a query returns no rows, THE SYSTEM SHALL show an empty state naming the filters that are in effect.
       Fails when: the tile renders blank axes with no message, or the message omits an active filter.

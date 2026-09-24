@@ -43,7 +43,7 @@ import { RollupRefreshNote } from '../tiles/RollupRefreshNote';
 import { TileSkeleton } from '../tiles/TileSkeleton';
 import { useDashboardColours } from './colours';
 import { AddPanel } from './edit/AddPanel';
-import { withFormats } from './chartSpec';
+import { CHART_MISSING, CHART_UNTYPED, withFormats } from './chartSpec';
 import { ChartEditorOverlay } from './edit/ChartEditorOverlay';
 import {
   drawnWithDrafts,
@@ -316,6 +316,19 @@ type LimitedState =
   | { readonly kind: 'filtered-out' };
 
 /**
+ * A chart the dashboard names that is gone, or cannot be read as stored — a
+ * state, with its icon (T183, AC-177), and no Retry: asking again cannot
+ * bring a deleted chart back (AC-042's review).
+ */
+function TileMissing() {
+  return (
+    <StateLine kind="warn" role="status" testId="tile-missing-chart">
+      {CHART_MISSING}
+    </StateLine>
+  );
+}
+
+/**
  * The marking a tile marks with when it names none (direction.md rule 44):
  * the dashboard's default, or its first marking where none is marked default.
  *
@@ -379,8 +392,11 @@ function TileBody({
   onItemClick,
   rowMarking,
   limited,
+  onRetry,
 }: {
   tile: Tile;
+  /** Ask a failed chart again (AC-042): the tile's own "Refresh now". */
+  onRetry?: (() => void) | undefined;
   /**
    * What a marking-limited tile shows instead of its chart (AC-109, AC-111),
    * or undefined when it shows its chart — including the `'all'`
@@ -461,7 +477,26 @@ function TileBody({
         return <NothingMarked state={limited.state} message={limited.message} />;
       }
       if (hidden !== undefined) return <TileUnavailable member={hidden} />;
-      if (error !== undefined) return <TileError error={error} />;
+      // Gone, not failed: the missing-chart state, with nothing to retry.
+      if (error === CHART_MISSING) return <TileMissing />;
+      if (error !== undefined)
+        return (
+          <>
+            {/* The tile keeps its title while in error, so the reader knows
+                which chart failed without guessing from its position. */}
+            {title === undefined || title.trim() === '' ? null : (
+              <div className="tile-head">
+                <h3 className="tile-head__title">{title}</h3>
+              </div>
+            )}
+            <TileError
+              error={error}
+              // A chart with no type fails the same way however often it is
+              // asked; Retry is for a load that might go differently.
+              {...(onRetry === undefined || error === CHART_UNTYPED ? {} : { onRetry })}
+            />
+          </>
+        );
       /**
        * Loading, absent and broken are three states, not two. Collapsing the
        * first into the second made "this chart is no longer available" the
@@ -471,10 +506,7 @@ function TileBody({
        */
       if (loading) return <TileSkeleton chartType="bar" />;
       return spec === undefined ? (
-        // A state, with its icon (T183, AC-177).
-        <StateLine kind="warn" role="status" testId="tile-missing-chart">
-          This chart is no longer available.
-        </StateLine>
+        <TileMissing />
       ) : (
         <ChartTile
           spec={spec}
@@ -866,6 +898,24 @@ function Elements({
               title={charts.titleOf?.(chartId)}
               answered={charts.answered?.[chartId]}
               limited={charts.limitedStates?.[chartId]}
+              /**
+               * Retry is the tile's "Refresh now" (AC-042): the same request,
+               * past Cube's cache, into the same place — so a chart that
+               * failed is asked again and drawn where the error was. It was
+               * never passed here, which is how the error state on every
+               * dashboard came to have no Retry while its component test,
+               * which passed the prop, stayed green.
+               */
+              onRetry={
+                // Not while editing, where Refresh is hidden on purpose: a
+                // drafted tile's Retry would re-read the saved chart and
+                // drop the draft it is showing.
+                charts.onRefresh === undefined || editing
+                  ? undefined
+                  : () => {
+                      charts.onRefresh?.(chartId);
+                    }
+              }
               // The chart's own type, where it has one (T132's review): the
               // editor changes the document's, not the tile's.
               chartType={charts.typeOf?.(chartId) ?? element.chartType}

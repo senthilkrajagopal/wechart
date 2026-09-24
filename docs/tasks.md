@@ -856,7 +856,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **The tail takes the neutral, not a palette slot** (direction.md §5). "Other" is not a member, and giving it a member's colour would put it in the same visual class as the things it hides.
   - No item is added when the category count is exactly the setting: an "Other (0)" would be an empty category taking a colour and a legend entry for nothing.
   - Ranking uses the *first* measure. Summing across measures of different units would be adding pounds to counts. The same additivity caveat as the pivot applies: a total of averages is not an average, and a non-additive measure needs its "Other" from Cube.
-- [ ] T049 (AC-042) Show a chart-shaped loading skeleton and an error state offering Retry and details
+- [x] T049 (AC-042) Show a chart-shaped loading skeleton and an error state offering Retry and details
   - **Reopened 2026-09-24, and AC-042 unticked.** The dashboard critique (`docs/design/critiques/2026-09-24-dashboard.md` F10) took a tile offline and refreshed it: no Retry, no details, and the wrong message ("This chart is no longer available"). Confirmed in the code — `DashboardView`'s `TileBody` renders `<TileError error={error} />` and never passes `onRetry`, so on a dashboard the Retry button cannot appear at all; only the chart editor passes one. The component was tested with the prop, which is how the criterion was ticked without the surface. Also to fix with it: a failed *query* must not fall through to the missing-chart state, and the tile keeps its header while in error.
   - Files: `packages/web/src/tiles/TileSkeleton.tsx`, `packages/web/src/tiles/TileSkeleton.test.tsx`, `packages/web/src/editor/ChartEditor.tsx`
   - Failing test: `TileSkeleton.test.tsx`: loading renders a skeleton matching the chart's shape, and a failure renders Retry plus the error details (AC-042).
@@ -3213,10 +3213,14 @@ Planned 2026-09-24 from the critiques in `docs/design/critiques/2026-09-24-*.md`
 
 Order: the reopened criteria first (they are ticked-and-false, the worst state to leave), then Explore and the shell, then dashboards.
 
-- [ ] T208 (AC-042) Offer Retry and details on a dashboard tile's error state, and never report a failed query as a missing chart
-  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/TileError.tsx`, `e2e/dashboard.spec.ts`
+- [x] T208 (AC-042) Offer Retry and details on a dashboard tile's error state, and never report a failed query as a missing chart
+  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/DashboardPage.tsx`, `packages/web/src/dashboard/chartSpec.ts`, `packages/web/src/query/loadTile.ts`, `e2e/dashboard.spec.ts`
   - Failing test: `e2e/dashboard.spec.ts`: a tile whose query fails shows its title, Retry and a details disclosure; Retry asks again and draws the chart (AC-042).
   - Depends on: none
+  - Done 2026-09-24. AC-042 re-ticked on four e2e tests in `e2e/dashboard.spec.ts`, all passing in Chrome, Firefox and WebKit: the chart-shaped skeleton while queries are held; a 500 from Cube giving the title, the message, Show query and a Retry that draws the chart; a dropped network during a refresh giving a retryable error rather than "no longer available", and Retry recovering it; and a 404 giving the missing-chart state with no Retry.
+  - **Two causes, both found by reading what the critique saw.** `TileBody` rendered `<TileError error={error} />` and never passed `onRetry` — the component test passed the prop, so it was green while no dashboard ever showed the button. And `specFor` caught *every* failure to fetch the chart document as "This chart is no longer available", so a dropped network read as a deleted chart. It now separates a 404 (missing) from a network failure or other HTTP status (a failed load).
+  - **The cold review found four more, all fixed.** The title vanished in the error state, which the task itself required — the tile now keeps its heading. A deleted chart received a Retry that could only fail — `CHART_MISSING` is now one shared value and the tile renders the missing state for it, with no Retry, as it does for `CHART_UNTYPED`. A network failure at `/api/load` was a bare `TypeError` with nothing behind "details" — `loadTile` now wraps it in a `TileLoadError` carrying the query, leaving a cancellation a cancellation. And Retry showed in edit mode, where Refresh is hidden because a drafted tile's re-read would drop the draft.
+  - **Recorded, not fixed:** a 200 response whose body will not parse is reported as "could not reach the server". A wrong message, not a wrong state; left for the next time `getJson` is touched.
 - [ ] T209 (AC-053) Show the dashboard's tree in the Outline tab, a row selecting and scrolling to its element
   - Files: `packages/web/src/dashboard/edit/Outline.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `e2e/dashboard-edit.spec.ts`
   - Failing test: `e2e/dashboard-edit.spec.ts`: the Outline lists page tabs, then their items with sections and tab groups nested, and clicking a row selects that element (AC-053).

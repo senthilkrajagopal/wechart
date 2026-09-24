@@ -19,6 +19,20 @@ import { NOTHING_CHOSEN } from './edit/templates';
  */
 export type TileChart = { readonly spec: RenderSpec } | { readonly error: unknown };
 
+/**
+ * A chart the dashboard names but that does not exist, or cannot be read as
+ * stored: the missing-chart state, not a failed load (AC-042).
+ *
+ * Kept as one value so the tile can tell the two apart. They look alike — both
+ * arrive as the tile's `error` — and are opposites: a failed load is worth
+ * asking again, and offering Retry on a deleted chart offers a button that can
+ * only fail the same way.
+ */
+export const CHART_MISSING = 'This chart is no longer available.';
+
+/** A chart the recommender can place nowhere; asking again changes nothing. */
+export const CHART_UNTYPED = 'This chart has no chart type yet.';
+
 /** Runs a chart's Cube query and returns its rows — `loadTile`, in the app. */
 export type LoadRows = (query: Record<string, unknown>) => Promise<Record<string, unknown>[]>;
 
@@ -111,7 +125,7 @@ export async function tileChartOf(document: ChartDocument, load: LoadRows): Prom
      * answer. That is the editor's behaviour too (it queries any non-empty
      * spec), and it keeps one path for every typeless chart.
      */
-    if (chartType === null) return { error: 'This chart has no chart type yet.' };
+    if (chartType === null) return { error: CHART_UNTYPED };
 
     return { spec: compile(document, { rows, chartType }) };
   } catch (failure) {

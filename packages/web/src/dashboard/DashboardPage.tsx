@@ -9,7 +9,7 @@ import { reachFrom } from '../filters/coverage';
 import { primaryKeyOf } from './markings/primaryKey';
 import { allMembers } from '../filters/FilterBar';
 import type { FilterValues } from '../filters/model';
-import { formatsFrom, tileChartOf, type TileChart } from './chartSpec';
+import { CHART_MISSING, formatsFrom, tileChartOf, type TileChart } from './chartSpec';
 import { StateLine } from '../shell/StatusIcon';
 import { DashboardView } from './DashboardView';
 import { chartWritesOf, drawnWithDrafts, withoutDrafts } from './edit/chartDrafts';
@@ -25,9 +25,17 @@ import { chartIdsOf, DEFAULT_SETTINGS, type DashboardDocument } from './model/do
  * takes its spec. A view that fetches cannot be rendered in a test without a
  * server, and cannot be reused inside the editor's preview.
  */
+/** A request the server answered with an error status, which it carries. */
+class HttpError extends Error {
+  constructor(readonly status: number) {
+    super(`Request failed: ${String(status)}`);
+    this.name = 'HttpError';
+  }
+}
+
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Request failed: ${String(response.status)}`);
+  if (!response.ok) throw new HttpError(response.status);
   return (await response.json()) as T;
 }
 
@@ -602,17 +610,40 @@ async function specFor(
   /** A previewed security context, asked as (T172, AC-166). */
   context?: Readonly<Record<string, unknown>>,
 ): Promise<{ chart: TileChart; document: ChartDocument | undefined; answered?: AnswerMeta }> {
+  let stored;
+  try {
+    stored = await getJson<StoredDocument>(`/api/documents/chart/${encodeURIComponent(chartId)}`);
+  } catch (failure) {
+    /**
+     * Only the server saying the chart does not exist is the missing-chart
+     * state. A request that never reached it — the network dropped — or one
+     * it failed to answer says nothing about whether the chart is there, and
+     * calling it "no longer available" sends the reader looking for whoever
+     * deleted it (the dashboard critique, F10). That is a failure to load, and
+     * the tile offers Retry for it (AC-042).
+     */
+    if (failure instanceof HttpError && failure.status === 404)
+      return { chart: { error: CHART_MISSING }, document: undefined };
+    return {
+      chart: {
+        error: new Error(
+          failure instanceof HttpError
+            ? `The server could not read this chart (HTTP ${String(failure.status)}).`
+            : 'Could not reach the server to read this chart. Check the connection, then retry.',
+        ),
+      },
+      document: undefined,
+    };
+  }
+
   let document;
   try {
-    const stored = await getJson<StoredDocument>(
-      `/api/documents/chart/${encodeURIComponent(chartId)}`,
-    );
     document = readChartDocument(stored.body);
   } catch {
-    // The chart itself is gone or unreadable. That is the missing-chart state
-    // (AC-017), which the tile shows, and it is not the same thing as a query
-    // that failed — one is a broken dashboard, the other a broken query.
-    return { chart: { error: 'This chart is no longer available.' }, document: undefined };
+    // Stored but unreadable: the chart as it stands cannot be drawn, which is
+    // the missing-chart state — a broken dashboard, not a broken query, so
+    // the tile shows it without Retry, which would only fail the same way.
+    return { chart: { error: CHART_MISSING }, document: undefined };
   }
 
   // AC-012: a failed query reaches the tile as the thrown value, so that a
