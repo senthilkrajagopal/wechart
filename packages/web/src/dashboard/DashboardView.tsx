@@ -73,6 +73,7 @@ import { insertElement, insertionPoint, newElement } from './model/insert';
 import { activeFilters, withFilters, withLimit, type ActiveFilter } from '../filters/apply';
 import { GeneratedSql } from '../workspaces/security/GeneratedSql';
 import { ViewQuery } from './ViewQuery';
+import { Markdown } from '../tiles/Markdown';
 import { coverageOf, type Reach } from '../filters/coverage';
 import { chartTilesOf } from '../filters/scope';
 import { effectsOn, type CrossEffects, type CrossSelection } from './crossfilter/apply';
@@ -534,7 +535,8 @@ function TileBody({
         />
       );
     case 'markdown':
-      return <p>{tile.text}</p>;
+      // Its subset of markdown, as elements — never as HTML (AC-208).
+      return <Markdown text={tile.text ?? ''} />;
     case 'header':
       return <h3>{tile.text}</h3>;
     case 'divider':
@@ -637,6 +639,9 @@ interface Affordances {
   readonly tableViews?:
     | { readonly showing: ReadonlySet<string>; readonly set: (tileId: string, on: boolean) => void }
     | undefined;
+  /** Which sections are collapsed (AC-202): view state, in both modes. */
+  readonly sections?:
+    { readonly collapsed: ReadonlySet<string>; readonly toggle: (id: string) => void } | undefined;
   readonly onResize?: ((id: string, size: { w: number; h: number }) => void) | undefined;
   readonly drag?: CanvasProps['drag'];
   /** What a key does to the focused tile (AC-057). */
@@ -707,29 +712,59 @@ function Elements({
         if (element === undefined) return null;
 
         if (isSection(element)) {
+          /**
+           * The prototype's band (AC-202): a header with its collapse
+           * control, its title and how many items it holds, collapsible in
+           * view and edit mode alike. Named by its title, not its id.
+           */
+          const collapsed = affordances.sections?.collapsed.has(element.id) === true;
+          const count = element.items.length;
           return (
-            <section className="dashboard-section" data-section={element.id}>
-              {affordances.onDelete === undefined ? null : (
-                // A section is a container, so the Delete key does not reach
-                // it — but AC-060 names sections among the things that can be
-                // deleted, so the menu does.
-                <MoveToMenu
-                  tileId={element.id}
-                  tileLabel={element.title}
-                  containers={[]}
-                  currentKey=""
-                  onMove={() => undefined}
-                  onDelete={() => {
-                    affordances.onDelete?.(element.id);
+            <section
+              className="dashboard-section"
+              data-section={element.id}
+              aria-labelledby={`${element.id}-title`}
+            >
+              <div className="dashboard-section__head">
+                <button
+                  type="button"
+                  className="dashboard-section__toggle"
+                  aria-expanded={!collapsed}
+                  aria-controls={`${element.id}-body`}
+                  aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${element.title}`}
+                  onClick={() => {
+                    affordances.sections?.toggle(element.id);
                   }}
+                >
+                  <span aria-hidden="true">{collapsed ? '▸' : '▾'}</span>
+                </button>
+                <h2 id={`${element.id}-title`}>{element.title}</h2>
+                <span className="dashboard-section__count">
+                  {count} {count === 1 ? 'item' : 'items'}
+                </span>
+                {affordances.onDelete === undefined ? null : (
+                  // A section is a container, so the Delete key does not reach
+                  // it — but AC-060 names sections among the things that can be
+                  // deleted, so the menu does.
+                  <MoveToMenu
+                    tileId={element.id}
+                    tileLabel={element.title}
+                    containers={[]}
+                    currentKey=""
+                    onMove={() => undefined}
+                    onDelete={() => {
+                      affordances.onDelete?.(element.id);
+                    }}
+                  />
+                )}
+              </div>
+              <div id={`${element.id}-body`} hidden={collapsed}>
+                <Elements
+                  items={element.items}
+                  containerKey={sectionKey(element.id)}
+                  affordances={affordances}
                 />
-              )}
-              <h2>{element.title}</h2>
-              <Elements
-                items={element.items}
-                containerKey={sectionKey(element.id)}
-                affordances={affordances}
-              />
+              </div>
             </section>
           );
         }
@@ -1028,6 +1063,22 @@ function Elements({
 }
 
 /** Whether an element is among these, at any depth of sections and tabs. */
+/** Every section around an element, outermost first; none if it is in none. */
+function sectionsAround(items: readonly Element_[], id: string): string[] {
+  for (const element of items) {
+    if (element.kind === 'section') {
+      if (holdsElement(element.items, id))
+        return [element.id, ...sectionsAround(element.items, id)];
+    } else if (element.kind === 'tabs') {
+      for (const tab of element.tabs) {
+        const found = sectionsAround(tab.items, id);
+        if (found.length > 0 || holdsElement(tab.items, id)) return found;
+      }
+    }
+  }
+  return [];
+}
+
 function holdsElement(items: readonly Element_[], id: string): boolean {
   return items.some(
     (element) =>
@@ -3252,6 +3303,31 @@ function DashboardPages({
   const band = useRef<HTMLDivElement>(null);
   /** The chart tiles showing their table (AC-178), switched there or from ⋯ (AC-199). */
   const [tableTiles, setTableTiles] = useState<ReadonlySet<string>>(() => new Set());
+  /** The sections collapsed (AC-202), kept across view and edit mode. */
+  const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<string>>(() => new Set());
+  /** Open every collapsed section around an element, so it has a box to show. */
+  const expandAround = (id: string, including?: string) => {
+    const around = [
+      ...document.pages.flatMap((page) => sectionsAround(page.items, id)),
+      ...(including === undefined ? [] : [including]),
+    ];
+    if (!around.some((section) => collapsedSections.has(section))) return;
+    setCollapsedSections((now) => {
+      const next = new Set(now);
+      for (const section of around) next.delete(section);
+      return next;
+    });
+  };
+  /**
+   * A new selection inside a collapsed section opens it — once per selection,
+   * as a tab group follows it (T221's review): selected from the Outline, it
+   * was hidden, with nothing to scroll to and the next insert out of sight.
+   */
+  const [followedSelection, setFollowedSelection] = useState<string | null>(null);
+  if (where.selected !== followedSelection) {
+    setFollowedSelection(where.selected);
+    if (where.selected !== null) expandAround(where.selected);
+  }
   useEffect(() => {
     const node = band.current;
     const canvas = node?.parentElement;
@@ -3323,6 +3399,17 @@ function DashboardPages({
   const affordances: Affordances = {
     editing,
     charts,
+    sections: {
+      collapsed: collapsedSections,
+      toggle: (id) => {
+        setCollapsedSections((now) => {
+          const next = new Set(now);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        });
+      },
+    },
     tableViews: {
       showing: tableTiles,
       set: (tileId, on) => {
@@ -3596,6 +3683,10 @@ function DashboardPages({
             // The same move the drag makes, reached without one.
             const elsewhere = focusAfterDeleting(tileId);
             session.change(moveTile(document, tileId, { key: to, index: null }));
+            // Into a collapsed section: opened, so the tile — and focus with
+            // it — has somewhere to be (T221's review).
+            if (to.startsWith('sec:'))
+              expandAround(to.slice('sec:'.length), to.slice('sec:'.length));
             /**
              * Focus goes with the tile to where it landed (T182, AC-176): it
              * is drawn afresh there, and its ⋯ menu with it. Moved to a page

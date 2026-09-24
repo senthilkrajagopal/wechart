@@ -653,7 +653,7 @@ Dashboards:
       Fails when: a chip shows a member's internal name, omits the source tile, or cannot unmark from the chip.
 - [x] AC-201 THE SYSTEM SHALL show the marked-items badge in a chart tile's header row, beside its title, and only on chart tiles whose marking holds something.
       Fails when: the badge pushes the title down, or appears on a tile that does not mark or whose marking is empty.
-- [ ] AC-202 THE SYSTEM SHALL draw a section as a band with a header holding a collapse control, its title and its number of items, and SHALL collapse and expand it in view and edit mode.
+- [x] AC-202 THE SYSTEM SHALL draw a section as a band with a header holding a collapse control, its title and its number of items, and SHALL collapse and expand it in view and edit mode.
       Fails when: a section has no collapse control, or cannot be collapsed in view mode.
 - [ ] AC-203 WHEN the user selects a tile in edit mode, THE SYSTEM SHALL open Properties, showing for a chart tile its title, chart type and source, an Edit chart action, its ownership, its Marking settings and its layout.
       Fails when: selecting a tile leaves another sidebar tab open, or one of those parts is missing for a chart tile.
@@ -665,7 +665,7 @@ Dashboards:
       Fails when: a tile's grip is visible only on hover, or either the title or "+ Page tab" is missing.
 - [x] AC-207 WHEN a dashboard or one of its page tabs has no tiles, THE SYSTEM SHALL show a sentence saying so with a way to start editing, and SHALL show the page-tab strip.
       Fails when: an empty dashboard or tab renders a blank canvas, or the tab strip is hidden.
-- [ ] AC-208 THE SYSTEM SHALL render a markdown tile's headings, emphasis, lists and line breaks, and no raw HTML (`[R7]`).
+- [x] AC-208 THE SYSTEM SHALL render a markdown tile's headings, emphasis, lists and line breaks, and no raw HTML (`[R7]`).
       Fails when: a heading marker such as "##" or an emphasis marker is shown as text, or an HTML tag in the text renders as HTML.
 - [ ] AC-209 THE SYSTEM SHALL name every tile, in its accessible name and its menu's, by its title — or, for a tile without one, by its kind and position — and never by an internal id.
       Fails when: a tile or its menu is announced by an id such as "tile-status" or "el-1790238490469-7".

@@ -1301,6 +1301,58 @@ main:has(.dashboard) {
    has to change the page and not just an attribute. */
 /* The prototype's .dgrid padding, round the tiles. */
 .dashboard-page { width: 100%; padding: 16px 24px 40px; }
+/* A section is a band (AC-202), the prototype's .dsection: the subtle ground,
+   8/12/12 padding, and a 36 px head with its ▾, its title at 16/600/22 and its
+   count at 12 px muted — not a tile card with a 21 px heading. */
+.grid-tile:has(> .dashboard-section) {
+  padding: 8px 12px 12px;
+  background: var(--wc-bg-subtle);
+  overflow: visible;
+}
+.dashboard-section__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+.dashboard-section__head h2 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+}
+.dashboard-section__count { color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
+/* Its ⋯ at the end of the head row, not at a tile's corner offsets. */
+.dashboard-section__head .tile-menu { margin-left: auto; position: relative; inset: auto; }
+/* The prototype's .dsection > .dgrid: 8 px between the head and its tiles. */
+.dashboard-section__head + div { padding-top: 8px; }
+.dashboard-section__toggle {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--wc-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.dashboard-section__toggle:hover { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
+/* A markdown tile's text (AC-208): headings on the type scale, lists indented. */
+.markdown { overflow-wrap: anywhere; }
+.markdown code {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--wc-bg-subtle);
+  font: 12px/16px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown h3 { margin: 0 0 6px; font-size: 16px; line-height: 22px; font-weight: 600; }
+.markdown h4 { margin: 0 0 4px; font-size: var(--wc-text-sm-size); font-weight: 600; }
+.markdown p { margin: 0 0 8px; }
+.markdown ul,
+.markdown ol { margin: 0 0 8px; padding-left: 20px; }
 .dashboard-page[data-width='fixed'] { max-width: 1440px; margin-inline: auto; }
 .dashboard-page[data-width='full'] { max-width: none; }
 /* position: relative so the canvas is a containing block as well as a scroll

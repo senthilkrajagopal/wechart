@@ -1449,3 +1449,111 @@ test('an empty dashboard says so, with its tab strip and a way to start editing'
   await empty.getByRole('button', { name: 'Start editing' }).click();
   await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
 });
+
+/**
+ * T221 / AC-202: THE SYSTEM SHALL draw a section as a band with a header
+ * holding a collapse control, its title and its number of items, and SHALL
+ * collapse and expand it in view and edit mode.
+ * `Fails when: a section has no collapse control, or cannot be collapsed in
+ * view mode.`
+ */
+test('a section is a band that says how many items it holds, and collapses in view and edit mode', async ({
+  page,
+}) => {
+  await open(page);
+  const section = page.getByRole('region', { name: 'Detail' });
+  await expect(section.locator('.dashboard-section__count')).toHaveText('1 item');
+  const inside = page.locator('[data-tile="tile-region"]');
+  await expect(inside).toBeVisible();
+
+  // View mode.
+  const collapse = section.getByRole('button', { name: 'Collapse Detail' });
+  await expect(collapse).toHaveAttribute('aria-expanded', 'true');
+  await collapse.click();
+  await expect(inside).toBeHidden();
+  const expand = section.getByRole('button', { name: 'Expand Detail' });
+  await expect(expand).toHaveAttribute('aria-expanded', 'false');
+  await expand.click();
+  await expect(inside).toBeVisible();
+
+  // Edit mode.
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
+  await section.getByRole('button', { name: 'Collapse Detail' }).click();
+  await expect(inside).toBeHidden();
+  await section.getByRole('button', { name: 'Expand Detail' }).click();
+  await expect(inside).toBeVisible();
+
+  // Collapsed, and a tile inside it chosen in the Outline: it opens, so the
+  // tile has a box to show (T221's review).
+  await section.getByRole('button', { name: 'Collapse Detail' }).click();
+  await expect(inside).toBeHidden();
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  await sidebar.getByRole('tab', { name: 'Outline' }).click();
+  await sidebar
+    .getByRole('navigation', { name: 'Dashboard outline' })
+    .getByRole('button', { name: /Chart: Orders over time/ })
+    .click();
+  await expect(inside).toBeVisible();
+});
+
+/**
+ * T221 / AC-208: THE SYSTEM SHALL render a markdown tile's headings, emphasis,
+ * lists and line breaks, and no raw HTML (`[R7]`).
+ * `Fails when: a heading marker such as "##" or an emphasis marker is shown as
+ * text, or an HTML tag in the text renders as HTML.`
+ */
+test('a markdown tile renders its headings, emphasis, lists and breaks, and no raw HTML', async ({
+  page,
+  request,
+}) => {
+  const unique = String(Date.now());
+  const API = 'http://localhost:4100/api';
+  const created = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title: `Markdown ${unique}`, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  const stored = (await (await request.get(`${API}/documents/dashboard/${created.id}`)).json()) as {
+    version: number;
+    body: Record<string, unknown>;
+  };
+  const text = [
+    '## What this shows',
+    'Orders **by status** and *this quarter*,',
+    'on two lines.',
+    '',
+    '- shipped',
+    '- completed',
+    '',
+    '<b>not bold</b>',
+  ].join('\n');
+  await request.put(`${API}/documents/dashboard/${created.id}`, {
+    data: {
+      version: stored.version,
+      body: {
+        ...stored.body,
+        pages: [
+          {
+            id: 'p',
+            title: 'Page 1',
+            items: [{ id: 'notes', kind: 'markdown', w: 6, h: 20, text }],
+          },
+        ],
+      },
+    },
+  });
+  await page.goto(`/explore/dashboards/${created.id}`);
+  const tile = page.locator('[data-tile="notes"]');
+
+  await expect(tile.getByRole('heading', { name: 'What this shows' })).toBeVisible();
+  await expect(tile.locator('strong')).toHaveText('by status');
+  await expect(tile.locator('em')).toHaveText('this quarter');
+  await expect(tile.getByRole('listitem')).toHaveText(['shipped', 'completed']);
+  await expect(tile.locator('br')).toHaveCount(1);
+  // The markers are gone; the tag is text, never markup.
+  await expect(tile).not.toContainText('##');
+  await expect(tile).not.toContainText('**');
+  await expect(tile).toContainText('<b>not bold</b>');
+  await expect(tile.locator('b')).toHaveCount(0);
+});

@@ -49,7 +49,8 @@ const laidOut = () =>
     .getAllByTestId('grid-item')
     .map((item) => {
       if (item.querySelector('[data-testid="tile-empty-chart"]') !== null) return 'chart';
-      return item.textContent?.includes('## Notes') === true ? 'notes' : '';
+      // The notes tile, by its rendered heading (AC-208).
+      return item.querySelector('h3')?.textContent === 'Notes' ? 'notes' : '';
     })
     .filter((kind) => kind !== '');
 
@@ -104,13 +105,13 @@ describe('adding a section template', () => {
      * The markdown tile arrives with prompting text rather than blank, so the
      * pair reads as a layout waiting to be filled in rather than as damage.
      *
-     * Asserted as the exact string the template produces, not a substring of
-     * it: the tile renders its markdown as a single unparsed node, heading
-     * line and all, so `getByText('Describe what this chart shows.')` can
-     * never match and matching loosely would hide that.
+     * Asserted as the exact strings the template produces, rendered (AC-208):
+     * its heading as a heading and its sentence as a paragraph — before T221
+     * the tile showed its markdown unparsed, "## Notes" and all.
      */
+    expect(screen.getByRole('heading', { name: 'Notes', level: 3 }).textContent).toBe('Notes');
     const paragraphs = [...window.document.querySelectorAll('p')].map((p) => p.textContent);
-    expect(paragraphs).toContain('## Notes\nDescribe what this chart shows.');
+    expect(paragraphs).toContain('Describe what this chart shows.');
   });
 
   it('puts the tiles in the container the panel named, not on the page', async () => {
