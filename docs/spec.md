@@ -380,7 +380,7 @@ Traces to: `[docs/inputs §12]`, direction.md §7, rules 13, 32.
 
 - [x] AC-117 WHILE a dashboard is in cross-filter mode, WHEN the user clicks a mark, THE SYSTEM SHALL apply the action set for that source and target pair: filter the target, highlight it, or leave it unchanged.
       Fails when: a pair set to None changes, or a pair set to Filter only highlights.
-- [ ] AC-118 THE SYSTEM SHALL apply the dashboard's default pair action to pairs the author has not set, and show that default in the settings page (direction.md rule 32).
+- [x] AC-118 THE SYSTEM SHALL apply the dashboard's default pair action to pairs the author has not set, and show that default in the settings page (direction.md rule 32).
       Fails when: an unset pair behaves differently from the stated default.
 - [ ] AC-119 WHEN a cross-filter is active, THE SYSTEM SHALL show a chip naming the member and value and the source tile, and clear it when the chip is dismissed or Escape is pressed.
       Fails when: the chip omits the source tile, or dismissing it leaves a tile filtered.

@@ -1043,6 +1043,59 @@ main:has(.dashboard) {
   background: var(--wc-bg-surface);
   color: var(--wc-text-primary);
 }
+/* A field's label, where the control beside it is not one label can wrap. */
+.settings-field__label {
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+}
+.settings-page__note {
+  margin: 12px 0 4px;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-secondary);
+}
+
+/* The prototype's .grid-table and .tscroll (AC-187): 12 px, tabular figures,
+   a 28 px sticky head and 24 px rows, ruled off row by row. The cross-filter
+   matrix (AC-118) is the first of these in the app. */
+.table-scroll { overflow: auto; }
+.grid-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.grid-table th {
+  position: sticky;
+  top: 0;
+  height: 28px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-subtle);
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.grid-table td {
+  height: 24px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  white-space: nowrap;
+}
+.grid-table tbody tr:hover td { background: var(--wc-bg-hover); }
+.grid-table__self { color: var(--wc-text-muted); }
+/* The prototype's .select.sm, 24 px, for a control inside a table row. */
+.select-sm {
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font-size: 12px;
+}
 
 .edit-bar { display: flex; gap: 8px; }
 .edit-bar button { height: 32px; padding: 0 12px; border: 1px solid var(--wc-border-strong); border-radius: 6px; background: var(--wc-bg-surface); color: var(--wc-text-primary); cursor: pointer; }

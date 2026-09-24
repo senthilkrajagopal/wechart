@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { DashboardDocument } from '../model/document';
+import { CrossFilterMatrix } from './CrossFilterMatrix';
 import { isDirty } from './dirtyGuard';
 import { StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
@@ -117,9 +118,11 @@ export interface SettingsPageProps {
   readonly onCancel: () => void;
   /** Leave, applying the edited document. */
   readonly onSave: (next: DashboardDocument) => void;
+  /** A chart's title, which is how the cross-filter matrix names a tile (AC-118). */
+  readonly titleOf?: ((chartId: string) => string | undefined) | undefined;
 }
 
-export function SettingsPage({ document, onCancel, onSave }: SettingsPageProps) {
+export function SettingsPage({ document, onCancel, onSave, titleOf }: SettingsPageProps) {
   const [open, setOpen] = useState<SettingsSection>('General');
 
   /**
@@ -276,6 +279,26 @@ export function SettingsPage({ document, onCancel, onSave }: SettingsPageProps) 
               cards={MODE_CARDS}
               onChoose={chooseMode}
               note="The configuration of the mode you are not using is kept, not cleared."
+            />
+          ) : open === 'Cross-filtering' ? (
+            /**
+             * The default action, and the matrix that overrides it per pair
+             * (AC-118, direction.md rule 32). Both live in the draft until
+             * Save, as every other setting on this page does.
+             */
+            <CrossFilterMatrix
+              document={draft}
+              interactions={interactions}
+              titleOf={titleOf}
+              onChange={(crossFilter) => {
+                setDraft({
+                  ...draft,
+                  settings: {
+                    ...draft.settings,
+                    interactions: { ...interactions, crossFilter },
+                  },
+                });
+              }}
             />
           ) : open === 'Layout' ? (
             /**

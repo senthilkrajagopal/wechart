@@ -1741,6 +1741,8 @@ export function DashboardView({
           settingsOpen ? (
             <SettingsPage
               document={session.document}
+              // How the cross-filter matrix names each tile (AC-118).
+              titleOf={chartTitleOf}
               onCancel={() => {
                 setSettingsOpen(false);
               }}

@@ -245,6 +245,44 @@ test('clicking a mark while editing selects the tile instead of cross-filtering'
   expect(await valuesIn(category)).toEqual(before);
 });
 
+/**
+ * T124 / AC-118: THE SYSTEM SHALL apply the dashboard's default pair action
+ * to pairs the author has not set, and show that default in the settings page.
+ * `Fails when: an unset pair behaves differently from the stated default.`
+ */
+test('the settings page shows the default, and a pair set there is what a click obeys', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await crossFilterDashboard(request, { defaultAction: 'filter' });
+  await open(page, id, title);
+
+  await page.getByRole('button', { name: 'Dashboard settings' }).click();
+  await page.getByRole('button', { name: /^Cross-filtering/ }).click();
+
+  // The default this dashboard was saved with, shown as the one in effect.
+  const chosen = page.getByRole('group', { name: 'Default for tile pairs' });
+  await expect(chosen.getByRole('button', { name: 'Filter' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  // And every pair nobody has set showing it.
+  const pair = page.getByRole('combobox', { name: 'By status to By category' });
+  await expect(pair).toHaveValue('filter');
+
+  await pair.selectOption('none');
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.getByTestId('dashboard-settings')).toHaveCount(0);
+
+  const category = tile(page, 'tile-category');
+  const before = await valuesIn(category);
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+
+  // What the page said is what the click does.
+  await page.waitForLoadState('networkidle');
+  expect(await valuesIn(category)).toEqual(before);
+});
+
 test('a pair set to None leaves the other tile untouched', async ({ page, request }) => {
   const { id, title } = await crossFilterDashboard(request, {
     defaultAction: 'filter',

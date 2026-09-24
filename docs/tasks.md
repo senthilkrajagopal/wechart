@@ -1662,10 +1662,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - **Coverage added:** the unreachable target (filtered and highlighted), and cross-filtering being off while editing, both on the real surface.
     - **Open, from the same review:** a highlighted tile's overlay is not re-asked by "Refresh now" (the base answer is); selections survive a page-tab switch and a mode switch as inert state, which T125 should settle with the chip; and clicking an empty plot area does not clear, which is AC-119's.
     - **Left for the tasks that own them:** the chip naming the member, value and source tile, and Escape (AC-119, T125); the settings matrix (AC-118, T124); no marking affordances in cross-filter mode (AC-120, T126).
-- [ ] T124 (AC-118) Apply and display the dashboard's default pair action
+- [x] T124 (AC-118) Apply and display the dashboard's default pair action
   - Files: `packages/web/src/dashboard/settings/CrossFilterMatrix.tsx`, `packages/web/src/dashboard/crossfilter/defaults.test.ts`
   - Failing test: `defaults.test.ts`: an unset pair behaves as the stated default, and the settings page shows that default (AC-118).
   - Depends on: T123
+  - **Built 2026-09-23** (the test is `defaults.test.tsx`, since it drives the page).
+    - Settings › Cross-filtering is the prototype's (`dash-settings.js`): "Default for tile pairs" as a three-way segmented control, then a matrix with a row per source tile, a column per target, a select in each cell and a dash on the diagonal, since a tile never acts on itself. Tiles are named by the chart each draws.
+    - **Pairs are stored sparsely.** A pair nobody has set is not written, so changing the default moves every pair that follows it, and choosing the default in a cell takes that pair back to following it. Stored as "whatever the default was when the page was opened", AC-118's failing state would be reachable by changing the default later.
+    - **One matrix per page tab**, and none for a tab with fewer than two chart tiles: a click reaches the tiles beside it, not another page's (direction.md rule 13), so pairs that could never act are not offered.
+    - The prototype's `.grid-table`, `.tscroll` and small select are added to the sheet here; this is the app's first table of that kind (AC-187).
+    - **Tests:** `crossfilter/defaults.test.tsx` drives the real settings page inside `DashboardView` — the default shown, unset pairs following it, a set pair staying put, what is saved (sparse), and that the saved default is what `actionFor` then does; `e2e/crossfilter.spec.ts` sets a pair on the page, saves, clicks a bar and finds the tile obeys it.
+    - AC-118 ticked on those.
 - [ ] T125 (AC-119) Show a cross-filter chip and clear it on dismiss or Escape
   - Files: `packages/web/src/dashboard/crossfilter/CrossFilterChip.tsx`, `packages/web/src/dashboard/crossfilter/CrossFilterChip.test.tsx`
   - Failing test: `CrossFilterChip.test.tsx`: the chip names the member, the value and the source tile, and dismissing it or pressing Escape leaves no tile filtered (AC-119).
