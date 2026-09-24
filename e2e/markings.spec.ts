@@ -364,6 +364,48 @@ test('a table’s rows mark, and a Shift-click marks the range', async ({ page, 
 });
 
 /**
+ * AC-100: WHEN a tile has keyboard focus in view mode, THE SYSTEM SHALL move
+ * between its items with the arrow keys without changing the marking, mark
+ * the focused item with Space, toggle it with Ctrl+Space or ⌘+Space, and
+ * extend the marking with Shift and the arrow keys.
+ * `Fails when: an arrow key changes the marking, or Space does not mark the
+ * focused item.`
+ *
+ * AC-094's other half rides here too: Escape on a focused tile unmarks that
+ * tile's marking and leaves other markings alone.
+ */
+test('a focused tile marks from the keyboard, and Escape unmarks it', async ({ page, request }) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+
+  await status.focus();
+  await expect(status).toBeFocused();
+
+  // Arrows move without marking — each marking change re-queries every tile
+  // using it, so "select as you move" would be unusable.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('marking-announcer')).toContainText('2 of 3');
+  await expect(status.getByTestId('mark-badge')).toHaveCount(0);
+
+  // Space marks the focused item.
+  await page.keyboard.press('Space');
+  await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
+
+  // Shift and an arrow extend from the anchor.
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect(status.getByTestId('mark-badge')).toContainText('2 marked');
+
+  // Ctrl+Space toggles the focused item, leaving the rest.
+  await page.keyboard.press('Control+Space');
+  await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
+
+  // Escape on the focused tile unmarks it (AC-094).
+  await page.keyboard.press('Escape');
+  await expect(status.getByTestId('mark-badge')).toHaveCount(0);
+});
+
+/**
  * AC-095: WHEN a marking changes, THE SYSTEM SHALL update every tile that
  * uses it or is limited by it, on every page tab of the dashboard.
  * `Fails when: a tile on another page tab still shows the previous marking

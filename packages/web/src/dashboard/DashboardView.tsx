@@ -1,8 +1,12 @@
-import { markFromLegend, markFromPanel } from '@wechart/charts';
+import { keyToMarking, markFromLegend, markFromPanel } from '@wechart/charts';
 import { COLORS } from '@wechart/ui';
 import {
+  addItemsWithinLimit,
   applyItemClick,
+  EMPTY_PREDICATE,
   markingsFrom,
+  memberOn,
+  seriesOf,
   type Marking,
   type MarkingPredicate,
   type MarkingSlot,
@@ -1509,6 +1513,121 @@ export function DashboardView({
     }
   };
 
+  /**
+   * The items a tile's keyboard moves between (AC-100): its categories, in
+   * the order they are drawn. The same items a click marks, so the two
+   * gestures reach the same marking.
+   */
+  const markableItemsOf = (tileId: string) => {
+    const element = elementAt(live, tileId);
+    if (element === null || !isTile(element) || element.chartId === undefined) return [];
+    if (marksWithOf(element) === undefined) return [];
+    const spec = drawn.specs[element.chartId];
+    if (spec === undefined || memberOn(spec.encoding, 'x') === undefined) return [];
+    try {
+      return seriesOf(spec).categories;
+    } catch {
+      return [];
+    }
+  };
+
+  /** Which item a tile's keyboard is on, and where a Shift-extend began. */
+  const [markFocus, setMarkFocus] = useState<
+    Readonly<Record<string, { readonly focused: number; readonly anchor: number | null }>>
+  >({});
+
+  /**
+   * The marking keys on a focused tile in view mode (AC-100, direction.md
+   * rule 52): the arrows move between items *without* marking, because each
+   * marking change re-queries every tile using it and "select as you move"
+   * would fire a round of queries per keystroke. Space marks, Ctrl and Space
+   * toggle, Shift and an arrow extend, and Escape unmarks this tile's
+   * marking (AC-094).
+   */
+  const onTileMarkKey = (event: React.KeyboardEvent, tileId: string) => {
+    const element = elementAt(live, tileId);
+    if (element === null || !isTile(element) || element.chartId === undefined) return;
+    const markingId = marksWithOf(element);
+    const items = markableItemsOf(tileId);
+    if (markingId === undefined || items.length === 0) return;
+
+    const spec = drawn.specs[element.chartId];
+    const member = spec === undefined ? undefined : memberOn(spec.encoding, 'x');
+    if (member === undefined) return;
+    const before = markingOf(marks, markingId);
+    const named = markings.find((each) => each.id === markingId);
+    const say = (predicate: MarkingPredicate, extra?: string) => {
+      if (named === undefined) return;
+      const from = chartTitleOf(element.chartId ?? '');
+      setMarkSaid(
+        `${announceMarking({
+          marking: named,
+          markedCount: predicate.items.length + predicate.ranges.length,
+          ...(from === undefined ? {} : { tileName: from }),
+        })}${extra ?? ''}`,
+      );
+    };
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      const cleared = markingOf(
+        clearTileMarking(marks, { ...element, marksWith: markingId }),
+        markingId,
+      );
+      if (cleared === before) return;
+      setMarks((now) => withMarking(now, markingId, cleared));
+      say(cleared);
+      return;
+    }
+
+    const state = markFocus[tileId] ?? { focused: 0, anchor: null };
+    const result = keyToMarking(
+      event.key,
+      { shift: event.shiftKey, toggle: event.ctrlKey || event.metaKey },
+      state,
+      items.length,
+    );
+    // Tab above all: a tile that swallowed it would be a keyboard trap.
+    if (!result.handled) return;
+    event.preventDefault();
+    setMarkFocus((now) => ({
+      ...now,
+      [tileId]: { focused: result.focused, anchor: result.anchor },
+    }));
+
+    const itemAt = (index: number) => [{ member, value: items[index] ?? '' }];
+    switch (result.action) {
+      case 'none': {
+        // Moved, not marked. Said, because nothing on screen says which item
+        // the keyboard is on (rule 52).
+        setMarkSaid(
+          `${items[result.focused] ?? ''}, ${String(result.focused + 1)} of ${String(items.length)}. Space marks.`,
+        );
+        return;
+      }
+      case 'replace':
+      case 'toggle': {
+        const after = applyItemClick(before, itemAt(result.focused), {
+          toggle: result.action === 'toggle',
+        });
+        setMarks((now) => withMarking(now, markingId, after));
+        say(after);
+        return;
+      }
+      case 'extend': {
+        const [from, to] = result.range ?? [result.focused, result.focused];
+        const reach = [];
+        for (let index = Math.min(from, to); index <= Math.max(from, to); index += 1) {
+          reach.push(itemAt(index));
+        }
+        const after = addItemsWithinLimit({ ...EMPTY_PREDICATE }, reach);
+        setMarks((now) => withMarking(now, markingId, after.predicate));
+        say(after.predicate, after.message === undefined ? '' : ` ${after.message}`);
+        return;
+      }
+    }
+  };
+
   /** A tile's name: the title of the chart it draws (AC-119). */
   const tileNameOf = useCallback(
     (tileId: string) => {
@@ -2339,6 +2458,7 @@ export function DashboardView({
               session={session}
               charts={charts}
               markSaid={markSaid}
+              {...(marking ? { markKeys: { onKey: onTileMarkKey, itemsOn: markableItemsOf } } : {})}
               // A duplicate's chart is made from the stored one and what it
               // draws; the session's drafts are read inside (T068, AC-062).
               duplicateFrom={{
@@ -2432,11 +2552,23 @@ function DashboardPages({
   onDeleted,
   duplicateFrom,
   markSaid = '',
+  markKeys,
 }: {
   session: EditSession<DashboardDocument>;
   charts: TileCharts;
   /** The last marking change, for the dashboard's polite live region (AC-101). */
   markSaid?: string;
+  /**
+   * The marking keys a focused tile answers in view mode (AC-100): what each
+   * key does is the dashboard's, since the marking is held there. Absent in
+   * Markings mode means this tile marks nothing.
+   */
+  markKeys?:
+    | {
+        readonly onKey: (event: React.KeyboardEvent, tileId: string) => void;
+        readonly itemsOn: (tileId: string) => readonly string[];
+      }
+    | undefined;
   /**
    * What a duplicated chart tile's copy is made from (T068, AC-062): the
    * dashboard it is local to, and each chart's stored document and drawing.
@@ -2672,7 +2804,16 @@ function DashboardPages({
               : sayPlace(next, tile.id),
           );
         }
-      : undefined,
+      : markKeys === undefined
+        ? undefined
+        : /**
+           * In view mode a focused tile answers the marking's keys instead
+           * (AC-100): the same tab stop, a different vocabulary, because
+           * arranging and reading are different things to be doing.
+           */
+          (event, tile) => {
+            markKeys.onKey(event, tile.id);
+          },
     onDelete: editing
       ? (id) => {
           /**
@@ -2766,7 +2907,19 @@ function DashboardPages({
             keys: `Arrow keys move. Shift and arrow keys resize.${editable} Enter opens its properties. Delete removes.`,
           };
         }
-      : undefined,
+      : markKeys !== undefined
+        ? (id) => {
+            // In view mode the keys are the marking's (AC-100), and only a
+            // tile that marks with something answers them.
+            if (!isTileId(document, id) || markKeys.itemsOn(id).length === 0) {
+              return { role: 'dashboard tile', keys: '' };
+            }
+            return {
+              role: 'dashboard tile',
+              keys: 'Arrow keys move between its items. Space marks. Ctrl and Space toggle. Shift and arrow keys extend. Escape unmarks.',
+            };
+          }
+        : undefined,
     moveTo: editing
       ? {
           containers: containersOf(document),
