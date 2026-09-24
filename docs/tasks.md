@@ -3336,8 +3336,9 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Decided (overturnable): a click on a tile's body, or on an Outline row, is selecting it and opens Properties; merely tabbing onto a tile is not, and leaves the open panel alone, so a chosen "+ Add" slot survives the Tab to the sidebar; a click on one of a tile's own controls uses the tile rather than choosing it; choosing a "+ Add" slot opens Add, as the prototype's does.
   - Failing test: `e2e/dashboard-edit.spec.ts`: clicking a chart tile in edit mode shows Properties with its title, type and source, Edit chart, ownership, Marking and Layout, inset 12 px (AC-203, AC-187).
   - Depends on: T209
-- [ ] T223 (AC-204, AC-205, AC-206) Make Discard leave edit mode, order the edit-mode tile menu, and mark tiles editable at rest
-  - Files: `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `e2e/dashboard-edit.spec.ts`
+- [x] T223 (AC-204, AC-205, AC-206) Make Discard leave edit mode, order the edit-mode tile menu, and mark tiles editable at rest
+  - Files: `packages/web/src/dashboard/edit/{EditChrome,EditBar,MoveToMenu,ChartOwnership}.tsx`, `packages/web/src/dashboard/{DashboardView,DashboardPage}.tsx`, `packages/web/src/dashboard/model/duplicate.ts`, `packages/web/src/shell/styles.ts`, `e2e/{dashboard-edit,chart-save}.spec.ts`, and the unit tests the new Discard and Duplicate replace
+  - Decided (overturnable): Discard is no longer undoable — it puts the session back and leaves edit mode, as the prototype's does; T072's "stays in edit mode" and "is itself undoable" tests are replaced by AC-204's. Every tile's menu offers Duplicate (a tile with no chart is copied as itself), reversing T068's chart-only Duplicate. "Editing" in the title is for the eye; the heading still names the dashboard, and the "Dashboard editing" toolbar says the mode. Sections are outlined on hover only, as containers.
   - Failing test: `e2e/dashboard-edit.spec.ts`: Discard with no changes returns to view mode; the tile menu's Duplicate and Delete are visible without scrolling; grips show at rest; the title reads "Editing …" and "+ Page tab" is offered (AC-204, AC-205, AC-206).
   - Depends on: T222
 - [x] T224 (AC-209, AC-210) Name tiles by their titles, and never draw an empty plot for returned rows

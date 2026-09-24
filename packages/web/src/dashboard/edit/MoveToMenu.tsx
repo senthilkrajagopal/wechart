@@ -29,6 +29,8 @@ export interface MoveToMenuProps {
   readonly onDelete?: (() => void) | undefined;
   /** Duplicating a chart tile, the copy with a chart of its own (AC-062). */
   readonly onDuplicate?: (() => void) | undefined;
+  /** A chart tile's "Save to folders…" or "Make a local copy" (AC-205). */
+  readonly ownership?: { readonly label: string; readonly run: () => void } | undefined;
 }
 
 export function MoveToMenu({
@@ -39,6 +41,7 @@ export function MoveToMenu({
   onMove,
   onDelete,
   onDuplicate,
+  ownership,
 }: MoveToMenuProps) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -88,26 +91,12 @@ export function MoveToMenu({
       </button>
 
       {open ? (
-        <ul className="tile-menu__list" aria-label={`Move ${tileLabel} to`}>
-          {elsewhere.length === 0 ? (
-            <li className="tile-menu__empty">Nowhere else to move it yet.</li>
-          ) : (
-            elsewhere.map((container) => (
-              <li key={container.key}>
-                <button
-                  type="button"
-                  data-testid={`move-${tileId}-to-${container.key}`}
-                  onClick={() => {
-                    setOpen(false);
-                    onMove(container.key);
-                  }}
-                >
-                  {container.title}
-                </button>
-              </li>
-            ))
-          )}
-
+        /**
+         * The prototype's order (AC-205): Duplicate first, then whose the
+         * chart is, then Move to with its targets — the only part that
+         * scrolls, however many there are — and Delete last, set apart.
+         */
+        <ul className="tile-menu__list" aria-label={`Actions for ${tileLabel}`}>
           {onDuplicate === undefined ? null : (
             <li className="tile-menu__duplicate">
               <button
@@ -122,6 +111,45 @@ export function MoveToMenu({
               </button>
             </li>
           )}
+          {ownership === undefined ? null : (
+            <li className="tile-menu__ownership">
+              <button
+                type="button"
+                data-testid={`ownership-${tileId}`}
+                onClick={() => {
+                  setOpen(false);
+                  ownership.run();
+                }}
+              >
+                {ownership.label}
+              </button>
+            </li>
+          )}
+          <li className="tile-menu__move">
+            <span className="tile-menu__heading" aria-hidden="true">
+              Move to
+            </span>
+            <ul className="tile-menu__targets" aria-label={`Move ${tileLabel} to`}>
+              {elsewhere.length === 0 ? (
+                <li className="tile-menu__empty">Nowhere else to move it yet.</li>
+              ) : (
+                elsewhere.map((container) => (
+                  <li key={container.key}>
+                    <button
+                      type="button"
+                      data-testid={`move-${tileId}-to-${container.key}`}
+                      onClick={() => {
+                        setOpen(false);
+                        onMove(container.key);
+                      }}
+                    >
+                      {container.title}
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </li>
           {onDelete === undefined ? null : (
             <li className="tile-menu__delete">
               <button

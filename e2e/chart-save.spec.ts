@@ -742,6 +742,41 @@ test('a local copy of a shared chart takes the tile and the edits so far, and le
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'bar');
 });
 
+/**
+ * T223 / AC-205: a shared chart tile's edit menu offers "Make a local copy",
+ * between Duplicate and Move to — the editor's path, from the menu: the tile
+ * repointed to a copy with the edits so far, drawn as edited, and the shared
+ * chart left as it was (AC-129).
+ */
+test('the tile menu’s Make a local copy takes the edits so far, and leaves the shared chart as it was', async ({
+  page,
+  request,
+}) => {
+  const { dashboardId, chartId } = await makeDashboard(request, true);
+  await page.goto(`/explore/dashboards/${dashboardId}`);
+  // An edit first, held as a draft: the copy must draw it, not the stored chart.
+  await editToStacked(page);
+
+  await page.getByTestId('tile-menu-tile-save').click();
+  const menu = page.getByRole('list', { name: /^Actions for / });
+  await expect(menu.locator(':scope > li').nth(1)).toHaveText('Make a local copy');
+  await menu.getByRole('button', { name: 'Make a local copy' }).click();
+  await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
+  await expect(page.locator('[data-tile="tile-save"]')).toBeFocused();
+
+  await barButton(page, 'Save').click();
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+  const saved = (await (await request.get(`${API}/documents/dashboard/${dashboardId}`)).json()) as {
+    body: { pages: { items: { chartId?: string }[] }[] };
+  };
+  const copyId = saved.body.pages[0]?.items[0]?.chartId ?? '';
+  expect(copyId).not.toBe(chartId);
+  const copy = await stored(request, copyId);
+  expect(copy.body['localToDashboardId']).toBe(dashboardId);
+  expect((copy.body['chart'] as { chartType?: string }).chartType).toBe('stackedBar');
+  expect(await storedType(request, chartId)).toBe('bar');
+});
+
 test('a library chart edited from its tile is saved with the dashboard, for every dashboard that uses it', async ({
   page,
   request,

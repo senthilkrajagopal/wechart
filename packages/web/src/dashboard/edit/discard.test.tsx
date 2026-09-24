@@ -179,35 +179,41 @@ describe('discarding a session', () => {
     expect(screen.getByRole('button', { name: /^Discard/ }).textContent).toBe('Discard (1 change)');
 
     await discard();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
     // The count is what tells the user there is unsaved work; one that stayed
     // up after a discard would be claiming work that no longer exists.
     expect(screen.getByRole('button', { name: /^Discard/ }).textContent).toBe('Discard');
   });
 
-  it('is itself undoable, so a discard by mistake is not the end', async () => {
+  /**
+   * T223 / AC-204: WHEN the user chooses Discard in edit mode, THE SYSTEM
+   * SHALL restore the dashboard as it was when editing began and return to
+   * view mode, whether or not anything was changed.
+   * `Fails when: Discard leaves the dashboard in edit mode, or is unavailable
+   * with no changes.`
+   *
+   * This replaces T072's "stays in edit mode" and "is itself undoable": the
+   * prototype's Discard puts the snapshot back and leaves edit mode, and the
+   * spec now says so.
+   */
+  it('returns to view mode with the dashboard as it was (AC-204)', async () => {
     const before = await edit();
     await userEvent.click(screen.getByTestId('add-divider'));
-    const added = shape();
     await discard();
 
-    await userEvent.click(
-      within(screen.getByRole('toolbar', { name: 'Dashboard editing' })).getByRole('button', {
-        name: 'Undo',
-      }),
-    );
-
-    expect(shape()).toEqual(added);
-    expect(shape()).not.toEqual(before);
+    expect(screen.queryByRole('toolbar', { name: 'Dashboard editing' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Edit' }).textContent).toBe('Edit');
+    expect(shape()).toEqual(before);
   });
 
-  it('stays in edit mode, because discarding is not finishing', async () => {
+  it('returns to view mode with nothing changed too (AC-204)', async () => {
     await edit();
-    await userEvent.click(screen.getByTestId('add-divider'));
+    const discardButton = screen.getByRole('button', { name: /^Discard/ });
+    expect(discardButton.getAttribute('aria-disabled')).toBe('false');
+
     await discard();
 
-    // Save leaves edit mode (AC-065); Discard puts the dashboard back and
-    // leaves the user where they were, still editing.
-    expect(screen.getByRole('toolbar', { name: 'Dashboard editing' })).toBeTruthy();
+    expect(screen.queryByRole('toolbar', { name: 'Dashboard editing' })).toBeNull();
   });
 });

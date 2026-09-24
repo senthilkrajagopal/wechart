@@ -80,7 +80,12 @@ describe('duplicating a chart tile on the dashboard', () => {
     expect(screen.queryByTestId('duplicate-t1')).toBeNull();
   });
 
-  it('offers no Duplicate for a tile with no chart', async () => {
+  /**
+   * T223 / AC-205: every tile's edit menu lists Duplicate first — a tile with
+   * no chart too, copied as itself beside it (the prototype's Duplicate on
+   * every item). T068 offered it on chart tiles only.
+   */
+  it('duplicates a tile with no chart as itself, beside it', async () => {
     render(
       <DashboardView
         dashboardId="d1"
@@ -100,6 +105,12 @@ describe('duplicating a chart tile on the dashboard', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await userEvent.click(screen.getByTestId('tile-menu-m1'));
-    expect(screen.queryByTestId('duplicate-m1')).toBeNull();
+    await userEvent.click(screen.getByTestId('duplicate-m1'));
+
+    const tiles = screen.getAllByTestId('grid-item');
+    expect(tiles).toHaveLength(2);
+    expect(tiles[0]?.getAttribute('data-tile')).toBe('m1');
+    expect(tiles[1]?.getAttribute('data-tile')).not.toBe('m1');
+    expect(tiles[1]?.textContent).toContain('Notes');
   });
 });

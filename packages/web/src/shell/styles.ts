@@ -2325,13 +2325,44 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   background: none;
   color: var(--wc-text-secondary);
   cursor: grab;
-  opacity: 0;
   touch-action: none;
 }
-.grid-tile:hover .grid-tile__grip,
-.grid-tile__grip:focus-visible { opacity: 1; }
-@media (hover: none) {
-  .grid-tile__grip { opacity: 1; }
+/* Every tile marked editable at rest while editing (AC-206, the prototype's
+   .dtile.editing): its grip shown, its outline dashed, the accent on hover —
+   not only once the pointer finds it. */
+.dashboard[data-editing='true'] .grid-tile {
+  outline: 1px dashed var(--wc-border-strong);
+  outline-offset: 2px;
+}
+.dashboard[data-editing='true'] .grid-tile:hover { outline-color: var(--wc-accent); }
+.dashboard[data-editing='true'] .grid-tile[data-selected='true'] {
+  outline: 2px solid var(--wc-accent);
+  outline-offset: -1px;
+}
+/* The focus ring still wins over both, as it does outside edit mode (AC-176). */
+.dashboard[data-editing='true'] .grid-tile:focus-visible {
+  outline: 2px solid var(--wc-accent);
+  outline-offset: 2px;
+}
+/* A section is a container, not a tile: marked on hover, as the prototype's
+   .dsection.editing is, so the tiles in it are what read as editable. */
+.dashboard[data-editing='true'] .grid-tile:has(> .dashboard-section):not([data-selected='true']):not(:focus-visible) {
+  outline-color: transparent;
+}
+.dashboard[data-editing='true'] .grid-tile:has(> .dashboard-section):hover {
+  outline-color: var(--wc-accent);
+}
+.dashboard__editing { font-weight: 400; color: var(--wc-text-secondary); }
+/* The tabs, then the rest of the row carrying the same rule, where "+ Page
+   tab" sits beside the last tab while editing, as the prototype's does. */
+.page-tabs__row { display: flex; }
+.page-tabs__row > .page-tabs { flex: 0 1 auto; padding-right: 0; }
+.page-tabs__rest {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 8px 24px 0 8px;
+  border-bottom: 1px solid var(--wc-border-subtle);
 }
 /* The tile in hand recedes, so the marker is what the eye follows. */
 .grid-tile[data-dragging='true'] { opacity: 0.4; }
@@ -2436,9 +2467,13 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* Delete sits apart from the destinations above it: one changes where a thing
    is, the other takes it away. */
 .tile-menu__delete { margin-top: 4px; border-top: 1px solid var(--wc-border-subtle); }
-/* Duplicate makes something where Delete takes it away: its own group, above (AC-062). */
-.tile-menu__duplicate { margin-top: 4px; border-top: 1px solid var(--wc-border-subtle); }
-.tile-menu__duplicate + .tile-menu__delete { margin-top: 0; border-top: 0; }
+/* The edit-mode menu (AC-205): Duplicate and whose the chart is first, Move
+   to's targets in a list of their own that scrolls — the only part that does,
+   however many containers a dashboard has — and Delete last, set apart. */
+.tile-menu__move { border-top: 1px solid var(--wc-border-subtle); margin-top: 4px; padding-top: 4px; }
+.tile-menu__move:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+.tile-menu__move .tile-menu__heading { display: block; }
+.tile-menu__targets { margin: 0; padding: 0; list-style: none; max-height: 168px; overflow: auto; }
 
 /* Deleting a page tab or a tab (AC-060), beside the strip they belong to. */
 /* Page tabs: the prototype's .dash-tabs — underlined, on a subtle rule. */

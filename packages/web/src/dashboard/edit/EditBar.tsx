@@ -93,7 +93,8 @@ export function EditBar({
     {
       id: 'discard',
       label: discardLabel(changes),
-      disabled: saving || changes === 0,
+      // With no changes too: it is also the way out of edit mode (AC-204).
+      disabled: saving,
       run: onDiscard,
     },
     {

@@ -587,6 +587,13 @@ function LoadedDashboard({
         onEditStart={() => {
           setEditBase(version);
           setSavedToFolders('');
+          // A new session: the last one's failed save is not this one's.
+          setSaveFailed('');
+        }}
+        // Its changes put back and edit mode left (AC-204): a failed save's
+        // "the session is still open" no longer holds (T223's review).
+        onDiscard={() => {
+          setSaveFailed('');
         }}
         onSave={(next, drafts) =>
           save.mutateAsync({ id: dashboardId, next, drafts, version: editBase ?? version })

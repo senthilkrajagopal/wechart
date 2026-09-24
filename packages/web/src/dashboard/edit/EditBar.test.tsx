@@ -88,20 +88,21 @@ describe('activating Edit', () => {
 });
 
 describe('what the bar reports', () => {
-  it('has nothing to undo, redo or discard when editing has just begun', async () => {
+  it('has nothing to undo or redo when editing has just begun, and Discard is the way out', async () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
-    for (const name of ['Undo', 'Redo', 'Discard']) {
+    for (const name of ['Undo', 'Redo']) {
       // aria-disabled rather than the disabled attribute: a toolbar item that
       // leaves the tab order when idle changes the bar's shape under the user,
       // and AC-053 asks that these controls be there.
       expect(screen.getByRole('button', { name }).getAttribute('aria-disabled')).toBe('true');
     }
-    // Save stays available: saving an unchanged dashboard is harmless.
-    expect(screen.getByRole('button', { name: 'Save' }).getAttribute('aria-disabled')).toBe(
-      'false',
-    );
+    // Save and Discard stay available: saving an unchanged dashboard is
+    // harmless, and Discard with nothing changed leaves edit mode (AC-204).
+    for (const name of ['Save', 'Discard']) {
+      expect(screen.getByRole('button', { name }).getAttribute('aria-disabled')).toBe('false');
+    }
   });
 
   it('counts the changes made since editing began', async () => {
@@ -118,16 +119,15 @@ describe('what the bar reports', () => {
     );
   });
 
-  it('counts from the state the session opened with, not from the undo stack', async () => {
+  it('counts the changes still in effect, one fewer after an Undo', async () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    const change = screen.getByRole('button', { name: 'Add a tile' });
-    await userEvent.click(change);
-    await userEvent.click(screen.getByRole('button', { name: /^Discard/ }));
-    await userEvent.click(change);
+    await userEvent.click(screen.getByRole('button', { name: 'Add a tile' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add a tile' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
 
-    // Discard is itself undoable, so the past holds three entries here. The
-    // count has to mean "changes still in effect", which is one.
+    // Two changes made and one undone: the count has to mean "changes still
+    // in effect", which is one.
     expect(screen.getByRole('button', { name: /^Discard/ }).textContent).toBe('Discard (1 change)');
   });
 

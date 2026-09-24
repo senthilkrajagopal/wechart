@@ -15,6 +15,26 @@ import { insertElement } from './insert';
  * shared chart is left alone. Drawn as the original is drawn, so the copy
  * shows at once rather than asking Cube again.
  */
+/**
+ * A copy of a tile that draws no chart — markdown, a header, a divider, an
+ * image, a link (AC-205, the prototype's Duplicate on every item) — beside
+ * it, as a chart tile's copy is placed. Nothing of its own to copy but itself.
+ */
+export function duplicatePlainTile(
+  dashboard: DashboardDocument,
+  tileId: string,
+  mintTileId: () => string,
+): { document: DashboardDocument; tileId: string } | undefined {
+  const tile = elementAt(dashboard, tileId);
+  const place = placeOf(dashboard, tileId);
+  if (tile === null || !isTile(tile) || tile.kind === 'chart' || place === null) return undefined;
+  const copy = { ...tile, id: mintTileId() };
+  return {
+    document: insertElement(dashboard, copy, { key: place.key, index: place.index + 1 }),
+    tileId: copy.id,
+  };
+}
+
 export function duplicateChartTile(
   dashboard: DashboardDocument,
   tileId: string,

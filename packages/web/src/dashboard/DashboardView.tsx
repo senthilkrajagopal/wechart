@@ -191,7 +191,7 @@ import {
   NOTHING_MARKED_DEFAULT,
   type NothingMarkedState,
 } from './tiles/NothingMarked';
-import { duplicateChartTile } from './model/duplicate';
+import { duplicateChartTile, duplicatePlainTile } from './model/duplicate';
 import { withLocalCharts } from './model/localCharts';
 
 /**
@@ -276,6 +276,8 @@ export interface DashboardViewProps {
    * the dashboard had at this moment (T198, AC-015).
    */
   readonly onEditStart?: (() => void) | undefined;
+  /** An edit session discarded, and edit mode left with it (AC-204). */
+  readonly onDiscard?: (() => void) | undefined;
   /**
    * The tile the URL names as open in the chart editor (T196, AC-002). A
    * reload, or the browser's Forward, that brings one in opens the editor on
@@ -665,6 +667,14 @@ interface Affordances {
   readonly onDelete?: ((id: string) => void) | undefined;
   /** Duplicating a chart tile from its ⋯ menu, the copy with a chart of its own (AC-062). */
   readonly onDuplicate?: ((id: string) => void) | undefined;
+  /**
+   * A chart tile's ownership action in its ⋯ menu (AC-205): "Save to
+   * folders…" for a chart of this dashboard's, "Make a local copy" for a
+   * shared one; none for a tile with no chart.
+   */
+  readonly ownershipOf?:
+    | ((tileId: string) => { readonly label: string; readonly run: () => void } | undefined)
+    | undefined;
   /** Opening a chart tile's chart in the editor, from its pencil (T032). */
   readonly onEditChart?: ((tileId: string, chartId: string) => void) | undefined;
   /** Deleting one tab of a tab group, the fourth thing AC-060 names. */
@@ -945,17 +955,19 @@ function Elements({
                       },
                     })}
                 {...(affordances.onDuplicate === undefined ||
-                element.kind !== 'chart' ||
-                element.chartId === undefined ||
-                // Only where there is a chart to copy: not while it loads,
-                // nor for one that is gone (T068's review).
-                charts.titleOf?.(element.chartId) === undefined
+                // Every tile (AC-205); a chart tile only where there is a
+                // chart to copy: not while it loads, nor for one that is gone
+                // (T068's review).
+                (element.kind === 'chart' &&
+                  (element.chartId === undefined ||
+                    charts.titleOf?.(element.chartId) === undefined))
                   ? {}
                   : {
                       onDuplicate: () => {
                         affordances.onDuplicate?.(element.id);
                       },
                     })}
+                ownership={affordances.ownershipOf?.(element.id)}
               />
             )}
             {charts.notCovered?.[chartId] === undefined ? null : (
@@ -1404,6 +1416,7 @@ export function DashboardView({
   memberTitle,
   formats,
   onEditStart,
+  onDiscard,
   editTile,
   onEditTile,
   urlFilterValues,
@@ -2713,6 +2726,20 @@ export function DashboardView({
   const [selected, setSelected] = useState<string | null>(null);
 
   const [addTarget, setAddTarget] = useState<string | null>(null);
+  /**
+   * A tile's "Save to folders…" asked from its ⋯ menu (AC-205): counted, so
+   * its Properties open on the folder to choose each time it is asked.
+   */
+  const [publishing, setPublishing] = useState<{ tileId: string | null; asked: number }>({
+    tileId: null,
+    asked: 0,
+  });
+  // Answered once: another tile chosen, or edit mode left, and the ask is
+  // over — coming back to the tile does not open the chooser again (T223's
+  // review).
+  if (publishing.tileId !== null && (!sessionEditing || selected !== publishing.tileId)) {
+    setPublishing({ tileId: null, asked: publishing.asked });
+  }
 
   /**
    * Which page tab is open, here rather than in `DashboardPages`, because the
@@ -2826,6 +2853,7 @@ export function DashboardView({
         saveBlocked={(shown) => whyUnsaveable(shown, dashboardId)}
         readOnly={preview !== undefined}
         onStart={onEditStart}
+        onDiscard={onDiscard}
         headerActions={(session) => (
           <button
             ref={gear}
@@ -3049,6 +3077,8 @@ export function DashboardView({
                         onChange={(apply) => {
                           session.update(apply);
                         }}
+                        // Asked for from the tile's ⋯ menu (AC-205).
+                        choose={publishing.tileId === tile.id ? publishing.asked : 0}
                       />
                     )}
                     <MarkingSection>
@@ -3230,6 +3260,12 @@ export function DashboardView({
               // Not while previewing a security context: the editor asks as
               // wechart (T172's review), so a preview is read, not edited.
               onEditChart={preview === undefined ? openEditor : undefined}
+              onSaveToFolders={(tileId) => {
+                setSelected(tileId);
+                setAddTarget(null);
+                setPublishing((was) => ({ tileId, asked: was.asked + 1 }));
+                openSidebarPanel('Properties');
+              }}
               editTile={editTile}
               editorOpenFor={editingChart?.tileId}
               where={where}
@@ -3302,6 +3338,7 @@ function DashboardPages({
   session,
   charts,
   onEditChart,
+  onSaveToFolders,
   editTile,
   editorOpenFor,
   where,
@@ -3357,6 +3394,11 @@ function DashboardPages({
    * chart at its size; it used to be dropped on the way through.
    */
   onEditChart?: ((open: OpenChart) => void) | undefined;
+  /**
+   * A chart tile's "Save to folders…" from its ⋯ menu (AC-205): its
+   * Properties, with the folder to choose (the prototype's `data-publish`).
+   */
+  onSaveToFolders?: ((tileId: string) => void) | undefined;
   /** The tile the URL names as open in the editor (T196). */
   editTile?: string | undefined;
   /** The tile the editor is open on now, if it is open. */
@@ -3679,11 +3721,12 @@ function DashboardPages({
     onDuplicate:
       editing && duplicateFrom !== undefined
         ? (id) => {
-            const copied = duplicateChartTile(document, id, {
-              ...duplicateFrom,
-              mintTileId: () => `el-${String(Date.now())}-${String(counter++)}`,
-              mintChartId,
-            });
+            const mintTileId = () => `el-${String(Date.now())}-${String(counter++)}`;
+            // A chart tile's copy with a chart of its own (AC-062); any other
+            // tile's, itself again (AC-205).
+            const copied =
+              duplicateChartTile(document, id, { ...duplicateFrom, mintTileId, mintChartId }) ??
+              duplicatePlainTile(document, id, mintTileId);
             if (copied === undefined) return;
             session.change(copied.document);
             // The copy selected, said, and focused, as an insert's tile is:
@@ -3697,6 +3740,53 @@ function DashboardPages({
                 .querySelector<HTMLElement>(`[data-tile="${CSS.escape(copied.tileId)}"]`)
                 ?.focus();
             });
+          }
+        : undefined,
+    ownershipOf:
+      editing && duplicateFrom !== undefined
+        ? (id) => {
+            const found = elementAt(document, id);
+            if (found === null || found.kind !== 'chart' || found.chartId === undefined)
+              return undefined;
+            const chartId = found.chartId;
+            const draft = document.chartDrafts?.[chartId];
+            const chart = draft?.document ?? duplicateFrom.documents[chartId];
+            // Not while it loads, nor one already on its way to a folder.
+            if (chart === undefined || draft?.wasLocalTo !== undefined) return undefined;
+            if (chart.localToDashboardId === duplicateFrom.dashboardId)
+              return { label: 'Save to folders…', run: () => onSaveToFolders?.(id) };
+            // Another dashboard's chart is that dashboard's to save.
+            if (chart.localToDashboardId !== undefined) return undefined;
+            return {
+              label: 'Make a local copy',
+              // As the editor's "Make a local copy" (T135, AC-129): the tile
+              // repointed to a copy only this dashboard has.
+              run: () => {
+                const spec = duplicateFrom.specs[chartId];
+                session.update((current) =>
+                  detach(current, id, {
+                    dashboardId: duplicateFrom.dashboardId,
+                    copyId: mintChartId(),
+                    edited: {
+                      document: chart,
+                      // What it draws as edited in this session, where it was
+                      // — never the stored drawing beside the edited chart
+                      // (T223's review).
+                      drawn:
+                        draft?.drawn ??
+                        (spec === undefined ? { error: duplicateFrom.errors[chartId] } : { spec }),
+                    },
+                  }),
+                );
+                drag.say(`${tileName(id)} is now a local copy, only on this dashboard.`);
+                // Focus stays with the tile the menu was on.
+                requestAnimationFrame(() => {
+                  window.document
+                    .querySelector<HTMLElement>(`[data-tile="${CSS.escape(id)}"]`)
+                    ?.focus();
+                });
+              },
+            };
           }
         : undefined,
     onDeleteTab: editing
@@ -3802,22 +3892,48 @@ function DashboardPages({
        * tab strip shows even for one page (AC-207), as the prototype's does.
        */}
       <div className="dashboard__fixed" ref={band}>
-        <div role="tablist" aria-label="Pages" className="page-tabs">
-          {document.pages.map((page) => (
-            <button
-              key={page.id}
-              type="button"
-              role="tab"
-              aria-selected={page.id === showing?.id}
-              // A tile dropped on a page tab moves to that page (AC-056).
-              data-droptab={pageKey(page.id)}
-              onClick={() => {
-                onOpenPage(page.id);
-              }}
-            >
-              {page.title}
-            </button>
-          ))}
+        <div className="page-tabs__row">
+          <div role="tablist" aria-label="Pages" className="page-tabs">
+            {document.pages.map((page) => (
+              <button
+                key={page.id}
+                type="button"
+                role="tab"
+                aria-selected={page.id === showing?.id}
+                // A tile dropped on a page tab moves to that page (AC-056).
+                data-droptab={pageKey(page.id)}
+                onClick={() => {
+                  onOpenPage(page.id);
+                }}
+              >
+                {page.title}
+              </button>
+            ))}
+          </div>
+          {/* A page tab added where the tabs are, while editing (AC-206, the
+              prototype's "+ Page tab"): beside the tablist, which holds only
+              tabs, and opened at once, empty and ready to fill. */}
+          <div className="page-tabs__rest">
+            {editing ? (
+              <button
+                type="button"
+                className="btn-ghost btn-sm page-tabs__add"
+                onClick={() => {
+                  const id = `page-${String(Date.now())}-${String(counter++)}`;
+                  session.change({
+                    ...document,
+                    pages: [
+                      ...document.pages,
+                      { id, title: `Page ${String(document.pages.length + 1)}`, items: [] },
+                    ],
+                  });
+                  onOpenPage(id);
+                }}
+              >
+                + Page tab
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {filterBar}

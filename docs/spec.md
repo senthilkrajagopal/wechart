@@ -657,11 +657,11 @@ Dashboards:
       Fails when: a section has no collapse control, or cannot be collapsed in view mode.
 - [x] AC-203 WHEN the user selects a tile in edit mode, THE SYSTEM SHALL open Properties, showing for a chart tile its title, chart type and source, an Edit chart action, its ownership, its Marking settings and its layout.
       Fails when: selecting a tile leaves another sidebar tab open, or one of those parts is missing for a chart tile.
-- [ ] AC-204 WHEN the user chooses Discard in edit mode, THE SYSTEM SHALL restore the dashboard as it was when editing began and return to view mode, whether or not anything was changed.
+- [x] AC-204 WHEN the user chooses Discard in edit mode, THE SYSTEM SHALL restore the dashboard as it was when editing began and return to view mode, whether or not anything was changed.
       Fails when: Discard leaves the dashboard in edit mode, or is unavailable with no changes.
-- [ ] AC-205 WHEN the user opens a tile's menu in edit mode, THE SYSTEM SHALL list Duplicate first and Delete last, with Save to folders… or Make a local copy, and Move to with its targets between them, every item reachable without scrolling the menu except the Move to targets.
+- [x] AC-205 WHEN the user opens a tile's menu in edit mode, THE SYSTEM SHALL list Duplicate first and Delete last, with Save to folders… or Make a local copy, and Move to with its targets between them, every item reachable without scrolling the menu except the Move to targets.
       Fails when: Duplicate or Delete must be scrolled to, or an item is missing.
-- [ ] AC-206 WHILE a dashboard is in edit mode, THE SYSTEM SHALL mark every tile as editable at rest — its drag grip visible and its outline dashed — title the page "Editing ‹name›", and offer "+ Page tab" in the tab row.
+- [x] AC-206 WHILE a dashboard is in edit mode, THE SYSTEM SHALL mark every tile as editable at rest — its drag grip visible and its outline dashed — title the page "Editing ‹name›", and offer "+ Page tab" in the tab row.
       Fails when: a tile's grip is visible only on hover, or either the title or "+ Page tab" is missing.
 - [x] AC-207 WHEN a dashboard or one of its page tabs has no tiles, THE SYSTEM SHALL show a sentence saying so with a way to start editing, and SHALL show the page-tab strip.
       Fails when: an empty dashboard or tab renders a blank canvas, or the tab strip is hidden.

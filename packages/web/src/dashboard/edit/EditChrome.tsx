@@ -1,4 +1,4 @@
-import { isValidElement, useState, type ReactNode } from 'react';
+import { isValidElement, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { canRedo, canUndo, discard, historyOf, push, redo, undo } from '../../editor/history';
 import { FolderCrumbs } from '../../workspaces/explore/FolderCrumbs';
@@ -71,10 +71,9 @@ export interface EditSession<T> {
 }
 
 /**
- * The count travels inside the snapshot instead of beside it. Undo, redo and
- * discard then carry it correctly for free: discard is itself undoable, so it
- * leaves an extra entry on the past, and a count derived from the stack's
- * depth would read three changes where the user has made one.
+ * The count travels inside the snapshot instead of beside it, so undo and
+ * redo carry it correctly for free. (Discard used to be undoable and leave an
+ * entry of its own; it now leaves edit mode, AC-204.)
  */
 interface Snapshot<T> {
   readonly document: T;
@@ -148,6 +147,8 @@ export interface EditChromeProps<T> {
    * the version the save will be checked against (T198, AC-015).
    */
   readonly onStart?: (() => void) | undefined;
+  /** The session discarded and edit mode left (AC-204). */
+  readonly onDiscard?: (() => void) | undefined;
   /**
    * No way into edit mode: no Edit, and `edit()` does nothing — for a
    * dashboard previewed as a security context (T172), whose editing would
@@ -167,10 +168,19 @@ export function EditChrome<T>({
   headerActions,
   saveBlocked,
   onStart,
+  onDiscard,
   readOnly = false,
   children,
 }: EditChromeProps<T>) {
   const [editing, setEditing] = useState(false);
+  /** Edit, once a Discard has put it back: where focus goes (T223's review). */
+  const editButton = useRef<HTMLButtonElement>(null);
+  const focusEditNext = useRef(false);
+  useEffect(() => {
+    if (editing || !focusEditNext.current) return;
+    focusEditNext.current = false;
+    editButton.current?.focus();
+  }, [editing]);
   const [history, setHistory] = useState(() =>
     historyOf<Snapshot<T>>({ document: opened, changes: 0 }),
   );
@@ -335,7 +345,18 @@ export function EditChrome<T>({
         <header className="dashboard__header">
           {/* The way back to its folder (AC-195). */}
           {folderOf === undefined ? null : <FolderCrumbs folderId={folderOf(current)} />}
-          <h1>{title(current)}</h1>
+          {/* "Editing ‹name›" while editing (AC-206), as the prototype's header.
+              The word is for the eye: the heading still names the dashboard,
+              and the edit bar — a toolbar named "Dashboard editing" — says the
+              mode to a screen reader. */}
+          <h1>
+            {editing ? (
+              <span className="dashboard__editing" aria-hidden="true">
+                Editing{' '}
+              </span>
+            ) : null}
+            {title(current)}
+          </h1>
           {editing ? (
             <EditBar
               changes={changes}
@@ -343,7 +364,15 @@ export function EditChrome<T>({
               canRedo={canRedo(history)}
               onUndo={() => setHistory(undo)}
               onRedo={() => setHistory(redo)}
-              onDiscard={() => setHistory(discard)}
+              // The dashboard as it was when editing began, and back to view
+              // mode, changes or none (AC-204, the prototype's Discard) —
+              // focus on Edit, where the next session begins, rather than
+              // lost with the bar (T223's review).
+              onDiscard={() => {
+                leave(discard(history).present.document);
+                focusEditNext.current = true;
+                onDiscard?.();
+              }}
               saveBlocked={blocked}
               saving={saving}
               onSave={() => {
@@ -356,7 +385,7 @@ export function EditChrome<T>({
             />
           ) : readOnly ? null : (
             // The prototype's primary Edit, with its pencil (AC-187).
-            <button type="button" className="btn-primary" onClick={start}>
+            <button ref={editButton} type="button" className="btn-primary" onClick={start}>
               <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
                 <path
                   d="M11.5 2.5l2 2L6 12l-2.8.8L4 10z"

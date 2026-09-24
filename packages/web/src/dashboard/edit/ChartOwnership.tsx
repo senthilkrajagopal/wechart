@@ -67,6 +67,7 @@ export function TileChartOwnership({
   stored,
   drawn,
   onChange,
+  choose = 0,
 }: {
   dashboardId: string;
   /** The dashboard as the session has it. */
@@ -77,6 +78,8 @@ export function TileChartOwnership({
   /** What the tile draws now, carried by the draft. */
   drawn: ChartDraft['drawn'];
   onChange: (apply: (current: DashboardDocument) => DashboardDocument) => void;
+  /** Each time it rises, "Save to folders…" is opened on its folder (AC-205). */
+  choose?: number;
 }) {
   const folders = useFolders();
   const [problem, setProblem] = useState('');
@@ -121,6 +124,7 @@ export function TileChartOwnership({
         onSaveToFolder={(folderId) => {
           void saveTo(folderId);
         }}
+        choose={choose}
       />
       {reading ? <StateLine kind="run">Reading the chart…</StateLine> : null}
       {problem === '' ? null : <StateLine kind="err">{problem}</StateLine>}
@@ -147,6 +151,7 @@ export function ChartOwnership({
   folders,
   defaultFolderId,
   onSaveToFolder,
+  choose = 0,
 }: {
   dashboardId: string;
   chart: ChartDocument | undefined;
@@ -157,9 +162,21 @@ export function ChartOwnership({
   /** The dashboard's own folder, offered first. */
   defaultFolderId: string;
   onSaveToFolder: (folderId: string) => void;
+  /** Each time it rises, the folder chooser opens (AC-205's ⋯ "Save to folders…"). */
+  choose?: number;
 }) {
   const [choosing, setChoosing] = useState(false);
   const [folder, setFolder] = useState(defaultFolderId);
+  /** The last ask followed: each new one opens the chooser, once. */
+  const [followed, setFollowed] = useState(0);
+  if (choose !== followed) {
+    setFollowed(choose);
+    if (choose > 0) {
+      setChoosing(true);
+      // From the dashboard's own folder, as the button starts it.
+      setFolder(defaultFolderId);
+    }
+  }
   const selectId = useId();
   /** Where focus goes once the panel has changed under it: never left on a control that went. */
   const focusNext = useRef<'select' | 'offer' | 'head' | null>(null);
