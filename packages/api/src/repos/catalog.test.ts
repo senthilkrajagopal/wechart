@@ -511,6 +511,11 @@ describe('search (AC-019)', () => {
 
     expect(found).toHaveLength(2);
     expect(found.map((item) => item.kind).sort()).toEqual(['chart', 'dashboard']);
+    // Dashboards alone, for a list of dashboards (T241's review): charts
+    // sorting first must not crowd one out of its limit.
+    expect((await cat().search(unique, 1, 'dashboard')).map((item) => item.kind)).toEqual([
+      'dashboard',
+    ]);
   });
 
   it('matches anywhere in the title, not only at the start', async () => {

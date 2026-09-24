@@ -54,6 +54,9 @@ describe('previewHref', () => {
 describe('ContextPreview', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    // The context is kept for the session (AC-232): one test's must not be
+    // the next one's.
+    window.sessionStorage.clear();
   });
 
   it('links each dashboard found to its preview under the context entered', async () => {
@@ -100,5 +103,58 @@ describe('ContextPreview', () => {
     expect(await screen.findByText('A security context is a JSON object.')).toBeTruthy();
     expect(context.getAttribute('aria-invalid')).toBe('true');
     expect(screen.queryByRole('link', { name: 'Preview Sales review' })).toBeNull();
+  });
+
+  /**
+   * T241 / AC-232: … start a dashboard preview from a bounded list of
+   * dashboards that says when nothing matches …
+   * `Fails when: … a search with no match shows nothing …`
+   */
+  it('lists at most eight dashboards, asking for dashboards alone, and says when more match', async () => {
+    const asked: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        asked.push(url);
+        return Response.json(
+          Array.from({ length: 9 }, (_, index) => ({
+            kind: 'dashboard',
+            id: `d${String(index)}`,
+            title: `Sales ${String(index)}`,
+          })),
+        );
+      }),
+    );
+    const user = userEvent.setup();
+    render(<ContextPreview groups={[]} />);
+    await user.type(screen.getByLabelText('Find a dashboard'), 'Sales');
+
+    await screen.findByRole('link', { name: 'Preview Sales 0' });
+    expect(screen.getAllByRole('link', { name: /^Preview Sales/ })).toHaveLength(8);
+    expect(screen.getByText('More dashboards match: narrow the search.')).toBeTruthy();
+    // Dashboards alone, and one more than shown — so "more" is known, not guessed.
+    expect(asked.at(-1)).toBe('/api/search?q=Sales&kind=dashboard&limit=9');
+  });
+
+  it('says a search that failed failed, rather than that nothing matched', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('down', { status: 500 })),
+    );
+    const user = userEvent.setup();
+    render(<ContextPreview groups={[]} />);
+    await user.type(screen.getByLabelText('Find a dashboard'), 'Sales');
+
+    expect(await screen.findByText('The search failed (HTTP 500).')).toBeTruthy();
+    expect(screen.queryByTestId('preview-no-match')).toBeNull();
+  });
+
+  it('says which files it could not read, whose cubes and views it cannot list', () => {
+    render(<ContextPreview groups={[]} unread={['cubes/product_catalog.yml (Jinja)']} />);
+    expect(
+      screen.getByText(
+        'Not read here: cubes/product_catalog.yml (Jinja). Cubes and views defined there are not listed.',
+      ),
+    ).toBeTruthy();
   });
 });

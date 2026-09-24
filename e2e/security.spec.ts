@@ -245,3 +245,97 @@ test('a previewed tile shows Cube’s SQL as the context, with the row filter it
   await expect(dialog).toHaveCount(0);
   await expect(opener).toBeFocused();
 });
+
+/**
+ * T241 / AC-232: WHEN the user opens Security, THE SYSTEM SHALL offer a preset
+ * context for each group the policies name, list every cube and view with the
+ * access the current context gives it and why, start a dashboard preview from
+ * a bounded list of dashboards that says when nothing matches, link each
+ * policy to its file in Model, and keep the edited context for the session.
+ * `Fails when: effective access is missing, a search with no match shows
+ * nothing, a policy's source does not open Model, or the context is reset
+ * after a preview.`
+ *
+ * With AC-228's Security half: the preview is a full-height pane beside the list.
+ */
+test('Security presets a group’s context, says what it can read and why, and keeps it', async ({
+  page,
+  request,
+}) => {
+  const { title } = await securedDashboard(request);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/security');
+  const preview = page.getByRole('region', { name: 'Preview a security context' });
+  const policies = page.getByRole('table', { name: 'Access policies' });
+  await expect(policies).toBeVisible();
+
+  // AC-228: a full-height pane beside the list — below the app bar, down to
+  // the window's bottom and not past it, and to the right of the policies.
+  const box = await preview.boundingBox();
+  const table = await policies.boundingBox();
+  expect(box?.y ?? 0).toBeGreaterThanOrEqual(48);
+  const bottom = (box?.y ?? 0) + (box?.height ?? 0);
+  expect(bottom).toBeGreaterThan(900 - 24);
+  expect(bottom).toBeLessThanOrEqual(900);
+  expect(box?.x ?? 0).toBeGreaterThanOrEqual((table?.x ?? 0) + (table?.width ?? 0));
+
+  // The finance preset, and what finance can read from each cube and view.
+  const presets = preview.getByRole('group', { name: 'Preset contexts' });
+  await presets.getByRole('button', { name: 'finance' }).click();
+  const context = preview.getByLabel('Security context (JSON)');
+  await expect(context).toHaveValue(/"finance"/);
+  const access = preview.getByRole('region', { name: 'Effective access' });
+  const secured = access.getByTestId('access-secured_orders');
+  await expect(secured).toContainText('Some members or rows');
+  await expect(secured).toContainText('count, status, ordered_at');
+  await expect(secured).toContainText('masked: total_amount');
+  // Every cube and view the model reads, each with its verdict.
+  for (const object of ['customers', 'monthly_orders', 'order_summary', 'orders', 'products'])
+    await expect(access.getByTestId(`access-${object}`)).toContainText(
+      'Everything No access policy: open to every context.',
+    );
+  // The sales preset alone: its condition is unmet, so Cube grants nothing
+  // (AC-167's test sees the same) — and the pane says so, and why.
+  await presets.getByRole('button', { name: 'sales' }).click();
+  await expect(secured).toContainText('Nothing');
+  await expect(secured).toContainText('only if { securityContext.is_employee }');
+  // A group no policy names gets nothing from the secured view, and is told why.
+  await context.fill('{"groups": ["marketing"]}');
+  await expect(secured).toContainText('Nothing');
+  await expect(secured).toContainText('managers');
+  // Its policy's file, from the access list, opens in Model.
+  await expect(secured.getByRole('link', { name: 'views/secured_orders.yml' })).toHaveAttribute(
+    'href',
+    '/model/files/views%2Fsecured_orders.yml',
+  );
+
+  // A search with no match says so.
+  const find = preview.getByLabel('Find a dashboard');
+  await find.fill('no dashboard is called this');
+  await expect(preview.getByTestId('preview-no-match')).toContainText('No dashboard matches');
+
+  // Kept through a preview: out to the dashboard and back.
+  await context.fill('{"groups": ["sales"], "is_employee": true}');
+  await find.fill(title);
+  await preview.getByRole('link', { name: `Preview ${title}` }).click();
+  await expect(page.getByTestId('preview-banner')).toBeVisible();
+  await page.getByTestId('preview-banner').getByRole('link', { name: 'Exit preview' }).click();
+  await page.goto('/security');
+  await expect(
+    page
+      .getByRole('region', { name: 'Preview a security context' })
+      .getByLabel('Security context (JSON)'),
+  ).toHaveValue('{"groups": ["sales"], "is_employee": true}');
+
+  // A policy's source opens its file in Model — the file itself, not only
+  // its address.
+  await page
+    .getByRole('table', { name: 'Access policies' })
+    .getByRole('link', { name: 'views/secured_orders.yml' })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/model\/files\/views%2Fsecured_orders\.yml$/);
+  await expect(
+    page.getByRole('textbox', { name: 'views/secured_orders.yml, as YAML' }),
+  ).toContainText('name: secured_orders');
+});

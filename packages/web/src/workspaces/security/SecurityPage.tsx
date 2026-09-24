@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { MODEL_FILES_QUERY } from '../model/FileList';
 import { AuthWarning } from './AuthWarning';
-import { ContextPreview } from './ContextPreview';
+import { ContextPreview, modelHref } from './ContextPreview';
 import { Scopes } from './Scopes';
 import {
   conditionsText,
@@ -29,11 +29,17 @@ export function SecurityPage() {
 
   const rows: { policy: Policy; path: string }[] = [];
   const open: string[] = [];
+  const openObjects: { kind: 'cube' | 'view'; name: string }[] = [];
+  const reaches: Record<string, readonly string[]> = {};
   const unread: string[] = [];
   for (const file of files.data ?? []) {
     const read = policiesOf(file.path, file.content);
     for (const policy of read.policies) rows.push({ policy, path: file.path });
-    for (const object of read.open) open.push(object.name);
+    for (const object of read.open) {
+      open.push(object.name);
+      openObjects.push(object);
+    }
+    Object.assign(reaches, read.reaches);
     if (read.code !== undefined) unread.push(`${file.path} (${read.code})`);
     if (read.problem !== undefined) unread.push(`${file.path} (${read.problem})`);
   }
@@ -60,7 +66,11 @@ export function SecurityPage() {
         <h2 className="security-workspace__head">Cube API scopes</h2>
         <Scopes />
       </div>
-      <ContextPreview groups={groups} />
+      <ContextPreview
+        groups={groups}
+        model={{ declared: rows, open: openObjects, reaches }}
+        unread={unread}
+      />
     </div>
   );
 }
@@ -106,7 +116,10 @@ function PolicyList({
                 <td>{rowsText(policy.rowLevel)}</td>
                 <td className="query-log__query">{conditionsText(policy.conditions)}</td>
                 <td>{maskingText(policy.memberMasking)}</td>
-                <td className="query-log__query">{path}</td>
+                <td className="query-log__query">
+                  {/* Its file, opened in Model where it is authored (AC-232). */}
+                  <a href={modelHref(path)}>{path}</a>
+                </td>
               </tr>
             ))}
           </tbody>

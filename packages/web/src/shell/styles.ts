@@ -1143,6 +1143,17 @@ fieldset.model-field > legend {
 .context-preview__note { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .context-preview__problem { font-size: 12px; line-height: 16px; color: var(--wc-status-error); }
 .context-preview__found { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+/* Docked as the full-height pane beside the policies (AC-228, AC-232): the
+   pane's edge, not a card's box. */
+.context-preview.admin-pane { padding: 12px 16px; border: 0; border-left: 1px solid var(--wc-border-subtle); border-radius: 0; }
+@media (max-width: 1100px) { .context-preview.admin-pane { position: static; height: auto; border-left: 0; } }
+.context-preview__presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.context-preview__access h3 { margin: 0 0 6px; font-size: var(--wc-text-xs-size); font-weight: 600; color: var(--wc-text-secondary); }
+.context-preview__access ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.context-preview__access li { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: center; font-size: 12px; line-height: 16px; }
+.context-preview__object { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.context-preview__why { flex-basis: 100%; color: var(--wc-text-secondary); overflow-wrap: anywhere; }
+.context-preview__source { overflow-wrap: anywhere; }
 /* A dashboard previewed as a security context (T172, AC-166): the prototype's
    .viewas bar, pinned while the page scrolls (direction.md rule 21). */
 .preview-banner {

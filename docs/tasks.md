@@ -3439,10 +3439,35 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Files: `packages/web/src/workspaces/jobs/{QueryLog,JobsPage}.tsx`, `packages/web/src/shell/styles.ts`, `packages/api/src/repos/query-log.ts` (a page narrowed and sorted over the whole log), `packages/api/src/server.ts` (`GET /api/jobs/queries/page`), `e2e/jobs.spec.ts`
   - Failing test: `e2e/jobs.spec.ts`: filtering by failed shows only failures; after scrolling the log the headers are in view; one page of rows is rendered (AC-230).
   - Depends on: T238
-- [ ] T241 (AC-228, AC-232) Dock Security's preview with presets, effective access, a bounded dashboard list and Model links
-  - Files: `packages/web/src/workspaces/security/ContextPreview.tsx`, `packages/web/src/workspaces/security/SecurityPage.tsx`, `e2e/security.spec.ts`
+- [x] T241 (AC-228, AC-232) Dock Security's preview with presets, effective access, a bounded dashboard list and Model links
+  - Files: `packages/web/src/workspaces/security/{ContextPreview,SecurityPage}.tsx`, `packages/web/src/workspaces/security/policies.ts` (`effectiveAccess`, `conditionHolds`, views' `reaches`), `packages/web/src/shell/styles.ts`, `packages/api/src/{server,repos/catalog}.ts` (`/api/search?kind=`), `docs/research/cube/access-policy-evaluation.md`, `e2e/security.spec.ts`
   - Failing test: `e2e/security.spec.ts`: choosing the "finance" preset lists each cube's access with a reason; a search with no match says so; a policy's source opens its file in Model; the context survives a preview (AC-232).
   - Depends on: T238
+  - Done 2026-09-24. AC-232 and AC-228's Security half are ticked on `e2e/security.spec.ts` "Security presets a group’s context, says what it can read and why, and keeps it", in all three browsers. That test checks:
+    - the pane is below the app bar, reaches the window's bottom and sits to the right of the policies;
+    - every cube and view has a verdict;
+    - the sales preset alone reads "Nothing" and says why;
+    - a search with no match says so;
+    - the context survives a preview;
+    - a policy's file opens in Model, where its YAML is shown.
+
+    `ContextPreview.test.tsx` covers the bounded list (8 shown, "more match", dashboards alone), a failed search, and unread files. AC-228's Jobs half was T239's.
+  - Effective access is Cube 1.7.42's own evaluation, read from its source in the compose container and recorded in a sibling note (`access-policy-evaluation.md`):
+    - a policy applies when a group matches and its conditions hold;
+    - `member_level: {}` and no `member_level` grant every member;
+    - members are unioned, and full access wins over masking;
+    - a view's rows are also filtered by its cubes' policies, and a cube whose policies none apply gives the view no rows.
+
+    YAML's `if` forms are evaluated against the edited context. A condition wechart cannot read is shown as "Cube decides", never guessed.
+  - **The cold review failed the first cut, fixed:**
+    - A conditional policy was counted as granting: the sales preset read "Some members or rows" where Cube grants nothing.
+    - A view's cubes' row filters were ignored.
+    - `member_level: {}` read as limited.
+    - Conditions were attributed to the wrong policy, and masking was listed beside full access.
+    - The full-height check could not fail, and the bounded list and Model links were untested.
+    - The search, over 50 dashboards and charts together, could say "No dashboard matches" falsely, and called a failure "no match". It now asks `/api/search?kind=dashboard` for one more than it shows.
+    - Unread files' cubes were missing without a word.
+    - Verdict and reason ran together as one word.
 - [ ] T225 (AC-187) Re-run the design critique on every surface, and tick AC-187 only on measured conformance
   - Files: `docs/design/critiques/`
   - Failing test: the `design-critic` report finds no `STRUCTURE` or AC-187 finding on the surfaces above (AC-187).

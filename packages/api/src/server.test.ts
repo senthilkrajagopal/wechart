@@ -339,6 +339,25 @@ describe('searching the catalog (AC-019)', () => {
     }
     expect(asked).toHaveLength(0);
   });
+
+  // T241's review: the security preview's list is of dashboards alone.
+  it('narrows to one kind when asked, and refuses any other', async () => {
+    const kinds: (string | undefined)[] = [];
+    const catalog = {
+      folders: async () => [],
+      contents: async () => [],
+      search: async (_text: string, _limit?: number, only?: string) => {
+        kinds.push(only);
+        return [];
+      },
+    };
+    const app = buildServer({ config, catalog, cube: stubCube(() => ({})) });
+    await app.inject({ method: 'GET', url: '/api/search?q=a&kind=dashboard&limit=9' });
+    await app.inject({ method: 'GET', url: '/api/search?q=a' });
+    expect(kinds).toEqual(['dashboard', undefined]);
+    const refused = await app.inject({ method: 'GET', url: '/api/search?q=a&kind=folder' });
+    expect(refused.statusCode).toBe(400);
+  });
 });
 
 describe('creating catalog objects (AC-020)', () => {

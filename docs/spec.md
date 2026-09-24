@@ -714,7 +714,7 @@ Model workspace:
 
 Jobs, Security, Schedules and Data sources:
 
-- [ ] AC-228 THE SYSTEM SHALL lay out Jobs and Security as a list beside a full-height inspector pane, and WHEN the user selects a pre-aggregation in Jobs, THE SYSTEM SHALL show in that pane its state, its trigger, a Build action and a way to open it in Model.
+- [x] AC-228 THE SYSTEM SHALL lay out Jobs and Security as a list beside a full-height inspector pane, and WHEN the user selects a pre-aggregation in Jobs, THE SYSTEM SHALL show in that pane its state, its trigger, a Build action and a way to open it in Model.
       Fails when: selecting a pre-aggregation shows nothing, or the pane is not full height.
 - [x] AC-229 THE SYSTEM SHALL list each pre-aggregation in Jobs with its state as an icon and a label, the refresh key that triggers it, and its name linking to its definition in Model, and SHALL show a started build's progress in that row (direction.md rule 22).
       Fails when: a row has no state or no trigger, the name does not open Model, or a build's progress appears only outside its row.
@@ -722,7 +722,7 @@ Jobs, Security, Schedules and Data sources:
       Fails when: the headers scroll out of view, a filter does not narrow the rows, or more than one page of rows is rendered at once.
 - [x] AC-231 THE SYSTEM SHALL draw the workspaces' page titles in direction.md's page-title style, and their tables as cards with a header band, rows of 34 pixels, 12-pixel cells and tabular numerals (direction.md rule 1).
       Fails when: a workspace page title is not 20 px at weight 600, or a workspace table's numbers are not tabular.
-- [ ] AC-232 WHEN the user opens Security, THE SYSTEM SHALL offer a preset context for each group the policies name, list every cube and view with the access the current context gives it and why, start a dashboard preview from a bounded list of dashboards that says when nothing matches, link each policy to its file in Model, and keep the edited context for the session.
+- [x] AC-232 WHEN the user opens Security, THE SYSTEM SHALL offer a preset context for each group the policies name, list every cube and view with the access the current context gives it and why, start a dashboard preview from a bounded list of dashboards that says when nothing matches, link each policy to its file in Model, and keep the edited context for the session.
       Fails when: effective access is missing, a search with no match shows nothing, a policy's source does not open Model, or the context is reset after a preview.
 - [x] AC-233 WHEN the user opens Schedules or Data sources, THE SYSTEM SHALL show the page's title and a note saying what the page is for and that managing it is not part of this phase, and SHALL treat "/sources" as Data sources.
       Fails when: either page renders nothing, or "/sources" shows Not found.

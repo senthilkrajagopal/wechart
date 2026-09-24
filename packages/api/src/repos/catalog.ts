@@ -205,12 +205,17 @@ export function catalog(db: Kysely<Database>) {
      * not a catalog object at all — it belongs to its dashboard and must never
      * surface in search (AC-126).
      */
-    async search(text: string, limit = 50): Promise<CatalogItem[]> {
+    async search(
+      text: string,
+      limit = 50,
+      /** One kind alone — dashboards, for the security preview's list (T241). */
+      only?: 'dashboard' | 'chart',
+    ): Promise<CatalogItem[]> {
       const needle = text.trim();
       if (needle === '') return [];
 
       const rows = await selectItems()
-        .where('kind', 'in', ['dashboard', 'chart'])
+        .where('kind', 'in', only === undefined ? ['dashboard', 'chart'] : [only])
         .where('local_to_dashboard_id', 'is', null)
         .where((eb) =>
           eb(eb.fn('lower', ['title']), 'like', `%${escapeLike(needle.toLowerCase())}%`),
