@@ -306,7 +306,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: a new chart tile marks with no marking, or "(None)" is missing from the setting.
 - [x] AC-086 THE SYSTEM SHALL store a marking only as a predicate over Cube dimension members — tuples of member, granularity and value, or bounded ranges — and never as row numbers or result positions (direction.md rule 46).
       Fails when: a stored marking references a row index or a position in a result set.
-- [ ] AC-087 WHEN the user clicks an item in a tile that marks, THE SYSTEM SHALL replace that marking with the clicked item; WHEN the user Ctrl-clicks or ⌘-clicks, THE SYSTEM SHALL toggle that item and leave the rest (direction.md rule 47).
+- [x] AC-087 WHEN the user clicks an item in a tile that marks, THE SYSTEM SHALL replace that marking with the clicked item; WHEN the user Ctrl-clicks or ⌘-clicks, THE SYSTEM SHALL toggle that item and leave the rest (direction.md rule 47).
       Fails when: a plain click adds to the marking, or a modified click replaces it.
 - [ ] AC-088 WHEN the user drags a rectangle, or Alt-drags a lasso, over a tile that marks, THE SYSTEM SHALL mark every item the shape touches, and a press-and-release without movement SHALL be treated as a click, not a selection.
       Fails when: a drag of at least 5 pixels is treated as a click, or a click is treated as an empty selection.
@@ -324,17 +324,17 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: another marking is cleared, or the marking survives.
 - [ ] AC-095 WHEN a marking changes, THE SYSTEM SHALL update every tile that uses it or is limited by it, on every page tab of the dashboard (direction.md rule 48).
       Fails when: a tile on another page tab still shows the previous marking state when opened.
-- [ ] AC-096 WHEN a tile shows a marking, THE SYSTEM SHALL draw marked items in their own colour with an outline in the marking's colour and fade unmarked items (direction.md rule 49).
+- [x] AC-096 WHEN a tile shows a marking, THE SYSTEM SHALL draw marked items in their own colour with an outline in the marking's colour and fade unmarked items (direction.md rule 49).
       Fails when: unmarked items render at full strength, or marked items carry no outline.
 - [ ] AC-097 WHEN an item is partly marked and its measure is additive, THE SYSTEM SHALL draw the marked share from the baseline at full strength and fade the remainder; WHEN the measure is not additive, THE SYSTEM SHALL draw the whole item with a pattern and show the marked and total values in its tooltip (direction.md rule 49; `[docs/inputs §11]`).
       Fails when: a partial average or distinct count is drawn as a sub-length, or a partly marked sum shows no marked share.
-- [ ] AC-098 THE SYSTEM SHALL convey marking state by more than colour: every tile using a non-empty marking shows a badge naming the marking and the number of marked items, and every non-empty marking has a chip naming it and summarising its values (direction.md rule 50).
+- [x] AC-098 THE SYSTEM SHALL convey marking state by more than colour: every tile using a non-empty marking shows a badge naming the marking and the number of marked items, and every non-empty marking has a chip naming it and summarising its values (direction.md rule 50).
       Fails when: a tile or chip conveys the marking only through colour.
 - [x] AC-099 THE SYSTEM SHALL keep every marking colour at least ΔE 15 from every categorical series colour under normal vision, and at least ΔE 8 under protan and deutan simulation, in both themes (direction.md rule 51).
       Fails when: the palette validator reports a marking colour below either threshold against any series colour.
 - [ ] AC-100 WHEN a tile has keyboard focus in view mode, THE SYSTEM SHALL move between its items with the arrow keys without changing the marking, mark the focused item with Space, toggle it with Ctrl+Space or ⌘+Space, and extend the marking with Shift and the arrow keys (direction.md rule 52).
       Fails when: an arrow key changes the marking, or Space does not mark the focused item.
-- [ ] AC-101 WHEN a marking changes, THE SYSTEM SHALL announce the marking's name, the number of marked items and the source tile in a polite live region (direction.md rule 52).
+- [x] AC-101 WHEN a marking changes, THE SYSTEM SHALL announce the marking's name, the number of marked items and the source tile in a polite live region (direction.md rule 52).
       Fails when: no announcement is made, or it omits the count.
 - [ ] AC-102 IF a marking would exceed 1,000 items, THEN THE SYSTEM SHALL refuse the additional items and explain the limit; "Mark all" SHALL be exempt because it stores the tile's filter rather than a list (`[R7]`, direction.md rule 29 of §7a).
       Fails when: a marking exceeds 1,000 stored items, or "Mark all" is refused.

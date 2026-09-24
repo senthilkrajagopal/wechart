@@ -12,6 +12,7 @@
  * palette is handed in, so @wechart/charts never imports the theme.
  */
 import type { MemberFormats, MemberGranularities } from './format';
+import type { MarkingPredicate } from './markings/predicate';
 
 /**
  * Every chart type wechart draws — exactly the list AC-037 names.
@@ -167,6 +168,21 @@ export interface RenderSpec {
    * answer, so the renderer has to be told which value that is.
    */
   readonly highlight?: ChartHighlight;
+  /**
+   * The marking this tile shows, where it marks with one (AC-096).
+   *
+   * The predicate rather than a list of marked rows: a marking is a rule
+   * about values, and the tile's own rows are what it is tested against — so
+   * a tile whose rows change under a filter marks whatever now matches,
+   * rather than keeping a stale set of row indices.
+   */
+  readonly marking?: ChartMarking;
+}
+
+export interface ChartMarking {
+  readonly predicate: MarkingPredicate;
+  /** The marking's own colour (its slot), for the outline on marked items. */
+  readonly colour: string;
 }
 
 export interface ChartHighlight {

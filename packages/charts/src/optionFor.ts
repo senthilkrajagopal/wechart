@@ -14,6 +14,7 @@ import type { ChartType, RenderSpec } from '@wechart/core';
 
 import { barOption, isBarType } from './series/bar';
 import { withHighlight } from './crossfilter/highlight';
+import { withMarks } from './marking/option';
 import { applyAxes } from './axis';
 import { isTrellisType, trellisOption } from './layout/trellis';
 import { legendFor } from './legend';
@@ -58,7 +59,7 @@ export function optionFor(spec: RenderSpec): EChartsOption {
   // would be a chart type quietly exempt from it.
   const base = legendFor(spec);
   const drawn = (option: EChartsOption): EChartsOption => ({
-    ...applyAxes(withLegend(withHighlight(option, spec)), spec),
+    ...applyAxes(withLegend(withMarks(withHighlight(option, spec), spec)), spec),
     // A tooltip has to exist before its values can carry member formats
     // (AC-046), and no renderer sets one.
     ...tooltipFor(spec),

@@ -1,4 +1,9 @@
+import { COLORS } from '@wechart/ui';
 import {
+  applyItemClick,
+  markingsFrom,
+  type Marking,
+  type MarkingSlot,
   toChartSpec,
   toCubeQuery,
   type ChartDocument,
@@ -61,6 +66,12 @@ import { chartTilesOf } from '../filters/scope';
 import { effectsOn, type CrossEffects, type CrossSelection } from './crossfilter/apply';
 import { CrossFilterChips } from './crossfilter/CrossFilterChip';
 import { clickedValue, membersDrawn, seriesCountOf, type ClickedItem } from './crossfilter/clicked';
+import { useThemeName } from '../shell/ThemeProvider';
+import { clearTileMarking } from './markings/clear';
+import { announceMarking, MarkingAnnouncer } from './markings/LiveRegion';
+import { MarkBadge } from './markings/MarkBadge';
+import { MarkChip } from './markings/MarkChip';
+import { markingOf, withMarking, type MarkingState } from './markings/store';
 import { interactionsOf, type InteractionMode } from './settings/interactionMode';
 import { describeFilter } from '../filters/describe';
 import { NotCovered } from '../filters/NotCovered';
@@ -425,6 +436,17 @@ interface TileCharts {
    * Absent in Markings mode and while editing, where a click selects the tile.
    */
   readonly onItemClick?: ((tileId: string, chartId: string, item: ClickedItem) => void) | undefined;
+  /**
+   * A click on a tile's chart while the dashboard is in Markings mode
+   * (AC-087): the modifier says whether it replaces the marking or toggles
+   * one item.
+   */
+  readonly onMarkClick?:
+    ((tileId: string, chartId: string, item: ClickedItem, toggle: boolean) => void) | undefined;
+  /** The marking a tile shows, its colour and how many items it holds (AC-098). */
+  readonly markingOn?:
+    | ((tileId: string) => { marking: Marking; colour: string; markedCount: number } | undefined)
+    | undefined;
 }
 
 interface Affordances {
@@ -669,6 +691,18 @@ function Elements({
                 members={charts.notCovered[chartId].map((each) => each.filter.member ?? '')}
               />
             )}
+            {/* What this tile is marking, in words and a count (AC-098): the
+                marking is not conveyed by colour alone. */}
+            {(() => {
+              const shown = charts.markingOn?.(element.id);
+              return shown === undefined ? null : (
+                <MarkBadge
+                  marking={shown.marking}
+                  colour={shown.colour}
+                  markedCount={shown.markedCount}
+                />
+              );
+            })()}
             {/* After a refresh, if a pre-aggregation answered it (T154, AC-148):
                 in view mode, as Refresh is — its Jobs link would leave an edit. */}
             {affordances.editing ||
@@ -704,6 +738,15 @@ function Elements({
                 : {
                     onItemClick: (item: ClickedItem) => {
                       charts.onItemClick?.(element.id, chartId, item);
+                    },
+                  })}
+              {...(charts.onMarkClick === undefined
+                ? {}
+                : {
+                    // The same click, read as a marking: the modifier is
+                    // what tells replace from toggle (AC-087).
+                    onItemClick: (item: ClickedItem, toggle = false) => {
+                      charts.onMarkClick?.(element.id, chartId, item, toggle);
                     },
                   })}
             />
@@ -928,6 +971,15 @@ const mintChartId = () => crypto.randomUUID();
 /** One empty list, so "nothing selected" is the same value on every render. */
 const NO_SELECTIONS: readonly CrossSelection[] = [];
 
+/**
+ * A marking's own colour: its slot (`mk1`–`mk4`) in the theme showing. Read
+ * from the tokens rather than a CSS variable, because ECharts paints a mark
+ * with a colour value, not with a custom property.
+ */
+function markingColour(slot: MarkingSlot, theme: 'light' | 'dark'): string {
+  return COLORS[theme][slot];
+}
+
 /** The session's chart drafts with new ones added: a new tile's local chart (T132). */
 function withDrafts(
   document: DashboardDocument,
@@ -1077,6 +1129,37 @@ export function DashboardView({
   );
   const crossFiltering =
     interactions.mode === 'crossFilter' && !sessionEditing && preview === undefined;
+
+  /**
+   * The dashboard's markings, and what each holds now (AC-084, AC-095).
+   *
+   * The definitions are the document's; what is marked is the session's —
+   * rule 54: "Saved dashboards store marking definitions only. Current marks
+   * are carried only by a link or a bookmark" — so marking something must
+   * never make the edit session think the dashboard has changed.
+   */
+  const theme = useThemeName();
+  const markings = markingsFrom(live.markings);
+  const [marks, setMarks] = useState<MarkingState>({});
+  /** The last marking change, for the polite live region (AC-101). */
+  const [markSaid, setMarkSaid] = useState('');
+  /** How many items a marking holds now: its items and its ranges. */
+  const markedCountOf = (markingId: string) => {
+    const predicate = markingOf(marks, markingId);
+    return predicate.items.length + predicate.ranges.length;
+  };
+  const marking = interactions.mode === 'markings' && !sessionEditing && preview === undefined;
+  const defaultMarking = markings.find((each) => each.isDefault) ?? markings[0];
+  /**
+   * Which marking a tile marks with: its own, or the dashboard's default for
+   * a tile saved before the setting existed. "(None)" is a tile that marks
+   * with nothing, which is `marksWith: ''` rather than an absent field
+   * (AC-085, direction.md rule 44).
+   */
+  const marksWithOf = (tile: Tile): string | undefined => {
+    const own = tile.marksWith ?? defaultMarking?.id;
+    return own === '' || own === undefined ? undefined : own;
+  };
   /**
    * What each of them does to each chart (AC-117). Read from the charts as
    * loaded, not as filtered, so that what a tile draws cannot decide what it
@@ -1328,6 +1411,48 @@ export function DashboardView({
     };
   }, [crossFiltering, crossSelections.length, setCrossSelections]);
 
+  /**
+   * A click in a tile that marks (AC-087, direction.md rule 47): a plain
+   * click replaces that marking with what was clicked, Ctrl or ⌘ toggles the
+   * one item and leaves the rest. A click on empty plot area unmarks the
+   * tile's marking and leaves every other marking alone (AC-094).
+   */
+  const onMarkClick = (tileId: string, chartId: string, item: ClickedItem, toggle: boolean) => {
+    const tile = elementAt(live, tileId);
+    if (tile === null || !isTile(tile)) return;
+    const markingId = marksWithOf(tile);
+    if (markingId === undefined) return;
+
+    const spec = drawn.specs[chartId];
+    const clicked = spec === undefined ? undefined : clickedValue(spec, item);
+    const before = markingOf(marks, markingId);
+    const after =
+      clicked === undefined
+        ? /**
+           * Empty plot area: this tile's marking, and nothing else. The
+           * effective marking is passed in, because a tile following the
+           * dashboard's default carries no `marksWith` of its own and the
+           * helper would then find nothing to clear.
+           */
+          markingOf(clearTileMarking(marks, { ...tile, marksWith: markingId }), markingId)
+        : applyItemClick(before, [{ member: clicked.member, value: clicked.value }], { toggle });
+    if (after === before) return;
+
+    setMarks((now) => withMarking(now, markingId, after));
+    const named = markings.find((each) => each.id === markingId);
+    if (named !== undefined) {
+      // Said in the live region, with its count and where from (AC-101).
+      const from = chartTitleOf(chartId);
+      setMarkSaid(
+        announceMarking({
+          marking: named,
+          markedCount: after.items.length + after.ranges.length,
+          ...(from === undefined ? {} : { tileName: from }),
+        }),
+      );
+    }
+  };
+
   /** A tile's name: the title of the chart it draws (AC-119). */
   const tileNameOf = useCallback(
     (tileId: string) => {
@@ -1370,6 +1495,29 @@ export function DashboardView({
     setHighlighted((before) => keepLastAnswers(before, results));
   }, []);
 
+  /**
+   * Each chart's spec with the marking its tile shows (AC-096), and what that
+   * marking holds now. Read at render, never pushed: a tile on a page tab
+   * nobody has opened yet draws the same marking as the ones on screen the
+   * moment it appears, which is what AC-095 asks across page tabs.
+   */
+  const markedSpecs = useMemo(() => {
+    if (!marking) return undefined;
+    const byChart: Record<string, { readonly markingId: string; readonly colour: string }> = {};
+    for (const tile of chartTilesOf(live)) {
+      const element = elementAt(live, tile.tileId);
+      if (tile.chartId === undefined || element === null || !isTile(element)) continue;
+      // The tile's own marking, or the dashboard's default for one saved
+      // before the setting existed; `''` is "(None)".
+      const own = element.marksWith ?? defaultMarking?.id;
+      const markingId = own === '' ? undefined : own;
+      const found = markings.find((each) => each.id === markingId);
+      if (markingId === undefined || found === undefined) continue;
+      byChart[tile.chartId] ??= { markingId, colour: markingColour(found.slot, theme) };
+    }
+    return byChart;
+  }, [marking, live, markings, defaultMarking, theme]);
+
   /** Each tile's spec with the highlight it draws, where a pair asks for one. */
   const withHighlights = useMemo(() => {
     if (Object.keys(crossEffects.perChart).length === 0) return formatted;
@@ -1396,11 +1544,26 @@ export function DashboardView({
     return specs;
   }, [formatted, crossEffects, highlighted]);
 
+  /** The same specs, each carrying the marking its tile shows (AC-096). */
+  const withMarkings = useMemo(() => {
+    if (markedSpecs === undefined || Object.keys(markedSpecs).length === 0) return withHighlights;
+    const specs: Record<string, RenderSpec> = { ...withHighlights };
+    for (const [chartId, shown] of Object.entries(markedSpecs)) {
+      const spec = specs[chartId];
+      if (spec === undefined) continue;
+      specs[chartId] = {
+        ...spec,
+        marking: { predicate: markingOf(marks, shown.markingId), colour: shown.colour },
+      };
+    }
+    return specs;
+  }, [withHighlights, markedSpecs, marks]);
+
   // The assignment is held across renders, so a filter that hides a member
   // does not hand its colour to whoever is now first (AC-039).
   // The dashboard as the session has it: a tile added in it — a duplicate's
   // copy (T068) — is drawn, and coloured, before the dashboard is saved.
-  const coloured = useDashboardColours(live, withHighlights);
+  const coloured = useDashboardColours(live, withMarkings);
   /**
    * Each filtered chart's filters in words, for the empty state (AC-043):
    * named by the field each was set on — the filter bar's field, not the name
@@ -1483,9 +1646,30 @@ export function DashboardView({
     specs: coloured,
     errors: withFiltered.errors,
     loading,
-    // Clicking a mark cross-filters only where the dashboard says so, and not
-    // while editing, where a click selects the tile (AC-117, AC-120).
+    /**
+     * A click on a mark: it cross-filters, or it marks, by the dashboard's
+     * mode — never both (AC-117, AC-120) — and neither while editing, where
+     * a click picks the tile up.
+     */
     ...(crossFiltering ? { onItemClick } : {}),
+    ...(marking ? { onMarkClick } : {}),
+    ...(marking
+      ? {
+          markingOn: (tileId: string) => {
+            const element = elementAt(live, tileId);
+            if (element === null || !isTile(element)) return undefined;
+            const id = marksWithOf(element);
+            const found = markings.find((each) => each.id === id);
+            if (found === undefined) return undefined;
+            const predicate = markingOf(marks, found.id);
+            return {
+              marking: found,
+              colour: markingColour(found.slot, theme),
+              markedCount: predicate.items.length + predicate.ranges.length,
+            };
+          },
+        }
+      : {}),
     pending: withFiltered.pending,
     notCovered: marked,
     inEffect,
@@ -1995,7 +2179,7 @@ export function DashboardView({
                 <FilterBar
                   // The cross-filters in effect, at the end of the bar
                   // (AC-119, direction.md §7).
-                  {...(crossFiltering
+                  {...(crossFiltering && crossSelections.length > 0
                     ? {
                         chips: (
                           <CrossFilterChips
@@ -2004,6 +2188,29 @@ export function DashboardView({
                             memberTitle={memberTitle}
                             tileName={tileNameOf}
                           />
+                        ),
+                      }
+                    : {})}
+                  {...(marking && markings.some((each) => markedCountOf(each.id) > 0)
+                    ? {
+                        /**
+                         * A chip per non-empty marking, naming it and what it
+                         * holds (AC-098) — the same right-hand group the
+                         * cross-filter chips use in the other mode. Only where
+                         * something is marked: a bar of nothing is a rule
+                         * across the page saying nothing.
+                         */
+                        chips: (
+                          <>
+                            {markings.map((each) => (
+                              <MarkChip
+                                key={each.id}
+                                marking={each}
+                                colour={markingColour(each.slot, theme)}
+                                predicate={markingOf(marks, each.id)}
+                              />
+                            ))}
+                          </>
                         ),
                       }
                     : {})}
@@ -2027,6 +2234,7 @@ export function DashboardView({
               }
               session={session}
               charts={charts}
+              markSaid={markSaid}
               // A duplicate's chart is made from the stored one and what it
               // draws; the session's drafts are read inside (T068, AC-062).
               duplicateFrom={{
@@ -2119,9 +2327,12 @@ function DashboardPages({
   deleted,
   onDeleted,
   duplicateFrom,
+  markSaid = '',
 }: {
   session: EditSession<DashboardDocument>;
   charts: TileCharts;
+  /** The last marking change, for the dashboard's polite live region (AC-101). */
+  markSaid?: string;
   /**
    * What a duplicated chart tile's copy is made from (T068, AC-062): the
    * dashboard it is local to, and each chart's stored document and drawing.
@@ -2531,6 +2742,9 @@ function DashboardPages({
       >
         {drag.announcement}
       </p>
+      {/* What a marking change came to, said politely (AC-101). Its own
+          region, so a marking and a drag cannot talk over each other. */}
+      <MarkingAnnouncer message={markSaid} />
 
       {/**
        * Both ways back, as AC-060 asks: this toast, and the edit bar's Undo.

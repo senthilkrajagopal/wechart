@@ -22,7 +22,7 @@ export interface ChartCanvasProps {
    * A click on one of its items, where the dashboard is cross-filtering
    * (AC-117). Absent, the chart takes no clicks at all.
    */
-  readonly onItemClick?: ((item: ClickedItem) => void) | undefined;
+  readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
 }
 
 const DEFAULT_HEIGHT = 320;
@@ -32,6 +32,14 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
   const instance = useRef<ReturnType<typeof echarts.init> | null>(null);
   /** The latest, read by a click without rebinding the handlers each render. */
   const clicked = useRef(onItemClick);
+  /**
+   * Whether the release that is on its way landed on one of the chart's
+   * items. A click on empty plot area reaches no series handler at all, and
+   * unmarks the tile's marking instead (AC-094, direction.md rule 47) — so
+   * "nothing was hit" has to be observed rather than waited for. Read on the
+   * wrapper's own release, which bubbles up after ECharts has dispatched.
+   */
+  const onItem = useRef(false);
   useEffect(() => {
     clicked.current = onItemClick;
   }, [onItemClick]);
@@ -57,26 +65,35 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
      * 4 px or the two landed on different elements, with nothing dispatched
      * at all — a mark that sometimes does nothing, with nothing to debug.
      */
-    const clicks = itemClicks(({ item }) => {
+    const clicks = itemClicks(({ item, toggle }) => {
       const [name, seriesName] = (item ?? '').split('\u0000');
-      clicked.current?.({ name, seriesName });
+      // Ctrl or ⌘ held: a marking toggles the one item rather than replacing
+      // itself with it (AC-087). Cross-filtering ignores it.
+      clicked.current?.({ name, seriesName }, toggle);
     });
     const at = (params: {
       name?: string;
       seriesName?: string;
-      event?: { offsetX?: number; offsetY?: number };
+      event?: {
+        offsetX?: number;
+        offsetY?: number;
+        event?: { ctrlKey?: boolean; metaKey?: boolean };
+      };
     }) => ({
       // The pair carries both names; which one a click stands for is the
       // dashboard's to decide, by chart type (`crossfilter/clicked.ts`).
       item: `${params.name ?? ''}\u0000${params.seriesName ?? ''}`,
       x: params.event?.offsetX ?? 0,
       y: params.event?.offsetY ?? 0,
-      toggle: false,
+      // zrender carries the browser's own event under `event.event`.
+      toggle: params.event?.event?.ctrlKey === true || params.event?.event?.metaKey === true,
     });
     const onDown = (params: unknown) => {
       clicks.down(at(params as Parameters<typeof at>[0]));
     };
     const onUp = (params: unknown) => {
+      // So the release on the wrapper below knows an item took this click.
+      onItem.current = true;
       clicks.up(at(params as Parameters<typeof at>[0]));
     };
     /**
@@ -109,6 +126,15 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
   }, [spec]);
 
   return (
+    /**
+     * `jsx-a11y/no-static-element-interactions` asks for a role and a
+     * keyboard path on anything that takes a mouse. The role belongs to the
+     * marks inside rather than to this box, and the keyboard path to the same
+     * marking is AC-100's — arrow keys between a tile's items, Space to mark
+     * the focused one — which the tile carries, because the tile is what
+     * takes focus. Answered next door, not here.
+     */
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       ref={node}
       data-testid="chart-canvas"
@@ -120,6 +146,30 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
           : `${spec.highlight.kind}:${spec.highlight.member}=${spec.highlight.value}`
       }
       style={{ height: `${String(height)}px`, width: '100%' }}
+      /**
+       * Mouse events, not pointer events: `pointerup` fires *before*
+       * `mouseup`, so on a pointer release the series handler would not yet
+       * have said it took the click, and every click on a mark would look
+       * like a click on nothing.
+       *
+       * `jsx-a11y/no-static-element-interactions` asks for a role and a
+       * keyboard path on anything that takes a mouse. The role belongs to the
+       * marks inside, not to this box, and the keyboard path to the same
+       * marking is AC-100's: arrow keys move between a tile's items, Space
+       * marks the focused one. It is the tile that takes focus and carries
+       * those keys, not this element, so the rule is answered next door
+       * rather than here.
+       */
+
+      onMouseDown={() => {
+        onItem.current = false;
+      }}
+      onMouseUp={(event) => {
+        // A release that no item took: empty plot area, which unmarks this
+        // tile's marking (AC-094). Reported as a click with nothing in it.
+        if (onItem.current) return;
+        clicked.current?.({}, event.ctrlKey || event.metaKey);
+      }}
     />
   );
 }

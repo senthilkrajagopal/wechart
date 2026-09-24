@@ -19,6 +19,19 @@ export function useTheme(): ThemeContextValue {
 }
 
 /**
+ * Which theme is showing, for something that needs the colour rather than the
+ * control — a marking's own colour, which ECharts paints with a value and not
+ * with a custom property (AC-096).
+ *
+ * Tolerant of there being no provider, unlike `useTheme`: a surface rendered
+ * on its own is still drawn, in the light palette, rather than failing to
+ * render at all over a colour it could have defaulted.
+ */
+export function useThemeName(): Theme {
+  return use(ThemeContext)?.theme ?? 'light';
+}
+
+/**
  * AC-003: switching re-renders the current surface in the other theme without
  * changing the route or losing scroll position.
  *

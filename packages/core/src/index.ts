@@ -48,6 +48,7 @@ export {
   type ChartType,
   type Encoding,
   type ChartHighlight,
+  type ChartMarking,
   type RenderSpec,
   type SeriesData,
 } from './render-spec';
