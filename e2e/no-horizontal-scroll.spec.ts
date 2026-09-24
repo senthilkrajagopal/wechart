@@ -50,7 +50,7 @@ test('a dashboard does not scroll sideways at 1,280 px, viewed or edited', async
 test('the chart editor does not scroll sideways at 1,280 px', async ({ page }) => {
   // A chart with fields in its wells, its result and preview drawn.
   await page.goto('/explore/charts/seed-chart-status/edit');
-  await expect(page.getByTestId('result-first-row')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('result-row-count')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('chart-canvas')).toBeVisible();
   expect(await overflowOf(page)).toEqual(NONE);
 });
@@ -61,10 +61,23 @@ test('the chart editor over a dashboard does not scroll the page sideways', asyn
   await expect(drawnTile(page, 'tile-region')).toBeVisible({ timeout: 15_000 });
   await page.locator('[data-tile="tile-region"]').hover();
   await page.locator('[data-tile="tile-region"] [data-edit-chart]').click();
-  await expect(page.getByTestId('result-first-row')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('result-row-count')).toBeVisible({ timeout: 15_000 });
   // Its preview pane may scroll within itself; the page may not.
   const { page: pageOver, main } = await overflowOf(page);
   expect({ page: pageOver, main }).toEqual({ page: 0, main: 0 });
+
+  // Nor with the longest thing its one header row says: a refused save's
+  // reason, which sits beside Save dashboard (T228's review).
+  await page
+    .getByTestId('editor-save-blocked')
+    .evaluate((node) =>
+      node.append(
+        'This chart belongs to another dashboard, so a change to it can only be saved with that dashboard. Back keeps the change on this one, unsaved.',
+      ),
+    );
+  const blocked = await overflowOf(page);
+  expect({ page: blocked.page, main: blocked.main }).toEqual({ page: 0, main: 0 });
+  await expect(page.getByTestId('editor-save-dashboard')).toBeInViewport();
 });
 
 test('the model editor does not scroll sideways at 1,280 px', async ({ page }) => {

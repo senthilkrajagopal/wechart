@@ -25,8 +25,9 @@ test('adds a field with the well picker and runs the query', async ({ page }) =>
 
   await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
   await expect(page.getByTestId('result-row-count')).toHaveText('1 rows');
-  // 240 seeded orders.
-  await expect(page.getByTestId('result-first-row')).toContainText('240');
+  // 240 seeded orders, in the drawer — the only place rows are printed (AC-214).
+  await page.getByRole('button', { name: 'Results' }).click();
+  await expect(page.getByTestId('drawer-result-rows')).toContainText('240');
 });
 
 test('adds a field by dragging it onto a well', async ({ page }) => {
@@ -467,6 +468,8 @@ test('editing an axis changes the drawn chart', async ({ page }) => {
   await expect(canvas).toBeVisible();
   await expect(canvas.getByText('Orders placed')).toBeHidden();
 
+  // The axes are in the inspector's Customize tab (AC-214).
+  await page.getByRole('tab', { name: 'Customize' }).click();
   await page.getByLabel('Title', { exact: true }).last().fill('Orders placed');
 
   // The title has to appear in the drawing, not merely in the form.
@@ -483,6 +486,7 @@ test('an axis edit is undoable like any other change', async ({ page }) => {
   await page.getByTestId('add-dimensions').selectOption('orders.status');
 
   const canvas = page.getByTestId('chart-canvas');
+  await page.getByRole('tab', { name: 'Customize' }).click();
   await page.getByLabel('Title', { exact: true }).last().fill('Orders placed');
   await expect(canvas.getByText('Orders placed')).toBeVisible();
 
@@ -588,6 +592,7 @@ test.describe('opening a saved chart (AC-182)', () => {
      * failing to seed its options from what was loaded.
      */
     await page.goto('/explore/charts/seed-chart-axes/edit');
+    await page.getByRole('tab', { name: 'Customize' }).click();
 
     const yAxis = page.getByTestId('axis-panel-y');
     await expect(yAxis.getByLabel('Title')).toHaveValue('Order count');
@@ -656,4 +661,137 @@ test.describe('opening a saved chart (AC-182)', () => {
     );
     await expect(page.getByLabel('Cube or view')).toBeHidden();
   });
+});
+
+/**
+ * T228 / AC-214: WHILE the chart editor is open, THE SYSTEM SHALL show the
+ * field list on the left, the preview in the centre above a drawer of
+ * results, underlying rows and the Cube query, and an inspector on the right
+ * with Data and Customize tabs, the preview's top edge visible without
+ * scrolling at 1,440 × 900, and a single header row holding the chart's
+ * editable title, its source and row count, whether it is local or shared,
+ * Undo, Redo, Discard and the save action.
+ * `Fails when: the preview's top edge is below the fold at 1,440 × 900, the
+ * title cannot be edited in the editor, or result rows are printed anywhere
+ * outside the drawer.`
+ */
+test('the editor is three panes under one header row, its preview in view at 1440 × 900', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openEditorOnOrders(page);
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  await page.getByTestId('add-dimensions').selectOption('orders.status');
+
+  // One header row: title, source and rows, ownership, Undo, Redo, Discard, Save.
+  const head = page.getByTestId('editor-bar');
+  await expect(head.getByTestId('result-row-count')).toHaveText('3 rows');
+  await expect(head).toContainText('Orders');
+  // A library chart: shared from its folder.
+  await expect(head.getByTestId('editor-ownership')).toHaveText('⛓ Shared');
+  const title = head.getByLabel('Chart title');
+  const before = await title.inputValue();
+  await title.fill('Orders by status, renamed');
+  await title.press('Enter');
+  await expect(title).toHaveValue('Orders by status, renamed');
+  await expect(
+    page.getByRole('heading', { name: 'Chart editor: Orders by status, renamed' }),
+  ).toHaveCount(1);
+  // One change, not one per letter: a single Undo puts the whole title back.
+  await head.getByRole('button', { name: 'Undo' }).click();
+  await expect(title).toHaveValue(before);
+  await head.getByRole('button', { name: 'Redo' }).click();
+  await expect(title).toHaveValue('Orders by status, renamed');
+  const controls = [
+    title,
+    head.getByRole('button', { name: 'Undo' }),
+    head.getByRole('button', { name: 'Redo' }),
+    head.getByRole('button', { name: 'Discard changes' }),
+    head.getByRole('button', { name: 'Save chart' }),
+  ];
+  const centres = await Promise.all(
+    controls.map(async (control) => {
+      const box = await control.boundingBox();
+      return (box?.y ?? 0) + (box?.height ?? 0) / 2;
+    }),
+  );
+  for (const centre of centres) expect(Math.abs(centre - (centres[0] ?? 0))).toBeLessThan(4);
+
+  // Fields on the left, the preview in the centre, the inspector on the right.
+  const fields = page.getByRole('complementary', { name: 'Fields' });
+  const preview = page.getByRole('region', { name: 'Preview' });
+  const inspector = page.getByRole('complementary', { name: 'Chart settings' });
+  const [left, centre, right] = await Promise.all(
+    [fields, preview, inspector].map((pane) => pane.boundingBox()),
+  );
+  expect(left?.x ?? 0).toBeLessThan(centre?.x ?? 0);
+  expect(centre?.x ?? 0).toBeLessThan(right?.x ?? 0);
+  await expect(inspector.getByRole('tab', { name: 'Data' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(inspector.getByRole('tab', { name: 'Customize' })).toBeVisible();
+
+  // The preview's top edge above the fold, with nothing scrolled.
+  const canvas = preview.getByTestId('chart-canvas');
+  await expect(canvas).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect((await canvas.boundingBox())?.y ?? 900).toBeLessThan(900);
+
+  // The drawer below it, and no result rows printed anywhere else: with the
+  // drawer open, the page's text outside it and the drawing names no row's
+  // member the way a printed row does.
+  const drawer = preview.getByRole('button', { name: 'Results' });
+  await expect(drawer).toBeVisible();
+  expect(((await drawer.boundingBox())?.y ?? 0) > ((await canvas.boundingBox())?.y ?? 0)).toBe(
+    true,
+  );
+  await drawer.click();
+  await expect(page.getByTestId('drawer-result-rows')).toContainText('shipped');
+  const outside = await page.getByRole('main').evaluate((main) => {
+    const copy = main.cloneNode(true) as HTMLElement;
+    copy
+      .querySelectorAll('.results-drawer, [data-testid="chart-canvas"], select, option')
+      .forEach((node) => node.remove());
+    return copy.textContent ?? '';
+  });
+  expect(outside).not.toContain('"orders.status"');
+  expect(outside).not.toContain('shipped');
+});
+
+/**
+ * AC-214 on the way most charts are opened: over a dashboard, from a tile.
+ * Back, whose the chart is, Undo, Redo, Discard and Save dashboard share the
+ * one header row, and the preview is in view at 1,440 × 900.
+ */
+test('over a dashboard, the editor’s one header row holds Back and Save dashboard', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/explore/dashboards/seed-root-dashboard-1');
+  const tile = page.locator('[data-tile="tile-status"]');
+  await expect(tile.getByTestId('chart-canvas')).toBeVisible();
+  await tile.hover();
+  await tile.locator('[data-edit-chart]').click();
+
+  const head = page.getByTestId('editor-bar');
+  await expect(head.getByLabel('Chart title')).toHaveValue('Orders by category and status');
+  await expect(head.getByTestId('editor-ownership')).toHaveText('Local · only on this dashboard');
+  const controls = [
+    head.getByTestId('editor-back'),
+    head.getByLabel('Chart title'),
+    head.getByRole('button', { name: 'Undo' }),
+    head.getByRole('button', { name: 'Discard changes' }),
+    head.getByTestId('editor-save-dashboard'),
+  ];
+  const centres = await Promise.all(
+    controls.map(async (control) => {
+      const box = await control.boundingBox();
+      return (box?.y ?? 0) + (box?.height ?? 0) / 2;
+    }),
+  );
+  for (const centre of centres) expect(Math.abs(centre - (centres[0] ?? 0))).toBeLessThan(4);
+  const canvas = page.getByRole('region', { name: 'Preview' }).getByTestId('chart-canvas');
+  await expect(canvas).toBeVisible();
+  expect((await canvas.boundingBox())?.y ?? 900).toBeLessThan(900);
 });

@@ -264,6 +264,17 @@ export function ChartEditorOverlay({
   useEffect(() => {
     backButton.current?.focus();
   }, []);
+  /**
+   * The way out moves into the editor's header once it opens (AC-214): the
+   * button focus started on is gone, so focus follows it rather than falling
+   * to the page.
+   */
+  const editing = view.kind === 'editor';
+  useEffect(() => {
+    const focused = window.document.activeElement;
+    if (editing && (focused === null || focused === window.document.body))
+      backButton.current?.focus();
+  }, [editing]);
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
@@ -292,110 +303,136 @@ export function ChartEditorOverlay({
     };
   }, [back]);
 
+  const backControl = (
+    <button
+      ref={backButton}
+      type="button"
+      className="btn-sm"
+      data-testid="editor-back"
+      onClick={() => {
+        void back();
+      }}
+    >
+      ← Back to {dashboardTitle}
+    </button>
+  );
+
+  const saveControls = (
+    <>
+      {/* Mounted from the start and only its text changing: a live region
+          that appears with its words already in it is announced
+          unreliably. */}
+      <StateLine kind="run" testId="editor-applying">
+        {applying ? 'Applying the change…' : ''}
+      </StateLine>
+      {/* Kept mounted with its text changing, as the edit bar's reason is:
+          a live region inserted with its words already in it is announced
+          unreliably. */}
+      <StateLine
+        kind="warn"
+        id={blockedId}
+        className="chart-editor-overlay__blocked"
+        testId="editor-save-blocked"
+      >
+        {blocked ?? ''}
+      </StateLine>
+      {/* aria-disabled, not disabled, as the edit bar's Save: it stays
+          focusable, so the reason it is tied to can be reached from it. The
+          handler is what refuses. */}
+      <button
+        type="button"
+        className="chart-editor-overlay__save btn-primary btn-sm"
+        data-testid="editor-save-dashboard"
+        aria-disabled={blocked !== undefined}
+        aria-describedby={blocked === undefined ? undefined : blockedId}
+        onClick={() => {
+          if (blocked !== undefined) return;
+          void leave(onSaveDashboard);
+        }}
+      >
+        Save dashboard
+      </button>
+    </>
+  );
+
+  /** Whose the chart is, beside its title (AC-214). */
+  const ownership =
+    opened === undefined ? null : copied && localNow ? (
+      // The prototype's note once copied: whose it is now, and the shared
+      // chart as it was.
+      <div
+        ref={copiedNote}
+        tabIndex={-1}
+        className="shared-chart-notice"
+        data-testid="local-copy-made"
+      >
+        <StateLine kind="ok">
+          Local copy · only on this dashboard. The shared chart is unchanged.
+        </StateLine>
+      </div>
+    ) : draft?.wasLocalTo !== undefined ? (
+      // Saved to a folder in this session (T133): shared once the dashboard is.
+      <span className="badge" data-testid="editor-ownership">
+        Local until saved · then shared from its folder
+      </span>
+    ) : opened.document.localToDashboardId !== undefined ? (
+      <span className="badge" data-testid="editor-ownership">
+        {opened.document.localToDashboardId === dashboardId
+          ? 'Local · only on this dashboard'
+          : 'Local to another dashboard'}
+      </span>
+    ) : (
+      // A library chart: shared, and on how many dashboards, before a change
+      // spreads (T134, AC-128) — not one this dashboard is saving to a folder
+      // in the session, which is its own until saved (T133).
+      <SharedChartNotice
+        chartId={chartId}
+        dashboardId={dashboardId}
+        folderId={opened.document.folderId}
+        onMakeLocalCopy={
+          onMakeLocalCopy === undefined
+            ? undefined
+            : () => {
+                void makeLocalCopy();
+              }
+        }
+      />
+    );
+
   return (
     <div ref={root} className="chart-editor-overlay" data-testid="chart-editor-overlay">
-      <header className="chart-editor-overlay__bar">
-        <button
-          ref={backButton}
-          type="button"
-          data-testid="editor-back"
-          onClick={() => {
-            void back();
-          }}
-        >
-          ← Back to {dashboardTitle}
-        </button>
-        {/* Names the chart, not only the tool: the page it replaces was headed
-            by the dashboard, and this is one chart of it. */}
-        <h1>
-          Chart editor
-          {opened === undefined || opened.document.title === '' ? '' : `: ${opened.document.title}`}
-        </h1>
-        {/* Mounted from the start and only its text changing: a live region
-            that appears with its words already in it is announced
-            unreliably. */}
-        <StateLine kind="run" testId="editor-applying">
-          {applying ? 'Applying the change…' : ''}
-        </StateLine>
-        {/* Kept mounted with its text changing, as the edit bar's reason is:
-            a live region inserted with its words already in it is announced
-            unreliably. */}
-        <StateLine
-          kind="warn"
-          id={blockedId}
-          className="chart-editor-overlay__blocked"
-          testId="editor-save-blocked"
-        >
-          {blocked ?? ''}
-        </StateLine>
-        {/* aria-disabled, not disabled, as the edit bar's Save: it stays
-            focusable, so the reason it is tied to can be reached from it. The
-            handler is what refuses. */}
-        <button
-          type="button"
-          className="chart-editor-overlay__save"
-          data-testid="editor-save-dashboard"
-          aria-disabled={blocked !== undefined}
-          aria-describedby={blocked === undefined ? undefined : blockedId}
-          onClick={() => {
-            if (blocked !== undefined) return;
-            void leave(onSaveDashboard);
-          }}
-        >
-          Save dashboard
-        </button>
-      </header>
-      {/* A library chart: shared, and on how many dashboards, before a change
-          spreads (T134, AC-128) — not one this dashboard is saving to a
-          folder in the session, which is its own until saved (T133). */}
-      {opened === undefined ||
-      opened.document.localToDashboardId !== undefined ||
-      draft?.wasLocalTo !== undefined ? null : (
-        <SharedChartNotice
-          chartId={chartId}
-          dashboardId={dashboardId}
-          folderId={opened.document.folderId}
-          onMakeLocalCopy={
-            onMakeLocalCopy === undefined
-              ? undefined
-              : () => {
-                  void makeLocalCopy();
-                }
-          }
-        />
-      )}
-      {/* The prototype's note once copied: whose it is now, and the shared chart as it was. */}
-      {copied && localNow ? (
-        <div
-          ref={copiedNote}
-          tabIndex={-1}
-          className="shared-chart-notice"
-          data-testid="local-copy-made"
-        >
-          <StateLine kind="ok">
-            Local copy · only on this dashboard. The shared chart is unchanged.
-          </StateLine>
-        </div>
-      ) : null}
-      {view.kind === 'loading' ? (
-        <StateLine kind="run" testId="editor-loading">
-          Opening the chart…
-        </StateLine>
-      ) : view.kind === 'error' ? (
-        <StateLine kind="err" testId="editor-load-error">
-          {view.message}
-        </StateLine>
-      ) : (
-        <div className="chart-editor-overlay__body" inert={applying} aria-busy={applying}>
+      {view.kind === 'editor' ? (
+        <div className="chart-editor-overlay__body">
           {/* Keyed by the tile, so the editor — its Undo history (AC-035) —
-              goes on through a local copy's new chart id (T135's review). */}
+              goes on through a local copy's new chart id (T135's review).
+              Its one header row carries the way back, whose the chart is and
+              Save dashboard (AC-214). */}
           <ChartEditor
             key={tileId ?? chartId}
             initial={view.initial}
             tile={tile}
             onChange={onChange}
+            busy={applying}
+            head={{ start: backControl, badges: ownership, end: saveControls }}
           />
         </div>
+      ) : (
+        <>
+          <header className="chart-editor-overlay__bar">
+            {backControl}
+            <h1>Chart editor</h1>
+            {saveControls}
+          </header>
+          {view.kind === 'loading' ? (
+            <StateLine kind="run" testId="editor-loading">
+              Opening the chart…
+            </StateLine>
+          ) : (
+            <StateLine kind="err" testId="editor-load-error">
+              {view.message}
+            </StateLine>
+          )}
+        </>
       )}
     </div>
   );

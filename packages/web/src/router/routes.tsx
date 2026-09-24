@@ -292,33 +292,16 @@ function ChartEditorSurface() {
     },
   });
 
+  const local = chart.data?.document.localToDashboardId !== undefined;
+
   return (
     <AppShell workspace="explore">
-      {/* The library chart page's head row (AC-212): title, then the action. */}
-      <div className="chart-page__head">
-        <h1 className="workspace-title">Chart editor</h1>
-        {chart.data === undefined ? null : (
-          <span className="chart-editor-route__title">{chart.data.document.title}</span>
-        )}
-        <span className="chart-page__spacer" />
-        {view.kind !== 'editor' ? null : chart.data?.document.localToDashboardId !== undefined ? (
-          // A chart of one dashboard's is saved with that dashboard, in its
-          // edit session — never on its own here (T227's review).
-          <span className="chart-page__none">
-            This chart belongs to a dashboard; edit and save it there.
-          </span>
-        ) : (
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={save.isPending || edited === undefined}
-            onClick={() => save.mutate()}
-          >
-            {save.isPending ? 'Saving…' : 'Save chart'}
-          </button>
-        )}
-      </div>
-      {save.isError ? <StateLine kind="err">{save.error.message}</StateLine> : null}
+      {/* Until the editor opens, and its header with it (AC-214). */}
+      {view.kind === 'editor' ? null : (
+        <div className="chart-page__head">
+          <h1 className="workspace-title">Chart editor</h1>
+        </div>
+      )}
       <p data-testid="selected-object" hidden>
         {chartId}
       </p>
@@ -333,7 +316,46 @@ function ChartEditorSurface() {
       ) : (
         // Keyed by chart id: the editor reads `initial` once, to seed its
         // history, so a different chart has to be a different editor.
-        <ChartEditor key={chartId} initial={view.initial} onChange={setEdited} />
+        <ChartEditor
+          key={chartId}
+          initial={view.initial}
+          onChange={setEdited}
+          head={{
+            // Whose it is (AC-214): a library chart is shared from its folder.
+            badges: (
+              <span className="badge" data-testid="editor-ownership">
+                {local ? (
+                  'Local to a dashboard'
+                ) : (
+                  <>
+                    <span aria-hidden="true">⛓ </span>Shared
+                  </>
+                )}
+              </span>
+            ),
+            end: (
+              <>
+                {save.isError ? <StateLine kind="err">{save.error.message}</StateLine> : null}
+                {local ? (
+                  // A chart of one dashboard's is saved with that dashboard, in
+                  // its edit session — never on its own here (T227's review).
+                  <span className="chart-page__none">
+                    This chart belongs to a dashboard; edit and save it there.
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-primary btn-sm"
+                    disabled={save.isPending || edited === undefined}
+                    onClick={() => save.mutate()}
+                  >
+                    {save.isPending ? 'Saving…' : 'Save chart'}
+                  </button>
+                )}
+              </>
+            ),
+          }}
+        />
       )}
     </AppShell>
   );

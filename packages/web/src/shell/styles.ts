@@ -2580,27 +2580,111 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   pointer-events: none;
 }
 
+/* The chart editor (AC-214, the prototype's workbench): one header row over
+   three full-height panes — the fields, the preview above its drawer, and the
+   inspector — filling the window below the app bar. Each pane scrolls on its
+   own, so the preview never leaves the fold. */
+main:has(.chart-editor) {
+  height: calc(100vh - var(--wc-app-bar-height));
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
 .chart-editor {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: 280px 1fr 280px;
-  grid-template-areas: 'bar bar bar' 'fields wells result';
-  gap: 16px;
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.chart-editor__head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
+}
+/* Long things in the row — a refused save's reason, a shared chart's note, a
+   long dashboard name on Back — shrink and wrap within it rather than push
+   it past the window (AC-179, T228's review). */
+.chart-editor__head > * { min-width: 0; }
+.chart-editor__head .state-line { margin: 0; flex: 0 1 auto; font-size: 12px; line-height: 16px; }
+.chart-editor__head .shared-chart-notice { flex: 0 1 auto; margin: 0; }
+.chart-editor__head [data-testid='editor-back'] {
+  flex: 0 1 auto;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The title reads as a heading until it is pointed at or typed in. */
+.chart-editor__title {
+  flex: 0 1 420px;
+  min-width: 120px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--wc-text-primary);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+}
+.chart-editor__title:hover,
+.chart-editor__title:focus { border-color: var(--wc-border-strong); background: var(--wc-bg-surface); }
+.chart-editor__meta { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); white-space: nowrap; }
+.chart-editor__spacer { flex: 1; }
+.chart-editor__fields,
+.chart-editor__inspector { min-height: 0; overflow: auto; background: var(--wc-bg-surface); }
+.chart-editor__fields { padding: 12px; border-right: 1px solid var(--wc-border-subtle); }
+.chart-editor__inspector { display: flex; flex-direction: column; border-left: 1px solid var(--wc-border-subtle); }
+.chart-editor__inspector-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.chart-editor__type { display: grid; gap: 6px; }
+.chart-editor__type h3,
+.chart-editor__type h4 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--wc-text-secondary); }
+.chart-editor__type p,
+.chart-editor__type ul { margin: 0; }
+.chart-editor__center { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.chart-editor__canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.chart-editor__empty { margin: auto; color: var(--wc-text-secondary); }
+.chart-editor__missing { margin: auto; max-width: 480px; }
+/* The drawer at the foot of the preview (AC-214): the only place result rows
+   are printed, its height its own so the preview keeps the rest. */
+.chart-editor__center .results-drawer {
+  flex: none;
+  max-height: 40%;
+  overflow: auto;
+  padding: 8px 12px;
+  border-top: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
 }
 
-.editor-bar { grid-area: bar; display: flex; gap: 8px; }
-.editor-bar button { height: 32px; padding: 0 12px; border: 1px solid var(--wc-border-strong); border-radius: 4px; background: var(--wc-bg-surface); color: var(--wc-text-primary); cursor: pointer; }
-.editor-bar button:disabled { color: var(--wc-text-muted); cursor: default; }
-
-.chart-editor > *,
 .well {
   padding: 8px;
   border: 1px solid var(--wc-border-subtle);
   border-radius: 6px;
   background: var(--wc-bg-surface);
 }
-/* The first row's JSON wraps within its column: one unbroken line of it
-   pushed the page sideways at 1,280 px (T184, AC-179). */
-.chart-editor [data-testid='result-first-row'] { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* The chart editor opened over the dashboard from a tile (T032). Laid out
    as the settings page is: its own bar in place of the dashboard's, and the
@@ -2653,17 +2737,9 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   color: var(--wc-text-secondary);
   font-size: var(--wc-text-sm-size);
 }
-/* Here the preview takes the flexible column, not the narrow side one: a
-   tile at its actual size is often far wider than 280 pixels. The editor
-   fills the overlay's height so that Fit has somewhere to grow, and the
-   preview scrolls within itself rather than widening the page. */
-.chart-editor-overlay .chart-editor {
-  flex: 1;
-  min-height: 0;
-  grid-template-columns: 240px 240px minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-}
-.chart-editor-overlay .chart-editor__result { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+/* The editor fills the overlay's height, so that Fit has somewhere to grow,
+   and the preview scrolls within itself rather than widening the page. */
+.chart-editor-overlay__body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 /* Never shrinks below its content. Allowed to shrink, it collapsed under a
    tile taller than the space left, and the results drawer that follows it
    was laid over its top, covering the Actual size and Fit buttons so neither

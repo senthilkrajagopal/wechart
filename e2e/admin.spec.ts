@@ -57,7 +57,8 @@ for (const path of [
   // A page inside a workspace is titled the same way.
   '/model/files/cubes%2Forders.yml',
   '/explore/charts/seed-chart-status',
-  '/explore/charts/seed-chart-empty/edit',
+  // Not the chart editor: its title is the chart's own, an editable field in
+  // its one header row (AC-214), as the prototype's editor has it.
 ])
   test(`${path}'s title is the prototype's page title, 20 px at 600`, async ({ page }) => {
     await page.goto(path);

@@ -12,7 +12,7 @@ import {
   type SortSettings,
 } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import {
   REQUIREMENTS,
@@ -49,7 +49,7 @@ import { signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { FieldList } from './FieldList';
 import { Wells } from './Wells';
-import { formatsOf, membersOf, type Member } from './fields';
+import { cubesFrom, formatsOf, membersOf, type Member } from './fields';
 
 /**
  * The chart editor (AC-025, AC-026).
@@ -118,11 +118,51 @@ export interface ChartEditorProps {
    * on the dashboard when the user goes back (T032).
    */
   readonly onChange?: ((state: EditorState) => void) | undefined;
+  /**
+   * What whoever opened the editor puts in its header row (AC-214): at its
+   * start, a way back; beside the title, whether the chart is local or
+   * shared; at its end, the save action and anything said about it.
+   */
+  readonly head?: {
+    readonly start?: ReactNode;
+    readonly badges?: ReactNode;
+    readonly end?: ReactNode;
+  };
+  /**
+   * A change is being applied elsewhere: the panes take no input meanwhile,
+   * while the header — what says so, and the way out — stays live.
+   */
+  readonly busy?: boolean;
 }
 
-export function ChartEditor({ initial = OPENED_WITH, tile, onChange }: ChartEditorProps = {}) {
+/** The inspector's tabs (AC-214, the prototype's Data and Customize). */
+const INSPECTOR_TABS = [
+  ['data', 'Data'],
+  ['customize', 'Customize'],
+] as const;
+type InspectorTab = (typeof INSPECTOR_TABS)[number][0];
+
+export function ChartEditor({
+  initial = OPENED_WITH,
+  tile,
+  onChange,
+  head,
+  busy = false,
+}: ChartEditorProps = {}) {
   const [history, setHistory] = useState(() => historyOf(initial));
-  const { cubeName, spec, chartType: chartTypeState, options } = history.present;
+  const { cubeName, spec, chartType: chartTypeState, options, title } = history.present;
+  /** The title as being typed, until it is set down (null: not being typed). */
+  const [typedTitle, setTypedTitle] = useState<string | null>(null);
+  const commitTitle = () => {
+    if (typedTitle === null) return;
+    const typed = typedTitle;
+    setTypedTitle(null);
+    if (typed !== (title ?? '')) change((current) => ({ ...current, title: typed }));
+  };
+  /** Which of the inspector's tabs is open: looking, not a change to the chart. */
+  const [inspector, setInspector] = useState<InspectorTab>('data');
+  const inspectorId = useId();
+  const inspectorTabs = useRef<(HTMLButtonElement | null)[]>([]);
 
   useEffect(() => {
     onChange?.(history.present);
@@ -284,36 +324,84 @@ export function ChartEditor({ initial = OPENED_WITH, tile, onChange }: ChartEdit
       })
     : [];
 
+  /** The chart's cube or view, as the model titles it. */
+  const sourceTitle =
+    cubeName === ''
+      ? 'No cube or view yet'
+      : (cubesFrom(meta.data).find((cube) => cube.name === cubeName)?.title ?? cubeName);
+
   return (
     <div className="chart-editor">
-      <div className="editor-bar" data-testid="editor-bar">
+      {/**
+       * One header row (AC-214, the prototype's editor head): whatever opened
+       * the editor at its start — Back to the dashboard — then the chart's
+       * title to edit, its source and row count, whether it is local or
+       * shared, Undo, Redo, Discard, and the save action at its end.
+       */}
+      <header className="chart-editor__head" data-testid="editor-bar">
+        <h1 className="visually-hidden">
+          Chart editor{title === undefined || title.trim() === '' ? '' : `: ${title}`}
+        </h1>
+        {head?.start}
+        {/* One change when the title is set down — on leaving it or Enter —
+            not one Undo step per letter (T228's review). Read-only while a
+            change is being applied, so nothing typed then is lost. */}
+        <input
+          className="chart-editor__title"
+          aria-label="Chart title"
+          placeholder="Untitled chart"
+          readOnly={busy}
+          value={typedTitle ?? title ?? ''}
+          onChange={(event) => setTypedTitle(event.target.value)}
+          onBlur={commitTitle}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') commitTitle();
+          }}
+        />
+        <span className="chart-editor__meta">
+          {sourceTitle}
+          {!isEmpty(spec) && result.isSuccess ? (
+            <>
+              {' · '}
+              <span data-testid="result-row-count">{rows.length} rows</span>
+            </>
+          ) : null}
+        </span>
+        {head?.badges}
+        <span className="chart-editor__spacer" />
+        {/* Not while a change is being applied: an edit then would be lost
+            with the draft already taken (T032, T228's review). */}
         <button
           type="button"
+          className="btn-sm"
           data-testid="undo"
-          disabled={!canUndo(history)}
+          disabled={busy || !canUndo(history)}
           onClick={() => setHistory(undo)}
         >
           Undo
         </button>
         <button
           type="button"
+          className="btn-sm"
           data-testid="redo"
-          disabled={!canRedo(history)}
+          disabled={busy || !canRedo(history)}
           onClick={() => setHistory(redo)}
         >
           Redo
         </button>
         <button
           type="button"
+          className="btn-sm"
           data-testid="discard"
-          disabled={!isDirty(history)}
+          disabled={busy || !isDirty(history)}
           onClick={() => setHistory(discard)}
         >
           Discard changes
         </button>
-      </div>
+        {head?.end}
+      </header>
 
-      <div className="chart-editor__fields">
+      <aside className="chart-editor__fields" aria-label="Fields" inert={busy} aria-busy={busy}>
         <FieldList
           cubeName={cubeName}
           onDragStateChange={setDragging}
@@ -323,198 +411,91 @@ export function ChartEditor({ initial = OPENED_WITH, tile, onChange }: ChartEdit
             change((current) => ({ ...current, cubeName: next, spec: emptySpec(next) }))
           }
         />
-      </div>
+      </aside>
 
-      <div className="chart-editor__wells">
-        <Wells
-          spec={spec}
-          available={available}
-          dragging={dragging}
-          onAdd={(well, member) => setSpec((current) => addToWell(current, well, member))}
-          onRemove={(well, member) => setSpec((current) => removeFromWell(current, well, member))}
-        />
-      </div>
-
-      <section className="chart-editor__result" data-testid="editor-result">
-        <h3>Chart</h3>
-        {recommendation.top ? (
-          <div data-testid="recommendation">
-            <p data-testid="chart-type">{shownType}</p>
-            <p data-testid="recommended-type">{recommended}</p>
-            <p data-testid="recommended-reason">{recommendation.top.reason}</p>
-
-            <h4>Or</h4>
-            <ul>
-              {recommendation.runnersUp.map((runnerUp) => (
-                <li
-                  key={runnerUp.candidate.chartType}
-                  data-testid={`runner-up-${runnerUp.candidate.chartType}`}
-                >
-                  {runnerUp.candidate.chartType} — {runnerUp.reason}
-                </li>
-              ))}
-            </ul>
-
-            {missing.length > 0 ? (
-              <div role="status" data-testid="missing-fields">
-                <p>
-                  <span data-icon="incomplete" aria-hidden="true">
-                    ⚠
-                  </span>{' '}
-                  This chart cannot be drawn yet.
-                </p>
-                <ul>
-                  {missing.map((sentence) => (
-                    <li key={sentence}>{sentence}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            <label htmlFor="chart-type-picker">Chart type</label>
-            <select
-              id="chart-type-picker"
-              value={shownType ?? ''}
-              onChange={(event) =>
-                setChartTypeState(chooseType(event.target.value as typeof shownType & string))
-              }
-            >
-              {/* Every type, not only the recommended ones: an override
-                  limited to the runners-up is barely an override, and a type
-                  the fields cannot yet produce is answered by the message
-                  above rather than by hiding it (AC-033). */}
-              {ALL_CHART_TYPES.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                  {alternatives.some((alternative) => alternative.candidate.chartType === option)
-                    ? ' (suggested)'
-                    : ''}
-                </option>
-              ))}
-            </select>
-
-            {isManual(chartTypeState) ? (
-              <button
-                type="button"
-                data-testid="back-to-recommended"
-                onClick={() => setChartTypeState(backToRecommended())}
-              >
-                Back to recommended
-              </button>
-            ) : null}
-
-            <WhyThisChart explanation={explanation} />
-
-            {/*
-              Sorting (AC-044). "Cube's order" is the default and is not the
-              same as any of the others: Cube was asked for an ordering and
-              returned one, and leaving it alone is a real choice rather than
-              the absence of one.
-            */}
-            <label htmlFor="chart-sort">Sort</label>
-            <select
-              id="chart-sort"
-              value={sortValue}
-              onChange={(event) => {
-                setSort(event.target.value);
-              }}
-            >
-              {SORT_CHOICES.map((choice) => (
-                <option key={choice.value} value={choice.value}>
-                  {choice.label}
-                </option>
-              ))}
-            </select>
-
-            {/*
-              The inspector's Axes section (AC-040, direction.md §6). Only for
-              the types that have cartesian axes: a pie or a KPI has none, and
-              offering settings that cannot apply is worse than offering none.
-            */}
-            {CARTESIAN_TYPES.includes(shownType) ? (
-              <div data-testid="axes-section">
-                <AxisPanel
-                  axis="x"
-                  label="X axis"
-                  settings={axes.x ?? {}}
-                  onChange={(next) => {
-                    setAxis('x', next);
-                  }}
-                />
-                <AxisPanel
-                  axis="y"
-                  label="Y axis"
-                  settings={axes.y ?? {}}
-                  onChange={(next) => {
-                    setAxis('y', next);
-                  }}
-                />
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        <h3>Result</h3>
-        {isEmpty(spec) ? (
-          <p data-testid="result-empty">Add a field to see data.</p>
-        ) : result.isPending ? (
-          // A skeleton in the shape of the chart, not a spinner (AC-042): a
-          // spinner says something is happening, a skeleton says something is
-          // happening *here* and will look like this.
-          <div data-testid="result-loading">
-            <TileSkeleton chartType={shownType ?? 'bar'} />
-          </div>
-        ) : result.isError ? (
-          // Cube's own message, with Retry and the query behind a disclosure
-          // (AC-012, AC-042).
-          <TileError
-            error={result.error}
-            onRetry={() => {
-              void result.refetch();
-            }}
-          />
-        ) : (
-          <>
-            <p data-testid="result-row-count">{rows.length} rows</p>
-            {/*
-              Where this answer came from, as the prototype's editor badges
-              it, and — when no pre-aggregation served it — the warning that
-              rollup-only mode would refuse the chart, on the chart itself
-              (T153, AC-147; its panel says the same). Read from the answer
-              the chart drew, so the two cannot disagree.
-            */}
-            <div className="result-source" data-testid="result-source">
-              <AccelerationBadge result={served} />
-              {accelerationOf(served).accelerated ? null : <RollupOnlyWarning />}
+      <section
+        className="chart-editor__center"
+        aria-label="Preview"
+        data-testid="editor-result"
+        inert={busy}
+        aria-busy={busy}
+      >
+        <div className="chart-editor__canvas">
+          {isEmpty(spec) ? (
+            <p className="chart-editor__empty" data-testid="result-empty">
+              Add a field to see data.
+            </p>
+          ) : result.isPending ? (
+            // A skeleton in the shape of the chart, not a spinner (AC-042): a
+            // spinner says something is happening, a skeleton says something
+            // is happening *here* and will look like this.
+            <div data-testid="result-loading">
+              <TileSkeleton chartType={shownType ?? 'bar'} />
             </div>
-            <pre data-testid="result-first-row">{JSON.stringify(rows[0] ?? null)}</pre>
-            {shownType === null || missing.length > 0 ? null : (
-              // Only once the fields can actually produce the chosen type.
-              // Drawing anyway would put a chart on screen that contradicts
-              // the message AC-033 has just shown beside it.
-              <PreviewFrame tile={tile}>
-                {(chartHeight) => (
-                  <ChartTile
-                    spec={compile(previewDocument, { rows, chartType: shownType, formats })}
-                    {...(chartHeight === undefined ? {} : { height: chartHeight })}
-                    // Held here, not in the tile: the tile unmounts whenever
-                    // the query re-runs, so a field change would flip the
-                    // reader back from the table to the chart (AC-178).
-                    tableView={tableView}
-                    onTableViewChange={setTableView}
-                  />
-                )}
-              </PreviewFrame>
-            )}
-          </>
-        )}
+          ) : result.isError ? (
+            // Cube's own message, with Retry and the query behind a disclosure
+            // (AC-012, AC-042).
+            <TileError
+              error={result.error}
+              onRetry={() => {
+                void result.refetch();
+              }}
+            />
+          ) : (
+            <>
+              {/*
+                Where this answer came from, as the prototype's editor badges
+                it, and — when no pre-aggregation served it — the warning that
+                rollup-only mode would refuse the chart, on the chart itself
+                (T153, AC-147; its panel says the same). Read from the answer
+                the chart drew, so the two cannot disagree.
+              */}
+              <div className="result-source" data-testid="result-source">
+                <AccelerationBadge result={served} />
+                {accelerationOf(served).accelerated ? null : <RollupOnlyWarning />}
+              </div>
+              {missing.length > 0 ? (
+                // In the chart's place, what it still needs (AC-033), rather
+                // than empty axes.
+                <div role="status" className="chart-editor__missing" data-testid="missing-fields">
+                  <p>
+                    <span data-icon="incomplete" aria-hidden="true">
+                      ⚠
+                    </span>{' '}
+                    This chart cannot be drawn yet.
+                  </p>
+                  <ul>
+                    {missing.map((sentence) => (
+                      <li key={sentence}>{sentence}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : shownType === null ? null : (
+                <PreviewFrame tile={tile}>
+                  {(chartHeight) => (
+                    <ChartTile
+                      spec={compile(previewDocument, { rows, chartType: shownType, formats })}
+                      {...(chartHeight === undefined ? {} : { height: chartHeight })}
+                      // Held here, not in the tile: the tile unmounts whenever
+                      // the query re-runs, so a field change would flip the
+                      // reader back from the table to the chart (AC-178).
+                      tableView={tableView}
+                      onTableViewChange={setTableView}
+                    />
+                  )}
+                </PreviewFrame>
+              )}
+            </>
+          )}
+        </div>
 
         {/*
           Outside the loading and error branches on purpose: rendered inside
           them, the drawer unmounts whenever the query re-runs and reopens
           closed, so changing a field would shut a drawer the user had opened.
           It shows the rows the chart rendered, passed in rather than
-          re-fetched, so the two cannot disagree (AC-036).
+          re-fetched, so the two cannot disagree (AC-036). The only place the
+          result's rows are printed (AC-214).
         */}
         {isEmpty(spec) ? null : (
           <ResultsDrawer
@@ -530,6 +511,167 @@ export function ChartEditor({ initial = OPENED_WITH, tile, onChange }: ChartEdit
           />
         )}
       </section>
+
+      <aside
+        className="chart-editor__inspector"
+        aria-label="Chart settings"
+        inert={busy}
+        aria-busy={busy}
+      >
+        <div role="tablist" aria-label="Inspector" className="edit-sidebar__tabs">
+          {INSPECTOR_TABS.map(([key, label], index) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              id={`${inspectorId}-${key}`}
+              ref={(node) => {
+                inspectorTabs.current[index] = node;
+              }}
+              aria-selected={inspector === key}
+              aria-controls={`${inspectorId}-panel`}
+              tabIndex={inspector === key ? 0 : -1}
+              onClick={() => setInspector(key)}
+              onKeyDown={(event) => {
+                // The APG tabs pattern, as the dashboard's sidebar.
+                const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+                if (step === 0) return;
+                event.preventDefault();
+                const next = (index + step + INSPECTOR_TABS.length) % INSPECTOR_TABS.length;
+                setInspector(INSPECTOR_TABS[next]?.[0] ?? 'data');
+                inspectorTabs.current[next]?.focus();
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div
+          role="tabpanel"
+          id={`${inspectorId}-panel`}
+          aria-labelledby={`${inspectorId}-${inspector}`}
+          // Reachable by Tab even when it holds no control (APG tabs).
+          tabIndex={0}
+          className="chart-editor__inspector-body"
+        >
+          {inspector === 'data' ? (
+            <>
+              <Wells
+                spec={spec}
+                available={available}
+                dragging={dragging}
+                onAdd={(well, member) => setSpec((current) => addToWell(current, well, member))}
+                onRemove={(well, member) =>
+                  setSpec((current) => removeFromWell(current, well, member))
+                }
+              />
+              {recommendation.top ? (
+                <div className="chart-editor__type" data-testid="recommendation">
+                  <h3>Chart type</h3>
+                  <p data-testid="chart-type">{shownType}</p>
+                  <p data-testid="recommended-type">{recommended}</p>
+                  <p data-testid="recommended-reason">{recommendation.top.reason}</p>
+
+                  <h4>Or</h4>
+                  <ul>
+                    {recommendation.runnersUp.map((runnerUp) => (
+                      <li
+                        key={runnerUp.candidate.chartType}
+                        data-testid={`runner-up-${runnerUp.candidate.chartType}`}
+                      >
+                        {runnerUp.candidate.chartType} — {runnerUp.reason}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <label htmlFor="chart-type-picker">Chart type</label>
+                  <select
+                    id="chart-type-picker"
+                    value={shownType ?? ''}
+                    onChange={(event) =>
+                      setChartTypeState(chooseType(event.target.value as typeof shownType & string))
+                    }
+                  >
+                    {/* Every type, not only the recommended ones: an override
+                  limited to the runners-up is barely an override, and a type
+                  the fields cannot yet produce is answered by the message
+                  above rather than by hiding it (AC-033). */}
+                    {ALL_CHART_TYPES.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                        {alternatives.some(
+                          (alternative) => alternative.candidate.chartType === option,
+                        )
+                          ? ' (suggested)'
+                          : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  {isManual(chartTypeState) ? (
+                    <button
+                      type="button"
+                      data-testid="back-to-recommended"
+                      onClick={() => setChartTypeState(backToRecommended())}
+                    >
+                      Back to recommended
+                    </button>
+                  ) : null}
+
+                  <WhyThisChart explanation={explanation} />
+
+                  {/*
+                    Sorting (AC-044). "Cube's order" is the default and is not
+                    the same as any of the others: Cube was asked for an
+                    ordering and returned one, and leaving it alone is a real
+                    choice rather than the absence of one.
+                  */}
+                  <label htmlFor="chart-sort">Sort</label>
+                  <select
+                    id="chart-sort"
+                    value={sortValue}
+                    onChange={(event) => {
+                      setSort(event.target.value);
+                    }}
+                  >
+                    {SORT_CHOICES.map((choice) => (
+                      <option key={choice.value} value={choice.value}>
+                        {choice.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+            </>
+          ) : CARTESIAN_TYPES.includes(shownType) ? (
+            /*
+              Customize › Axes (AC-040, direction.md §6). Only for the types
+              that have cartesian axes: a pie or a KPI has none, and offering
+              settings that cannot apply is worse than offering none.
+            */
+            <div data-testid="axes-section">
+              <AxisPanel
+                axis="x"
+                label="X axis"
+                settings={axes.x ?? {}}
+                onChange={(next) => {
+                  setAxis('x', next);
+                }}
+              />
+              <AxisPanel
+                axis="y"
+                label="Y axis"
+                settings={axes.y ?? {}}
+                onChange={(next) => {
+                  setAxis('y', next);
+                }}
+              />
+            </div>
+          ) : (
+            <p className="panel-section__note">This chart type has no axes to set.</p>
+          )}
+        </div>
+      </aside>
     </div>
   );
 }

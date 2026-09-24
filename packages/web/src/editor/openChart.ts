@@ -25,6 +25,11 @@ export interface EditorState {
    * change is undoable and an axis edit is a change like any other.
    */
   readonly options: Record<string, unknown>;
+  /**
+   * Its title, edited in the editor's header (AC-214). Absent for a chart
+   * opened with none to load, until one is typed.
+   */
+  readonly title?: string;
 }
 
 /** A new chart: nothing to load. */
@@ -228,7 +233,14 @@ export function chartDocumentWith(loaded: ChartDocument, state: EditorState): Ch
     delete chart['options'];
   }
 
-  return { ...loaded, chart: chart as unknown as ChartDocument['chart'] };
+  return {
+    ...loaded,
+    // The title as edited in the header (AC-214), where the editor has one —
+    // but never none: a title cleared keeps the stored one, as a rename
+    // refuses a blank name (T228's review).
+    ...(state.title === undefined || state.title.trim() === '' ? {} : { title: state.title }),
+    chart: chart as unknown as ChartDocument['chart'],
+  };
 }
 
 /**
@@ -304,7 +316,8 @@ function canonical(value: unknown): string {
  * answer AC-181 gives a chart from a newer format.
  *
  * Not loaded, because `EditorState` has nowhere to hold them: the document's
- * `encoding` overrides, and its title, owner, folder and dashboard ownership.
+ * `encoding` overrides, and its owner, folder and dashboard ownership. (Its
+ * title is, since the header edits it — AC-214.)
  * So a chart is written back by merging onto the loaded document
  * (`chartDocumentWith`, which T192's save uses), never by rebuilding one from
  * this state — that would drop them, the same shape as the `dashboardOf` data
@@ -324,5 +337,6 @@ export function editorStateOf(document: ChartDocument): EditorState {
     spec,
     chartType: chartType === undefined ? FOLLOWING_RECOMMENDATION : chooseType(chartType),
     options: document.chart.options ?? {},
+    title: document.title,
   };
 }

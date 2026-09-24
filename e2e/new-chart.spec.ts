@@ -26,7 +26,8 @@ test('New › Chart opens the editor on an untitled chart, and saving it opens i
   // The editor, on the new chart.
   await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit$/);
   const id = /\/explore\/charts\/([^/]+)\/edit$/.exec(page.url())?.[1] ?? '';
-  await expect(page.getByRole('main')).toContainText('Untitled chart');
+  // Its title, in the editor's header to change (AC-214).
+  await expect(page.getByLabel('Chart title')).toHaveValue('Untitled chart');
 
   // A field, and Save.
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });

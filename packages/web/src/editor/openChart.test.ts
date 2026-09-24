@@ -320,6 +320,25 @@ describe('writing the editor’s state back onto the chart', () => {
     expect(chartDocumentWith(plain, editorStateOf(plain))).toEqual(plain);
   });
 
+  /** T228 / AC-214: the title is edited in the editor's header, and saved. */
+  it('takes a title changed in the header, and keeps it otherwise', () => {
+    const renamed = chartDocumentWith(everything, {
+      ...editorStateOf(everything),
+      title: 'Renamed in the header',
+    });
+    expect(renamed.title).toBe('Renamed in the header');
+    expect(renamed.chart).toEqual(everything.chart);
+
+    // A state with no title — a chart opened with none to load — keeps the stored one.
+    const { cubeName, spec, chartType, options } = editorStateOf(everything);
+    expect(chartDocumentWith(everything, { cubeName, spec, chartType, options }).title).toBe(
+      everything.title,
+    );
+    // Nor one cleared to nothing: a chart always has a name (T228's review).
+    const cleared = { ...editorStateOf(everything), title: '   ' };
+    expect(chartDocumentWith(everything, cleared).title).toBe(everything.title);
+  });
+
   it('takes a changed cube', () => {
     const written = chartDocumentWith(everything, {
       ...editorStateOf(everything),
@@ -463,7 +482,8 @@ describe('a new chart', () => {
 
     const state = editorStateOf(readChartDocument(migrateChartDocument(stub)));
 
-    expect(state).toEqual(OPENED_WITH);
+    // Empty, with the title it was made with, which the header edits (AC-214).
+    expect(state).toEqual({ ...OPENED_WITH, title: 'Untitled chart' });
   });
 });
 

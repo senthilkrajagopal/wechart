@@ -213,6 +213,10 @@ test('a tile resized in this session is previewed at its new height', async ({ p
 });
 
 test('Fit fills the editor, and Actual size goes back to the tile', async ({ page }) => {
+  // At AC-214's size: between the fields and the inspector (280 and 320 px),
+  // a 1,280 px window leaves the preview barely wider than a half-width tile,
+  // and the difference Fit makes would not show.
+  await page.setViewportSize({ width: 1440, height: 900 });
   await open(page);
   const tile = await page.locator(TILE).boundingBox();
   await openEditorFromPencil(page);
