@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { META_QUERY } from '../../query/meta';
 import { StateLine } from '../../shell/StatusIcon';
 import { CreateMenu, DEFAULT_TITLES, type CreatableKind } from './CreateMenu';
 import { FolderContents, type CatalogItem } from './FolderContents';
@@ -165,6 +166,20 @@ export function ExplorePage() {
 
   const shown = searching ? results : contents;
 
+  /**
+   * Whether a chart's source is a cube or a view, for its Built on column
+   * (AC-193) — the model's meta says; until it has, the name stands alone.
+   */
+  const meta = useQuery(META_QUERY);
+  const sourceKinds = new Map(
+    (
+      (meta.data as { cubes?: readonly { name?: unknown; type?: unknown }[] } | undefined)?.cubes ??
+      []
+    )
+      .filter((cube): cube is { name: string; type?: unknown } => typeof cube.name === 'string')
+      .map((cube) => [cube.name, cube.type === 'view' ? ('view' as const) : ('cube' as const)]),
+  );
+
   return (
     <div className="explore">
       <aside className="explore__tree">
@@ -272,7 +287,17 @@ export function ExplorePage() {
         {shown.isSuccess ? (
           <FolderContents
             items={searching ? shown.data.slice(0, SEARCH_SHOWN) : shown.data}
-            folders={folders.data ?? []}
+            // The top is somewhere to move to as well (AC-193).
+            folders={[{ id: ROOT, title: ROOT_TITLE, parentId: null }, ...(folders.data ?? [])]}
+            sourceKinds={sourceKinds}
+            {...(searching
+              ? {
+                  folderNames: new Map([
+                    [ROOT, ROOT_TITLE],
+                    ...(folders.data ?? []).map((folder) => [folder.id, folder.title] as const),
+                  ]),
+                }
+              : {})}
             emptyText={
               searching
                 ? 'Nothing matches.'

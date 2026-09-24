@@ -44,8 +44,9 @@ test('a chart keeps its address after being renamed', async ({ page, request }) 
     .getByRole('button', { name: `Home ${unique}` })
     .click();
   const row = page.getByTestId(`item-${chart.id}`);
-  // Exact: the fixture's own title contains the word "rename".
-  await row.getByRole('button', { name: 'Rename', exact: true }).click();
+  // Rename is in the row's menu (AC-193).
+  await row.getByRole('button', { name: `Actions for Chart ${unique}` }).click();
+  await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
   await row.getByRole('textbox').fill(`Renamed ${unique}`);
   await row.getByRole('button', { name: 'Save', exact: true }).click();
 
@@ -70,6 +71,12 @@ test('a chart keeps its address after being moved to another folder', async ({ p
     .click();
   await expect(page.getByTestId(`item-${chart.id}`)).toBeVisible();
 
+  // Move is in the row's menu (AC-193).
+  await page
+    .getByTestId(`item-${chart.id}`)
+    .getByRole('button', { name: `Actions for Chart ${unique}` })
+    .click();
+  await page.getByRole('menuitem', { name: 'Move to…' }).click();
   await page
     .getByTestId(`item-${chart.id}`)
     .getByRole('combobox')

@@ -110,8 +110,13 @@ test('clearing the box goes back to the folder it was searching from', async ({ 
   await box.fill('');
 
   await expect(contents.getByRole('heading', { level: 1 })).toHaveText('Finance');
-  // Finance's own contents again: its charts, not the search's dashboards.
-  await expect(names(contents).first()).toContainText('Finance');
+  // Finance's own contents again: its dashboards, not the search's. (Its
+  // subfolders, which other tests add, come first — AC-193.)
+  await expect(
+    names(contents)
+      .filter({ hasText: /^Finance dashboard/ })
+      .first(),
+  ).toContainText('Finance');
 });
 
 test('the ⌘K palette finds the same library items', async ({ page }) => {

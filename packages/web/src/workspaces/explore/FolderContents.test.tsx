@@ -29,6 +29,10 @@ const items: CatalogItem[] = [
     title: 'Revenue by region',
     owner: 'analyst',
     updatedAt: '2026-09-18T09:30:00.000Z',
+    chartType: 'bar',
+    source: 'orders',
+    hasFields: true,
+    folderId: 'root',
   },
   {
     kind: 'folder',
@@ -50,9 +54,10 @@ describe('folder contents (AC-017)', () => {
   it('fills the type, owner and last-updated columns for every item that has them', () => {
     render(<FolderContents items={items} />);
 
+    // Type, Built on, Updated, Owner (AC-193's order).
     const dashboard = within(screen.getByTestId('item-d1')).getAllByRole('cell');
     expect(dashboard[0]?.textContent).toContain('Dashboard');
-    expect(dashboard[1]?.textContent).toBe('admin');
+    expect(dashboard[3]?.textContent).toBe('admin');
     expect(dashboard[2]?.textContent?.trim()).not.toBe('');
   });
 
@@ -60,14 +65,17 @@ describe('folder contents (AC-017)', () => {
     render(<FolderContents items={items} />);
 
     expect(within(screen.getByTestId('item-d1')).getByText('Dashboard')).toBeTruthy();
-    expect(within(screen.getByTestId('item-c1')).getByText('Chart')).toBeTruthy();
+    // A chart by its chart type (AC-193), never only "Chart".
+    const chart = within(screen.getByTestId('item-c1')).getAllByRole('cell');
+    expect(chart[0]?.textContent?.trim()).toBe('Bar');
+    expect(chart[1]?.textContent).toBe('orders');
   });
 
   it('shows a placeholder rather than a blank cell for an item with no owner', () => {
     render(<FolderContents items={items} />);
 
     const folder = within(screen.getByTestId('item-f1')).getAllByRole('cell');
-    expect(folder[1]?.textContent?.trim()).not.toBe('');
+    expect(folder[3]?.textContent?.trim()).not.toBe('');
   });
 
   it('carries a machine-readable timestamp alongside the shown one', () => {
@@ -101,9 +109,15 @@ describe('folder contents (AC-017)', () => {
  * Fails when: arrow keys do not move the selection, or Enter does not open the
  * selected item.
  */
-describe('keyboard navigation (AC-024)', () => {
-  const rowFor = (id: string) => screen.getByTestId(`item-${id}`);
+const rowFor = (id: string) => screen.getByTestId(`item-${id}`);
 
+/** Open a row's ⋯ menu and choose one of its items (AC-193). */
+async function chooseFromMenu(row: HTMLElement, title: string, item: string) {
+  await userEvent.click(within(row).getByRole('button', { name: `Actions for ${title}` }));
+  await userEvent.click(screen.getByRole('menuitem', { name: item }));
+}
+
+describe('keyboard navigation (AC-024)', () => {
   it('reaches the list in one tab stop, not one per row', async () => {
     render(<FolderContents items={items} />);
 
@@ -189,7 +203,7 @@ describe('keyboard navigation (AC-024)', () => {
     );
     const row = rowFor('c1');
 
-    await userEvent.click(within(row).getByRole('button', { name: 'Rename' }));
+    await chooseFromMenu(row, 'Revenue by region', 'Rename');
     const field = within(row).getByLabelText(/^New name for/);
     await userEvent.clear(field);
     await userEvent.type(field, 'Renamed{Home}{End}{ArrowUp}{Enter}');
@@ -198,6 +212,7 @@ describe('keyboard navigation (AC-024)', () => {
     expect(onOpen).not.toHaveBeenCalled();
 
     // The Move-to list: arrow keys choose within it, not another row.
+    await chooseFromMenu(rowFor('d1'), 'Revenue', 'Move to…');
     const move = within(rowFor('d1')).getByLabelText(/^Move .* to$/);
     move.focus();
     await userEvent.keyboard('{ArrowDown}');
@@ -208,9 +223,10 @@ describe('keyboard navigation (AC-024)', () => {
     const onRename = vi.fn();
     render(<FolderContents items={items} onRename={onRename} />);
     const row = rowFor('c1');
-    const rename = within(row).getByRole('button', { name: 'Rename' });
+    const trigger = within(row).getByRole('button', { name: 'Actions for Revenue by region' });
 
-    rename.focus();
+    trigger.focus();
+    await userEvent.keyboard('{Enter}');
     await userEvent.keyboard('{Enter}');
     const field = within(row).getByLabelText(/^New name for/);
     expect(document.activeElement).toBe(field);
@@ -218,8 +234,8 @@ describe('keyboard navigation (AC-024)', () => {
     await userEvent.keyboard('Other{Escape}');
     expect(within(row).queryByLabelText(/^New name for/)).toBeNull();
     expect(onRename).not.toHaveBeenCalled();
-    // Back where the rename began.
-    expect(document.activeElement).toBe(within(row).getByRole('button', { name: 'Rename' }));
+    // Back where the rename began: the row's menu button.
+    expect(document.activeElement).toBe(trigger);
   });
 
   it('leaves the empty folder message alone', () => {
@@ -227,5 +243,138 @@ describe('keyboard navigation (AC-024)', () => {
 
     expect(screen.queryByRole('table')).toBeNull();
     expect(screen.getByText(/empty/i)).toBeTruthy();
+  });
+});
+
+/**
+ * AC-193: … showing a dashboard's number of page tabs, a chart's chart type
+ * and the cube or view it is built on, and a subfolder's item count, and SHALL
+ * offer rename and move through a menu on each row.
+ * `Fails when: … a row shows a rename or move control before its menu is
+ * opened, or a move offers the item's own folder or, for a folder, itself or a
+ * folder inside it.`
+ */
+describe("the contents' columns and row menu (AC-193)", () => {
+  const listed: CatalogItem[] = [
+    {
+      kind: 'folder',
+      id: 'sub',
+      title: 'Sub',
+      owner: 'admin',
+      updatedAt: '2026-09-01T08:00:00.000Z',
+      folderId: 'home',
+      itemCount: 1,
+    },
+    {
+      kind: 'dashboard',
+      id: 'board',
+      title: 'Board',
+      owner: 'admin',
+      updatedAt: '2026-09-01T08:00:00.000Z',
+      folderId: 'home',
+      tabs: 3,
+    },
+    {
+      kind: 'chart',
+      id: 'auto',
+      title: 'Auto',
+      owner: 'admin',
+      updatedAt: '2026-09-01T08:00:00.000Z',
+      folderId: 'home',
+      chartType: null,
+      source: 'order_summary',
+      hasFields: true,
+    },
+  ];
+  const folders = [
+    { id: 'root', title: 'All folders', parentId: null },
+    { id: 'home', title: 'Home', parentId: 'root' },
+    { id: 'sub', title: 'Sub', parentId: 'home' },
+    { id: 'inner', title: 'Inner', parentId: 'sub' },
+    { id: 'elsewhere', title: 'Elsewhere', parentId: 'root' },
+  ];
+  const sourceKinds = new Map([['order_summary', 'view' as const]]);
+
+  it('says what each row is built on: items, tabs, or a cube or view', () => {
+    render(<FolderContents items={listed} sourceKinds={sourceKinds} />);
+
+    const builtOn = (id: string) => within(rowFor(id)).getAllByRole('cell')[1]?.textContent;
+    expect(builtOn('sub')).toBe('1 item');
+    expect(builtOn('board')).toBe('3 tabs');
+    expect(builtOn('auto')).toBe('view: order_summary');
+    expect(within(rowFor('auto')).getAllByRole('cell')[0]?.textContent?.trim()).toBe('Automatic');
+  });
+
+  it("says in a search's results which folder each item is in", () => {
+    // The prototype's Built on in search: "3 tabs · Finance" (explore.js).
+    render(
+      <FolderContents
+        items={listed}
+        sourceKinds={sourceKinds}
+        folderNames={new Map([['home', 'Home']])}
+      />,
+    );
+
+    const builtOn = (id: string) => within(rowFor(id)).getAllByRole('cell')[1]?.textContent;
+    expect(builtOn('board')).toBe('3 tabs · Home');
+    expect(builtOn('auto')).toBe('view: order_summary · Home');
+  });
+
+  it('does not offer the top to an item already there', async () => {
+    const atTop: CatalogItem = { ...listed[1]!, id: 'top', title: 'Top', folderId: 'root' };
+    render(<FolderContents items={[atTop]} folders={folders} onMove={vi.fn()} />);
+
+    await chooseFromMenu(rowFor('top'), 'Top', 'Move to…');
+    const offered = within(within(rowFor('top')).getByRole('combobox'))
+      .getAllByRole('option')
+      .map((option) => option.textContent);
+    expect(offered).toEqual(['Move to…', 'Home', 'Sub', 'Inner', 'Elsewhere']);
+  });
+
+  it('shows no rename or move control on a row until its menu is opened', () => {
+    render(<FolderContents items={listed} folders={folders} onRename={vi.fn()} onMove={vi.fn()} />);
+
+    for (const id of ['sub', 'board', 'auto']) {
+      expect(within(rowFor(id)).queryByRole('button', { name: 'Rename' })).toBeNull();
+      expect(within(rowFor(id)).queryByRole('combobox')).toBeNull();
+    }
+  });
+
+  it("never offers a chart's own folder as where to move it", async () => {
+    const onMove = vi.fn();
+    render(<FolderContents items={listed} folders={folders} onMove={onMove} />);
+
+    await chooseFromMenu(rowFor('auto'), 'Auto', 'Move to…');
+    const list = within(rowFor('auto')).getByRole('combobox', { name: 'Move Auto to' });
+    expect(document.activeElement).toBe(list);
+    const offered = within(list)
+      .getAllByRole('option')
+      .map((option) => option.textContent);
+    expect(offered).toEqual(['Move to…', 'All folders', 'Sub', 'Inner', 'Elsewhere']);
+
+    await userEvent.selectOptions(list, 'Elsewhere');
+    expect(onMove).toHaveBeenCalledWith(expect.objectContaining({ id: 'auto' }), 'elsewhere');
+  });
+
+  it('never offers a folder itself, or a folder inside it, as where to move it', async () => {
+    render(<FolderContents items={listed} folders={folders} onMove={vi.fn()} />);
+
+    await chooseFromMenu(rowFor('sub'), 'Sub', 'Move to…');
+    const offered = within(within(rowFor('sub')).getByRole('combobox'))
+      .getAllByRole('option')
+      .map((option) => option.textContent);
+    expect(offered).toEqual(['Move to…', 'All folders', 'Elsewhere']);
+  });
+
+  it('puts the Move list away with Escape, back on the row menu', async () => {
+    render(<FolderContents items={listed} folders={folders} onMove={vi.fn()} />);
+
+    await chooseFromMenu(rowFor('board'), 'Board', 'Move to…');
+    await userEvent.keyboard('{Escape}');
+
+    expect(within(rowFor('board')).queryByRole('combobox')).toBeNull();
+    expect(document.activeElement).toBe(
+      within(rowFor('board')).getByRole('button', { name: 'Actions for Board' }),
+    );
   });
 });

@@ -21,6 +21,18 @@ export interface CatalogItem {
    * read from the body like the other columns, so it cannot go stale.
    */
   readonly description: string | null;
+  /** The folder it sits in, which a move need not offer (AC-193). */
+  readonly folderId: string | null;
+  /** A chart's saved type; null when the recommender picks it, or it has none. */
+  readonly chartType: string | null;
+  /** The cube or view a chart is built on. */
+  readonly source: string | null;
+  /** Whether a chart has any field in its wells — one with none is incomplete. */
+  readonly hasFields: boolean;
+  /** A dashboard's page tabs: one before any is added, as it opens on one. */
+  readonly tabs: number | null;
+  /** A folder's dashboards and charts, including those in its subfolders. */
+  readonly itemCount: number | null;
 }
 
 export interface FolderNode {
@@ -37,7 +49,52 @@ export function catalog(db: Kysely<Database>) {
     db
       .selectFrom('documents')
       .select(['kind', 'id', 'title', 'owner', 'updated_at', 'folder_id', 'local_to_dashboard_id'])
-      .select(sql<string | null>`body ->> 'description'`.as('description'));
+      .select(sql<string | null>`body ->> 'description'`.as('description'))
+      // What the Type and Built on columns say (AC-193), read from the body
+      // like the rest, so they cannot disagree with the object.
+      .select(sql<string | null>`body -> 'chart' ->> 'chartType'`.as('chart_type'))
+      .select(sql<string | null>`body -> 'chart' -> 'source' ->> 'cube'`.as('source'))
+      .select(
+        // Silent: a body with no chart, or no wells, has no fields rather
+        // than being an error.
+        sql<boolean>`coalesce(jsonb_path_exists(body, 'strict $.chart.wells.* ? (@.size() > 0)', '{}', true), false)`.as(
+          'has_fields',
+        ),
+      )
+      .select(
+        sql<
+          number | null
+        >`case when jsonb_typeof(body -> 'pages') = 'array' then jsonb_array_length(body -> 'pages') end`.as(
+          'pages',
+        ),
+      );
+
+  /**
+   * Each of these folders' dashboards and library charts, counting those in
+   * every folder beneath it (AC-193, AC-194). Dashboard-local charts are not
+   * catalog objects (AC-126), so they are not counted.
+   *
+   * The recursion follows `folder_id` from each folder down; a cycle in
+   * stored data would repeat a row, and `union` (not `union all`) drops the
+   * repeat, so it ends.
+   */
+  const itemCounts = async (folderIds: readonly string[]): Promise<Map<string, number>> => {
+    if (folderIds.length === 0) return new Map();
+    const result = await sql<{ root: string; count: string }>`
+      with recursive tree(root, id) as (
+        select id, id from documents where kind = 'folder' and id in (${sql.join(folderIds)})
+        union
+        select tree.root, d.id from documents d join tree on d.folder_id = tree.id
+        where d.kind = 'folder'
+      )
+      select tree.root, count(i.id) as count
+      from tree left join documents i
+        on i.folder_id = tree.id
+        and i.kind in ('dashboard', 'chart')
+        and i.local_to_dashboard_id is null
+      group by tree.root`.execute(db);
+    return new Map(result.rows.map((row) => [row.root, Number(row.count)]));
+  };
 
   return {
     /** Every folder, for the tree. */
@@ -67,11 +124,18 @@ export function catalog(db: Kysely<Database>) {
       const rows = await selectItems()
         .where('folder_id', '=', folderId)
         .where('local_to_dashboard_id', 'is', null)
-        .orderBy('kind', 'asc')
+        // Subfolders first, then dashboards, then charts (AC-193).
+        .orderBy(sql`case kind when 'folder' then 0 when 'dashboard' then 1 else 2 end`)
         .orderBy('title', 'asc')
         .execute();
 
-      return rows.map(toItem);
+      const counts = await itemCounts(
+        rows.filter((row) => row.kind === 'folder').map((row) => row.id),
+      );
+      return rows.map((row) => ({
+        ...toItem(row),
+        itemCount: row.kind === 'folder' ? (counts.get(row.id) ?? 0) : null,
+      }));
     },
 
     /** Every chart and dashboard with its body, for what uses a member (T147, AC-141). */
@@ -158,9 +222,15 @@ interface Row {
   updated_at: Date;
   local_to_dashboard_id: string | null;
   description: string | null;
+  folder_id: string | null;
+  chart_type: string | null;
+  source: string | null;
+  has_fields: boolean;
+  pages: number | null;
 }
 
 function toItem(row: Row): CatalogItem {
+  const chart = row.kind === 'chart';
   return {
     kind: row.kind as CatalogItem['kind'],
     id: row.id,
@@ -170,5 +240,12 @@ function toItem(row: Row): CatalogItem {
     localToDashboardId: row.local_to_dashboard_id,
     // A blank description is none: the line beneath the name would be empty.
     description: row.description?.trim() ? row.description : null,
+    folderId: row.folder_id,
+    chartType: chart ? row.chart_type : null,
+    source: chart ? row.source : null,
+    hasFields: chart && row.has_fields,
+    // A dashboard opens on one page before any is added (DashboardPage).
+    tabs: row.kind === 'dashboard' ? Math.max(1, row.pages ?? 0) : null,
+    itemCount: null,
   };
 }

@@ -41,7 +41,11 @@ test('selecting a folder shows that folder’s contents', async ({ page }) => {
   // unscoped query matches both.
   await page.getByRole('tree').getByRole('button', { name: 'Finance' }).click();
 
-  await expect(contents.getByRole('row').nth(1)).toContainText(/Finance/);
+  // Its first dashboard: subfolders come first (AC-193), and other tests add
+  // folders of their own to Finance.
+  await expect(contents.locator('tbody tr').filter({ hasText: 'Dashboard' }).first()).toContainText(
+    /Finance/,
+  );
 });
 
 /**
@@ -151,4 +155,164 @@ test('Rename beside the heading renames the folder in place', async ({ page, req
 
   await expect(heading(page)).toHaveText(`After ${unique}`);
   await expect(page.getByRole('treeitem', { name: `After ${unique}` })).toBeVisible();
+});
+
+/**
+ * T213 / AC-193: THE SYSTEM SHALL list a folder's contents under the columns
+ * Name, Type, Built on, Updated and Owner — subfolders first, then dashboards,
+ * then charts — showing a dashboard's description beneath its name and its
+ * number of page tabs, a chart's chart type and the cube or view it is built
+ * on, and a subfolder's item count, and SHALL offer rename and move through a
+ * menu on each row.
+ * `Fails when: a column is missing, a chart's type reads only "Chart", a row
+ * shows a rename or move control before its menu is opened, or a move offers
+ * the item's own folder or, for a folder, itself or a folder inside it.`
+ *
+ * The prototype's `browse()` table (docs/design/prototype/explore.js).
+ */
+async function documentIn(
+  request: APIRequestContext,
+  kind: 'dashboard' | 'chart',
+  folderId: string,
+  body: Record<string, unknown>,
+) {
+  const title = body['title'] as string;
+  const created = (await (
+    await request.post(`${API}/documents`, { data: { kind, title, folderId } })
+  ).json()) as { id: string };
+  const stored = (await (await request.get(`${API}/documents/${kind}/${created.id}`)).json()) as {
+    version: number;
+    body: Record<string, unknown>;
+  };
+  await request.put(`${API}/documents/${kind}/${created.id}`, {
+    data: { version: stored.version, body: { ...stored.body, ...body } },
+  });
+  return created.id;
+}
+
+async function listed(request: APIRequestContext) {
+  const unique = String(Date.now());
+  const home = await folderIn(request, 'root', `Listed ${unique}`);
+  const sub = await folderIn(request, home, `Sub ${unique}`);
+  const inner = await folderIn(request, sub, `Inner ${unique}`);
+  await documentIn(request, 'dashboard', sub, { title: `In sub ${unique}` });
+  await documentIn(request, 'chart', inner, { title: `In inner ${unique}` });
+  const dashboard = await documentIn(request, 'dashboard', home, {
+    title: `Board ${unique}`,
+    description: 'What the board is for',
+    pages: [
+      { id: 'a', title: 'A', items: [] },
+      { id: 'b', title: 'B', items: [] },
+      { id: 'c', title: 'C', items: [] },
+    ],
+  });
+  const wells = { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] };
+  const typed = await documentIn(request, 'chart', home, {
+    title: `A typed ${unique}`,
+    chart: { source: { cube: 'orders' }, wells, chartType: 'hbar' },
+  });
+  const auto = await documentIn(request, 'chart', home, {
+    title: `B auto ${unique}`,
+    chart: {
+      source: { cube: 'order_summary' },
+      wells: { measures: ['order_summary.count'], dimensions: [], timeDimensions: [] },
+    },
+  });
+  return { unique, home, sub, inner, dashboard, typed, auto };
+}
+
+async function openListed(page: Page, title: string) {
+  await page.goto('/explore');
+  await page.getByRole('tree').getByRole('button', { name: title }).click();
+  await expect(heading(page)).toHaveText(title);
+}
+
+test('the contents are listed under Name, Type, Built on, Updated and Owner, subfolders first', async ({
+  page,
+  request,
+}) => {
+  const made = await listed(request);
+  await openListed(page, `Listed ${made.unique}`);
+  const table = contentsOf(page).getByRole('table');
+
+  await expect(table.getByRole('columnheader')).toHaveText([
+    'Name',
+    'Type',
+    'Built on',
+    'Updated',
+    'Owner',
+    'Actions',
+  ]);
+  // Subfolders, then dashboards, then charts.
+  await expect(table.getByRole('row')).toHaveCount(5);
+  const rows = table.locator('tbody tr');
+  await expect(rows.nth(0)).toHaveAttribute('data-testid', `item-${made.sub}`);
+  await expect(rows.nth(1)).toHaveAttribute('data-testid', `item-${made.dashboard}`);
+  await expect(rows.nth(2)).toHaveAttribute('data-testid', `item-${made.typed}`);
+  await expect(rows.nth(3)).toHaveAttribute('data-testid', `item-${made.auto}`);
+
+  const cells = (id: string) => page.getByTestId(`item-${id}`).getByRole('cell');
+  // A subfolder: its items, counting those in the folder inside it.
+  await expect(cells(made.sub).nth(0)).toHaveText('Folder');
+  await expect(cells(made.sub).nth(1)).toHaveText('2 items');
+  // A dashboard: its description beneath its name, and its page tabs.
+  await expect(page.getByTestId(`item-${made.dashboard}`).getByRole('rowheader')).toContainText(
+    'What the board is for',
+  );
+  await expect(cells(made.dashboard).nth(1)).toHaveText('3 tabs');
+  // A chart: its type, never only "Chart", and what it is built on.
+  await expect(cells(made.typed).nth(0)).toHaveText('Bar, horizontal');
+  await expect(cells(made.typed).nth(1)).toHaveText('cube: orders');
+  await expect(cells(made.auto).nth(0)).toHaveText('Automatic');
+  await expect(cells(made.auto).nth(1)).toHaveText('view: order_summary');
+  await expect(cells(made.auto).nth(3)).toHaveText('admin');
+});
+
+test("rename and move are in each row's menu, and a move never offers where the item already is", async ({
+  page,
+  request,
+}) => {
+  const made = await listed(request);
+  await openListed(page, `Listed ${made.unique}`);
+
+  const chartRow = page.getByTestId(`item-${made.typed}`);
+  await expect(chartRow).toBeVisible();
+  // Nothing to rename or move with until the row's menu is opened.
+  await expect(chartRow.getByRole('button', { name: 'Rename', exact: true })).toHaveCount(0);
+  await expect(chartRow.getByRole('combobox')).toHaveCount(0);
+
+  await chartRow.getByRole('button', { name: `Actions for A typed ${made.unique}` }).click();
+  const menu = page.getByRole('menu', { name: `Actions for A typed ${made.unique}` });
+  await expect(menu.getByRole('menuitem')).toHaveText(['Rename', 'Move to…']);
+  await menu.getByRole('menuitem', { name: 'Move to…' }).click();
+  const chartTargets = chartRow.getByRole('combobox', { name: `Move A typed ${made.unique} to` });
+  await expect(chartTargets).toBeFocused();
+  // Its own folder is not a place to move it to; the others are.
+  await expect(chartTargets.getByRole('option', { name: `Listed ${made.unique}` })).toHaveCount(0);
+  await expect(chartTargets.getByRole('option', { name: `Sub ${made.unique}` })).toHaveCount(1);
+
+  // A folder: never itself, nor a folder inside it.
+  const folderRow = page.getByTestId(`item-${made.sub}`);
+  await folderRow.getByRole('button', { name: `Actions for Sub ${made.unique}` }).click();
+  await page
+    .getByRole('menu', { name: `Actions for Sub ${made.unique}` })
+    .getByRole('menuitem', { name: 'Move to…' })
+    .click();
+  const folderTargets = folderRow.getByRole('combobox', { name: `Move Sub ${made.unique} to` });
+  for (const excluded of [`Listed ${made.unique}`, `Sub ${made.unique}`, `Inner ${made.unique}`])
+    await expect(folderTargets.getByRole('option', { name: excluded })).toHaveCount(0);
+  // The top is somewhere a folder can go.
+  await expect(folderTargets.getByRole('option', { name: 'All folders' })).toHaveCount(1);
+
+  // Rename, from the menu, renames in place.
+  await chartRow.getByRole('button', { name: `Actions for A typed ${made.unique}` }).click();
+  await page
+    .getByRole('menu', { name: `Actions for A typed ${made.unique}` })
+    .getByRole('menuitem', { name: 'Rename' })
+    .click();
+  const field = chartRow.getByRole('textbox', { name: `New name for A typed ${made.unique}` });
+  await expect(field).toBeFocused();
+  await field.fill(`Renamed ${made.unique}`);
+  await field.press('Enter');
+  await expect(chartRow.getByRole('rowheader')).toHaveText(`Renamed ${made.unique}`);
 });

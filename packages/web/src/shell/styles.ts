@@ -899,6 +899,15 @@ fieldset.model-field > legend {
 
 .folder-contents__empty,
 .query-log__empty { color: var(--wc-text-secondary); }
+/* A row's name with its type's icon, as the prototype's browse() draws it;
+   its actions behind a ⋯ menu at the end (AC-193). */
+.folder-contents__name { display: inline-flex; gap: 8px; align-items: center; }
+.folder-contents__icon { color: var(--wc-text-secondary); }
+.folder-contents__icon[data-icon='folder']::before { content: '🗀'; }
+.folder-contents__icon[data-icon='dashboard']::before { content: '▤'; }
+.folder-contents__icon[data-icon='chart']::before { content: '▦'; }
+.folder-contents__actions { width: 1%; white-space: nowrap; text-align: right; }
+.folder-contents__rename { display: flex; gap: 4px; align-items: center; }
 /* A dashboard's description beneath its name (AC-197): the prototype's
    second line, 12 px muted. */
 .folder-contents__description {

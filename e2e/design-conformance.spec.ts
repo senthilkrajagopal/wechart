@@ -151,11 +151,14 @@ test.describe('T202: the app bar, workspace navigation, buttons and inputs', () 
   test('buttons, the primary button and inputs', async ({ page }) => {
     // .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong);
     //        background: var(--bg-surface) }
-    // A contents row's Rename is a plain button; its name field and Save, the
-    // input and primary button. (The old create buttons and their form went
-    // with the prototype's one New menu, AC-192.)
+    // A contents row's rename: its Cancel is a plain button; its name field
+    // and Save, the input and primary button. (The old create buttons and
+    // their form went with the prototype's one New menu, AC-192; the row's
+    // Rename, into its ⋯ menu, AC-193.)
     const row = page.getByTestId('explore-contents').getByRole('row').nth(1);
-    const plain = row.getByRole('button', { name: 'Rename', exact: true });
+    await row.getByRole('button', { name: /^Actions for / }).click();
+    await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
+    const plain = row.getByRole('button', { name: 'Cancel', exact: true });
     expect(
       await style(
         plain,
@@ -175,7 +178,6 @@ test.describe('T202: the app bar, workspace navigation, buttons and inputs', () 
       'background-color': await token(page, 'bg-surface'),
     });
 
-    await plain.click();
     // .input { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px;
     //          background: var(--bg-surface); padding: 0 8px }
     const input = row.getByLabel(/^New name for /);

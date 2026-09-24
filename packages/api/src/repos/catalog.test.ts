@@ -138,6 +138,122 @@ describe('folder contents (AC-017)', () => {
   });
 });
 
+/**
+ * T213 / AC-193: THE SYSTEM SHALL list a folder's contents under the columns
+ * Name, Type, Built on, Updated and Owner — subfolders first, then dashboards,
+ * then charts — showing a dashboard's description beneath its name and its
+ * number of page tabs, a chart's chart type and the cube or view it is built
+ * on, and a subfolder's item count …
+ * `Fails when: a column is missing, a chart's type reads only "Chart", …`
+ *
+ * The listing is where those values come from.
+ */
+describe("the contents' columns (AC-193)", () => {
+  it('lists subfolders first, then dashboards, then charts, each by title', async () => {
+    const here = await folder('Ordered');
+    for (const [kind, title] of [
+      ['chart', 'A chart'],
+      ['dashboard', 'B dashboard'],
+      ['dashboard', 'A dashboard'],
+    ] as const)
+      await repo().create({ kind, id: randomUUID(), body: { title, folderId: here } });
+    await folder('Z folder', here);
+
+    expect((await cat().contents(here)).map((item) => item.title)).toEqual([
+      'Z folder',
+      'A dashboard',
+      'B dashboard',
+      'A chart',
+    ]);
+  });
+
+  it("gives a chart its saved type and source, and says when the type is the recommender's", async () => {
+    const here = await folder('Charts');
+    const typed = randomUUID();
+    const auto = randomUUID();
+    const empty = randomUUID();
+    const wells = { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] };
+    await repo().create({
+      kind: 'chart',
+      id: typed,
+      body: {
+        title: 'Typed',
+        folderId: here,
+        chart: { source: { cube: 'orders' }, wells, chartType: 'hbar' },
+      },
+    });
+    await repo().create({
+      kind: 'chart',
+      id: auto,
+      body: { title: 'Auto', folderId: here, chart: { source: { cube: 'orders_view' }, wells } },
+    });
+    await repo().create({ kind: 'chart', id: empty, body: { title: 'Empty', folderId: here } });
+
+    const byId = new Map((await cat().contents(here)).map((item) => [item.id, item]));
+    expect(byId.get(typed)).toMatchObject({ chartType: 'hbar', source: 'orders', hasFields: true });
+    expect(byId.get(auto)).toMatchObject({
+      chartType: null,
+      source: 'orders_view',
+      hasFields: true,
+    });
+    expect(byId.get(empty)).toMatchObject({ chartType: null, source: null, hasFields: false });
+  });
+
+  it('gives a dashboard its number of page tabs, one when it has no pages yet', async () => {
+    const here = await folder('Dashboards');
+    const three = randomUUID();
+    const fresh = randomUUID();
+    await repo().create({
+      kind: 'dashboard',
+      id: three,
+      body: { title: 'Three', folderId: here, pages: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] },
+    });
+    await repo().create({
+      kind: 'dashboard',
+      id: fresh,
+      body: { title: 'Fresh', folderId: here, pages: [] },
+    });
+
+    const byId = new Map((await cat().contents(here)).map((item) => [item.id, item]));
+    expect(byId.get(three)?.tabs).toBe(3);
+    // A dashboard opens on one page before any is added (DashboardPage's FIRST_PAGE).
+    expect(byId.get(fresh)?.tabs).toBe(1);
+  });
+
+  it("counts a subfolder's items including those in its own subfolders, and not dashboard-local charts", async () => {
+    const here = await folder('Counted');
+    const child = await folder('Child', here);
+    const grandchild = await folder('Grandchild', child);
+    await repo().create({
+      kind: 'dashboard',
+      id: randomUUID(),
+      body: { title: 'd', folderId: child },
+    });
+    await repo().create({
+      kind: 'chart',
+      id: randomUUID(),
+      body: { title: 'c', folderId: grandchild },
+    });
+    await repo().create({
+      kind: 'chart',
+      id: randomUUID(),
+      body: { title: 'local', folderId: child, localToDashboardId: 'x' },
+    });
+
+    const listed = (await cat().contents(here)).find((item) => item.id === child);
+    expect(listed?.itemCount).toBe(2);
+  });
+
+  it('says which folder each item is in, so a move need not offer it', async () => {
+    const here = await folder('Home');
+    const id = randomUUID();
+    await repo().create({ kind: 'dashboard', id, body: { title: 'Mine', folderId: here } });
+
+    expect((await cat().contents(here))[0]?.folderId).toBe(here);
+    expect((await cat().search('Mine', 5000)).find((item) => item.id === id)?.folderId).toBe(here);
+  });
+});
+
 describe('references survive a rename or move (AC-021)', () => {
   /**
    * AC-021: WHEN the user renames or moves a folder, dashboard or chart, THE
