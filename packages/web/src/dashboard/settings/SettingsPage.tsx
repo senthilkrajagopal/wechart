@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DashboardDocument } from '../model/document';
 import { CrossFilterMatrix } from './CrossFilterMatrix';
 import { isDirty } from './dirtyGuard';
-import { StatusIcon } from '../../shell/StatusIcon';
+import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import { interactionsOf, labelOf, setMode, type InteractionMode } from './interactionMode';
 
@@ -116,8 +116,13 @@ export interface SettingsPageProps {
   readonly document: DashboardDocument;
   /** Leave without applying anything. */
   readonly onCancel: () => void;
-  /** Leave, applying the edited document. */
-  readonly onSave: (next: DashboardDocument) => void;
+  /**
+   * Leave, applying the edited document. A promise is a write on its way
+   * (AC-185): the page stays open until it answers, and stays open with the
+   * reason if it fails. Nothing returned is a change handed to the edit
+   * session, which is immediate.
+   */
+  readonly onSave: (next: DashboardDocument) => void | Promise<unknown>;
   /** A chart's title, which is how the cross-filter matrix names a tile (AC-118). */
   readonly titleOf?: ((chartId: string) => string | undefined) | undefined;
 }
@@ -132,6 +137,21 @@ export function SettingsPage({ document, onCancel, onSave, titleOf }: SettingsPa
    * to undo.
    */
   const [draft, setDraft] = useState<DashboardDocument>(document);
+
+  /**
+   * A view-mode save is a write, and the page waits for it (AC-185): open
+   * while it is on its way, and open with the reason if it fails.
+   */
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+  /** Whether this page is still on screen when the save answers. */
+  const here = useRef(true);
+  useEffect(() => {
+    here.current = true;
+    return () => {
+      here.current = false;
+    };
+  }, []);
 
   /** Both configurations and which is active, defaulted for older dashboards. */
   const interactions = interactionsOf(draft.settings);
@@ -199,6 +219,7 @@ export function SettingsPage({ document, onCancel, onSave, titleOf }: SettingsPa
           <button
             type="button"
             className="settings-page__save"
+            disabled={saving}
             onClick={() => {
               /**
                * Saving a page nobody altered is leaving it, not a change to
@@ -207,13 +228,44 @@ export function SettingsPage({ document, onCancel, onSave, titleOf }: SettingsPa
                * that count is the only thing telling an editor whether they
                * have unsaved work (AC-074).
                */
-              if (isDirty(document, draft)) onSave(draft);
-              else onCancel();
+              if (!isDirty(document, draft)) {
+                onCancel();
+                return;
+              }
+              /**
+               * Held here until the save answers (AC-185). While editing, the
+               * save goes to the session and returns nothing, so the page
+               * closes as it always did; in view mode it is a write, and the
+               * page stays until that write has gone through.
+               */
+              setFailed(undefined);
+              const answer = onSave(draft);
+              if (answer === undefined) return;
+              setSaving(true);
+              void Promise.resolve(answer)
+                .catch((reason: unknown) => {
+                  // Kept open, with the settings as entered: closing would
+                  // lose them, which is this criterion's failing state.
+                  setFailed(reason instanceof Error ? reason.message : String(reason));
+                })
+                .finally(() => {
+                  if (here.current) setSaving(false);
+                });
             }}
           >
-            Save settings
+            {saving ? 'Saving…' : 'Save settings'}
           </button>
         </div>
+        {saving ? (
+          <StateLine kind="run" testId="settings-saving" className="settings-page__state">
+            Saving the settings…
+          </StateLine>
+        ) : null}
+        {failed === undefined ? null : (
+          <StateLine kind="err" testId="settings-save-failed" className="settings-page__state">
+            {failed}
+          </StateLine>
+        )}
       </header>
 
       <div className="settings-page__body">

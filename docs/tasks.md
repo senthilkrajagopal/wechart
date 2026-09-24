@@ -598,12 +598,18 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Failing test: `save.test.ts`: a save whose request never answers rejects after 60 seconds (fake timers) with a reason saying it timed out; `e2e/chart-save.spec.ts`: a save held at the network is abandoned with the session kept (AC-186).
   - Depends on: T197
   - **Decided by the user, 2026-09-21** (T197's review, F6): time limit, then fail; 60 seconds. The request may still land after the client has given up. The reason must not send the user into a worse loss: a save that did land moves the version on, so the next Save would be refused as a conflict with the user's *own* save, and "reloading discards yours" would then be untrue — the reload would show their work. Word the timeout so it says the save may have gone through, and check what the next save says in that case.
-- [ ] T199 (AC-185) Keep the settings page open until a view-mode save goes through, keeping what was entered if it fails
-  - **Deferred by the user, 2026-09-21** ("dont over engineer this for now") — not to be started unless the user asks.
+- [x] T199 (AC-185) Keep the settings page open until a view-mode save goes through, keeping what was entered if it fails
+  - **Deferred by the user, 2026-09-21** ("dont over engineer this for now"); **un-deferred by the user, 2026-09-23**, and built that day.
   - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/settings/SettingsPage.tsx`, `packages/web/src/dashboard/settings/SettingsPage.test.tsx`, `e2e/dashboard.spec.ts`
   - Failing test: `SettingsPage.test.tsx`: in view mode, Save settings leaves the page open, saying it is saving, until the save resolves; on a rejection it stays open with the settings as entered, and the reason is shown; Cancel closes it (AC-185).
   - Depends on: T197
   - Decided by the user at T197's review (F11): "Stay open until saved… or close if cancelled". The reason today is the page's `save-failed` alert, rendered above `DashboardView` — check it can be seen over the settings page, which covers the dashboard.
+  - **Built 2026-09-23.**
+    - A view-mode save is a write, so the page now waits for it: "Saving the settings…" while it is out, closing only once it has gone through, and staying open with the settings exactly as entered — and the service's own reason — when it fails. The reason is the page's own line (`settings-save-failed`), not the alert behind it, which the page covers.
+    - The page tells the two apart by what its `onSave` returns: a promise is a write to wait for, nothing returned is a change handed to the edit session, which is immediate. While editing, Save still folds into the session and closes at once (AC-074).
+    - **A test changed because the behaviour did.** `DashboardPage.test.tsx` had a case for "an edit session begun while a view-mode save was still out" — pressing Edit mid-save, which the page closing instantly made possible. Holding the page open removes that race rather than catching it, so the test now asserts the new guarantee: no Edit is offered while the save is out, and the session begun afterwards starts from what the save stored, so its own save is accepted rather than refused. The test-integrity hook flagged the replaced matcher; it is reported to the user rather than worked around.
+    - **Tests:** `SettingsPage.test.tsx` (held open and saying so; open with the entry and the reason on failure; Cancel still leaves) and `e2e/dashboard.spec.ts`, where a real stale save 409s and the page keeps the name that was typed.
+    - AC-185 ticked on those.
 - [x] T033 (AC-035) Undo, redo and discard every change made since the editor opened
   - Files: `packages/web/src/editor/history.ts`, `packages/web/src/editor/history.test.ts`, `packages/web/src/editor/ChartEditor.tsx`, `packages/web/src/shell/styles.ts`, `e2e/chart-editor.spec.ts`
   - Failing test: `history.test.ts`: every editor change is undoable and redoable, and Discard restores the chart exactly as it was on open (AC-035).

@@ -197,13 +197,17 @@ describe('the dashboard page', () => {
     expect(server.stored.title).toBe('Revenue (theirs)');
   });
 
-  it('checks an edit session begun while a view-mode save was still out against its own start', async () => {
+  it('lets no edit session begin while a view-mode save is still out', async () => {
     /**
-     * A rename saved from the settings page in view mode, and Edit pressed
-     * before that save has answered: the session begins from the document
-     * before the rename. Once the rename lands, the session's save must be
-     * refused — it would put the old name back — not waved through because
-     * the rename's success forgot where the session began.
+     * A rename saved from the settings page in view mode: until AC-185 the
+     * page closed at once, so Edit could be pressed while the save was still
+     * out and the session would begin from the document before the rename —
+     * its save then had to be refused as a conflict with the user's own.
+     *
+     * Since T199 the page stays open until the save answers, which removes
+     * the race rather than catching it: there is no Edit to press meanwhile,
+     * and the session that begins afterwards begins from the renamed
+     * dashboard, so its save is accepted.
      */
     const server = dashboardServer();
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -213,21 +217,33 @@ describe('the dashboard page', () => {
     const letThrough = server.holdSaves();
     await userEvent.click(screen.getByRole('button', { name: 'Dashboard settings' }));
     await rename('Renamed');
-    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    // Held: the page is still up, saying so, and the dashboard behind it —
+    // Edit included — is not reachable.
+    expect(screen.getByTestId('dashboard-settings')).toBeTruthy();
+    expect(screen.queryAllByRole('button', { name: 'Edit' })).toHaveLength(0);
 
     letThrough();
     await vi.waitFor(() => {
       expect(server.stored.title).toBe('Renamed');
     });
     await fetchedAgain(client);
+    await vi.waitFor(() => {
+      expect(screen.queryAllByTestId('dashboard-settings')).toHaveLength(0);
+    });
 
+    // And the session begun now starts from what that save stored, so its
+    // own save is taken rather than refused against the user's own rename.
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect((await screen.findByTestId('save-failed')).textContent).toBe(conflict);
-    expect(server.sent).toEqual([
-      { version: 1, title: 'Renamed' },
-      { version: 1, title: 'Revenue' },
-    ]);
+    await vi.waitFor(() => {
+      expect(server.sent).toEqual([
+        { version: 1, title: 'Renamed' },
+        { version: 2, title: 'Renamed' },
+      ]);
+    });
+    expect(screen.queryAllByTestId('save-failed')).toHaveLength(0);
     expect(server.stored.title).toBe('Renamed');
   });
 

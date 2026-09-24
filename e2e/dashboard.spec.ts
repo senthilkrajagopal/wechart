@@ -1117,3 +1117,54 @@ test('a time axis and a time column are written by their granularity, never as a
   const cells = await tile.getByTestId('table-row').locator('td').allTextContents();
   expect(cells.filter((text) => RAW.test(text))).toEqual([]);
 });
+
+/**
+ * T199 / AC-185: WHEN the user saves the dashboard settings page in view
+ * mode, THE SYSTEM SHALL keep the page open until the save has gone through,
+ * and IF the save fails, keep the settings as entered on the page and show
+ * the reason.
+ * `Fails when: the page closes before the save answers, or a failed save
+ * loses what was entered.`
+ *
+ * Provoked with a real stale save (AC-065's 409), so what the page reports is
+ * what the service said.
+ */
+test('a settings save that fails keeps the page, the entry and the reason', async ({
+  page,
+  request,
+}) => {
+  const unique = `settings-${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const created = await request.post('http://localhost:4100/api/documents', {
+    data: { kind: 'dashboard', title: `Settings ${unique}`, folderId: 'root' },
+  });
+  const { id } = (await created.json()) as { id: string };
+  const body = {
+    schemaVersion: 1,
+    title: `Settings ${unique}`,
+    folderId: 'root',
+    owner: 'admin',
+    settings: { width: 'fixed' },
+    pages: [{ id: 'only', title: 'Only', items: [] }],
+  };
+  await request.put(`http://localhost:4100/api/documents/dashboard/${id}`, {
+    data: { version: 1, body },
+  });
+
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: `Settings ${unique}` })).toBeVisible();
+  await page.getByRole('button', { name: 'Dashboard settings' }).click();
+  const name = page.getByLabel('Name');
+  await name.fill(`Renamed ${unique}`);
+
+  // Someone else saves first, so ours is the stale one that 409s.
+  await request.put(`http://localhost:4100/api/documents/dashboard/${id}`, {
+    data: { version: 2, body },
+  });
+
+  await page.getByRole('button', { name: /^Save settings|^Saving/ }).click();
+
+  // Open, with what was typed, and the reason the service gave.
+  await expect(page.getByTestId('settings-save-failed')).toBeVisible();
+  await expect(page.getByTestId('dashboard-settings')).toBeVisible();
+  await expect(name).toHaveValue(`Renamed ${unique}`);
+});

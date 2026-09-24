@@ -1841,14 +1841,22 @@ export function DashboardView({
                * reach it (AC-074).
                */
               onSave={(next) => {
-                if (session.editing) session.change(next);
-                else {
-                  // A failed save is the page's to report, and it does; here it
-                  // is only swallowed, or it would surface as an unhandled
-                  // rejection (the save has returned its outcome since T197).
-                  void Promise.resolve(onSave(withoutDrafts(next))).catch(() => undefined);
+                if (session.editing) {
+                  // One undoable change on the session, which is immediate.
+                  session.change(next);
+                  setSettingsOpen(false);
+                  return undefined;
                 }
-                setSettingsOpen(false);
+                /**
+                 * In view mode it is a write, and the page waits for it
+                 * (AC-185): it closes when the save has gone through, and
+                 * stays open with the settings as entered when it fails —
+                 * which the page reports, since it is the page that holds
+                 * them.
+                 */
+                return Promise.resolve(onSave(withoutDrafts(next))).then(() => {
+                  setSettingsOpen(false);
+                });
               }}
             />
           ) : editingChart === null ? null : (

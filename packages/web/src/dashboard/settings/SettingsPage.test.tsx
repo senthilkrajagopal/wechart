@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -284,6 +284,104 @@ describe('the dashboard settings page', () => {
     } finally {
       process.off('unhandledRejection', record);
     }
+  });
+
+  /**
+   * T199 / AC-185: WHEN the user saves the dashboard settings page in view
+   * mode, THE SYSTEM SHALL keep the page open until the save has gone
+   * through, and IF the save fails, keep the settings as entered on the page
+   * and show the reason.
+   * `Fails when: the page closes before the save answers, or a failed save
+   * loses what was entered.`
+   *
+   * The user's decision at T197's review: "Stay open until saved… or close if
+   * cancelled." Closing first would leave someone looking at a dashboard that
+   * does not show what they just typed, with no way back to it.
+   */
+  describe('a view-mode save', () => {
+    const held = () => {
+      let settle = (value: unknown) => {
+        void value;
+      };
+      let fail = (reason: unknown) => {
+        void reason;
+      };
+      const promise = new Promise((resolve, reject) => {
+        settle = resolve;
+        fail = reject;
+      });
+      return { promise, settle, fail };
+    };
+
+    const typeName = async (text: string) => {
+      const name = screen.getByLabelText('Name');
+      await userEvent.clear(name);
+      await userEvent.type(name, text);
+    };
+
+    it('keeps the page open, saying so, until the save answers', async () => {
+      const save = held();
+      render(
+        <DashboardView dashboardId="d1" document={DOC} specs={{}} onSave={() => save.promise} />,
+      );
+      await openSettings();
+      await typeName('On its way');
+      await userEvent.click(screen.getByRole('button', { name: /^Save settings|^Saving/ }));
+
+      // Still open, and saying why it is still open.
+      expect(screen.getByTestId('dashboard-settings')).toBeTruthy();
+      expect(screen.getByTestId('settings-saving').textContent).toMatch(/saving/i);
+
+      await act(async () => {
+        save.settle(undefined);
+        await save.promise;
+      });
+
+      await vi.waitFor(() => {
+        expect(screen.queryByTestId('dashboard-settings')).toBeNull();
+      });
+    });
+
+    it('stays open with what was entered, and says why, when the save fails', async () => {
+      const save = held();
+      render(
+        <DashboardView dashboardId="d1" document={DOC} specs={{}} onSave={() => save.promise} />,
+      );
+      await openSettings();
+      await typeName('Half-finished');
+      await userEvent.click(screen.getByRole('button', { name: /^Save settings|^Saving/ }));
+
+      await act(async () => {
+        save.fail(new Error('Could not save: 409'));
+        await save.promise.catch(() => undefined);
+      });
+
+      expect(screen.getByTestId('dashboard-settings')).toBeTruthy();
+      // What was entered is still on the page, not thrown away.
+      expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Half-finished');
+      expect(screen.getByTestId('settings-save-failed').textContent).toContain('409');
+    });
+
+    it('can be left by Cancel while a save is failing, losing nothing else', async () => {
+      const save = held();
+      render(
+        <DashboardView dashboardId="d1" document={DOC} specs={{}} onSave={() => save.promise} />,
+      );
+      await openSettings();
+      await typeName('Half-finished');
+      await userEvent.click(screen.getByRole('button', { name: /^Save settings|^Saving/ }));
+      await act(async () => {
+        save.fail(new Error('Could not save: 409'));
+        await save.promise.catch(() => undefined);
+      });
+
+      // The way out the user decided on: Cancel closes, and asks first,
+      // because what is on the page is unsaved (AC-073).
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+
+      expect(screen.queryByTestId('dashboard-settings')).toBeNull();
+    });
   });
 
   it('folds a save made while editing into the session, where Discard can reach it', async () => {
