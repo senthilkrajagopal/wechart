@@ -44,10 +44,27 @@ in full as things stand:
   change, not an implementation gap.
 - **Box plot** (`box_plot`): same — not in AC-037's list.
 
-Both are **decisions for the user** before that work starts: add them to the
-spec (new ACs, research for a geo renderer and its projection/tiles), or
-reproduce those two panels another way and say so. Everything else maps onto a
-type wechart already draws.
+**Decided 2026-09-24 (`docs/requirements.md` R8): both are added.** The three
+panels they cover, read from Superset's own database:
+
+| Superset chart | Type | What it shows |
+| --- | --- | --- |
+| Revenue by Customer Country | `world_map` | `revenue` per `customer_country_iso3`, from `sales_lines` |
+| Orders by Ship Country | `world_map` | `orders` per `ship_country_iso3`, from `order_summary` |
+| Days to Ship Distribution by Shipper | `box_plot` | per `shipper`, the spread of `MAX(days_to_ship)` taken per `order_id` |
+
+What that sets up, before any code:
+- **Research.** A country map needs a renderer and a world boundary file that
+  is permissively licensed and bundled with the app (requirements §5: open
+  source, permissive licences only; no tile server). A box plot needs its
+  quartiles computed *in Cube* if Cube can — whether it has a percentile
+  measure is to be verified, not assumed — and otherwise a stated reason why
+  not.
+- **Spec.** New acceptance criteria for each, alongside AC-037, plus the
+  recommender rules (a country dimension with one measure suggests a map; one
+  category with a per-row numeric value suggests a box plot).
+
+Everything else maps onto a type wechart already draws.
 
 **The data needs a model.** wechart reads Cube, so reproducing these dashboards
 means cubes over the same tables. wechart's sample model already has an
@@ -79,7 +96,9 @@ good test of AC-131–AC-137.
 - **A signed-in Superset session.** I do not type passwords into forms. Either
   sign in at <http://localhost:8088> in Chrome before the comparison, or say
   that a throwaway read-only account may be used and how it is provisioned.
-- **The two chart-type decisions** in §2, since they change the spec.
+  The admin credentials are in the Helm release's `init.adminUser` values;
+  the user has them.
+- ~~The two chart-type decisions in §2~~ — decided 2026-09-24: add both.
 
 ## 5. Ordering
 

@@ -65,6 +65,10 @@ AC-151, AC-153 … AC-155, AC-157 … AC-164. Do not start those.
 | Moving average | **3 periods by default, changeable in the menu** (offer 3/6/12). Each window is its own generated companion measure, so only the ones used are added. |
 | Rank ties | **Competition ranking** (1, 1, 3) — which is what Cube's `type: rank` already produced in the spike, so no extra generation. |
 
+**Superset parity chart types — answered 2026-09-24:** add a **country map**
+(choropleth keyed by ISO-3 codes) and a **box plot**, both as new chart types.
+Recorded as requirements R8. Not yet researched or specified — see §4 step 10.
+
 These three answer the "Open for the user" section of
 `docs/research/cube/spike-model-store-and-quick-calcs.md`. The remaining item
 there — *% of total under a filter is the share of the **filtered** total* —
@@ -123,12 +127,14 @@ session needs to know about:
    Prerequisite AC-131 … AC-137 (the model store and publish path) are done, so
    generated companion measures can be added to the served model.
 9. **AC-171, AC-175, AC-176** — export, marking performance, keyboard coverage.
-10. **The Superset parity exercise.** `docs/design/superset-parity.md` holds the
-    plan. Superset is scaled up in the local `superset` namespace; its inventory
-    was read from its Postgres. **Two chart types have no wechart equivalent —
-    `world_map` and `box_plot` — and that needs the user's decision, because it
-    is a spec change.** The exercise also needs a signed-in Superset session,
-    which the user must do: credentials must never be typed into a form.
+10. **Country map and box plot (R8), then the Superset parity exercise.**
+    `docs/design/superset-parity.md` holds the plan and what the three panels
+    show. The chart types go through the workflow like anything else:
+    component-research (renderer, a permissively licensed world boundary file,
+    and whether Cube can compute quartiles), then write-spec (new ACs beside
+    AC-037, plus recommender rules), then plan-tasks, then implement. Superset
+    is up at http://localhost:8088; the exercise needs the user signed in in
+    Chrome, because credentials are never typed into a form by Claude.
 
 ## 5. Things that will waste your time if you rediscover them
 

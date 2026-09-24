@@ -146,6 +146,7 @@ Product surfaces, from the design work already reviewed (`docs/design/direction.
 - **Quick calculations** — a fixed menu on a measure (% of total, difference and % difference from the previous period, running total, rank, moving average), each mapping to a Cube multi-stage measure. Anything else becomes a tracked request to the semantic-layer engineer, carrying the chart it came from `[R7]`.
 - **Text tiles** — Markdown with live tokens (measure values, marking summaries) and no raw HTML `[R7]`.
 - **Chart builder** — cube/view picker, metrics and dimensions, chart-type gallery, recommendation with a one-line reason and "Why this chart?", axis and legend customisation, drill `[docs/inputs §2–3]`.
+- **Two more chart types: a country map and a box plot** `[R8]`. The map is a country-level choropleth keyed by ISO-3 country codes, with one measure coloured per country. The box plot draws one box per category over a numeric value — median, quartiles and whiskers. Both come from the Superset parity exercise (`docs/design/superset-parity.md`): Superset's two Northwind dashboards use them for three of their 22 charts, and nothing else wechart draws can reproduce those panels.
 - **Model editor** — Cube YAML authoring with synchronised form and code views `[docs/inputs §4b]`.
 - **Data sources, jobs, schedules, security preview** — `[docs/inputs §7]`.
 
@@ -327,3 +328,10 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which Spotfire features must eventually reach wechart? A: "Subsets, Tags and Lists, Data functions"
 - Q: Who owns group membership in phase 2? A: "Identity provider owns it"
 - Q: A `.dxp` inspection tool? A: "Yes, after phase 1"
+
+**R8 — chart types for the Superset parity exercise** (2026-09-24, asked because Superset's dashboards use two types AC-037 does not list)
+
+- Q: World map — the two country charts (Revenue by Customer Country, Orders by Ship Country). What should wechart do? (options: add a country map type / substitute a sorted bar / defer maps to phase 2)
+  A: "Add a country map type (Recommended)"
+- Q: Box plot — Days to Ship Distribution by Shipper. What should wechart do? (options: add a box plot type / substitute a bar of the average / defer to phase 2)
+  A: "Add a box plot type (Recommended)"
