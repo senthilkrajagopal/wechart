@@ -104,12 +104,45 @@ describe('whether a filter’s field reaches a tile’s cube or view', () => {
     expect(reachFrom(undefined)('orders.status', 'orders')).toBeUndefined();
   });
 
-  it('cannot say between two cubes whose join components it does not know', () => {
+  it('cannot say when the model reports no join components at all', () => {
+    /**
+     * A model that says nothing about components — a different Cube version,
+     * or one read before the joins were compiled — is telling us nothing.
+     * Reading that as "every cube is isolated" would stop every filter
+     * reaching every tile, which is the worse mistake of the two.
+     */
     const unknown = reachFrom({
       cubes: META.cubes.map((cube) => ({ ...cube, connectedComponent: undefined })),
     });
     expect(unknown('orders.status', 'orders')).toBe('orders.status');
     expect(unknown('orders.status', 'products')).toBeUndefined();
+  });
+
+  it('rules out a cube that is in no join graph, where others are', () => {
+    /**
+     * Cube omits `connectedComponent` for a cube with no joins — verified
+     * against v1.7.42 (`research/cube/markings-query-support.md` §4.5) — so
+     * where other cubes report one, its absence says this cube reaches
+     * nothing but its own members (AC-079, AC-103).
+     */
+    const alone = reachFrom({
+      cubes: [
+        ...META.cubes,
+        {
+          name: 'monthly',
+          type: 'cube',
+          measures: [member('monthly.count')],
+          dimensions: [member('monthly.status')],
+          segments: [],
+        },
+      ],
+    });
+
+    expect(alone('orders.status', 'monthly')).toBe(false);
+    // Its own member is still its own.
+    expect(alone('monthly.status', 'monthly')).toBe('monthly.status');
+    // And a joined pair is unaffected: same component, so Cube decides.
+    expect(alone('orders.status', 'products')).toBeUndefined();
   });
 });
 

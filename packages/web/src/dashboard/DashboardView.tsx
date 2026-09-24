@@ -4,6 +4,8 @@ import {
   addItemsWithinLimit,
   applyItemClick,
   EMPTY_PREDICATE,
+  isEmptyPredicate,
+  markingApplicability,
   markingsFrom,
   memberOn,
   seriesOf,
@@ -466,6 +468,8 @@ interface TileCharts {
    */
   readonly rowMarkingOn?:
     ((tileId: string, chartId: string) => ChartTileProps['rowMarking']) | undefined;
+  /** Why a tile is not marked: its cube cannot reach the marking's members (AC-103). */
+  readonly notLinked?: Readonly<Record<string, string>> | undefined;
   /** The marking a tile shows, its colour and how many items it holds (AC-098). */
   readonly markingOn?:
     | ((tileId: string) => { marking: Marking; colour: string; markedCount: number } | undefined)
@@ -713,6 +717,14 @@ function Elements({
               <NotCovered
                 members={charts.notCovered[chartId].map((each) => each.filter.member ?? '')}
               />
+            )}
+            {/* A marking this tile's cube cannot reach: unmarked, and said
+                rather than left looking like "none of it is in here"
+                (AC-103). */}
+            {charts.notLinked?.[chartId] === undefined ? null : (
+              <StateLine kind="idle" testId="not-linked" className="tile-not-covered">
+                {charts.notLinked[chartId]}
+              </StateLine>
             )}
             {/* What this tile is marking, in words and a count (AC-098): the
                 marking is not conveyed by colour alone. */}
@@ -1693,6 +1705,27 @@ export function DashboardView({
     return byChart;
   }, [marking, live, markings, defaultMarking, theme]);
 
+  /**
+   * A tile whose cube or view cannot reach the members a marking names is
+   * left unmarked and says so (AC-103, direction.md §7a rule 18). Silently
+   * unbrushed would read as "nothing of yours is in here", which is a
+   * different and wrong answer; a query error would be worse still.
+   */
+  const notLinked = useMemo(() => {
+    const said: Record<string, string> = {};
+    for (const [chartId, shown] of Object.entries(markedSpecs ?? {})) {
+      const predicate = markingOf(marks, shown.markingId);
+      if (isEmptyPredicate(predicate)) continue;
+      const members = new Set<string>();
+      for (const item of predicate.items) for (const part of item) members.add(part.member);
+      for (const range of predicate.ranges) members.add(range.member);
+      const reachable = [...members].filter((member) => reachOf(member, chartId) !== false);
+      const applicability = markingApplicability(predicate, reachable);
+      if (!applicability.linked) said[chartId] = applicability.label;
+    }
+    return said;
+  }, [markedSpecs, marks, reachOf]);
+
   /** Each tile's spec with the highlight it draws, where a pair asks for one. */
   const withHighlights = useMemo(() => {
     if (Object.keys(crossEffects.perChart).length === 0) return formatted;
@@ -1725,14 +1758,16 @@ export function DashboardView({
     const specs: Record<string, RenderSpec> = { ...withHighlights };
     for (const [chartId, shown] of Object.entries(markedSpecs)) {
       const spec = specs[chartId];
-      if (spec === undefined) continue;
+      // A tile that cannot reach the marking's members draws none of it
+      // (AC-103); its label says why.
+      if (spec === undefined || notLinked[chartId] !== undefined) continue;
       specs[chartId] = {
         ...spec,
         marking: { predicate: markingOf(marks, shown.markingId), colour: shown.colour },
       };
     }
     return specs;
-  }, [withHighlights, markedSpecs, marks]);
+  }, [withHighlights, markedSpecs, marks, notLinked]);
 
   // The assignment is held across renders, so a filter that hides a member
   // does not hand its colour to whoever is now first (AC-039).
@@ -1827,7 +1862,7 @@ export function DashboardView({
      * a click picks the tile up.
      */
     ...(crossFiltering ? { onItemClick } : {}),
-    ...(marking ? { onMarkClick } : {}),
+    ...(marking ? { onMarkClick, notLinked } : {}),
     ...(marking
       ? {
           /**
@@ -1868,6 +1903,11 @@ export function DashboardView({
           markingOn: (tileId: string) => {
             const element = elementAt(live, tileId);
             if (element === null || !isTile(element)) return undefined;
+            // A tile that cannot reach the marking shows no badge: its label
+            // already says why it is not marked (AC-103).
+            if (element.chartId !== undefined && notLinked[element.chartId] !== undefined) {
+              return undefined;
+            }
             const id = marksWithOf(element);
             const found = markings.find((each) => each.id === id);
             if (found === undefined) return undefined;

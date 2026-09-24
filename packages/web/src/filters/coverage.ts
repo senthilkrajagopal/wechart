@@ -70,6 +70,8 @@ function cubesOf(meta: unknown): MetaCube[] | undefined {
 
 export function reachFrom(meta: unknown): Reach {
   const cubes = cubesOf(meta);
+  /** Whether this model says anything about join components at all. */
+  const anyComponents = (cubes ?? []).some((cube) => cube.connectedComponent !== undefined);
   return (member, source) => {
     if (cubes === undefined) return undefined;
     const target = cubes.find((cube) => cube.name === source);
@@ -80,6 +82,24 @@ export function reachFrom(meta: unknown): Reach {
     // A field the model no longer has reaches nothing; a view's member is
     // not asked of a cube.
     if (owner === undefined || owner.type === 'view') return false;
+    /**
+     * A cube in no join graph at all reaches nothing but its own members.
+     * Cube omits `connectedComponent` for a cube with no joins — verified
+     * against v1.7.42 (`markings-query-support.md` §4.5) — so its absence is
+     * an answer rather than a silence, and the tile can be told before a
+     * query is sent that it will not be reached.
+     *
+     * **Only where the model reports components at all.** If no cube has
+     * one, the field is telling us nothing — a different Cube version, or a
+     * model read before the joins were compiled — and reading that as "every
+     * cube is isolated" would stop every filter reaching every tile. Silence
+     * everywhere stays "cannot say".
+     */
+    if (
+      anyComponents &&
+      (target.connectedComponent === undefined || owner.connectedComponent === undefined)
+    )
+      return false;
     // Different join components: never joined. The same one, or none known,
     // only fails to rule it out — the component ignores the joins' direction
     // and Cube does not (T085's review), so Cube's own answer decides.

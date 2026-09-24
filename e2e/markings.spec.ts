@@ -33,7 +33,7 @@ const API = 'http://localhost:4100/api';
  */
 async function markingDashboard(
   request: APIRequestContext,
-  { twoPages = false, split = false, table = false, trellis = false } = {},
+  { twoPages = false, split = false, table = false, trellis = false, apart = false } = {},
 ) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Markings ${unique}`;
@@ -48,6 +48,7 @@ async function markingDashboard(
     dimensions: readonly string[],
     chartType = 'bar',
     encoding?: Record<string, readonly string[]>,
+    cube = 'orders',
   ) => {
     const chart = (await (
       await request.post(`${API}/documents`, {
@@ -63,9 +64,9 @@ async function markingDashboard(
           owner: 'admin',
           localToDashboardId: dashboard.id,
           chart: {
-            source: { cube: 'orders' },
+            source: { cube },
             wells: {
-              measures: chartType === 'table' ? [] : ['orders.count'],
+              measures: chartType === 'table' ? [] : [`${cube}.count`],
               dimensions: [...dimensions],
               timeDimensions: [],
             },
@@ -90,6 +91,19 @@ async function markingDashboard(
   // A table of rows, each identified by the cube's primary key.
   const tableChart = table
     ? await chartOn('Orders', ['orders.id', 'orders.status'], 'table')
+    : undefined;
+  /**
+   * A tile on a cube with no joins at all (`monthly_orders`), so nothing on
+   * the dashboard can reach `orders.status` on its behalf.
+   */
+  const apartChart = apart
+    ? await chartOn(
+        'Apart',
+        ['monthly_orders.status'],
+        'bar',
+        { x: ['monthly_orders.status'], y: ['monthly_orders.count'] },
+        'monthly_orders',
+      )
     : undefined;
   // One panel per category, each with its own header to mark from.
   const trellisChart = trellis
@@ -125,6 +139,9 @@ async function markingDashboard(
               ...(trellisChart === undefined
                 ? []
                 : [{ id: 'tile-trellis', kind: 'chart', w: 12, h: 60, chartId: trellisChart }]),
+              ...(apartChart === undefined
+                ? []
+                : [{ id: 'tile-apart', kind: 'chart', w: 6, h: 40, chartId: apartChart }]),
             ],
           },
           ...(elsewhere === undefined
@@ -361,6 +378,33 @@ test('a table’s rows mark, and a Shift-click marks the range', async ({ page, 
   await rows.nth(2).click({ modifiers: ['Shift'] });
   await expect(table.getByTestId('mark-badge')).toContainText('3 marked');
   await expect(rows.nth(1)).toHaveAttribute('aria-selected', 'true');
+});
+
+/**
+ * AC-103: WHEN a tile's cube or view cannot resolve every member of a
+ * marking's predicate, THE SYSTEM SHALL leave that tile unmarked and label it
+ * as not linked to that marking.
+ * `Fails when: the tile shows a query error, or is silently left unbrushed
+ * with no label.`
+ */
+test('a tile that cannot reach the marked field says it is not linked', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request, { apart: true });
+  await open(page, id, title);
+  const apart = tile(page, 'tile-apart');
+  await expect(apart.getByTestId('chart-canvas')).toBeVisible();
+
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+  await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toContainText('1 marked');
+
+  // Unmarked, and said: silence would read as "none of it is in here".
+  await expect(apart.getByTestId('not-linked')).toContainText('orders.status');
+  await expect(apart.getByTestId('mark-badge')).toHaveCount(0);
+  expect((await opacities(apart)).every((value) => value === 1)).toBe(true);
+  // And no error on it either.
+  await expect(apart.getByRole('alert')).toHaveCount(0);
 });
 
 /**

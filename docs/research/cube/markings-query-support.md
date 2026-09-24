@@ -380,7 +380,8 @@ Source: [multifact-doc].
   - It **is** exposed per cube config: `connectedComponent: this.joinGraph.connectedComponents()[cubeName]` ([src-meta]).
   - Doc wording: "If the same value is returned for two cubes, then there is at least one join path between them" ([rest-ref]).
   - Source: components come from `findConnectedComponent` over `undirectedNodes` ([src-joingraph]), so the value ignores direction. Use it only to rule out ("different component, never applicable").
-  - Views and join-less cubes have no graph node, so the value is absent (source reading; UNVERIFIED at runtime).
+  - Views and join-less cubes have no graph node, so the value is absent. **Verified at runtime, 2026-09-23**, against the local Cube v1.7.42 (`GET /v1/meta`): `orders`, `products` and `customers` each report `connectedComponent: 1`, while `monthly_orders` (a cube with no `joins:`) and the `order_summary` view report no value at all.
+  - **What that licenses:** a cube with no component is in no join graph, so a member it does not own cannot be asked of it — the one case where the absence of the value is itself an answer. wechart's `reachFrom` uses it that way (AC-079, AC-103); everywhere else the value only rules out, never rules in.
 - **`/v1/meta?extended`:** exposes per-cube `joins` (`[{name, relationship, sql}]`) ([data-modeling]). Re-implementing `buildJoin` on the client would duplicate Cube's algorithm (roots, fewest joins, join hints, views). Use the server as the authority instead.
 - **Authoritative probe:** `/v1/sql` or `/v1/dry-run` with the tile query plus the marking filter. Both call `compilerApi.getSql()`, which builds the join ([src-gw]).
   - `/v1/sql` uses the post-RLS / post-`queryRewrite` queries.
