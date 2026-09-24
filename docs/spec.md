@@ -195,7 +195,7 @@ Traces to: `[R7]`, `[R2]`, `[research/cube/data-modeling.md]`.
 Purpose: build dashboards on a 12-column grid, in place, with the keyboard or the mouse.
 Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
 
-- [ ] AC-053 WHEN the user activates Edit on a dashboard, THE SYSTEM SHALL show the edit bar with Undo, Redo, Discard and Save, and the edit sidebar with Add, Outline and Properties.
+- [x] AC-053 WHEN the user activates Edit on a dashboard, THE SYSTEM SHALL show the edit bar with Undo, Redo, Discard and Save, and the edit sidebar with Add, Outline and Properties.
       Fails when: any of those controls is missing in edit mode.
 - [x] AC-054 WHILE editing, THE SYSTEM SHALL show a 12-column grid on the canvas and snap every tile to whole columns and to 8-pixel row units (direction.md rule 15).
       Fails when: a tile's width is not a whole number of columns, or its height is not a multiple of 8 pixels.

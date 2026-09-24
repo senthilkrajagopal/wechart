@@ -264,6 +264,44 @@ main { padding: var(--wc-surface-padding); }
 .itemicon.ic-chart { background: var(--wc-bg-accent-soft); color: var(--wc-accent); }
 .itemicon.ic-folder { background: var(--wc-bg-subtle); color: var(--wc-text-secondary); }
 
+/* The edit sidebar's Outline (AC-053): the prototype's .dir and .file rows. */
+.outline, .outline ul { margin: 0; padding: 0; list-style: none; }
+.outline { padding: 8px 0; }
+.outline__page {
+  display: block;
+  padding: 6px 12px 2px;
+  font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-strong-weight);
+  color: var(--wc-text-secondary);
+}
+.outline__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-size: var(--wc-text-xs-size);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.outline__row[aria-current='true'] {
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
+.outline__icon { width: 18px; flex: none; text-align: center; color: var(--wc-text-secondary); }
+.outline__tab, .outline__empty {
+  display: block;
+  font-size: var(--wc-text-xs-size);
+  color: var(--wc-text-muted);
+}
+.outline__empty { padding-left: 26px; }
+
 /* A menu button's menu, the prototype's .picker. */
 .menu-button { position: relative; display: inline-flex; }
 .menu-button__menu {

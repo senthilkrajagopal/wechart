@@ -61,6 +61,7 @@ import {
 import { DeleteSectionDialog } from './edit/DeleteSectionDialog';
 import { UndoToast } from './edit/UndoToast';
 import { EditChrome, type EditSession } from './edit/EditChrome';
+import { Outline } from './edit/Outline';
 import { openSidebarPanel } from './edit/EditSidebar';
 import { MoveToMenu } from './edit/MoveToMenu';
 import { NOTHING_CHOSEN, needsOf, templateElements } from './edit/templates';
@@ -949,6 +950,16 @@ function Elements({
   );
 }
 
+/** Whether an element is among these, at any depth of sections and tabs. */
+function holdsElement(items: readonly Element_[], id: string): boolean {
+  return items.some(
+    (element) =>
+      element.id === id ||
+      (element.kind === 'section' && holdsElement(element.items, id)) ||
+      (element.kind === 'tabs' && element.tabs.some((tab) => holdsElement(tab.items, id))),
+  );
+}
+
 function TabGroupView({
   group,
   affordances,
@@ -957,6 +968,26 @@ function TabGroupView({
   affordances: Affordances;
 }) {
   const [open, setOpen] = useState(group.tabs[0]?.id ?? '');
+  /**
+   * A selection made elsewhere — the Outline, say — that lands inside one of
+   * this group's tabs shows that tab. Only the showing tab's elements are
+   * rendered, so otherwise the selected element had no box on the canvas:
+   * nothing to scroll to, nothing highlighted, and the next insert went
+   * after it into a tab the user could not see (T209's review).
+   *
+   * Followed once per new selection, so the user can still switch tabs by
+   * hand with an element in another tab selected.
+   */
+  const selectedId = affordances.selection?.id ?? null;
+  const [followed, setFollowed] = useState<string | null>(null);
+  if (selectedId !== followed) {
+    setFollowed(selectedId);
+    const holding =
+      selectedId === null
+        ? undefined
+        : group.tabs.find((tab) => holdsElement(tab.items, selectedId));
+    if (holding !== undefined && holding.id !== open) setOpen(holding.id);
+  }
   const showing = group.tabs.find((tab) => tab.id === open) ?? group.tabs[0];
 
   return (
@@ -2653,6 +2684,26 @@ export function DashboardView({
         }
         panels={(session) => ({
           add: <AddSlot session={session} dashboardId={dashboardId} where={where} />,
+          // The dashboard as a tree (AC-053); a row selects its element.
+          outline: (
+            <Outline
+              document={session.document}
+              selected={selected}
+              chartTitleOf={chartTitleOf}
+              onSelect={(onPage, id) => {
+                setOpenPage(onPage);
+                setSelected(id);
+                setAddTarget(null);
+                // Brought into view once the page it is on has rendered: it
+                // may be far down the canvas, or on a tab that was not open.
+                requestAnimationFrame(() => {
+                  globalThis.document
+                    .querySelector(`[data-tile="${CSS.escape(id)}"]`)
+                    ?.scrollIntoView({ block: 'nearest' });
+                });
+              }}
+            />
+          ),
           properties: (
             <>
               <TileProperties

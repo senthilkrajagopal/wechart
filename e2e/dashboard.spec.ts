@@ -189,6 +189,69 @@ test('activating Edit reveals the edit bar and the sidebar', async ({ page }) =>
   await expect(sidebar.getByRole('tab')).toHaveText(['Add', 'Outline', 'Properties']);
 });
 
+/**
+ * AC-053 (reopened 2026-09-24): the Outline tab was a panel with nothing in
+ * it. It is the dashboard's tree — page tabs, then their elements, sections
+ * and tab groups nested — and a row selects its element, as the prototype's
+ * `outline()` does.
+ */
+test('the Outline shows the dashboard as a tree, and a row selects its element', async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  await sidebar.getByRole('tab', { name: 'Outline' }).click();
+
+  const outline = sidebar.getByRole('navigation', { name: 'Dashboard outline' });
+  // Every element the seed saves, each by what a reader knows it by — its
+  // chart's title, its text — and never by an id.
+  await expect(outline.getByRole('button')).toHaveText([
+    /Chart: Orders by category and status$/,
+    /Markdown: Orders by status, this quarter\.$/,
+    /Section: Detail$/,
+    /Chart: Orders over time by status$/,
+    /Header: Definitions$/,
+    /Section: Terms$/,
+    /Tab group: Measures, Dimensions$/,
+    /Markdown: Count is the number of orders\.$/,
+  ]);
+  await expect(outline).toContainText('Page: Overview');
+  await expect(outline).toContainText('Page: Appendix');
+  // Nesting is structural: the section's chart is inside the section's item.
+  const detail = outline
+    .getByRole('listitem')
+    .filter({ has: page.getByRole('button', { name: /Section: Detail$/ }) });
+  await expect(detail.getByRole('button', { name: /Chart: Orders over time/ })).toBeVisible();
+
+  // A row selects its element on the canvas, and brings it into view.
+  await outline.getByRole('button', { name: /Chart: Orders over time/ }).click();
+  const region = page.locator('[data-tile="tile-region"]');
+  await expect(region).toHaveAttribute('data-selected', 'true');
+  await expect(region).toBeInViewport();
+
+  // One on the page tab that is not open opens that page to select it.
+  await outline.getByRole('button', { name: /Header: Definitions$/ }).click();
+  await expect(
+    page.getByRole('tablist', { name: 'Pages' }).getByRole('tab', { name: 'Appendix' }),
+  ).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[data-tile="tile-heading"]')).toHaveAttribute('data-selected', 'true');
+
+  // And one in a tab group's tab that is not showing shows that tab — else
+  // the element has no box on the canvas to select (T209's review).
+  const group = page.locator('[data-tab-group="group-terms"]');
+  await group.getByRole('tab', { name: 'Dimensions' }).click();
+  await outline.getByRole('button', { name: /Markdown: Count is the number/ }).click();
+  await expect(group.getByRole('tab', { name: 'Measures' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.locator('[data-tile="tile-measures"]')).toHaveAttribute(
+    'data-selected',
+    'true',
+  );
+});
+
 test('the canvas is actually painted with a 12-column grid while editing', async ({ page }) => {
   await open(page);
   const canvas = page.getByTestId('grid-canvas').first();
