@@ -410,7 +410,7 @@ test('dropping a tile on a tab-group label moves it into that tab', async ({ pag
   await page.getByRole('tablist', { name: 'Pages' }).getByRole('tab', { name: 'Appendix' }).click();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
 
-  const group = page.getByRole('tablist', { name: /Tabs in/ });
+  const group = page.getByRole('tablist', { name: 'Tab group: Measures, Dimensions' });
   const dimensions = group.getByRole('tab', { name: 'Dimensions' });
   await expect(dimensions).toBeVisible();
 
@@ -546,7 +546,7 @@ test('the Add panel offers every element type and inserts one', async ({ page })
   // And the panel now aims at what was just added, so a second insert follows
   // the first rather than stacking in front of it.
   await expect(page.getByTestId('add-destination')).toHaveText(
-    'Adds to Overview, after header: New heading.',
+    'Adds to Overview, after Header: New heading.',
   );
 });
 
@@ -785,7 +785,7 @@ test('a tab group added to a page is wrapped in a section, and says so', async (
   // direction.md rule 37: a tab group can exist only inside a section. The
   // criterion's failing state is one created directly on a page tab.
   await expect(page.locator('.dashboard-section')).toHaveCount(sectionsBefore + 1);
-  await expect(page.getByRole('tablist', { name: /Tabs in/ })).toHaveCount(1);
+  await expect(page.getByRole('tablist', { name: /^Tab group: / })).toHaveCount(1);
 
   // And the other half: nothing explaining it.
   await expect(page.getByTestId('add-message')).toContainText(/section/i);
