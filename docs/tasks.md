@@ -73,7 +73,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Depends on: T002, T006
   - Done 2026-09-19. **AC-003 stays unchecked**: the route half and the repaint half are demonstrated (computed `background-color` on `body` and `.app-bar`, in both directions, and across a reload), but the criterion also says "without losing scroll position" and no surface is long enough to scroll yet. Asserting that against a page that cannot scroll would prove nothing. T016 builds the Explore contents list and ticks AC-003 with the scroll assertion added.
   - Both palettes ship in one stylesheet and the switch is a `data-theme` attribute on the document element, so nothing remounts and no navigation happens — which is *why* the route and scroll survive, rather than something that needs defending per surface. The stylesheet is generated from the tokens by `@wechart/ui`'s `themeCss()`, so what the browser paints and what the contrast audit checks are the same values.
-- [x] T008 (AC-004, AC-005) Apply the tokens across the shell and run the audit over rendered surfaces
+- [ ] T008 (AC-004, AC-005) Apply the tokens across the shell and run the audit over rendered surfaces
+  - **Reopened 2026-09-24, and AC-005 unticked** (AC-004 stands). Two surfaces the audit never reached fail it: **chart text in the dark theme** — ECharts draws axis and legend labels in its light-theme `#54555a` on the dark tile `#1c1c1b`, **2.3:1** (dashboard critique F30; the renderer is given neither the dark tokens nor the dark categorical palette) — and **the ⌘K palette's results**, browser-default link blue on `bg-raised`, **1.63:1** in dark (shell critique F1). The audit ran over text nodes in the DOM with the palette closed; SVG text inside a chart and a dialog that is not open were both outside what it looked at. Coming back needs the renderer themed, the palette styled, and the audit extended to open the palette and to include SVG `<text>`.
   - Files: `packages/web/src/shell/styles.ts`, `e2e/a11y-tokens.spec.ts`, `e2e/tsconfig.json`
   - Failing test: `e2e/a11y-tokens.spec.ts`: on the rendered shell in both themes, every text node computes to at least 12 px and meets its contrast threshold (AC-004, AC-005).
   - Depends on: T002, T007
@@ -855,7 +856,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **The tail takes the neutral, not a palette slot** (direction.md §5). "Other" is not a member, and giving it a member's colour would put it in the same visual class as the things it hides.
   - No item is added when the category count is exactly the setting: an "Other (0)" would be an empty category taking a colour and a legend entry for nothing.
   - Ranking uses the *first* measure. Summing across measures of different units would be adding pounds to counts. The same additivity caveat as the pivot applies: a total of averages is not an average, and a non-additive measure needs its "Other" from Cube.
-- [x] T049 (AC-042) Show a chart-shaped loading skeleton and an error state offering Retry and details
+- [ ] T049 (AC-042) Show a chart-shaped loading skeleton and an error state offering Retry and details
+  - **Reopened 2026-09-24, and AC-042 unticked.** The dashboard critique (`docs/design/critiques/2026-09-24-dashboard.md` F10) took a tile offline and refreshed it: no Retry, no details, and the wrong message ("This chart is no longer available"). Confirmed in the code — `DashboardView`'s `TileBody` renders `<TileError error={error} />` and never passes `onRetry`, so on a dashboard the Retry button cannot appear at all; only the chart editor passes one. The component was tested with the prop, which is how the criterion was ticked without the surface. Also to fix with it: a failed *query* must not fall through to the missing-chart state, and the tile keeps its header while in error.
   - Files: `packages/web/src/tiles/TileSkeleton.tsx`, `packages/web/src/tiles/TileSkeleton.test.tsx`, `packages/web/src/editor/ChartEditor.tsx`
   - Failing test: `TileSkeleton.test.tsx`: loading renders a skeleton matching the chart's shape, and a failure renders Retry plus the error details (AC-042).
   - Depends on: T013
@@ -938,7 +940,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F7. Dashboard authoring
 
-- [x] T059 (AC-053) Show the edit bar and the edit sidebar
+- [ ] T059 (AC-053) Show the edit bar and the edit sidebar
+  - **Reopened 2026-09-24, and AC-053 unticked.** The dashboard critique (F16) found the Outline tab's panel empty — `<div role="tabpanel" …></div>` with no children. The criterion's letter ("the edit sidebar with Add, Outline and Properties") is met by the tab, but a tab labelled Outline that shows nothing is not an outline, and the user's standing rule is that a tick needs the real surface. It comes back when the Outline shows the dashboard's tree (page tabs, then items, sections and tab groups nested, each with its kind) and a row selects and scrolls to its element, as the prototype does.
   - Files: `packages/web/src/dashboard/edit/{EditChrome,EditBar,EditSidebar}.tsx`, `packages/web/src/dashboard/edit/EditBar.test.tsx`, `packages/web/src/shell/styles.ts`
   - Failing test: `EditBar.test.tsx`: activating Edit reveals Undo, Redo, Discard and Save, and the sidebar's Add, Outline and Properties panels (AC-053).
   - Depends on: T005
@@ -3094,6 +3097,7 @@ Each task below measures its components' computed styles in `e2e/design-conforma
     - Also, both a11y: `aria-controls` is set only while the popover exists, and Remove's visible text is "Remove", so its name "Remove {filter}" begins with what it shows (WCAG 2.5.3).
     - The filter bar moved under the page tabs, as the prototype has it. That is recorded with T205's review, since it is AC-187 layout.
 - [x] T205 (AC-187) Draw the edit sidebar's tabs, Add palette and Properties as the prototype does
+  - **AC-187 reopened 2026-09-24** (this task and T202–T204 stay ticked for what they did). The dashboard critique measured two of AC-187's own components off the prototype's rule: the **dashboard header** is 48 px holding only the title, Edit and ⚙, where the prototype's is 80 px with a breadcrumb row (F3); and the **Properties panel** has a 0 px inset — `.edit-sidebar__panel` has no padding, so the Marking select runs to the window's edge — against the prototype's 12 px section inset (F19). AC-187's failing state is exactly "a component's computed height, padding … differs from the prototype's rule". It comes back with the F22 work (AC-195, AC-203) that restores those parts.
   - Files: `packages/web/src/dashboard/edit/EditSidebar.tsx`, `packages/web/src/dashboard/edit/AddPanel.tsx`, `packages/web/src/dashboard/edit/TileProperties.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts`: the sidebar tabs are 36 px, 12 px 600, underlined in the accent colour when selected; Properties fields have 12/16 600 secondary labels over 32 px inputs, in sections with a 12 px uppercase heading (AC-187).
   - Depends on: T202
@@ -3203,6 +3207,85 @@ Each task below measures its components' computed styles in `e2e/design-conforma
   - **The lesson worth keeping, independent of markings.** A criterion whose `Fails when:` names an observation on a tile is not demonstrated by a test that renders a component with hand-passed props. When planning any future feature, the task that introduces a UI module must also name the renderer that mounts it, or the feature is finished everywhere except where the user is.
   - Known interface hazard for whoever does this: `allLimitsEmpty(limitingMarkings(xs))` is false for every input, because `limitingMarkings` keeps only the non-empty markings. Pinned by a test in `NothingMarked.test.tsx`.
 
+## Spec F22. Following the design prototype's structure
+
+Planned 2026-09-24 from the critiques in `docs/design/critiques/2026-09-24-*.md` (R9: the user chose to do this before more features, then resume the handoff order). Every task here is surface work, so every one names the renderer and an e2e spec — the lesson of T190 above. The prototype is served for comparison with `python3 -m http.server 5500` in `docs/design/prototype/`.
+
+Order: the reopened criteria first (they are ticked-and-false, the worst state to leave), then Explore and the shell, then dashboards.
+
+- [ ] T208 (AC-042) Offer Retry and details on a dashboard tile's error state, and never report a failed query as a missing chart
+  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/TileError.tsx`, `e2e/dashboard.spec.ts`
+  - Failing test: `e2e/dashboard.spec.ts`: a tile whose query fails shows its title, Retry and a details disclosure; Retry asks again and draws the chart (AC-042).
+  - Depends on: none
+- [ ] T209 (AC-053) Show the dashboard's tree in the Outline tab, a row selecting and scrolling to its element
+  - Files: `packages/web/src/dashboard/edit/Outline.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `e2e/dashboard-edit.spec.ts`
+  - Failing test: `e2e/dashboard-edit.spec.ts`: the Outline lists page tabs, then their items with sections and tab groups nested, and clicking a row selects that element (AC-053).
+  - Depends on: none
+- [ ] T210 (AC-005, AC-211) Draw charts in the dark theme's palette and tokens, and bring chart text and the open palette into the contrast audit
+  - Files: `packages/charts/src/theme.ts`, `packages/web/src/tiles/ChartCanvas.tsx`, `packages/web/src/shell/SearchPalette.tsx`, `packages/web/src/shell/styles.ts`, `e2e/a11y-tokens.spec.ts`
+  - Failing test: `e2e/a11y-tokens.spec.ts`: in the dark theme, every SVG `<text>` in a chart and every result in the open palette meets its contrast threshold, and a chart's series use the dark palette (AC-005, AC-211).
+  - Depends on: none
+- [ ] T211 (AC-190, AC-191) Put the search field and avatar in the top bar, and make the palette search fields and model files with arrow-key results
+  - Files: `packages/web/src/shell/AppShell.tsx`, `packages/web/src/shell/SearchPalette.tsx`, `packages/api/src/server.ts`, `e2e/search-palette.spec.ts`
+  - Failing test: `e2e/search-palette.spec.ts`: clicking the top-bar field opens the palette; a field name and a model file are found with their types; ArrowDown then Enter opens the second result; Escape returns focus (AC-190, AC-191).
+  - Depends on: T210
+- [ ] T212 (AC-019, AC-192) Give each Explore folder its breadcrumb, heading with Rename, search box and New menu
+  - Files: `packages/web/src/workspaces/explore/ExplorePage.tsx`, `packages/web/src/workspaces/explore/CreateMenu.tsx`, `e2e/search.spec.ts`, `e2e/explore.spec.ts`
+  - Failing test: `e2e/search.spec.ts` (written 2026-09-24, red for want of the box) and `e2e/explore.spec.ts`: the heading is the folder's name, a crumb opens its folder, New offers Dashboard, Chart and Folder (AC-019, AC-192).
+  - Depends on: none
+- [ ] T213 (AC-193) List a folder's contents under Name, Type, Built on, Updated and Owner, with a row menu for rename and move
+  - Files: `packages/api/src/repos/catalog.ts`, `packages/web/src/workspaces/explore/FolderContents.tsx`, `e2e/explore.spec.ts`
+  - Failing test: `e2e/explore.spec.ts`: a chart row shows its chart type and source, a dashboard its description and tab count, subfolders come first, and rename and move are in the row's menu, which never offers the item's own folder (AC-193).
+  - Depends on: T212, T215
+- [ ] T214 (AC-194) Dock the folder tree as a full-height pane with "Folders", "+ Folder", counts and a "My workspace" root
+  - Files: `packages/api/src/repos/catalog.ts`, `packages/api/src/seed.ts`, `packages/web/src/workspaces/explore/FolderTree.tsx`, `e2e/explore.spec.ts`
+  - Failing test: `e2e/explore.spec.ts`: "My workspace" is a root, a folder's count includes its subfolders' items, and the tree stays put while the contents scroll (AC-194).
+  - Depends on: T212
+- [ ] T215 (AC-197) Edit a dashboard's name, folder and description in Settings › General, and show the description in Explore
+  - Files: `packages/web/src/dashboard/settings/SettingsPage.tsx`, `packages/web/src/dashboard/model/document.ts`, `e2e/dashboard-settings.spec.ts`
+  - Failing test: `e2e/dashboard-settings.spec.ts`: a description saved in settings appears under the dashboard's name in Explore, and changing the folder moves it (AC-197).
+  - Depends on: none
+- [ ] T216 (AC-195) Show a breadcrumb back to the folder on dashboards and chart pages, and keep the folder in Explore's URL
+  - Files: `packages/web/src/workspaces/explore/ExplorePage.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, `e2e/explore.spec.ts`
+  - Failing test: `e2e/explore.spec.ts`: open a dashboard from Finance, follow its breadcrumb, and Finance is shown; reload, and it still is (AC-195).
+  - Depends on: T212
+- [ ] T217 (AC-196, AC-207) Fix the dashboard's header, tabs and filter bar above the scrolling tiles, with the filter bar's hint and the empty state
+  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/filters/FilterBar.tsx`, `packages/web/src/shell/styles.ts`, `e2e/dashboard.spec.ts`
+  - Failing test: `e2e/dashboard.spec.ts`: after scrolling the tiles the tabs and filter bar are still in view; the hint shows with nothing set; an empty dashboard says so and shows its tab strip (AC-196, AC-207).
+  - Depends on: T216
+- [ ] T218 (AC-198) Manage markings in Settings › Markings, with the tiles-and-markings table
+  - Files: `packages/web/src/dashboard/settings/MarkingsSettings.tsx`, `packages/web/src/dashboard/settings/SettingsPage.tsx`, `e2e/dashboard-settings.spec.ts`
+  - Failing test: `e2e/dashboard-settings.spec.ts`: add a marking, rename and recolour it, make it the default, see a fifth refused, and see every chart tile's Marks with and Limited by (AC-198).
+  - Depends on: T215
+- [ ] T219 (AC-199, AC-201) Give a chart tile's view-mode menu its items, and put the marked badge in the header row
+  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/ChartTile.tsx`, `packages/web/src/dashboard/markings/MarkBadge.tsx`, `e2e/markings.spec.ts`
+  - Failing test: `e2e/markings.spec.ts`: the menu offers View as table, View query, Download CSV and Edit chart, and the marked-rows group only in Markings mode; the badge sits beside the title and not on a markdown tile (AC-199, AC-201).
+  - Depends on: T217
+- [ ] T220 (AC-200) Make the marking chip bordered, titled by members' titles, naming its source tile, with a menu and ×
+  - Files: `packages/web/src/dashboard/markings/MarkChip.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `e2e/markings.spec.ts`
+  - Failing test: `e2e/markings.spec.ts`: after marking, the chip reads the member's title and the source tile, and its × unmarks (AC-200).
+  - Depends on: T217
+- [ ] T221 (AC-202, AC-208) Draw sections as collapsible bands, and render markdown
+  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/tiles/MarkdownTile.tsx`, `e2e/dashboard.spec.ts`
+  - Failing test: `e2e/dashboard.spec.ts`: a section collapses in view mode and says how many items it holds; a markdown tile's "## Title" renders as a heading and `<b>` stays text (AC-202, AC-208).
+  - Depends on: T217
+- [ ] T222 (AC-203, AC-187) Open Properties on selecting a tile, with its Chart, Marking and Layout sections at the prototype's inset
+  - Files: `packages/web/src/dashboard/edit/TileProperties.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/shell/styles.ts`, `e2e/dashboard-edit.spec.ts`
+  - Failing test: `e2e/dashboard-edit.spec.ts`: clicking a chart tile in edit mode shows Properties with its title, type and source, Edit chart, ownership, Marking and Layout, inset 12 px (AC-203, AC-187).
+  - Depends on: T209
+- [ ] T223 (AC-204, AC-205, AC-206) Make Discard leave edit mode, order the edit-mode tile menu, and mark tiles editable at rest
+  - Files: `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `e2e/dashboard-edit.spec.ts`
+  - Failing test: `e2e/dashboard-edit.spec.ts`: Discard with no changes returns to view mode; the tile menu's Duplicate and Delete are visible without scrolling; grips show at rest; the title reads "Editing …" and "+ Page tab" is offered (AC-204, AC-205, AC-206).
+  - Depends on: T222
+- [ ] T224 (AC-209, AC-210) Name tiles by their titles, and never draw an empty plot for returned rows
+  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/charts/src/option.ts`, `e2e/dashboard.spec.ts`
+  - Failing test: `e2e/dashboard.spec.ts`: every tile's accessible name is its title; a 243-bar chart at half width draws bars of non-zero width (AC-209, AC-210).
+  - Depends on: T217
+- [ ] T225 (AC-187) Re-run the design critique on Explore and dashboards, and tick AC-187 only on measured conformance
+  - Files: `docs/design/critiques/`
+  - Failing test: the `design-critic` report finds no `STRUCTURE` or AC-187 finding on the surfaces above (AC-187).
+  - Depends on: T208–T224
+
 ---
 
 ## Coverage: acceptance criterion → task
@@ -3255,5 +3338,12 @@ Each task below measures its components' computed styles in `e2e/design-conforma
 | AC-044 | T051       | AC-089 | T095 | AC-134 | T140 | AC-179 | T184       |
 | AC-045 | T043       | AC-090 | T096 | AC-135 | T141 | AC-180 | T001, T185 |
 | AC-181 | T187       | AC-182 | T191 | AC-183 | T192 | AC-184 | T197       |
-| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205 | AC-188 | T206       |
-| AC-189 | T207       |        |      |        |      |        |            |
+| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225 | AC-188 | T206       |
+| AC-189 | T207       | AC-190 | T211 | AC-191 | T211 | AC-192 | T212       |
+| AC-193 | T213       | AC-194 | T214 | AC-195 | T216 | AC-196 | T217       |
+| AC-197 | T215       | AC-198 | T218 | AC-199 | T219 | AC-200 | T220       |
+| AC-201 | T219       | AC-202 | T221 | AC-203 | T222 | AC-204 | T223       |
+| AC-205 | T223       | AC-206 | T223 | AC-207 | T217 | AC-208 | T221       |
+| AC-209 | T224       | AC-210 | T224 | AC-211 | T210 |        |            |
+
+Reopened 2026-09-24 and now also covered by the prototype-alignment tasks: AC-005 → T008, T210 · AC-019 → T017, T212 · AC-042 → T049, T208 · AC-053 → T059, T209.

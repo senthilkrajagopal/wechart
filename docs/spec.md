@@ -43,7 +43,7 @@ Traces to: `[R2]`, `[docs/inputs §8]`, direction.md §2.
       Fails when: the route changes, the scroll position resets, or any element keeps the previous theme's background colour after the switch.
 - [x] AC-004 THE SYSTEM SHALL render every text node at a computed font size of at least 12 px (direction.md rule 1).
       Fails when: any rendered text node has a computed font-size below 12 px.
-- [x] AC-005 THE SYSTEM SHALL meet WCAG AA contrast for text in both themes: at least 4.5:1, or 3:1 for text of at least 18.66 px bold or 24 px (direction.md rule 2).
+- [ ] AC-005 THE SYSTEM SHALL meet WCAG AA contrast for text in both themes: at least 4.5:1, or 3:1 for text of at least 18.66 px bold or 24 px (direction.md rule 2).
       Fails when: any text node's contrast ratio against its own background is below its threshold.
 - [x] AC-006 WHEN the user presses ⌘K or Ctrl+K anywhere in the application, THE SYSTEM SHALL open the search palette with keyboard focus in its input.
       Fails when: after the shortcut, focus is not inside the palette input, or the palette does not open.
@@ -147,7 +147,7 @@ Traces to: `[docs/inputs §2]`, direction.md §6, rules 4–7, 18–19.
       Fails when: any of those settings has no effect on the rendered axis.
 - [x] AC-041 WHEN a categorical chart exceeds its top-N setting, THE SYSTEM SHALL aggregate the remainder into a single "Other (n)" item and label it with the number of members it covers.
       Fails when: the chart renders more categories than the setting, or the remainder is unlabelled.
-- [x] AC-042 WHEN a chart is loading, THE SYSTEM SHALL show a skeleton in the shape of the chart, and WHEN it fails, an error state offering Retry and the error details (direction.md rule 18).
+- [ ] AC-042 WHEN a chart is loading, THE SYSTEM SHALL show a skeleton in the shape of the chart, and WHEN it fails, an error state offering Retry and the error details (direction.md rule 18).
       Fails when: loading shows an empty tile, or the error state offers no Retry or no details.
 - [x] AC-043 WHEN a query returns no rows, THE SYSTEM SHALL show an empty state naming the filters that are in effect.
       Fails when: the tile renders blank axes with no message, or the message omits an active filter.
@@ -195,7 +195,7 @@ Traces to: `[R7]`, `[R2]`, `[research/cube/data-modeling.md]`.
 Purpose: build dashboards on a 12-column grid, in place, with the keyboard or the mouse.
 Traces to: `[docs/inputs §8, §9]`, direction.md §2, rules 15–17, 36–42.
 
-- [x] AC-053 WHEN the user activates Edit on a dashboard, THE SYSTEM SHALL show the edit bar with Undo, Redo, Discard and Save, and the edit sidebar with Add, Outline and Properties.
+- [ ] AC-053 WHEN the user activates Edit on a dashboard, THE SYSTEM SHALL show the edit bar with Undo, Redo, Discard and Save, and the edit sidebar with Add, Outline and Properties.
       Fails when: any of those controls is missing in edit mode.
 - [x] AC-054 WHILE editing, THE SYSTEM SHALL show a 12-column grid on the canvas and snap every tile to whole columns and to 8-pixel row units (direction.md rule 15).
       Fails when: a tile's width is not a whole number of columns, or its height is not a multiple of 8 pixels.
@@ -613,8 +613,66 @@ Traces to: `[R3]`, `[R7]`, direction.md rules 1–5, 39, 52.
       > criterion is ticked by a four-browser run, not by the local three.
 - [x] AC-188 THE SYSTEM SHALL write a time dimension's values by their granularity — a year as "2026", a quarter as "Q1 2026", a month as "Jan 2026", a week as "Week of Jan 5, 2026", a day as "Jan 2, 2026", and an hour or finer with the time — in axes, labels, tooltips and tables, unless the member's model format says otherwise.
       Fails when: a time value shows as a raw timestamp such as "2026-01-02T00:00:00.000".
-- [x] AC-187 THE SYSTEM SHALL draw the app bar, workspace navigation, buttons and inputs, the dashboard header and page tabs, the filter bar, tiles, and the edit sidebar with the component styles of the design prototype the user approved (`docs/design/prototype/index.html`, published as "wechart Workbench"; the user, 2026-09-21: "align with the ui styles in" it), in the tokens of direction.md §3–5.
+- [ ] AC-187 THE SYSTEM SHALL draw the app bar, workspace navigation, buttons and inputs, the dashboard header and page tabs, the filter bar, tiles, and the edit sidebar with the component styles of the design prototype the user approved (`docs/design/prototype/index.html`, published as "wechart Workbench"; the user, 2026-09-21: "align with the ui styles in" it), in the tokens of direction.md §3–5.
       Fails when: one of those components' computed height, padding, border width or radius, font size or weight, or colour token differs from the prototype's rule for the same component.
+
+## F22. Following the design prototype's structure
+
+Purpose: the prototype's structure, layout and interaction, which the user accepted, on every surface — not only its component styles, which AC-187 covers.
+Traces to: `[R7]`, `[R9]`; the critiques in `docs/design/critiques/2026-09-24-*.md`, which measured each gap against `docs/design/prototype/`.
+
+Application shell and search:
+
+- [ ] AC-190 THE SYSTEM SHALL show at the right of the top bar a search field that names the platform's shortcut (⌘K or Ctrl+K) and opens the search palette when clicked, and an identity avatar at the far right.
+      Fails when: the top bar offers no visible way to open search, or the avatar is missing.
+- [ ] AC-191 WHEN the user types in the search palette, THE SYSTEM SHALL list the matching dashboards, library charts, Cube fields and model files, each with its type, move the active result with the arrow keys, open it with Enter, and return focus to where it was when the palette closes (`[R9]`).
+      Fails when: a matching field or model file is missing, a result has no type, the arrow keys do not move the active result, or focus is not returned on close.
+
+Explore:
+
+- [ ] AC-192 WHEN the user opens a folder in Explore, THE SYSTEM SHALL show a breadcrumb of its ancestors, the folder's name as the page heading with Rename beside it, the Explore search box, and a single "New" menu offering Dashboard, Chart and Folder.
+      Fails when: the folder's name is not the page heading, a breadcrumb ancestor does not open that folder, or creating is offered other than through the New menu.
+- [ ] AC-193 THE SYSTEM SHALL list a folder's contents under the columns Name, Type, Built on, Updated and Owner — subfolders first, then dashboards, then charts — showing a dashboard's description beneath its name and its number of page tabs, a chart's chart type and the cube or view it is built on, and a subfolder's item count, and SHALL offer rename and move through a menu on each row.
+      Fails when: a column is missing, a chart's type reads only "Chart", a row shows a rename or move control before its menu is opened, or a move offers the item's own folder or, for a folder, itself or a folder inside it.
+- [ ] AC-194 THE SYSTEM SHALL show the folder tree as a full-height pane headed "Folders" with a "+ Folder" action, holding a shared root and a personal "My workspace" root, each folder showing the number of items it holds including those in its subfolders (`[R9]`).
+      Fails when: "My workspace" is missing, a count leaves out items in subfolders, or the tree scrolls away with the contents.
+- [ ] AC-195 WHEN the user opens a dashboard or a library chart from Explore, THE SYSTEM SHALL show a breadcrumb back to its folder, and returning by it, or reloading Explore, SHALL show that folder.
+      Fails when: the breadcrumb is missing, or returning or reloading lands on a folder other than the item's.
+
+Dashboards:
+
+- [ ] AC-196 WHILE a dashboard is open, THE SYSTEM SHALL keep its header, page tabs and filter bar fixed above the scrolling tiles, and show the filter bar at all times, with a one-line hint on how to mark or filter while nothing is set.
+      Fails when: the page tabs or the filter bar scroll out of view with the tiles, or the filter bar appears only once something is set.
+- [ ] AC-197 WHEN the user opens a dashboard's settings, THE SYSTEM SHALL let the user change its name, its folder and its description under General, and Explore SHALL show that description beneath the dashboard's name.
+      Fails when: the folder or the description cannot be changed there, or a saved description does not appear in Explore.
+- [ ] AC-198 WHEN the user opens Settings › Markings, THE SYSTEM SHALL list the dashboard's markings with their colour, name, whether each is the default and how many tiles mark with or are limited by it, let the user add a marking (up to four), rename, recolour, delete and make one the default, and show a table of every chart tile with the marking it marks with and the markings that limit it.
+      Fails when: any of those changes cannot be made on that page, or the tiles table is missing.
+- [ ] AC-199 WHEN the user opens a chart tile's menu in view mode, THE SYSTEM SHALL offer View as table, View query, Download CSV and Edit chart, and, while the dashboard is in Markings mode, the marked-rows actions headed by the tile's marking and its count.
+      Fails when: one of those items is missing, or the marked-rows actions appear outside Markings mode.
+- [ ] AC-200 THE SYSTEM SHALL show each non-empty marking in the filter bar as a chip bordered in the marking's colour, naming the marking, summarising its values by the members' titles, naming the tile it came from, and offering a menu and a control that unmarks it.
+      Fails when: a chip shows a member's internal name, omits the source tile, or cannot unmark from the chip.
+- [ ] AC-201 THE SYSTEM SHALL show the marked-items badge in a chart tile's header row, beside its title, and only on chart tiles whose marking holds something.
+      Fails when: the badge pushes the title down, or appears on a tile that does not mark or whose marking is empty.
+- [ ] AC-202 THE SYSTEM SHALL draw a section as a band with a header holding a collapse control, its title and its number of items, and SHALL collapse and expand it in view and edit mode.
+      Fails when: a section has no collapse control, or cannot be collapsed in view mode.
+- [ ] AC-203 WHEN the user selects a tile in edit mode, THE SYSTEM SHALL open Properties, showing for a chart tile its title, chart type and source, an Edit chart action, its ownership, its Marking settings and its layout.
+      Fails when: selecting a tile leaves another sidebar tab open, or one of those parts is missing for a chart tile.
+- [ ] AC-204 WHEN the user chooses Discard in edit mode, THE SYSTEM SHALL restore the dashboard as it was when editing began and return to view mode, whether or not anything was changed.
+      Fails when: Discard leaves the dashboard in edit mode, or is unavailable with no changes.
+- [ ] AC-205 WHEN the user opens a tile's menu in edit mode, THE SYSTEM SHALL list Duplicate first and Delete last, with Save to folders… or Make a local copy, and Move to with its targets between them, every item reachable without scrolling the menu except the Move to targets.
+      Fails when: Duplicate or Delete must be scrolled to, or an item is missing.
+- [ ] AC-206 WHILE a dashboard is in edit mode, THE SYSTEM SHALL mark every tile as editable at rest — its drag grip visible and its outline dashed — title the page "Editing ‹name›", and offer "+ Page tab" in the tab row.
+      Fails when: a tile's grip is visible only on hover, or either the title or "+ Page tab" is missing.
+- [ ] AC-207 WHEN a dashboard or one of its page tabs has no tiles, THE SYSTEM SHALL show a sentence saying so with a way to start editing, and SHALL show the page-tab strip.
+      Fails when: an empty dashboard or tab renders a blank canvas, or the tab strip is hidden.
+- [ ] AC-208 THE SYSTEM SHALL render a markdown tile's headings, emphasis, lists and line breaks, and no raw HTML (`[R7]`).
+      Fails when: a heading marker such as "##" or an emphasis marker is shown as text, or an HTML tag in the text renders as HTML.
+- [ ] AC-209 THE SYSTEM SHALL name every tile, in its accessible name and its menu's, by its title — or, for a tile without one, by its kind and position — and never by an internal id.
+      Fails when: a tile or its menu is announced by an id such as "tile-status" or "el-1790238490469-7".
+- [ ] AC-210 WHEN a chart's query returns rows, THE SYSTEM SHALL draw every row visibly, whatever the width of the tile.
+      Fails when: a chart with returned rows draws empty axes, as a 243-bar chart did at a tile width where each bar measured 0 px.
+- [ ] AC-211 THE SYSTEM SHALL draw charts in the dark theme with the dark categorical palette and the dark theme's text and gridline tokens, and redraw them when the theme changes (direction.md rules 2, 24).
+      Fails when: a chart in the dark theme uses a light-theme series colour, text colour or gridline colour.
 
 ---
 
@@ -679,3 +737,4 @@ Copied from [requirements.md §7](./requirements.md):
 | Scope: export `[R6]`                                                                          | AC-171 … AC-173                                                       |
 | Scope: filters `[docs/inputs §2]`                                                             | AC-076 … AC-083                                                       |
 | Scope: chart rendering and customisation `[docs/inputs §2]`                                   | AC-037 … AC-046                                                       |
+| Scope: following the prototype's structure, "My workspace", global search scope `[R7, R9]`   | AC-187, AC-190 … AC-211                                               |

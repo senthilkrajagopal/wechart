@@ -146,6 +146,7 @@ Product surfaces, from the design work already reviewed (`docs/design/direction.
 - **Quick calculations** — a fixed menu on a measure (% of total, difference and % difference from the previous period, running total, rank, moving average), each mapping to a Cube multi-stage measure. Anything else becomes a tracked request to the semantic-layer engineer, carrying the chart it came from `[R7]`.
 - **Text tiles** — Markdown with live tokens (measure values, marking summaries) and no raw HTML `[R7]`.
 - **Chart builder** — cube/view picker, metrics and dimensions, chart-type gallery, recommendation with a one-line reason and "Why this chart?", axis and legend customisation, drill `[docs/inputs §2–3]`.
+- **The prototype's structure, followed** `[R7, R9]`. R7 accepted `docs/design/prototype/` for structure, layout and interaction; R9 makes following it phase-1 work, surface by surface, from the critiques in `docs/design/critiques/2026-09-24-*.md`. Two structural choices it settles: the folder tree has **a shared root and a personal "My workspace" root** — in phase 1, with one user, simply a place for personal and draft work — and **global search covers dashboards, charts, Cube fields and model files**, each result labelled with its type, while Explore's own search box stays dashboards and charts `[R9]`.
 - **Two more chart types: a country map and a box plot** `[R8]`. The map is a country-level choropleth keyed by ISO-3 country codes, with one measure coloured per country. The box plot draws one box per category over a numeric value — median, quartiles and whiskers. Both come from the Superset parity exercise (`docs/design/superset-parity.md`): Superset's two Northwind dashboards use them for three of their 22 charts, and nothing else wechart draws can reproduce those panels.
 - **Model editor** — Cube YAML authoring with synchronised form and code views `[docs/inputs §4b]`.
 - **Data sources, jobs, schedules, security preview** — `[docs/inputs §7]`.
@@ -335,3 +336,12 @@ Questions are Claude's; answers are the user's, verbatim.
   A: "Add a country map type (Recommended)"
 - Q: Box plot — Days to Ship Distribution by Shipper. What should wechart do? (options: add a box plot type / substitute a bar of the average / defer to phase 2)
   A: "Add a box plot type (Recommended)"
+
+**R9 — the prototype-alignment pass** (2026-09-24, after the user compared the running Explore with `docs/design/prototype/` and found it structurally different)
+
+- Q: When should the prototype-alignment pass happen? (options: now, before more features / Explore now, the rest later / after the remaining ACs)
+  A: "Go with Option 1.. and after that continue with the handoff"
+- Q: The prototype's folder tree has two roots, a shared one and a personal "My workspace"; wechart has one. Phase 1 is single-user. What should the tree have? (options: both roots now / one shared root for now)
+  A: "Both roots now (Recommended)"
+- Q: The prototype's top-bar search says "Search fields, charts, models"; the ⌘K palette searches dashboards and charts only. What should global search cover? (options: dashboards, charts, fields and models / dashboards and charts only)
+  A: "Dashboards, charts, fields and models (Recommended)"
