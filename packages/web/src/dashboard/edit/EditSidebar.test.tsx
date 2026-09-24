@@ -46,4 +46,27 @@ describe('asking the sidebar for a panel', () => {
 
     expect(document.activeElement).toBe(screen.getByRole('tabpanel'));
   });
+
+  /**
+   * T222 / AC-203: a tile chosen by a click shows its Properties while the
+   * tile keeps focus — its keys still move and resize it.
+   */
+  it('shows the panel asked for without focus, leaving focus where it was', () => {
+    render(
+      <>
+        <button type="button">A tile</button>
+        <EditSidebar panels={panels} />
+      </>,
+    );
+    screen.getByRole('button', { name: 'A tile' }).focus();
+
+    act(() => {
+      openSidebarPanel('Properties', { focus: false });
+    });
+
+    expect(screen.getByRole('tab', { name: 'Properties' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'A tile' }));
+  });
 });

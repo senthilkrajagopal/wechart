@@ -37,8 +37,16 @@ const tabId = (panel: SidebarPanel) => `edit-sidebar-tab-${panel.toLowerCase()}`
  * sidebar, and selecting the tile has already happened on its focus.
  */
 const OPEN_PANEL = 'wechart:open-sidebar-panel';
-export function openSidebarPanel(panel: SidebarPanel) {
-  window.dispatchEvent(new CustomEvent<SidebarPanel>(OPEN_PANEL, { detail: panel }));
+interface OpenAsk {
+  readonly panel: SidebarPanel;
+  readonly focus: boolean;
+}
+/**
+ * `focus: false` shows the panel and leaves focus where it is: a tile chosen
+ * by a click shows its Properties (AC-203) while the tile keeps the keys.
+ */
+export function openSidebarPanel(panel: SidebarPanel, { focus = true } = {}) {
+  window.dispatchEvent(new CustomEvent<OpenAsk>(OPEN_PANEL, { detail: { panel, focus } }));
 }
 
 export function EditSidebar({ panels }: EditSidebarProps) {
@@ -53,10 +61,10 @@ export function EditSidebar({ panels }: EditSidebarProps) {
   const [asked, setAsked] = useState(0);
   useEffect(() => {
     const onOpen = (event: Event) => {
-      const wanted = (event as CustomEvent<SidebarPanel>).detail;
+      const { panel: wanted, focus } = (event as CustomEvent<OpenAsk>).detail;
       if (!SIDEBAR_PANELS.includes(wanted)) return;
       setOpen(wanted);
-      setAsked((count) => count + 1);
+      if (focus) setAsked((count) => count + 1);
     };
     window.addEventListener(OPEN_PANEL, onOpen);
     return () => {

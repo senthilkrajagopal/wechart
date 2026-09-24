@@ -655,7 +655,7 @@ Dashboards:
       Fails when: the badge pushes the title down, or appears on a tile that does not mark or whose marking is empty.
 - [x] AC-202 THE SYSTEM SHALL draw a section as a band with a header holding a collapse control, its title and its number of items, and SHALL collapse and expand it in view and edit mode.
       Fails when: a section has no collapse control, or cannot be collapsed in view mode.
-- [ ] AC-203 WHEN the user selects a tile in edit mode, THE SYSTEM SHALL open Properties, showing for a chart tile its title, chart type and source, an Edit chart action, its ownership, its Marking settings and its layout.
+- [x] AC-203 WHEN the user selects a tile in edit mode, THE SYSTEM SHALL open Properties, showing for a chart tile its title, chart type and source, an Edit chart action, its ownership, its Marking settings and its layout.
       Fails when: selecting a tile leaves another sidebar tab open, or one of those parts is missing for a chart tile.
 - [ ] AC-204 WHEN the user chooses Discard in edit mode, THE SYSTEM SHALL restore the dashboard as it was when editing began and return to view mode, whether or not anything was changed.
       Fails when: Discard leaves the dashboard in edit mode, or is unavailable with no changes.

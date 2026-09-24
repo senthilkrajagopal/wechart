@@ -88,7 +88,13 @@ import { markingOf, withMarking, type MarkingState } from './markings/store';
 import { interactionsOf, type InteractionMode } from './settings/interactionMode';
 import { describeFilter } from '../filters/describe';
 import { NotCovered } from '../filters/NotCovered';
-import { PageTabsProperties, TileProperties } from './edit/TileProperties';
+import {
+  ChartSection,
+  MarkingSection,
+  PageTabsProperties,
+  TileProperties,
+} from './edit/TileProperties';
+import { chartTypeText } from '../workspaces/explore/chartTypeLabels';
 import { ImageTile } from './tiles/ImageTile';
 import { LinkTile } from './tiles/LinkTile';
 import { FilterBar } from '../filters/FilterBar';
@@ -801,11 +807,8 @@ function Elements({
                 // would otherwise lose focus return without a sound.
                 data-edit-chart={element.id}
                 /**
-                 * Labelled as the tile's ⋯ menu is ("Actions for …"), from the
-                 * same source. That makes two chart tiles' pencils read alike,
-                 * as their menus already do: a chart's title lives on the chart
-                 * document, not the tile, and giving tiles distinct accessible
-                 * names is a fix for every tile control at once, not this one.
+                 * Named for its tile as the tile's ⋯ menu is, by the chart's
+                 * title (AC-209).
                  */
                 aria-label={`Edit ${affordances.nameOf?.(element.id) ?? element.text ?? element.kind}`}
                 onClick={() => {
@@ -1426,6 +1429,25 @@ export function DashboardView({
     [specs, errors, documents, answered, document, drafts],
   );
   const chartTitleOf = (chartId: string) => drawn.documents?.[chartId]?.title;
+  /**
+   * A chart's type as Properties says it (AC-203): its saved type, or, where
+   * it follows the recommender, "Automatic" and the type it is drawn as.
+   */
+  const chartTypeOf = (chartId: string) => {
+    const chart = drawn.documents?.[chartId]?.chart;
+    if (chart?.chartType !== undefined) return chartTypeText({ chartType: chart.chartType });
+    // Nothing in it to draw: "Incomplete", as the prototype and Explore say.
+    const hasFields =
+      chart !== undefined && Object.values(chart.wells).some((well) => well.length > 0);
+    if (!hasFields) return chartTypeText({ hasFields: false });
+    const shown = drawn.specs[chartId]?.chartType;
+    return shown === undefined ? 'Automatic' : `Automatic (${chartTypeText({ chartType: shown })})`;
+  };
+  /** The cube or view a chart is built on (AC-203); a new chart has none yet. */
+  const chartSourceOf = (chartId: string) => {
+    const cube = drawn.documents?.[chartId]?.chart.source.cube ?? '';
+    return cube === '' ? 'no cube or view yet' : cube;
+  };
 
   /**
    * What each filter holds now (F9). The reader's, not the dashboard's: not
@@ -2596,6 +2618,8 @@ export function DashboardView({
    * whatever opened it.
    */
   const returnFocus = useRef<string | null>(null);
+  /** The tile the editor was opened on, for when that control is gone. */
+  const returnTile = useRef<string | null>(null);
   /**
    * Whether the session is saving, mirrored up from it (`SessionMirror`).
    * The editor's Save dashboard closes the editor and starts a save in one
@@ -2607,7 +2631,18 @@ export function DashboardView({
     // Only once the editor has closed, the dashboard is drawn again, and it
     // can take focus.
     if (editingChart !== null || saving || returnFocus.current === null) return;
-    const target = globalThis.document.querySelector<HTMLElement>(returnFocus.current);
+    /**
+     * Or, when the control that opened it is gone, its tile's pencil, then
+     * the tile: Properties' Edit chart leaves with the sidebar when Save
+     * dashboard ends edit mode (T222's review).
+     */
+    const tile = returnTile.current === null ? null : CSS.escape(returnTile.current);
+    const target =
+      globalThis.document.querySelector<HTMLElement>(returnFocus.current) ??
+      (tile === null
+        ? null
+        : (globalThis.document.querySelector<HTMLElement>(`[data-edit-chart="${tile}"]`) ??
+          globalThis.document.querySelector<HTMLElement>(`[data-tile="${tile}"]`)));
     /**
      * Inert, so it cannot take focus yet. `saving` above lags by a render: the
      * mirror sets it from an effect, and state set there reaches this
@@ -2899,6 +2934,7 @@ export function DashboardView({
                   session.change(withDraft(session.document, editingChart.chartId, draft));
                 }
                 returnFocus.current = editingChart.returnTo;
+                returnTile.current = editingChart.tileId;
                 setEditingChart(null);
                 closeInUrl();
               }}
@@ -2911,6 +2947,7 @@ export function DashboardView({
                */
               onSaveDashboard={(draft) => {
                 returnFocus.current = editingChart.returnTo;
+                returnTile.current = editingChart.tileId;
                 setEditingChart(null);
                 closeInUrl();
                 session.save(
@@ -2955,6 +2992,10 @@ export function DashboardView({
                 setOpenPage(onPage);
                 setSelected(id);
                 setAddTarget(null);
+                // Chosen here as on the canvas: its Properties show (AC-203),
+                // as the prototype's Outline rows do — with focus, since the
+                // row it was on goes with the Outline (T222's review).
+                openSidebarPanel('Properties');
                 // Brought into view once the page it is on has rendered: it
                 // may be far down the canvas, or on a tab that was not open.
                 requestAnimationFrame(() => {
@@ -2977,65 +3018,22 @@ export function DashboardView({
                 // Whose its chart is, and "Save to folders…" (T133, AC-127).
                 chartProperties={(tile) => (
                   <>
-                    {/* Which marking clicking in this tile changes (AC-085). */}
-                    <TileMarking
-                      key={`marking-${tile.id}`}
-                      markings={markingsFrom(session.document.markings)}
-                      marksWith={tile.marksWith}
-                      onChange={(marksWith) => {
-                        session.update((current) =>
-                          changeTile(current, tile.id, (each) => ({ ...each, marksWith })),
-                        );
-                      }}
-                    />
-                    {/* Which markings limit what it shows (AC-107, AC-108),
-                        and what it does while they are empty (AC-109). */}
-                    <TileLimits
-                      key={`limits-${tile.id}`}
-                      markings={markingsFrom(session.document.markings)}
-                      marksWith={tile.marksWith}
-                      limitedBy={tile.limitedBy ?? []}
-                      combination={tile.limitCombination ?? 'all'}
-                      nothingMarked={tile.nothingMarked ?? NOTHING_MARKED_DEFAULT}
-                      nothingMarkedMessage={tile.nothingMarkedMessage ?? ''}
-                      onChange={(next) => {
-                        session.update((current) =>
-                          changeTile(current, tile.id, (each) => ({
-                            ...each,
-                            ...next,
-                            /**
-                             * AC-110: a tile limited for the first time gets
-                             * the message state and a message naming the
-                             * tiles it now waits on.
-                             *
-                             * **Only while the tile has no message of its
-                             * own**, not merely on every 0→1 transition.
-                             * Switching which marking a tile follows is two
-                             * clicks — uncheck one, check another — and the
-                             * second is a 0→1 transition on a tile whose
-                             * message the user may have written themselves.
-                             * The message box is hidden between the clicks,
-                             * so overwriting it there is invisible until
-                             * afterwards.
-                             */
-                            ...(each.nothingMarkedMessage === undefined &&
-                            (next.limitedBy ?? []).length > 0
-                              ? {
-                                  nothingMarked: NOTHING_MARKED_DEFAULT,
-                                  nothingMarkedMessage: defaultNothingMarkedMessage(
-                                    masterTileNames(
-                                      session.document,
-                                      next.limitedBy ?? [],
-                                      chartTitleOfTile,
-                                      defaultMarking?.id,
-                                    ),
-                                  ),
-                                }
-                              : {}),
-                          })),
-                        );
-                      }}
-                    />
+                    {/* What it draws, and Edit chart (AC-203). */}
+                    {tile.chartId === undefined ? null : (
+                      <ChartSection
+                        title={chartTitleOf(tile.chartId) ?? 'Untitled chart'}
+                        type={chartTypeOf(tile.chartId)}
+                        source={chartSourceOf(tile.chartId)}
+                        onEdit={() => {
+                          openEditor({
+                            tileId: tile.id,
+                            chartId: tile.chartId ?? '',
+                            rows: tile.h,
+                            returnTo: '[data-properties-edit-chart]',
+                          });
+                        }}
+                      />
+                    )}
                     {tile.chartId === undefined ? null : (
                       <TileChartOwnership
                         key={tile.id}
@@ -3053,6 +3051,67 @@ export function DashboardView({
                         }}
                       />
                     )}
+                    <MarkingSection>
+                      {/* Which marking clicking in this tile changes (AC-085). */}
+                      <TileMarking
+                        key={`marking-${tile.id}`}
+                        markings={markingsFrom(session.document.markings)}
+                        marksWith={tile.marksWith}
+                        onChange={(marksWith) => {
+                          session.update((current) =>
+                            changeTile(current, tile.id, (each) => ({ ...each, marksWith })),
+                          );
+                        }}
+                      />
+                      {/* Which markings limit what it shows (AC-107, AC-108),
+                        and what it does while they are empty (AC-109). */}
+                      <TileLimits
+                        key={`limits-${tile.id}`}
+                        markings={markingsFrom(session.document.markings)}
+                        marksWith={tile.marksWith}
+                        limitedBy={tile.limitedBy ?? []}
+                        combination={tile.limitCombination ?? 'all'}
+                        nothingMarked={tile.nothingMarked ?? NOTHING_MARKED_DEFAULT}
+                        nothingMarkedMessage={tile.nothingMarkedMessage ?? ''}
+                        onChange={(next) => {
+                          session.update((current) =>
+                            changeTile(current, tile.id, (each) => ({
+                              ...each,
+                              ...next,
+                              /**
+                               * AC-110: a tile limited for the first time gets
+                               * the message state and a message naming the
+                               * tiles it now waits on.
+                               *
+                               * **Only while the tile has no message of its
+                               * own**, not merely on every 0→1 transition.
+                               * Switching which marking a tile follows is two
+                               * clicks — uncheck one, check another — and the
+                               * second is a 0→1 transition on a tile whose
+                               * message the user may have written themselves.
+                               * The message box is hidden between the clicks,
+                               * so overwriting it there is invisible until
+                               * afterwards.
+                               */
+                              ...(each.nothingMarkedMessage === undefined &&
+                              (next.limitedBy ?? []).length > 0
+                                ? {
+                                    nothingMarked: NOTHING_MARKED_DEFAULT,
+                                    nothingMarkedMessage: defaultNothingMarkedMessage(
+                                      masterTileNames(
+                                        session.document,
+                                        next.limitedBy ?? [],
+                                        chartTitleOfTile,
+                                        defaultMarking?.id,
+                                      ),
+                                    ),
+                                  }
+                                : {}),
+                            })),
+                          );
+                        }}
+                      />
+                    </MarkingSection>
                   </>
                 )}
               />
@@ -3656,8 +3715,12 @@ function DashboardPages({
           id: where.selected,
           // Choosing somewhere new retires the slot: with two aims at once
           // the user cannot tell which the next insert will follow.
-          onSelect: (id) => {
+          onSelect: (id, onControl) => {
             onAim({ selected: id, addTarget: null });
+            // A tile chosen shows its Properties (AC-203), focus left on it —
+            // not a tile whose own control was used, as the prototype's
+            // selects only on a click that is not on a button.
+            if (!onControl) openSidebarPanel('Properties', { focus: false });
           },
           // Passing through on the way to the sidebar is not a choice.
           onFocusSelect: (id) => {
@@ -3670,6 +3733,8 @@ function DashboardPages({
           activeKey: where.addTarget,
           onChoose: (key) => {
             onAim({ selected: null, addTarget: key });
+            // What goes there is chosen in Add, as the prototype's slot opens it.
+            openSidebarPanel('Add', { focus: false });
           },
           nameOf: (key) =>
             containersOf(document).find((container) => container.key === key)?.title ??

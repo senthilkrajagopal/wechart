@@ -1755,6 +1755,24 @@ main:has(.dashboard) {
   letter-spacing: 0.04em;
 }
 .panel-section__note { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+/* A chart tile's Chart section (AC-203): its title strong, its type and
+   source beneath with the source in the code face, and Edit chart. */
+.chart-section__title { margin: 0; font-size: 13px; line-height: 20px; font-weight: 600; color: var(--wc-text-primary); }
+.chart-section__source { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.chart-section > button { justify-self: start; }
+/* A sized tile's Layout, collapsed as the prototype's is: its summary set as
+   a section heading, at the same inset. */
+details.panel-section { display: block; }
+.layout-section > summary {
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.layout-section > p { margin-top: 6px; }
 /* A chart tile's Ownership (T133, AC-127): Save and Cancel side by side. */
 .chart-ownership__actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .chart-ownership > button { justify-self: start; }

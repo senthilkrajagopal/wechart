@@ -143,6 +143,8 @@ describe('adding a section template', () => {
      */
     await edit();
     await userEvent.click(screen.getAllByTestId('grid-item')[0] as HTMLElement);
+    // Choosing a tile shows its Properties (AC-203); templates are in Add.
+    await userEvent.click(screen.getByRole('tab', { name: 'Add' }));
 
     await userEvent.click(screen.getByTestId('template-notes'));
 

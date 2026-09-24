@@ -48,8 +48,12 @@ export interface CanvasProps {
   readonly selection?:
     | {
         readonly id: string | null;
-        /** A deliberate choice, which retires any chosen "+ Add" slot. */
-        readonly onSelect: (id: string) => void;
+        /**
+         * A deliberate choice, which retires any chosen "+ Add" slot.
+         * `onControl`: the click landed on one of the tile's own controls —
+         * its menu, its pencil — which is using the tile, not choosing it.
+         */
+        readonly onSelect: (id: string, onControl: boolean) => void;
         /** Merely arriving by Tab, which leaves a chosen slot alone. */
         readonly onFocusSelect: (id: string) => void;
       }
@@ -276,7 +280,13 @@ export function Canvas({
                     // would select the tile and then immediately re-select
                     // the section on the way up.
                     event.stopPropagation();
-                    selection.onSelect(tile.id);
+                    const control = (event.target as Element).closest(
+                      'button, a, input, select, textarea, [role="menuitem"], [role="tab"]',
+                    );
+                    selection.onSelect(
+                      tile.id,
+                      control !== null && event.currentTarget.contains(control),
+                    );
                   }
             }
             /**

@@ -4,9 +4,11 @@ import { useEffect, useId, useState, type ReactNode } from 'react';
 import { StateLine } from '../../shell/StatusIcon';
 import { webAddressProblem } from '../tiles/LinkTile';
 
+import { COLUMNS, ROW_UNIT_PX } from '../grid/geometry';
 import {
   changeTile,
   elementAt,
+  isSized,
   isTile,
   type DashboardDocument,
   type Tile,
@@ -40,24 +42,33 @@ export function TileProperties({
   const change = (patch: Partial<Tile>) => {
     onChange((current) => changeTile(current, element.id, (tile) => ({ ...tile, ...patch })));
   };
-  switch (element.kind) {
-    case 'image':
-      // Keyed, so one tile's refusal or upload does not carry to the next.
-      return (
-        <ImageProperties
-          key={element.id}
-          dashboardId={dashboardId}
-          tile={element}
-          onChange={change}
-        />
-      );
-    case 'link':
-      return <LinkProperties key={element.id} tile={element} onChange={change} />;
-    case 'chart':
-      return chartProperties?.(element) ?? <Note>This tile has no properties to set here.</Note>;
-    default:
-      return <Note>This tile has no properties to set here.</Note>;
-  }
+  const own = (() => {
+    switch (element.kind) {
+      case 'image':
+        // Keyed, so one tile's refusal or upload does not carry to the next.
+        return (
+          <ImageProperties
+            key={element.id}
+            dashboardId={dashboardId}
+            tile={element}
+            onChange={change}
+          />
+        );
+      case 'link':
+        return <LinkProperties key={element.id} tile={element} onChange={change} />;
+      case 'chart':
+        return chartProperties?.(element) ?? <Note>This tile has no properties to set here.</Note>;
+      default:
+        return <Note>This tile has no properties to set here.</Note>;
+    }
+  })();
+  // Its size last, as the prototype's Properties close (AC-203).
+  return (
+    <>
+      {own}
+      <LayoutSection key={`layout-${element.id}`} tile={element} />
+    </>
+  );
 }
 
 /**
@@ -95,6 +106,79 @@ export function PageTabsProperties({
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * A chart tile's Chart section (AC-203; the prototype's Properties › Chart):
+ * what it draws — its title, its type and the cube or view it is built on —
+ * and Edit chart.
+ */
+export function ChartSection({
+  title,
+  type,
+  source,
+  onEdit,
+}: {
+  title: string;
+  type: string;
+  source: string;
+  onEdit: () => void;
+}) {
+  const id = useId();
+  return (
+    <section className="panel-section chart-section" aria-labelledby={`${id}-head`}>
+      <h3 id={`${id}-head`}>Chart</h3>
+      <p className="chart-section__title" data-testid="properties-chart-title">
+        {title}
+      </p>
+      <p className="panel-section__note" data-testid="properties-chart-type">
+        {type} · <span className="chart-section__source">{source}</span>
+      </p>
+      <button
+        type="button"
+        className="btn-primary btn-sm"
+        data-properties-edit-chart=""
+        onClick={onEdit}
+      >
+        <span aria-hidden="true">✎ </span>Edit chart
+      </button>
+    </section>
+  );
+}
+
+/**
+ * A marking section's frame (AC-203): which marking the tile marks with and
+ * which limit it, under one heading at the panel's inset. Not a named region:
+ * its first control is already called "Marking", and two things of one name
+ * are one too many to find by it.
+ */
+export function MarkingSection({ children }: { children: ReactNode }) {
+  return (
+    <section className="panel-section marking-section">
+      <h3>Marking</h3>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * A sized tile's Layout (AC-203; the prototype's collapsed LAYOUT): its size,
+ * and how to change it, since it is changed on the canvas rather than here.
+ */
+export function LayoutSection({ tile }: { tile: Tile }) {
+  if (!isSized(tile)) return null;
+  // As the canvas draws it, which rounds what the document holds.
+  const wide = `${String(Math.round(tile.w))} / ${String(COLUMNS)} columns`;
+  return (
+    <details className="panel-section layout-section">
+      <summary>Layout</summary>
+      <p className="panel-section__note">
+        {tile.h === undefined
+          ? `${wide} · as tall as what it holds.`
+          : `${wide} · ${String(Math.round(tile.h) * ROW_UNIT_PX)} px tall. Resize by dragging the tile’s edges, or focus the tile and press Shift and an arrow key.`}
+      </p>
+    </details>
   );
 }
 

@@ -230,7 +230,9 @@ test('the Outline shows the dashboard as a tree, and a row selects its element',
   await expect(region).toHaveAttribute('data-selected', 'true');
   await expect(region).toBeInViewport();
 
-  // One on the page tab that is not open opens that page to select it.
+  // One on the page tab that is not open opens that page to select it. A row
+  // chosen shows its element's Properties (AC-203), so back to the Outline.
+  await sidebar.getByRole('tab', { name: 'Outline' }).click();
   await outline.getByRole('button', { name: /Header: Definitions$/ }).click();
   await expect(
     page.getByRole('tablist', { name: 'Pages' }).getByRole('tab', { name: 'Appendix' }),
@@ -241,6 +243,8 @@ test('the Outline shows the dashboard as a tree, and a row selects its element',
   // the element has no box on the canvas to select (T209's review).
   const group = page.locator('[data-tab-group="group-terms"]');
   await group.getByRole('tab', { name: 'Dimensions' }).click();
+  // A row chosen shows that element's Properties (AC-203): back to the Outline.
+  await sidebar.getByRole('tab', { name: 'Outline' }).click();
   await outline.getByRole('button', { name: /Markdown: Count is the number/ }).click();
   await expect(group.getByRole('tab', { name: 'Measures' })).toHaveAttribute(
     'aria-selected',

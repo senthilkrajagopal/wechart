@@ -468,6 +468,8 @@ describe('adding an element from the sidebar (AC-058)', () => {
     await edit();
     const first = screen.getAllByTestId('grid-item')[0] as HTMLElement;
     await userEvent.click(first);
+    // Choosing a tile shows its Properties (AC-203); what to add is in Add.
+    await userEvent.click(screen.getByRole('tab', { name: 'Add' }));
 
     // Naming the container alone could not tell this from "the end of the
     // page", which is exactly the distinction the criterion draws. A chart
