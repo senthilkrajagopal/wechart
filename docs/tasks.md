@@ -2932,6 +2932,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `playwright.config.ts`, `.github/workflows/ci.yml`, `e2e/**`
   - Failing test: the full `e2e/` suite passes in all four desktop browsers (AC-180).
   - Depends on: T184
+  - **Deferred 2026-09-22, at the user's direction.** Running Edge needs either the `msedge` install, which asks for the machine's password, or a push so CI runs it. Asked which to do, the user chose to defer. AC-180 stays unticked and carries the same note.
   - Note: two gaps to close here, both recorded at T001. **Edge** only runs where the `msedge` channel is installed and `CI` is set, so AC-180 is demonstrated by the CI run, not by a local one — do not tick AC-180 from a local three-browser pass. **Safari** is covered by Playwright's bundled WebKit, not by the shipped Safari; `docs/research/test-stack.md` records that as a residual gap against "current Safari". Switch the `webServer` from `vite dev` to `vite preview` over a real build first, so the suite exercises the artifact users receive rather than the dev server.
 
 **Design conformance to the prototype (AC-187).** Added 2026-09-21 at the user's request ("align with the ui styles in" the published prototype, which is file-for-file the copy in `docs/design/prototype/`). Screenshots of the running app beside the prototype showed several differences:

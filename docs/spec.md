@@ -605,6 +605,12 @@ Traces to: `[R3]`, `[R7]`, direction.md rules 1–5, 39, 52.
       Fails when: any of those surfaces scrolls horizontally at that width.
 - [ ] AC-180 THE SYSTEM SHALL work in current Chrome, Edge, Firefox and Safari on desktop (`[R7]`).
       Fails when: any acceptance test in this spec fails in one of those browsers.
+      > **Status, 2026-09-22: deferred, at the user's direction.** The suite passes
+      > in Chrome, Firefox and WebKit locally on every task. Edge needs the
+      > `msedge` channel, whose install asks for the machine's password, or a CI
+      > run, which needs a push. Asked which to do, the user chose to defer. The
+      > Playwright and CI configuration for all four is in place (T001); this
+      > criterion is ticked by a four-browser run, not by the local three.
 - [x] AC-188 THE SYSTEM SHALL write a time dimension's values by their granularity — a year as "2026", a quarter as "Q1 2026", a month as "Jan 2026", a week as "Week of Jan 5, 2026", a day as "Jan 2, 2026", and an hour or finer with the time — in axes, labels, tooltips and tables, unless the member's model format says otherwise.
       Fails when: a time value shows as a raw timestamp such as "2026-01-02T00:00:00.000".
 - [x] AC-187 THE SYSTEM SHALL draw the app bar, workspace navigation, buttons and inputs, the dashboard header and page tabs, the filter bar, tiles, and the edit sidebar with the component styles of the design prototype the user approved (`docs/design/prototype/index.html`, published as "wechart Workbench"; the user, 2026-09-21: "align with the ui styles in" it), in the tokens of direction.md §3–5.
