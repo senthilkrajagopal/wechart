@@ -1,6 +1,7 @@
 import { isValidElement, useState, type ReactNode } from 'react';
 
 import { canRedo, canUndo, discard, historyOf, push, redo, undo } from '../../editor/history';
+import { FolderCrumbs } from '../../workspaces/explore/FolderCrumbs';
 import { EditBar } from './EditBar';
 import { EditSidebar, type SidebarContent } from './EditSidebar';
 
@@ -91,6 +92,12 @@ export interface EditChromeProps<T> {
    */
   readonly title: (document: T) => string;
   /**
+   * The folder it lives in, for the breadcrumb back to it (AC-195) — read from
+   * the document being edited like the title, so a move made in the settings
+   * shows at once. Absent draws no breadcrumb.
+   */
+  readonly folderOf?: (document: T) => string | undefined;
+  /**
    * Save this document. Return a promise and it decides the outcome (AC-184):
    * edit mode is left once it resolves, and if it rejects the session stays,
    * every change kept, for the user to try again or change course. Saying why
@@ -153,6 +160,7 @@ export interface EditChromeProps<T> {
 export function EditChrome<T>({
   document: opened,
   title,
+  folderOf,
   onSave,
   panels,
   overlay,
@@ -325,6 +333,8 @@ export function EditChrome<T>({
         aria-hidden={overlaid ? true : undefined}
       >
         <header className="dashboard__header">
+          {/* The way back to its folder (AC-195). */}
+          {folderOf === undefined ? null : <FolderCrumbs folderId={folderOf(current)} />}
           <h1>{title(current)}</h1>
           {editing ? (
             <EditBar

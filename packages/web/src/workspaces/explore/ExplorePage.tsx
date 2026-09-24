@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter, useRouterState } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { META_QUERY } from '../../query/meta';
 import { StateLine } from '../../shell/StatusIcon';
 import { CreateMenu, DEFAULT_TITLES, type CreatableKind } from './CreateMenu';
 import { FolderContents, type CatalogItem } from './FolderContents';
-import { FolderTree, type FolderNode } from './FolderTree';
+import { FolderTree } from './FolderTree';
+import { exploreHref, folderChain, FOLDERS_QUERY } from './folders';
 import { ROOT_FOLDERS, SHARED_ROOT, rootTitleOf } from './roots';
 
 /**
@@ -36,38 +38,43 @@ interface CreatedObject {
   readonly id: string;
 }
 
-/**
- * The folder and each folder above it, the root it hangs from first — the
- * shared root or My workspace (AC-194).
- */
-function chainOf(folders: readonly FolderNode[], id: string): { id: string; title: string }[] {
-  const out: { id: string; title: string }[] = [];
-  let above: string | null = id;
-  let current = folders.find((folder) => folder.id === id);
-  // Bounded by the number of folders: a cycle in stored data cannot hang it.
-  for (let guard = 0; current !== undefined && guard <= folders.length; guard += 1) {
-    out.unshift({ id: current.id, title: current.title });
-    above = current.parentId;
-    const parent: string | null = above;
-    current = folders.find((folder) => folder.id === parent);
-  }
-  const root = ROOT_FOLDERS.find((each) => each.id === above) ?? SHARED_ROOT;
-  return [{ id: root.id, title: root.title }, ...out];
-}
-
 export function ExplorePage() {
-  const [folderId, setFolderId] = useState(ROOT);
-  /** The Explore search box (AC-019): typing searches every folder. */
-  const [query, setQuery] = useState('');
-  /** The open folder's name, while it is being renamed in the heading. */
-  const [renaming, setRenaming] = useState<string | null>(null);
+  /**
+   * The open folder is the address's (AC-195): `?folder=` names it, so a
+   * reload, a link from a dashboard's breadcrumb and Back all land on it.
+   * Opening a folder pushes an entry, so Back walks back through folders.
+   */
+  const router = useRouter();
+  const asked = useRouterState({ select: (state) => state.location.search }) as Record<
+    string,
+    unknown
+  >;
+  // The router reads a value that looks like JSON as JSON, so a number-like
+  // id arrives as a number; ids are strings.
+  const folderId =
+    asked['folder'] === undefined || asked['folder'] === '' ? ROOT : String(asked['folder']);
+  const setFolderId = (id: string) => {
+    // The folder already open is no new place for Back to step through.
+    if (id !== folderId) router.history.push(exploreHref(id));
+  };
+  /**
+   * The Explore search box (AC-019), and the open folder's name while it is
+   * renamed in the heading — each held with the folder it was begun in, and
+   * shown only while that folder is open. Back or Forward changes the folder
+   * without passing through here, and a rename left open over another folder
+   * would rename that one (T216's review).
+   */
+  const [search, setSearch] = useState({ folder: ROOT, text: '' });
+  const query = search.folder === folderId ? search.text : '';
+  const setQuery = (text: string) => setSearch({ folder: folderId, text });
+  const [renameOf, setRenameOf] = useState<{ folder: string; text: string } | null>(null);
+  const renaming = renameOf?.folder === folderId ? renameOf.text : null;
+  const setRenaming = (text: string | null) =>
+    setRenameOf(text === null ? null : { folder: folderId, text });
   const queryClient = useQueryClient();
   const searching = query.trim() !== '';
 
-  const folders = useQuery({
-    queryKey: ['folders'],
-    queryFn: () => getJson<FolderNode[]>('/api/folders'),
-  });
+  const folders = useQuery(FOLDERS_QUERY);
 
   const contents = useQuery({
     queryKey: ['folder-contents', folderId],
@@ -112,7 +119,9 @@ export function ExplorePage() {
         await queryClient.invalidateQueries({ queryKey: ['folders'] });
         setQuery('');
         setFolderId(created.id);
-        setRenaming(DEFAULT_TITLES.folder);
+        // Begun in the new folder by name: this handler was made while the
+        // folder it was created in was open.
+        setRenameOf({ folder: created.id, text: DEFAULT_TITLES.folder });
         return;
       }
       globalThis.location.assign(`/explore/${created.kind}s/${encodeURIComponent(created.id)}`);
@@ -148,7 +157,7 @@ export function ExplorePage() {
     },
   });
 
-  const chain = chainOf(folders.data ?? [], folderId);
+  const chain = folderChain(folders.data ?? [], folderId);
   /**
    * Whether the open folder is one the tree knows. While the folders load,
    * or after one is deleted elsewhere, it is not — and borrowing the root's
@@ -177,10 +186,12 @@ export function ExplorePage() {
   };
 
   const commitRename = () => {
-    if (renaming === null) return;
+    // Only the rename begun in this folder: `renaming` is null otherwise.
+    if (renaming === null || renameOf === null) return;
     const title = renaming.trim() === '' ? UNTITLED_FOLDER : renaming.trim();
+    const target = renameOf.folder;
     setRenaming(null);
-    if (title !== folderTitle) relocate.mutate({ item: { kind: 'folder', id: folderId }, title });
+    if (title !== folderTitle) relocate.mutate({ item: { kind: 'folder', id: target }, title });
   };
 
   const shown = searching ? results : contents;

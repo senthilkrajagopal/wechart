@@ -432,3 +432,70 @@ test('the tree is a full-height pane that stays put while the contents scroll', 
   expect((await aside.boundingBox())?.y).toBeCloseTo(before, 0);
   await expect(shared).toBeInViewport();
 });
+
+/**
+ * T216 / AC-195: WHEN the user opens a dashboard or a library chart from
+ * Explore, THE SYSTEM SHALL show a breadcrumb back to its folder, and
+ * returning by it, or reloading Explore, SHALL show that folder.
+ * `Fails when: the breadcrumb is missing, or returning or reloading lands on a
+ * folder other than the item's.`
+ */
+for (const [kind, id, title] of [
+  ['dashboard', 'seed-folder-0-item-1', 'Finance dashboard 1'],
+  ['library chart', 'seed-folder-0-item-3', 'Finance chart 3'],
+] as const)
+  test(`a ${kind} opened from Finance leads back to Finance by its breadcrumb, and a reload keeps it`, async ({
+    page,
+  }) => {
+    await openFinance(page);
+    await page.getByTestId(`item-${id}`).getByRole('button', { name: title, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/${id}$`));
+
+    const trail = page.getByRole('main').getByRole('navigation', { name: 'Breadcrumb' });
+    await expect(trail.getByRole('link')).toHaveText(['← Explore', 'Shared', 'Finance']);
+    await trail.getByRole('link', { name: 'Finance' }).click();
+
+    await expect(heading(page)).toHaveText('Finance');
+    await expect(page).toHaveURL(/\/explore\?folder=seed-folder-0$/);
+    await page.reload();
+    await expect(heading(page)).toHaveText('Finance');
+  });
+
+test('Back from a folder being named leaves the rename behind, and renames nothing', async ({
+  page,
+  request,
+}) => {
+  const unique = String(Date.now());
+  const parent = await folderIn(request, 'root', `Parent ${unique}`);
+  await page.goto(`/explore?folder=${parent}`);
+  await expect(heading(page)).toHaveText(`Parent ${unique}`);
+
+  // "+ Folder" opens the new folder with its name ready to type...
+  await pane(page).getByRole('button', { name: '+ Folder' }).click();
+  const name = contentsOf(page).getByRole('textbox', { name: 'Folder name' });
+  await expect(name).toBeFocused();
+  await name.fill(`Typed ${unique}`);
+
+  // ...and Back, before it is saved, is the parent with no rename open.
+  await page.goBack();
+  await expect(heading(page)).toHaveText(`Parent ${unique}`);
+  await expect(name).toHaveCount(0);
+  await page.keyboard.press('Enter');
+  await page.reload();
+  await expect(heading(page)).toHaveText(`Parent ${unique}`);
+});
+
+test('Explore keeps the open folder in its address, so Back and a reload return to it', async ({
+  page,
+}) => {
+  await openFinance(page);
+  await expect(page).toHaveURL(/\/explore\?folder=seed-folder-0$/);
+  await page.reload();
+  await expect(heading(page)).toHaveText('Finance');
+
+  // Another folder, then Back: Finance again.
+  await page.getByRole('tree').getByRole('button', { name: 'Marketing', exact: true }).click();
+  await expect(heading(page)).toHaveText('Marketing');
+  await page.goBack();
+  await expect(heading(page)).toHaveText('Finance');
+});

@@ -44,6 +44,8 @@ beforeEach(() => {
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input) === '/api/meta') return new Response(JSON.stringify(META));
+      // The header's breadcrumb reads the folders (AC-195); that is no query.
+      if (String(input) === '/api/folders') return new Response('[]');
       loads.push(JSON.parse(String(init?.body ?? '{}')));
       return new Response(JSON.stringify({ data: [{ 'orders.status': 'shipped' }] }));
     }),

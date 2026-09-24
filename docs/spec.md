@@ -636,7 +636,7 @@ Explore:
       Fails when: a column is missing, a chart's type reads only "Chart", a row shows a rename or move control before its menu is opened, or a move offers the item's own folder or, for a folder, itself or a folder inside it.
 - [x] AC-194 THE SYSTEM SHALL show the folder tree as a full-height pane headed "Folders" with a "+ Folder" action, holding a shared root and a personal "My workspace" root, each folder showing the number of items it holds including those in its subfolders (`[R9]`).
       Fails when: "My workspace" is missing, a count leaves out items in subfolders, or the tree scrolls away with the contents.
-- [ ] AC-195 WHEN the user opens a dashboard or a library chart from Explore, THE SYSTEM SHALL show a breadcrumb back to its folder, and returning by it, or reloading Explore, SHALL show that folder.
+- [x] AC-195 WHEN the user opens a dashboard or a library chart from Explore, THE SYSTEM SHALL show a breadcrumb back to its folder, and returning by it, or reloading Explore, SHALL show that folder.
       Fails when: the breadcrumb is missing, or returning or reloading lands on a folder other than the item's.
 
 Dashboards:

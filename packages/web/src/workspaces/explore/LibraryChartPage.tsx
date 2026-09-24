@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import { StateLine } from '../../shell/StatusIcon';
+import { FolderCrumbs } from './FolderCrumbs';
 
 /**
  * A library chart's page (AC-022): every dashboard that uses it, and a way to
@@ -28,6 +29,15 @@ export interface LibraryChartPageProps {
 export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   const queryClient = useQueryClient();
   const [target, setTarget] = useState('');
+
+  /** Which folder the chart lives in, for its breadcrumb (AC-195). */
+  const stored = useQuery({
+    queryKey: ['chart-folder', chartId],
+    queryFn: () =>
+      getJson<{ body: { folderId?: string } }>(
+        `/api/documents/chart/${encodeURIComponent(chartId)}`,
+      ),
+  });
 
   const using = useQuery({
     queryKey: ['chart-dashboards', chartId],
@@ -109,6 +119,10 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
 
   return (
     <section className="chart-page">
+      {/* The way back to its folder (AC-195), once the chart is read; to
+          Explore's top if it cannot be. */}
+      {stored.isSuccess ? <FolderCrumbs folderId={stored.data.body.folderId} /> : null}
+      {stored.isError ? <FolderCrumbs folderId={undefined} /> : null}
       <h1 className="workspace-title">Chart</h1>
       <p data-testid="selected-object">{chartId}</p>
 

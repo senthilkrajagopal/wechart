@@ -274,6 +274,11 @@ main { padding: var(--wc-surface-padding); }
   color: var(--wc-text-secondary);
 }
 .crumbs__step { display: inline-flex; align-items: center; gap: 4px; }
+/* A dashboard's or a chart's way back to its folder (AC-195): its own row
+   above the title, as the prototype's .dash-head nav. */
+.item-crumbs { flex-basis: 100%; color: var(--wc-text-secondary); }
+.item-crumbs a { color: inherit; padding: 2px 4px; border-radius: 4px; text-decoration: none; }
+.item-crumbs a:hover { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
 .crumbs button {
   border: 0;
   background: none;
@@ -1085,6 +1090,7 @@ svg[data-icon] { flex: none; }
    the 12-column canvas grid arrives with it (T060). */
 .dashboard__header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   min-height: 48px;

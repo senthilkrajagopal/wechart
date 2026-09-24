@@ -2511,6 +2511,7 @@ export function DashboardView({
       <EditChrome
         document={document}
         title={(shown) => shown.title}
+        folderOf={(shown) => shown.folderId}
         /**
          * Never with drafts on it. The save sends the whole document, so a draft
          * left there would be written into the dashboard's own row. The drafts go
