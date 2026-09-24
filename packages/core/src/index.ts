@@ -47,6 +47,7 @@ export {
   type Channel,
   type ChartType,
   type Encoding,
+  type ChartHighlight,
   type RenderSpec,
   type SeriesData,
 } from './render-spec';
@@ -87,6 +88,7 @@ export {
   type Interactions,
   type NewDashboard,
   type NewDashboardBody,
+  type PairAction,
 } from './dashboard-document';
 
 export {

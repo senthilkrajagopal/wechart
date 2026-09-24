@@ -1638,10 +1638,30 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F12. Cross-filtering and cross-highlighting
 
-- [ ] T123 (AC-117) Apply the configured action for each source and target pair
+- [x] T123 (AC-117) Apply the configured action for each source and target pair
   - Files: `packages/web/src/dashboard/crossfilter/apply.ts`, `packages/web/src/dashboard/crossfilter/apply.test.ts`
   - Failing test: `apply.test.ts`: a pair set to Filter filters the target, one set to Highlight highlights it, and one set to None leaves it unchanged (AC-117).
   - Depends on: T076, T084
+  - **Built 2026-09-23.**
+    - **What Highlight draws — the user's decision, 2026-09-22.** Asked how a highlighted target should look, the user chose Power BI's: the tile keeps its own values, faded, and the selection's own values are drawn over them from the baseline, from a second query. Not a share of the tile's total: a measure over a subset is not a fraction of the measure over everything, which is why it is Cube's answer rather than arithmetic here. The research is `docs/research/cross-highlight.md` (written for this task; it also corrects `references.md`, which said every target offers Filter / Highlight / None — Power BI offers Highlight only where the target can show one).
+    - **Where each drawing applies.** `share` on a plain bar or horizontal bar, where the selection has a slot of its own: `barGap: '-100%'` is a property of the whole grid, so on a grouped or stacked chart the overlay would land on every series at once (that research, gotcha 4). `fade` — the matching items keep their strength, the rest go back — on grouped, stacked and combo bars, pie, donut, treemap and heatmap, and only where the tile groups by the clicked member, since otherwise no item on it is the selection. Everything else (lines, area, scatter, KPI, table, pivot, trellis) is **filtered** instead, as Power BI filters lines, scatter and maps. A pair asking for a highlight a tile cannot draw filters it rather than leaving it alone: the pair asked for the selection to reach it.
+    - **A cross-filter is written as a filter** (`DashboardView` `crossFilters`), scoped to the tiles the matrix says it filters, so it takes the path every dashboard filter takes: one query per tile, its reach checked against the model, and a tile whose cube cannot join to the field left unfiltered and told so — the user's second decision, and the same note AC-079 already shows.
+    - **Clicking.** `mousedown` and `mouseup` paired with the existing 5 px slop (`itemClicks`), never ECharts' `click`, which `docs/research/echarts.md` finds is dropped after 4 px of movement with nothing dispatched at all. What the click stands for follows the prototype: the category on a bar or pie, the series on a grouped, stacked or multi-line chart, the panel in a trellis. One selection per tile, and the same value again takes it back, as Power BI and Superset both do.
+    - **Off where it should be:** in Markings mode, while editing (a click selects the tile there), and in a previewed security context. Selections are held in the view, not in the document: clicking a mark is reading the dashboard, not changing it.
+    - **Tests:**
+      - `e2e/crossfilter.spec.ts` clicks a real bar — the mark, as the criterion says — on a two-tile dashboard, and checks the other tile filtered, highlighted (its own rows kept, the share drawn), or untouched, plus clicking the same bar again taking it back.
+      - `crossfilter/apply.test.ts` (the pair decision, the default, two sources at once, and which drawing each type gets), `crossfilter/clicked.test.ts` (what a click stands for), `charts/src/crossfilter/highlight.test.ts` (both drawings).
+    - AC-117 ticked on those. **AC-118 stays unticked:** the default applies here and is tested, but the criterion also asks the settings page to show it, which is T124's matrix.
+    - **Cold review (one round), verdict FAIL. Fixed:**
+      - **A click on a combo or multi-measure chart made a filter no row matches.** Where such a chart has no colour split its series are its measures, and the name under the pointer was paired with the x member: `orders.status = 'orders.count'`, which emptied every target it reached. Such a click now selects nothing.
+      - **The share overlay mis-drew any bar tile with more than one series.** The gate was the chart type, but a bar chart draws one series per measure; `barGap: '-100%'` belongs to the whole grid, so the overlay would have landed on every series. It now gates on the series count, and such a tile fades or is filtered instead.
+      - **A heatmap lost its cells under a fade.** Its data items are `[column, row, value]` triples, and spreading an array into an object dropped the value ECharts reads. Arrays are carried as the item's `value`, and a cell's column is matched by index.
+      - **A highlight Cube could not join to the tile drew nothing, and said nothing.** It now leaves the same "Not filtered by …" note a filter leaves — the user's decision — and is asked by the name a view takes the member by.
+      - **Axis, legend and title clicks cleared the selection.** The handlers are bound to the marks alone.
+      - **A chart placed on two tiles could cross-filter itself** through its other tile.
+      - **Coverage added:** the unreachable target (filtered and highlighted), and cross-filtering being off while editing, both on the real surface.
+    - **Open, from the same review:** a highlighted tile's overlay is not re-asked by "Refresh now" (the base answer is); selections survive a page-tab switch and a mode switch as inert state, which T125 should settle with the chip; and clicking an empty plot area does not clear, which is AC-119's.
+    - **Left for the tasks that own them:** the chip naming the member, value and source tile, and Escape (AC-119, T125); the settings matrix (AC-118, T124); no marking affordances in cross-filter mode (AC-120, T126).
 - [ ] T124 (AC-118) Apply and display the dashboard's default pair action
   - Files: `packages/web/src/dashboard/settings/CrossFilterMatrix.tsx`, `packages/web/src/dashboard/crossfilter/defaults.test.ts`
   - Failing test: `defaults.test.ts`: an unset pair behaves as the stated default, and the settings page shows that default (AC-118).

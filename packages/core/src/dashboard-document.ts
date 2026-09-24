@@ -16,13 +16,25 @@ export const INTERACTION_MODES = ['markings', 'crossFilter'] as const;
 
 export type InteractionMode = (typeof INTERACTION_MODES)[number];
 
+/** What a click on one tile does to another (direction.md rule 32). */
+export type PairAction = 'filter' | 'highlight' | 'none';
+
 export interface CrossFilterConfig {
   /**
    * direction.md rule 32: "the default action for tile pairs (Filter,
-   * Highlight or None)", which "starts at Filter". The source → target matrix
-   * that overrides it per pair is AC-117's.
+   * Highlight or None)", which "starts at Filter".
    */
-  readonly defaultAction: 'filter' | 'highlight' | 'none';
+  readonly defaultAction: PairAction;
+  /**
+   * The source → target matrix that overrides the default per pair (AC-117),
+   * keyed `source>target` as the prototype's settings page writes it.
+   *
+   * Sparse: a pair absent here is at the default, so changing the default
+   * moves every pair nobody has set. Power BI stores the same thing as a list
+   * of `{source, target, type}` entries, with unset pairs left out
+   * (`docs/research/cross-highlight.md` §3).
+   */
+  readonly pairs?: Readonly<Record<string, PairAction>>;
 }
 
 /**

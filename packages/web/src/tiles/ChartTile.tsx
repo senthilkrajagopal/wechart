@@ -2,6 +2,7 @@ import { isDrawable } from '@wechart/charts';
 import type { ChartType, RenderSpec } from '@wechart/core';
 import { useState } from 'react';
 
+import type { ClickedItem } from '../dashboard/crossfilter/clicked';
 import type { AnswerMeta } from '../query/answerMeta';
 import { StateLine, StatusIcon } from '../shell/StatusIcon';
 import { AccelerationBadge } from './AccelerationBadge';
@@ -28,6 +29,12 @@ import { TileEmpty } from './TileEmpty';
 export interface ChartTileProps {
   readonly spec: RenderSpec;
   readonly height?: number;
+  /**
+   * A click on one of the chart's items, while the dashboard cross-filters
+   * (AC-117). Absent — in Markings mode, or while editing — the chart takes
+   * no clicks.
+   */
+  readonly onItemClick?: ((item: ClickedItem) => void) | undefined;
   /**
    * Whether the table view is showing, when the owner wants to keep that
    * across a re-render.
@@ -72,6 +79,8 @@ export interface ChartTileProps {
 interface ChartBodyProps {
   readonly spec: RenderSpec;
   readonly height?: number;
+  /** A click on one of its items, while the dashboard cross-filters (AC-117). */
+  readonly onItemClick?: ((item: ClickedItem) => void) | undefined;
 }
 
 /** Types wechart draws as DOM rather than handing to ECharts. */
@@ -81,7 +90,7 @@ const DOM_TYPES: Partial<Record<ChartType, (props: ChartBodyProps) => React.Reac
   pivot: PivotTable,
 };
 
-function ChartBody({ spec, height }: ChartBodyProps) {
+function ChartBody({ spec, height, onItemClick }: ChartBodyProps) {
   const DomChart = DOM_TYPES[spec.chartType];
   if (DomChart !== undefined) {
     return <DomChart spec={spec} {...(height === undefined ? {} : { height })} />;
@@ -96,7 +105,13 @@ function ChartBody({ spec, height }: ChartBodyProps) {
     );
   }
 
-  return <ChartCanvas spec={spec} {...(height === undefined ? {} : { height })} />;
+  return (
+    <ChartCanvas
+      spec={spec}
+      {...(height === undefined ? {} : { height })}
+      {...(onItemClick === undefined ? {} : { onItemClick })}
+    />
+  );
 }
 
 export function ChartTile({
@@ -109,6 +124,7 @@ export function ChartTile({
   title,
   asOf,
   served,
+  onItemClick,
 }: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
@@ -197,7 +213,11 @@ export function ChartTile({
         // AC-036 is built on the same rule, and for the same reason.
         <DataTable spec={spec} label={title} {...(height === undefined ? {} : { height })} />
       ) : (
-        <ChartBody spec={spec} {...(height === undefined ? {} : { height })} />
+        <ChartBody
+          spec={spec}
+          {...(height === undefined ? {} : { height })}
+          {...(onItemClick === undefined ? {} : { onItemClick })}
+        />
       )}
     </div>
   );

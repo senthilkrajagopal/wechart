@@ -157,6 +157,35 @@ export interface RenderSpec {
    * the equivalent field untyped for the same reason.
    */
   readonly options?: Record<string, unknown>;
+  /**
+   * The cross-filter selection this chart shows, where a tile pair is set to
+   * Highlight (AC-117, `docs/research/cross-highlight.md`).
+   *
+   * Filtering is not drawing: a filtered tile is asked a narrower question and
+   * draws the answer, and nothing about that reaches here. A highlighted tile
+   * is asked its own question and draws the selection *beside* its own
+   * answer, so the renderer has to be told which value that is.
+   */
+  readonly highlight?: ChartHighlight;
+}
+
+export interface ChartHighlight {
+  readonly member: string;
+  readonly value: string;
+  /**
+   * `fade`: the items that are the selection keep their strength and the rest
+   * fade. `share`: the chart's own values fade, and the selection's own
+   * values are drawn over them from the baseline, as Power BI draws a
+   * cross-highlight.
+   */
+  readonly kind: 'fade' | 'share';
+  /**
+   * For a share: the same query's rows, answered with the selection applied.
+   * Its own rows, not a fraction of these — a measure over a subset is not a
+   * portion of the measure over everything, which is exactly why this is a
+   * second answer from Cube rather than arithmetic here.
+   */
+  readonly rows?: readonly Record<string, unknown>[];
 }
 
 /**

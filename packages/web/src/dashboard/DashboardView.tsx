@@ -57,6 +57,10 @@ import { insertElement, insertionPoint, newElement } from './model/insert';
 import { activeFilters, withFilters, type ActiveFilter } from '../filters/apply';
 import { GeneratedSql } from '../workspaces/security/GeneratedSql';
 import { coverageOf, type Reach } from '../filters/coverage';
+import { chartTilesOf } from '../filters/scope';
+import { effectsOn, type CrossEffects, type CrossSelection } from './crossfilter/apply';
+import { clickedValue, membersDrawn, seriesCountOf, type ClickedItem } from './crossfilter/clicked';
+import { interactionsOf } from './settings/interactionMode';
 import { describeFilter } from '../filters/describe';
 import { NotCovered } from '../filters/NotCovered';
 import { PageTabsProperties, TileProperties } from './edit/TileProperties';
@@ -274,8 +278,11 @@ function TileBody({
   answered,
   chartType = tile.chartType,
   canEditChart = false,
+  onItemClick,
 }: {
   tile: Tile;
+  /** A click on its chart, while the dashboard cross-filters (AC-117). */
+  onItemClick?: ((item: ClickedItem) => void) | undefined;
   spec: RenderSpec | undefined;
   error: unknown;
   loading: boolean;
@@ -351,6 +358,7 @@ function TileBody({
           asOf={answered?.lastRefreshTime}
           served={answered}
           {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
+          {...(onItemClick === undefined ? {} : { onItemClick })}
         />
       );
     case 'markdown':
@@ -411,6 +419,11 @@ interface TileCharts {
     | undefined;
   /** Show a chart's SQL as the previewed security context (T174); only while previewing. */
   readonly onShowSql?: ((chartId: string, tileId: string) => void) | undefined;
+  /**
+   * A click on a tile's chart, while the dashboard cross-filters (AC-117).
+   * Absent in Markings mode and while editing, where a click selects the tile.
+   */
+  readonly onItemClick?: ((tileId: string, chartId: string, item: ClickedItem) => void) | undefined;
 }
 
 interface Affordances {
@@ -685,6 +698,13 @@ function Elements({
               chartType={charts.typeOf?.(chartId) ?? element.chartType}
               // Named as the way in only where the pencil is offered.
               canEditChart={affordances.onEditChart !== undefined}
+              {...(charts.onItemClick === undefined
+                ? {}
+                : {
+                    onItemClick: (item: ClickedItem) => {
+                      charts.onItemClick?.(element.id, chartId, item);
+                    },
+                  })}
             />
           </>
         );
@@ -989,6 +1009,101 @@ export function DashboardView({
    */
   const [live, setLive] = useState<DashboardDocument>(document);
   /**
+   * Whether the dashboard is being edited, mirrored up with it: clicking a
+   * mark selects the tile while editing, so cross-filtering is off there —
+   * the prototype says so on its filter bar in as many words.
+   */
+  const [sessionEditing, setSessionEditing] = useState(false);
+  /**
+   * The cross-filter selections in effect (AC-117): what was clicked, and on
+   * which tile. Held here rather than in the document, because clicking a
+   * mark is reading the dashboard, not changing it — Looker drops them when
+   * the dashboard is left, and so does the prototype
+   * (`docs/research/cross-highlight.md` §7).
+   */
+  const [crossSelections, setCrossSelections] = useState<readonly CrossSelection[]>([]);
+  /**
+   * Whether a chart's own cube or view can be asked about a member, and by
+   * what name (AC-079). One answer for filters and cross-filters alike: they
+   * are the same question, and two copies of it would drift.
+   */
+  const reachOf = useCallback(
+    (member: string, chartId: string) => {
+      if (reach === undefined) return member;
+      const source = drawn.documents?.[chartId]?.chart.source.cube;
+      return source === undefined ? undefined : reach(member, source);
+    },
+    [reach, drawn.documents],
+  );
+  const interactions = interactionsOf(live.settings);
+  const crossFiltering =
+    interactions.mode === 'crossFilter' && !sessionEditing && preview === undefined;
+  /**
+   * What each of them does to each chart (AC-117). Read from the charts as
+   * loaded, not as filtered, so that what a tile draws cannot decide what it
+   * is asked — which would not settle.
+   */
+  const crossEffects = useMemo(() => {
+    const perChart: Record<string, CrossEffects> = {};
+    /** The name each highlighted chart's own cube or view takes the member by. */
+    const askHighlightAs: Record<string, string> = {};
+    if (!crossFiltering || crossSelections.length === 0) return { perChart, askHighlightAs };
+    const tiles = chartTilesOf(live);
+    const pageOfSource = new Map(tiles.map((tile) => [tile.tileId, tile.pageId]));
+
+    for (const tile of tiles) {
+      const chartId = tile.chartId;
+      // The first tile's, as a filter's coverage is by chart too: a chart on
+      // two tiles is a hand-built dashboard, since a duplicate gets a chart
+      // of its own (AC-062).
+      if (chartId === undefined || perChart[chartId] !== undefined) continue;
+      // Every tile showing this chart, so a chart placed twice cannot
+      // cross-filter itself through its other tile (T123's review).
+      const own = tiles.filter((each) => each.chartId === chartId).map((each) => each.tileId);
+      // On the tab, as direction.md rule 13 has it: a click reaches the tiles
+      // beside it, not another page's.
+      const here = crossSelections.filter(
+        (each) => pageOfSource.get(each.from) === tile.pageId && !own.includes(each.from),
+      );
+      const spec = drawn.specs[chartId];
+      const effects = effectsOn(
+        tile.tileId,
+        here,
+        interactions.crossFilter,
+        spec === undefined
+          ? undefined
+          : {
+              chartType: spec.chartType,
+              members: membersDrawn(spec),
+              // What it draws, not what its type suggests: a bar chart of two
+              // measures draws two series (T123's review).
+              seriesCount: seriesCountOf(spec),
+            },
+      );
+
+      /**
+       * A highlight is asked of Cube as well, so it answers to the same rule
+       * as a filter (AC-079, and the user's decision of 2026-09-22): a chart
+       * whose cube cannot join to the field is filtered instead, which is the
+       * path that leaves it unfiltered and says "Not filtered by …"; a view
+       * that takes the member by another name is asked by that name.
+       */
+      const highlight = effects.highlight;
+      if (highlight === undefined) {
+        perChart[chartId] = effects;
+        continue;
+      }
+      const as = reachOf(highlight.selection.member, chartId);
+      if (as === false) {
+        perChart[chartId] = { filters: [...effects.filters, highlight.selection] };
+        continue;
+      }
+      perChart[chartId] = effects;
+      askHighlightAs[chartId] = as ?? highlight.selection.member;
+    }
+    return { perChart, askHighlightAs };
+  }, [crossFiltering, crossSelections, live, interactions.crossFilter, drawn.specs, reachOf]);
+  /**
    * The charts a filter in effect reaches, each with the filters that reach it
    * (AC-078), and what each draws once filtered — asked by `FilteredCharts`.
    */
@@ -998,14 +1113,47 @@ export function DashboardView({
    * Cube would refuse — and marked. A chart the model cannot yet say about is
    * neither filtered nor marked.
    */
+  /**
+   * A cross-filter is a filter: written as one, it takes the path every
+   * dashboard filter takes — reach checked against the model, the tile left
+   * unfiltered and told so where its cube cannot join to the field (AC-079),
+   * and one query per tile rather than a second mechanism beside it.
+   *
+   * Scoped to the tiles the pair matrix says it filters, which is also how a
+   * tile the click came from is left out of its own selection.
+   */
+  const crossFilters = useMemo(() => {
+    const byKey = new Map<string, { selection: CrossSelection; chartIds: string[] }>();
+    for (const [chartId, effects] of Object.entries(crossEffects.perChart))
+      for (const selection of effects.filters) {
+        const key = `${selection.from}:${selection.member}:${selection.value}`;
+        const entry = byKey.get(key) ?? { selection, chartIds: [] };
+        entry.chartIds.push(chartId);
+        byKey.set(key, entry);
+      }
+    const tilesOf = (chartIds: readonly string[]) =>
+      chartTilesOf(live)
+        .filter((tile) => tile.chartId !== undefined && chartIds.includes(tile.chartId))
+        .map((tile) => tile.tileId);
+    return [...byKey.values()].map(({ selection, chartIds }) => ({
+      filter: {
+        id: `cross:${selection.from}:${selection.member}`,
+        widget: 'checkbox' as const,
+        member: selection.member,
+        scope: { kind: 'tiles' as const, tileIds: tilesOf(chartIds) },
+      },
+      value: { kind: 'values' as const, values: [selection.value] },
+    }));
+  }, [crossEffects, live]);
+
   const { reached, notCovered } = useMemo(
     () =>
-      coverageOf(live, activeFilters(live.filters ?? [], filterValues), (member, chartId) => {
-        if (reach === undefined) return member;
-        const source = drawn.documents?.[chartId]?.chart.source.cube;
-        return source === undefined ? undefined : reach(member, source);
-      }),
-    [live, filterValues, reach, drawn.documents],
+      coverageOf(
+        live,
+        [...activeFilters(live.filters ?? [], filterValues), ...crossFilters],
+        reachOf,
+      ),
+    [live, filterValues, crossFilters, reachOf],
   );
   const [filtered, setFiltered] = useState<FilteredResults>({});
   // A chart being asked again keeps its last answer, busy, meanwhile.
@@ -1087,11 +1235,89 @@ export function DashboardView({
     [withFiltered.specs, formats],
   );
 
+  /**
+   * A click on a mark (AC-117): the selection from that tile, replacing
+   * whatever it had selected before — one selection per tile, as Superset and
+   * the prototype both have it. Clicking the same value again clears it, the
+   * way clicking a selected point does in Power BI and Superset.
+   */
+  const onItemClick = useCallback(
+    (tileId: string, chartId: string, item: ClickedItem) => {
+      const spec = drawn.specs[chartId];
+      const value = spec === undefined ? undefined : clickedValue(spec, item);
+      setCrossSelections((before) => {
+        const others = before.filter((each) => each.from !== tileId);
+        if (value === undefined) return others;
+        const had = before.find((each) => each.from === tileId);
+        const same = had?.member === value.member && had?.value === value.value;
+        return same ? others : [...others, { from: tileId, ...value }];
+      });
+    },
+    [drawn.specs],
+  );
+
+  /**
+   * What each highlighted tile draws over its own answer (AC-117): the same
+   * question asked with the selection, which is a second answer from Cube —
+   * a measure over a subset is not a fraction of the measure over everything.
+   */
+  const highlightReached = useMemo(() => {
+    const asked: Record<string, ActiveFilter[]> = {};
+    for (const [chartId, effects] of Object.entries(crossEffects.perChart)) {
+      const highlight = effects.highlight;
+      if (highlight === undefined || highlight.kind !== 'share') continue;
+      asked[chartId] = [
+        ...(reached[chartId] ?? []),
+        {
+          filter: {
+            id: `cross-highlight:${highlight.selection.from}`,
+            widget: 'checkbox' as const,
+            // By the name this chart's own cube or view takes it by: a view
+            // reaches a cube's member through its own (AC-079).
+            member: crossEffects.askHighlightAs[chartId] ?? highlight.selection.member,
+          },
+          value: { kind: 'values' as const, values: [highlight.selection.value] },
+        },
+      ];
+    }
+    return asked;
+  }, [crossEffects, reached]);
+  const [highlighted, setHighlighted] = useState<FilteredResults>({});
+  const onHighlighted = useCallback((results: FilteredResults) => {
+    setHighlighted((before) => keepLastAnswers(before, results));
+  }, []);
+
+  /** Each tile's spec with the highlight it draws, where a pair asks for one. */
+  const withHighlights = useMemo(() => {
+    if (Object.keys(crossEffects.perChart).length === 0) return formatted;
+    const specs: Record<string, RenderSpec> = { ...formatted };
+    for (const [chartId, effects] of Object.entries(crossEffects.perChart)) {
+      const highlight = effects.highlight;
+      const spec = specs[chartId];
+      if (highlight === undefined || spec === undefined) continue;
+      const answer = highlighted[chartId]?.chart;
+      const rows = answer !== undefined && 'spec' in answer ? answer.spec.rows : undefined;
+      // A share with no answer yet draws the tile as it is: a faded chart
+      // with nothing over it would say the selection matched nothing.
+      if (highlight.kind === 'share' && rows === undefined) continue;
+      specs[chartId] = {
+        ...spec,
+        highlight: {
+          member: highlight.selection.member,
+          value: highlight.selection.value,
+          kind: highlight.kind,
+          ...(rows === undefined ? {} : { rows }),
+        },
+      };
+    }
+    return specs;
+  }, [formatted, crossEffects, highlighted]);
+
   // The assignment is held across renders, so a filter that hides a member
   // does not hand its colour to whoever is now first (AC-039).
   // The dashboard as the session has it: a tile added in it — a duplicate's
   // copy (T068) — is drawn, and coloured, before the dashboard is saved.
-  const coloured = useDashboardColours(live, formatted);
+  const coloured = useDashboardColours(live, withHighlights);
   /**
    * Each filtered chart's filters in words, for the empty state (AC-043):
    * named by the field each was set on — the filter bar's field, not the name
@@ -1143,13 +1369,40 @@ export function DashboardView({
       const more = applied.filter(({ filter }) => refused.includes(filter.id));
       if (more.length > 0) all[chartId] = [...(all[chartId] ?? []), ...more];
     }
+    /**
+     * And a highlight Cube would not join to the tile (AC-117, and the user's
+     * decision of 2026-09-22): the same note, because it is the same answer —
+     * the tile is left as it is, and says which field could not reach it.
+     * Without this it drew as though nothing had been clicked (T123's review).
+     */
+    for (const [chartId, effects] of Object.entries(crossEffects.perChart)) {
+      const highlight = effects.highlight;
+      if (highlight === undefined || highlight.kind !== 'share') continue;
+      const result = highlighted[chartId];
+      const asked = `cross-highlight:${highlight.selection.from}`;
+      if (result?.unfiltered !== true && !(result?.uncovered ?? []).includes(asked)) continue;
+      all[chartId] = [
+        ...(all[chartId] ?? []),
+        {
+          filter: {
+            id: asked,
+            widget: 'checkbox' as const,
+            member: highlight.selection.member,
+          },
+          value: { kind: 'values' as const, values: [highlight.selection.value] },
+        },
+      ];
+    }
     return all;
-  }, [notCovered, reached, filtered]);
+  }, [notCovered, reached, filtered, crossEffects, highlighted]);
 
   const charts: TileCharts = {
     specs: coloured,
     errors: withFiltered.errors,
     loading,
+    // Clicking a mark cross-filters only where the dashboard says so, and not
+    // while editing, where a click selects the tile (AC-117, AC-120).
+    ...(crossFiltering ? { onItemClick } : {}),
     pending: withFiltered.pending,
     notCovered: marked,
     inEffect,
@@ -1398,6 +1651,16 @@ export function DashboardView({
           context={preview}
         />
       )}
+      {/* The second answer a highlighted tile draws over its own (AC-117):
+          the same question, asked with the selection. */}
+      {Object.keys(highlightReached).length === 0 ? null : (
+        <FilteredCharts
+          reached={highlightReached}
+          documents={drawn.documents}
+          onResults={onHighlighted}
+          context={preview}
+        />
+      )}
       <EditChrome
         document={document}
         title={(shown) => shown.title}
@@ -1626,6 +1889,8 @@ export function DashboardView({
               onDrafts={setDrafts}
               saving={session.saving}
               onSaving={setSaving}
+              editing={session.editing}
+              onEditing={setSessionEditing}
             />
             <DashboardPages
               /**
@@ -1706,6 +1971,8 @@ function SessionMirror({
   onDrafts,
   saving,
   onSaving,
+  editing,
+  onEditing,
 }: {
   readonly document: DashboardDocument;
   readonly onDocument: (document: DashboardDocument) => void;
@@ -1713,6 +1980,9 @@ function SessionMirror({
   readonly onDrafts: (drafts: DashboardDocument['chartDrafts']) => void;
   readonly saving: boolean;
   readonly onSaving: (saving: boolean) => void;
+  /** Whether the dashboard is being edited: cross-filtering is off while it is (AC-117). */
+  readonly editing: boolean;
+  readonly onEditing: (editing: boolean) => void;
 }) {
   useEffect(() => {
     onDocument(document);
@@ -1723,6 +1993,9 @@ function SessionMirror({
   useEffect(() => {
     onSaving(saving);
   }, [saving, onSaving]);
+  useEffect(() => {
+    onEditing(editing);
+  }, [editing, onEditing]);
   return null;
 }
 

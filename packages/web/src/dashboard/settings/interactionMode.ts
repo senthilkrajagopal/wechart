@@ -22,7 +22,7 @@ import type { DashboardSettings } from '../model/document';
  * than having to know which half of the idea lives where.
  */
 export { DEFAULT_INTERACTIONS, INTERACTION_MODES };
-export type { CrossFilterConfig, InteractionMode, Interactions } from '@wechart/core';
+export type { CrossFilterConfig, InteractionMode, Interactions, PairAction } from '@wechart/core';
 
 /**
  * The interactions of a dashboard's settings, which may predate them.
