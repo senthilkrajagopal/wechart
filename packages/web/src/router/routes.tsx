@@ -25,7 +25,8 @@ import { StateLine } from '../shell/StatusIcon';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { JobsPage } from '../workspaces/jobs/JobsPage';
 import { SecurityPage } from '../workspaces/security/SecurityPage';
-import { DataSourcesPage, SchedulesPage } from '../workspaces/admin/DeferredPage';
+import { DataSourcesPage } from '../workspaces/admin/DeferredPage';
+import { SchedulesPage } from '../workspaces/schedules/SchedulesPage';
 import { ModelFilePage } from '../workspaces/model/ModelFilePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
 import { WORKSPACES, type WorkspaceId } from '../shell/WorkspaceSwitcher';
@@ -428,12 +429,26 @@ const chartRoute = createRoute({
 const modelFileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/model/files/$objectId',
+  /**
+   * A cube's tab to open on (T160): Schedules links a pre-aggregation to its
+   * cube's Pre-aggregations. Strings only; anything else is no request.
+   */
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { cube?: string | undefined; tab?: string | undefined } => ({
+    cube: typeof search['cube'] === 'string' && search['cube'] !== '' ? search['cube'] : undefined,
+    tab: typeof search['tab'] === 'string' && search['tab'] !== '' ? search['tab'] : undefined,
+  }),
   // A model file, open on its forms (T138, AC-132).
   component: function ModelFileSurface() {
     const params = useParams({ strict: false }) as { objectId?: string };
+    const { cube, tab } = modelFileRoute.useSearch();
     return (
       <AppShell workspace="model">
-        <ModelFilePage path={decodeURIComponent(params.objectId ?? '')} />
+        <ModelFilePage
+          path={decodeURIComponent(params.objectId ?? '')}
+          {...(cube === undefined || tab === undefined ? {} : { openOn: { cube, tab } })}
+        />
       </AppShell>
     );
   },

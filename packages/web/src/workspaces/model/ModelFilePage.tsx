@@ -92,6 +92,7 @@ function FileEditor({
   path,
   content,
   published = true,
+  openOn,
   onProblems,
   onChanged,
   onText,
@@ -99,6 +100,8 @@ function FileEditor({
 }: {
   path: string;
   content: string;
+  /** A cube's tab to open on (T160). */
+  openOn?: OpenOn | undefined;
   /** False for a file made here and not yet published: there is nothing to go back to. */
   published?: boolean;
   /** Discarding a file made here and not yet published: it goes (AC-226). */
@@ -626,6 +629,10 @@ function FileEditor({
                 kind="cube"
                 value={value}
                 readOnly={readOnly}
+                // Opened from Schedules on this cube's pre-aggregations (T160).
+                {...(openOn !== undefined && openOn.cube === value['name']
+                  ? { initialTab: openOn.tab }
+                  : {})}
                 // Its rollups a publish was refused for, on their rows (T207, AC-189).
                 rollupProblems={refusedRollups.filter(
                   (problem) =>
@@ -748,6 +755,7 @@ function FileBody({
   path,
   content,
   published,
+  openOn,
   onProblems,
   onChanged,
   onText,
@@ -756,6 +764,7 @@ function FileBody({
   path: string;
   content: string;
   published: boolean;
+  openOn?: OpenOn | undefined;
   onProblems: (byPath: Readonly<Record<string, number>>) => void;
   onChanged: (changed: boolean) => void;
   onText?: ((text: string) => void) | undefined;
@@ -777,6 +786,7 @@ function FileBody({
       path={path}
       content={content}
       published={published}
+      openOn={openOn}
       onProblems={onProblems}
       onChanged={onChanged}
       onDiscard={onDiscard}
@@ -842,7 +852,19 @@ export function newFileOf(
  * which opens the chosen file in place, its path in the URL — and New cube
  * and New view, which make a file here to be published.
  */
-export function ModelFilePage({ path }: { path?: string | undefined }) {
+/** A cube's tab to open the file on: Schedules' link to a pre-aggregation (T160). */
+interface OpenOn {
+  readonly cube: string;
+  readonly tab: string;
+}
+
+export function ModelFilePage({
+  path,
+  openOn,
+}: {
+  path?: string | undefined;
+  openOn?: OpenOn | undefined;
+}) {
   const files = useQuery(MODEL_FILES_QUERY);
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -956,6 +978,7 @@ export function ModelFilePage({ path }: { path?: string | undefined }) {
             path={file.path}
             content={file.content}
             published={!isDraft}
+            openOn={openOn}
             onProblems={(byPath) => {
               setReported({ from: file.path, byPath });
             }}

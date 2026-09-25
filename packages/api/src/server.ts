@@ -21,6 +21,7 @@ import { healthOf, originOf } from './cube/health';
 import { MetaCache } from './cube/meta-cache';
 import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
 import { registerBuilds } from './jobs/build';
+import { registerSchedules } from './jobs/schedules';
 import type { Config } from './config';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, type ReferenceDocument } from './model/references';
@@ -227,6 +228,7 @@ export function buildServer({
 
   registerModelPublishing(app, { config, client, meta, modelFiles });
   registerBuilds(app, client);
+  registerSchedules(app, client);
 
   /**
    * The charts and dashboards that use the members an edit changes, listed

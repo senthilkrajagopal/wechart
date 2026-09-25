@@ -8,8 +8,8 @@ import { StatusIcon } from '../../shell/StatusIcon';
  * info bar, rather than the empty <main> the admin critique found, which read
  * as broken rather than as deferred.
  *
- * Deferred by the user's scope decisions: data-source management (F18) and
- * wechart's own scheduler (AC-150 … AC-155) — "Cube first, defer the rest".
+ * Deferred by the user's scope decisions: data-source management (F18) —
+ * "Cube first, defer the rest". Schedules has its own page since T160.
  */
 export function DeferredPage({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -20,22 +20,6 @@ export function DeferredPage({ title, children }: { title: string; children: Rea
         <div>{children}</div>
       </div>
     </div>
-  );
-}
-
-/**
- * Schedules: what Cube's refresh worker runs is set by each pre-aggregation's
- * refresh key, in the model; wechart's own scheduler is deferred.
- */
-export function SchedulesPage() {
-  return (
-    <DeferredPage title="Schedules">
-      <p>
-        When each pre-aggregation is rebuilt is set by its refresh key in the model, and Cube’s
-        refresh worker runs it. Scheduling builds and cache warm-ups from wechart is not part of
-        this phase.
-      </p>
-    </DeferredPage>
   );
 }
 

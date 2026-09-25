@@ -2697,7 +2697,18 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - Save writes `refresh_key: { every, timezone }` and publishes through the model's path.
     - A rebuild within one of Cube's check periods of a shown run is observed on a `* * * * *` key in the e2e.
   - Depends on: T258
-- [ ] T160 (AC-154) List every pre-aggregation's refresh schedule in Schedules, labelled Cube's and read-only, linking to Model
+- [x] T160 (AC-154) List every pre-aggregation's refresh schedule in Schedules, labelled Cube's and read-only, linking to Model
+  - Done 2026-09-24, all three browsers. AC-154 is ticked on `e2e/schedules.spec.ts` "Schedules lists each refresh schedule as Cube’s, read-only, and opens it in Model", which failed first. Its setup: on the real Cube, with a cube file of the browser's own, holding a cron in Los Angeles and a rollup with `scheduled_refresh: false`.
+    - **The API** (`jobs/schedules.ts`, `GET /api/schedules`, tested in `schedules.test.ts`) reads Cube's extended metadata. It lists every pre-aggregation of every cube there, lambdas and rollup joins included, each Cube's refresh worker's.
+    - **When each is rebuilt, in the research's honest words** (`refresh-key-schedule.md`, "For Schedules"):
+      - "At "0 8 * * *" in America/Los_Angeles", or in UTC for a cron with no zone;
+      - "Every 1 hour", with incremental and its window;
+      - a key of SQL alone, whose SQL the metadata drops, as "When its SQL returns a new value, checked every 10 seconds";
+      - no key: its cube's, else Cube's hourly default;
+      - "Not scheduled: …" for `scheduled_refresh: false`, a lambda and a rollup join, with its icon.
+    - **Read-only:** the page has no control, only a link per row, "Edit in Model". It opens the file on that cube's Pre-aggregations tab: the model file route takes `?cube=…&tab=…`, and `CubeForm` an `initialTab`.
+    - **The note** still says wechart's own scheduling is not part of this phase (AC-234), so AC-233's test reads it as before.
+    - **Left:** "Next run" per row waits for T159's turn-over formula. A key of SQL with `every` shows as the interval, since the metadata drops the SQL (research, probe d).
   - Re-scoped 2026-09-24: Schedules lists the Cube-owned schedules; wechart-owned ones arrive with AC-234.
   - Files: `packages/web/src/workspaces/schedules/*`, `packages/api/src/jobs/build.ts` (the extended meta it already reads), `e2e/schedules.spec.ts`; AC-233's test (Schedules no longer says it is out of phase)
   - Failing test:

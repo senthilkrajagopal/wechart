@@ -39,8 +39,11 @@ export function CubeForm({
   onChange,
   readOnly = false,
   rollupProblems = [],
+  initialTab,
 }: {
   kind: 'cube' | 'view';
+  /** The tab to open on, one of its own: Schedules opens a cube on its pre-aggregations (T160). */
+  initialTab?: string | undefined;
   value: Value;
   onChange: (next: Value) => void;
   /**
@@ -63,7 +66,9 @@ export function CubeForm({
   const section: SectionId = kind === 'cube' ? 'Y.3' : 'Y.10';
   const tabs = [['general', 'General'], ...TABS[kind]] as const;
   const listed = new Set(TABS[kind].map(([key]) => key));
-  const [open, setOpen] = useState('general');
+  const [open, setOpen] = useState(() =>
+    initialTab !== undefined && tabs.some(([key]) => key === initialTab) ? initialTab : 'general',
+  );
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const base = useId();
   const name = typeof value['name'] === 'string' ? value['name'] : kind;
