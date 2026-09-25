@@ -9,6 +9,7 @@
 import { seriesOf, type RenderSpec } from '@wechart/core';
 
 import { colourFor } from '../colours';
+import { plotEdgesOf } from '../customize';
 import { PROTOTYPE_GRID } from '../layout/grid';
 import { DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 
@@ -84,7 +85,14 @@ export function barOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
    */
   const gap = gapFor(
     laidBarWidth(
-      categoryAxisPx(canvas, horizontal),
+      categoryAxisPx(
+        canvas,
+        horizontal,
+        plotEdgesOf(
+          spec,
+          series.map((one) => one.name),
+        ),
+      ),
       categories.length,
       stacked ? 1 : Math.max(1, series.length),
     ),
@@ -141,16 +149,28 @@ export interface Canvas {
 /** A chart drawn without being told its canvas: the headless renderer's. */
 export const DEFAULT_CANVAS: Canvas = { width: 640, height: 400 };
 
+/** Room kept for the value axis's labels: a row of them, or a column wide enough for "$40,000.00". */
+const VALUE_LABELS_PX = { row: 24, column: 80 } as const;
+
 /**
- * How long the category axis of a chart on this canvas is, by the prototype's
- * grid that `optionFor` lays every chart on axes out on (T254: 8 px left, 28
- * right, 12 above and 8 below; research/echarts-text-and-grid.md, Q3). Its
- * labels come out of that too, which this leaves in: slightly over rather
- * than under, as a legend moves the grid as well, which only errs towards
- * keeping a gap the colour still shows beside (research/echarts-bar-density.md).
+ * How long the category axis of a chart on this canvas is: the grid it is
+ * laid out on — the prototype's edges, with its legend's room where one is
+ * drawn (`plotEdgesOf`) — less the value axis's labels, which the grid's
+ * "same" bounds keep inside it (research/echarts-text-and-grid.md, Q3).
+ *
+ * **Under rather than over** (T254's review): an over-estimate keeps a gap on
+ * a bar too thin to show colour beside it, which draws the bar empty
+ * (AC-210's failing state); an under-estimate only lets a borderline bar
+ * touch its neighbour (research/echarts-bar-density.md).
  */
-export function categoryAxisPx(canvas: Canvas, horizontal: boolean): number {
-  return horizontal ? canvas.height - 20 : canvas.width - 36;
+export function categoryAxisPx(
+  canvas: Canvas,
+  horizontal: boolean,
+  edges: { top: number; right: number; bottom: number; left: number } = PROTOTYPE_GRID,
+): number {
+  return horizontal
+    ? canvas.height - edges.top - edges.bottom - VALUE_LABELS_PX.row
+    : canvas.width - edges.left - edges.right - VALUE_LABELS_PX.column;
 }
 
 /**

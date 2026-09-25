@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from '@wechart/core';
 
+import { optionFor } from '../optionFor';
 import { barOption } from './bar';
 import { comboOption } from './combo';
 import { trellisOption } from '../layout/trellis';
@@ -29,6 +30,7 @@ const PALETTE = [BLUE, ORANGE];
 
 const STATUS = 'orders.status';
 const COUNT = 'orders.count';
+const REGION = 'orders.region';
 const TOTAL = 'orders.total';
 
 const draw = (spec: RenderSpec) => renderToSvg(barOption(spec));
@@ -351,6 +353,55 @@ describe('a dense bar chart (AC-210)', () => {
       });
     }
   }
+
+  /**
+   * T254's review: drawn as the app draws them — through `optionFor`, on the
+   * prototype's grid, with a legend placed or wide value labels taking room —
+   * the estimate must not keep a gap on a bar too thin to show colour beside
+   * it. Estimated from the grid alone it did, and these bars drew empty.
+   */
+  it('shows every bar’s colour with the legend below, on their side, 480 × 320', () => {
+    const canvas = { width: 480, height: 320 };
+    for (const count of [16, 17]) {
+      const spec: RenderSpec = {
+        chartType: 'hbar',
+        encoding: { x: [STATUS], y: [COUNT], color: [REGION] },
+        rows: Array.from({ length: count }, (_, at) =>
+          ['east', 'west'].map((region) => ({
+            [STATUS]: `s${String(at)}`,
+            [REGION]: region,
+            [COUNT]: 3,
+          })),
+        ).flat(),
+        palette: [BLUE, ORANGE],
+        surface: SURFACE,
+        options: { legend: { position: 'bottom' } },
+      };
+      // The bars, not the legend's two swatches in its 56 px below the plot.
+      const marks = marksOf(renderToSvg(optionFor(spec, canvas), canvas), [BLUE, ORANGE]).filter(
+        (mark) => mark.bottom <= canvas.height - 56,
+      );
+      expect(marks).toHaveLength(count * 2);
+      for (const mark of marks) expect(colourShown(mark, 'height')).toBeGreaterThan(0);
+    }
+  });
+
+  it('shows every bar’s colour beside wide currency ticks, in a 200 px tile', () => {
+    const canvas = { width: 200, height: 320 };
+    for (const count of [16, 17, 18]) {
+      const spec: RenderSpec = {
+        ...bars('bar', count),
+        rows: Array.from({ length: count }, (_, at) => ({
+          [STATUS]: `s${String(at)}`,
+          [COUNT]: 40000 + at,
+        })),
+        formats: { [COUNT]: 'currency' },
+      };
+      const marks = marksOf(renderToSvg(optionFor(spec, canvas), canvas), [BLUE]);
+      expect(marks).toHaveLength(count);
+      for (const mark of marks) expect(colourShown(mark, 'width')).toBeGreaterThan(0);
+    }
+  });
 
   it('keeps the 2 px surface gap wherever it leaves the bar its colour', () => {
     const canvas = { width: 640, height: 320 };

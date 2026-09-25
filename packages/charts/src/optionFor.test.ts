@@ -146,9 +146,29 @@ describe('a chart on axes', () => {
         outerBoundsMode: 'same',
         outerBoundsContain: 'all',
       });
-      // 12 above with no legend at the top, as the prototype's topPad.
-      expect(typeof grid['top']).toBe('number');
+      // One series, so no legend: 12 above, as the prototype's topPad (T254's
+      // review: the assertion was only "a number").
+      expect(grid['top']).toBe(12);
     });
+
+  it('keeps the prototype’s 12 px top when Customize hides the legend or moves it', () => {
+    // T254's review: removing the legend's 32 px top left ECharts' default 65.
+    const twoSeries: RenderSpec = {
+      chartType: 'bar',
+      encoding: { x: ['orders.status'], y: ['orders.count'], color: ['orders.region'] },
+      rows: [
+        { 'orders.status': 'paid', 'orders.region': 'east', 'orders.count': 10 },
+        { 'orders.status': 'paid', 'orders.region': 'west', 'orders.count': 30 },
+      ],
+      palette: PALETTE,
+    };
+    const topOf = (options: Record<string, unknown>) =>
+      (optionFor({ ...twoSeries, options })['grid'] as { top?: unknown }).top;
+    expect(topOf({})).toBe(32);
+    expect(topOf({ legend: { show: false } })).toBe(12);
+    expect(topOf({ legend: { position: 'bottom' } })).toBe(12);
+    expect(topOf({ legend: { position: 'right' } })).toBe(12);
+  });
 
   it('draws its axis labels down to 8 px from the foot, not 80', () => {
     const labels = labelsOf(renderToSvg(optionFor(spec('bar'))));

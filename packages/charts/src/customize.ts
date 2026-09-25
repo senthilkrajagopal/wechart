@@ -14,6 +14,7 @@
  */
 import { formatterFor, membersOn, type RenderSpec } from '@wechart/core';
 
+import { PROTOTYPE_GRID } from './layout/grid';
 import type { EChartsOption } from './theme';
 
 export type LegendPosition = 'top' | 'right' | 'bottom' | 'left';
@@ -49,6 +50,25 @@ const PLACED: Record<LegendPosition, { legend: object; grid: object }> = {
   left: { legend: { left: 0, top: 'middle', orient: 'vertical' }, grid: { left: 120 } },
 };
 
+/**
+ * The edges a chart on axes is laid out within: the prototype's, with room
+ * for its legend where one is drawn and where Customize puts it — the same
+ * rule `applyCustomize` and `legendFor` apply (AC-038: a legend for two
+ * series or more). What a bar's width is estimated against (T254's review).
+ */
+export function plotEdgesOf(
+  spec: RenderSpec,
+  seriesNames: readonly string[],
+): { top: number; right: number; bottom: number; left: number } {
+  const { top, right, bottom, left } = PROTOTYPE_GRID;
+  const edges = { top, right, bottom, left };
+  const settings = legendSettingsOf(spec);
+  const hidden = seriesSettingsOf(spec);
+  const drawn = seriesNames.filter((name) => hidden[name]?.hidden !== true).length;
+  if (drawn < 2 || settings.show === false) return edges;
+  return { ...edges, ...(PLACED[settings.position ?? 'top'].grid as Partial<typeof edges>) };
+}
+
 type Series = Record<string, unknown> & { name?: unknown; type?: unknown };
 
 /** An object less one key. */
@@ -78,16 +98,18 @@ export function applyCustomize(option: EChartsOption, spec: RenderSpec): ECharts
     drawnSeries.length < 2 &&
     drawnSeries.every((one) => SERIES_COLOURED.includes(String(one.type)));
 
-  // The legend: off, or placed. Only where the chart has one (AC-038).
+  // The legend: off, or placed. Only where the chart has one (AC-038). The
+  // plot's top goes back to the prototype's 12 px, not ECharts' default 65,
+  // when the legend leaves the top (T254's review).
   if (next['legend'] !== undefined) {
     const grid = record(next['grid']);
     if (legend.show === false || lonely) {
-      next = { ...without(next, 'legend'), grid: without(grid, 'top') };
+      next = { ...without(next, 'legend'), grid: { ...grid, top: PROTOTYPE_GRID.top } };
     } else if (legend.position !== undefined && legend.position !== 'top') {
       next = {
         ...next,
         legend: { ...without(record(next['legend']), 'top'), ...PLACED[legend.position].legend },
-        grid: { ...without(grid, 'top'), ...PLACED[legend.position].grid },
+        grid: { ...grid, top: PROTOTYPE_GRID.top, ...PLACED[legend.position].grid },
       };
     }
   }

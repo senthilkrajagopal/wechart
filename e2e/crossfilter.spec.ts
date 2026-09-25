@@ -137,13 +137,19 @@ async function clickBar(page: Page, target: Locator, category: string) {
   // Its own client rect: Playwright's boundingBox() puts a middle-anchored
   // SVG text half its width to the right in WebKit (found in T254's run).
   let box: { x: number; y: number; width: number } | null = null;
+  // And where it has come to rest, the same box twice running, as the
+  // markings helper waits (T254's review).
+  let last = '';
   await expect
     .poll(async () => {
       box = await label.evaluate((text) => {
         const rect = text.getBoundingClientRect();
         return { x: rect.x, y: rect.y, width: rect.width };
       });
-      return box.width > 0;
+      const now = JSON.stringify(box);
+      const settled = box.width > 0 && now === last;
+      last = now;
+      return settled;
     })
     .toBe(true);
   const at = box as unknown as { x: number; y: number; width: number };

@@ -69,9 +69,18 @@ drawn in. It uses the grid's margins and barGrid's formula above.
 **Since T254 (2026-09-24), the grid is the prototype's, not ECharts' default.**
 Every chart on axes is laid out 8 px left, 28 px right, 12 px above and 8 px
 below, with "same" outer bounds holding the labels
-(`echarts-text-and-grid.md`, Q3). Bars and combos carry that grid themselves, so
-the estimate is `width − 36` along the width and `height − 20` down a
-horizontal chart.
+(`echarts-text-and-grid.md`, Q3). A drawn legend takes its room, which
+Customize can place on any side.
+
+**The estimate now errs under, not over (T254's review).** The first T254
+estimate took only the grid's edges, `width − 36` and `height − 20`. It kept the
+gap on bars really under 4 px wide, which drew them empty (AC-210's failing
+state). Two cases did it: a legend placed at the bottom, and wide value labels
+such as "$40,000.00" in a narrow tile. It now subtracts the legend's room where
+one is drawn (`plotEdgesOf` in `customize.ts`) and a value-label allowance: a
+24 px row under a horizontal chart, an 80 px column beside a vertical one. So a
+borderline bar loses its gap and keeps its colour. `bar.test.ts` draws both cases
+through `optionFor`.
 
 - The gap is kept only where the bar is at least three gaps wide, so the colour
   between its two borders is at least as wide as one border.

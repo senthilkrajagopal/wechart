@@ -3711,13 +3711,21 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Done 2026-09-24, all three browsers. The e2e failed first, and so did `themed.test.ts` "a chart's text" and `optionFor.test.ts` "a chart on axes".
     - **The chart's text is Inter.** It is set through the option's root `textStyle`, which reaches every text wechart draws; ECharts writes the family inline, so page CSS can't. The tooltip is the prototype's 12 px.
     - **Tabular numerals come from page CSS on the chart**, as ECharts has no option for them. Most of its text inherits them. The few written with the `font` shorthand get them through an `!important` rule, and the tooltip through its `extraCssText`.
-    - **One limit, recorded in the research:** zrender measures text with a canvas, which has no tabular figures. The labels are laid out by proportional digit widths and drawn tabular, and Inter's digits differ little.
+    - **One limit, recorded in the research:** zrender measures text with a canvas, which has no tabular figures. The labels are laid out by proportional digit widths and drawn tabular. How far the two differ for Inter at 12 px is UNVERIFIED.
     - **The grid is the prototype's `{ left: 8, right: 28, top: 12, bottom: 8 }`**, in ECharts 6's supported terms: `outerBoundsMode: 'same'` with `outerBoundsContain: 'all'`. Axis titles stay inside the 8 px bottom too. `containLabel` is deprecated, and wechart's build doesn't register the legacy algorithm the prototype's full bundle ran. The legend's room and the Customize tab's placement still win.
     - **Bars and combos carry the grid themselves**, so a bar's estimated width is measured against the grid it is drawn on: `width − 36` along it, `height − 20` down a horizontal chart. `echarts-bar-density.md` says so.
     - **Found by the full run:**
       - The markings and cross-filter e2e helpers clicked a bar at Playwright's `boundingBox()` of its axis label.
       - In WebKit that box sits half the label's width to the right for middle-anchored SVG text. With the wider plot, the click fell in the gap between two bars.
-      - Both helpers now measure with the element's own client rect, and wait for it to settle.
+      - Both helpers now measure with the element's own client rect, and wait for it to settle. The measurement is recorded in `docs/research/playwright-webkit-svg-text-box.md`.
+  - **The cold review failed it on AC-210, fixed:**
+    - **The bar-width estimate** took only the grid's edges. It kept the gap on bars really under 4 px, which drew them empty, with a legend at the bottom or wide currency ticks in a narrow tile. It now subtracts the legend's room where one is drawn (`plotEdgesOf`) and a value-label allowance, erring under. Both cases are drawn through `optionFor` in `bar.test.ts`, and fail without the fix.
+    - **Hiding or moving the legend** had put the plot's top back at ECharts' default 65 px. Customize now keeps the prototype's 12 (tested in `optionFor.test.ts`), and the grid test asserts 12 rather than "a number".
+    - **Also:**
+      - the tooltip's `extraCssText` is joined with a separator;
+      - the cross-filter helper waits for a settled box too;
+      - the unsourced claim about Inter's digits is marked UNVERIFIED.
+    - **Recorded choice:** the grid keeps ECharts' default 25 % clamp, not the research's 0. Very long labels then overflow, rather than shrinking the plot to nothing, which would itself draw empty axes. `nameMoveOverlap` stays at its default, which keeps axis titles clear of the labels and, under `'all'`, inside the grid.
 - [x] T253 (AC-187) Use the prototype's picker for tile menus, its inline grip, and its tinted edit grid
   - Files: `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: a tile's ⋯ menu is 250 px, `border-strong` with the pop shadow, 28 px items at 12 px, its heading 12/16 muted and Delete in `status-error`; the grip sits inline in the head at 14 px muted; the edit grid's columns are tinted bands (recheck-dashboard N4; mismatches 14, 19, 20).

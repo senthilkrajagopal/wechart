@@ -155,7 +155,7 @@ export function themed(option: EChartsOption, theme: ChartTheme): EChartsOption 
             // Its figures tabular like the tile's: its own inline "font"
             // shorthand resets them, and extraCssText is written after it
             // (research/echarts-text-and-grid.md, Q2).
-            extraCssText: `${String(asObject(coloured['tooltip'])['extraCssText'] ?? '')}font-variant-numeric: tabular-nums;`,
+            extraCssText: `${String(asObject(coloured['tooltip'])['extraCssText'] ?? '')};font-variant-numeric: tabular-nums;`,
             textStyle: {
               color: tokens['text-primary'],
               // The prototype's 12 px; ECharts' tooltip default is 14.
