@@ -463,6 +463,20 @@ Traces to: `[R4]`, `[docs/inputs §1]`, direction.md §7c; `[research/cube/pre-a
 >   destructive commands.
 >
 > The user's words: "defer both as per recommendation".
+>
+> **Un-deferred 2026-09-24, at the user's direction.** An independent analysis
+> found two things:
+> - **Rebuilding selected partitions** needs only the documented jobs API:
+>   a `dateRange` of one partition's start matches that partition alone.
+> - **The full partition list** comes exactly only from Cube's
+>   `/cubejs-system/v1/pre-aggregations/partitions`. Cube Store's SQL interface
+>   can't show a partition that was never built, and anything that reaches it
+>   can run destructive commands unauthenticated.
+>
+> The user chose "Cube's system API": read-only, switched on by a secret only
+> Cube and wechart's API hold, with a contract test run on each Cube upgrade.
+> "Building" and "failed" come from AC-150's history. The route's research is
+> `research/cube/system-partitions.md`.
 
 - [x] AC-142 WHEN the user opens a cube's pre-aggregations, THE SYSTEM SHALL list each rollup with its measures, dimensions, time dimension, granularity, partition granularity and indexes.
       Fails when: a declared rollup or any of those attributes is missing.
@@ -473,8 +487,8 @@ Traces to: `[R4]`, `[docs/inputs §1]`, direction.md §7c; `[research/cube/pre-a
       > Added 2026-09-22 at the user's decision ("Yes, refuse to publish"): Cube compiles a rollup that names members the model doesn't have, and every query on that cube then fails (research/cube/pre-aggregations.md, "Observed locally").
 - [x] AC-144 WHEN the user opens a chart's acceleration panel, THE SYSTEM SHALL say whether the chart's query matches a pre-aggregation, and when it does not, name the member that prevents the match.
       Fails when: the panel reports a match that Cube does not use, or names no reason for a miss.
-- [ ] AC-145 WHEN a rollup is partitioned, THE SYSTEM SHALL list its partitions with their build state and last build time, and allow a rebuild of selected partitions.
-      Fails when: a partition is missing, or a rebuild applies to partitions the user did not select.
+- [ ] AC-145 WHEN the user opens a partitioned rollup in Jobs, THE SYSTEM SHALL list every partition Cube derives from its build range in the time zones wechart builds in, each with its period, its build state (built, not built, building or failed) and the time Cube last built it, and SHALL rebuild the partitions the user selects through Cube's jobs API.
+      Fails when: a partition Cube lists for the rollup is missing, or shows a last build time other than Cube's newest version of it; or a rebuild starts a job whose table names a partition the user did not select, or starts none for one they did.
 - [x] AC-146 WHEN the user defines an index on a rollup, THE SYSTEM SHALL let the columns be ordered and mark aggregate indexes as such.
       Fails when: the column order cannot be changed, or an aggregate index is written as a regular one.
 - [x] AC-147 IF a query would fail under rollup-only mode, THEN THE SYSTEM SHALL warn on the chart that it depends on the source database.

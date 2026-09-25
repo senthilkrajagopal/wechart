@@ -2519,11 +2519,19 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **Other fixes.** A plan Cube gives as a list, one per query it runs, is read whole. A Cube refusal on any of the three calls is passed on as Cube's. A dry run that owns nothing still names the query's first member.
     - Tests: the two fixtures that didn't match what Cube emits now do. Added: joined members (blamed and not), a rollup on a joined cube, a measure filter, segments, a date range without grouping, the non-additive granularity case, the list plan, and Cube's refusal.
     - Left as found: a rollup Cube plans to use but hasn't built yet reads as a match, while the chart itself shows Cube's "not built yet" error.
-- [ ] T151 (AC-145) List a rollup's partitions and rebuild the selected ones
-  - Files: `packages/web/src/workspaces/model/preagg/Partitions.tsx`, `packages/api/src/routes/preagg.ts`, `packages/api/src/routes/partitions.test.ts`
-  - Failing test: `partitions.test.ts`: every partition is listed with its build state and last build time, and a rebuild targets exactly the selected partitions (AC-145).
-  - Depends on: T148
-  - **Deferred by the user, 2026-09-21** ("defer both as per recommendation"). Not to be started unless the user asks. The only sources are Cube's undocumented `/cubejs-system/*` routes and Cube Store's unauthenticated MySQL interface (spec F16 status note).
+- [ ] T151 (AC-145) List a rollup's partitions from Cube's system route, and rebuild the selected ones through the jobs API
+  - **Un-deferred 2026-09-24** at the user's choice of "Cube's system API" (spec F16 status note). The partition list comes from `/cubejs-system/v1/pre-aggregations/partitions`, read-only. Rebuilds use the documented jobs API, one `dateRange` of a partition's start per selected partition. Building and failed states come from AC-150's history.
+  - Files:
+    - `docker-compose.yml`: the system secret, given to Cube and wechart's API only;
+    - `packages/api/src/cube/client.ts` (+ test): a system-token read of the partitions;
+    - `packages/api/src/jobs/partitions.ts` (+ test);
+    - `packages/web/src/workspaces/jobs/*`;
+    - `e2e/jobs.spec.ts`, with a month-partitioned cube file the test brings with it.
+  - Failing test:
+    - `partitions.test.ts`: the partitions Cube lists are all shown, each with its period, state and newest build time;
+    - `e2e/jobs.spec.ts`: rebuilding two of eight partitions starts jobs whose tables name exactly those two;
+    - a contract test that fails if the system route's shape changes on a Cube upgrade (AC-145).
+  - Depends on: T148, T156, T263, `docs/research/cube/system-partitions.md`
 - [x] T152 (AC-146) Define an index with ordered columns and an aggregate flag
   - Files: `packages/web/src/workspaces/model/preagg/IndexEditor.tsx`, `packages/web/src/workspaces/model/preagg/IndexEditor.test.tsx`
   - Failing test: `IndexEditor.test.tsx`: column order can be changed and is preserved in the written YAML, and an aggregate index is written as `type: aggregate` (AC-146).
@@ -2613,7 +2621,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - **The accessibility sweep** covers the query log again (`/jobs?tab=queries` opens it). The e2e's job locator is the list item, not any `job-*` test id.
       - Left as found: a cube marked `public: false` is missing from the extended metadata outside dev mode, so its rollups can't be started here; the refresh worker still builds them.
     - AC-149 ticked. `e2e/jobs.spec.ts`, against the real Cube in all three browsers, builds the seed rollup from the Jobs page. The job's token appears, its state is followed to `done`, and it names its Cube Store table. Cube's own record of that token, asked afterwards, is `done`. `BuildPanel.test.tsx` shows the polling stopping at each finished state and not before.
-- [ ] T263 (AC-150, AC-149) Move Cube and Cube Store to the version `docs/research/cube/upgrade-1.7.43.md` pins
+- [ ] T263 (AC-150, AC-149) Move Cube and Cube Store to v1.7.45, the user's pick after `docs/research/cube/upgrade-1.7.43.md` (which recommended 1.7.44)
   - Files: `docker-compose.yml`, the research docs the upgrade doc corrects
   - Failing test: `e2e/jobs.spec.ts`: a build whose import fails is reported as a failure, not `done`. It can only fail on v1.7.42 if the research shows how to make an import fail on purpose; if it doesn't, the task says so and the full suite is the check.
   - **Why:** the user's decision of 2026-09-24 ("Proceed with cube update to 1.7.43", after research). On v1.7.42 a failed import can report `done`, and Run history would record it as a success.
