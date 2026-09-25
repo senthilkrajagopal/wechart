@@ -2419,11 +2419,40 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - There's no zoom or pan: the pane scrolls.
     - Leaving through a link doesn't warn of unpublished edits, as elsewhere. The user has ruled out hardening save edge cases.
     - Joins declared in JavaScript or Jinja files aren't drawn: those files are read-only and aren't read as YAML.
+- [ ] T275 (AC-250, AC-139) Run the user's Cube fork, and grant its `introspection` scope only to the tokens the API signs for it
+  - Planned 2026-09-25 `[R10]`.
+  - `docker-compose.yml`: both `cube` and `cube-refresh-worker` use `cube:v1.7.45-introspection`, built locally. This takes in T263's move of Cube Store to v1.7.45.
+  - The Helm values' `cube.image` points at the same local image (`pullPolicy: IfNotPresent`, as wechart's own images).
+  - `infra/cube/cube.js` `contextToApiScopes` adds `introspection` only for a context carrying the API's introspection claim, and never for a draft's.
+  - Files: `docker-compose.yml`, `deploy/helm/values/docker-desktop.yaml` (and the chart's defaults if it names the image), `infra/cube/cube.js`, the API's Cube token signing (`packages/api/src/cube/*`), and their tests.
+  - Failing test:
+    - the API's token for introspection carries the claim, and its query, publish and draft tokens do not;
+    - `cube.js`'s `contextToApiScopes` grants `introspection` for that claim alone, and not with `wechartDraft`;
+    - the dev Cube answers `/v1/introspection/data-sources` for the API's token and 403s a query token (AC-250).
+  - Depends on: `docs/research/cube/introspection-api.md`
 - [ ] T145 (AC-139) Generate cubes from a data source's tables
-  - **Deferred 2026-09-21 with F18**, under the user's rule "for requirements that dont work with cube defer". It depends on T165, the connection test. Reading a source's tables goes through Cube's drivers called from wechart's server, as a test does, and not through a Cube API: `research/cube-capabilities.md` §6 has "Schema and table browsing: Core (driver methods; dev-only route)".
-  - Files: `packages/api/src/model/generate.ts`, `packages/web/src/workspaces/model/GenerateCubes.tsx`, `packages/api/src/model/generate.test.ts`
-  - Failing test: `generate.test.ts`: each selected table produces a cube whose columns map to dimensions plus a count measure, and any dropped column is reported (AC-139).
-  - Depends on: T142, T165
+  - **Deferred 2026-09-21 with F18**, under the user's rule "for requirements that dont work with cube defer". It depended on T165, the connection test. Reading a source's tables went through Cube's drivers called from wechart's server, as a test does, and not through a Cube API: `research/cube-capabilities.md` §6 has "Schema and table browsing: Core (driver methods; dev-only route)".
+  - **Re-planned 2026-09-25 `[R10]`**, on the introspection API in the user's Cube fork (`research/cube/introspection-api.md`). It no longer depends on T165.
+    - The API proxies the five endpoints under `/api/introspection/…`, signing the introspection token itself (T275). It retries Cube's "Continue wait".
+    - The Model workspace's **Generate cubes** flow:
+      1. data source, then schema, then tables, with search, a type filter and paging;
+      2. an optional look at a table's columns;
+      3. generate: the YAML for each table, with the columns Cube left unmapped and why;
+      4. save to the model store as `cubes/<file>`;
+      5. publish through the validate-then-publish flow (AC-136, AC-137).
+  - Files: `packages/api/src/model/introspection.ts` (+ test), `packages/api/src/server.ts`, `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test), the Model workspace's entry to it, `e2e/generate-cubes.spec.ts`
+  - Failing test:
+    - `introspection.test.ts`: the proxy passes each endpoint's parameters through, retries "Continue wait", and turns Cube's refusals into the API's.
+    - `e2e/generate-cubes.spec.ts`: from the sample source, three tables selected produce three cubes, each with its columns as dimensions, a count measure, and every unmapped column listed with its reason. Once published, a chart can ask the generated cubes across their join (AC-139).
+  - Depends on: T275, T142
+- [ ] T276 (AC-249) Refuse a generated cube whose name or file name is already in the model store, naming it
+  - Planned 2026-09-25 `[R10]`. Cube's scaffold knows nothing of wechart's model (research, "Scaffold ignores the existing model").
+    - The review step marks each clash: a cube name any model file declares, or a file path already stored. It names the existing cube or file.
+    - Save is refused while any selected table clashes. The user deselects it, and nothing existing is written.
+    - The API refuses a save that would overwrite a stored file, whatever the browser sent.
+  - Files: `packages/api/src/model/introspection.ts`, `packages/web/src/workspaces/model/GenerateCubes.tsx`, their tests, `e2e/generate-cubes.spec.ts`
+  - Failing test: generating `orders` when the model already has an `orders` cube marks it "`orders` is already a cube in cubes/orders.yml", refuses to save it, and leaves that file byte-for-byte unchanged (AC-249).
+  - Depends on: T145
 - [x] T146 (AC-140) Open Jinja, Python and JavaScript model files read-only with a reason
   - Files: `packages/web/src/workspaces/model/dynamicFiles.ts`, `packages/web/src/workspaces/model/dynamicFiles.test.ts`
   - Failing test: `dynamicFiles.test.ts`: a file containing `{{`, `{%` or `{#`, or a `.py`/`.js` model file, opens read-only in the code view with a stated reason and no editable form (AC-140).
@@ -4326,6 +4355,9 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
 | AC-237 | T270       | AC-238 | T270 | AC-239 | T268 | AC-240 | T269       |
 | AC-241 | T271       | AC-242 | T271 | AC-243 | T271 | AC-244 | T272       |
 | AC-245 | T273       | AC-246 | T266 | AC-247 | T267 | AC-248 | T274       |
+| AC-249 | T276       | AC-250 | T275 |        |      |        |            |
+
+AC-139 is covered by T145 and T275 (the fork's Cube and its scope, R10).
 
 AC-199 is also covered by T266 and T272 (its reworded Export item). AC-153 by T264, AC-154 by T160 and T264.
 

@@ -73,6 +73,7 @@ Not chosen as metrics, and so not tracked: retiring Spotfire seats on a deadline
 **Platform**
 
 - **Cube Core v1.7.42.** Cube Cloud-only capabilities are unavailable and must be built by wechart or dropped `[research/cube/*]`.
+  - **From 2026-09-25, the user's fork of Cube v1.7.45** (`cube:v1.7.45-introspection`: upstream v1.7.45 plus a data-source introspection API). It runs as both Cube and its refresh worker, in docker-compose and in the docker-desktop Helm release. It is built locally and pushed to no registry `[R10]`.
 - Consequences already established by research: Cube Core has no connection-management API, no build history beyond 24 hours, no users or groups, and dev mode bypasses authentication.
 
 **Devices**
@@ -162,7 +163,7 @@ From `docs/research/cube/` (Cube Core 1.7.42). **In** = phase 1. **Deferred** = 
 - **In:** dimensions — string, number, boolean, time, geo, switch; `case` bucketing, `sub_query`, proxy references, `order`, `primary_key`, `links`; the 8 default time granularities plus custom granularities.
 - **In:** segments, hierarchies, joins (`one_to_one`, `one_to_many`, `many_to_one`, directed) with a join-graph editor, views (`includes`, `excludes`, `prefix`, `alias`, member overrides, `extends`), view folders and groups, `default_filters`.
 - **In:** `refresh_key` and context variables (`CUBE`, `FILTER_PARAMS`, `FILTER_GROUP`, `SQL_UTILS`); reading and publishing the model (`/v1/meta`, `schemaVersion`).
-- **In:** **generating cubes from database tables**, by browsing a connection's schemas and tables `[R6 confirmation]`.
+- **In:** **generating cubes from database tables**, by browsing a connection's schemas and tables `[R6 confirmation]`. **Un-deferred 2026-09-25 `[R10]`:** browsing and generation go through the data-source introspection API in the user's Cube fork (`[docs/inputs/2026-09-25-cube-introspection-api.md]`). wechart browses through Cube, the user picks tables, and Cube returns generated YAML that it writes nowhere. wechart then saves that YAML to its own model store and publishes it through the existing validate-then-publish flow. Anyone may generate in phase 1. A generated cube whose name or file name is already in the model store is refused, naming the existing one, and nothing existing is overwritten `[R10]`.
 - **Deferred:** dynamic models (Jinja, Python `globals.py`, JavaScript `asyncModule`) `[R6]`.
 - **Deferred:** import from a dbt manifest or from LookML `[R6 confirmation]`.
 - **Deferred:** multi-tenant models (`contextToAppId`, `COMPILE_CONTEXT`) `[R6 confirmation]`.
@@ -347,3 +348,13 @@ Questions are Claude's; answers are the user's, verbatim.
   A: "Dashboards, charts, fields and models (Recommended)"
 - Q: The prototype puts a "History" button on every model file; wechart keeps only each file's current version, and a publish overwrites it. Should the Model workspace have history? (options: yes — versions, diff, restore / not in phase 1)
   A: "Not in phase 1"
+
+**R10 — generating cubes through Cube's introspection API** (2026-09-25, after the user added the API to a fork of Cube and wrote `docs/inputs/2026-09-25-cube-introspection-api.md`)
+
+- The user: "Use this ffor unblocking creating models form datasouce by introspections docs/inputs/2026-09-25-cube-introspection-api.md"
+- Q: Where should the fork's Cube image come from? The Helm chart and docker-compose would both switch cube and the refresh worker to it. (options: local build only / push to a registry)
+  A: "Local build only (Recommended)"
+- Q: Who may generate cubes from a data source? The introspection scope exposes the warehouse catalog. (options: anyone, phase 1 / model engineers only)
+  A: "Anyone, phase 1 (Recommended)"
+- Q: When a generated cube's name or file name matches one already in the model store, what should happen? (options: refuse and say which / rename automatically / ask per clash)
+  A: "Refuse and say which (Recommended)"
