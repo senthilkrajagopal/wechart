@@ -49,6 +49,28 @@ export function touchesSpan(shape: Shape, from: Point, to: Point): boolean {
   return edgesOf(shape).some(([a, b]) => segmentsMeet(from, to, a, b));
 }
 
+/**
+ * Whether the shape touches a rectangle, such as a bar as ECharts draws it:
+ * an edge of the rectangle inside or across the shape, or the shape wholly
+ * inside the rectangle.
+ */
+export function touchesRect(shape: Shape, x0: number, y0: number, x1: number, y1: number): boolean {
+  const corners: readonly Point[] = [
+    [x0, y0],
+    [x1, y0],
+    [x1, y1],
+    [x0, y1],
+  ];
+  if (
+    corners.some((corner, index) => touchesSpan(shape, corner, corners[(index + 1) % 4] ?? corner))
+  )
+    return true;
+  const [first] = edgesOf(shape);
+  return (
+    first !== undefined && insideShape({ kind: 'rect', x0, y0, x1, y1 }, first[0][0], first[0][1])
+  );
+}
+
 /** The shape's outline as segments, a lasso closed back to its start. */
 function edgesOf(shape: Shape): (readonly [Point, Point])[] {
   const points: readonly Point[] =

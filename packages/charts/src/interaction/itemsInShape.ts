@@ -1,5 +1,6 @@
+import { laidBarWidth } from '../series/bar';
 import type { EChartsOption } from '../theme';
-import { insideShape, touchesSpan, type Shape } from './hitTest';
+import { insideShape, touchesRect, type Shape } from './hitTest';
 
 /**
  * The items of a drawn chart that a marking shape touches (AC-088, AC-089,
@@ -27,6 +28,9 @@ export interface PixelConverter {
     finder: { readonly xAxisIndex?: number; readonly yAxisIndex?: number },
     value: number | string,
   ): number;
+  /** The chart's size, for a band's width where there is one category. */
+  getWidth?(): number;
+  getHeight?(): number;
 }
 
 export interface ShapeItem {
@@ -76,10 +80,34 @@ export function itemsInShape(
     seen.add(key);
     out.push({ name, seriesName });
   };
-  /** Where each stack has reached, per axis pair and category. */
+  /**
+   * Where each stack has reached, per axis pair, category and sign: ECharts
+   * 6.1 stacks by sign by default (`stackStrategy: 'samesign'`), so a
+   * negative segment grows down from the baseline, not from the top of the
+   * positive ones (T190 stage 7's review).
+   */
   const stacked = new Map<string, number>();
+  const allSeries = list<Series>(option['series']);
+  /**
+   * The bars side by side in each band, per axis pair: every unstacked bar
+   * series a column of its own, and a stack one — as ECharts lays them out
+   * (`laidBarWidth`, research/echarts-bar-density.md). Overlaid bars
+   * (`barGap: '-100%'`) share one.
+   */
+  const columnsOf = new Map<string, string[]>();
+  allSeries.forEach((series, seriesIndex) => {
+    if (series.type !== 'bar') return;
+    const axes = `${String(series.xAxisIndex ?? 0)}|${String(series.yAxisIndex ?? 0)}`;
+    const columns = columnsOf.get(axes) ?? [];
+    const overlaid = (series as { barGap?: unknown }).barGap === '-100%';
+    const column = overlaid
+      ? (columns[0] ?? 'overlay')
+      : (series.stack ?? `alone-${String(seriesIndex)}`);
+    if (!columns.includes(column)) columns.push(column);
+    columnsOf.set(axes, columns);
+  });
 
-  list<Series>(option['series']).forEach((series, seriesIndex) => {
+  allSeries.forEach((series, seriesIndex) => {
     const xi = series.xAxisIndex ?? 0;
     const yi = series.yAxisIndex ?? 0;
     const xAxis = xAxes[xi] ?? {};
@@ -116,20 +144,51 @@ export function itemsInShape(
       const amount = Number(value);
       if (!Number.isFinite(amount)) return;
 
-      const key = `${series.stack ?? `alone-${String(seriesIndex)}`}|${String(xi)}|${String(yi)}|${String(index)}`;
-      const base = series.stack === undefined ? 0 : (stacked.get(key) ?? 0);
-      const top = base + amount;
+      // A log axis starts its bars at 1, where 0 has no place at all
+      // (ECharts' `Log.getDefaultStartValue`); and a value it cannot place
+      // is not marked, rather than turning every comparison into NaN.
+      const valueAxis = horizontal ? xAxis : yAxis;
+      const origin = valueAxis.type === 'log' ? 1 : 0;
+      const sign = amount < 0 ? '-' : '+';
+      const key = `${series.stack ?? `alone-${String(seriesIndex)}`}|${String(xi)}|${String(yi)}|${String(index)}|${sign}`;
+      const base = series.stack === undefined ? origin : (stacked.get(key) ?? origin);
+      const top = series.stack === undefined || origin === 0 ? base + amount : amount;
       if (series.stack !== undefined) stacked.set(key, top);
 
-      const at = (along: number): [number, number] =>
-        horizontal ? [px(along), py(index)] : [px(index), py(along)];
+      const onCategory = (at: number) => (horizontal ? py(at) : px(at));
+      const onValue = (at: number) => (horizontal ? px(at) : py(at));
+      const [from, to] = [onValue(base), onValue(top)];
+      if (!Number.isFinite(from) || !Number.isFinite(to)) return;
 
       if (series.type === 'line') {
-        const [x, y] = at(top);
-        if (insideShape(shape, x, y)) take(name, seriesName);
+        const centre = onCategory(index);
+        const [x, y] = horizontal ? [to, centre] : [centre, to];
+        if (Number.isFinite(centre) && insideShape(shape, x, y)) take(name, seriesName);
         return;
       }
-      if (touchesSpan(shape, at(base), at(top))) take(name, seriesName);
+
+      // The rectangle ECharts draws: its column's slot in the band.
+      const band =
+        categories.length > 1
+          ? Math.abs(onCategory(1) - onCategory(0))
+          : (horizontal ? (chart.getHeight?.() ?? 0) : (chart.getWidth?.() ?? 0)) * 0.8;
+      const columns = columnsOf.get(`${String(xi)}|${String(yi)}`) ?? [];
+      const overlaid = (series as { barGap?: unknown }).barGap === '-100%';
+      const column = Math.max(
+        0,
+        columns.indexOf(
+          overlaid ? (columns[0] ?? '') : (series.stack ?? `alone-${String(seriesIndex)}`),
+        ),
+      );
+      const width = laidBarWidth(band, 1, Math.max(1, columns.length));
+      const group = columns.length * width + (columns.length - 1) * 0.1 * width;
+      const centre = onCategory(index) - group / 2 + width / 2 + column * 1.1 * width;
+      if (!Number.isFinite(centre)) return;
+      const [a, b] = [centre - width / 2, centre + width / 2];
+      const touched = horizontal
+        ? touchesRect(shape, Math.min(from, to), a, Math.max(from, to), b)
+        : touchesRect(shape, a, Math.min(from, to), b, Math.max(from, to));
+      if (touched) take(name, seriesName);
     });
   });
 

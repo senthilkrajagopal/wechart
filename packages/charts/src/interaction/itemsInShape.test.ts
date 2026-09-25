@@ -127,6 +127,73 @@ describe('what a shape touches on a chart', () => {
     ]);
   });
 
+  // T190 stage 7's review: a bar is the rectangle ECharts draws, not its centre line.
+  it('takes a wide bar by its edge, not only across its centre', () => {
+    // Three bands of 100 px: one bar per band is 100 − 31% = 69 px wide, centred.
+    const shape = { kind: 'rect', x0: 70, y0: 290, x1: 80, y1: 299 } as const;
+
+    expect(itemsInShape(converter, bars(), shape)).toEqual([
+      { name: 'completed', seriesName: 'Count' },
+    ]);
+  });
+
+  it('takes a grouped bar by its own slot in the band, not its neighbour', () => {
+    const option: EChartsOption = {
+      xAxis: { type: 'category', data: ['a', 'b'] },
+      yAxis: { type: 'value' },
+      series: [
+        { type: 'bar', name: 'North', data: [50, 50] },
+        { type: 'bar', name: 'South', data: [50, 50] },
+      ],
+    };
+    // Band 0 is x 0–100. Two columns: each (100 − 27) / 2.1 ≈ 34.8 px, 10% of
+    // one apart, the pair 73 wide and centred on 50 — North 13.5–48.3, South
+    // 51.7–86.5, and the gap between them 48.3–51.7.
+    const overSouth = { kind: 'rect', x0: 60, y0: 280, x1: 80, y1: 299 } as const;
+    const inTheGap = { kind: 'rect', x0: 49, y0: 280, x1: 51, y1: 299 } as const;
+
+    expect(itemsInShape(converter, option, overSouth)).toEqual([
+      { name: 'a', seriesName: 'South' },
+    ]);
+    expect(itemsInShape(converter, option, inTheGap)).toEqual([]);
+  });
+
+  it('stacks a negative segment below the baseline, as ECharts does by sign', () => {
+    const option: EChartsOption = {
+      xAxis: { type: 'category', data: ['a'] },
+      yAxis: { type: 'value' },
+      series: [
+        { type: 'bar', name: 'Up', stack: 'total', data: [100] },
+        { type: 'bar', name: 'Down', stack: 'total', data: [-30] },
+      ],
+    };
+    // Below the foot (y > 300 is below zero): only the negative segment.
+    const below = { kind: 'rect', x0: 45, y0: 310, x1: 55, y1: 320 } as const;
+    // At 80, inside the positive bar: not the negative one too.
+    const at80 = { kind: 'rect', x0: 45, y0: 215, x1: 55, y1: 225 } as const;
+
+    expect(itemsInShape(converter, option, below)).toEqual([{ name: 'a', seriesName: 'Down' }]);
+    expect(itemsInShape(converter, option, at80)).toEqual([{ name: 'a', seriesName: 'Up' }]);
+  });
+
+  it('starts a bar at 1 on a log axis, and never marks what it cannot place', () => {
+    const logarithmic: PixelConverter = {
+      convertToPixel(finder, value) {
+        if (finder.xAxisIndex !== undefined) return 100 * Number(value) + 50;
+        // log10: 1 at the foot (300), 10 at 200, 100 at 100; 0 is -Infinity.
+        return 300 - 100 * Math.log10(Number(value));
+      },
+    };
+    const option: EChartsOption = {
+      xAxis: { type: 'category', data: ['a', 'b', 'c'] },
+      yAxis: { type: 'log' },
+      series: [{ type: 'bar', name: 'Count', data: [100, 10, 1000] }],
+    };
+    const overA = { kind: 'rect', x0: 40, y0: 150, x1: 60, y1: 160 } as const;
+
+    expect(itemsInShape(logarithmic, option, overA)).toEqual([{ name: 'a', seriesName: 'Count' }]);
+  });
+
   it('skips a gap a series has no value for', () => {
     const option: EChartsOption = {
       xAxis: { type: 'category', data: ['a', 'b'] },

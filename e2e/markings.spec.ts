@@ -236,7 +236,11 @@ async function clickBar(
   page: Page,
   target: Locator,
   category: string,
-  modifiers: ('Control' | 'Meta')[] = [],
+  /**
+   * `ControlOrMeta` is Ctrl, or ⌘ on a Mac — where Ctrl+click is the context
+   * menu, which a press does not survive (T190 stage 7's review).
+   */
+  modifiers: ('ControlOrMeta' | 'Meta')[] = [],
 ) {
   const label = target.locator('svg text', { hasText: category }).first();
   await expect(label).toBeVisible();
@@ -343,13 +347,13 @@ test('a plain click replaces the marking, and Ctrl-click adds to it', async ({ p
   await expect(page.getByTestId('mark-chip')).not.toContainText('shipped');
 
   // Ctrl-click toggles that one item and leaves the rest (AC-087).
-  await clickBar(page, status, 'shipped', ['Control']);
+  await clickBar(page, status, 'shipped', ['ControlOrMeta']);
   await expect(status.getByTestId('mark-badge')).toContainText('2 marked');
   await expect(page.getByTestId('mark-chip')).toContainText('completed');
   await expect(page.getByTestId('mark-chip')).toContainText('shipped');
 
   // The same item again takes it back off, leaving the other.
-  await clickBar(page, status, 'shipped', ['Control']);
+  await clickBar(page, status, 'shipped', ['ControlOrMeta']);
   await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
 });
 
@@ -398,9 +402,10 @@ test('a legend entry marks its whole category, and does not hide the series', as
     .toBeGreaterThan(0);
 
   // Ctrl-click adds a further category, where Ctrl on an item toggles one.
-  await page.keyboard.down('Control');
+  // ⌘ on a Mac, where Ctrl+click is the context menu (T190 stage 7's review).
+  await page.keyboard.down('ControlOrMeta');
   await split.locator('svg text', { hasText: 'Instruments' }).first().click();
-  await page.keyboard.up('Control');
+  await page.keyboard.up('ControlOrMeta');
   await expect(split.getByTestId('mark-badge')).toContainText('2 marked');
 });
 
@@ -849,7 +854,7 @@ test('the same set of marks asks Cube the same question, whatever order it was m
 
   // shipped, then completed.
   await clickBar(page, master, 'shipped');
-  await clickBar(page, master, 'completed', ['Control']);
+  await clickBar(page, master, 'completed', ['ControlOrMeta']);
   await expect(details.getByTestId('chart-canvas')).toBeVisible();
   // Generously, because this waits on a round trip to Cube under whatever
   // load the rest of the suite is putting on it.
@@ -863,7 +868,7 @@ test('the same set of marks asks Cube the same question, whatever order it was m
   await expect(master.getByTestId('chart-canvas')).toBeVisible();
   asked.length = 0;
   await clickBar(page, master, 'completed');
-  await clickBar(page, master, 'shipped', ['Control']);
+  await clickBar(page, master, 'shipped', ['ControlOrMeta']);
   await expect(details.getByTestId('chart-canvas')).toBeVisible();
   await expect
     .poll(() => asked.filter((body) => body.includes('shipped')).length, { timeout: 20_000 })
@@ -1006,16 +1011,20 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
   let menu = await openMenu();
   // The marked-rows group first, headed by the tile's marking and its count.
   const marked = menu.getByRole('group', { name: 'Marking · 1 marked' });
+  // Filter to and out of marked first, as the prototype's group (T119, AC-113).
   await expect(marked.getByRole('button')).toHaveText([
+    'Filter to marked',
+    'Filter out marked',
     'Invert marking',
     'Mark all',
     'Unmark',
     'Create details tile',
   ]);
   await expect(
-    menu
-      .getByRole('button')
-      .filter({ hasNotText: /^(Invert marking|Mark all|Unmark|Create details tile)$/ }),
+    menu.getByRole('button').filter({
+      hasNotText:
+        /^(Filter to marked|Filter out marked|Invert marking|Mark all|Unmark|Create details tile)$/,
+    }),
   ).toHaveText(['View as table', 'View query', 'Download CSV', 'Edit chart']);
 
   // View as table: the tile shows its rows.
@@ -1334,7 +1343,7 @@ test('Invert marking and Mark all change one tile’s items, and keep another ti
   const category = tile(page, 'tile-category');
   // The status tile's shipped, and — added with Ctrl — the category tile's Instruments.
   await clickBar(page, status, 'shipped');
-  await clickBar(page, category, 'Instruments', ['Control']);
+  await clickBar(page, category, 'Instruments', ['ControlOrMeta']);
   await expect(status.getByTestId('mark-badge')).toContainText('2 marked');
   /** How many of a tile's bars are faded — unmarked — and how many drawn. */
   const faded = async (target: Locator) => {
@@ -1387,7 +1396,7 @@ test('Invert marking and Mark all change one tile’s items, and keep another ti
   );
 
   // A Ctrl-click then takes one status away, as on any marked item.
-  await clickBar(page, status, 'completed', ['Control']);
+  await clickBar(page, status, 'completed', ['ControlOrMeta']);
   await expect(status.getByTestId('mark-badge')).toContainText('3 marked');
   await expect.poll(() => faded(status)).toBe('1 of 3');
   await expect.poll(() => opacityAt('completed')).toBe(0.28);
@@ -1491,11 +1500,6 @@ test('Create details tile adds a tile limited by the tile’s marking, its messa
 });
 
 /**
- * T112 / AC-106: WHILE a dashboard is in edit mode, THE SYSTEM SHALL select
- * the tile on click and change no marking.
- * `Fails when: clicking a chart in edit mode changes a marking.`
- */
-/**
  * AC-088: WHEN the user drags a rectangle, or Alt-drags a lasso, over a tile
  * that marks, THE SYSTEM SHALL mark every item the shape touches, and a
  * press-and-release without movement SHALL be treated as a click, not a
@@ -1539,7 +1543,7 @@ test.describe('marking with a shape', () => {
   async function drag(
     page: Page,
     path: readonly (readonly [number, number])[],
-    keys: ('Control' | 'Meta' | 'Alt')[] = [],
+    keys: ('ControlOrMeta' | 'Meta' | 'Alt')[] = [],
   ) {
     const [first, ...rest] = path;
     if (first === undefined) return;
@@ -1623,7 +1627,7 @@ test.describe('marking with a shape', () => {
       [centre(left) - 3, top],
       [centre(middle) + 3, foot],
     ] as const;
-    await drag(page, overLeftTwo, ['Control']);
+    await drag(page, overLeftTwo, ['ControlOrMeta']);
     await expect(badge).toContainText('2 marked');
     await expect(chip).toContainText(left.name);
     await expect(chip).toContainText(middle.name);
@@ -1635,15 +1639,75 @@ test.describe('marking with a shape', () => {
         [centre(right) - 3, top],
         [centre(right) + 3, foot],
       ],
-      ['Control'],
+      ['ControlOrMeta'],
     );
     await expect(badge).toContainText('3 marked');
 
     // Over the left two again, both marked: toggled off, the right one kept.
-    await drag(page, overLeftTwo, ['Control']);
+    await drag(page, overLeftTwo, ['ControlOrMeta']);
     await expect(badge).toContainText('1 marked');
     await expect(chip).toContainText(right.name);
     await expect(chip).not.toContainText(left.name);
+  });
+
+  // T190 stage 7's review: a gesture is one thing — a click, a shape, a
+  // context menu — and belongs to the tile it began on.
+  test('a drag out and back, a right-click, an overshoot and an empty drag each do one thing', async ({
+    page,
+    request,
+  }) => {
+    const { id, title } = await markingDashboard(request, { second: true });
+    await open(page, id, title);
+    const status = tile(page, 'tile-status');
+    const category = tile(page, 'tile-category');
+    const [left, middle] = await labelsOf(status, ['completed', 'shipped', 'processing']);
+    if (left === undefined || middle === undefined) throw new Error('axis');
+    const badge = status.getByTestId('mark-badge');
+    const foot = left.y - 8;
+
+    // Ctrl, out 20 px and back onto the same bar: the shape toggles it off,
+    // and no click toggles it back on.
+    await clickBar(page, status, left.name);
+    await expect(badge).toContainText('1 marked');
+    await drag(
+      page,
+      [
+        [centre(left), foot],
+        [centre(left) + 20, foot - 20],
+        [centre(left) + 1, foot],
+      ],
+      ['ControlOrMeta'],
+    );
+    await expect(badge).toHaveCount(0);
+
+    // A right-click on a bar marks nothing.
+    await page.mouse.click(centre(middle), foot, { button: 'right' });
+    await expect(badge).toHaveCount(0);
+
+    // The other tile marks with its own marking; a drag on this one that
+    // ends over it leaves that marking alone.
+    await clickBar(page, category, 'Instruments');
+    const categoryBadge = category.getByTestId('mark-badge');
+    await expect(categoryBadge).toContainText('1 marked');
+    const into = await category.getByTestId('chart-canvas').boundingBox();
+    if (into === null) throw new Error('no canvas');
+    await drag(page, [
+      [centre(left) - 3, left.y - 40],
+      [into.x + into.width / 2, into.y + 20],
+    ]);
+    await expect(categoryBadge).toContainText('1 marked');
+
+    // A plain drag over nothing on this tile replaces its marking with nothing.
+    await clickBar(page, status, middle.name);
+    await expect(badge).toContainText('1 marked');
+    const box = await status.getByTestId('chart-canvas').boundingBox();
+    if (box === null) throw new Error('no canvas');
+    await drag(page, [
+      [box.x + 4, box.y + 4],
+      [box.x + 30, box.y + 12],
+    ]);
+    await expect(badge).toHaveCount(0);
+    await expect(categoryBadge).toContainText('1 marked');
   });
 });
 
@@ -1871,6 +1935,11 @@ test('a shape over more than 1,000 items marks 1,000 and says why, and Mark all 
   await expect(badge).toContainText('1,500 marked');
 });
 
+/**
+ * T112 / AC-106: WHILE a dashboard is in edit mode, THE SYSTEM SHALL select
+ * the tile on click and change no marking.
+ * `Fails when: clicking a chart in edit mode changes a marking.`
+ */
 test('a click while editing selects the tile and leaves the marking as it was', async ({
   page,
   request,
@@ -1890,7 +1959,7 @@ test('a click while editing selects the tile and leaves the marking as it was', 
   // — a plain click on another bar, a Ctrl-click, a click on another tile.
   await clickBar(page, status, 'completed');
   await expect(status).toHaveAttribute('data-selected', 'true');
-  await clickBar(page, status, 'completed', ['Control']);
+  await clickBar(page, status, 'completed', ['ControlOrMeta']);
   await clickBar(page, category, 'Instruments');
   await expect(category).toHaveAttribute('data-selected', 'true');
   await expect(status).not.toHaveAttribute('data-selected', /./);

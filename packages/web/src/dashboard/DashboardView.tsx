@@ -738,6 +738,13 @@ interface TileCharts {
     | ((tileId: string, chartId: string, items: readonly ClickedItem[], toggle: boolean) => void)
     | undefined;
   /**
+   * Whether a shape dragged over this tile can mark anything: a chart on
+   * axes, marking with a marking. A pie, a treemap, a KPI, a table or a
+   * pivot, and a tile set to "(None)", draw no rubber band that would mark
+   * nothing (T190 stage 7's review, `dragOverlay.ts`'s own failing state).
+   */
+  readonly marksShapes?: ((tileId: string, chartId: string) => boolean) | undefined;
+  /**
    * Marking a table tile's rows (AC-092): the marking it shows, the key that
    * identifies its rows, and where a row click goes.
    */
@@ -1252,7 +1259,8 @@ function Elements({
                       charts.onMarkClick?.(element.id, chartId, item, toggle);
                     },
                   })}
-              {...(charts.onMarkShape === undefined
+              {...(charts.onMarkShape === undefined ||
+              charts.marksShapes?.(element.id, chartId) !== true
                 ? {}
                 : {
                     onShapeMark: (items: readonly ClickedItem[], toggle: boolean) => {
@@ -2296,7 +2304,13 @@ export function DashboardView({
       const value = clickedValue(spec, item);
       if (value !== undefined) enclosed.push([{ member: value.member, value: value.value }]);
     }
-    if (enclosed.length === 0) return;
+    if (enclosed.length === 0) {
+      // A plain shape over nothing replaces the marking with nothing — "marks
+      // the items touched, replacing the marking" (direction.md rule 47) — as
+      // a click on empty plot area does; with Ctrl or ⌘ it adds nothing.
+      if (!toggle) onMarkClick(tileId, chartId, {}, false);
+      return;
+    }
 
     const held = markingOf(marks, markingId);
     // A tile marked whole (Mark all), as its items again, as a Ctrl-click
@@ -2845,6 +2859,19 @@ export function DashboardView({
     return all;
   }, [notCovered, reached, filtered, crossEffects, highlighted]);
 
+  /** Whether a shape over this tile can mark anything (T190 stage 7's review). */
+  const marksShapes = (tileId: string, chartId: string) => {
+    const tile = elementAt(live, tileId);
+    const type = drawn.specs[chartId]?.chartType;
+    const markingId = tile !== null && isTile(tile) ? marksWithOf(tile) : undefined;
+    return (
+      markingId !== undefined &&
+      markingId !== '' &&
+      notLinked[chartId] === undefined &&
+      type !== undefined &&
+      !['pie', 'donut', 'treemap', 'kpi', 'table', 'pivot'].includes(type)
+    );
+  };
   const charts: TileCharts = {
     specs: withWholes,
     errors: withFiltered.errors,
@@ -2855,7 +2882,7 @@ export function DashboardView({
      * a click picks the tile up.
      */
     ...(crossFiltering ? { onItemClick } : {}),
-    ...(marking ? { onMarkClick, onMarkShape, notLinked } : {}),
+    ...(marking ? { onMarkClick, onMarkShape, marksShapes, notLinked } : {}),
     /**
      * Not gated on `marking`: a limited tile explains itself while the
      * dashboard is being edited too, where clicking selects the tile rather

@@ -40,6 +40,12 @@ export interface ItemClick {
 export interface ItemClicks {
   readonly down: (event: ItemEvent) => void;
   readonly up: (event: ItemEvent) => void;
+  /**
+   * Forget the press under way: it became something else — a drag, or a
+   * context menu (a right-click, or macOS's Ctrl+click, which presses the
+   * primary button) — so its release is no click.
+   */
+  readonly cancel: () => void;
 }
 
 /**
@@ -75,6 +81,9 @@ export function itemClicks(onClick: (click: ItemClick) => void): ItemClicks {
       // The modifier is read from the release, which is what the user was
       // holding when they committed to it.
       onClick({ item: event.item, toggle: event.toggle });
+    },
+    cancel() {
+      pressed = null;
     },
   };
 }

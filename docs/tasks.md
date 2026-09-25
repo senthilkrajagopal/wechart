@@ -3370,6 +3370,25 @@ Each task below measures its components' computed styles in `e2e/design-conforma
         - Ctrl-dragging over a partly marked pair adds, over an unmarked bar toggles it on, and over the wholly marked pair toggles them off.
       - All failed first, for want of the drag.
     - **Ticked here: AC-088, AC-089.**
+    - **Review 2026-09-25 (cold, FAIL), fixed once:**
+      - **Log axes.** A shape on a log value axis marked every bar: its base was 0, whose pixel is infinite. A bar now starts at 1 there, as ECharts' does, and an item whose pixels are not finite is not marked.
+      - **Bars are hit as the rectangles ECharts draws**, not their centre line. Each column's slot in the band follows ECharts' own layout (`laidBarWidth`, `research/echarts-bar-density.md`): unstacked series a column each, a stack one, and overlaid bars one. So a grouped bar is found by its own slot, and a wide bar by its edge. `hitTest.touchesRect` is exact, as `touchesSpan` is.
+      - **Mixed-sign stacks** stack by sign, as ECharts 6.1 does (`samesign`). A negative segment is found below the baseline.
+      - **A drag is never also a click.** An out-and-back drag ending on its bar, or a drag along a trellis header, fired both. The series and header releases now defer to a drag under way, and a header press is told apart by where it happened. `itemClicks.cancel` was added, and `itemClick.test.ts` covers it.
+      - **Only the primary button marks.** zrender reports every button alike, so a right-click marked the item under it, or unmarked from empty plot area. A context menu opening cancels any press under way. That includes macOS's Ctrl+click, which presses the primary button (`research/context-menu-and-submenus.md`).
+        - So on a Mac, toggling is ⌘ (AC-087 and AC-089 name both keys).
+        - The e2e now presses `ControlOrMeta`, which is ⌘ on a Mac. Before, it pressed Control, the Mac's context-menu gesture. On Windows and Linux it is Ctrl, as before.
+      - **A release belongs to the tile it was pressed on.** A drag overshooting onto a neighbouring tile no longer clears that tile's marking.
+      - **A lost release ends the drag.** One that never arrives (another window, a context menu, the window losing focus) ends the drag with nothing marked, and a release of another button mid-drag is ignored.
+      - **No rubber band** on a pie, donut, treemap, KPI, table or pivot, a tile set to "(None)", or a tile that can't reach its marking.
+      - **A plain drag over nothing** replaces the marking with nothing, as direction.md rule 47 has it, like a click on empty plot area. With Ctrl or ⌘ it adds nothing.
+      - **The tooltip** is hidden on every move of a drag, not only the first.
+      - **Tests added:**
+        - `itemsInShape.test.ts`: a bar's edge, a grouped bar's slot and the gap beside it, a mixed-sign stack, a log axis. All four failed first.
+        - `e2e/markings.spec.ts` "a drag out and back, a right-click, an overshoot and an empty drag each do one thing", in all three browsers.
+      - **Also fixed:** the AC-106 test's doc comment, which stage 7's block had separated from its test.
+      - **Left as is:** a heatmap cell marks its column, as a click on it does (older than this stage). The part of a bar clipped off the plot when the axis leaves out zero can still be hit.
+      - **A slip in T119's commit:** its new menu items broke "a chart tile's menu offers…". I had run only T119's own test before committing. The list is updated here, and the whole markings suite (102 tests) passes.
   - **Stage 8, 2026-09-25: the 1,000-item cap on a real tile (AC-102).**
     - T108 built the rule. It was ticked on `limit.test.ts` on 2026-09-20 and has been shown on a tile only now.
     - `e2e/markings.spec.ts` "a shape over more than 1,000 items…" uses a cube of the browser's own over `generate_series(1, 1500)`, drawn as a 1,500-bar tile (a bar chart folds categories only when its Top N is set).

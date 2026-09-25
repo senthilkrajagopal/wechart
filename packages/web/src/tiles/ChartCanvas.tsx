@@ -94,6 +94,8 @@ export function ChartCanvas({
    * unmark the tile's marking.
    */
   const dragging = useRef(false);
+  /** Whether the primary button went down on this chart, so its release is this chart's. */
+  const pressedHere = useRef(false);
 
   useLayoutEffect(() => {
     const element = node.current;
@@ -143,7 +145,7 @@ export function ChartCanvas({
       event?: {
         offsetX?: number;
         offsetY?: number;
-        event?: { ctrlKey?: boolean; metaKey?: boolean };
+        event?: { ctrlKey?: boolean; metaKey?: boolean; button?: number };
       };
     }) => ({
       // The pair carries both names; which one a click stands for is the
@@ -155,12 +157,26 @@ export function ChartCanvas({
       // zrender carries the browser's own event under `event.event`.
       toggle: params.event?.event?.ctrlKey === true || params.event?.event?.metaKey === true,
     });
+    /**
+     * Only the primary button marks (T190 stage 7's review): zrender reports
+     * every button's press and release alike, so a right-click marked the
+     * item under it, or unmarked the tile from empty plot area.
+     */
+    const primary = (params: unknown) =>
+      ((params as Parameters<typeof at>[0]).event?.event?.button ?? 0) === 0;
     const onDown = (params: unknown) => {
+      if (!primary(params)) return;
       clicks.down(at(params as Parameters<typeof at>[0]));
     };
     const onUp = (params: unknown) => {
+      if (!primary(params)) return;
       // So the release on the wrapper below knows an item took this click.
       onItem.current = true;
+      // A drag that came back to where it began is a shape, never a click too.
+      if (dragging.current) {
+        clicks.cancel();
+        return;
+      }
       clicks.up(at(params as Parameters<typeof at>[0]));
     };
     /**
@@ -183,17 +199,28 @@ export function ChartCanvas({
       onItem.current = true;
       clicked.current?.({ panelIndex: Number(item) }, toggle);
     });
-    const panelAt = (params: { componentIndex?: number }) => ({
+    // Where on the header, so a drag along it is told from a click on it.
+    const panelAt = (params: {
+      componentIndex?: number;
+      event?: { offsetX?: number; offsetY?: number };
+    }) => ({
       item: String(params.componentIndex ?? 0),
-      x: 0,
-      y: 0,
+      x: params.event?.offsetX ?? 0,
+      y: params.event?.offsetY ?? 0,
       toggle: false,
     });
     const onTitleDown = (params: unknown) => {
-      panelClicks.down(panelAt(params as { componentIndex?: number }));
+      if (!primary(params)) return;
+      panelClicks.down(panelAt(params as Parameters<typeof panelAt>[0]));
     };
     const onTitleUp = (params: unknown) => {
-      panelClicks.up(panelAt(params as { componentIndex?: number }));
+      if (!primary(params)) return;
+      if (dragging.current) {
+        onItem.current = true;
+        panelClicks.cancel();
+        return;
+      }
+      panelClicks.up(panelAt(params as Parameters<typeof panelAt>[0]));
     };
     chart.on('mousedown', 'title', onTitleDown);
     chart.on('mouseup', 'title', onTitleUp);
@@ -229,9 +256,10 @@ export function ChartCanvas({
         band.setAttribute('class', 'mark-drag');
         band.setAttribute('aria-hidden', 'true');
         element.appendChild(band);
-        // The tooltip would sit over what is being drawn round.
-        chart.dispatchAction({ type: 'hideTip' });
       }
+      // The tooltip would sit over what is being drawn round, and comes back
+      // as the pointer moves over marks.
+      chart.dispatchAction({ type: 'hideTip' });
       const first = path[0] ?? [0, 0];
       const last = path[path.length - 1] ?? first;
       band.innerHTML = '';
@@ -247,7 +275,27 @@ export function ChartCanvas({
       }
       band.appendChild(outline);
     };
+    /**
+     * A drag given up without a release: the button came up where the page
+     * could not see it (another window, a context menu), or the window lost
+     * focus. Nothing is marked, and nothing is left following the pointer.
+     */
+    const abandon = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onRelease);
+      window.removeEventListener('blur', abandon);
+      band?.remove();
+      band = null;
+      path = [];
+      queueMicrotask(() => {
+        dragging.current = false;
+      });
+    };
     const onMove = (event: MouseEvent) => {
+      if ((event.buttons & 1) === 0) {
+        abandon();
+        return;
+      }
       const [x, y] = local(event);
       gesture.move({ x, y, alt: lasso });
       const first = path[0] ?? [x, y];
@@ -257,8 +305,11 @@ export function ChartCanvas({
       draw();
     };
     const onRelease = (event: MouseEvent) => {
+      // Another button coming up mid-drag ends nothing: the drag is the primary's.
+      if (event.button !== 0) return;
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onRelease);
+      window.removeEventListener('blur', abandon);
       band?.remove();
       band = null;
       toggleOnRelease = event.ctrlKey || event.metaKey;
@@ -271,6 +322,17 @@ export function ChartCanvas({
         dragging.current = false;
       });
     };
+    /**
+     * A context menu opening — a right-click, or macOS's Ctrl+click, which
+     * presses the primary button — ends every press under way: it is not a
+     * click on anything, nor the start of a shape (T190 stage 7's review).
+     */
+    const onContextMenu = () => {
+      clicks.cancel();
+      panelClicks.cancel();
+      if (path.length > 0) abandon();
+    };
+    element.addEventListener('contextmenu', onContextMenu);
     const onPress = (event: MouseEvent) => {
       if (event.button !== 0 || shaped.current === undefined) return;
       const box = element.getBoundingClientRect();
@@ -282,13 +344,16 @@ export function ChartCanvas({
       gesture.down({ x, y, alt: lasso });
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onRelease);
+      window.addEventListener('blur', abandon);
     };
     element.addEventListener('mousedown', onPress);
 
     return () => {
       element.removeEventListener('mousedown', onPress);
+      element.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onRelease);
+      window.removeEventListener('blur', abandon);
       band?.remove();
       chart.off('mousedown', onDown);
       chart.off('mouseup', onUp);
@@ -352,12 +417,20 @@ export function ChartCanvas({
        * rather than here.
        */
 
-      onMouseDown={() => {
+      onMouseDown={(event) => {
+        if (event.button !== 0) return;
         onItem.current = false;
+        pressedHere.current = true;
       }}
       onMouseUp={(event) => {
+        if (event.button !== 0) return;
+        // A release this chart was not pressed in — a drag that began on
+        // another tile and overshot onto this one — is nobody's click here
+        // (T190 stage 7's review).
+        const mine = pressedHere.current;
+        pressedHere.current = false;
         // The end of a shape dragged over the chart, not a click (AC-088).
-        if (onItem.current || dragging.current) return;
+        if (!mine || onItem.current || dragging.current) return;
         /**
          * A release no mark took. Two things it can be: a legend entry,
          * which marks every item of that category (AC-090), or empty plot

@@ -114,4 +114,17 @@ describe('recognising a click on a chart item', () => {
 
     expect(onClick).toHaveBeenCalledTimes(1);
   });
+
+  it('forgets a press that became something else, so its release is no click', () => {
+    // A drag out and back, or a context menu (macOS Ctrl+click presses the
+    // primary button): T190 stage 7's review.
+    const onClick = vi.fn();
+    const clicks = itemClicks(onClick);
+
+    clicks.down(press('bar-1', 10, 10));
+    clicks.cancel();
+    clicks.up(press('bar-1', 10, 10));
+
+    expect(onClick).not.toHaveBeenCalled();
+  });
 });
