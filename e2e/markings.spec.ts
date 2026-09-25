@@ -1263,6 +1263,62 @@ test('Invert marking and Mark all change one tile’s items, and keep another ti
 });
 
 /**
+ * T118 / AC-112: WHEN the user chooses "Create details tile" on a tile, THE
+ * SYSTEM SHALL add a tile limited by that tile's marking, with its
+ * nothing-marked message pre-filled.
+ * `Fails when: the new tile is not limited by the marking, or has no message.`
+ *
+ * From the tile's ⋯ marked-rows group (AC-199), then saved and read.
+ */
+test('Create details tile adds a tile limited by the tile’s marking, its message filled in', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  const statuses = (await axisLabels(status)).filter((text) => !/^[\d.,]+$/.test(text));
+  expect(statuses.length).toBeGreaterThan(1);
+  const tiles = page.getByTestId('grid-item');
+  const before = await tiles.count();
+
+  await status.getByRole('button', { name: /^Actions for / }).click();
+  await status
+    .getByRole('list', { name: /^Actions for / })
+    .getByRole('group', { name: /marked$/ })
+    .getByRole('button', { name: 'Create details tile' })
+    .click();
+
+  // Beside it, in edit mode, chosen.
+  const bar = page.getByRole('toolbar', { name: 'Dashboard editing' });
+  await expect(bar).toBeVisible();
+  await expect(tiles).toHaveCount(before + 1);
+  const details = page.locator('[data-tile][data-selected="true"]');
+  await expect(details).toBeVisible();
+  const madeId = (await details.getAttribute('data-tile')) ?? '';
+  const order = await tiles.evaluateAll((all) => all.map((each) => each.getAttribute('data-tile')));
+  expect(order[order.indexOf('tile-status') + 1]).toBe(madeId);
+
+  await bar.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(bar).toBeHidden();
+  const made = tile(page, madeId);
+
+  // Nothing marked: its message, naming the tile to mark in.
+  await expect(made.getByTestId('nothing-marked')).toContainText(
+    'Nothing is marked in By status. Mark something there to fill this tile.',
+  );
+  // Marked: only what is marked, while the tile it came from draws everything.
+  await clickBar(page, status, 'shipped');
+  await expect(made.getByTestId('chart-canvas')).toBeVisible();
+  // The details of By status: a chart of its own, so named.
+  await expect(made).toContainText('Details: By status');
+  await expect
+    .poll(async () => (await axisLabels(made)).filter((text) => statuses.includes(text)))
+    .toEqual(['shipped']);
+  expect((await axisLabels(status)).filter((text) => statuses.includes(text))).toEqual(statuses);
+});
+
+/**
  * T112 / AC-106: WHILE a dashboard is in edit mode, THE SYSTEM SHALL select
  * the tile on click and change no marking.
  * `Fails when: clicking a chart in edit mode changes a marking.`

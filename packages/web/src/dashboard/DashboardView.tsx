@@ -70,6 +70,7 @@ import { NOTHING_CHOSEN, needsOf, templateElements } from './edit/templates';
 import { PreviewBanner } from './PreviewBanner';
 import { TileViewMenu } from './TileViewMenu';
 import { SettingsPage, type SettingsSection } from './settings/SettingsPage';
+import { createDetailsTile } from './tiles/createDetails';
 import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
 import { activeFilters, withFilters, withLimit, type ActiveFilter } from '../filters/apply';
@@ -684,6 +685,12 @@ interface Affordances {
   /** Duplicating a chart tile from its ⋯ menu, the copy with a chart of its own (AC-062). */
   readonly onDuplicate?: ((id: string) => void) | undefined;
   /**
+   * "Create details tile" from a tile's marked-rows group (AC-112): a tile
+   * beside it, limited by its marking — the dashboard put into edit mode to
+   * hold it, as the prototype's does.
+   */
+  readonly onCreateDetails?: ((tileId: string) => void) | undefined;
+  /**
    * A chart tile's ownership action in its ⋯ menu (AC-205): "Save to
    * folders…" for a chart of this dashboard's, "Make a local copy" for a
    * shared one; none for a tile with no chart.
@@ -958,6 +965,13 @@ function Elements({
                               },
                               onMarkAll: () => {
                                 markItems('all');
+                              },
+                            }),
+                        ...(affordances.onCreateDetails === undefined
+                          ? {}
+                          : {
+                              onCreateDetails: () => {
+                                affordances.onCreateDetails?.(element.id);
                               },
                             }),
                       };
@@ -3859,6 +3873,35 @@ function DashboardPages({
             requestAnimationFrame(() => {
               window.document
                 .querySelector<HTMLElement>(`[data-tile="${CSS.escape(copied.tileId)}"]`)
+                ?.focus();
+            });
+          }
+        : undefined,
+    onCreateDetails:
+      canEdit && duplicateFrom !== undefined
+        ? (tileId) => {
+            // Not while a save is under way: the session takes no change (AC-184).
+            if (session.saving) return;
+            const shown = charts.markingOn?.(tileId);
+            if (shown === undefined) return;
+            const detailsId = `el-${String(Date.now())}-${String(counter++)}`;
+            // From view mode, editing first, which holds the new tile until it
+            // is saved — or Discard takes it away.
+            session.edit();
+            session.update(
+              (current) =>
+                createDetailsTile(current, tileId, {
+                  ...duplicateFrom,
+                  mintTileId: () => detailsId,
+                  mintChartId,
+                  markingId: shown.marking.id,
+                })?.document ?? current,
+            );
+            onAim({ selected: detailsId, addTarget: null });
+            drag.say(`Details tile added, limited by ${shown.marking.name}.`);
+            requestAnimationFrame(() => {
+              window.document
+                .querySelector<HTMLElement>(`[data-tile="${CSS.escape(detailsId)}"]`)
                 ?.focus();
             });
           }

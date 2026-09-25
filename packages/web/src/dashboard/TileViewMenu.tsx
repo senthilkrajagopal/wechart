@@ -85,6 +85,8 @@ export function TileViewMenu({
         /** Invert marking and Mark all on this tile (AC-115), where it has items to name. */
         onInvert?: (() => void) | undefined;
         onMarkAll?: (() => void) | undefined;
+        /** A tile beside this one, limited by its marking (AC-112). */
+        onCreateDetails?: (() => void) | undefined;
       }
     | undefined;
 }) {
@@ -234,6 +236,17 @@ export function TileViewMenu({
                 >
                   Unmark
                 </button>
+                {marked.onCreateDetails === undefined ? null : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      marked.onCreateDetails?.();
+                      close();
+                    }}
+                  >
+                    Create details tile
+                  </button>
+                )}
               </div>
             </li>
           )}
