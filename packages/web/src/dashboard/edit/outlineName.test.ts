@@ -31,4 +31,15 @@ describe('a Markdown tile’s name', () => {
   it('is its kind alone when it says nothing', () => {
     expect(outlineNameOf(markdown('##   \n\n'), noCharts)).toBe('Markdown');
   });
+
+  // T247's review: the name is read by the rules that draw the tile, so what
+  // the tile shows as text stays in its name.
+  it('keeps what the tile shows as it is: an unpaired mark, a leading space, a key’s underscore', () => {
+    expect(outlineNameOf(markdown('Revenue * 1.2'), noCharts)).toBe('Markdown: Revenue * 1.2');
+    expect(outlineNameOf(markdown('  ## Notes'), noCharts)).toBe('Markdown: ## Notes');
+    expect(outlineNameOf(markdown('_id is the key'), noCharts)).toBe('Markdown: _id is the key');
+    expect(outlineNameOf(markdown('order_line_items by _status_'), noCharts)).toBe(
+      'Markdown: order_line_items by status',
+    );
+  });
 });

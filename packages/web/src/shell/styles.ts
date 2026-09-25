@@ -1747,15 +1747,18 @@ main:has(.dashboard) {
   background: color-mix(in srgb, var(--wc-bg-surface) 55%, var(--wc-bg-page));
   overflow: visible;
 }
-/* A tab group sits in its section's band, not in a card of its own there
-   (T247, N1): its tabs are the band's head. */
+/* A tab group is a band of its own, as dashboard.js draws it (a .dsection,
+   its tabs the head): the section's ground and 8/12/12 padding, not a white
+   card (T247, N1). T247 first drew it bare; its review found the prototype's
+   band. */
 .grid-tile:has(> .tab-group) {
-  padding: 0;
-  border: 0;
-  background: none;
+  padding: 8px 12px 12px;
+  background: color-mix(in srgb, var(--wc-bg-surface) 55%, var(--wc-bg-page));
   overflow: visible;
 }
 .page-tabs.tab-group__tabs { padding: 0; border-bottom: 0; }
+/* .dsection > .dgrid { padding: 8px 0 0 }: the tabs' content 8 px below them. */
+.tab-group > [role='tablist'] + * { margin-top: 8px; }
 /* The Header and the Divider are the prototype's .dplain: on the page, with
    no border, ground or padding, a 32 px row at least (T247, N5). */
 .grid-tile:has(> .dashboard-heading),
@@ -1767,6 +1770,16 @@ main:has(.dashboard) {
   border: 0;
   background: none;
 }
+/* Their ⋯ centred on the row, and room kept for it: at the tile's corner it
+   ran past a 32 px row and was clipped (T247's review). */
+.grid-tile:has(> .dashboard-heading) > .tile-menu,
+.grid-tile:has(> .dashboard-divider) > .tile-menu {
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+}
+.dashboard[data-editing='true'] .grid-tile:has(> .dashboard-heading),
+.dashboard[data-editing='true'] .grid-tile:has(> .dashboard-divider) { padding-right: 32px; }
 /* <h2 style="font-size:20px;line-height:1.3;font-weight:600">: text-lg. */
 .dashboard-heading {
   flex: 1;
@@ -2884,10 +2897,18 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 }
 /* A section is a container, not a tile: marked on hover, as the prototype's
    .dsection.editing is, so the tiles in it are what read as editable. */
-.dashboard[data-editing='true'] .grid-tile:has(> .dashboard-section):not([data-selected='true']):not(:focus-visible) {
+.dashboard[data-editing='true'] .grid-tile:has(> .dashboard-section):not([data-selected='true']):not(:focus-visible),
+.dashboard[data-editing='true'] .grid-tile:has(> .tab-group):not([data-selected='true']):not(:focus-visible),
+.dashboard[data-editing='true'] .grid-tile:has(> .dashboard-heading):not([data-selected='true']):not(:focus-visible),
+.dashboard[data-editing='true'] .grid-tile:has(> .dashboard-divider):not([data-selected='true']):not(:focus-visible) {
   outline-color: transparent;
 }
-.dashboard[data-editing='true'] .grid-tile:has(> .dashboard-section):hover {
+/* The same for a tab group, the Header and the Divider, the prototype's
+   .dsection.editing and .dplain.editing (T247's review). */
+.dashboard[data-editing='true'] .grid-tile:has(> .dashboard-section):hover,
+.dashboard[data-editing='true'] .grid-tile:has(> .tab-group):hover,
+.dashboard[data-editing='true'] .grid-tile:has(> .dashboard-heading):hover,
+.dashboard[data-editing='true'] .grid-tile:has(> .dashboard-divider):hover {
   outline-color: var(--wc-accent);
 }
 /* <h1 style="font-size:20px"><span class="muted" style="font-weight:400">Editing</span> …

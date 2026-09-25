@@ -2,6 +2,7 @@ import { useRef, useState, type ReactNode } from 'react';
 
 import { COLUMNS, GUTTER_PX, ROW_UNIT_PX, heightOf, type GridTile } from './geometry';
 import { DRAG_INSTRUCTIONS_ID } from './drag';
+import { sentenceOf } from './sentence';
 import {
   MIN_ROWS,
   readoutFor,
@@ -98,9 +99,6 @@ export interface CanvasProps {
 }
 
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
-
-/** A name as a sentence: its own closing mark kept, a full stop added only where it has none. */
-const sentenceOf = (name: string) => (/[.!?…]$/.test(name) ? name : `${name}.`);
 
 /**
  * The document's numbers are snapped here rather than trusted. A width of 4.7

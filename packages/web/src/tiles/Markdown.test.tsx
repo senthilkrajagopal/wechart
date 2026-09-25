@@ -12,12 +12,20 @@ import { Markdown } from './Markdown';
 const html = (text: string) => render(<Markdown text={text} />).container.innerHTML;
 
 describe('a markdown tile’s text (AC-208)', () => {
-  // Each carries its own marks' count for its size (T247): the level in the
-  // outline and the size drawn are separate.
-  it('renders headings below the tile’s own, one level per marker up to two', () => {
+  // Each carries its own marks' count for its size (T247). Its level in the
+  // page's outline is its rank among the tile's own heading levels, from h3,
+  // so what is drawn larger is never announced as a sibling of what is drawn
+  // smaller (T247's review: "#" and "##" were both h3). One level alone is h3.
+  it('renders the tile’s shallowest heading at h3, and each deeper one a level down', () => {
     expect(html('# Top')).toBe('<div class="markdown"><h3 data-level="1">Top</h3></div>');
     expect(html('## Title')).toBe('<div class="markdown"><h3 data-level="2">Title</h3></div>');
-    expect(html('### Sub')).toBe('<div class="markdown"><h4 data-level="3">Sub</h4></div>');
+    expect(html('### Sub')).toBe('<div class="markdown"><h3 data-level="3">Sub</h3></div>');
+    expect(html('# A\n### B')).toBe(
+      '<div class="markdown"><h3 data-level="1">A</h3><h4 data-level="3">B</h4></div>',
+    );
+    expect(html('## A\n### B\n# C\n#### D')).toBe(
+      '<div class="markdown"><h4 data-level="2">A</h4><h5 data-level="3">B</h5><h3 data-level="1">C</h3><h6 data-level="4">D</h6></div>',
+    );
   });
 
   it('renders emphasis, strong and code inside a line', () => {

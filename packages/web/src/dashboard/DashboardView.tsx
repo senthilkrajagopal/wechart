@@ -141,7 +141,7 @@ function sayPlace(
 ): string {
   const place = placeOf(document, tileId);
   if (place === null) return '';
-  return `${nameOf(tileId)}: position ${String(place.index + 1)} of ${String(place.of)}.`;
+  return `${clauseOf(nameOf(tileId))}: position ${String(place.index + 1)} of ${String(place.of)}.`;
 }
 
 const tileNode = (id: string) =>
@@ -206,6 +206,7 @@ import {
   NOTHING_MARKED_DEFAULT,
   type NothingMarkedState,
 } from './tiles/NothingMarked';
+import { clauseOf } from './grid/sentence';
 import { duplicateChartTile, duplicatePlainTile } from './model/duplicate';
 import { withLocalCharts } from './model/localCharts';
 

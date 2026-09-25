@@ -1521,6 +1521,13 @@ test.describe('T247: the tab group, the Header, Markdown and the section band', 
                   text: '## Quarter notes\nOrders by status, this quarter.',
                 },
                 {
+                  id: 'el-levels',
+                  kind: 'markdown',
+                  w: 6,
+                  h: 20,
+                  text: '# Quarter\n### Detail\nThe detail.',
+                },
+                {
                   id: 'el-terms',
                   kind: 'section',
                   title: 'Terms',
@@ -1563,8 +1570,19 @@ test.describe('T247: the tab group, the Header, Markdown and the section band', 
     'background-color': 'rgba(0, 0, 0, 0)',
     'padding-top': '0px',
   };
+  /** .dsection's ground: color-mix(in srgb, var(--bg-surface) 55%, var(--bg-page)). */
+  const bandOf = (page: Page) =>
+    page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.backgroundColor =
+        'color-mix(in srgb, var(--wc-bg-surface) 55%, var(--wc-bg-page))';
+      document.body.append(probe);
+      const value = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return value;
+    });
 
-  test('a tab group’s tabs are the page tabs’: the one showing underlined, and no card inside its section', async ({
+  test('a tab group’s tabs are the page tabs’: the one showing underlined, on a band of its own', async ({
     page,
   }) => {
     const group = page.getByRole('tablist', { name: /Measures/ });
@@ -1585,10 +1603,27 @@ test.describe('T247: the tab group, the Header, Markdown and the section band', 
       color: await token(page, 'text-secondary'),
       'border-bottom-color': 'rgba(0, 0, 0, 0)',
     });
-    // In its section's band, not a white card within it (N1).
+    // A .dsection of its own (dashboard.js:359), not a white card (N1): the
+    // band's ground, rule and 8/12/12 padding, and 8 px between its tabs and
+    // what they show. T247 first drew it bare, which its review found was
+    // not the prototype's.
     expect(
-      await style(element(page, 'el-group'), 'border-top-width', 'background-color', 'padding-top'),
-    ).toEqual(plain);
+      await style(
+        element(page, 'el-group'),
+        'border-top-width',
+        'background-color',
+        'padding-top',
+        'padding-left',
+      ),
+    ).toEqual({
+      'border-top-width': '1px',
+      'background-color': await bandOf(page),
+      'padding-top': '8px',
+      'padding-left': '12px',
+    });
+    const tabsBottom = await group.evaluate((list) => list.getBoundingClientRect().bottom);
+    const shownTop = (await element(page, 'el-count').boundingBox())?.y ?? 0;
+    expect(shownTop - tabsBottom).toBeCloseTo(8, 0);
   });
 
   test('the Header and the Divider sit on the page, the Header a 600 heading on the type scale', async ({
@@ -1608,6 +1643,73 @@ test.describe('T247: the tab group, the Header, Markdown and the section band', 
         'font-weight',
       ),
     ).toEqual({ 'font-size': '20px', 'line-height': '26px', 'font-weight': '600' });
+    // <hr style="border:0;border-top:1px solid var(--border-strong);margin:8px 0">
+    expect(
+      await style(
+        element(page, 'el-divider').locator('hr'),
+        'border-top-width',
+        'border-top-color',
+        'margin-top',
+      ),
+    ).toEqual({
+      'border-top-width': '1px',
+      'border-top-color': await token(page, 'border-strong'),
+      'margin-top': '8px',
+    });
+  });
+
+  test('editing, the Header and the Divider keep their ⋯ whole, their grip beside the heading, and no outline at rest', async ({
+    page,
+  }) => {
+    // T247's review: at no padding, the ⋯ ran past the 32 px row and was
+    // clipped, and the corner grip sat on the heading's first letter.
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    for (const id of ['el-header', 'el-divider']) {
+      const tile = element(page, id);
+      await tile.hover();
+      const box = await tile.boundingBox();
+      const menu = await tile.getByRole('button', { name: /^Actions for / }).boundingBox();
+      expect(menu?.y ?? 0).toBeGreaterThanOrEqual(box?.y ?? 0);
+      expect((menu?.y ?? 0) + (menu?.height ?? 0)).toBeLessThanOrEqual(
+        (box?.y ?? 0) + (box?.height ?? 0),
+      );
+    }
+    const grip = await element(page, 'el-header')
+      .getByRole('button', { name: /^Move / })
+      .boundingBox();
+    const heading = await element(page, 'el-header').getByRole('heading').boundingBox();
+    expect(heading?.x ?? 0).toBeGreaterThanOrEqual((grip?.x ?? 0) + (grip?.width ?? 0));
+    // .dplain.editing { outline: 1px dashed transparent } until hovered.
+    await page.mouse.move(0, 0);
+    expect(await style(element(page, 'el-divider'), 'outline-color')).toEqual({
+      'outline-color': 'rgba(0, 0, 0, 0)',
+    });
+  });
+
+  test('Markdown: headings sized by their marks and levelled in the tile, the shallowest at h3', async ({
+    page,
+  }) => {
+    // "#" at text-xl, "###" at text-md; the shallowest a tile has is h3 and
+    // the next one down h4, so the outline agrees with what is drawn (T247's
+    // review: "#" and "##" were both h3 at different sizes).
+    const levels = element(page, 'el-levels');
+    expect(
+      await style(
+        levels.getByRole('heading', { name: 'Quarter', level: 3 }),
+        'font-size',
+        'line-height',
+      ),
+    ).toEqual({ 'font-size': '24px', 'line-height': '32px' });
+    expect(
+      await style(
+        levels.getByRole('heading', { name: 'Detail', level: 4 }),
+        'font-size',
+        'line-height',
+      ),
+    ).toEqual({ 'font-size': '16px', 'line-height': '22px' });
+    await expect(
+      element(page, 'el-notes').getByRole('heading', { name: 'Quarter notes', level: 3 }),
+    ).toBeVisible();
   });
 
   test('Markdown: “##” at 20/26 over a 14/22 secondary body, and each tile named by its text', async ({
@@ -1654,15 +1756,7 @@ test.describe('T247: the tab group, the Header, Markdown and the section band', 
     page,
   }) => {
     // .dsection { background: color-mix(in srgb, var(--bg-surface) 55%, var(--bg-page)) } (mismatch 15)
-    const band = await page.evaluate(() => {
-      const probe = document.createElement('span');
-      probe.style.backgroundColor =
-        'color-mix(in srgb, var(--wc-bg-surface) 55%, var(--wc-bg-page))';
-      document.body.append(probe);
-      const value = getComputedStyle(probe).backgroundColor;
-      probe.remove();
-      return value;
-    });
+    const band = await bandOf(page);
     const terms = element(page, 'el-terms');
     expect(await style(terms, 'background-color')).toEqual({ 'background-color': band });
     // <span class="xs muted">1 item</span>

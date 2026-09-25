@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 
 import { dropTargetAt, type DropCandidate, type DropTarget, type Rect } from './dropTarget';
+import { sentenceOf } from './sentence';
 
 /**
  * Dragging a tile by its grip (AC-056).
@@ -136,7 +137,7 @@ export function useTileDrag({ onMove, root, nameOf }: UseTileDragOptions): TileD
 
     const from = { x: event.clientX, y: event.clientY };
     set({ id: tileId, from, moved: false, target: null });
-    setAnnouncement(`Picked up ${name(tileId)}.`);
+    setAnnouncement(`Picked up ${sentenceOf(name(tileId))}`);
 
     const node = event.currentTarget;
 

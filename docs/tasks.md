@@ -3668,6 +3668,20 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
       - A Markdown tile is named by its first line as it reads, with no heading, list, emphasis or code marks.
       - A tile's accessible name no longer doubles the full stop after a name that ends one.
     - The Divider isn't in the task's own line. It shares the Header's `.dplain` rule in the prototype, so it is drawn and tested with it.
+  - **The cold review failed it, fixed:**
+    - **The tab group was drawn bare.** "No card" had been taken to mean no chrome at all. The prototype draws a tab group as a `.dsection` band of its own (dashboard.js:359), so it now has the band's ground, its rule and its 8/12/12 padding, with 8 px under its tabs. The test that had locked in the bare look now asserts the band.
+    - **Edit-mode regressions on the Header and the Divider:**
+      - Their ⋯ now sits centred on the row, with room kept for it; at the tile's corner it had been clipped.
+      - Their grip sits beside the heading, not on it. That fix came with T253.
+      - They take no outline at rest, as a section doesn't, which is the prototype's `.dplain.editing`.
+      - New e2e tests cover these in edit mode.
+    - **Headings are levelled by their rank among the tile's own.** The shallowest is h3 and each deeper one a level down, so `#` and `##` are no longer both h3 at different sizes. `Markdown.test.tsx` asserts the new rule. A tile's only heading is h3, whatever its marks, so a lone `###` is now h3 where it was h4.
+    - **The name is read by the renderer's own rules** (`readingOfLine`, `firstReadingOf` in `Markdown.tsx`), so an unpaired mark, a leading space or a key's underscore stays as it is drawn.
+    - **One full stop in the drag and place announcements too** (`grid/sentence.ts`, tested).
+    - **Also asserted now:** the Divider's rule, `#` at xl and `###` at md.
+    - **Left, low:**
+      - A tab group saved outside a section through the API is not refused. The UI cannot make one.
+      - The axe sweep doesn't visit the Appendix page.
 - [x] T252 (AC-187) Draw a chart tile's badges, head and incomplete state as the prototype does
   - Files: `packages/web/src/tiles/ChartTile.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: one freshness badge; the tile head no taller than 22 px; an incomplete chart keeps its head and says so at 12 px secondary, with no editing hint in view mode (recheck-dashboard F8, F13; mismatches 9, 10, 21).

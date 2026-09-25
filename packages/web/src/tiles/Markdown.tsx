@@ -10,8 +10,11 @@ import type { ReactNode } from 'react';
  * `innerHTML`. So a tag typed into a tile is shown as the text it is — AC-208's
  * "no raw HTML" holds by construction, with no sanitiser to get wrong.
  *
- * Headings sit below the tile's own level: the dashboard is h1, a section h2
- * and a tile's title h3, so `#` and `##` are h3 and anything deeper h4.
+ * Headings sit at the tiles' level of the page's outline and below: the
+ * dashboard is h1 and a section h2, so the tile's shallowest heading is h3
+ * and each deeper one of its own a level down, to h6 — ranked among the
+ * tile's own levels, so none is skipped (T247's review). Each is drawn at the
+ * size its own marks ask for, as `data-level`.
  */
 export function Markdown({ text }: { readonly text: string }) {
   return <div className="markdown">{blocksOf(text)}</div>;
@@ -20,9 +23,45 @@ export function Markdown({ text }: { readonly text: string }) {
 const HEADING = /^(#{1,6})\s+(.*)$/;
 const BULLET = /^[-*]\s+(.*)$/;
 const NUMBERED = /^(\d+)[.)]\s+(.*)$/;
+const HEADINGS = ['h3', 'h4', 'h5', 'h6'] as const;
+
+function linesOf(text: string): string[] {
+  return text.replace(/\r\n?/g, '\n').split('\n');
+}
+
+/**
+ * A line as the tile reads it, with its block and inline marks taken off by
+ * the very rules that draw it — "## Notes" is "Notes", "- **Count**" is
+ * "Count" — for naming the tile (AC-209, T247's review): an unpaired mark,
+ * which the tile shows, is kept.
+ */
+export function readingOfLine(line: string): string {
+  const block = HEADING.exec(line) ?? BULLET.exec(line) ?? NUMBERED.exec(line);
+  const content = block === null ? line : (block[block.length - 1] ?? '');
+  return plainOf(content).trim();
+}
+
+/** The first line of a tile's text that reads as anything, or '' for none. */
+export function firstReadingOf(text: string): string {
+  for (const line of linesOf(text)) {
+    const read = readingOfLine(line);
+    if (read !== '') return read;
+  }
+  return '';
+}
 
 function blocksOf(text: string): ReactNode[] {
-  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const lines = linesOf(text);
+  // The tile's own heading levels, shallowest first: each heading's rank
+  // among them is its place in the outline, from h3.
+  const ranks = [
+    ...new Set(
+      lines.flatMap((line) => {
+        const heading = HEADING.exec(line);
+        return heading === null ? [] : [(heading[1] ?? '#').length];
+      }),
+    ),
+  ].sort((a, b) => a - b);
   const blocks: ReactNode[] = [];
   let paragraph: string[] = [];
   let list: { ordered: boolean; start: number; items: string[] } | null = null;
@@ -63,20 +102,13 @@ function blocksOf(text: string): ReactNode[] {
       flushParagraph();
       flushList();
       const marks = (heading[1] ?? '#').length;
-      const level = marks <= 2 ? 3 : 4;
-      const content = inline(heading[2] ?? '', 'h');
+      const Heading = HEADINGS[Math.min(ranks.indexOf(marks), HEADINGS.length - 1)] ?? 'h3';
       // Drawn at the size its own marks ask for (T247, the prototype's .md h2
       // for "##"), whatever level it takes in the page's outline.
       blocks.push(
-        level === 3 ? (
-          <h3 key={blocks.length} data-level={marks}>
-            {content}
-          </h3>
-        ) : (
-          <h4 key={blocks.length} data-level={marks}>
-            {content}
-          </h4>
-        ),
+        <Heading key={blocks.length} data-level={marks}>
+          {inline(heading[2] ?? '', 'h')}
+        </Heading>,
       );
       continue;
     }
@@ -147,6 +179,22 @@ function inline(text: string, key: string): ReactNode[] {
     marked,
     ...inline(text.slice(match.index + match[0].length), `${key}a`),
   ];
+}
+
+/** The text `inline` would draw, as plain text: each paired mark taken off. */
+function plainOf(text: string): string {
+  let earliest: RegExpExecArray | undefined;
+  for (const { pattern } of MARKS) {
+    const match = pattern.exec(text);
+    if (match !== null && (earliest === undefined || match.index < earliest.index))
+      earliest = match;
+  }
+  if (earliest === undefined) return text;
+  return (
+    text.slice(0, earliest.index) +
+    plainOf(earliest[1] ?? '') +
+    plainOf(text.slice(earliest.index + earliest[0].length))
+  );
 }
 
 /** Text as it is, a line break within it as <br>. */
