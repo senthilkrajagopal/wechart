@@ -660,6 +660,29 @@ test('Model is one workspace: a tree beside full-height form and code panes, Pro
 });
 
 /**
+ * AC-222 from the overview, which the Superset parity run found lost: there
+ * no file is open, and opening the new one leaves the overview's page for the
+ * file's — so what New cube made must outlive the page that made it.
+ */
+test('New cube and New view from the overview open their new file', async ({ page }) => {
+  await page.goto('/model');
+  const tree = page.getByRole('navigation', { name: 'Model files' });
+  await tree.getByRole('button', { name: 'New cube' }).click();
+  await expect(page).toHaveURL(/\/model\/files\/cubes%2Fnew_cube_\d+\.yml$/);
+  await expect(
+    page.getByRole('textbox', { name: /^cubes\/new_cube_\d+\.yml, as YAML$/ }),
+  ).toContainText('name: new_cube_');
+  await expect(tree.getByRole('link', { name: /^new_cube_\d+\.yml/ })).toContainText('unpublished');
+
+  await page.goto('/model');
+  await tree.getByRole('button', { name: 'New view' }).click();
+  await expect(page).toHaveURL(/\/model\/files\/views%2Fnew_view_\d+\.yml$/);
+  await expect(
+    page.getByRole('textbox', { name: /^views\/new_view_\d+\.yml, as YAML$/ }),
+  ).toContainText('name: new_view_');
+});
+
+/**
  * T236 / AC-225: THE SYSTEM SHALL show each member in a row with its name,
  * its type, a preview of its SQL and badges for primary key, public and
  * format, and when expanded, only the fields that apply to its type and to

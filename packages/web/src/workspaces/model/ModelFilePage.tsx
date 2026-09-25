@@ -803,6 +803,8 @@ function FileBody({
  * keeps them.
  */
 const DRAFTS_KEY = ['model-drafts'] as const;
+/** The file New cube or New view just made, until it opens (ModelFilePage's `made`). */
+const MADE_KEY = ['model-made'] as const;
 const DRAFTS_STORAGE = 'wechart.model.drafts';
 
 function readDrafts(): Record<string, string> {
@@ -886,9 +888,23 @@ export function ModelFilePage({
   /**
    * A file New cube or New view made, kept as a draft once it opens: leaving
    * the open file may be asked about, and staying makes no file (T237's
-   * review).
+   * review). Kept in the query cache, not the page: made on the overview, it
+   * opens on the file's page, a new one (the Superset parity run).
    */
-  const [made, setMade] = useState<{ path: string; content: string }>();
+  const made =
+    useQuery<{ path: string; content: string } | null>({
+      queryKey: MADE_KEY,
+      queryFn: () => null,
+      initialData: null,
+      staleTime: Number.POSITIVE_INFINITY,
+      gcTime: Number.POSITIVE_INFINITY,
+    }).data ?? undefined;
+  const setMade = useCallback(
+    (next: { path: string; content: string } | undefined) => {
+      queryClient.setQueryData(MADE_KEY, next ?? null);
+    },
+    [queryClient],
+  );
   useEffect(() => {
     if (made === undefined || path !== made.path || made.path in drafts) return;
     setDrafts({ ...drafts, [made.path]: made.content });

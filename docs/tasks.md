@@ -3817,6 +3817,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - The tree re-parsed every file on every render.
     - The Problems-docked check could not fail.
   - **Known flake:** `keyboard-coverage.spec.ts` "a tile’s table can be reached and scrolled from the keyboard" fails under full load in Safari and passes alone.
+  - **Fixed 2026-09-25, from the Superset parity run:** New cube or New view pressed on the overview opened an empty page. The overview and a file are two routes, so the page that made the file was gone before the file opened, and its `made` state with it. The made file is now kept in the query cache, as the drafts are. `e2e/model.spec.ts` "New cube and New view from the overview open their new file" failed first, finding no editor, and now passes in Chrome, Firefox and Safari.
 - [x] T235 (AC-224) Edit member references with pickers, and a join's target with a list of cubes
   - Files: `packages/web/src/workspaces/model/form/{MemberPicker.tsx,MemberPicker.test.tsx,scopes.ts,scopes.test.ts,schema.ts,ObjectForm.tsx,CubeForm.tsx,CubeForm.test.tsx}`, `packages/web/src/workspaces/model/ModelFilePage.tsx`, `packages/web/src/shell/styles.ts`, `e2e/model-pickers.spec.ts`, `e2e/preaggregations.spec.ts`, `e2e/model.spec.ts`
   - Failing test: `e2e/model-pickers.spec.ts`: a pre-aggregation's measures are chosen from a picker listing the cube's measures, and a join's target from its cubes; neither accepts typed text (AC-224).
