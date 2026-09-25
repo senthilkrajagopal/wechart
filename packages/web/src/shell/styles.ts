@@ -2007,7 +2007,14 @@ main:has(.dashboard) {
 /* 16 px as the prototype's h1; 600, not its 700 (direction.md §3). */
 .settings-page__title { margin: 0 0 0 8px; font-size: 16px; line-height: 20px; font-weight: 600; }
 .settings-page__spacer { flex: 1; }
-.settings-page__unsaved { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.settings-page__unsaved {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-secondary);
+}
 .settings-page__actions { display: flex; gap: 8px; }
 /* A state said in the bar (saving, a refused save) takes a line of its own. */
 .settings-page__bar > .settings-page__state { flex-basis: 100%; margin: 0; }
@@ -2054,7 +2061,9 @@ main:has(.dashboard) {
   align-content: start;
   padding: 16px 24px 48px;
 }
-.settings-page__panel > * { max-width: 872px; }
+/* min-width 0: a wide cross-filter matrix scrolls in its own box rather than
+   widening the grid's track and the panel with it (T249's review). */
+.settings-page__panel > * { max-width: 872px; min-width: 0; }
 .settings-page__panel > h2 { margin: 0; font-size: 18px; line-height: 20px; font-weight: 600; }
 .settings-page__panel p { margin: 0; }
 .settings-page__later,
@@ -2117,7 +2126,9 @@ main:has(.dashboard) {
   opacity: 0;
   cursor: pointer;
 }
-.marking-slot:has(input:focus-visible) { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
+/* Clear of the chosen ring by a gap, so focus is not read as the choice
+   (T249's review, AC-176). */
+.marking-slot:has(input:focus-visible) { outline: 2px solid var(--wc-accent); outline-offset: 3px; }
 /* .mk-swatch: the colour, ringed inside in border-strong. */
 .marking-swatch {
   display: inline-block;

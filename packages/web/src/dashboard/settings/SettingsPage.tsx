@@ -306,11 +306,15 @@ export function SettingsPage({
 
   /**
    * Escape leaves as Cancel does, asking first when there is something to
-   * lose (T249, F29; the prototype's onKey). Taken on the way down, before
-   * anything under the page sees it, as the prototype's is: behind this
-   * full-viewport page nothing else should answer it. While the question is
-   * open its own Escape — "Keep editing" — is the one that counts.
+   * lose (T249, F29; the prototype's onKey). While the question is open its
+   * own Escape — "Keep editing" — is the one that counts.
+   *
+   * Only when focus is on the page, or nowhere, as the chart editor over a
+   * dashboard does (T249's review): the search palette opens over this page
+   * from the app bar, and its Escape is its own. And not when Escape ends an
+   * IME composition in a field here.
    */
+  const page = useRef<HTMLDivElement>(null);
   const leaveNow = useRef(leave);
   useEffect(() => {
     leaveNow.current = leave;
@@ -318,14 +322,16 @@ export function SettingsPage({
   useEffect(() => {
     if (asking) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+      const focused = window.document.activeElement;
+      if (focused !== null && focused !== window.document.body && !page.current?.contains(focused))
+        return;
       event.preventDefault();
-      event.stopPropagation();
       leaveNow.current();
     };
-    window.addEventListener('keydown', onKeyDown, true);
+    window.document.addEventListener('keydown', onKeyDown);
     return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
+      window.document.removeEventListener('keydown', onKeyDown);
     };
   }, [asking]);
 
@@ -347,7 +353,7 @@ export function SettingsPage({
   };
 
   return (
-    <div className="settings-page" data-testid="dashboard-settings">
+    <div ref={page} className="settings-page" data-testid="dashboard-settings">
       <header className="settings-page__bar">
         {/* Both ways out go through the guard, not just the one called
             Cancel: "← Back to …" is the one someone reaches for without
@@ -360,8 +366,12 @@ export function SettingsPage({
             Cancel and the primary Save at the far end (T249, F26). */}
         <h1 className="settings-page__title">Dashboard settings</h1>
         <span className="settings-page__spacer" />
+        {/* A state, with its icon as well as its words (AC-177). */}
         {isDirty(document, draft) ? (
-          <span className="settings-page__unsaved">Unsaved changes</span>
+          <span className="settings-page__unsaved">
+            <StatusIcon kind="idle" />
+            Unsaved changes
+          </span>
         ) : null}
         <div className="settings-page__actions">
           <button type="button" className="btn-sm" onClick={leave}>

@@ -3448,6 +3448,41 @@ test.describe('T249: the dashboard settings page', () => {
     await expect(settings).toHaveCount(0);
   });
 
+  test('Escape that closes the search palette leaves the settings page open (T249’s review)', async ({
+    page,
+  }) => {
+    const settings = await openSettings(page);
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
+    const palette = page.getByRole('dialog', { name: /search/i });
+    await expect(palette).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(palette).toBeHidden();
+    await expect(settings).toBeVisible();
+    await expect(page.getByRole('alertdialog', { name: 'Discard your changes?' })).toHaveCount(0);
+  });
+
+  test('only the inactive section has the banner, and a change says it is unsaved (T249’s review)', async ({
+    page,
+  }) => {
+    const settings = await openSettings(page);
+    const banners = settings.getByRole('note').filter({ hasText: /^Inactive:/ });
+    // Markings is the mode in use: no banner there.
+    await section(settings, 'Markings').click();
+    await expect(settings.getByRole('heading', { name: 'Markings', level: 2 })).toBeVisible();
+    await expect(banners).toHaveCount(0);
+    await section(settings, 'Cross-filtering').click();
+    await expect(banners).toHaveCount(1);
+
+    const bar = settings.locator('.settings-page__bar');
+    await expect(bar.getByText('Unsaved changes')).toHaveCount(0);
+    await section(settings, 'General').click();
+    await settings.getByLabel('Description', { exact: true }).fill('Changed');
+    const unsaved = bar.getByText('Unsaved changes');
+    await expect(unsaved).toBeVisible();
+    // A state, with its icon (AC-177).
+    await expect(bar.locator('.settings-page__unsaved [data-icon]')).toHaveCount(1);
+  });
+
   test('Markings: the prototype’s tables, 29 px rows, slot buttons and limit pills', async ({
     page,
   }) => {

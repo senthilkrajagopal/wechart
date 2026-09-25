@@ -4138,6 +4138,14 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - A limit the tile cannot take is muted ink, where the prototype has opacity .5, which takes the text under AA.
     - Mismatch 35 (the cross-filter default's segmented control at 420 px, "against inline-flex") is not changed. On the prototype it measures the content's full width, 872 px, because it sits in a grid `.field`.
     - Layout keeps its radio cards; the prototype has a `.seg`. AC-075's tests choose "Full width" as a radio.
+  - The specs covering the touched criteria passed in all three browsers: design-conformance, dashboard (AC-069, AC-073, AC-185, AC-197), markings (AC-198), crossfilter (AC-118), keyboard-coverage (AC-176), a11y-tokens and status-labels, 714 runs. The 89 settings unit tests passed too.
+  - **Cold review (one round), verdict FAIL. Fixed, each with a test that failed first:**
+    - **Escape was taken from the search palette opened over the page** (AC-176, AC-191). The page's Escape listener sat in the capture phase and stopped the event, so the palette could not close. It now listens as the chart editor over a dashboard does: only while focus is on the page or nowhere, and not when Escape ends an IME composition. The test opens the palette over the settings page and closes it with Escape, leaving the page open with no question asked.
+    - **"Unsaved changes" had no icon** (AC-177): it now has the idle icon. It is also tested now.
+    - **The banner test** now also asserts that the section in use has no banner.
+    - **AC-005 evidence for the new grounds:** `a11y-tokens.spec.ts` sweeps the settings page, section by section, in both themes (axe contrast and the 12 px floor). This covers the chosen card's tint and the banner's warning tint.
+    - **Also:** a focused colour slot's ring now stands 3 px clear of the chosen slot's ring. The panel's children may shrink, so a wide cross-filter matrix scrolls in its own box.
+  - **Put to the user, from the review:** AC-231 asks for "the workspaces' page titles" at 20 px/600 and their tables as cards with 34 px rows. This page follows the prototype instead: a 16 px title and `.grid-table`s with 29 px rows. I read AC-231 as not covering it, as T228 read it not covering the chart editor, for the same reason: the page is a dashboard's, opened over it, not a workspace's page. AC-231's failing state, tabular numerals and a 20 px workspace title, is not reached. If the user reads AC-231 as covering it, the title and the rows change back.
 - [x] T250 (AC-187) Below 1,024 pixels, stack a dashboard to one column in view mode only, keeping every tile's title
   - Files: `packages/web/src/dashboard/*`, `packages/web/src/shell/styles.ts`, `e2e/no-horizontal-scroll.spec.ts`
   - Failing test: at 390×844 tiles are full width, each title is visible, and Edit is not offered (recheck-dashboard N2; direction.md §2).
