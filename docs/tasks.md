@@ -4577,11 +4577,16 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
   - Files: `packages/charts/src/customize.ts`, its test, `packages/web/src/editor/CustomizeTab.test.tsx`, `e2e/customize.spec.ts`
   - Failing test: a horizontal bar with two series stacks when "Stack series" is on, and Customize shows the checkbox for it (AC-219).
   - Depends on: none
-- [ ] T303 (AC-044) Order a pivot's rows and columns by the chart's sort
+- [x] T303 (AC-044) Order a pivot's rows by the chart's sort
   - Gap 8 of the parity rebuild. The pivot kept the rows' arrival order whatever Sort said. AC-044's Fails-when is "the order is not applied".
   - Files: `packages/core/src/pivot.ts`, its test, `packages/web/src/tiles/PivotTable.test.tsx`
   - Failing test: a pivot sorted by value descending lists its row groups by their totals, largest first. Sorted by label, it lists them alphabetically (AC-044).
   - Depends on: none
+  - **Done 2026-09-25.** `pivot()` orders its row groups by `sortSettingsOf(spec)`, now exported from `sort.ts`. By value it uses the first measure's row total; by label, the row's names. It follows `applySort`'s rules: no measurement goes last, "Other" is pinned last, and ties keep arrival order. Cells and row totals move with their rows.
+    - Only the rows move, as the title now says. AC-044 orders "categories", and a pivot's categories are its row groups. Its columns keep Cube's order, and the planned `PivotTable.test.tsx` change was not needed.
+  - **Tests, red first:**
+    - `core/pivot.test.ts` (4): by value either way, with a row without a measurement last; by label either way; the columns and their totals unchanged. Three failed first, on the arrival order.
+    - `e2e/chart-editor.spec.ts` "sorting a pivot reorders its rows". It opens the seeded chart on `orders.total_amount` (its count ties at 120 a category), pivots it, and checks all four settings. With the fix set aside it failed in Chrome at "Value, low to high". It passes in all three browsers, with chart-editor and export (168 runs).
 - [x] T304 (AC-187) Draw table and pivot tiles as the prototype's `.grid-table.comfy`
   - Gap 9, second half, of the parity rebuild: the header row scrolled away with the rows. No rule styled `.data-table` or `.pivot-table`. Against the prototype's `.grid-table` (index.html:1089), a table tile had:
     - no sticky 28 px header on `bg-subtle`;

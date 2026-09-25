@@ -154,3 +154,49 @@ describe('a spec that cannot be pivoted', () => {
     expect(result.cells).toEqual([]);
   });
 });
+
+/**
+ * T303, AC-044: WHEN the user sorts a chart, THE SYSTEM SHALL order
+ * categories by value ascending, value descending or label. A pivot's
+ * categories are its row groups; it ignored the setting (the Superset-parity
+ * rebuild's gap 8).
+ */
+describe('a sorted pivot (AC-044)', () => {
+  const REGIONS = [
+    { [REGION]: 'north', [STATUS]: 'paid', [COUNT]: 5 },
+    { [REGION]: 'east', [STATUS]: 'paid', [COUNT]: 1 },
+    { [REGION]: 'east', [STATUS]: 'refunded', [COUNT]: 2 },
+    { [REGION]: 'west', [STATUS]: 'paid', [COUNT]: 4 },
+    { [REGION]: 'west', [STATUS]: 'refunded', [COUNT]: 8 },
+    { [REGION]: 'south', [STATUS]: 'refunded', [COUNT]: null },
+  ];
+  const sorted = (by: 'value' | 'label', direction: 'asc' | 'desc') =>
+    pivot(spec({ rows: REGIONS, options: { sort: { by, direction } } }));
+
+  it('orders its rows by their totals, largest first', () => {
+    const result = sorted('value', 'desc');
+
+    // west 12, north 5, east 3; south has no measurement and goes last.
+    expect(result.rowHeaders).toEqual([['west'], ['north'], ['east'], ['south']]);
+    // Each row keeps its own cells and total.
+    expect(result.rowTotals).toEqual([[12], [5], [3], [null]]);
+    expect(result.cells[0]).toEqual([[4], [8]]);
+  });
+
+  it('orders its rows by their totals, smallest first, with no measurement still last', () => {
+    expect(sorted('value', 'asc').rowHeaders).toEqual([['east'], ['north'], ['west'], ['south']]);
+  });
+
+  it('orders its rows by label either way', () => {
+    expect(sorted('label', 'asc').rowHeaders).toEqual([['east'], ['north'], ['south'], ['west']]);
+    expect(sorted('label', 'desc').rowHeaders).toEqual([['west'], ['south'], ['north'], ['east']]);
+  });
+
+  it('leaves its columns and their totals as they came', () => {
+    const result = sorted('value', 'desc');
+
+    expect(result.columnHeaders).toEqual([['paid'], ['refunded']]);
+    expect(result.columnTotals).toEqual([[10], [10]]);
+    expect(result.grandTotals).toEqual([20]);
+  });
+});

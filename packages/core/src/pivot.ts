@@ -11,6 +11,8 @@
  */
 
 import { membersOn, type RenderSpec } from './render-spec';
+import { sortSettingsOf } from './sort';
+import { OTHER_LABEL } from './topN';
 
 export interface PivotResult {
   /** One entry per row, holding that row's value for each row dimension. */
@@ -123,5 +125,53 @@ export function pivot(spec: RenderSpec): PivotResult {
 
   const grandTotals = measures.map((_, m) => total(rowTotals.map((row) => row[m] ?? null)));
 
-  return { rowHeaders, columnHeaders, measures, cells, rowTotals, columnTotals, grandTotals };
+  const order = rowOrder(spec, rowHeaders, rowTotals);
+  return {
+    rowHeaders: order.map((r) => rowHeaders[r]!),
+    columnHeaders,
+    measures,
+    cells: order.map((r) => cells[r]!),
+    rowTotals: order.map((r) => rowTotals[r]!),
+    columnTotals,
+    grandTotals,
+  };
+}
+
+/**
+ * The order its row groups are drawn in (T303, AC-044): the chart's sort, as
+ * `applySort` orders any other chart's categories — by the first measure's
+ * row total, or by the row's label — else as they arrived.
+ *
+ * The same rules as `applySort`, for the same reasons: a group with no
+ * measurement goes last in either direction, since zero is a measurement it
+ * does not have; "Other" is pinned last; ties keep their arrival order, so
+ * the order after a refresh of unchanged data is the order before it. Only
+ * the rows move: the columns keep Cube's order, and every total is the same
+ * sum in any order.
+ */
+function rowOrder(
+  spec: RenderSpec,
+  rowHeaders: readonly (readonly string[])[],
+  rowTotals: readonly (readonly (number | null)[])[],
+): number[] {
+  const arrived = rowHeaders.map((_, index) => index);
+  const settings = sortSettingsOf(spec);
+  if (settings === null) return arrived;
+
+  const labelOf = (r: number) => (rowHeaders[r] ?? []).join(' ');
+  const isOther = (r: number) => (rowHeaders[r]?.[0] ?? '').startsWith(`${OTHER_LABEL} (`);
+  const sign = settings.direction === 'asc' ? 1 : -1;
+
+  return arrived.sort((a, b) => {
+    if (isOther(a) !== isOther(b)) return isOther(a) ? 1 : -1;
+    if (settings.by === 'label') return sign * labelOf(a).localeCompare(labelOf(b)) || a - b;
+
+    const left = rowTotals[a]?.[0] ?? null;
+    const right = rowTotals[b]?.[0] ?? null;
+    if (left === null || right === null) {
+      if (left === right) return a - b;
+      return left === null ? 1 : -1;
+    }
+    return sign * (left - right) || a - b;
+  });
 }
