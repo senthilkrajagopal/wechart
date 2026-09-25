@@ -172,6 +172,11 @@ export function TileViewMenu({
         /** The rows behind the marked items (T120, AC-114). */
         onViewMarkedRows?: (() => void) | undefined;
         /**
+         * Those rows pinned open beside the dashboard, following the marking
+         * (T269, AC-240): whether it's on for this tile, and its switch.
+         */
+        detailsPanel?: { readonly on: boolean; readonly onToggle: () => void } | undefined;
+        /**
          * The marked items' values as tab-separated text, headed by the
          * members' titles, for Copy › Marked values (T271, AC-241).
          */
@@ -506,6 +511,19 @@ export function TileViewMenu({
                       label: 'View marked rows',
                       onSelect: marked.onViewMarkedRows,
                       disabled: marked.count === 0 ? 'Nothing is marked.' : undefined,
+                    },
+                  ]),
+              // Offered with nothing marked too: the panel says so, and fills
+              // as the marking does.
+              ...(marked.detailsPanel === undefined
+                ? []
+                : [
+                    {
+                      kind: 'checkbox' as const,
+                      key: 'details-panel',
+                      label: 'Details panel',
+                      checked: marked.detailsPanel.on,
+                      onToggle: marked.detailsPanel.onToggle,
                     },
                   ]),
               // On this tile's items alone, other tiles' left as they are

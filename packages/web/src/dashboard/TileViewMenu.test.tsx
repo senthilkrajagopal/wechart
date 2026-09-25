@@ -518,6 +518,56 @@ describe('a tile’s view-mode menu', () => {
     ).toBeTruthy();
   });
 
+  /**
+   * T269 / AC-240: … the panel SHALL be turned on and off both from the tile's
+   * menu and from the panel itself. The menu's half: a checkbox in the marked
+   * group, checked while the panel is on — offered with nothing marked too,
+   * where the panel says so.
+   */
+  it('turns the details panel on and off from a checkbox in its marked group', async () => {
+    const onToggle = vi.fn();
+    const { rerender } = render(
+      <TileViewMenu
+        tileId="t1"
+        title="By country"
+        spec={SPEC}
+        save={vi.fn()}
+        marked={{
+          name: 'Marking',
+          count: 0,
+          onUnmark: vi.fn(),
+          detailsPanel: { on: false, onToggle },
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By country' }));
+    const off = screen.getByRole('menuitemcheckbox', { name: 'Details panel' });
+    expect(off.getAttribute('aria-checked')).toBe('false');
+    expect(off.getAttribute('aria-disabled')).toBeNull();
+    await userEvent.click(off);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <TileViewMenu
+        tileId="t1"
+        title="By country"
+        spec={SPEC}
+        save={vi.fn()}
+        marked={{
+          name: 'Marking',
+          count: 2,
+          onUnmark: vi.fn(),
+          detailsPanel: { on: true, onToggle },
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By country' }));
+    const on = screen.getByRole('menuitemcheckbox', { name: 'Details panel' });
+    expect(on.getAttribute('aria-checked')).toBe('true');
+    await userEvent.click(on);
+    expect(onToggle).toHaveBeenCalledTimes(2);
+  });
+
   it('closes on Escape, giving focus back to its trigger', async () => {
     render(<TileViewMenu tileId="t1" title="T" spec={SPEC} save={vi.fn()} />);
     const trigger = screen.getByRole('button', { name: 'Actions for T' });

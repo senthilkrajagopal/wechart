@@ -4261,7 +4261,20 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
   - Files: `packages/web/src/dashboard/*` (the rows view T120 builds), `e2e/markings.spec.ts`
   - Failing test: with nothing marked, View underlying rows shows the tile's query ungrouped with its filters, and states the total.
   - Depends on: T120
-- [ ] T269 (AC-240) A details panel that follows the marking, toggled from the menu and the panel
+- [x] T269 (AC-240) A details panel that follows the marking, toggled from the menu and the panel
+  - Done 2026-09-25. **AC-240 is ticked** on `e2e/markings.spec.ts` "the details panel follows the marking, and is turned off from the menu and from itself", in Chrome, Firefox and Safari:
+    - on from the menu with nothing marked, it says "Nothing is marked.";
+    - shipped marked, its 80 rows; processing marked, its own 80 and no shipped row;
+    - off from its own switch, then on and off from the menu, checked while on;
+    - the one-off View marked rows' switch pins it open.
+    - **The design:** the context-menu analysis' P3 and its state G. AC-114's rows, pinned open under the tiles, following the marking.
+      - `MarkedRows` takes `follow: { key, onChange }`. The key is the marking's query, and a change asks again; an answer to a marking already replaced is dropped. There's no key while nothing is marked.
+      - As the panel it's a region, not a dialog: no focus trap and no Escape, so the dashboard stays in reach. It says "Asked again each time the marking changes."
+      - Its switch, "Details panel: follow the marking", is `role="switch"`. The one-off view offers the same switch for marked rows, to pin it open.
+      - The tile menu's marked group has a "Details panel" checkbox, offered with nothing marked too. The panel is on for one tile at a time.
+      - `EditChrome` docks it under the tiles in a `foot` slot, and the canvas gives it room (at most 40% of the height) rather than going under it.
+    - **Tests that failed first:** `MarkedRows.test.tsx`'s five details-panel cases, `TileViewMenu.test.tsx`'s checkbox, and the e2e.
+    - **The e2e:** it scrolls the tile's foot into view before each click, because the panel shortens the canvas, the more once its rows come. Scrolling ECharts' own labels instead detached them in Safari, so `clickBar` is unchanged.
   - Files: `packages/web/src/dashboard/*`, `e2e/markings.spec.ts`
   - Failing test: with the panel on, a new marking replaces its rows and total; the menu's checkbox and the panel's own control both turn it off.
   - Depends on: T120, T266

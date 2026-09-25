@@ -1677,6 +1677,62 @@ fieldset.model-field > legend {
   white-space: nowrap;
 }
 .marked-rows__table td { padding: 4px 8px; border-top: 1px solid var(--wc-border-subtle); white-space: nowrap; }
+/* Its head: the heading, and the switch that pins it open (the context-menu
+   analysis' drawer head, state G). */
+.marked-rows__head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.marked-rows__head h2 { margin: 0; }
+.marked-rows__follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: var(--wc-text-xs-size);
+  color: var(--wc-text-secondary);
+}
+.marked-rows__note { margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.switch {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 8px;
+  background: var(--wc-bg-subtle);
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--wc-text-secondary);
+}
+.switch[aria-checked='true'] { border-color: var(--wc-accent); background: var(--wc-accent); }
+.switch[aria-checked='true']::after { left: 13px; background: var(--wc-bg-surface); }
+/* The details panel (T269, AC-240): the rows pinned open under the tiles,
+   which give it room rather than go under it; its own table scrolls. */
+.dashboard__foot {
+  flex: none;
+  display: flex;
+  max-height: 40vh;
+  border-top: 1px solid var(--wc-border-strong);
+  background: var(--wc-bg-surface);
+}
+.marked-rows--panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 8px 16px 12px;
+}
+.marked-rows--panel h2 { font-size: var(--wc-text-sm-size); }
+.marked-rows--panel .marked-rows__table { flex: 1; }
+.marked-rows--panel .dialog__actions { margin: 0; }
 .view-query__code {
   max-height: 280px;
   margin: 0;

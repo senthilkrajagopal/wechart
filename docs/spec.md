@@ -803,7 +803,7 @@ Traces to: the user, 2026-09-25; `[docs/design/reviews/2026-09-24/chart-context-
       Fails when: a drilled view the database answered shows the parent view's pre-aggregation.
 - [x] AC-239 WHEN the user chooses View underlying rows on a chart tile with nothing marked, THE SYSTEM SHALL show the rows behind the whole tile, as its query ungrouped with its filters, and state the total number of rows.
       Fails when: the rows differ from the tile's query ungrouped, or the total is absent.
-- [ ] AC-240 WHILE the details panel is on, WHEN the marking changes, THE SYSTEM SHALL show the rows behind the newly marked items and their total, and the panel SHALL be turned on and off both from the tile's menu and from the panel itself.
+- [x] AC-240 WHILE the details panel is on, WHEN the marking changes, THE SYSTEM SHALL show the rows behind the newly marked items and their total, and the panel SHALL be turned on and off both from the tile's menu and from the panel itself.
       Fails when: the panel shows rows of a previous marking after the change, or either control does not toggle it.
 - [x] AC-241 WHEN the user chooses Copy › Marked values, THE SYSTEM SHALL put the marked items' member values on the clipboard as tab-separated text with a header row of the members' titles.
       Fails when: the clipboard text differs from the marked items, or has no header row.

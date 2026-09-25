@@ -1993,6 +1993,85 @@ test('Filter to marked and Filter out marked filter every tile they reach, clear
 });
 
 /**
+ * T269 / AC-240: WHILE the details panel is on, WHEN the marking changes, THE
+ * SYSTEM SHALL show the rows behind the newly marked items and their total,
+ * and the panel SHALL be turned on and off both from the tile's menu and from
+ * the panel itself. `Fails when: the panel shows rows of a previous marking
+ * after the change, or either control does not toggle it.`
+ *
+ * 240 orders, 80 of each status (infra/sample-db/init.sql).
+ */
+test('the details panel follows the marking, and is turned off from the menu and from itself', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  const detailsItem = async () => {
+    await status.getByRole('button', { name: /^Actions for / }).click();
+    return status
+      .getByRole('menu', { name: /^Actions for / })
+      .getByRole('menuitemcheckbox', { name: 'Details panel' });
+  };
+  const panel = page.getByRole('region', { name: 'Marked rows: By status' });
+  const statuses = () =>
+    panel.locator('tbody tr').evaluateAll((rows) => rows.map((row) => row.textContent ?? ''));
+
+  // On from the menu, with nothing marked yet: it says so, beside the tiles.
+  const first = await detailsItem();
+  await expect(first).toHaveAttribute('aria-checked', 'false');
+  await first.click();
+  await expect(panel).toContainText('Nothing is marked.');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Shipped marked: its 80 rows; then processing: its own 80, none shipped.
+  // The canvas gives the panel room — the more as its rows come — so the
+  // tile's foot, where its bars' labels are, is scrolled to, as a user would.
+  const inView = () =>
+    status.evaluate((element) => {
+      element.scrollIntoView({ block: 'end' });
+    });
+  await inView();
+  await clickBar(page, status, 'shipped');
+  await expect(panel.getByTestId('rows-count')).toHaveText('Showing 80 of 80 rows');
+  expect((await statuses()).every((text) => text.includes('shipped'))).toBe(true);
+  await inView();
+  await clickBar(page, status, 'processing');
+  await expect(panel.getByTestId('rows-count')).toHaveText('Showing 80 of 80 rows');
+  await expect
+    .poll(async () => (await statuses()).every((text) => text.includes('processing')))
+    .toBe(true);
+  expect((await statuses()).some((text) => text.includes('shipped'))).toBe(false);
+
+  // Off from its own switch.
+  await panel.getByRole('switch', { name: 'Details panel: follow the marking' }).click();
+  await expect(panel).toHaveCount(0);
+
+  // On and off again from the menu, which shows it checked while on.
+  await (await detailsItem()).click();
+  await expect(panel.getByTestId('rows-count')).toHaveText('Showing 80 of 80 rows');
+  const item = await detailsItem();
+  await expect(item).toHaveAttribute('aria-checked', 'true');
+  await item.click();
+  await expect(panel).toHaveCount(0);
+
+  // And the one-off view's switch pins it open.
+  await status.getByRole('button', { name: /^Actions for / }).click();
+  await status
+    .getByRole('menu', { name: /^Actions for / })
+    .getByRole('group', { name: /marked$/ })
+    .getByRole('menuitem', { name: 'View marked rows' })
+    .click();
+  await page
+    .getByRole('dialog', { name: 'Marked rows: By status' })
+    .getByRole('switch', { name: 'Details panel: follow the marking' })
+    .click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(panel.getByTestId('rows-count')).toHaveText('Showing 80 of 80 rows');
+});
+
+/**
  * AC-114: WHEN the user chooses "View marked rows", THE SYSTEM SHALL show the
  * underlying rows behind the marked items, state the total number of rows,
  * and offer an export of them (direction.md rule 53).

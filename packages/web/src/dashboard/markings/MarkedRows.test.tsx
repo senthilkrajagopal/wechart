@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -128,5 +128,109 @@ describe('the rows behind a tile', () => {
     await userEvent.keyboard('{Escape}');
 
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+/**
+ * T269 / AC-240: WHILE the details panel is on, WHEN the marking changes, THE
+ * SYSTEM SHALL show the rows behind the newly marked items and their total,
+ * and the panel SHALL be turned on and off both from the tile's menu and from
+ * the panel itself. `Fails when: the panel shows rows of a previous marking
+ * after the change, or either control does not toggle it.`
+ *
+ * The same rows, pinned open (the context-menu analysis, P3): a region
+ * beside the dashboard rather than a dialog over it, so the marking can
+ * change under it, asking again each time it does.
+ */
+describe('the details panel', () => {
+  const panel = (key: string | undefined, load: Load, onFollow = vi.fn()) => (
+    <MarkedRows
+      title="By status"
+      heading="Marked rows"
+      load={load}
+      follow={{ key, onChange: onFollow }}
+      onClose={vi.fn()}
+    />
+  );
+
+  it('asks again when the marking changes, showing the new rows and total, never the old', async () => {
+    const answers: Record<string, RowsAnswer> = {
+      shipped: { rows: [{ 'orders.status': 'shipped' }], total: 80 },
+      returned: { rows: [{ 'orders.status': 'returned' }], total: 7 },
+    };
+    let marking = 'shipped';
+    const load = vi.fn<Load>(async () => answers[marking] as RowsAnswer);
+    const { rerender } = render(panel('shipped', load));
+
+    const region = screen.getByRole('region', { name: 'Marked rows: By status' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(await within(region).findByText('shipped')).toBeTruthy();
+    expect(within(region).getByTestId('rows-count').textContent).toBe('Showing 1 of 80 rows');
+    expect(region.textContent).toContain('Asked again each time the marking changes.');
+
+    marking = 'returned';
+    rerender(panel('returned', load));
+    expect(await within(region).findByText('returned')).toBeTruthy();
+    expect(within(region).queryByText('shipped')).toBeNull();
+    expect(within(region).getByTestId('rows-count').textContent).toBe('Showing 1 of 7 rows');
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops an answer for a marking already replaced', async () => {
+    const pending: ((answer: RowsAnswer) => void)[] = [];
+    const load = vi.fn<Load>(() => new Promise<RowsAnswer>((resolve) => pending.push(resolve)));
+    const { rerender } = render(panel('first', load));
+    rerender(panel('second', load));
+
+    pending[1]?.({ rows: [{ 'orders.status': 'second' }], total: 1 });
+    const region = screen.getByRole('region', { name: 'Marked rows: By status' });
+    expect(await within(region).findByText('second')).toBeTruthy();
+    pending[0]?.({ rows: [{ 'orders.status': 'first' }], total: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(within(region).queryByText('first')).toBeNull();
+  });
+
+  it('says nothing is marked, asking nothing, when the marking empties', () => {
+    const load = vi.fn<Load>();
+    render(panel(undefined, load));
+
+    expect(screen.getByRole('region', { name: 'Marked rows: By status' }).textContent).toContain(
+      'Nothing is marked.',
+    );
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('is turned off from its own switch', async () => {
+    const onFollow = vi.fn();
+    render(
+      panel(
+        'shipped',
+        vi.fn<Load>(async () => ({ rows: [], total: 0 })),
+        onFollow,
+      ),
+    );
+
+    const toggle = screen.getByRole('switch', { name: 'Details panel: follow the marking' });
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    await userEvent.click(toggle);
+    expect(onFollow).toHaveBeenCalledWith(false);
+  });
+
+  it('is turned on from the one-off view’s switch', async () => {
+    const onFollow = vi.fn();
+    render(
+      <MarkedRows
+        title="By status"
+        heading="Marked rows"
+        load={vi.fn<Load>(async () => ({ rows: [], total: 0 }))}
+        onFollow={onFollow}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const toggle = screen.getByRole('switch', { name: 'Details panel: follow the marking' });
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    await userEvent.click(toggle);
+    expect(onFollow).toHaveBeenCalledWith(true);
   });
 });

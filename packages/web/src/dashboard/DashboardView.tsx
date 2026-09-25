@@ -835,6 +835,17 @@ interface TileCharts {
    */
   readonly onViewRows?: ((chartId: string, tileId: string, marked: boolean) => void) | undefined;
   /**
+   * The details panel (T269, AC-240): those rows pinned open under the
+   * dashboard, following the marking — whether it's on for this tile, and
+   * its switch in the tile's menu.
+   */
+  readonly detailsPanelOf?:
+    | ((
+        chartId: string,
+        tileId: string,
+      ) => { readonly on: boolean; readonly onToggle: () => void } | undefined)
+    | undefined;
+  /**
    * The marked rows as CSV, for Export › Marked rows CSV (T272, AC-244): the
    * rows View marked rows shows, read up to Cube's row limit and written as
    * its download writes them.
@@ -1189,6 +1200,7 @@ function Elements({
                                 charts.onViewRows?.(chartId, element.id, true);
                               },
                             }),
+                        detailsPanel: charts.detailsPanelOf?.(chartId, element.id),
                         ...(charts.exportRowsOf === undefined
                           ? {}
                           : { exportRows: charts.exportRowsOf(chartId, element.id) }),
@@ -2276,8 +2288,12 @@ export function DashboardView({
   const [menuRequest, setMenuRequest] = useState<
     { tileId: string; seq: number; at?: { x: number; y: number } } | undefined
   >(undefined);
+  /**
+   * The rows open (T120, T268): once, over the dashboard; or `following`, as
+   * the details panel under it, asked again as the marking changes (T269).
+   */
   const [rowsFor, setRowsFor] = useState<
-    { chartId: string; tileId: string; marked: boolean } | undefined
+    { chartId: string; tileId: string; marked: boolean; following?: boolean } | undefined
   >(undefined);
   /**
    * The charts a refresh was asked for (T154, AC-148): once its answer is in,
@@ -3186,6 +3202,17 @@ export function DashboardView({
         setRowsFor({ chartId, tileId, marked });
       }
     },
+    // On for one tile at a time; on for another tile, it follows that one.
+    detailsPanelOf: (chartId: string, tileId: string) => {
+      const on = rowsFor?.following === true && rowsFor.tileId === tileId;
+      return {
+        on,
+        onToggle: () => {
+          if (on) closeRows();
+          else setRowsFor({ chartId, tileId, marked: true, following: true });
+        },
+      };
+    },
     exportRowsOf: (chartId: string, tileId: string) => async (signal: AbortSignal) => {
       const query = rowsQueryOf(chartId, tileId, true, DOWNLOADED);
       if (query === undefined) throw new Error('There is nothing marked to export.');
@@ -3467,6 +3494,37 @@ export function DashboardView({
       return undefined;
     }
   }
+  /** What the rows show, once or as the details panel: the tile's query ungrouped, under its marking. */
+  const rowsProps = (open: { chartId: string; tileId: string; marked: boolean }) => ({
+    title: chartTitleOf(open.chartId) ?? 'this chart',
+    heading: open.marked ? 'Marked rows' : 'Underlying rows',
+    load: async (limit: number, signal: AbortSignal) => {
+      const query = rowsQueryOf(open.chartId, open.tileId, open.marked, limit);
+      if (query === undefined) throw new Error('There is nothing marked to show rows for.');
+      if (typeof query === 'string') throw new Error(query);
+      const result = (await loadTile({
+        query,
+        signal,
+        ...(preview === undefined ? {} : { context: preview }),
+      })) as { data?: unknown; total?: unknown };
+      return {
+        rows: Array.isArray(result.data) ? (result.data as Record<string, unknown>[]) : [],
+        total: typeof result.total === 'number' ? result.total : undefined,
+      };
+    },
+    measures: drawn.specs[open.chartId]?.measures ?? [],
+    formats: drawn.specs[open.chartId]?.formats ?? {},
+    titles: drawn.specs[open.chartId]?.titles ?? {},
+  });
+  /**
+   * The details panel's marking, as the query it asks (AC-240): a change
+   * asks again; none while nothing is marked.
+   */
+  const followed = (() => {
+    if (rowsFor?.following !== true) return undefined;
+    const query = rowsQueryOf(rowsFor.chartId, rowsFor.tileId, true, 1);
+    return query === undefined ? undefined : JSON.stringify(query);
+  })();
   const closeRows = () => {
     const opener = rowsFor?.tileId ?? '';
     setRowsFor(undefined);
@@ -3736,27 +3794,17 @@ export function DashboardView({
           }}
         />
       )}
-      {rowsFor === undefined ? null : (
+      {rowsFor === undefined || rowsFor.following === true ? null : (
         <MarkedRows
-          title={chartTitleOf(rowsFor.chartId) ?? 'this chart'}
-          heading={rowsFor.marked ? 'Marked rows' : 'Underlying rows'}
-          load={async (limit, signal) => {
-            const query = rowsQueryOf(rowsFor.chartId, rowsFor.tileId, rowsFor.marked, limit);
-            if (query === undefined) throw new Error('There is nothing marked to show rows for.');
-            if (typeof query === 'string') throw new Error(query);
-            const result = (await loadTile({
-              query,
-              signal,
-              ...(preview === undefined ? {} : { context: preview }),
-            })) as { data?: unknown; total?: unknown };
-            return {
-              rows: Array.isArray(result.data) ? (result.data as Record<string, unknown>[]) : [],
-              total: typeof result.total === 'number' ? result.total : undefined,
-            };
-          }}
-          measures={drawn.specs[rowsFor.chartId]?.measures ?? []}
-          formats={drawn.specs[rowsFor.chartId]?.formats ?? {}}
-          titles={drawn.specs[rowsFor.chartId]?.titles ?? {}}
+          {...rowsProps(rowsFor)}
+          // Marked rows only: pinned open, they follow the marking (AC-240).
+          {...(rowsFor.marked
+            ? {
+                onFollow: () => {
+                  setRowsFor({ ...rowsFor, following: true });
+                },
+              }
+            : {})}
           onClose={closeRows}
         />
       )}
@@ -4173,6 +4221,21 @@ export function DashboardView({
          * there while the tiles scroll (AC-196). The tab strip shows even for
          * one page (AC-207).
          */
+        // The details panel, docked under the tiles while it follows the marking (T269, AC-240).
+        foot={
+          rowsFor?.following === true ? (
+            <MarkedRows
+              {...rowsProps(rowsFor)}
+              follow={{
+                key: followed,
+                onChange: (on) => {
+                  if (!on) closeRows();
+                },
+              }}
+              onClose={closeRows}
+            />
+          ) : undefined
+        }
         band={(session) => (
           <>
             <PageTabsRow session={session} pageId={pageId} onOpenPage={setOpenPage} />

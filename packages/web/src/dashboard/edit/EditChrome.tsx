@@ -161,6 +161,11 @@ export interface EditChromeProps<T> {
    * prototype stacks them (T246), and so held while the canvas scrolls.
    */
   readonly band?: ((session: EditSession<T>) => ReactNode) | undefined;
+  /**
+   * Docked under the canvas, full width — the details panel (T269, AC-240):
+   * the canvas gives it room rather than go under it.
+   */
+  readonly foot?: ReactNode;
   readonly children: (session: EditSession<T>) => ReactNode;
 }
 
@@ -177,6 +182,7 @@ export function EditChrome<T>({
   onDiscard,
   readOnly = false,
   band,
+  foot,
   children,
 }: EditChromeProps<T>) {
   const [editing, setEditing] = useState(false);
@@ -423,6 +429,7 @@ export function EditChrome<T>({
           </div>
           {editing ? <EditSidebar panels={panels?.(session)} /> : null}
         </div>
+        {foot === undefined || foot === null ? null : <div className="dashboard__foot">{foot}</div>}
       </div>
     </>
   );

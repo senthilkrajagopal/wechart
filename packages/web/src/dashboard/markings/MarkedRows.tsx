@@ -45,6 +45,8 @@ export function MarkedRows({
   measures = [],
   formats = {},
   titles,
+  follow,
+  onFollow,
   onClose,
   save = (name, text) => {
     saveFile(name, text);
@@ -59,49 +61,77 @@ export function MarkedRows({
   measures?: readonly string[];
   formats?: MemberFormats;
   titles?: Readonly<Record<string, string>>;
+  /**
+   * The details panel (T269, AC-240): the rows pinned open beside the
+   * dashboard, asked again whenever `key` — the marking's query — changes;
+   * none while nothing is marked. `onChange(false)` is its switch turned off.
+   */
+  follow?: { key: string | undefined; onChange: (on: boolean) => void } | undefined;
+  /** Where offered, the one-off view's switch that pins it open as the panel. */
+  onFollow?: ((on: boolean) => void) | undefined;
   onClose: () => void;
   /** How the file is handed over; the browser's download unless a test says. */
   save?: (name: string, text: string) => void;
 }) {
   const named = useId();
   const box = useRef<HTMLDivElement>(null);
+  /** No box to keep focus in while it is a panel: the dashboard stays in reach. */
+  const noBox = useRef<HTMLDivElement>(null);
   const closer = useRef<HTMLButtonElement>(null);
-  useFocusTrap(box);
-  const [answer, setAnswer] = useState<
-    { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'rows'; value: RowsAnswer }
-  >({ kind: 'loading' });
+  const panel = follow !== undefined;
+  useFocusTrap(panel ? noBox : box);
+  const [answered, setAnswered] = useState<{
+    for: string;
+    state: { kind: 'error'; message: string } | { kind: 'rows'; value: RowsAnswer };
+  }>();
   const [note, setNote] = useState<{ kind: StateKind; text: string } | undefined>(undefined);
 
-  // The latest `load`, read once on opening: the dialog shows one answer.
+  // The latest `load`: read once on opening, where the dialog shows one
+  // answer; as the panel, again each time the marking's query changes, the
+  // answer to one it has left behind dropped.
   const loading = useRef(load);
   useEffect(() => {
     loading.current = load;
   }, [load]);
+  const asking = panel ? (follow.key ?? null) : 'once';
   useEffect(() => {
+    if (asking === null) return undefined;
     const aborted = new AbortController();
     loading.current(SHOWN, aborted.signal).then(
       (value) => {
-        if (!aborted.signal.aborted) setAnswer({ kind: 'rows', value });
+        if (!aborted.signal.aborted) setAnswered({ for: asking, state: { kind: 'rows', value } });
       },
       (error: unknown) => {
         if (aborted.signal.aborted) return;
-        setAnswer({
-          kind: 'error',
-          message: error instanceof Error ? error.message : 'The rows could not be read.',
+        setAnswered({
+          for: asking,
+          state: {
+            kind: 'error',
+            message: error instanceof Error ? error.message : 'The rows could not be read.',
+          },
         });
       },
     );
     return () => {
       aborted.abort();
     };
-  }, []);
+  }, [asking]);
+  /** What's shown: the answer to the marking as it is now, and to no other. */
+  const answer =
+    asking === null
+      ? ({ kind: 'nothing' } as const)
+      : answered?.for === asking
+        ? answered.state
+        : ({ kind: 'loading' } as const);
 
-  // Escape closes it, as every dialog here closes; focus starts on Close.
+  // Escape closes the dialog, as every dialog here closes; focus starts on
+  // Close. The panel takes neither: the dashboard beside it keeps its keys.
   const closing = useRef(onClose);
   useEffect(() => {
     closing.current = onClose;
   }, [onClose]);
   useEffect(() => {
+    if (panel) return undefined;
     closer.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closing.current();
@@ -110,7 +140,7 @@ export function MarkedRows({
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, []);
+  }, [panel]);
 
   /** A download being read, stopped when the dialog closes (T120's review). */
   const downloading = useRef<AbortController | null>(null);
@@ -152,7 +182,97 @@ export function MarkedRows({
   const write = columns.map((member) => formatterFor(member, formats));
   const total = answer.kind === 'rows' ? answer.value.total : undefined;
 
-  return (
+  /** Its switch: on, the rows pinned open and following the marking (AC-240). */
+  const toggle =
+    follow === undefined && onFollow === undefined ? null : (
+      <div className="marked-rows__follow">
+        <span id={`${named}-follow`}>Details panel: follow the marking</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={panel}
+          aria-labelledby={`${named}-follow`}
+          className="switch"
+          onClick={() => {
+            if (follow !== undefined) follow.onChange(false);
+            else onFollow?.(true);
+          }}
+        />
+      </div>
+    );
+
+  const body = (
+    <>
+      <div className="marked-rows__head">
+        <h2 id={named}>
+          {heading}: {title}
+        </h2>
+        {toggle}
+      </div>
+      {panel ? (
+        // One query a marking change while it's on (the analysis, P3).
+        <p className="marked-rows__note">Asked again each time the marking changes.</p>
+      ) : null}
+      {answer.kind === 'nothing' ? <p>Nothing is marked.</p> : null}
+      {answer.kind === 'loading' ? <StateLine kind="run">Reading the rows…</StateLine> : null}
+      {answer.kind === 'error' ? <StateLine kind="err">{answer.message}</StateLine> : null}
+      {answer.kind === 'rows' ? (
+        <>
+          <p className="marked-rows__count" data-testid="rows-count">
+            {total === undefined
+              ? `Showing ${rows.length.toLocaleString('en-GB')} rows. The total could not be read.`
+              : `Showing ${rows.length.toLocaleString('en-GB')} of ${total.toLocaleString('en-GB')} rows`}
+          </p>
+          <div className="marked-rows__table">
+            <table>
+              <thead>
+                <tr>
+                  {columns.map((column) => (
+                    <th key={column} scope="col">
+                      {columnTitleOf(column, titles)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  // Ungrouped rows have no key of their own to go by, and
+                  // the list is read once and never reordered.
+                  <tr key={index}>
+                    {columns.map((column, at) => (
+                      <td key={column}>{write[at]?.(row[column]) ?? ''}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : null}
+      {note === undefined ? null : <StateLine kind={note.kind}>{note.text}</StateLine>}
+      <div className="dialog__actions">
+        <button
+          type="button"
+          disabled={answer.kind !== 'rows' || note?.kind === 'run'}
+          onClick={download}
+        >
+          Download CSV
+        </button>
+        {/* The panel's own switch is how it goes (AC-240). */}
+        {panel ? null : (
+          <button type="button" ref={closer} onClick={onClose}>
+            Close
+          </button>
+        )}
+      </div>
+    </>
+  );
+
+  return panel ? (
+    <section aria-labelledby={named} className="marked-rows marked-rows--panel">
+      {body}
+    </section>
+  ) : (
     <div className="dialog-backdrop">
       <div
         ref={box}
@@ -161,57 +281,7 @@ export function MarkedRows({
         aria-labelledby={named}
         className="dialog marked-rows"
       >
-        <h2 id={named}>
-          {heading}: {title}
-        </h2>
-        {answer.kind === 'loading' ? <StateLine kind="run">Reading the rows…</StateLine> : null}
-        {answer.kind === 'error' ? <StateLine kind="err">{answer.message}</StateLine> : null}
-        {answer.kind === 'rows' ? (
-          <>
-            <p className="marked-rows__count" data-testid="rows-count">
-              {total === undefined
-                ? `Showing ${rows.length.toLocaleString('en-GB')} rows. The total could not be read.`
-                : `Showing ${rows.length.toLocaleString('en-GB')} of ${total.toLocaleString('en-GB')} rows`}
-            </p>
-            <div className="marked-rows__table">
-              <table>
-                <thead>
-                  <tr>
-                    {columns.map((column) => (
-                      <th key={column} scope="col">
-                        {columnTitleOf(column, titles)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, index) => (
-                    // Ungrouped rows have no key of their own to go by, and
-                    // the list is read once and never reordered.
-                    <tr key={index}>
-                      {columns.map((column, at) => (
-                        <td key={column}>{write[at]?.(row[column]) ?? ''}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        ) : null}
-        {note === undefined ? null : <StateLine kind={note.kind}>{note.text}</StateLine>}
-        <div className="dialog__actions">
-          <button
-            type="button"
-            disabled={answer.kind !== 'rows' || note?.kind === 'run'}
-            onClick={download}
-          >
-            Download CSV
-          </button>
-          <button type="button" ref={closer} onClick={onClose}>
-            Close
-          </button>
-        </div>
+        {body}
       </div>
     </div>
   );
