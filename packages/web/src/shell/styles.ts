@@ -1991,81 +1991,164 @@ main:has(.dashboard) {
   min-height: 0;
 }
 .dashboard--under-overlay { visibility: hidden; }
+/* The dashboard settings page, the prototype's settings overlay (T249,
+   index.html 2107–2205): a 41 px head, a 220 px nav, and the section's
+   content flat on the page, not in a card. */
 .settings-page { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .settings-page__bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 48px;
-}
-.settings-page__actions { display: flex; gap: 8px; }
-.settings-page__bar button {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--wc-border-strong);
-  border-radius: 4px;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
   background: var(--wc-bg-surface);
-  color: var(--wc-text-primary);
-  cursor: pointer;
 }
-.settings-page__save {
-  background: var(--wc-accent);
-  color: var(--wc-text-on-accent);
-  border-color: var(--wc-accent);
-}
-.settings-page__body { display: flex; align-items: stretch; gap: 16px; flex: 1; min-height: 0; }
-/* The left nav direction.md asks for, at the workbench tree's 280px. */
+/* 16 px as the prototype's h1; 600, not its 700 (direction.md §3). */
+.settings-page__title { margin: 0 0 0 8px; font-size: 16px; line-height: 20px; font-weight: 600; }
+.settings-page__spacer { flex: 1; }
+.settings-page__unsaved { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.settings-page__actions { display: flex; gap: 8px; }
+/* A state said in the bar (saving, a refused save) takes a line of its own. */
+.settings-page__bar > .settings-page__state { flex-basis: 100%; margin: 0; }
+.settings-page__bar .btn-sm { border-radius: 6px; }
+.settings-page__body { display: flex; align-items: stretch; flex: 1; min-height: 0; }
+/* .settings-nav: 220 px on the surface, ruled off from the content. */
 .settings-page__nav {
-  flex: 0 0 280px;
+  flex: 0 0 220px;
   display: grid;
   align-content: start;
-  gap: 4px;
+  padding: 8px 0;
   overflow: auto;
   min-height: 0;
+  border-right: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
 }
+/* .settings-nav .file: 32 px rows at 12 px, flush to the nav's edges. */
 .settings-page__nav button {
-  padding: 8px 12px;
+  height: 32px;
+  padding: 0 12px 0 24px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 0;
   background: none;
-  color: var(--wc-text-secondary);
+  color: var(--wc-text-primary);
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
-.settings-page__nav button:hover { background: var(--wc-bg-subtle); }
-.settings-page__nav button[aria-current='true'] {
-  background: var(--wc-bg-subtle);
-  color: var(--wc-text-primary);
-  font-weight: var(--wc-text-sm-strong-weight);
+.settings-page__nav button:hover { background: var(--wc-bg-hover); }
+.settings-page__nav button[aria-current='true'],
+.settings-page__nav button[aria-current='true']:hover {
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-weight: 600;
 }
+/* .settings-inner: flat, padded 16 24 48, at most 920 px. */
 .settings-page__panel {
   flex: 1;
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 16px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 6px;
-  background: var(--wc-bg-surface);
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 16px 24px 48px;
 }
-.settings-page__later { color: var(--wc-text-secondary); }
+.settings-page__panel > * { max-width: 872px; }
+.settings-page__panel > h2 { margin: 0; font-size: 18px; line-height: 20px; font-weight: 600; }
+.settings-page__panel p { margin: 0; }
+.settings-page__later,
+.settings-page__intro { color: var(--wc-text-secondary); }
+.settings-page__subhead {
+  margin: 8px 0 0;
+  font-size: var(--wc-text-md-size);
+  line-height: var(--wc-text-md-line);
+  font-weight: 600;
+}
+/* .formgrid: fields two or more to a row, a wide one the whole row. */
+.settings-form {
+  display: grid;
+  gap: 8px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  align-items: start;
+}
+.settings-form__wide { grid-column: 1 / -1; }
+.settings-form textarea { font-size: 12px; line-height: 18px; }
+/* The prototype's .warnbar for a section whose mode is not in use (F28). */
+.settings-page__inactive {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 20px;
+  background: color-mix(in srgb, var(--wc-status-warning-icon) 16%, var(--wc-bg-surface));
+  color: var(--wc-text-primary);
+}
+.settings-page__inactive > svg[data-icon] { flex: none; margin-top: 3px; color: var(--wc-status-warning-icon); }
 /* Settings › Markings (AC-198): the prototype's colour slots, default radio,
    and a tile's limit checkboxes, each with its marking's swatch. */
-.markings-table { margin-bottom: 8px; }
-.marking-slots,
-.marking-limits { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
-.marking-slot,
-.marking-limit,
-.marking-default { display: inline-flex; gap: 4px; align-items: center; }
+.markings-table td,
+.markings-table th[scope='row'] { vertical-align: middle; }
+.markings-table th[scope='row'] { background: none; font-weight: 600; }
+.marking-slots { display: inline-flex; gap: 2px; align-items: center; }
+.marking-limits { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.marking-default { display: inline-flex; gap: 6px; align-items: center; }
+/* .mk-slot: 22 × 24, a transparent rule, ringed in the accent when chosen.
+   The radio lies over it, unseen, so it is what a pointer presses. */
+.marking-slot {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 24px;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+.marking-slot:has(input:checked) { border-color: var(--wc-accent); box-shadow: 0 0 0 1px var(--wc-accent); }
+.marking-slot > input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.marking-slot:has(input:focus-visible) { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
+/* .mk-swatch: the colour, ringed inside in border-strong. */
 .marking-swatch {
   display: inline-block;
+  flex: none;
   width: 14px;
   height: 14px;
   border-radius: 3px;
-  border: 1px solid var(--wc-border-subtle);
+  box-shadow: inset 0 0 0 1px var(--wc-border-strong);
+  vertical-align: middle;
 }
-.markings-add { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+.marking-slot > .marking-swatch { width: 16px; height: 16px; }
+/* .chk: a limit, a 12 px pill with its checkbox and the marking's swatch. */
+.marking-limit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.marking-limit > .marking-swatch { width: 10px; height: 10px; }
+/* The marking a tile marks with is not one it can be limited by: said in
+   muted ink (not the prototype's opacity, which takes the text under AA). */
+.marking-limit:has(input:disabled) { color: var(--wc-text-muted); }
+.settings-page input[type='radio'],
+.settings-page input[type='checkbox'] { accent-color: var(--wc-accent); }
+/* The page's small controls are the prototype's .input.sm and .select.sm. */
+.settings-page input.input-sm:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']),
+.settings-page .select-sm { height: 28px; font-size: 12px; }
+.markings-add { display: flex; gap: 12px; align-items: center; }
 
 /* "Limit data using markings" (AC-108). The reason sits beside the option it
    explains, not in a tooltip: a disabled control with no explanation is the
@@ -2123,28 +2206,49 @@ main:has(.dashboard) {
   gap: 4px;
   align-items: center;
   font-size: var(--wc-text-xs-size);
+  font-weight: 400;
   color: var(--wc-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
+.settings-page__nav button[aria-current='true'] .settings-page__activity { color: var(--wc-accent); }
 .settings-page__activity > svg[data-icon='ok'] { color: var(--wc-status-success); }
 /* direction.md calls these radio cards, so they are cards: the whole option is
-   the target, not a 13px circle beside it. */
-.settings-modes { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; max-width: 520px; }
+   the target, not a 13px circle beside it. The prototype's .radio-card (T249,
+   F27, mismatch 33): 12 px padding, radius 8, a strong rule; the chosen one
+   ringed in the accent over a 40 % tint of its soft ground. */
+.settings-modes { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
 .settings-modes legend { padding: 0 0 8px; font-weight: var(--wc-text-sm-strong-weight); }
+.settings-modes__cards {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
 .settings-modes__card {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
   padding: 12px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 6px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 8px;
+  background: var(--wc-bg-surface);
   cursor: pointer;
 }
-.settings-modes__card:hover { background: var(--wc-bg-subtle); }
-.settings-modes__card:has(input:checked) {
+.settings-modes__card:hover { background: var(--wc-bg-hover); }
+.settings-modes__card:has(input:checked),
+.settings-modes__card:has(input:checked):hover {
   border-color: var(--wc-accent);
-  background: var(--wc-bg-subtle);
+  box-shadow: 0 0 0 1px var(--wc-accent);
+  background: color-mix(in srgb, var(--wc-bg-accent-soft) 40%, var(--wc-bg-surface));
+}
+.settings-modes__card > input { flex: none; margin: 3px 0 0; }
+.settings-modes__text { display: grid; gap: 4px; }
+.settings-modes__name { font-size: 14px; line-height: 20px; font-weight: 600; }
+.settings-modes__about { color: var(--wc-text-secondary); }
+.settings-modes__refs {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-secondary);
 }
 .settings-field { display: grid; gap: 4px; max-width: 420px; }
 .settings-field input {

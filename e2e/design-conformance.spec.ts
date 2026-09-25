@@ -3129,3 +3129,319 @@ test.describe('T257: the chart editor', () => {
     });
   });
 });
+
+/**
+ * T249 (AC-187, AC-231): the dashboard settings page as the prototype draws it
+ * (dash-settings.js, index.html 2107–2205) — its bar, nav, flat content, mode
+ * cards, inactive banner and markings tables, and Escape leaving as Cancel
+ * does (recheck-dashboard F26–F29; mismatches 27–34).
+ *
+ * Measured on the prototype's settings page at 1,440 × 900 on 2026-09-25.
+ * Weights are direction.md's 600 where the prototype's headings are 700
+ * (direction.md §3: only 400 and 600).
+ */
+test.describe('T249: the dashboard settings page', () => {
+  const openSettings = async (page: Page) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await page.getByRole('button', { name: 'Dashboard settings' }).click();
+    const settings = page.getByTestId('dashboard-settings');
+    await expect(settings.getByRole('heading', { name: 'General', level: 2 })).toBeVisible();
+    return settings;
+  };
+  const section = (settings: Locator, name: string) =>
+    settings.getByRole('navigation', { name: 'Settings sections' }).locator(`[data-section="${name}"]`);
+
+  test('the bar: 41 px, titled "Dashboard settings", its buttons 24 px and Save the primary', async ({
+    page,
+  }) => {
+    const settings = await openSettings(page);
+    // .settings-head { padding: 8px 16px; border-bottom: 1px solid var(--border-subtle);
+    //                  background: var(--bg-surface) } — 41 px measured
+    const bar = settings.locator('.settings-page__bar');
+    expect(
+      await style(
+        bar,
+        'height',
+        'padding-left',
+        'background-color',
+        'border-bottom-width',
+        'border-bottom-color',
+      ),
+    ).toEqual({
+      height: '41px',
+      'padding-left': '16px',
+      'background-color': await token(page, 'bg-surface', 'background-color'),
+      'border-bottom-width': '1px',
+      'border-bottom-color': await token(page, 'border-subtle', 'background-color'),
+    });
+    // .settings-head h1 { font-size: 16px } "Dashboard settings"
+    const title = bar.getByRole('heading', { name: 'Dashboard settings', level: 1 });
+    expect(await style(title, 'font-size', 'font-weight')).toEqual({
+      'font-size': '16px',
+      'font-weight': '600',
+    });
+    // .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; border-radius: 6px }
+    for (const name of [/^← Back to/, /^Cancel$/, /^Save settings$/]) {
+      expect(
+        await style(bar.getByRole('button', { name }), 'height', 'font-size', 'border-radius'),
+      ).toEqual({ height: '24px', 'font-size': '12px', 'border-radius': '6px' });
+    }
+    // .btn.primary
+    expect(
+      await style(
+        bar.getByRole('button', { name: 'Save settings' }),
+        'background-color',
+        'color',
+        'font-weight',
+      ),
+    ).toEqual({
+      'background-color': await token(page, 'accent', 'background-color'),
+      color: await token(page, 'text-on-accent'),
+      'font-weight': '600',
+    });
+  });
+
+  test('the nav: 220 px, 32 px rows, the open section on the accent’s tint; the content flat', async ({
+    page,
+  }) => {
+    const settings = await openSettings(page);
+    // .settings-nav { width: 220px; border-right: 1px solid var(--border-subtle); background: var(--bg-surface) }
+    const nav = settings.getByRole('navigation', { name: 'Settings sections' });
+    expect(
+      await style(nav, 'width', 'background-color', 'border-right-width', 'border-right-color'),
+    ).toEqual({
+      width: '220px',
+      'background-color': await token(page, 'bg-surface', 'background-color'),
+      'border-right-width': '1px',
+      'border-right-color': await token(page, 'border-subtle', 'background-color'),
+    });
+    // .settings-nav .file { height: 32px; padding: 0 12px 0 24px; font-size: 12px }
+    // .file[aria-current='true'] { background: var(--accent-soft); color: var(--accent); font-weight: 600 }
+    const rowStyle = (name: string) =>
+      style(
+        section(settings, name),
+        'height',
+        'padding-left',
+        'font-size',
+        'border-radius',
+        'background-color',
+        'color',
+        'font-weight',
+      );
+    expect(await rowStyle('General')).toEqual({
+      height: '32px',
+      'padding-left': '24px',
+      'font-size': '12px',
+      'border-radius': '0px',
+      'background-color': await token(page, 'bg-accent-soft', 'background-color'),
+      color: await token(page, 'accent'),
+      'font-weight': '600',
+    });
+    expect(await rowStyle('Layout')).toEqual({
+      height: '32px',
+      'padding-left': '24px',
+      'font-size': '12px',
+      'border-radius': '0px',
+      'background-color': 'rgba(0, 0, 0, 0)',
+      color: await token(page, 'text-primary'),
+      'font-weight': '400',
+    });
+
+    // .settings-inner { padding: 16px 24px 48px } — flat, no card round it
+    const panel = settings.getByRole('region', { name: 'General settings' });
+    expect(
+      await style(
+        panel,
+        'padding-top',
+        'padding-left',
+        'padding-bottom',
+        'border-top-width',
+        'background-color',
+      ),
+    ).toEqual({
+      'padding-top': '16px',
+      'padding-left': '24px',
+      'padding-bottom': '48px',
+      'border-top-width': '0px',
+      'background-color': 'rgba(0, 0, 0, 0)',
+    });
+    // .settings-inner h2 { font-size: 18px }
+    expect(
+      await style(panel.getByRole('heading', { name: 'General', level: 2 }), 'font-size', 'font-weight'),
+    ).toEqual({ 'font-size': '18px', 'font-weight': '600' });
+    // .field > label 12/16/600 secondary; Name and Folder side by side (.formgrid), Description wide
+    const name = panel.getByLabel('Name', { exact: true });
+    const folder = panel.getByLabel('Folder', { exact: true });
+    const description = panel.getByLabel('Description', { exact: true });
+    expect(
+      await style(
+        panel.locator('label', { hasText: /^Name$/ }),
+        'font-size',
+        'line-height',
+        'font-weight',
+        'color',
+      ),
+    ).toEqual({
+      'font-size': '12px',
+      'line-height': '16px',
+      'font-weight': '600',
+      color: await token(page, 'text-secondary'),
+    });
+    const [nameBox, folderBox, descriptionBox] = await Promise.all(
+      [name, folder, description].map((field) => field.boundingBox()),
+    );
+    expect(nameBox!.y).toBe(folderBox!.y);
+    expect(folderBox!.x).toBeGreaterThan(nameBox!.x + nameBox!.width);
+    expect(descriptionBox!.y).toBeGreaterThan(nameBox!.y + nameBox!.height);
+    expect(descriptionBox!.width).toBeGreaterThan(folderBox!.x + folderBox!.width - nameBox!.x - 1);
+  });
+
+  test('Interactions: two described radio cards, the chosen one on the accent', async ({
+    page,
+  }) => {
+    const settings = await openSettings(page);
+    await section(settings, 'Interactions').click();
+    const markings = settings.getByRole('radio', { name: 'Markings', exact: true });
+    const cross = settings.getByRole('radio', {
+      name: 'Cross-filtering and cross-highlighting',
+      exact: true,
+    });
+    await expect(markings).toBeChecked();
+    // .radio-card { padding: 12px; border: 1px solid var(--border-strong); border-radius: 8px }
+    // .radio-card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) }
+    const card = (radio: Locator) => radio.locator('xpath=ancestor::label[1]');
+    expect(
+      await style(card(markings), 'padding-top', 'border-radius', 'border-top-color'),
+    ).toEqual({
+      'padding-top': '12px',
+      'border-radius': '8px',
+      'border-top-color': await token(page, 'accent', 'background-color'),
+    });
+    expect(await style(card(cross), 'border-top-color')).toEqual({
+      'border-top-color': await token(page, 'border-strong', 'background-color'),
+    });
+    // .radio-card input { accent-color: var(--accent) } — not the browser's blue (F27)
+    expect(await style(markings, 'accent-color')).toEqual({
+      'accent-color': await token(page, 'accent'),
+    });
+    // Each card says what the mode does (F27), read as the radio's description.
+    await expect(markings).toHaveAccessibleDescription(/marks items in a named, coloured marking/);
+    await expect(cross).toHaveAccessibleDescription(/filters or highlights the other tiles/);
+  });
+
+  test('an inactive section says so in a banner, with its icon (F28)', async ({ page }) => {
+    const settings = await openSettings(page);
+    await section(settings, 'Cross-filtering').click();
+    // .warnbar with SV.warn: "Inactive: this dashboard uses Markings. …"
+    const banner = settings.getByRole('note').filter({ hasText: 'Inactive: this dashboard uses Markings' });
+    await expect(banner).toBeVisible();
+    await expect(banner.locator('[data-icon="warn"]')).toHaveCount(1);
+    expect(await style(banner, 'font-size', 'border-radius', 'padding-left')).toEqual({
+      'font-size': '12px',
+      'border-radius': '6px',
+      'padding-left': '12px',
+    });
+    // And Markings, once the draft cross-filters.
+    await section(settings, 'Interactions').click();
+    await settings.getByRole('radio', { name: 'Cross-filtering and cross-highlighting' }).check();
+    await section(settings, 'Markings').click();
+    await expect(
+      settings
+        .getByRole('note')
+        .filter({ hasText: 'Inactive: this dashboard uses cross-filtering' })
+        .locator('[data-icon="warn"]'),
+    ).toHaveCount(1);
+  });
+
+  test('Escape leaves as Cancel does: at once with nothing changed, and asking first with a change (F29)', async ({
+    page,
+  }) => {
+    let settings = await openSettings(page);
+    await page.keyboard.press('Escape');
+    await expect(settings).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Dashboard settings' })).toBeFocused();
+
+    settings = await openSettings(page);
+    await settings.getByLabel('Description', { exact: true }).fill('Changed');
+    await page.keyboard.press('Escape');
+    const question = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    await expect(question).toBeVisible();
+    // Escape on the question is "Keep editing": the page and the change stay.
+    await page.keyboard.press('Escape');
+    await expect(question).toHaveCount(0);
+    await expect(settings.getByLabel('Description', { exact: true })).toHaveValue('Changed');
+    await page.keyboard.press('Escape');
+    await question.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(settings).toHaveCount(0);
+  });
+
+  test('Markings: the prototype’s tables, 29 px rows, slot buttons and limit pills', async ({
+    page,
+  }) => {
+    const settings = await openSettings(page);
+    await section(settings, 'Markings').click();
+    // .settings-inner > p.sec: the intro in the secondary ink (mismatch 34)
+    expect(
+      await style(settings.getByText(/^A marking is a named, coloured selection/), 'color'),
+    ).toEqual({ color: await token(page, 'text-secondary') });
+
+    const markings = settings.getByRole('table', { name: 'Markings', exact: true });
+    // .grid-table: 12 px, tabular, the head 28 px on bg-subtle; rows 29 px (a 28 px .input.sm)
+    expect(await style(markings, 'font-size', 'font-variant-numeric')).toEqual({
+      'font-size': '12px',
+      'font-variant-numeric': 'tabular-nums',
+    });
+    expect(
+      await style(markings.getByRole('columnheader').first(), 'height', 'background-color'),
+    ).toEqual({
+      height: '28px',
+      'background-color': await token(page, 'bg-subtle', 'background-color'),
+    });
+    const row = markings.locator('tbody tr').first();
+    expect((await row.boundingBox())?.height).toBe(29);
+    expect(
+      await style(row.getByRole('textbox', { name: 'Name of marking 1' }), 'height', 'font-size'),
+    ).toEqual({ height: '28px', 'font-size': '12px' });
+    // .mk-slot { height: 24px; padding: 2px; border: 1px solid transparent; border-radius: 4px }
+    // [aria-checked='true'] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) }
+    const slot = (n: number) =>
+      row.getByRole('radio', { name: `Colour ${String(n)}` }).locator('xpath=ancestor::label[1]');
+    expect(
+      await style(slot(1), 'width', 'height', 'border-radius', 'border-top-color'),
+    ).toEqual({
+      width: '22px',
+      height: '24px',
+      'border-radius': '4px',
+      'border-top-color': await token(page, 'accent', 'background-color'),
+    });
+    expect(await style(slot(2), 'border-top-color')).toEqual({
+      'border-top-color': 'rgba(0, 0, 0, 0)',
+    });
+
+    const tiles = settings.getByRole('table', { name: 'Tiles and markings' });
+    // .select.sm 28 px; .chk { font-size: 12px; padding: 2px 6px; border: 1px solid var(--border-subtle); border-radius: 6px }
+    const marksWith = tiles.getByRole('combobox').first();
+    expect(await style(marksWith, 'height', 'font-size')).toEqual({
+      height: '28px',
+      'font-size': '12px',
+    });
+    const pill = tiles.getByRole('checkbox').first().locator('xpath=ancestor::label[1]');
+    expect(
+      await style(
+        pill,
+        'font-size',
+        'padding-left',
+        'border-top-width',
+        'border-top-color',
+        'border-radius',
+      ),
+    ).toEqual({
+      'font-size': '12px',
+      'padding-left': '6px',
+      'border-top-width': '1px',
+      'border-top-color': await token(page, 'border-subtle', 'background-color'),
+      'border-radius': '6px',
+    });
+  });
+});

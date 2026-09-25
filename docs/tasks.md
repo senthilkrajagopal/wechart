@@ -4109,10 +4109,28 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
       - Escape lets go only from a focused tile. The prototype's Escape works from anywhere, and a double-click on a page tab opens the dashboard's properties.
       - F19's other gaps, planned nowhere so far: the "Use separate color for marked items" switch, swatches in the limit list, and "Manage markings…". They are passed to the 2026-09-24 UI review.
       - With nothing selected, Properties has no "Dashboard" heading with its name and description, as the prototype's has.
-- [ ] T249 (AC-187, AC-231) Give the dashboard settings page the prototype's bar, nav, content and tables, with Escape and an inactive banner
+- [x] T249 (AC-187, AC-231) Give the dashboard settings page the prototype's bar, nav, content and tables, with Escape and an inactive banner
   - Files: `packages/web/src/dashboard/settings/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: a 41 px bar titled "Dashboard settings" with 24 px buttons and a primary Save; a 220 px nav with `accent-soft` selection; flat content with an 18 px h2; mode cards with descriptions; an inactive section says so in a banner; Escape leaves as Cancel does; markings tables at 29 px rows (recheck-dashboard F26–F29; mismatches 27–35).
   - Depends on: none
+  - **Done 2026-09-25, all three browsers.** The prototype's settings page was measured first (Playwright, 1,440 × 900). `e2e/design-conformance.spec.ts` "T249: the dashboard settings page" has six tests, and all six failed first.
+    - **The bar** is the prototype's `.settings-head`: 41 px, padded 8 16, on the surface over a subtle rule. It holds Back, then the page's title "Dashboard settings" (16 px), then "Unsaved changes" while there are any, then Cancel and the primary Save settings. All three buttons are `.btn.sm`: 24 px, 12 px, radius 6 (mismatches 27–29).
+    - **The nav** is 220 px on the surface with a rule on its right. Its rows are 32 px at 12 px, padded 0 12 0 24, radius 0, in the primary ink. The open section is on `accent-soft` in the accent at 600 (mismatch 30).
+    - **The content** is flat on the page, padded 16 24 48, with an 18 px h2 (mismatch 31). General is the prototype's `.formgrid`: Name and Folder side by side, Description the whole width below, with `.field` labels at 12/16/600 secondary tied by `htmlFor` (mismatch 32).
+    - **The mode cards** are the prototype's `.radio-card`s, side by side. Each has a 12 px pad, radius 8 and a strong rule. The chosen one is ringed in the accent over a 40 % tint of `accent-soft`. The radios are drawn in the accent, not the browser's blue. Each card says what its mode does and where it comes from, in the prototype's words. The radio is named by the mode alone and described by the rest, so it is still "Markings" (F27, mismatch 33).
+    - **An inactive section says so in a banner** with the warn icon, on both Markings and Cross-filtering (F28; rule 3).
+    - **Escape leaves as Cancel does** (F29). With nothing changed it leaves at once and gives focus back to the gear. With a change it asks the discard question first, and Escape on the question is "Keep editing". The key is taken in the capture phase, as the prototype's is, so nothing under the full-viewport page answers it too.
+    - **Markings' tables** are the prototype's `.grid-table`, not the query log's card:
+      - 12 px, a 28 px head, and 29 px rows around a 28 px `.input.sm` name and `.select.sm` "Marks with";
+      - each colour slot is a 22 × 24 `.mk-slot` ringed in the accent when chosen, a native radio laid over it, so the name and keys are the platform's;
+      - each limit is a `.chk` pill;
+      - the intro is in the secondary ink (mismatch 34).
+  - **Deviations, recorded:**
+    - The title and headings are 600, where the prototype's are 700 (direction.md §3: 400 and 600 only).
+    - The cards' small print is `text-secondary`, where the prototype has muted, for AA on the tinted card.
+    - A limit the tile cannot take is muted ink, where the prototype has opacity .5, which takes the text under AA.
+    - Mismatch 35 (the cross-filter default's segmented control at 420 px, "against inline-flex") is not changed. On the prototype it measures the content's full width, 872 px, because it sits in a grid `.field`.
+    - Layout keeps its radio cards; the prototype has a `.seg`. AC-075's tests choose "Full width" as a radio.
 - [ ] T250 (AC-187) Below 1,024 pixels, stack a dashboard to one column in view mode only, keeping every tile's title
   - Files: `packages/web/src/dashboard/*`, `packages/web/src/shell/styles.ts`, `e2e/no-horizontal-scroll.spec.ts`
   - Failing test: at 390×844 tiles are full width, each title is visible, and Edit is not offered (recheck-dashboard N2; direction.md §2).
