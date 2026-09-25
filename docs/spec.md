@@ -626,13 +626,16 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
 > - How Cube takes connections from wechart, rather than from its own
 >   environment, is research's to find, with fork changes allowed (`[R15]`).
 >   AC-161 is reworded so it doesn't assume a restart.
+> - A connection test runs in Cube, with Cube's own drivers, at wechart's
+>   request (`[R20]`, `research/connection-testing.md`). AC-159 is reworded
+>   to say so.
 
 - [ ] AC-157 THE SYSTEM SHALL list, in the Data sources workspace, every data source the user may see, each with its folder, its driver type, its health from the last test, and the cubes whose models use it (phase 2: `[R16, R19]`).
       Fails when: a data source the user may see is missing, one they may not see is listed, or a cube list disagrees with the models.
 - [ ] AC-158 WHEN the user adds a data source in their workspace, THE SYSTEM SHALL take its name, the driver type, the connection fields for that driver and a Test step, and SHALL refuse to create it until the test passes or the user explicitly overrides (direction.md rules 23, 35; phase 2: `[P2 input]`).
       Fails when: a source is created with a failing test and no override.
-- [ ] AC-159 WHEN the user runs a connection test, THE SYSTEM SHALL run it from the wechart service, show each check's result, and show the driver's error text when a check fails.
-      Fails when: the test runs in the browser, or a failure shows no error text.
+- [ ] AC-159 WHEN the user runs a connection test, THE SYSTEM SHALL have Cube run it, with Cube's own driver for that type, at the wechart service's request; show each check's result; and show the driver's error text when a check fails (phase 2: `[R20]`).
+      Fails when: the test runs in the browser or through a driver other than Cube's, or a failure shows no error text.
 - [ ] AC-160 THE SYSTEM SHALL offer PostgreSQL, Snowflake, Databricks, BigQuery, SQL Server and Oracle as driver types, with each driver's own authentication fields (`[R4]`).
       Fails when: a listed driver is absent, or its form omits an authentication method the driver requires.
 - [ ] AC-161 WHEN an approved change to a data source's settings lands in its folder, THE SYSTEM SHALL say whether Cube needs a restart before it takes effect, and show whether the running Cube uses the new settings (phase 2: `[R15]`).
@@ -934,7 +937,7 @@ Traces to: §P2.6 C, `[P2 input]`, `[R19]`. Rewritten phase-1 criteria: AC-001, 
 ## F28. Names and resolution per folder
 
 Purpose: the same name can mean different things in different folders; within a folder it means one thing, found from the nearest folder up.
-Traces to: §P2.6 D, `[P2 input]`, `[R17, R19]`. Rewritten phase-1 criterion: AC-249.
+Traces to: §P2.6 D, `[P2 input]`, `[R17, R19, R20, R22]`. Rewritten phase-1 criterion: AC-249.
 
 - [ ] AC-270 IF an item would take the name of an item of the same kind in the same folder (a cube, by cube name across the folder's models; a model file; a dashboard; or a data source), THEN THE SYSTEM SHALL refuse it and name the existing item (`[P2 input]`).
       Fails when: two items of one kind share a name in one folder, or the refusal doesn't name the existing item.
@@ -948,6 +951,10 @@ Traces to: §P2.6 D, `[P2 input]`, `[R17, R19]`. Rewritten phase-1 criterion: AC
       Fails when: one folder's answer, or pre-aggregation, comes from the other folder's cube.
 - [ ] AC-275 WHEN an approved change to a model lands in a folder, THE SYSTEM SHALL use it for that folder and its descendants (unless one defines the name nearer), and for no other folder.
       Fails when: a dashboard outside that subtree changes, or one inside it that doesn't define the name nearer keeps the old definition.
+- [ ] AC-309 WHEN a chart or dashboard uses a model defined in an ancestor of its folder, and that model names a cube (in a join, a view or an `extends`), THE SYSTEM SHALL resolve that name bottom-up from the chart's or dashboard's own folder, as AC-272 does (`[R20]`).
+      Fails when: a chart in /A/B, using a model from /A whose join names `orders`, joins to /A's `orders` while /A/B defines its own.
+- [ ] AC-310 WHEN a cube names no data source, THE SYSTEM SHALL use the data source named `default` nearest on its model's path (the model's folder, then each ancestor to the root), and only when that path has none, the deployment's own default connection (`[R22]`).
+      Fails when: such a cube in /A/B queries the deployment's connection while /A has a data source named `default`, or queries /A's `default` while /A/B has one.
 
 ## F29. Workspaces
 
@@ -1026,15 +1033,19 @@ Traces to: `[R18]`; F17.
 ## F34. Credentials
 
 Purpose: data-source credentials are unreadable without the deployment's key.
-Traces to: §P2.4, `[R14, R15]`; F18's AC-164.
+Traces to: §P2.4, `[R14, R15, R21]`; F18's AC-164.
 
 - [ ] AC-298 THE SYSTEM SHALL store data-source credentials in the metadata database encrypted with a key from the deployment's Secret, so the database alone can't reveal them.
       Fails when: a credential can be read from a dump of the metadata database without the key.
+- [ ] AC-311 IF the API starts without the encryption key, or with a key that can't decrypt the stored credentials, THEN THE SYSTEM SHALL refuse to start, and say which key is missing or can't decrypt them (`[R21]`).
+      Fails when: the API serves requests without a usable key, or exits without naming the key problem.
+- [ ] AC-312 WHEN a data source's connection target changes (its host, port, account, workspace, warehouse, project or connect string), THE SYSTEM SHALL clear its stored secret and require the secret again before the source can be tested or saved (`[R21]`).
+      Fails when: after the target changes, a test or save uses the previously stored secret.
 
 ## F35. Charts from the UI review and R8
 
 Purpose: the UI review's accepted chart gaps, and the two chart types from the Superset parity exercise.
-Traces to: §P2.6 H, `[R8, R16, R19]`, `[backlog]` §5. Rewritten phase-1 criteria: AC-041, AC-220.
+Traces to: §P2.6 H, `[R8, R16, R19, R21, R22]`, `[backlog]` §5. Rewritten phase-1 criteria: AC-041, AC-220.
 
 - [ ] AC-299 WHEN a chart's value-axis labels would overlap at the tile's width, THE SYSTEM SHALL thin or abbreviate them so no two overlap (the UI review's gap 4).
       Fails when: two value-axis labels overlap in a drawn tile.
@@ -1048,10 +1059,16 @@ Traces to: §P2.6 H, `[R8, R16, R19]`, `[backlog]` §5. Rewritten phase-1 criter
       Fails when: a slice's label shows a truncated value such as "$…".
 - [ ] AC-304 WHILE the window is narrower than 1,024 pixels, THE SYSTEM SHALL fit the app bar within it, folding navigation and search into a menu (the UI review's narrow-shell change).
       Fails when: a page scrolls sideways at 390 pixels wide.
-- [ ] AC-305 WHEN a chart has one measure and a dimension holding ISO-3 country codes, THE SYSTEM SHALL offer a country map that colours each country by the measure on a sequential scale with a legend, and names any codes it can't place (`[R8]`).
-      Fails when: a country code in the data isn't coloured, the map has no legend, or an unplaced code isn't named.
-- [ ] AC-306 WHEN the user draws a box plot of a numeric value by a category, THE SYSTEM SHALL draw one box per category with its median and quartiles. Its whiskers follow a chart option: by default Tukey's 1.5 × IQR, with values beyond drawn as dots, or else the minimum and maximum (`[R8, R19]`).
-      Fails when: a box's median or quartiles differ from those computed from the rows, or the whiskers don't follow the chosen option.
+- [ ] AC-305 WHEN a chart has one measure and a dimension holding ISO-3 country codes, THE SYSTEM SHALL offer a country map that colours each country by the measure on a sequential scale with a legend, and names any codes it can't place. Its boundaries are Natural Earth's 1:50m admin-0 units, so small states such as Singapore (SGP) are placed (`[R8, R22]`).
+      Fails when: a country code in the data isn't coloured (SGP included), the map has no legend, or an unplaced code isn't named.
+- [ ] AC-313 THE SYSTEM SHALL treat a dimension as holding ISO-3 country codes when every non-empty value is an ISO 3166-1 alpha-3 code, unless the model marks it otherwise; a dimension the model marks as a country code counts whatever its values, and one it marks as not a country code never does (`[R22]`).
+      Fails when: the map is offered for a dimension marked "not a country code", withheld from one marked as a country code, or withheld from an unmarked dimension whose values are all ISO-3 codes.
+- [ ] AC-306 WHEN the user draws a box plot of a numeric value by a category, THE SYSTEM SHALL draw one box per category with its median and quartiles, computed by linear interpolation (Hyndman–Fan type 7). Its whiskers follow a chart option: by default Tukey's, ending at the most extreme value within 1.5 × IQR of the box, with values beyond drawn as dots; or else the minimum and maximum (`[R8, R19]`).
+      Fails when: a box's median or quartiles differ from type-7 quartiles of its values, or the whiskers don't follow the chosen option.
+- [ ] AC-314 WHEN the user sets a box plot's "Each point is" field (for example Order ID), THE SYSTEM SHALL compute the measure once per value of that field within each category, and draw the boxes from those values (`[R22]`).
+      Fails when: with "Each point is" set to Order ID, a box's values are not one per order.
+- [ ] AC-315 IF a box plot's data has more rows than Cube returns in one query, THEN THE SYSTEM SHALL draw the boxes from the rows returned and show "computed from _n_ of _N_ rows" on the tile (`[R21]`).
+      Fails when: a box plot drawn from fewer rows than the data holds shows no such warning, or its counts differ from the rows used and the query's total.
 
 ## F36. Phase 2's performance and regression
 
@@ -1164,19 +1181,19 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | §P2.3 S1 Zero access leaks `[R13]` | AC-268, AC-264, AC-276 |
 | §P2.6 C Folders hold models and data sources; no Model tab; a Data sources list `[P2 input, R19]` | AC-001, AC-131, AC-157, AC-192, AC-194, AC-222, AC-233, AC-269 |
 | §P2.6 D Names unique per folder `[P2 input]` | AC-249, AC-270, AC-271 |
-| §P2.6 D Cube and data-source resolution `[P2 input, R17, R19]` | AC-272, AC-273, AC-274, AC-275 |
+| §P2.6 D Cube and data-source resolution `[P2 input, R17, R19, R20, R22]` | AC-272, AC-273, AC-274, AC-275, AC-309, AC-310 |
 | §P2.6 E Workspaces: private, copy in, resolution, target folders `[P2 input, R12, R17, R18]` | AC-276 … AC-283 |
 | §P2.6 E Proposals, approval, rejection, history, direct actions `[R12, R17, R18]` | AC-284 … AC-291 |
 | §P2.6 F Personal bookmarks, shareable `[R12]` | AC-292, AC-293 |
 | §P2.4 Groups in Cube's security context `[R14]` | AC-008 |
 | §P2.4 Audit trail and its retention `[R14, R18]` | AC-294, AC-295, AC-296 |
 | §P2.2 Jobs and Schedules for a folder's read-write members `[R18]` | AC-297 |
-| §P2.4 Credentials encrypted in the metadata database `[R14, R15]` | AC-298, AC-164, AC-280 |
+| §P2.4 Credentials encrypted in the metadata database `[R14, R15, R21]` | AC-298, AC-164, AC-280, AC-311, AC-312 |
 | §P2.6 G Data sources: all of F18, per folder `[R16]` | AC-157 … AC-161, AC-163, AC-164 |
 | §P2.6 H Quick calculations (F6) `[R16]` | AC-047 … AC-052 |
 | §P2.6 H Scheduling and build history (F17) `[R16]` | AC-145, AC-150, AC-151, AC-153 … AC-155, AC-234 |
 | §P2.6 H Markings refinements and keyboard gaps `[R16]` | AC-093, AC-097, AC-104, AC-116, AC-176 |
-| §P2.6 H Country map and box plot `[R8, R19]` | AC-305, AC-306 |
+| §P2.6 H Country map and box plot `[R8, R19, R21, R22]` | AC-305, AC-306, AC-313, AC-314, AC-315 |
 | §P2.6 H The UI review's eight spec changes `[R16]` | AC-041, AC-220, AC-299 … AC-304 |
 | §P2.6 H UI fixes: style conformance, AC-201/220/246, Edge `[R16]` | AC-187, AC-201, AC-220, AC-246, AC-180 |
 | §P2.3 S2 Speed holds with security on `[R13]` | AC-307 |

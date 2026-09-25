@@ -433,6 +433,10 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 **Data inside cubes.** The signed-in user's AD groups go into Cube's security context, so the model's access policies can filter rows and members by group. For now it's groups only; user attributes come later `[R14]`.
 
 **Credentials.** Data-source credentials are encrypted in wechart's metadata database, with a key from the deployment's Secret. They are never shown again, and never sent to the browser. This holds in development and in production `[R14, R15]`.
+- Every API pod mounts the same Secret, so every pod can decrypt every data source `[R21]`.
+- Development (docker-compose on a laptop) uses one fixed development key written in the repository's compose file `[R21]`.
+- An API pod that starts without the key, or with a key that can't decrypt the stored credentials, refuses to start and says why `[R21]`.
+- Changing where a data source connects (host, account, warehouse and the like) clears its stored secret, so it must be entered again `[R21]`.
 
 **Audit.** wechart records sign-ins, permission changes, copies proposed, approved and rejected, and data-source changes. Super-Admins can browse the record `[R14]`. How long records are kept is a deployment setting, one year by default `[R18]`.
 
@@ -448,14 +452,15 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 - credentials encrypted in the metadata database `[R14, R15]`;
 - changes to the Cube fork where needed, through the Cube-expert agent `[R15]`.
 
-**Still open, with what decides each**
+**Decided after research** (these were the open items; the user chose on 2026-09-25, rounds R20–R22)
 
-| Open item | Decided by |
-|---|---|
-| **How sign-in is built:** oauth2-proxy in front of wechart, or wechart's API as its own OIDC client | Research, on four points: users in hundreds of groups, passing groups to Cube, logout, and switching security off for single-user mode. Fit with Entra ID and a broker is checked at the end of phase 2 `[R15]`. |
-| **Development OIDC provider** | Research: the lightest self-hosted provider that puts groups in tokens and runs in docker-compose and on docker-desktop, Keycloak or smaller `[R15]`. |
-| **Per-folder models in Cube** | Research, which must show how Cube can:<br>• compile a model for each folder path, nearest name first;<br>• keep pre-aggregations apart per path, and build them;<br>• take connections from wechart's per-folder data sources.<br>Where Cube's configuration can't, the fork changes `[R15]`. |
-| **How credentials are encrypted** | Research, against §P2.4's constraints. |
+| Item | Decision | Research |
+|---|---|---|
+| **How sign-in is built** | **wechart's API is its own OIDC client** (openid-client 6.8.8), with a server-side session in the metadata database (@fastify/session 11.1.3 with @fastify/cookie 11.1.2). Not oauth2-proxy `[R20]`. | `docs/research/openid-client.md`; compared with `docs/research/oauth2-proxy.md` |
+| **Development OIDC provider** | **Dex 2.45.1**, with users and groups from its config file `[R20]`. | `docs/research/dex.md`; compared with `docs/research/keycloak.md` and `docs/research/authelia.md` |
+| **Per-folder models in Cube** | One compile per folder chain, nearest file first, and connections served by wechart `[R20]`. | `docs/research/cube/per-folder-models.md` |
+| **How credentials are encrypted** | AES-256-GCM through `node:crypto`, key from the deployment's Secret. | `docs/research/credential-encryption.md` |
+| **Where a connection test runs** | **In Cube, at wechart's request:** a fork endpoint runs Cube's own drivers, so a pass means the Cube that will use the source can connect. wechart starts it and shows each check `[R20]`. | `docs/research/connection-testing.md` |
 
 ## P2.6 Scope
 
@@ -480,6 +485,8 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 - A dashboard's cubes resolve bottom-up, from its folder to the root, and the nearest definition wins. Children's cubes aren't used.
 - Models can use any data source in their folder's path and in all its children `[P2 input]`.
 - **A data-source name resolves bottom-up from the model's own folder:** first the model's folder, then each ancestor up to the root. A descendant's data source is used only when no folder on that path has the name `[R19]`.
+- **Names inside an inherited model resolve from the viewer's folder.** When a chart or dashboard in /A/B uses a model defined in /A, a cube that model names resolves bottom-up from /A/B, so /A/B's own cube of that name wins `[R20]`.
+- **A cube that names no data source** uses a data source called `default`, resolved like any other name. If no folder on the path has one, it uses the deployment's own default connection `[R22]`.
 
 **E. Workspaces, copying and approval** `[P2 input, R12, R17]`
 
@@ -506,7 +513,7 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 
 **G. Data sources: all of backlog F18, per folder** `[R16]`
 - A list per folder, with each source's health.
-- Adding a source with a connection test.
+- Adding a source with a connection test, run by Cube's own drivers at wechart's request `[R20]`.
 - The six driver types, each with its own authentication.
 - The restart note and whether Cube has picked the change up.
 - Test history.
@@ -517,6 +524,11 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 - Scheduling and build history (F17).
 - The markings refinements and keyboard gaps (AC-093, AC-097, AC-104, AC-116, AC-176).
 - The country map and box plot (R8), and the UI review's eight proposed spec changes. The box plot's whisker rule is a chart option. It defaults to Tukey's 1.5 × IQR, with values beyond drawn as dots, and the other choice is the minimum and maximum `[R19]`.
+  - **Box plot observations.** An "Each point is" setting chooses what one observation is (for example Order ID); the measure is computed per observation and the boxes summarise those values `[R22]`.
+  - **Box plot over Cube's row limit.** The boxes are computed from the rows Cube returned, with a warning "computed from _n_ of _N_ rows" `[R21]`.
+  - **Box plot statistics** (Claude's call under the standing instruction for small decisions, following the research): quartiles and median by linear interpolation (Hyndman–Fan type 7, the default of R, NumPy, PostgreSQL `percentile_cont` and ECharts). Tukey whiskers end at the most extreme value inside 1.5 × IQR.
+  - **Country map offered** when every value of the dimension is an ISO 3166-1 alpha-3 code. The model author can also mark a dimension as a country code, or as not one, to override that `[R22]`.
+  - **Country map detail:** Natural Earth 1:50m admin-0 boundaries (242 units, small states such as Singapore included) `[R22]`.
 - The UI fixes: AC-187's style mismatches, the failing cases of AC-201, AC-220 and AC-246, and Edge (AC-180).
 
 ## P2.7 Non-goals for phase 2
@@ -619,3 +631,22 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Box plot whiskers? A: "Make it a configurable option while building the chart"
 - Q (follow-up): The default? A: "1.5 × IQR, dots beyond"
 - Q: What count should the test use to prove 'hundreds of groups'? A: "maybe 20 groups"
+
+**R20 — choices after component research** (each with a side-by-side comparison and a recommendation)
+- Q: How should sign-in be built when security is on? A: "API signs in itself (Recommended)"
+- Q: Which development identity provider should docker-compose and the docker-desktop Helm release use? A: "Dex 2.45.1 (Recommended)"
+- Q: Where should a data source's connection test run (AC-159 says 'from the wechart service')? A: "In Cube, at wechart's request (Recommended)"
+- Q: A model defined in /A is used from /A/B; a join inside it names cube `orders`, and /A/B has its own `orders`. Which is used? A: "The viewer's folder (Recommended)"
+
+**R21 — credentials and the box plot's row limit**
+- Q (first wording, about a "gitignored" development key file): *(The user asked to clarify.)* "I did not understand this question.. what git are we talking about is it the user workspace? if we are using per user git folder, how will multi pod deployment work?" Claude explained that "gitignored" referred to wechart's own source repository, that wechart uses no git at runtime, and that every pod shares the key from the deployment's Secret; the question was about developer laptops only.
+- Q: For a developer running wechart on their laptop with docker-compose, where should the encryption key come from? A: "One fixed key in the repo"
+- Q: What should a wechart API pod do if it starts without the encryption key, or with the wrong one? A: "Refuse to start (Recommended)"
+- Q: A read-write member changes where a data source connects. Must they type the password again? A: "Yes, re-enter it (Recommended)"
+- Q: What should a box plot do when the data has more rows than Cube returns? A: "Use part, with a warning"
+
+**R22 — box plot, country map and default data source**
+- Q: Should wechart's box plot let the user choose what one observation is (e.g. one per order)? A: "Yes, an 'Each point is' setting (Recommended)"
+- Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
+- Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
+- Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
