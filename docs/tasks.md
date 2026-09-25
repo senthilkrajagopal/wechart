@@ -4961,3 +4961,526 @@ AC-139 is covered by T145 and T275 (the fork's Cube and its scope, R10).
 AC-199 is also covered by T266 and T272 (its reworded Export item). AC-153 by T264, AC-154 by T160 and T264.
 
 Reopened 2026-09-24 and now also covered by the prototype-alignment tasks: AC-004 → T008, T233 · AC-005 → T008, T210 · AC-019 → T017, T212 · AC-042 → T049, T208 (re-ticked) · AC-053 → T059, T209.
+
+---
+
+# Phase 2
+
+Inputs: `docs/spec.md` F25–F36 and the phase-1 criteria returned or rewritten for phase 2 (104 open criteria); `docs/requirements.md` Part 2 (R11–R23); `docs/research/` (openid-client, dex, credential-encryption, cube/per-folder-models, connection-testing, box-plot, country-map, scheduler, and the CodeMirror merge research); `docs/design/direction.md` §7e and rules 59–89.
+
+The `[moved to phase 2]` tasks above are superseded by the tasks below, which carry their notes forward where they still hold.
+
+**Decisions this plan takes** (small, under the standing instruction; each can be changed with its task):
+
+- **Where the user comes from.** Every request carries `request.wechartUser = { key, name, groups, superAdmin }`. With security off it is the one user `admin`, a Super-Admin. With security on it comes from the server-side session. Handlers read nothing else (research `openid-client.md`, "Security off").
+- **Group access is stored on the folder.** Each folder document's body gains `access: { readOnly: string[] | null, readWrite: string[] | null }`, where `null` means unset. The shared root's access is a `setting` document `root-access`. Effective access is computed in memory from the folder list by a pure function in `packages/core/src/access/`.
+- **Workspaces are folder ids** of the form `ws:<userKey>`. The phase-1 pseudo-root `mine` resolves to the signed-in user's workspace, and phase-1 items in `mine` move to the workspace of the single user `admin`.
+- **The folder chain Cube compiles** is the list of model-bearing folder ids, nearest first, in a signed `wechartModel` claim that only the API mints after checking access (research `cube/per-folder-models.md`, layout B).
+- **The security-on end-to-end suite is separate.** It is `playwright.security.config.ts`, with its own API (port 4300), web preview (port 5373) and Dex, so the phase-1 suite (security off) stays as it is until AC-308's end-of-phase check (the user's R13).
+- **Every API route declares its access class**: `public` (health and `/api/auth/*`), `cube` (key-guarded model routes) or `user`. A test fails for any unclassified route (T318).
+
+## P2.0 Foundations: the request's user and effective access
+
+- [ ] T311 [P] (AC-254) Carry the request's user, and run as the single Super-Admin while security is off
+  - Files: `packages/api/src/config.ts` (`WECHART_SECURITY=off|oidc`, default `off`), `packages/api/src/auth/user.ts` (+ test), `packages/api/src/server.ts` (an `onRequest` hook filling `request.wechartUser`; `/api/me` returns `{ name, superAdmin, security }`)
+  - Failing test: `user.test.ts` and `server.test.ts`: with security off, `/api/me` answers `{ name: 'admin', superAdmin: true, security: 'off' }`, and every route answers without a session (AC-254).
+  - Depends on: none
+- [ ] T312 [P] (AC-260, AC-261, AC-255) Compute each folder's effective read-only and read-write groups
+  - Files: `packages/core/src/access/effective.ts` (+ test), `packages/core/src/index.ts`
+  - Failing test: `effective.test.ts`:
+    - an unset setting takes the parent's effective groups, each setting on its own (AC-260);
+    - a group granted on /A reaches /A/B/C at the same level although /A/B sets another group (AC-261);
+    - every inherited group names the folder it comes from (AC-260);
+    - a user in 20 groups, granted only through the 20th, has access (AC-255).
+  - Depends on: none
+- [ ] T313 (AC-262, AC-263, AC-264, AC-265, AC-256) Decide what each user may see and change in each folder
+  - Files: `packages/core/src/access/visibility.ts` (+ test)
+  - Failing test: `visibility.test.ts`:
+    - a read-write member of /A/B sees every kind of item in /A and the root, view-only (AC-262);
+    - a read-only member of /A/B sees dashboards (and their charts) in /A/B, its descendants and its ancestors, and no model, data source or library chart (AC-263);
+    - a user in no group that reaches a folder gets nothing for it (AC-264);
+    - a member of the configured Super-Admin group writes everywhere (AC-256, AC-265).
+  - Depends on: T312
+- [ ] T314 (AC-259, AC-260) Store each folder's groups and serve its effective access
+  - Files: `packages/api/src/repos/folder-access.ts` (+ test), `packages/api/src/routes/access.ts` (+ test), `packages/api/src/server.ts`
+  - Failing test: `access.test.ts`:
+    - `PUT /api/folders/:id/access` takes read-only and read-write group lists, each optional (`null` = unset), for the root too; a body naming users (`users`, `members`) is refused with 400 (AC-259);
+    - someone who isn't a Super-Admin or a read-write member there gets 403 (AC-259);
+    - `GET /api/folders/:id/access` returns set and inherited groups, each inherited one with its source folder (AC-260).
+  - Depends on: T311, T313
+
+## P2.1 Sign-in (F25)
+
+- [ ] T315 [P] (AC-257) Run Dex 2.45.1 beside wechart in docker-compose, with the test users and their groups
+  - Files: `docker-compose.yml` (service `dex`, image pinned by digest, profile `security`), `infra/dex/config.yaml` (static users: `super` in `wechart-super-admins`; `writer` in `sales-rw`; `reader` in `sales-ro`; `many` in `g01`…`g20`; `nobody` in none; one client `wechart`), `packages/api/vitest.globalSetup.ts` (starts `dex` with `wechart-meta`), `packages/api/src/auth/dex.test.ts`
+  - Failing test: `dex.test.ts`: Dex's discovery answers at the configured issuer, and a password-grant ID token for `many` carries all 20 groups in `groups` (research `dex.md` §6) (AC-257, compose half).
+  - Depends on: none
+- [ ] T316 (AC-252) Sign users in with openid-client, keeping identity and groups in a server-side session
+  - Files: `packages/api/package.json` (openid-client 6.8.8, @fastify/cookie 11.1.2, @fastify/session 11.1.3), `packages/api/vite.build.config.ts` (externals), a migration `…_sessions.cjs`, `packages/api/src/auth/{oidc,session-store,routes}.ts` (+ tests), `packages/api/src/config.ts` (`WECHART_OIDC_ISSUER`, `_CLIENT_ID`, `_CLIENT_SECRET`, `_GROUPS_CLAIM`, `_BACKCHANNEL_ORIGIN`, `WECHART_PUBLIC_URL`, `WECHART_SESSION_SECRET`)
+  - Failing test: `routes.test.ts`, against Dex: `/api/auth/login` redirects to Dex; completing Dex's form for `writer` and following the callback gives a session whose `/api/me` names the user and lists exactly the token's groups; with `WECHART_OIDC_GROUPS_CLAIM` set to another claim, groups come from that claim (AC-252).
+  - Depends on: T311, T315
+- [ ] T317 (AC-253) Sign out: end the wechart session so the next request needs a new sign-in
+  - Files: `packages/api/src/auth/routes.ts` (`POST /api/auth/logout`), `packages/api/src/auth/logout.test.ts`
+  - Failing test: `logout.test.ts`: after `POST /api/auth/logout`, the same cookie gets 401 on `/api/me`, and the session row is gone (AC-253).
+  - Depends on: T316
+- [ ] T318 (AC-251) Refuse every API route without a session, except health and sign-in, and prove no route is unclassified
+  - Files: `packages/api/src/auth/guard.ts` (+ test), `packages/api/src/server.ts` (each route's `config.access`), `packages/api/src/model/publish.ts`, `packages/api/src/model/introspection.ts`, `packages/api/src/jobs/*.ts`
+  - Failing test: `guard.test.ts`: with security on and no session, every route registered on the server (collected with an `onRoute` hook) answers 401 `{ error: 'unauthenticated' }` and no data, except `/api/health`, `/api/cube-health`, `/api/auth/*` and the key-guarded `/api/cube-model/*`; a route registered without an access class fails the test (AC-251).
+  - Depends on: T316
+- [ ] T319 (AC-252, AC-254) Show the account button and menu, or the single-user chip
+  - Files: `packages/web/src/shell/AccountMenu.tsx` (+ test), `packages/web/src/shell/AppShell.tsx`
+  - Failing test: `AccountMenu.test.tsx`: signed in, the top bar shows the name and a 28 px avatar, and the menu holds the identity, "Super-Admin" for Super-Admins and Sign out; with security off it shows "Single-user mode" with no Sign out (AC-252, AC-254; rule 59).
+  - Depends on: T311, T316
+- [ ] T320 (AC-257) Build the security end-to-end harness: its own API, web preview and Dex, with a sign-in fixture per role
+  - Files: `playwright.security.config.ts`, `e2e/security/fixtures.ts` (signs `super`, `writer`, `reader`, `many` and `nobody` in through Dex's form; storage state per role), `e2e/security/sign-in.spec.ts`, `e2e/package.json` (`e2e:security`)
+  - Failing test: `sign-in.spec.ts`: `writer` signs in through Dex in docker-compose and sees their name in the top bar (AC-257, compose half).
+  - Depends on: T315, T316, T319
+- [ ] T321 (AC-251) Send a page request without a session to sign-in, rendering no wechart content first
+  - Files: `packages/web/src/shell/AuthGate.tsx` (+ test), `packages/web/src/api/http.ts` (a 401 sends the browser to `/api/auth/login?returnTo=…`), `deploy/helm/wechart/templates/web-config.yaml` (`auth_request` to `/api/auth/check` when security is on)
+  - Failing test: `AuthGate.test.tsx`: nothing of the app renders until `/api/me` succeeds; `e2e/security/sign-in.spec.ts`: opening `/explore` without a session lands on Dex's login form with no wechart text on the page (AC-251).
+  - Depends on: T318, T320
+- [ ] T322 (AC-008) Put the signed-in user's groups into every Cube request's security context
+  - Files: `packages/api/src/cube/client.ts` (a per-request `groups` claim), `packages/api/src/server.ts`, `packages/api/src/cube/client.test.ts`, `e2e/security/cube-groups.spec.ts`
+  - Failing test: `client.test.ts`: with security on, every Cube request's token carries the configured context and exactly the user's groups; `cube-groups.spec.ts`: the seeded `secured_orders` view returns rows to a member of `managers` and none to `writer` (AC-008).
+  - Depends on: T316
+- [ ] T323 (AC-256, AC-265) Take the Super-Admin group from the deployment's configuration and open every admin surface to its members
+  - Files: `packages/api/src/config.ts` (`WECHART_SUPER_ADMIN_GROUP`), `packages/api/src/auth/user.ts`, `packages/api/src/auth/admin.test.ts`
+  - Failing test: `admin.test.ts`: a member of the configured group gets `superAdmin: true` and reaches every folder and admin route; a user outside it gets 403 on the admin routes (AC-256, AC-265).
+  - Depends on: T313, T316
+- [ ] T324 (AC-257) Run Dex beside wechart in the Helm release on docker-desktop and sign in there
+  - Files: `deploy/helm/wechart/templates/{dex.yaml,dex-config.yaml}`, `deploy/helm/wechart/values.yaml` (`security.enabled`, `security.oidc.*`, `security.dex.*`, `security.superAdminGroup`), `deploy/helm/wechart/templates/{api.yaml,secrets.yaml,_helpers.tpl}` (the OIDC client secret and the session secret, generated once), `deploy/helm/values/docker-desktop.yaml`, `deploy/helm/verify.sh`
+  - Failing test: `verify.sh` with security on: `/explore` without a cookie is redirected to Dex; a scripted sign-in as `writer` through Dex's form makes `/api/me` answer with that user (AC-257, Helm half).
+  - Depends on: T321, T317
+
+## P2.2 Folder permissions and roles (F26)
+
+- [ ] T325 (AC-264, AC-194) List and count only what the user may see in the tree, listings and search
+  - Files: `packages/api/src/repos/catalog.ts`, `packages/api/src/server.ts`, `packages/api/src/repos/catalog-access.test.ts`
+  - Failing test: `catalog-access.test.ts`: `/api/folders`, `/api/folder-roots`, `/api/folders/:id/contents` and `/api/search` never name a folder or item the user may not see, and every count counts only visible items, subfolders included (AC-264, AC-194).
+  - Depends on: T313, T314
+- [ ] T326 (AC-263, AC-266) Read-only users read dashboards and change nothing
+  - Files: `packages/api/src/server.ts` (write routes), `packages/api/src/access/readonly.test.ts`
+  - Failing test: `readonly.test.ts`: a read-only user can open the folder's dashboards and their charts, load their data, export and bookmark; a model, data source or library chart answers 404; every create, change, move, delete, propose and access route answers 403 (AC-263, AC-266).
+  - Depends on: T325
+- [ ] T327 (AC-262) Read-write members see their folders' ancestors view-only
+  - Files: `packages/api/src/access/ancestors.test.ts`
+  - Failing test: `ancestors.test.ts`: a read-write member of /A/B lists and opens every dashboard, chart, model and data source in /A and the root, and every write there answers 403 (AC-262).
+  - Depends on: T325
+- [ ] T328 (AC-267) When security is first turned on, keep phase-1 content as the shared tree, visible only to Super-Admins
+  - Files: a migration `…_root-access.cjs` (the root and phase-1 folders with both settings unset), `packages/api/src/access/phase1-content.test.ts`
+  - Failing test: `phase1-content.test.ts`: with no groups assigned, `super` sees the seeded tree and `writer`, `reader` and `nobody` see none of it; after a group is set on Finance, its members see Finance (AC-267).
+  - Depends on: T325
+- [ ] T329 (AC-291) Apply subfolders, permissions, renames, moves and deletes at once for read-write members
+  - Files: `packages/api/src/server.ts` (`POST /api/documents` for folders, `PATCH`, `DELETE`), `packages/api/src/access/direct.test.ts`
+  - Failing test: `direct.test.ts`: a read-write member creates a subfolder, sets its groups, renames, moves and deletes, each applied at once; a move needs read-write on both folders and answers 403 otherwise; a read-only member gets 403 for each (AC-291).
+  - Depends on: T314, T325
+- [ ] T330 (AC-259, AC-260, AC-265) Edit a folder's groups in the Access panel
+  - Files: `packages/web/src/workspaces/explore/access/{AccessPanel,GroupRow,GroupCombobox}.tsx` (+ tests), `packages/web/src/workspaces/explore/ExplorePage.tsx`, `e2e/security/access.spec.ts`
+  - Failing test: `AccessPanel.test.tsx` and `access.spec.ts`: read-write groups come before read-only; each list shows "Set here" and "From ancestors", every inherited group with a lock and its source folder as a link; an unset list says "Not set here. Inherits from _folder_."; "Only Super-Admins can see this folder" when nothing reaches it; the picker is labelled "AD group"; Save counts changes; removing one's own read-write access asks first (AC-259, AC-260; rules 62–66).
+  - Depends on: T314, T320
+- [ ] T331 (AC-001, AC-192, AC-194) Shape Explore and the top bar by role
+  - Files: `packages/web/src/shell/WorkspaceSwitcher.tsx`, `packages/web/src/workspaces/explore/{ExplorePage,CreateMenu,FolderTree,AccessChip}.tsx` (+ tests), `e2e/security/explore-roles.spec.ts`
+  - Failing test: `explore-roles.spec.ts`, for each role:
+    - the switcher lists Explore to all; Data sources, Jobs and Schedules to Super-Admins and read-write members; Security to Super-Admins; and never Model (AC-001);
+    - the folder header shows the access chip (rule 69); a shared folder's New menu offers only Folder to its read-write members and nothing to readers (AC-192);
+    - the tree is headed "Folders", holds "My workspace" only for users who have one, and counts only visible items (AC-194).
+  - Depends on: T325, T326, T345
+
+## P2.3 Credentials (F34)
+
+- [ ] T332 [P] (AC-298) Encrypt data-source credentials in the metadata database
+  - Files: a migration `…_data-sources.cjs` (`data_sources`, and `data_source_secrets` as bytea: key id, IV, ciphertext, tag), `packages/api/src/secrets/crypto.ts` (+ test)
+  - Failing test: `crypto.test.ts`: AES-256-GCM with a 12-byte random IV and AAD naming the data source id; a `pg_dump` of the test database contains no plaintext secret; decrypting under another source's id fails (AC-298; research `credential-encryption.md`).
+  - Depends on: none
+- [ ] T333 (AC-311) Load the encryption key, and refuse to start without a usable one
+  - Files: `packages/api/src/secrets/key.ts` (+ test), `packages/api/src/main.ts`, `playwright.config.ts` and `playwright.security.config.ts` (the fixed development key), `deploy/helm/wechart/templates/{secrets.yaml,api.yaml}` (a generated key mounted as a file)
+  - Failing test: `key.test.ts`: with no key, or with a key that can't decrypt a stored credential, start-up throws naming the missing file or the key id that fails, and the server never listens (AC-311).
+  - Depends on: T332
+
+## P2.4 Models and data sources in folders; names and per-folder Cube (F27, F28)
+
+- [ ] T334 (AC-269, AC-131) Keep model files in folders and list them in Explore
+  - Files: a migration `…_model-files-folder.cjs` (a `folder_id` column, existing files in the root; the key becomes `(folder_id, path)`), `packages/api/src/repos/model-files.ts`, `packages/api/src/repos/catalog.ts`, `packages/web/src/workspaces/explore/FolderContents.tsx`, `packages/api/src/repos/model-files.test.ts`
+  - Failing test: `model-files.test.ts`: a folder's listing includes its model files with kind "Model" and "_n_ cubes · _n_ views", and `GET /api/model/files?folder=` returns each file's cubes, views, measures, dimensions, segments, hierarchies, joins and pre-aggregations (AC-269, AC-131).
+  - Depends on: T325
+- [ ] T335 (AC-269, AC-164, AC-312) Keep data sources as folder items, never sending a credential to the browser
+  - Files: `packages/api/src/repos/data-sources.ts` (+ test), `packages/api/src/routes/data-sources.ts` (+ test), `packages/api/src/repos/catalog.ts`
+  - Failing test: `data-sources.test.ts`:
+    - a folder lists its data sources with kind "Data source" and the driver (AC-269);
+    - no response contains a stored secret, only `stored: true` (AC-164);
+    - changing host, port, account, workspace, warehouse, project or connect string clears the secret, and a test or save then asks for it again (AC-312).
+  - Depends on: T332, T333, T325
+- [ ] T336 (AC-270, AC-271, AC-249) Keep names unique per folder, and free across folders
+  - Files: `packages/api/src/model/names.ts` (+ test), `packages/api/src/model/publish.ts`, `packages/api/src/server.ts`
+  - Failing test: `names.test.ts`: in one folder, a second cube of a name (across the folder's models), model file, dashboard or data source is refused with the existing item named; the same names in two folders are accepted; a generated cube clashing with one in the target folder is refused, naming it, and the existing file is unchanged (AC-270, AC-271, AC-249).
+  - Depends on: T334, T335
+- [ ] T337 (AC-272, AC-275, AC-309) Serve each folder chain its model, nearest definition first
+  - Files: `packages/api/src/model/chain.ts` (+ test), `packages/api/src/model/publish.ts` (`GET /api/cube-model/chains`, `/chains/:chain/files`, `/chains/:chain/version`)
+  - Failing test: `chain.test.ts`:
+    - /A/B's chain serves /A/B's `sales` and not /A's, and nothing from /A/B/C or a sibling (AC-272);
+    - a join inside /A's model naming `orders` binds to /A/B's `orders` in /A/B's chain (AC-309);
+    - changing /A changes the version of every chain through /A that doesn't define the name nearer, and of no other (AC-275).
+  - Depends on: T334
+- [ ] T338 (AC-273, AC-310) Resolve each model's data sources from its own folder, and give a cube with none the nearest `default`
+  - Files: `packages/api/src/model/data-sources.ts` (+ test), `packages/api/src/model/chain.ts` (served files name canonical `ds_<id>_v<n>` sources)
+  - Failing test: `data-sources.test.ts`: a model in /A/B naming `warehouse` uses /A's when /A has one, and /A/B/C's only when no folder on the path has it; two descendants' `warehouse` and none on the path is refused, naming both (AC-273); a cube with no data source uses the nearest `default` on its model's path, else the deployment's (AC-310).
+  - Depends on: T335, T337
+- [ ] T339 (AC-008, AC-272) Configure Cube for folder chains: app id, files, version, refresh contexts and data sources from wechart
+  - Files: `infra/cube/cube.js` (the `wechartModel` claim in `contextToAppId`, `repositoryFactory` and `schemaVersion`; `scheduledRefreshContexts` from `/chains`; `driverFactory` answering `ds_*` names from `/api/cube-model/data-sources/:name`, from memory), `packages/api/src/model/publish.ts` (the key-guarded, decrypted data-source route), `packages/api/src/model/cube-config.test.ts`
+  - Failing test: `cube-config.test.ts`: two chains get different app ids and fetch their own files; groups never enter an app id; `driverFactory` answers a `ds_*` name from wechart once and from memory after; an unknown name throws (AC-008, AC-272).
+  - Depends on: T337, T338, T333
+- [ ] T340 (AC-272, AC-268) Make every query name the item it serves, check access, and sign that item's chain
+  - Files: `packages/api/src/server.ts` (`/api/load`, `/api/sql`, `/api/acceleration`, `/api/meta` take `for: { kind, id }`), `packages/api/src/cube/client.ts`, `packages/web/src/query/*` (tiles, the chart editor and the model editor pass their item), `packages/api/src/access/queries.test.ts`, `e2e/security/resolution.spec.ts`
+  - Failing test: `queries.test.ts`: a query for an item the user may not see answers 404 and reaches no Cube; a query for a dashboard in /A/B is signed with /A/B's chain. `resolution.spec.ts`: a chart in /A/B draws /A/B's `sales` while /A defines its own (AC-272, AC-268).
+  - Depends on: T339
+- [ ] T341 (AC-274) Keep two folders' same-named cubes and their rollups apart
+  - Files: `packages/api/src/model/chain.ts` (each served cube's `sql_alias` from its origin folder and resolved data source), `e2e/security/isolation.spec.ts`
+  - Failing test: `isolation.spec.ts`, against the real Cube: /A and /C each define `sales` over different tables; the same query from each folder returns each one's own count, and their rollups build into differently named tables (AC-274).
+  - Depends on: T340
+- [ ] T342 (AC-222, AC-131) Open a model in its folder, beside that folder's files, read-only when shared
+  - Files: `packages/web/src/router/routes.tsx` (`/explore/folders/$folderId/models/$path`), `packages/web/src/workspaces/model/{ModelFilePage,FileTree}.tsx`, `packages/web/src/workspaces/model/ModelInFolder.test.tsx`, `e2e/security/model-in-folder.spec.ts`
+  - Failing test: `model-in-folder.spec.ts`: opening a model from a folder shows that folder's files beside the editor with the folder and file in the URL; every object each file defines is listed; a file with an error is marked; in a shared folder the editor is read-only with "Edit in my workspace" and no New cube or New view (AC-222, AC-131).
+  - Depends on: T334, T345
+
+## P2.5 Workspaces (F29)
+
+- [ ] T343 (AC-276, AC-277) Give each Super-Admin and read-write member a private workspace, and read-only users none
+  - Files: `packages/api/src/repos/workspaces.ts` (+ test), `packages/api/src/repos/catalog.ts`, a migration `…_workspaces.cjs` (phase-1 items in `mine` move to `ws:admin`)
+  - Failing test: `workspaces.test.ts`: `writer` and `super` each list, open and search their own `ws:` folder; neither can list, open, search or load the other's, Super-Admins included; `reader` has no workspace and every create route answers 403 (AC-276, AC-277).
+  - Depends on: T325, T313
+- [ ] T344 (AC-278, AC-279) Copy a dashboard into the workspace with its charts, never editing shared items in place
+  - Files: `packages/api/src/routes/workspace-copy.ts` (+ test), `packages/api/src/server.ts` (a write to a shared item answers 409 "Edit in my workspace"), `packages/api/src/repos/documents.ts`
+  - Failing test: `workspace-copy.test.ts`: copying a dashboard brings its local charts and the library charts it shows, and a model or data source only when chosen; a second copy opens the first; any `PUT`, `PATCH` of content on a shared dashboard, chart, model or data source is refused (AC-278, AC-279).
+  - Depends on: T343
+- [ ] T345 (AC-282, AC-192) Create items in the workspace with a target folder
+  - Files: `packages/api/src/server.ts` (`POST /api/documents` in a workspace requires `targetFolderId`), `packages/web/src/workspaces/explore/{CreateMenu,NewItemDialog,TargetPicker}.tsx` (+ tests)
+  - Failing test: `NewItemDialog.test.tsx` and `targets.test.ts`: the workspace's New menu offers Dashboard, Chart, Model, Data source and Folder; the first four ask for a target among the folders where the user has read-write access, preselected when there is one; creating without a target, or with a folder they can't write, answers 400 or 403 (AC-282, AC-192; rule 74).
+  - Depends on: T343, T325
+- [ ] T346 (AC-280) Copy a data source into the workspace with its credentials, still encrypted
+  - Files: `packages/api/src/routes/workspace-copy.ts`, `packages/api/src/secrets/crypto.ts`, `packages/api/src/routes/workspace-copy-source.test.ts`
+  - Failing test: `workspace-copy-source.test.ts`: the copy has the connection settings and a secret re-encrypted under the copy's id, decrypts to the original value, and no response shows it (AC-280).
+  - Depends on: T344, T335
+- [ ] T347 (AC-281, AC-283) Resolve a workspace item's cubes in the workspace first, then along its origin's or target's path
+  - Files: `packages/api/src/model/chain.ts` (`ws:<user>` chains), `packages/api/src/model/workspace-chain.test.ts`
+  - Failing test: `workspace-chain.test.ts`: a workspace dashboard uses the workspace's `sales` over its origin folder's; a copied item resolves along its origin's path and a new one along its target's; every model, data source, dashboard and chart the user may see can be used there, and none they may not (AC-281, AC-283).
+  - Depends on: T344, T337
+- [ ] T348 (AC-278) Show the workspace band, each item's origin and target, and "Edit in my workspace" / "Open my copy"
+  - Files: `packages/web/src/workspaces/explore/{WorkspaceBand,OriginLine,EditInWorkspaceDialog}.tsx` (+ tests), `packages/web/src/dashboard/DashboardView.tsx`, `e2e/security/workspace.spec.ts`
+  - Failing test: `workspace.spec.ts`: a shared dashboard offers "Edit in my workspace" and no edit; its dialog lists models and data sources unchecked; the copy opens under "My workspace · only you can see this" with "Copied from _path_ · version _n_" and its target; the shared item then offers "Open my copy" (AC-278; rules 71–73).
+  - Depends on: T344, T345, T320
+
+## P2.6 Proposals, approval and history (F30)
+
+- [ ] T349 (AC-284) Propose a workspace item into its target folder, with an optional description of up to 1,000 characters
+  - Files: a migration `…_proposals.cjs` (`proposals`, `proposal_items` with the item snapshot), `packages/api/src/repos/proposals.ts` (+ test), `packages/api/src/routes/proposals.ts` (+ test)
+  - Failing test: `proposals.test.ts`: a proposal records the item snapshot, the folder, the author, the time and the description; 1,001 characters answer 400; the folder serves its current version until approval (AC-284).
+  - Depends on: T344
+- [ ] T350 (AC-285) Put the workspace-only models a proposed dashboard needs into the same proposal
+  - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/model/chain.ts`, `packages/api/src/routes/proposal-bundle.test.ts`
+  - Failing test: `proposal-bundle.test.ts`: a dashboard whose cubes resolve only through the author's workspace models is proposed with them, and approving or rejecting applies to all together (AC-285).
+  - Depends on: T349, T347
+- [ ] T351 (AC-286) Let only the author, the target folder's read-write members and Super-Admins decide a proposal
+  - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/proposal-deciders.test.ts`
+  - Failing test: `proposal-deciders.test.ts`: the author (with security on and off), a read-write member of the target and a Super-Admin may approve or reject; a read-only member and an outsider get 403; nothing reaches the folder except through an approval (AC-286, AC-254).
+  - Depends on: T349
+- [ ] T352 (AC-288, AC-275) Land an approved item in its folder, keeping the replaced version in history
+  - Files: a migration `…_item-versions.cjs`, `packages/api/src/repos/versions.ts` (+ test), `packages/api/src/routes/proposals.ts`
+  - Failing test: `versions.test.ts`: approving replaces the same-kind, same-name item and stores the replaced version with its author, approver, time and description; an approved model changes the served files of that folder's chains (AC-288, AC-275).
+  - Depends on: T351
+- [ ] T353 (AC-290) Return a rejected proposal to its author with the approver's reason
+  - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/proposal-reject.test.ts`
+  - Failing test: `proposal-reject.test.ts`: rejecting leaves the folder unchanged and the work in the author's workspace, with the reason (at most 1,000 characters; 1,001 answer 400) shown on the item (AC-290).
+  - Depends on: T351
+- [ ] T354 (AC-289) Keep each item's last 10 versions for read-write members and Super-Admins, and restore one only through a proposal
+  - Files: `packages/api/src/repos/versions.ts`, `packages/api/src/routes/history.ts` (+ test)
+  - Failing test: `history.test.ts`: after 12 approvals an item keeps its last 10 versions; a read-only user gets 404 on its history; "restore version 9" creates a proposal, and the folder is unchanged until it is approved (AC-289).
+  - Depends on: T352
+- [ ] T355 (AC-287) List the proposals each user may decide, with their number in the top bar
+  - Files: `packages/web/src/workspaces/reviews/{ReviewsPage,ReviewsControl}.tsx` (+ tests), `packages/web/src/router/routes.tsx` (`/reviews`), `packages/api/src/routes/proposals.ts` (`GET /api/reviews`), `e2e/security/reviews.spec.ts`
+  - Failing test: `reviews.spec.ts`: "To review" lists every open proposal the user may decide, each with item, folder, author and description, and none they may not; the top-bar count equals that list's length and is hidden at 0 (AC-287; rule 76).
+  - Depends on: T351, T320
+- [ ] T356 (AC-287) Review a proposal by seeing the item itself, then approve or reject it
+  - Files: `packages/web/package.json` (@codemirror/merge, per its research doc), `packages/web/src/workspaces/reviews/{ReviewView,YamlDiff,SettingsDiff}.tsx` (+ tests), `e2e/security/reviews.spec.ts`
+  - Failing test: `reviews.spec.ts`: a dashboard proposal renders the dashboard read-only with a Proposed / Current switch; a model proposal shows a unified YAML diff with +/− markers; a data-source proposal shows a settings table whose credentials read "unchanged" or "replaced"; Approve asks for confirmation; Reject offers a reason with a "_n_ / 1,000" counter; an author sees "Approve my own proposal" (AC-287; rules 77–79).
+  - Depends on: T355, T352, T353, `docs/research/codemirror-merge.md`
+- [ ] T357 (AC-289) Show an item's history, compare a version, and propose restoring it
+  - Files: `packages/web/src/workspaces/explore/HistoryPanel.tsx` (+ test), `e2e/security/history.spec.ts`
+  - Failing test: `history.spec.ts`: the History panel lists at most 10 versions newest first with number, time, author, approver and description, marks Current, compares a model version with the current one, and "Propose restoring…" opens the Propose dialog prefilled; readers see no History (AC-289; rule 80).
+  - Depends on: T354, T356
+- [ ] T358 (AC-284) Propose from the workspace item: the dialog, the counter, the bundle and the waiting band
+  - Files: `packages/web/src/workspaces/explore/ProposeDialog.tsx` (+ test), `e2e/security/workspace.spec.ts`
+  - Failing test: `ProposeDialog.test.tsx`: the dialog names the target and "new" or "replaces version _n_", lists bundled models without a way to remove them, counts "_n_ / 1,000" and blocks at 1,001 without truncating; after proposing, the item shows "Waiting for review" (AC-284; rule 75).
+  - Depends on: T349, T350, T348
+- [ ] T359 (AC-254) With security off, the single user works through a workspace and approves their own proposals
+  - Files: `e2e/workspace-single-user.spec.ts` (the phase-1 configuration)
+  - Failing test: `workspace-single-user.spec.ts`: with security off, editing a dashboard goes through "Edit in my workspace", a proposal and "Approve my own proposal", and nothing asks for a sign-in or refuses a permission (AC-254).
+  - Depends on: T356, T358
+
+## P2.7 Data sources and connections (F18, returned)
+
+- [ ] T360 [P] (AC-160) Define the six driver types' connection and authentication fields
+  - Files: `packages/core/src/data-sources/drivers.ts` (+ test)
+  - Failing test: `drivers.test.ts`: PostgreSQL (password, client certificate), Snowflake (key pair, OAuth token, password), Databricks (personal access token, OAuth machine-to-machine), BigQuery (service-account JSON), SQL Server (SQL login, NTLM, Entra ID service principal) and Oracle (password), each with the fields `docs/research/connection-testing.md` §2 lists, and no field that names a file path (AC-160).
+  - Depends on: none
+- [ ] T361 (AC-159) Have Cube run a connection test with its own driver, at wechart's request, and show each check
+  - Files: the Cube fork, through the Cube-expert agent only: a `connection-test` scope and `POST /v1/introspection/connection-tests` in the `cube-introspection` package (explicit config, no path fields, a timeout per check, error text redacted, body kept out of Cube's logs; research `connection-testing.md` §3); the fork image rebuilt under a new tag. wechart: `packages/api/src/cube/client.ts`, `packages/api/src/routes/data-sources.ts` (`POST /api/data-sources/:id/test`), `docker-compose.yml`, `deploy/helm/values/docker-desktop.yaml` (the new image)
+  - Failing test: `data-source-test.test.ts`, against the rebuilt Cube: a PostgreSQL source with a wrong password reports the checks Cube ran, the failing one with the driver's error text (SQLSTATE 28P01) and no secret in it; a correct one passes every check; the request never comes from the browser (AC-159).
+  - Depends on: T333, T335, T360
+- [ ] T362 (AC-163) Record each connection test and show a source's test history
+  - Files: a migration `…_connection-tests.cjs`, `packages/api/src/repos/connection-tests.ts` (+ test), `packages/web/src/workspaces/data-sources/TestHistory.tsx`
+  - Failing test: `connection-tests.test.ts`: every test run is stored with its time, checks and outcome, and the source's history lists them newest first (AC-163).
+  - Depends on: T361
+- [ ] T363 (AC-158) Add a data source in the workspace through Type → Connection → Test → Name, refusing a failing test without an override
+  - Files: `packages/web/src/workspaces/data-sources/{NewSourceWizard,ConnectionForm}.tsx` (+ tests), `packages/api/src/routes/data-sources.ts`, `e2e/security/data-sources.spec.ts`
+  - Failing test: `data-sources.spec.ts`: the wizard takes a name, a driver, that driver's fields and a Test step; Create stays disabled until the test passes or "Create anyway" is chosen; the API refuses a create with no passing test and no override (AC-158).
+  - Depends on: T360, T361, T345
+- [ ] T364 (AC-157, AC-233, AC-001) List every visible data source with its folder, driver, health and the cubes that use it
+  - Files: `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (replacing the deferred page), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`), `e2e/security/data-sources.spec.ts`
+  - Failing test: `data-sources.spec.ts`: the page shows its title and note, lists every source the user may see with folder path, driver, health from the last test and the cubes using it, and none they may not; `/sources` opens it; `reader` has no Data sources entry (AC-157, AC-233, AC-001).
+  - Depends on: T335, T338, T362
+- [ ] T365 (AC-161) After an approved change to a source, say whether Cube needs a restart and whether the running Cube uses it
+  - Files: `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources/:id/cube-state`, from the versioned name Cube's `/v1/sql` reports), `packages/web/src/workspaces/data-sources/CubeState.tsx` (+ test)
+  - Failing test: `cube-state.test.ts`: after an approved change, the source says no restart is needed and shows "Waiting for Cube to pick up the change" until Cube's SQL for one of its cubes names the new version, then "Cube uses these settings"; an environment-level source says a restart is needed (AC-161).
+  - Depends on: T339, T352
+
+## P2.8 Bookmarks (F31)
+
+- [ ] T366 (AC-292) Keep each bookmark its saver's own
+  - Files: `packages/api/src/repos/bookmarks.ts` (an owner), `packages/api/src/server.ts`, `packages/api/src/repos/bookmarks.test.ts`
+  - Failing test: `bookmarks.test.ts`: a bookmark `writer` saves is listed for `writer` and for nobody else, and names are unique per owner (AC-292).
+  - Depends on: T316, T325
+- [ ] T367 (AC-293) Share a bookmark with everyone who may see the dashboard; only its owner changes it
+  - Files: `packages/api/src/repos/bookmarks.ts`, `packages/web/src/dashboard/bookmarks/Bookmarks.tsx` (+ test), `e2e/security/bookmarks.spec.ts`
+  - Failing test: `bookmarks.spec.ts`: a shared bookmark appears under "Shared" for `reader`, labelled with who shared it; `reader` can apply it and "Save a copy to mine" but not change or unshare it; Mine is listed before Shared, newest first (AC-293; rule 81).
+  - Depends on: T366, T320
+
+## P2.9 Audit trail (F32)
+
+- [ ] T368 (AC-294) Record every sign-in, permission change, proposal, approval, rejection, restore and data-source change
+  - Files: a migration `…_audit.cjs`, `packages/api/src/repos/audit.ts` (+ test), the routes that emit each event
+  - Failing test: `audit.test.ts`: each of the seven kinds of event is recorded with who, what, which folder and when, and a data-source record shows credentials only as "replaced" (AC-294).
+  - Depends on: T316, T314, T349, T352, T353, T354, T335
+- [ ] T369 (AC-295) Show the audit trail to Super-Admins only, newest first, filtered by user, event and folder
+  - Files: `packages/web/src/workspaces/security/AuditTrail.tsx` (+ test), `packages/api/src/routes/audit.ts` (+ test), `e2e/security/audit.spec.ts`
+  - Failing test: `audit.spec.ts`: `super` sees the records newest first; the User, Event, Folder and Time filters combine and every row matches them; `writer` gets Not found for the page and 403 from the API (AC-295; rule 82).
+  - Depends on: T368
+- [ ] T370 (AC-296) Remove audit records older than the configured retention, one year by default
+  - Files: `packages/api/src/audit/retention.ts` (+ test), `packages/api/src/config.ts` (`WECHART_AUDIT_RETENTION_DAYS`)
+  - Failing test: `retention.test.ts`: with a fixed clock, a record older than the retention is removed and a younger one kept, with and without the setting (AC-296).
+  - Depends on: T368
+
+## P2.10 Jobs and Schedules (F17 returned, F33)
+
+- [ ] T371 (AC-297) Scope Jobs and Schedules to the models of the user's read-write folders
+  - Files: `packages/api/src/jobs/{build,schedules}.ts`, `packages/api/src/server.ts` (query log), `packages/web/src/workspaces/jobs/JobsPage.tsx`, `packages/api/src/jobs/scope.test.ts`
+  - Failing test: `scope.test.ts`: a read-write member of /A who isn't a Super-Admin sees only /A's chains' pre-aggregations, builds, schedules and query records, may build only those, and gets 403 for another folder's (AC-297).
+  - Depends on: T339, T340
+- [ ] T372 (AC-150) Record every build wechart starts and follow it to its end on the server
+  - Files: a migration `…_build-history.cjs`, `packages/api/src/repos/build-history.ts` (+ test), `packages/api/src/jobs/{build,follow}.ts` (+ tests)
+  - Failing test: as T156 (above): the build is stored with its pre-aggregation, "started from Jobs" and each partition's token; the API follows every open token to its end without a browser, and again after a restart; an expired token is "Cube's record expired"; the log keeps every reported state; a 101st record drops the oldest (AC-150).
+  - Depends on: T371
+- [ ] T373 (AC-150) Record the refresh worker's builds through Cube's `logger` option
+  - Files: as T261 (above)
+  - Failing test: as T261: a completed or failed build event is stored as "started by Cube's refresh worker"; a `* * * * *` rollup appears in Run history within one check period; the logger never throws (AC-150).
+  - Depends on: T372
+- [ ] T374 (AC-150) Show Run history in Jobs
+  - Files: as T262 (above)
+  - Failing test: as T262: Run history lists builds newest first with the prototype's columns and filters, opens a build's log, and still lists a build older than Cube's 24 hours (AC-150).
+  - Depends on: T372
+- [ ] T375 (AC-145) List a rollup's partitions and rebuild the selected ones
+  - Files: as T151 (above), with the partition list read through Cube's system route or, if that needs more than configuration, a fork endpoint added by the Cube-expert agent
+  - Failing test: as T151: every partition Cube lists is shown with its period, state and last build time, and a rebuild starts jobs for exactly the selected partitions (AC-145).
+  - Depends on: T372
+- [ ] T376 (AC-151) Show the build queue and cancel a queued entry
+  - Files: the Cube fork, through the Cube-expert agent: a queue listing and cancel endpoint in the `cube-introspection` package; `packages/api/src/jobs/queue.ts` (+ test), `packages/web/src/workspaces/jobs/BuildQueue.tsx`
+  - Failing test: `queue.test.ts`, against the rebuilt Cube: every queued build appears with its pre-aggregation, partition, state and token, and cancelling removes it (AC-151).
+  - Depends on: T372
+- [ ] T377 (AC-153, AC-154) Fix what T258's, T159's and T160's reviews found, then tick AC-153 and AC-154 again
+  - Files and failing tests: as T264 (above), each finding with a test that fails first
+  - Depends on: T339
+- [ ] T378 (AC-234) Run a wechart-owned cron schedule through Cube's jobs API
+  - Files: `packages/api/package.json` (pg-boss 12.33.2), `packages/api/src/scheduler/{schedules,worker}.ts` (+ tests), `packages/web/src/workspaces/schedules/ScheduleForm.tsx`
+  - Failing test: `schedules.test.ts`: the next runs shown match the cron expression and time zone, and with a fake clock a due run starts a build through the jobs API (AC-234).
+  - Depends on: T372
+- [ ] T379 (AC-155) Suspend a repeatedly failing schedule, say so, and offer Resume
+  - Files: `packages/api/src/scheduler/suspend.ts` (+ test), `packages/web/src/workspaces/schedules/SchedulesPage.tsx`
+  - Failing test: `suspend.test.ts`: after the configured number of consecutive failures the schedule stops running and says so, and Resume starts it again (AC-155).
+  - Depends on: T378
+
+## P2.11 Quick calculations and calculation requests (F6, returned)
+
+- [ ] T380 [P] (AC-047) Offer the six quick calculations on a measure
+  - Files and failing test: as T053 (above) (AC-047).
+  - Depends on: none
+- [ ] T381 (AC-049) Disable a period calculation without a time dimension, and say which field is missing
+  - Files and failing test: as T054 (above) (AC-049).
+  - Depends on: T380
+- [ ] T382 (AC-048) Compute quick calculations in Cube as generated multi-stage measures, and label the measure
+  - Files: `packages/core/src/quickCalc.ts` (+ test), `packages/api/src/model/chain.ts` (only the companions charts use, added to the served files), `e2e/quick-calcs.spec.ts`
+  - Failing test: `quickCalc.test.ts` and `quick-calcs.spec.ts`: each calculation queries a generated companion measure (the spike's shapes) rather than post-processing rows, and the tile labels the measure with the calculation (AC-048).
+  - **Ask the user first:** does a running total count from the start of the data (Cube's `trailing: unbounded`, observed) or from the start of the chart's range (research spike, "Open for the user")?
+  - Depends on: T380, T337
+- [ ] T383 (AC-050) Record a calculation request and show it to the read-write members of the folder whose model defines the cube
+  - Files: `packages/api/src/repos/calc-requests.ts` (+ test), `packages/web/src/editor/RequestCalcDialog.tsx`
+  - Failing test: `calc-requests.test.ts`: the request holds the chart, the fields and the description, and is listed for that folder's read-write members and no one else (AC-050).
+  - Depends on: T380, T334, T325
+- [ ] T384 (AC-051) Open a request's cube in the member's workspace model editor, with the request beside it
+  - Files: `packages/web/src/workspaces/model/RequestPane.tsx` (+ test)
+  - Failing test: `RequestPane.test.tsx`: opening a request copies the model into the member's workspace (or opens the copy) on the cube it names, with the request text beside the editor (AC-051).
+  - Depends on: T383, T344, T342
+- [ ] T385 (AC-052) Resolve a request when its measure is approved into the folder, naming the member
+  - Files: `packages/api/src/repos/calc-requests.ts`, `packages/api/src/repos/calc-resolution.test.ts`
+  - Failing test: `calc-resolution.test.ts`: approving a model proposal that adds the requested measure marks the request resolved and records the member (AC-052).
+  - Depends on: T384, T352
+
+## P2.12 Markings (F10, F11, returned)
+
+- [ ] T386 [P] (AC-093) Mark a continuous range by dragging along an axis
+  - Files: `packages/charts/src/marks/range.ts` (+ test), `packages/web/src/dashboard/markings/*`, `e2e/markings.spec.ts`
+  - Failing test: `markings.spec.ts`: in range mode, a drag along the x axis marks the range, draws a coloured stripe on the axis, and the bounds stay when a filter changes (AC-093).
+  - Depends on: none
+- [ ] T387 [P] (AC-097) Draw a partly marked item: the marked share for additive measures, a pattern for the others
+  - Files: `packages/charts/src/marks/partial.ts` (+ test)
+  - Failing test: `partial.test.ts`: a partly marked sum draws the marked share from the baseline at full strength and fades the rest; an average or distinct count draws the whole item patterned, with marked and total values in the tooltip (AC-097).
+  - Depends on: none
+- [ ] T388 [P] (AC-104) Obtain the marked share with one extra query per tile, keeping the base result cached
+  - Files and failing test: as T110 (above) (AC-104).
+  - Depends on: none
+- [ ] T389 [P] (AC-116) Render marking and measure tokens in text tiles
+  - Files and failing test: as T122 (above) (AC-116).
+  - Depends on: none
+
+## P2.13 Charts (F35)
+
+- [ ] T390 [P] (AC-041) Fold the remainder into "Other (n)" or drop it, and offer a row limit
+  - Files: `packages/core/src/topN.ts` (+ test), `packages/web/src/editor/customize/*`
+  - Failing test: `topN.test.ts`: a chart over its top-N either folds the remainder into "Other (_n_)" naming the members' count or drops it, and a row limit drops rows past it (AC-041).
+  - Depends on: none
+- [ ] T391 [P] (AC-299) Thin or abbreviate value-axis labels so none overlap
+  - Files: `packages/charts/src/axes.ts` (+ test)
+  - Failing test: `axes.test.ts`, with `renderToSvg`: at a narrow tile width no two value-axis labels overlap (AC-299).
+  - Depends on: none
+- [ ] T392 [P] (AC-300) Draw, stack and list series in the order set in Customize
+  - Files: `packages/core/src/compile.ts`, `packages/web/src/editor/customize/SeriesOrder.tsx` (+ tests)
+  - Failing test: `seriesOrder.test.ts`: a set order draws, stacks and lists the series in that order, and holds after a refresh (AC-300).
+  - Depends on: none
+- [ ] T393 [P] (AC-301) Order a table's columns as the wells order its fields
+  - Files: `packages/web/src/tiles/DataTable.tsx` (+ test)
+  - Failing test: `DataTable.test.tsx`: time and dimensions come first, then measures in the Metrics well's order (AC-301).
+  - Depends on: none
+- [ ] T394 [P] (AC-302) Edit a markdown tile's text in edit mode
+  - Files: `packages/web/src/dashboard/tiles/MarkdownTile.tsx` (+ test), `e2e/dashboard.spec.ts`
+  - Failing test: `dashboard.spec.ts`: selecting a markdown tile in edit mode lets the user change its text, and the tile renders the change (AC-302).
+  - Depends on: none
+- [ ] T395 [P] (AC-303) Draw pie and donut labels whole, moving or hiding the ones that don't fit
+  - Files: `packages/charts/src/series/pie.ts` (+ test)
+  - Failing test: `pie.test.ts`: with data labels on, no label is truncated ("$…"); labels that don't fit move out or hide (AC-303).
+  - Depends on: none
+- [ ] T396 [P] (AC-304) Fold the app bar into a menu below 1,024 pixels
+  - Files: `packages/web/src/shell/AppShell.tsx`, `e2e/shell.spec.ts`
+  - Failing test: `shell.spec.ts`: at 390 pixels wide no page scrolls sideways, and navigation and search are in a menu (AC-304).
+  - Depends on: none
+- [ ] T397 [P] (AC-313) Detect ISO-3 country codes, with the model's marking overriding
+  - Files: `packages/core/src/geo/iso3.ts` (+ test; the ISO 3166-1 alpha-3 list, per `research/country-map.md`), `packages/web/src/workspaces/model/form/*` (a "Country code" setting on a dimension, written as its `meta`)
+  - Failing test: `iso3.test.ts`: a dimension whose non-empty values are all ISO-3 codes counts; one marked as a country code counts whatever its values; one marked "not a country code" never does (AC-313).
+  - Depends on: none
+- [ ] T398 (AC-305) Draw a country map on Natural Earth 1:50m boundaries, with a legend, and name the codes it can't place
+  - Files: `packages/charts/src/geo/{countries-50m.geo.json,countryMap.ts}` (the slim file derived from Natural Earth v5.1.2, keyed `ISO_A3`, then `ISO_A3_EH`), `packages/charts/package.json` (d3-geo 3.1.1), `packages/charts/src/series/map.ts` (+ test), `packages/charts/src/echarts.ts` (`MapChart`), `packages/core/src/render-spec.ts` (`map`), `packages/core/src/topN.ts` (the map is excluded), `packages/recommender/src/*` (offered per AC-313), `packages/web/src/tiles/UnplacedCodes.tsx`, `e2e/country-map.spec.ts`
+  - Failing test: `map.test.ts`: every code in the data, SGP, FRA and NOR included, is filled from the sequential ramp; the legend shows the range and "No data"; `country-map.spec.ts`: an unplaced code is named under the map (AC-305; rules 86–87).
+  - Depends on: T397
+- [ ] T399 [P] (AC-306) Draw a box plot with type-7 quartiles, and whiskers per the chart option
+  - Files: `packages/core/src/stats/boxplot.ts` (+ test), `packages/charts/src/series/boxplot.ts` (+ test), `packages/charts/src/echarts.ts` (`BoxplotChart`), `packages/core/src/render-spec.ts` (`boxplot`)
+  - Failing test: `boxplot.test.ts`: medians and quartiles equal PostgreSQL's `percentile_cont` on the same values; Tukey whiskers end at the most extreme value within 1.5 × IQR with values beyond as dots; the min/max option draws the extremes (AC-306; rule 88).
+  - Depends on: none
+- [ ] T400 (AC-314) Compute a box plot's values once per "Each point is"
+  - Files: `packages/core/src/compile.ts`, `packages/web/src/editor/wells/*`, `packages/core/src/stats/boxplot.test.ts`
+  - Failing test: `boxplot.test.ts` and `e2e/boxplot.spec.ts`: with "Each point is" set to Order ID, the query groups by category and order, and each box holds one value per order (AC-314).
+  - Depends on: T399
+- [ ] T401 (AC-315) Say "computed from _n_ of _N_ rows" when a box plot's data passes Cube's row limit
+  - Files: `packages/web/src/tiles/ChartTile.tsx`, `packages/web/src/query/*` (`total: true` for box plots), `packages/web/src/tiles/RowLimitWarning.test.tsx`
+  - Failing test: `RowLimitWarning.test.tsx`: a box plot whose query's total exceeds the rows returned shows "Computed from _n_ of _N_ rows" with the warning icon, and none when they're equal (AC-315; rule 89).
+  - Depends on: T399
+
+## P2.14 The UI fixes (F21–F23, returned)
+
+- [ ] T402 [P] (AC-201) Keep the marked-items badge in the header row beside the title
+  - Files: `packages/web/src/tiles/ChartTile.tsx`, `e2e/markings.spec.ts`
+  - Failing test: `markings.spec.ts`: on a marked KPI tile the badge sits beside the title without pushing it down or squeezing it out of view, and no tile with an empty marking shows one (AC-201).
+  - Depends on: none
+- [ ] T403 [P] (AC-220) Name members by their titles in the Acceleration tab and every other place the re-critique found
+  - Files: `packages/web/src/editor/acceleration/*`, `e2e/titles.spec.ts`
+  - Failing test: `titles.spec.ts`: no legend, tooltip, table header, pill, marking chip, "Why this chart?" trace or Acceleration tab shows an internal name such as `orders.count`, and a one-source chart's legend and KPI label use the short title (AC-220).
+  - Depends on: none
+- [ ] T404 [P] (AC-246) Open the tile's menu with Shift+F10 or the Menu key on any chart tile, one with no fields included
+  - Files: `packages/web/src/tiles/ChartTile.tsx`, `e2e/tile-menu.spec.ts`
+  - Failing test: `tile-menu.spec.ts`: Shift+F10 and the Menu key open the tile's menu on a focused chart tile with no fields yet, and the browser's own menu never opens there (AC-246).
+  - Depends on: none
+- [ ] T405 (AC-176) Reach the remaining pointer-only actions from the keyboard
+  - Files and failing test: as T307 and T182 (above), extended to every phase-2 panel, dialog and popover (rule 85) (AC-176).
+  - Depends on: T330, T356, T357, T367
+- [ ] T406 (AC-187) Re-run the design critique on every surface and tick AC-187 only on measured conformance
+  - Files and failing test: as T225 (above), with the phase-2 surfaces added (AC-187).
+  - Depends on: T330, T348, T356, T364, T369
+- [ ] T407 (AC-180) Run the acceptance suites in Chrome, Edge, Firefox and Safari
+  - Files: `playwright.config.ts`, `playwright.security.config.ts` (an Edge project locally when Edge is installed), `docs/handoff.md`
+  - Failing test: both suites pass in all four browsers (AC-180).
+  - Depends on: T405, T406
+
+## P2.15 The whole-surface checks
+
+- [ ] T408 (AC-268) Ask every route as users in and out of each group, and get nothing outside their folders
+  - Files: `packages/api/src/access/route-matrix.test.ts` (fixtures for /A, /A/B, /A/B/C, /C and a workspace; the users `super`, `writer`, `reader`, `many`, `nobody`)
+  - Failing test: `route-matrix.test.ts`: for every route the server registers, each user gets only items in folders they may see and can change only what they may change; the test fails for a route it has no case for (AC-268).
+  - Depends on: T340, T355, T364, T369, T371
+- [ ] T409 (AC-307) Render a 10-chart dashboard in a folder with its own models within 3 s at p95 with security on
+  - Files: `e2e/perf/secure-dashboard-open.spec.ts`
+  - Failing test: `secure-dashboard-open.spec.ts`: 20 opens as `writer` of a 10-chart dashboard in /A/B, whose chain has its own models, render every tile with p95 ≤ 3,000 ms (AC-307).
+  - Depends on: T341, T408
+- [ ] T410 (AC-308) End of phase 2: pass the phase-1 suite with security off, editing through the workspace and a self-approved proposal
+  - Files: the phase-1 specs in `e2e/` whose steps edit shared content
+  - Failing test: the phase-1 suite in all four browsers with security off (AC-308).
+  - Depends on: T407, T409
+- [ ] T411 (AC-258) End of phase 2: sign in against Microsoft Entra ID, or on-prem AD through a broker, and resolve groups
+  - Files: `docs/deploy.md` (the configuration used), `docs/handoff.md` (the result)
+  - Failing test: signing in as a directory user whose groups are known, and comparing the groups wechart resolves with the directory's (AC-258). **Needs the user:** a tenant or broker to test against.
+  - Depends on: T410
+
+## Phase 2 coverage: acceptance criterion → task
+
+| AC | Tasks | AC | Tasks | AC | Tasks |
+|---|---|---|---|---|---|
+| AC-001 | T331, T364 | AC-008 | T322, T339 | AC-041 | T390 |
+| AC-047 | T380 | AC-048 | T382 | AC-049 | T381 |
+| AC-050 | T383 | AC-051 | T384 | AC-052 | T385 |
+| AC-093 | T386 | AC-097 | T387 | AC-104 | T388 |
+| AC-116 | T389 | AC-131 | T334, T342 | AC-145 | T375 |
+| AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |
+| AC-154 | T377 | AC-155 | T379 | AC-157 | T364 |
+| AC-158 | T363 | AC-159 | T361 | AC-160 | T360 |
+| AC-161 | T365 | AC-163 | T362 | AC-164 | T335 |
+| AC-176 | T405 | AC-180 | T407 | AC-187 | T406 |
+| AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
+| AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
+| AC-234 | T378 | AC-246 | T404 | AC-249 | T336 |
+| AC-251 | T318, T321 | AC-252 | T316, T319 | AC-253 | T317 |
+| AC-254 | T311, T319, T351, T359 | AC-255 | T312 | AC-256 | T313, T323 |
+| AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
+| AC-260 | T312, T314, T330 | AC-261 | T312 | AC-262 | T313, T327 |
+| AC-263 | T313, T326 | AC-264 | T313, T325 | AC-265 | T313, T323, T330 |
+| AC-266 | T326 | AC-267 | T328 | AC-268 | T340, T408 |
+| AC-269 | T334, T335 | AC-270 | T336 | AC-271 | T336 |
+| AC-272 | T337, T339, T340 | AC-273 | T338 | AC-274 | T341 |
+| AC-275 | T337, T352 | AC-276 | T343 | AC-277 | T343 |
+| AC-278 | T344, T348 | AC-279 | T344 | AC-280 | T346 |
+| AC-281 | T347 | AC-282 | T345 | AC-283 | T347 |
+| AC-284 | T349, T358 | AC-285 | T350 | AC-286 | T351 |
+| AC-287 | T355, T356 | AC-288 | T352 | AC-289 | T354, T357 |
+| AC-290 | T353 | AC-291 | T329 | AC-292 | T366 |
+| AC-293 | T367 | AC-294 | T368 | AC-295 | T369 |
+| AC-296 | T370 | AC-297 | T371 | AC-298 | T332 |
+| AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
+| AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
+| AC-305 | T398 | AC-306 | T399 | AC-307 | T409 |
+| AC-308 | T410 | AC-309 | T337 | AC-310 | T338 |
+| AC-311 | T333 | AC-312 | T335 | AC-313 | T397 |
+| AC-314 | T400 | AC-315 | T401 | | |

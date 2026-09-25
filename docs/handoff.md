@@ -1,5 +1,24 @@
 # Handoff — 2026-09-24
 
+> **Phase 2, 2026-09-25: implementing.** The workflow ran interview (R11–R19), spec
+> (F25–F36), research, the user's choices (R20–R22), the design direction (§7e,
+> accepted in R23) and the task plan: `docs/tasks.md` › "Phase 2", T311–T411,
+> covering every open criterion. Take the next unchecked task whose dependencies are
+> met.
+> - **Decided:**
+>   - Sign-in is wechart's API as its own OIDC client (openid-client), with Dex 2.45.1 as the development provider.
+>   - Connection tests run in Cube's fork at wechart's request; fork changes go through the Cube-expert agent only.
+>   - Names resolve bottom-up from the viewer's folder.
+>   - Development uses one fixed encryption key in the repo, and the API refuses to start without a usable key.
+> - **Still for the user, when its task comes:**
+>   - running totals from the start of the data or of the chart's range (T382);
+>   - an Entra ID tenant or AD broker for the end-of-phase check (T411).
+> - **The user's R13:** test phase 2 with security on (`playwright.security.config.ts`); run
+>   phase 1's suite with security off only at the end (T410).
+> - **Deployed:** wechart-api/web:40aa57e on docker-desktop (`deploy/helm/verify.sh`
+>   passed).
+> - **Pushing is the user's:** `git push origin main --tags`.
+
 > **Phase 1 closed on 2026-09-25, at the user's decision.** Start phase 2 from
 > `docs/phase-2/backlog.md`, not from §4 below. The backlog holds:
 > - every criterion moved out of `docs/spec.md`, word for word, with why it moved;
