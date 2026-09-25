@@ -822,6 +822,8 @@ interface Affordances {
   readonly drag?: CanvasProps['drag'];
   /** What a key does to the focused tile (AC-057). */
   readonly onTileKeyDown?: CanvasProps['onTileKeyDown'];
+  readonly takesKeys?: CanvasProps['takesKeys'];
+  readonly onTileContextMenu?: CanvasProps['onTileContextMenu'];
   readonly describeItem?: CanvasProps['describeItem'];
   readonly selection?: CanvasProps['selection'];
   readonly addHere?: CanvasProps['addHere'];
@@ -895,6 +897,8 @@ function Elements({
       drag={drag}
       onResize={onResize}
       onTileKeyDown={affordances.onTileKeyDown}
+      takesKeys={affordances.takesKeys}
+      onTileContextMenu={affordances.onTileContextMenu}
       describeItem={affordances.describeItem}
       selection={affordances.selection}
       addHere={affordances.addHere}
@@ -4552,6 +4556,25 @@ function DashboardPages({
             }
             markKeys?.onKey(event, tile.id);
           },
+    // Outside Markings only a chart tile answers a key — its menu's — so only
+    // it is a tab stop there (T266's review).
+    ...(editing || markKeys !== undefined
+      ? {}
+      : { takesKeys: (id: string) => chartIdOf(document, id) !== undefined }),
+    /**
+     * A `contextmenu` a keyboard makes at the focused tile — VoiceOver's
+     * VO+Shift+M, or the Menu key where the keydown did not stop it — opens
+     * the tile's menu, never the browser's (AC-246; research gotcha 2).
+     */
+    ...(editing || charts.onTileMenu === undefined
+      ? {}
+      : {
+          onTileContextMenu: (event: React.MouseEvent, tile: { id: string }) => {
+            if (chartIdOf(document, tile.id) === undefined) return;
+            event.preventDefault();
+            charts.onTileMenu?.(tile.id);
+          },
+        }),
     onDelete: editing
       ? (id) => {
           /**

@@ -233,3 +233,33 @@ describe('the gridlines', () => {
     }
   });
 });
+
+/**
+ * T266's review: in view mode outside Markings only a chart tile answers a
+ * key — Shift+F10 opens its menu — and a tile that answers none is no tab
+ * stop, which would be a stop for nothing.
+ */
+describe('which tiles are tab stops', () => {
+  it('only those that take keys, where only some do', () => {
+    render(
+      <Canvas
+        tiles={OFF_GRID}
+        editing={false}
+        onTileKeyDown={vi.fn()}
+        takesKeys={(id) => id === 'a' || id === 'd'}
+      >
+        {(tile) => <span>{tile.id}</span>}
+      </Canvas>,
+    );
+
+    const stops = screen
+      .getAllByTestId('grid-item')
+      .map((tile) => [tile.textContent, tile.getAttribute('tabindex')]);
+    expect(stops).toEqual([
+      ['a', '0'],
+      ['b', null],
+      ['c', null],
+      ['d', '0'],
+    ]);
+  });
+});

@@ -388,6 +388,9 @@ export function TileViewMenu({
         <span aria-hidden="true">⋯</span>
       </button>
       {open ? (
+        // Its handlers keep focus and the browser's menu off it; the menu in
+        // it takes every key and click (`Menu`).
+        // eslint-disable-next-line jsx-a11y/no-static-element-interactions
         <div
           className="tile-view-menu"
           ref={popup}
@@ -396,6 +399,20 @@ export function TileViewMenu({
           // of any transform above it, while it stays in the tile's DOM.
           // Only where it can be shown: a popover not shown is not drawn.
           popover={CAN_POP ? 'manual' : undefined}
+          // A press on its heading or its padding leaves focus on the item it
+          // was on, where the menu's keys — Escape among them — are taken
+          // (T266's review: it went to the tile, and Escape unmarked it).
+          onMouseDown={(event) => {
+            if ((event.target as Element).closest('[role^="menuitem"]') === null)
+              event.preventDefault();
+          }}
+          // Never the browser's menu over this one (AC-246; research gotcha
+          // 2): a right-click on it, or the Menu key's `contextmenu`, which
+          // Chromium on Windows fires on its keyup — at the item this menu
+          // has just focused.
+          onContextMenu={(event) => {
+            event.preventDefault();
+          }}
         >
           {/* The marked-rows group's heading, outside the menu itself, which
               holds items only (APG): the tile's marking and how much it holds

@@ -39,6 +39,19 @@ export interface CanvasProps {
    */
   readonly onTileKeyDown?: ((event: React.KeyboardEvent, tile: GridTile) => void) | undefined;
   /**
+   * Whether any key answers on this tile, where only some take them — in
+   * view mode outside Markings, a chart tile's menu keys and nothing else
+   * (T266's review). Absent, every tile does.
+   */
+  readonly takesKeys?: ((id: string) => boolean) | undefined;
+  /**
+   * A `contextmenu` on the focused tile itself — one a keyboard makes, such
+   * as VoiceOver's VO+Shift+M or the Menu key where it fires at the focused
+   * element (research gotcha 2; T266's review). Not one from inside it: a
+   * right-click on a chart is the chart's.
+   */
+  readonly onTileContextMenu?: ((event: React.MouseEvent, tile: GridTile) => void) | undefined;
+  /**
    * What each item is, and which keys answer on it — so the tab stop is
    * announced for what it can actually do. A section answers none of them,
    * and a markdown tile has no chart to edit.
@@ -161,6 +174,8 @@ export function Canvas({
   drag,
   onResize,
   onTileKeyDown,
+  takesKeys,
+  onTileContextMenu,
   describeItem,
   selection,
   addHere,
@@ -258,6 +273,8 @@ export function Canvas({
         // started from.
         const live = dragging?.id === tile.id ? { ...tile, ...dragging.size } : tile;
         const { columns, height } = onGrid(live);
+        // A tile no key answers on here is no tab stop (T266's review).
+        const keys = (takesKeys?.(tile.id) ?? true) ? onTileKeyDown : undefined;
 
         return (
           <div
@@ -324,11 +341,9 @@ export function Canvas({
              * protect is the whole subject of `keyboard.test.ts`.
              */
 
-            tabIndex={onTileKeyDown === undefined ? undefined : 0}
-            role={onTileKeyDown === undefined ? undefined : 'group'}
-            aria-roledescription={
-              onTileKeyDown === undefined ? undefined : describeItem?.(tile.id).role
-            }
+            tabIndex={keys === undefined ? undefined : 0}
+            role={keys === undefined ? undefined : 'group'}
+            aria-roledescription={keys === undefined ? undefined : describeItem?.(tile.id).role}
             /**
              * Named for the keys that actually answer on *this* item. A
              * section answers none of them, and a markdown tile has no chart
@@ -336,7 +351,7 @@ export function Canvas({
              * not keep.
              */
             aria-label={
-              onTileKeyDown === undefined
+              keys === undefined
                 ? undefined
                 : [
                     // Its name, never its id (AC-209), as one sentence: a
@@ -349,7 +364,7 @@ export function Canvas({
                     .join(' ')
             }
             onKeyDown={
-              onTileKeyDown === undefined
+              keys === undefined
                 ? undefined
                 : (event) => {
                     /**
@@ -361,7 +376,15 @@ export function Canvas({
                      * editor mid-sentence.
                      */
                     if (event.target !== event.currentTarget) return;
-                    onTileKeyDown(event, tile);
+                    keys(event, tile);
+                  }
+            }
+            onContextMenu={
+              keys === undefined || onTileContextMenu === undefined
+                ? undefined
+                : (event) => {
+                    if (event.target !== event.currentTarget) return;
+                    onTileContextMenu(event, tile);
                   }
             }
             style={{

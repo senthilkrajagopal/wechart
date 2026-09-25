@@ -70,9 +70,17 @@ export type MenuEntry =
 /** Why the menu is closing: Escape at its top, Tab, or an item that ran. */
 export type MenuClose = 'escape' | 'tab' | 'selected';
 
-/** This menu's own items, groups' included and submenus' not. */
-const OWN_ITEMS =
-  ':scope > [role^="menuitem"], :scope > [role="group"] > [role^="menuitem"], :scope > [role="none"] > [role^="menuitem"]';
+/**
+ * This menu's own items, groups' included and submenus' not: a submenu's
+ * item sits in a `role="none"` wrapper, in the menu or in a group (T266's
+ * review: one in a group was skipped).
+ */
+const OWN_ITEMS = [
+  ':scope > [role^="menuitem"]',
+  ':scope > [role="group"] > [role^="menuitem"]',
+  ':scope > [role="none"] > [role^="menuitem"]',
+  ':scope > [role="group"] > [role="none"] > [role^="menuitem"]',
+].join(', ');
 
 export function Menu({
   entries,
@@ -109,17 +117,27 @@ export function Menu({
   /**
    * A submenu opens beside its item and, where that would leave the window,
    * on the other side of it: measured once it has laid out.
+   *
+   * Placed `fixed`, by its item's box (research §6; T266's review): placed
+   * inside its menu, a menu that scrolls — the tile menu does, at its height
+   * cap — clipped it at its own edge.
    */
   useLayoutEffect(() => {
     if (!nested) return;
     const own = box.current;
-    if (own === null || typeof window === 'undefined') return;
-    const rect = own.getBoundingClientRect();
-    if (rect.right > window.innerWidth) own.classList.add('menu--flip');
-    if (rect.bottom > window.innerHeight) {
-      own.style.top = `${String(Math.min(0, window.innerHeight - rect.bottom - 8))}px`;
-    }
-  }, [nested]);
+    const item = labelledBy === undefined ? null : window.document.getElementById(labelledBy);
+    if (own === null || item === null) return;
+    const from = item.getBoundingClientRect();
+    const size = own.getBoundingClientRect();
+    const gap = 4;
+    const right = from.right + gap;
+    const left =
+      right + size.width > window.innerWidth ? Math.max(0, from.left - gap - size.width) : right;
+    const top = Math.max(0, Math.min(from.top, window.innerHeight - size.height - 8));
+    own.style.position = 'fixed';
+    own.style.left = `${String(left)}px`;
+    own.style.top = `${String(top)}px`;
+  }, [nested, labelledBy]);
 
   const entryOf = (key: string): MenuEntry | undefined => {
     const find = (list: readonly MenuEntry[]): MenuEntry | undefined => {

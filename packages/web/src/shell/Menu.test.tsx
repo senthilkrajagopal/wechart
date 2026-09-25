@@ -177,4 +177,50 @@ describe('the tile menu', () => {
     await userEvent.keyboard('{Tab}');
     expect(onClose).toHaveBeenLastCalledWith('tab');
   });
+
+  it('reaches a submenu inside a group, and opens and closes it (T266’s review)', async () => {
+    menu([
+      { kind: 'item', key: 'a', label: 'View query', onSelect: vi.fn() },
+      {
+        kind: 'group',
+        key: 'g',
+        label: 'Marked',
+        entries: [
+          {
+            kind: 'submenu',
+            key: 'x',
+            label: 'Drill by',
+            entries: [{ kind: 'item', key: 'r', label: 'Region', onSelect: vi.fn() }],
+          },
+        ],
+      },
+    ]);
+
+    await userEvent.keyboard('{ArrowDown}');
+    expect(focused()).toContain('Drill by');
+    await userEvent.keyboard('{ArrowRight}');
+    expect(focused()).toBe('Region');
+    await userEvent.keyboard('{Escape}');
+    expect(focused()).toContain('Drill by');
+  });
+
+  it('places a submenu by its item’s box, fixed, so a menu that scrolls cannot clip it', async () => {
+    menu([
+      {
+        kind: 'submenu',
+        key: 'x',
+        label: 'Export',
+        entries: [{ kind: 'item', key: 'csv', label: 'CSV', onSelect: vi.fn() }],
+      },
+    ]);
+    const item = screen.getByRole('menuitem', { name: /Export/ });
+    item.getBoundingClientRect = () => DOMRect.fromRect({ x: 100, y: 200, width: 250, height: 28 });
+
+    await userEvent.keyboard('{ArrowRight}');
+
+    const sub = screen.getByRole('menu', { name: /Export/ });
+    expect(sub.style.position).toBe('fixed');
+    expect(sub.style.left).toBe('354px');
+    expect(sub.style.top).toBe('200px');
+  });
 });

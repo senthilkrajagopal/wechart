@@ -3228,11 +3228,12 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 .menu__check { width: 12px; flex: 0 0 auto; color: var(--wc-accent); }
 .menu__chevron { margin-left: auto; color: var(--wc-text-muted); }
 .menu__separator { height: 1px; margin: 4px 0; background: var(--wc-border-subtle); }
-.menu__sub { position: relative; }
+/* Fixed, placed by its item's box (Menu), so a menu that scrolls does not
+   clip it (T266's review; research §6). */
 .menu--sub {
-  position: absolute;
-  top: -5px;
-  left: calc(100% + 4px);
+  position: fixed;
+  top: 0;
+  left: 0;
   z-index: 1;
   width: 220px;
   padding: 4px;
@@ -3241,7 +3242,6 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   background: var(--wc-bg-raised);
   box-shadow: var(--wc-shadow-pop);
 }
-.menu--sub.menu--flip { left: auto; right: calc(100% + 4px); }
 /* Delete in the error ink, as the prototype's is (mismatch 14). */
 .tile-menu__delete button { color: var(--wc-status-error); }
 .tile-menu__list button:disabled { color: var(--wc-text-muted); cursor: not-allowed; }

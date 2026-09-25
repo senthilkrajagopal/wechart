@@ -336,6 +336,9 @@ export function ChartCanvas({
     const onContextMenu = () => {
       clicks.cancel();
       panelClicks.cancel();
+      // And the wrapper's own press, whose release would otherwise be a click
+      // on empty plot and unmark the tile (T266's review).
+      pressedHere.current = false;
       if (path.length > 0) abandon();
     };
     element.addEventListener('contextmenu', onContextMenu);

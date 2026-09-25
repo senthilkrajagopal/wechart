@@ -1091,8 +1091,15 @@ test('a right-click on the chart, Shift+F10 or the Menu key opens the tile’s m
   await expect(badge).toContainText('1 marked');
   await page.evaluate(() => {
     const seen: boolean[] = [];
-    (window as unknown as { __menus: boolean[] }).__menus = seen;
+    const keys: boolean[] = [];
+    Object.assign(window, { __menus: seen, __keys: keys });
     document.addEventListener('contextmenu', (event) => seen.push(event.defaultPrevented));
+    // Each menu key's own default prevented too, so no browser makes it a
+    // `contextmenu` of its own (research §4).
+    document.addEventListener('keydown', (event) => {
+      if ((event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu')
+        keys.push(event.defaultPrevented);
+    });
   });
 
   // A right-click on another bar: the menu at the pointer, the marking as it was.
@@ -1126,6 +1133,32 @@ test('a right-click on the chart, Shift+F10 or the Menu key opens the tile’s m
     await expect(menu).toHaveCount(0);
     await expect(status).toBeFocused();
   }
+  expect(await page.evaluate(() => (window as unknown as { __keys: boolean[] }).__keys)).toEqual([
+    true,
+    true,
+  ]);
+
+  /**
+   * The `contextmenu` a keyboard makes (T266's review): VoiceOver's
+   * VO+Shift+M fires one at the focused tile, and Chromium on Windows fires
+   * the Menu key's on its keyup — at the item the menu has just focused.
+   * Neither opens the browser's menu. Playwright makes none from a key
+   * (research §7), so each is dispatched where the browser would.
+   */
+  const keyboardMenu = (target: Locator) =>
+    target.evaluate((node) => {
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      node.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+  await status.focus();
+  expect(await keyboardMenu(status)).toBe(true);
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  expect(await keyboardMenu(menu.getByRole('menuitem').first())).toBe(true);
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
   await expect(badge).toContainText('1 marked');
 });
 

@@ -4091,6 +4091,18 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
       - `TileViewMenu.test.tsx`: the test-integrity hook flags this as "replaces a strict matcher with a weaker one". It is a false positive: the renamed line was `toBeTruthy` before too, and `toBe(true)` on `.disabled` became `toBe('true')` on `aria-disabled`. Reported to the user.
       - The design checks measure the popup the menu sits in (`viewMenuOf`).
       - T119's disabled-reason check reads the accessible description instead of `title`.
+  - **T266's review, 2026-09-25.** One cold review, which judged AC-246 met only in part. Everything it found is fixed in one commit, all three browsers:
+    - **H1. A keyboard's `contextmenu` opened the browser's menu.** Only the plot prevented `contextmenu`. On Windows, Chromium fires the Menu key's on keyup, at the item the menu has just focused, so the browser's menu opened over ours. VoiceOver's VO+Shift+M fires one at the focused tile. Now:
+      - the popup prevents every `contextmenu` inside it;
+      - a `contextmenu` on the focused chart tile itself opens its menu (`Canvas`'s new `onTileContextMenu`) and prevents the browser's.
+      - The e2e dispatches both events where a browser would, since Playwright makes none from a key (research §7), and checks that each key's keydown default is prevented. **AC-246 stays ticked on that test**, which now observes this path.
+    - **M1. Submenus would have been clipped** by the popup's `overflow: auto`. A submenu is now `position: fixed`, placed from its item's box and turned back from the window's edges (research §6). This was latent until T270–T273 add submenus. `Menu.test.tsx` checks the placement.
+    - **M2. A macOS Ctrl+click could unmark a tile.** The `contextmenu` cancelled the chart's presses but not the wrapper's, so a release off the menu read as a click on empty plot. It now ends that press too. **No test:** the reviewer did not reproduce it, and Playwright cannot place the release off a flipped menu without depending on the window size. The change is the one line the finding names.
+    - **L1.** A submenu inside a group can now be reached. `OWN_ITEMS` includes `group > none > menuitem`, with a test.
+    - **L2.** A press on the popup's heading or padding keeps focus on the item it was on, so Escape still closes the menu. Before, focus went to the tile, and Escape unmarked it with the menu still open.
+    - **L4.** In view mode outside Markings, only chart tiles are tab stops (`Canvas`'s new `takesKeys`). A text or image tile answers no key there. `Canvas.test.tsx` checks this; it was written after the code.
+    - **L3 (no change):** a right-click on a KPI, table or pivot keeps the browser's menu. AC-246 names the plot, and a table's text is worth copying.
+    - **L5:** covered by the e2e additions above.
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/web/src/tiles/ChartCanvas.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/shell/styles.ts`, `e2e/markings.spec.ts` or `e2e/tile-menu.spec.ts`
   - Failing test: a right-click on a bar opens the menu at the pointer, prevents the browser's menu, and changes no marking; Shift+F10 on a focused tile opens it at the tile; the submenus open with Right arrow and close with Left or Escape.
   - Depends on: `docs/research/context-menu-and-submenus.md`
