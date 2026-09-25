@@ -1,0 +1,22 @@
+# The images build from the repository root (deploy/Dockerfile) and install
+# their own dependencies, so nothing built or installed on the host goes in —
+# the host's node_modules hold other platforms' binaries — nor anything they
+# don't build from. `**/` reaches into the workspace packages; a bare name
+# matches at the root only (docs/research/node-docker-pnpm.md).
+**/node_modules
+**/dist
+**/dist-demo
+**/coverage
+**/.vite
+**/test-results
+**/playwright-report
+**/.DS_Store
+.git
+.gitignore
+.github
+.claude
+.env
+.env.*
+docs
+deploy
+infra

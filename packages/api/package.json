@@ -7,6 +7,10 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "files": [
+    "dist",
+    "src/db/migrations"
+  ],
   "scripts": {
     "build": "vite build -c vite.build.config.ts",
     "dev": "pnpm build && node dist/main.js",
@@ -20,13 +24,13 @@
     "close-with-grace": "2.5.0",
     "fastify": "5.12.5",
     "kysely": "0.29.6",
+    "node-pg-migrate": "9.0.0",
     "pg": "8.23.0",
     "yaml": "2.9.1"
   },
   "devDependencies": {
     "@types/node": "26.0.0",
     "@types/pg": "8.23.1",
-    "node-pg-migrate": "9.0.0",
     "typescript": "6.0.3",
     "vite": "8.3.0",
     "vitest": "5.0.1"

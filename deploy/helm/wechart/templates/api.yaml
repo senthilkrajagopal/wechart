@@ -1,0 +1,128 @@
+{{- $name := include "wechart.component" (list . "api") }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list . "api") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "wechart.selectorLabels" (list . "api") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.api.port }}
+      targetPort: http
+---
+# wechart's API (packages/api): the only thing the browser talks to besides
+# the web server, and the only holder of Cube's secret (AC-007).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list . "api") | nindent 4 }}
+spec:
+  # One instance, and never two at once: a publish holds its draft in this
+  # process while Cube reads it back through the Service
+  # (packages/api/src/model/publish.ts), so a second instance could be the
+  # one Cube asks and answer that it has no such draft.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "wechart.selectorLabels" (list . "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "wechart.labels" (list . "api") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # The API migrates the metadata database as it starts, and exits if
+        # it can't reach it: wait for it first.
+        - name: wait-for-meta
+          image: {{ .Values.meta.image }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - until pg_isready -q -h "$HOST" -p 5432; do echo "waiting for $HOST"; sleep 2; done
+          env:
+            - name: HOST
+              value: {{ include "wechart.host" (list . "meta") }}
+          securityContext:
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+      containers:
+        - name: api
+          image: {{ include "wechart.image" (list . .Values.images.api) }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.api.port }}
+          env:
+            - name: PORT
+              value: {{ .Values.api.port | quote }}
+            - name: WECHART_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wechart.secretName" . }}
+                  key: meta-url
+            - name: CUBE_API_URL
+              value: {{ printf "http://%s:%d/cubejs-api" (include "wechart.host" (list . "cube")) (int .Values.cube.port) | quote }}
+            - name: CUBE_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wechart.secretName" . }}
+                  key: cube-api-secret
+            # The refresh worker's own /readyz and /livez (T162, AC-156).
+            - name: CUBE_WORKER_URL
+              value: {{ printf "http://%s:%d" (include "wechart.host" (list . "cube-refresh-worker")) (int .Values.cube.port) | quote }}
+            # Named in every token, so Cube reads this API's model; it must be
+            # one of Cube's WECHART_MODEL_STORES, which the same helper names.
+            - name: WECHART_CUBE_STORE_URL
+              value: {{ include "wechart.modelStoreUrl" . | quote }}
+            - name: WECHART_MODEL_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wechart.secretName" . }}
+                  key: model-key
+            {{- if .Values.api.seed }}
+            # wechart's sample dashboards, which name the sample database's cubes.
+            - name: WECHART_SEED
+              value: "1"
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 6
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          {{- with .Values.api.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}

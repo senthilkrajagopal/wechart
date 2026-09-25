@@ -1,0 +1,114 @@
+{{- $name := include "wechart.component" (list . "meta") }}
+# Headless: the StatefulSet's governing Service, and the address the API
+# connects to (docs/research/postgres-image.md, "Illustrative StatefulSet").
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list . "meta") | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "wechart.selectorLabels" (list . "meta") | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+# wechart's metadata database: dashboards, charts, folders, images, the query
+# log and the Cube model's files (packages/api/src/db/migrations).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list . "meta") | nindent 4 }}
+spec:
+  serviceName: {{ $name }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "wechart.selectorLabels" (list . "meta") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "wechart.labels" (list . "meta") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # The image's own start: as root, which owns the data directory to its
+      # postgres user whatever the volume's ownership, then drops to it. Run as
+      # that user from the start, the volume would have to be writable by it,
+      # and fsGroup does not reach hostPath volumes such as Docker Desktop's
+      # (docs/research/postgres-image.md, "Running as uid 70 directly").
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: {{ .Values.meta.image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.meta.user | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.meta.database | quote }}
+            # Read once, when the database is first initialised.
+            - name: POSTGRES_PASSWORD_FILE
+              value: /run/secrets/meta/password
+          # Over TCP, which only the real server listens on: the one the
+          # entrypoint starts to initialise the database listens only on its
+          # socket, so this is not ready until initialisation is done.
+          startupProbe:
+            exec:
+              command: [pg_isready, -q, -h, 127.0.0.1, -p, '5432', -U, {{ .Values.meta.user | quote }}, -d, {{ .Values.meta.database | quote }}, -t, '2']
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: [pg_isready, -q, -h, 127.0.0.1, -p, '5432', -U, {{ .Values.meta.user | quote }}, -d, {{ .Values.meta.database | quote }}, -t, '2']
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command: [pg_isready, -q, -h, 127.0.0.1, -p, '5432', -U, {{ .Values.meta.user | quote }}, -d, {{ .Values.meta.database | quote }}, -t, '2']
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 6
+          volumeMounts:
+            # The parent of PGDATA (/var/lib/postgresql/18/docker), never
+            # /var/lib/postgresql/data, which 18 refuses to start on.
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: password
+              mountPath: /run/secrets/meta
+              readOnly: true
+          {{- with .Values.meta.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: password
+          secret:
+            secretName: {{ include "wechart.secretName" . }}
+            items:
+              - key: meta-password
+                path: password
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "wechart.selectorLabels" (list . "meta") | nindent 10 }}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.meta.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.meta.storage }}

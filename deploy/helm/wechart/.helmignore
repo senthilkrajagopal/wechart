@@ -1,0 +1,10 @@
+# Not part of the chart (docs/research/helm.md, ".helmignore").
+.DS_Store
+.git/
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+.idea/
+.vscode/

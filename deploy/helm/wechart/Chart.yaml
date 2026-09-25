@@ -1,0 +1,6 @@
+apiVersion: v2
+name: wechart
+description: wechart, with Cube's API, Cube's refresh worker and Cube Store (F24, AC-248)
+type: application
+version: 0.1.0
+appVersion: '0.1.0'

@@ -1,0 +1,85 @@
+# The wechart chart's values (F24, AC-248). docs/deploy.md explains each, and
+# deploy/helm/values/docker-desktop.yaml is the set for Docker Desktop, with
+# Superset's northwind database as Cube's data source.
+#
+# No secret goes in here: the data source's password is read from a Secret
+# this names, and what wechart generates for itself (Cube's API secret, the
+# model store's key, the metadata database's password) is made at install.
+
+nameOverride: ''
+fullnameOverride: ''
+
+# wechart's own images, built from this repository (docs/deploy.md, "Build the
+# images"). Both are built from the same commit, so they share one tag.
+images:
+  api: wechart-api
+  web: wechart-web
+  # The chart's appVersion when empty.
+  tag: ''
+  pullPolicy: IfNotPresent
+
+# The web server: the built app, with /api passed to the API.
+web:
+  service:
+    # LoadBalancer is published on the host's localhost on Docker Desktop.
+    type: LoadBalancer
+    # The port the app is served at.
+    port: 8089
+  resources: {}
+
+# wechart's API.
+api:
+  port: 4100
+  # wechart's sample dashboards, which name the sample database's cubes.
+  # Off: this release's model starts empty, to be built in the Model workspace.
+  seed: false
+  resources: {}
+
+# wechart's metadata database: dashboards, charts, folders and the model.
+meta:
+  image: postgres:18.6-alpine3.24
+  user: wechart
+  database: wechart_meta
+  # The volume's size and class; set them for the cluster it runs in.
+  storage: 8Gi
+  storageClassName: ''
+  resources: {}
+
+# Cube's API and its refresh worker.
+cube:
+  image: cubejs/cube:v1.7.45
+  port: 4000
+  # The warehouse Cube reads: Cube's CUBEJS_DB_* settings.
+  dataSource:
+    # Cube's driver, e.g. postgres. Required.
+    type: ''
+    host: ''
+    port: ''
+    database: ''
+    user: ''
+    # The Secret, in the release's namespace, holding the password.
+    passwordSecret:
+      name: ''
+      key: password
+    # Any other CUBEJS_DB_* variables the driver takes, as plain values,
+    # e.g. CUBEJS_DB_SSL: 'true'.
+    env: {}
+    # Any other CUBEJS_DB_* variables taken from Secrets:
+    # VARIABLE: { name: <secret>, key: <key> }.
+    secretEnv: {}
+  # Anything else for both Cube instances, e.g. CUBEJS_LOG_LEVEL.
+  env: {}
+  resources: {}
+  refreshWorker:
+    resources: {}
+
+# Cube Store, one node: router and worker at once.
+cubestore:
+  # linux/amd64; cubejs/cubestore:v1.7.45-arm64v8 on arm64.
+  image: cubejs/cubestore:v1.7.45
+  # Its metastore, cache store and pre-aggregations. Size it for the cluster.
+  storage: 8Gi
+  storageClassName: ''
+  # Anything else for Cube Store, e.g. CUBESTORE_LOG_LEVEL.
+  env: {}
+  resources: {}
