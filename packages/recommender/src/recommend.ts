@@ -96,6 +96,16 @@ export function enumerate(signature: Signature): Candidate[] {
           facetField: dimensions[0],
         }),
       );
+      // Time down its rows, the dimension across: no colour and no panels to
+      // cap, so a dimension too large for either still has a chart beside the
+      // table (T305's review, AC-028's runner-up).
+      candidates.push(
+        build('pivot', {
+          valueFields: measures,
+          categoryField: time,
+          secondCategoryField: dimensions[0],
+        }),
+      );
     }
   }
 

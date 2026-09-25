@@ -71,7 +71,9 @@ export const REQUIREMENTS: Record<ChartType, readonly Requirement[]> = {
   treemap: [measures(1), dimensions(1)],
   heatmap: [measures(1), dimensions(2)],
   table: [],
-  pivot: [dimensions(2)],
+  // Rows from a time dimension and columns from a dimension, as `compile`
+  // draws them (T305's review).
+  pivot: [groupings(2)],
   trellis: [measures(1), groupings(2)],
   combo: [measures(2)],
 };

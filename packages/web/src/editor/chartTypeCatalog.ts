@@ -62,7 +62,9 @@ export const TYPE_DESCRIPTIONS: Readonly<Record<ChartType, string>> = {
 export function needsText(type: ChartType): string {
   const needs = REQUIREMENTS[type].map((requirement) => requirement.memberType);
   if (needs.length === 0) return 'Draws any fields';
-  const last = needs.at(-1) ?? '';
+  // "…, or a time dimension and a dimension," is written to sit mid-sentence
+  // (AC-033's "Put … in Dimensions"); here it ends one.
+  const last = (needs.at(-1) ?? '').replace(/,$/, '');
   return `Needs ${needs.length === 1 ? last : `${needs.slice(0, -1).join(', ')} and ${last}`}`;
 }
 

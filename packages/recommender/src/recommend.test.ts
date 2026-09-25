@@ -37,6 +37,12 @@ const SIGNATURES: [string, Signature][] = [
   ['measure by two large categories', signature(measure(), dimension(30), dimension(30, 'b'))],
   ['two measures by category', signature(measure(), measure('m2'), dimension(9))],
   ['unknown cardinality', signature(measure(), { name: 'd', kind: 'dimension' })],
+  // T305's review: every chart over time coloured by these is over the cap.
+  ['measure over time by a large category', signature(measure(), time(), dimension(21))],
+  [
+    'measure over time by a category of unknown size',
+    signature(measure(), time(), { name: 'd', kind: 'dimension' }),
+  ],
 ];
 
 describe('a recommendation and a runner-up (AC-028)', () => {

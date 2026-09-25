@@ -4633,6 +4633,16 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
     - By category with a 21-member second dimension, neither bar nor horizontal bar is offered.
     - The editor and Explore e2e specs that involve a recommendation still pass (372 runs, all three browsers).
   - **Consequence:** with no rows yet, a dimension's cardinality is unknown, and an unknown count fails a cap (legality.ts). So a chart over time split by a dimension is recommended as a table until its rows arrive. That is the recommender's existing rule for unknown counts, and it now covers these candidates too.
+  - **Cold review of T300–T305 and T309 (one round), 2026-09-25.** It judged AC-031 met, and found AC-028 regressed. Fixed:
+    - **The problem.** Over time by a dimension of more than 20 members, or of unknown size, every chart over time failed a cap: line, area and bar by colour, and trellis by panels. The table was left alone, with no runner-up, and AC-028 fails when no runner-up is shown.
+    - **The fix.** `enumerate` now also offers a pivot, time down its rows and the dimension across. It has neither colour nor panels to cap, and scores as the table does.
+    - **Its requirement.** `REQUIREMENTS.pivot` is `groupings(2)`: two dimensions, or a time dimension and a dimension, which is what `compile` draws a pivot from (as T242 made trellis's). It was `dimensions(2)`, which would have called the pivot just offered undrawable.
+    - **The gallery's "Needs" line** no longer ends on the comma of that phrase. Trellis read "…and a dimension," before this change too.
+    - **A test was wrong, and the user is told.** `chartTypeCatalog.test.ts` expected a pivot to need "2 dimensions", the old requirement. It now expects the new text, and asserts trellis's line as well.
+    - **Tests, red first:**
+      - `recommend.test.ts`: two AC-028 signatures, over time by a 21-member dimension and by one of unknown size. Both got no runner-up.
+      - `requirements.test.ts`: a pivot draws from a time dimension and a dimension, and not from one dimension alone.
+    - The editor and Explore e2e specs pass (378 runs).
 - [x] T306 (AC-176, AC-100) Draw the item a tile's keyboard focus is on, distinct from the marking outline
   - From T182's review. AC-100's arrows move a focused item, but `markFocus` is state only. A sighted keyboard user cannot see which item Space will mark.
   - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/charts/src/markings/*`, `e2e/keyboard-coverage.spec.ts`
