@@ -800,11 +800,11 @@ Traces to: the user, 2026-09-25; `[docs/design/reviews/2026-09-24/chart-context-
       Fails when: the rows differ from the tile's query ungrouped, or the total is absent.
 - [ ] AC-240 WHILE the details panel is on, WHEN the marking changes, THE SYSTEM SHALL show the rows behind the newly marked items and their total, and the panel SHALL be turned on and off both from the tile's menu and from the panel itself.
       Fails when: the panel shows rows of a previous marking after the change, or either control does not toggle it.
-- [ ] AC-241 WHEN the user chooses Copy › Marked values, THE SYSTEM SHALL put the marked items' member values on the clipboard as tab-separated text with a header row of the members' titles.
+- [x] AC-241 WHEN the user chooses Copy › Marked values, THE SYSTEM SHALL put the marked items' member values on the clipboard as tab-separated text with a header row of the members' titles.
       Fails when: the clipboard text differs from the marked items, or has no header row.
-- [ ] AC-242 WHEN the user chooses Copy › Image on a tile ECharts draws, THE SYSTEM SHALL put a PNG of the chart as drawn, marking included, on the clipboard; on a KPI, table or pivot tile THE SYSTEM SHALL offer it disabled and say why.
+- [x] AC-242 WHEN the user chooses Copy › Image on a tile ECharts draws, THE SYSTEM SHALL put a PNG of the chart as drawn, marking included, on the clipboard; on a KPI, table or pivot tile THE SYSTEM SHALL offer it disabled and say why.
       Fails when: the clipboard holds no image, the image omits the marking's drawing, or a KPI, table or pivot tile offers it enabled.
-- [ ] AC-243 WHEN the user chooses Copy › To dashboard and picks a dashboard, THE SYSTEM SHALL add a dashboard-local copy of the tile's chart to that dashboard, and SHALL leave the source dashboard unchanged.
+- [x] AC-243 WHEN the user chooses Copy › To dashboard and picks a dashboard, THE SYSTEM SHALL add a dashboard-local copy of the tile's chart to that dashboard, and SHALL leave the source dashboard unchanged.
       Fails when: the chosen dashboard lacks the copy, the copy is the source's chart rather than its own, or the source dashboard's saved definition changes.
 - [x] AC-244 THE SYSTEM SHALL offer under a chart tile's Export the tile's CSV, the marked rows' CSV while the marking holds items, and SVG and PNG images of a chart ECharts draws, each downloading the chart as drawn.
       Fails when: one of those items is missing where it applies, or an image file is not the chart as drawn.

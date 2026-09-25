@@ -994,9 +994,9 @@ test('Settings › Markings adds, renames, recolours, deletes and defaults marki
 
 /**
  * T219 / AC-199: WHEN the user opens a chart tile's menu in view mode, THE
- * SYSTEM SHALL offer View as table, View query, Download CSV and Edit chart,
- * and, while the dashboard is in Markings mode, the marked-rows actions headed
- * by the tile's marking and its count.
+ * SYSTEM SHALL offer View as table, View query, Export and Edit chart, and,
+ * while the dashboard is in Markings mode, the marked-rows actions headed by
+ * the tile's marking and its count. (Copy, T271, sits beside Export.)
  * `Fails when: one of those items is missing, or the marked-rows actions
  * appear outside Markings mode.`
  */
@@ -1036,7 +1036,7 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
         /^(Filter to marked|Filter out marked|View marked rows|Invert marking|Mark all|Unmark|Create details tile)$/,
     }),
     // Export holds the CSV now, with the images (T272, AC-244).
-  ).toHaveText(['View as table', 'View query', /^Export/, 'Edit chart']);
+  ).toHaveText(['View as table', 'View query', /^Copy/, /^Export/, 'Edit chart']);
 
   // View as table: the tile shows its rows.
   await menu.getByRole('menuitem', { name: 'View as table' }).click();
@@ -2109,16 +2109,166 @@ test('a filter made from a marking leaves a tile that cannot reach it unfiltered
 });
 
 /**
- * AC-102: IF a marking would exceed 1,000 items, THEN THE SYSTEM SHALL refuse
- * the additional items and explain the limit; "Mark all" SHALL be exempt
- * because it stores the tile's filter rather than a list.
- * `Fails when: a marking holds more than 1,000 enumerated items, or Mark all
- * is refused on a tile with more than 1,000 items.`
+ * T271 / AC-241, AC-242, AC-243: Copy › Marked values, Image and To
+ * dashboard.
+ * `Fails when: the clipboard text differs from the marked items, or has no
+ * header row` (AC-241); `the clipboard holds no image, the image omits the
+ * marking's drawing, …` (AC-242); `the chosen dashboard lacks the copy, the
+ * copy is the source's chart rather than its own, or the source dashboard's
+ * saved definition changes` (AC-243).
  *
- * On a tile of 1,500 bars, from a cube of the browser's own over a generated
- * series: a rectangle across all of them marks 1,000 and says why the rest
- * were not; Mark all then marks every one.
+ * What reaches the clipboard is recorded as the app hands it over — the
+ * research's route (clipboard-and-image-export.md, "Reading an image back"):
+ * reading the OS clipboard back is per engine, and four workers share one.
+ * The wrapper calls the browser's own write at once, keeping Safari's
+ * gesture rule.
  */
+test('Copy puts the marked values and the chart’s image on the clipboard, and the chart on another dashboard', async ({
+  page,
+  request,
+}) => {
+  await page.addInitScript(() => {
+    const texts: string[] = [];
+    const images: Promise<Blob>[] = [];
+    Object.assign(window, { __texts: texts, __images: images });
+    const { writeText, write } = Clipboard.prototype;
+    Clipboard.prototype.writeText = function (this: Clipboard, text: string) {
+      texts.push(text);
+      return writeText.call(this, text);
+    };
+    Clipboard.prototype.write = function (this: Clipboard, items: ClipboardItem[]) {
+      for (const item of items)
+        if (item.types.includes('image/png')) images.push(item.getType('image/png'));
+      return write.call(this, items);
+    };
+  });
+  const { id, title } = await markingDashboard(request);
+  const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const targetTitle = `Copy target ${unique}`;
+  const target = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title: targetTitle, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  type Stored = { version: number; body: Record<string, unknown> };
+  const read = async (kind: string, docId: string) =>
+    (await (await request.get(`${API}/documents/${kind}/${docId}`)).json()) as Stored;
+  const before = await read('dashboard', id);
+
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  const note = status.locator('.tile-export-note');
+  const copyMenu = async () => {
+    await status.getByRole('button', { name: 'Actions for By status' }).click();
+    await status.getByRole('menuitem', { name: 'Copy' }).click();
+    return status.getByRole('menu', { name: 'Copy' });
+  };
+  await clickBar(page, status, 'shipped');
+  await clickBar(page, status, 'completed', ['ControlOrMeta']);
+  await expect(status.getByTestId('mark-badge')).toContainText('2 marked');
+
+  // Marked values: a header of the member's title, a line per item.
+  let menu = await copyMenu();
+  await menu.getByRole('menuitem', { name: 'Marked values' }).click();
+  await expect(note).toContainText('Copied 2 marked values.');
+  expect(await page.evaluate(() => (window as unknown as { __texts: string[] }).__texts)).toEqual([
+    'Orders Status\nshipped\ncompleted',
+  ]);
+
+  // Image: a PNG of the chart as drawn, the marked bars solid and the other
+  // faded, at its size times the pixel ratio.
+  menu = await copyMenu();
+  await menu.getByRole('menuitem', { name: 'Image', exact: true }).click();
+  await expect(note).toContainText('Copied the chart as an image.');
+  const canvas = status.getByTestId('chart-canvas');
+  const size = await canvas.evaluate((node) => ({
+    width: Math.round(node.clientWidth * window.devicePixelRatio),
+    height: Math.round(node.clientHeight * window.devicePixelRatio),
+    ratio: window.devicePixelRatio,
+  }));
+  const inBar = (category: string) =>
+    canvas
+      .locator('svg text', { hasText: category })
+      .first()
+      .evaluate((text, ratio) => {
+        const label = text.getBoundingClientRect();
+        const box = (
+          text.closest('[data-testid="chart-canvas"]') as Element
+        ).getBoundingClientRect();
+        return [
+          Math.round((label.x + label.width / 2 - box.x) * ratio),
+          Math.round((label.y - 12 - box.y) * ratio),
+        ];
+      }, size.ratio);
+  const points = [await inBar('shipped'), await inBar('processing')];
+  const image = await page.evaluate(async (at) => {
+    const blob = await (window as unknown as { __images: Promise<Blob>[] }).__images[0];
+    if (blob === undefined) return undefined;
+    const bitmap = await createImageBitmap(blob);
+    const drawing = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = drawing.getContext('2d') as OffscreenCanvasRenderingContext2D;
+    context.drawImage(bitmap, 0, 0);
+    return {
+      type: blob.type,
+      width: bitmap.width,
+      height: bitmap.height,
+      light: at.map(([x, y]) => {
+        const [r = 0, g = 0, b = 0] = context.getImageData(x ?? 0, y ?? 0, 1, 1).data;
+        return r + g + b;
+      }),
+    };
+  }, points);
+  expect(image?.type).toBe('image/png');
+  expect([image?.width, image?.height]).toEqual([size.width, size.height]);
+  const [marked = 0, faded = 0] = image?.light ?? [];
+  expect(marked).toBeLessThan(faded);
+
+  // To dashboard: found by its title, and copied there as a chart of its own.
+  menu = await copyMenu();
+  await menu.getByRole('menuitem', { name: 'To dashboard…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Copy “By status” to a dashboard' });
+  await dialog.getByLabel('Find a dashboard').fill(targetTitle);
+  await dialog.getByRole('radio', { name: targetTitle }).check();
+  await dialog.getByRole('button', { name: 'Copy', exact: true }).click();
+  await expect(dialog.getByRole('status')).toContainText(`Copied to ${targetTitle}.`);
+
+  const copied = await read('dashboard', target.id);
+  const pages = copied.body['pages'] as { items: { kind: string; chartId?: string }[] }[];
+  const copyTile = pages[0]?.items.find((item) => item.kind === 'chart');
+  const sourceTile = (before.body['pages'] as { items: { id: string; chartId?: string }[] }[])
+    .flatMap((each) => each.items)
+    .find((item) => item.id === 'tile-status');
+  expect(copyTile?.chartId).toBeDefined();
+  expect(copyTile?.chartId).not.toBe(sourceTile?.chartId);
+  const copyChart = await read('chart', copyTile?.chartId ?? '');
+  const sourceChart = await read('chart', sourceTile?.chartId ?? '');
+  expect(copyChart.body['localToDashboardId']).toBe(target.id);
+  expect(copyChart.body['chart']).toEqual(sourceChart.body['chart']);
+  // The source dashboard as it was saved.
+  const after = await read('dashboard', id);
+  expect(after.version).toBe(before.version);
+  expect(after.body).toEqual(before.body);
+
+  // And it draws there.
+  await dialog.getByRole('link', { name: `Open ${targetTitle}` }).click();
+  await expect(page.getByRole('heading', { name: targetTitle })).toBeVisible();
+  await expect(page.getByTestId('chart-canvas')).toBeVisible();
+});
+
+/** AC-242's other half: a table is drawn as text, so it has no image to copy, and says why. */
+test('Copy › Image is offered disabled on a table tile, saying why', async ({ page, request }) => {
+  const { id, title } = await markingDashboard(request, { table: true });
+  await open(page, id, title);
+  const table = tile(page, 'tile-table');
+  await table.getByRole('button', { name: /^Actions for / }).click();
+  await table.getByRole('menuitem', { name: 'Copy' }).click();
+  const image = table.getByRole('menu', { name: 'Copy' }).getByRole('menuitem', { name: 'Image' });
+  await expect(image).toHaveAttribute('aria-disabled', 'true');
+  await expect(image).toHaveAccessibleDescription(
+    'A KPI, table or pivot is drawn as text, not as a chart image.',
+  );
+});
+
 /**
  * T272 / AC-244: THE SYSTEM SHALL offer under a chart tile's Export the
  * tile's CSV, the marked rows' CSV while the marking holds items, and SVG and
@@ -2259,6 +2409,17 @@ test('Export offers the tile’s CSV, its marked rows’ CSV while marked, and S
   await expect(status.locator('.tile-export-note')).toContainText('Downloaded 80 rows');
 });
 
+/**
+ * AC-102: IF a marking would exceed 1,000 items, THEN THE SYSTEM SHALL refuse
+ * the additional items and explain the limit; "Mark all" SHALL be exempt
+ * because it stores the tile's filter rather than a list.
+ * `Fails when: a marking holds more than 1,000 enumerated items, or Mark all
+ * is refused on a tile with more than 1,000 items.`
+ *
+ * On a tile of 1,500 bars, from a cube of the browser's own over a generated
+ * series: a rectangle across all of them marks 1,000 and says why the rest
+ * were not; Mark all then marks every one.
+ */
 test('a shape over more than 1,000 items marks 1,000 and says why, and Mark all is exempt', async ({
   page,
   request,

@@ -22,6 +22,33 @@ export function csvFileName(title: string): string {
  */
 export const BYTE_ORDER_MARK = '﻿';
 
+/** What Copy writes to (T271): the browser's clipboard, or a test's. */
+export interface CopyTarget {
+  writeText(text: string): Promise<void>;
+  write(items: ClipboardItem[]): Promise<void>;
+}
+
+/**
+ * The page's clipboard where it can be written, or null (research/
+ * clipboard-and-image-export.md, "Support detection"): only on a secure page
+ * — HTTPS, or localhost — does a browser offer one at all.
+ */
+function pageClipboard(): CopyTarget | null {
+  if (typeof window === 'undefined' || !window.isSecureContext) return null;
+  if (!('clipboard' in navigator)) return null;
+  return navigator.clipboard;
+}
+
+/** Whether this browser can put a PNG on the clipboard (the research's detection). */
+function copiesImages(): boolean {
+  return (
+    typeof ClipboardItem === 'function' &&
+    (!('supports' in ClipboardItem) || ClipboardItem.supports('image/png'))
+  );
+}
+
+const NO_CLIPBOARD = 'Copying needs a secure page: HTTPS, or localhost.';
+
 /** Hands the browser a file to save: a Blob behind a link, clicked once. */
 export function saveFile(name: string, data: string | Blob, type = 'text/csv;charset=utf-8'): void {
   const url = URL.createObjectURL(new Blob([data], { type }));
@@ -55,7 +82,16 @@ export function TileViewMenu({
   onViewRows,
   marked,
   openAt,
+  clipboard,
+  onCopyToDashboard,
 }: {
+  /**
+   * Where Copy writes (T271): the page's clipboard unless a test says; null
+   * where there is none, which Copy then says.
+   */
+  clipboard?: CopyTarget | null;
+  /** Copy › To dashboard (T271, AC-243): the dialog that picks one. */
+  onCopyToDashboard?: (() => void) | undefined;
   /**
    * A request to open, from a right-click on the chart (`at` the pointer) or
    * Shift+F10 or the Menu key on the focused tile (under ⋯) — T266, AC-246.
@@ -122,6 +158,11 @@ export function TileViewMenu({
         filterOut?: (() => void) | { readonly refused: string } | undefined;
         /** The rows behind the marked items (T120, AC-114). */
         onViewMarkedRows?: (() => void) | undefined;
+        /**
+         * The marked items' values as tab-separated text, headed by the
+         * members' titles, for Copy › Marked values (T271, AC-241).
+         */
+        valuesTsv?: (() => string) | undefined;
         /**
          * Those rows as CSV, for Export › Marked rows CSV (T272, AC-244): as
          * the rows dialog writes them, with how many and of how many.
@@ -256,6 +297,68 @@ export function TileViewMenu({
         text: error instanceof Error ? error.message : 'The image could not be made.',
       });
     }
+  };
+  /**
+   * Copy (T271). Where it writes: the page's clipboard unless a test gave
+   * one, and none on a page that is not secure, which the items then say.
+   * Each writes inside the click that chose it, with nothing awaited first —
+   * Safari refuses a write outside a gesture (the research's gotcha).
+   */
+  const target = clipboard === undefined ? pageClipboard() : clipboard;
+  const copyMarkedValues = () => {
+    const text = marked?.valuesTsv?.() ?? '';
+    const lines = text === '' ? 0 : text.split('\n').length - 1;
+    target?.writeText(text).then(
+      () => {
+        setNote({
+          kind: 'ok',
+          text: `Copied ${lines.toLocaleString('en-GB')} marked ${lines === 1 ? 'value' : 'values'}.`,
+        });
+      },
+      (error: unknown) => {
+        setNote({
+          kind: 'err',
+          text: `Could not copy: ${error instanceof Error ? error.message : 'the browser refused'}.`,
+        });
+      },
+    );
+  };
+  /**
+   * Copy › Image (AC-242): the PNG Export makes, handed to the clipboard as
+   * a promise inside the click, so the rasterising happens after the write
+   * has its gesture (the research's Safari recipe).
+   */
+  const copyImage = () => {
+    const tile = document.querySelector(`[data-tile="${CSS.escape(tileId)}"]`);
+    const chart = drawnChartIn(tile);
+    if (chart === undefined || target === null) {
+      setNote({ kind: 'err', text: 'The chart is not drawn yet, so there is no image of it.' });
+      return;
+    }
+    const surface = surfaceOf(tile?.querySelector('[data-testid="chart-canvas"]'));
+    let png: Promise<Blob>;
+    try {
+      png = svgToPng(chartSvg(chart, { pixelRatio: window.devicePixelRatio, surface }));
+    } catch (error) {
+      setNote({
+        kind: 'err',
+        text: error instanceof Error ? error.message : 'The image could not be made.',
+      });
+      return;
+    }
+    target.write([new ClipboardItem({ 'image/png': png })]).then(
+      () => {
+        setNote({ kind: 'ok', text: 'Copied the chart as an image.' });
+      },
+      (error: unknown) => {
+        setNote({
+          kind: 'err',
+          text: `Could not copy the image: ${
+            error instanceof Error ? error.message : 'the browser refused'
+          }. Export › PNG image downloads it instead.`,
+        });
+      },
+    );
   };
   /** Why a tile has no image to export: it is drawn as text, not by ECharts. */
   const imageless =
@@ -442,6 +545,57 @@ export function TileViewMenu({
     ...(onViewQuery === undefined
       ? []
       : [{ kind: 'item' as const, key: 'query', label: 'View query', onSelect: onViewQuery }]),
+    // Copy (T271; the mockup's): the marked values as text, the chart as an
+    // image, or the chart onto another dashboard.
+    {
+      kind: 'submenu',
+      key: 'copy',
+      label: 'Copy',
+      entries: [
+        ...(marked?.valuesTsv === undefined
+          ? []
+          : [
+              {
+                kind: 'item' as const,
+                key: 'copy-marked',
+                label: 'Marked values',
+                onSelect: copyMarkedValues,
+                disabled:
+                  target === null
+                    ? NO_CLIPBOARD
+                    : marked.count === 0
+                      ? 'Nothing is marked.'
+                      : undefined,
+              },
+            ]),
+        {
+          kind: 'item',
+          key: 'copy-image',
+          label: 'Image',
+          onSelect: copyImage,
+          // A KPI, table or pivot has no chart image (AC-242), and a page
+          // with no clipboard nothing to put one on.
+          disabled:
+            imageless ??
+            (target === null || !copiesImages()
+              ? NO_CLIPBOARD
+              : asking
+                ? 'Its newest answer is still on its way.'
+                : undefined),
+          describedBy: imageless === undefined && target !== null && asking ? why : undefined,
+        },
+        ...(onCopyToDashboard === undefined
+          ? []
+          : [
+              {
+                kind: 'item' as const,
+                key: 'copy-to',
+                label: 'To dashboard…',
+                onSelect: onCopyToDashboard,
+              },
+            ]),
+      ],
+    },
     // Export (T272, AC-244; the mockup's): the tile's CSV, where Download CSV
     // was, its marked rows' while it holds any, and the chart as drawn.
     {

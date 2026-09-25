@@ -4144,7 +4144,35 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
     - The badge shows the drilled answer's freshness.
     - Back restores the tile, and the saved chart is unchanged.
   - Depends on: T266
-- [ ] T271 (AC-241, AC-242, AC-243) Copy › Marked values, Image and To dashboard
+- [x] T271 (AC-241, AC-242, AC-243) Copy › Marked values, Image and To dashboard
+  - Done 2026-09-25, all three browsers.
+    - **AC-241, AC-242 and AC-243** are ticked on `e2e/markings.spec.ts` "Copy puts the marked values and the chart's image on the clipboard, and the chart on another dashboard".
+    - **AC-242's other half** is ticked on "Copy › Image is offered disabled on a table tile, saying why".
+    - **Tests that failed first:** `TileViewMenu.test.tsx`'s Copy cases and `markedValues.test.ts`.
+    - **Tests that did not:** `copyChartTo.test.ts` was written but not run before its module, so it was not seen failing, and the e2e tests were written after the wiring.
+    - **Copy** is a submenu beside Export, holding:
+      - **Marked values** (Markings mode): `markedValuesTsv`.
+        - A header row of the members' titles, then a line per marked item.
+        - A column per member any item names, left empty where an item does not name it.
+        - A whole tile marked is its drawn items.
+        - A tab or line break inside a value becomes a space, since TSV carries neither (the research's open question, decided here).
+        - Lines are separated by `\n`.
+        - It says "Copied n marked values."
+      - **Image**: the PNG Export makes, handed to `navigator.clipboard.write` as a promise inside the click, so Safari's gesture rule holds (the research's recipe). On a KPI, table or pivot, or a chart shown as a table, it is disabled with the reason. If the browser refuses, the note points to Export › PNG image.
+      - **To dashboard…**: a dialog (`CopyToDashboard.tsx`).
+        - It finds a dashboard by title, as the security preview does. The dashboard the tile is on is not offered, since Duplicate makes that copy.
+        - `copyChartToDashboard` reads the chosen dashboard and appends a tile to its first page at the source tile's size.
+        - The tile shows a new chart of its own: the source's definition, local to that dashboard (`localToDashboardId`), in no folder. It is created in the same save as the tile (the API's `updateTogether`, T132).
+        - The source dashboard is neither read nor written. The dialog then says "Copied to ‹title›" with a link to open it.
+    - **Where there is no clipboard** (a page not on HTTPS or localhost), Marked values and Image are disabled: "Copying needs a secure page: HTTPS, or localhost." The clipboard is injectable, for the unit tests.
+    - `dashboardOf` moved from `DashboardPage.tsx` to `model/stored.ts` (re-exported from the page), so the copy reads a stored dashboard as the page does, without importing the page.
+    - **The e2e** records what the app hands the clipboard, through an init script that wraps `writeText` and `write` and calls the browser's own at once. That is the research's route: reading the OS clipboard back is per engine, and four workers share it.
+      - The text is exactly `Orders Status\nshipped\ncompleted`.
+      - The PNG decodes at the chart's size × the pixel ratio, with a marked bar darker than the faded one.
+      - The target dashboard's new tile shows a chart that is not the source's, is local to the target, and has the same definition.
+      - The source dashboard's stored version and body are unchanged.
+      - The copy draws when opened.
+    - The AC-199 menu test's list gained Copy, and its header no longer says Download CSV. The AC-102 test's comment, orphaned above T272's test, is back above its own test.
   - Files: `packages/web/src/dashboard/*`, `packages/web/src/tiles/ChartCanvas.tsx`, `e2e/tile-menu.spec.ts`
   - Failing test:
     - The clipboard holds the marked values as tab-separated text with a header row.

@@ -111,6 +111,8 @@ import {
   type MarkFilter,
 } from './markings/filterToMarked';
 import { DOWNLOADED, MarkedRows } from './markings/MarkedRows';
+import { markedValuesTsv } from './markings/markedValues';
+import { CopyToDashboard } from './CopyToDashboard';
 import { markingOf, withMarking, type MarkingState } from './markings/store';
 import { interactionsOf, type InteractionMode } from './settings/interactionMode';
 import { describeFilter } from '../filters/describe';
@@ -793,6 +795,8 @@ interface TileCharts {
              * asked when the menu opens, as it reads every item.
              */
             onTile?: () => { readonly marked: number; readonly of: number } | undefined;
+            /** Its items' values as tab-separated text, for Copy › Marked values (AC-241). */
+            valuesTsv?: () => string;
           }
         | undefined)
     | undefined;
@@ -813,6 +817,8 @@ interface TileCharts {
     | undefined;
   /** The query a tile's chart asks, and its SQL (AC-199's View query). */
   readonly onViewQuery?: ((chartId: string, tileId: string) => void) | undefined;
+  /** Copy › To dashboard (T271, AC-243): the dialog that picks one. */
+  readonly onCopyToDashboard?: ((chartId: string, tileId: string) => void) | undefined;
   /**
    * The rows behind a tile (T120, AC-114; T268, AC-239): behind its marked
    * items, or behind the whole of it.
@@ -1118,6 +1124,13 @@ function Elements({
                         charts.onViewQuery?.(chartId, element.id);
                       }
                 }
+                onCopyToDashboard={
+                  charts.onCopyToDashboard === undefined
+                    ? undefined
+                    : () => {
+                        charts.onCopyToDashboard?.(chartId, element.id);
+                      }
+                }
                 onEditChart={
                   affordances.onEditChart === undefined
                     ? undefined
@@ -1162,6 +1175,7 @@ function Elements({
                         ...(charts.exportRowsOf === undefined
                           ? {}
                           : { exportRows: charts.exportRowsOf(chartId, element.id) }),
+                        ...(shown.valuesTsv === undefined ? {} : { valuesTsv: shown.valuesTsv }),
                         ...(markItems === undefined
                           ? {}
                           : {
@@ -2200,6 +2214,10 @@ export function DashboardView({
   const [queryFor, setQueryFor] = useState<{ chartId: string; tileId: string } | undefined>(
     undefined,
   );
+  /** The tile whose chart Copy › To dashboard is copying (T271, AC-243). */
+  const [copyFor, setCopyFor] = useState<{ chartId: string; tileId: string } | undefined>(
+    undefined,
+  );
   /** The tile whose rows are open (T120, AC-114; T268, AC-239), and which of them. */
   /**
    * The latest request to open a tile's menu other than by its ⋯ (T266,
@@ -3026,6 +3044,15 @@ export function DashboardView({
     onViewQuery: (chartId: string, tileId: string) => {
       if (queryOf(chartId) !== undefined) setQueryFor({ chartId, tileId });
     },
+    // A saved chart to copy: not while previewing another context, whose
+    // answers are not the chart.
+    ...(preview === undefined
+      ? {
+          onCopyToDashboard: (chartId: string, tileId: string) => {
+            if (drawn.documents?.[chartId] !== undefined) setCopyFor({ chartId, tileId });
+          },
+        }
+      : {}),
     // Its menu, from a right-click on its chart or its keys, in view mode only:
     // while editing, the tile's own menu is the arranging one.
     ...(sessionEditing
@@ -3217,6 +3244,10 @@ export function DashboardView({
               colour: markingColour(found.slot, theme),
               markedCount: markedCount(predicate),
               values: summariseMarking(predicate, memberTitle, 5, (id) => chartTitleOfTile(id)),
+              // Copy › Marked values (T271, AC-241): a whole tile's items as
+              // that tile draws them.
+              valuesTsv: () =>
+                markedValuesTsv(predicate, (member) => memberTitle?.(member), tileItemsOf),
               onTile,
             };
           },
@@ -3561,6 +3592,29 @@ export function DashboardView({
           query={viewedQuery}
           context={preview}
           onClose={closeQuery}
+        />
+      )}
+      {copyFor === undefined || drawn.documents?.[copyFor.chartId] === undefined ? null : (
+        <CopyToDashboard
+          sourceDashboardId={dashboardId}
+          title={chartTitleOf(copyFor.chartId) ?? 'this chart'}
+          chart={drawn.documents[copyFor.chartId] as ChartDocument}
+          size={(() => {
+            const element = elementAt(live, copyFor.tileId);
+            return element !== null && isTile(element)
+              ? { w: element.w, h: element.h }
+              : { w: COLUMNS / 2 };
+          })()}
+          onClose={() => {
+            const opener = copyFor.tileId;
+            setCopyFor(undefined);
+            // Back to the ⋯ menu it was opened from.
+            requestAnimationFrame(() => {
+              window.document
+                .querySelector<HTMLElement>(`[data-view-menu="${CSS.escape(opener)}"]`)
+                ?.focus();
+            });
+          }}
         />
       )}
       {rowsFor === undefined ? null : (

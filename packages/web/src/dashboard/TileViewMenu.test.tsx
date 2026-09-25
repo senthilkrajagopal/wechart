@@ -268,6 +268,75 @@ describe('a tile’s view-mode menu', () => {
     expect(screen.queryByRole('menuitem', { name: 'Marked rows CSV' })).toBeNull();
   });
 
+  /**
+   * T271 / AC-241, AC-242, AC-243: Copy › Marked values, Image and To
+   * dashboard. The clipboard itself, and the image, are the e2e's: jsdom has
+   * neither (research/clipboard-and-image-export.md).
+   */
+  it('copies the marked values as tab-separated text, and says how many', async () => {
+    const written: string[] = [];
+    const clipboard = {
+      writeText: async (text: string) => {
+        written.push(text);
+      },
+      write: vi.fn(async () => undefined),
+    };
+    const onCopyToDashboard = vi.fn();
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="By status"
+        spec={SPEC}
+        save={vi.fn()}
+        clipboard={clipboard}
+        onCopyToDashboard={onCopyToDashboard}
+        marked={{
+          name: 'Marking',
+          count: 2,
+          onUnmark: vi.fn(),
+          valuesTsv: () => 'Status\nshipped\ncompleted',
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Copy/ }));
+    const copy = screen.getByRole('menu', { name: /^Copy/ });
+    expect([...copy.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)).toEqual(
+      ['Marked values', 'Image', 'To dashboard…'],
+    );
+
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Marked values' }));
+    expect(written).toEqual(['Status\nshipped\ncompleted']);
+    expect((await screen.findByRole('status')).textContent).toContain('Copied 2 marked values.');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Copy/ }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'To dashboard…' }));
+    expect(onCopyToDashboard).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no copy where the page has no clipboard, and says why', async () => {
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="T"
+        spec={SPEC}
+        save={vi.fn()}
+        clipboard={null}
+        marked={{ name: 'Marking', count: 1, onUnmark: vi.fn(), valuesTsv: () => 'S\nx' }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Copy/ }));
+    for (const name of ['Marked values', 'Image']) {
+      const item = screen.getByRole('menuitem', { name });
+      expect(item.getAttribute('aria-disabled')).toBe('true');
+      expect(
+        document.getElementById(item.getAttribute('aria-describedby') ?? '')?.textContent,
+      ).toBe('Copying needs a secure page: HTTPS, or localhost.');
+    }
+  });
+
   it('offers no image of a tile drawn as text, and says why', async () => {
     render(
       <TileViewMenu

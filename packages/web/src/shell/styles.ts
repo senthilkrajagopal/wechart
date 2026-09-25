@@ -1593,6 +1593,22 @@ fieldset.model-field > legend {
   grid-template-columns: minmax(0, 1fr);
 }
 .dialog.view-query h3 { margin: 8px 0 0; font-size: var(--wc-text-sm-size); font-weight: 600; }
+/* Copy › To dashboard (T271, AC-243): a search, the dashboards it finds as a
+   list that scrolls within the dialog, and Copy and Close. */
+.copy-to-dashboard__search { display: grid; gap: 4px; }
+.copy-to-dashboard__list {
+  display: grid;
+  gap: 4px;
+  max-height: 240px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+}
+.copy-to-dashboard__list label { display: flex; align-items: center; gap: 8px; }
+.copy-to-dashboard__done { margin: 0; }
+
 /* The rows behind a tile (T120, AC-114): the table scrolls within the dialog,
    its header in view, so Download and Close never leave the screen. */
 .dialog.marked-rows {
