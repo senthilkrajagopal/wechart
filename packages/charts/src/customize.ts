@@ -146,12 +146,14 @@ export function applyCustomize(option: EChartsOption, spec: RenderSpec): ECharts
 
 /**
  * The types whose series the Customize tab offers to stack (AC-219): bars and
- * lines drawn side by side or over one another. Not the stacked types, which
- * already are; not a horizontal bar or a combo, whose one bar series has
- * nothing to stack on.
+ * lines drawn side by side or over one another, a horizontal bar's included —
+ * with two measures, or split by colour, it has two series side by side too
+ * (T302). Not the stacked types, which already are; not a combo, whose one
+ * bar series has nothing to stack on.
  */
 export const STACKABLE_TYPES: readonly string[] = [
   'bar',
+  'hbar',
   'groupedBar',
   'line',
   'multiLine',
@@ -177,9 +179,9 @@ function labelFor(spec: RenderSpec, one: Series, inside: boolean): Record<string
   const position =
     one.type === 'pie' || one.type === 'treemap' || one.type === 'heatmap'
       ? {}
-      : spec.chartType === 'hbar'
-        ? { position: 'right' }
-        : { position: inside ? 'inside' : 'top' };
+      : inside
+        ? { position: 'inside' }
+        : { position: spec.chartType === 'hbar' ? 'right' : 'top' };
   return {
     show: true,
     ...position,

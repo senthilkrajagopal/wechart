@@ -4572,11 +4572,20 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
   - **Tests, red first:**
     - `colours.test.ts` (9): pie, donut and treemap agree with a bar split by the same member; a donut first on the page gives each category its own colour; each of KPI, table, pivot, heatmap and trellis claims nothing. All failed first: a pie claimed only `orders.count`.
     - `e2e/dashboard.spec.ts` "a member keeps one colour between a donut of it and a bar split by it, after a KPI". With the fix set aside it failed in Chrome (a slice `#2a78d6` against its series `#1baf7a`). It passes in all three browsers, with dashboard, markings and crossfilter (291 runs).
-- [ ] T302 (AC-219) Offer "Stack series" on a horizontal bar with more than one series
+- [x] T302 (AC-219) Offer "Stack series" on a horizontal bar with more than one series
   - Gap 6 of the parity rebuild. AC-219 has Customize offer "whether series stack". A horizontal bar with two measures, or with its series split by colour, draws two series side by side, but the tab offered no stacking: `STACKABLE_TYPES` left `hbar` out.
   - Files: `packages/charts/src/customize.ts`, its test, `packages/web/src/editor/CustomizeTab.test.tsx`, `e2e/customize.spec.ts`
   - Failing test: a horizontal bar with two series stacks when "Stack series" is on, and Customize shows the checkbox for it (AC-219).
   - Depends on: none
+  - **Done 2026-09-25.**
+    - `STACKABLE_TYPES` includes `hbar`, so Customize offers "Stack the series" on a horizontal bar with two series or more, and `applyCustomize` stacks them.
+    - A stacked horizontal bar's data labels go inside their segments, as a stacked column's do, rather than past the bar's end.
+  - **A test was wrong, and the user is told.** `customize.test.ts` "leaves a combo, a horizontal bar and a single series unstacked" asserted T231's reasoning: that a horizontal bar has one bar series and nothing to stack. With two measures, or split by colour, it has two, and AC-219 offers to stack them.
+    - The horizontal bar's line is now its own test, which asserts that it stacks.
+    - The combo and single-series assertions are unchanged.
+  - **Tests, red first:**
+    - `charts/customize.test.ts` (2). The drawn check: in each category, the second series' bar starts at the first's end, within the 2 px surface gap. Labels sit inside. Both failed first: the series were unstacked, and the labels were at `right`.
+    - `e2e/chart-editor.spec.ts` "a horizontal bar split by colour can stack its series". It opens the seeded chart as a horizontal bar: 6 rows of bars, then 2 once stacked. With the fix set aside it failed in Chrome, with no "Stack the series" to check. It passes in all three browsers, with chart-editor and chart-save (231 runs).
 - [x] T303 (AC-044) Order a pivot's rows by the chart's sort
   - Gap 8 of the parity rebuild. The pivot kept the rows' arrival order whatever Sort said. AC-044's Fails-when is "the order is not applied".
   - Files: `packages/core/src/pivot.ts`, its test, `packages/web/src/tiles/PivotTable.test.tsx`

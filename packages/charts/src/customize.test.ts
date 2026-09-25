@@ -14,8 +14,10 @@ import { describe, expect, it } from 'vitest';
 
 import { formatterFor, type RenderSpec } from '@wechart/core';
 
+import { STACKABLE_TYPES } from './customize';
 import { optionFor } from './optionFor';
 import { labelsOf, marksOf, renderToSvg } from './testing/renderToSvg';
+import { MARK } from './theme';
 
 const PALETTE = ['#123456', '#abcdef', '#0f9d58'];
 const STATUS = 'orders.status';
@@ -149,12 +151,52 @@ describe('stacking, only where the tab offers it', () => {
   const stacks = (spec: RenderSpec) =>
     ((optionFor(spec) as { series?: { stack?: unknown }[] }).series ?? []).map((one) => one.stack);
 
-  it('leaves a combo, a horizontal bar and a single series unstacked', () => {
+  it('leaves a combo and a single series unstacked', () => {
     expect(stacks({ ...twoSeries({ stacked: true }), chartType: 'combo' })).not.toContain('total');
-    expect(stacks({ ...twoSeries({ stacked: true }), chartType: 'hbar' })).not.toContain('total');
     expect(
       stacks({ ...twoSeries({ stacked: true }), encoding: { x: [STATUS], y: [COUNT] } }),
     ).not.toContain('total');
+  });
+
+  /**
+   * T302 (the Superset-parity rebuild's gap 6). T231 left a horizontal bar
+   * out, as a chart with one bar series; with two measures, or split by
+   * colour, it has two, drawn side by side, and AC-219 offers to stack them.
+   */
+  it('stacks a horizontal bar’s two series, each segment starting where the one before it ends', () => {
+    const hbar = { ...twoSeries({ stacked: true }), chartType: 'hbar' as const };
+    expect(stacks(hbar)).toEqual(['total', 'total']);
+    expect(STACKABLE_TYPES).toContain('hbar');
+
+    // Drawn: in each category the second series' bar begins at the first's
+    // end, past the surface gap between two touching marks (MARK.gapPx).
+    const svg = renderToSvg(optionFor(hbar));
+    // Taller than the legend's 14 px swatch: the bars alone.
+    const bars = (colour: string) =>
+      marksOf(svg, [colour])
+        .filter((mark) => mark.bottom - mark.top > 20)
+        .sort((a, b) => a.top - b.top);
+    const first = bars(PALETTE[0] ?? '');
+    const second = bars(PALETTE[1] ?? '');
+    expect(first).toHaveLength(2);
+    expect(second).toHaveLength(2);
+    for (const [index, mark] of first.entries()) {
+      const gap = (second[index]?.left ?? Number.NaN) - mark.right;
+      expect(gap).toBeGreaterThanOrEqual(0);
+      expect(gap).toBeLessThanOrEqual(MARK.gapPx);
+    }
+  });
+
+  it('writes a stacked horizontal bar’s labels inside its segments', () => {
+    const labels = (
+      (
+        optionFor({
+          ...twoSeries({ stacked: true, dataLabels: true }),
+          chartType: 'hbar',
+        }) as { series?: { label?: { position?: unknown } }[] }
+      ).series ?? []
+    ).map((one) => one.label?.position);
+    expect(labels).toEqual(['inside', 'inside']);
   });
 });
 

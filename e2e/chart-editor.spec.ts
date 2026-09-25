@@ -1037,6 +1037,38 @@ test('the Customize tab moves the legend, writes data labels and lets the axis l
 });
 
 /**
+ * T302, AC-219's "whether series stack" on a horizontal bar (the
+ * Superset-parity rebuild's gap 6): split by a second dimension it draws its
+ * series side by side, and Customize offered no way to stack them.
+ */
+test('a horizontal bar split by colour can stack its series', async ({ page }) => {
+  // The seeded chart: orders by products.category, split by orders.status.
+  await page.goto('/explore/charts/seed-chart-status/edit');
+  await expect(page.getByTestId('in-dimensions-orders.status')).toBeVisible();
+  await chooseChartType(page, 'hbar');
+  const canvas = page.getByTestId('chart-canvas');
+  await expect(canvas).toHaveAttribute('data-chart-type', 'hbar');
+
+  /** The rows the bars sit on: one per bar side by side, one per category stacked. */
+  const barRows = () =>
+    canvas.evaluate((node) => {
+      const tops = [...node.querySelectorAll('svg path[fill^="#"]')]
+        .map((path) => path.getBoundingClientRect())
+        // Wider and taller than a legend swatch (25 × 14): the bars. The
+        // legend's hit area is filled rgb(0,0,0), not a palette colour.
+        .filter((box) => box.width > 30 && box.height > 16)
+        .map((box) => Math.round(box.top));
+      return new Set(tops).size;
+    });
+  // Two categories, three statuses side by side.
+  await expect.poll(barRows).toBe(6);
+
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  await page.getByLabel('Stack the series').check();
+  await expect.poll(barRows).toBe(2);
+});
+
+/**
  * T232 / AC-220: THE SYSTEM SHALL name every member by its title from the
  * model wherever a person reads it — legends, tooltips, table headers, well
  * pills, marking chips and the "Why this chart?" trace — and never by its
