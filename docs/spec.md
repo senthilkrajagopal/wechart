@@ -384,7 +384,7 @@ Traces to: `[docs/inputs §12]`, direction.md §7, rules 13, 32.
       Fails when: an unset pair behaves differently from the stated default.
 - [x] AC-119 WHEN a cross-filter is active, THE SYSTEM SHALL show a chip naming the member and value and the source tile, and clear it when the chip is dismissed or Escape is pressed.
       Fails when: the chip omits the source tile, or dismissing it leaves a tile filtered.
-- [ ] AC-120 WHILE a dashboard is in cross-filter mode, THE SYSTEM SHALL offer no marking controls, chips or badges anywhere in that dashboard.
+- [x] AC-120 WHILE a dashboard is in cross-filter mode, THE SYSTEM SHALL offer no marking controls, chips or badges anywhere in that dashboard.
       Fails when: a marking control appears in cross-filter mode.
 
 ## F13. Bookmarks and shareable links

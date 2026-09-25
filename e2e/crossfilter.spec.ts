@@ -26,7 +26,8 @@ async function crossFilterDashboard(
     defaultAction = 'filter',
     pairs,
     unreachable = false,
-  }: { defaultAction?: string; pairs?: Pairs; unreachable?: boolean } = {},
+    markings = false,
+  }: { defaultAction?: string; pairs?: Pairs; unreachable?: boolean; markings?: boolean } = {},
 ) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Cross ${unique}`;
@@ -86,6 +87,10 @@ async function crossFilterDashboard(
             crossFilter: { defaultAction, ...(pairs === undefined ? {} : { pairs }) },
           },
         },
+        // A marking kept from Markings mode: configured, and not in use here.
+        ...(markings
+          ? { markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }] }
+          : {}),
         pages: [
           {
             id: 'only',
@@ -381,6 +386,41 @@ test('switching the interaction mode and back leaves no cross-filter behind', as
   // Back in cross-filter mode with nothing selected: what was clicked before
   // the dashboard changed mode does not come back with it.
   await expect(page.getByTestId('cross-filter-chip')).toHaveCount(0);
+});
+
+/**
+ * T126 / AC-120: WHILE a dashboard is in cross-filter mode, THE SYSTEM SHALL
+ * offer no marking controls, chips or badges anywhere in that dashboard.
+ * `Fails when: a marking control, chip or badge appears in cross-filter mode.`
+ *
+ * With a marking configured, kept from Markings mode: there is one to show,
+ * and nothing shows it.
+ */
+test('a cross-filtering dashboard shows no marking control, chip or badge', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await crossFilterDashboard(request, { markings: true });
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+
+  // A click, and a Ctrl-click, cross-filter; neither marks.
+  await clickBar(page, status, 'shipped');
+  await expect(page.getByTestId('cross-filter-chip')).toContainText('shipped');
+  await page.keyboard.down('Control');
+  await clickBar(page, status, 'completed');
+  await page.keyboard.up('Control');
+  await page.waitForLoadState('networkidle');
+  for (const affordance of ['mark-badge', 'mark-chip'])
+    await expect(page.getByTestId(affordance)).toHaveCount(0);
+  await expect(page.getByTestId('marking-announcer')).toHaveText('');
+
+  // Nor in a tile's menu: no marking group, no Unmark.
+  await status.getByRole('button', { name: /^Actions for / }).click();
+  const menu = status.getByRole('list', { name: /^Actions for / });
+  await expect(menu).toBeVisible();
+  await expect(menu).not.toContainText('marked');
+  await expect(menu.getByRole('button', { name: 'Unmark' })).toHaveCount(0);
 });
 
 test('a pair set to None leaves the other tile untouched', async ({ page, request }) => {

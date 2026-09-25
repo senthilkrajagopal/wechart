@@ -1738,9 +1738,9 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **Escape takes them all back**, as the bar's own "Clear all (Esc)" says. Not while a dialog, a menu or a filter's popover is open: Escape there means "close this", and taking the dashboard's cross-filters as well would be a keystroke doing two things at once.
     - **Tests:** `CrossFilterChip.test.tsx` (what a chip says, what each control clears, and that nothing shows when nothing is active); `e2e/crossfilter.spec.ts` — the chip names the field, value and source tile on the real dashboard, dismissing it leaves the other tile unfiltered, and Escape does the same.
     - AC-119 ticked on those.
-- [ ] T126 (AC-120) Offer no marking affordances in cross-filter mode
-  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `e2e/crossfilter-mode.spec.ts`
-  - Failing test: `e2e/crossfilter-mode.spec.ts`: in cross-filter mode no marking control, chip or badge appears anywhere in the dashboard (AC-120).
+- [x] T126 (AC-120) Offer no marking affordances in cross-filter mode
+  - Files: `e2e/crossfilter.spec.ts` (the behaviour was already in place: every marking affordance is gated on Markings mode)
+  - Failing test: `e2e/crossfilter.spec.ts`: in cross-filter mode no marking control, chip or badge appears anywhere in the dashboard (AC-120).
   - Depends on: T123, T104
 
 ## F13. Bookmarks and shareable links
