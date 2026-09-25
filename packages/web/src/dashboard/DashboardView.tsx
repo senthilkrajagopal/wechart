@@ -466,6 +466,8 @@ interface Drill {
   readonly option: DrillOption;
   readonly items: string;
   readonly markingName: string;
+  /** The question it was asked under (`drillBasisOf`): another, and it no longer shows. */
+  readonly key: string;
   readonly state:
     | { readonly kind: 'loading' }
     | { readonly kind: 'done'; readonly spec: RenderSpec; readonly answered?: AnswerMeta }
@@ -1173,7 +1175,8 @@ function Elements({
               <TileViewMenu
                 tileId={element.id}
                 title={charts.titleOf?.(chartId) ?? element.text ?? 'chart'}
-                spec={charts.specs[chartId]}
+                // What is drawn: a drilled tile's drill, for its CSV and images (T270's review).
+                spec={drill === undefined ? charts.specs[chartId] : drill.spec}
                 // Not while a newer answer is on its way, as for Refresh.
                 asking={
                   charts.pending?.has(chartId) === true ||
@@ -1359,7 +1362,9 @@ function Elements({
                   // After a refresh, if a pre-aggregation answered it (T154,
                   // AC-148): in view mode, as Refresh is — its Jobs link would
                   // leave an edit.
+                  // Not over a drill, whose answer is its own (AC-238).
                   affordances.editing ||
+                  drill !== undefined ||
                   charts.refreshedFromRollup?.has(chartId) !== true ||
                   !accelerationOf(charts.answered?.[chartId]).accelerated ? null : (
                     <RollupRefreshNote
@@ -1398,14 +1403,17 @@ function Elements({
                * which passed the prop, stayed green.
                */
               onRetry={
-                // Not while editing, where Refresh is hidden on purpose: a
-                // drafted tile's Retry would re-read the saved chart and
-                // drop the draft it is showing.
-                charts.onRefresh === undefined || editing
-                  ? undefined
-                  : () => {
-                      charts.onRefresh?.(chartId);
-                    }
+                // A failed drill is asked again, not the tile's own chart (T270's review).
+                drill !== undefined
+                  ? drill.onRetry
+                  : // Not while editing, where Refresh is hidden on purpose: a
+                    // drafted tile's Retry would re-read the saved chart and
+                    // drop the draft it is showing.
+                    charts.onRefresh === undefined || editing
+                    ? undefined
+                    : () => {
+                        charts.onRefresh?.(chartId);
+                      }
               }
               // The chart's own type, where it has one (T132's review): the
               // editor changes the document's, not the tile's.
@@ -2650,6 +2658,8 @@ export function DashboardView({
     const element = elementAt(live, tileId);
     if (element === null || !isTile(element) || element.chartId === undefined) return [];
     if (marksWithOf(element) === undefined) return [];
+    // A drilled view marks nothing, by the keyboard either (T270's review).
+    if (drillShown(tileId) !== undefined) return [];
     const spec = drawn.specs[element.chartId];
     if (spec === undefined || memberOn(spec.encoding, 'x') === undefined) return [];
     // A scatter's x is a measure, not items to step between (T242's review).
@@ -3248,7 +3258,13 @@ export function DashboardView({
     dataAsOfOf: (chartId: string, tileId: string) => () =>
       dataAsOf(
         {
-          answered: withFiltered.answered?.[chartId],
+          // A drilled tile's own answer — its pre-aggregation or the database —
+          // and never its chart's while the drill's is on its way (AC-238).
+          answered: (() => {
+            const shown = drillShown(tileId);
+            if (shown === undefined) return withFiltered.answered?.[chartId];
+            return shown.state.kind === 'done' ? shown.state.answered : undefined;
+          })(),
           schedules,
           onRefresh:
             onRefresh === undefined
@@ -3352,9 +3368,10 @@ export function DashboardView({
       };
     },
     drilledOf: (tileId: string): DrilledView | undefined => {
-      const drilled = drills[tileId];
+      const drilled = drillShown(tileId);
       if (drilled === undefined) return undefined;
       const { state, option } = drilled;
+      const again = { ...drilled, tileId };
       return {
         crumb: {
           title: chartTitleOf(drilled.chartId) ?? 'this chart',
@@ -3368,16 +3385,31 @@ export function DashboardView({
         loading: state.kind === 'loading',
         ...(state.kind === 'done'
           ? {
-              spec: state.spec,
+              // Written with the model's formats and titles, as every tile is (T270's review).
+              spec: {
+                ...state.spec,
+                ...(formats === undefined ? {} : { formats }),
+                ...(titles === undefined ? {} : { titles }),
+              },
               ...(state.answered === undefined ? {} : { answered: state.answered }),
             }
           : {}),
         ...(state.kind === 'failed' ? { error: state.error } : {}),
-        // Back to the tile's own chart, which was never changed.
+        // The drill asked again, as a tile's Retry asks its own chart again.
+        onRetry: () => {
+          drill(again);
+        },
+        // Back to the tile's own chart, which was never changed, and the focus
+        // on its ⋯, where the drill was chosen (T270's review).
         onBack: () => {
           setDrills((now) =>
             Object.fromEntries(Object.entries(now).filter(([id]) => id !== tileId)),
           );
+          requestAnimationFrame(() => {
+            window.document
+              .querySelector<HTMLElement>(`[data-view-menu="${CSS.escape(tileId)}"]`)
+              ?.focus();
+          });
         },
       };
     },
@@ -3710,46 +3742,28 @@ export function DashboardView({
     markingName: string;
   }) {
     const chart = drawn.documents?.[to.chartId];
-    if (chart === undefined) return;
-    const drilled: Drill = { ...to, state: { kind: 'loading' } };
+    const basis = drillBasisOf(to.chartId, to.tileId);
+    if (chart === undefined || basis === undefined) return;
+    const drilled: Drill = {
+      ...to,
+      key: 'reason' in basis ? '' : basis.key,
+      state: { kind: 'loading' },
+    };
     setDrills((now) => ({ ...now, [to.tileId]: drilled }));
     const settle = (state: Drill['state']) => {
       setDrills((now) =>
         now[to.tileId] === drilled ? { ...now, [to.tileId]: { ...drilled, state } } : now,
       );
     };
-    const refused = filtered[to.chartId]?.uncovered ?? [];
-    const applied = (reached[to.chartId] ?? []).filter(
-      ({ filter }) => !refused.includes(filter.id),
-    );
-    const element = elementAt(live, to.tileId);
-    const markingId = element !== null && isTile(element) ? marksWithOf(element) : undefined;
-    const made =
-      markingId === undefined
-        ? undefined
-        : markFilterFrom(markingOf(marks, markingId), false, {
-            id: '',
-            markingName: '',
-            summary: '',
-          });
-    if (made === undefined || 'refused' in made) {
-      settle({ kind: 'failed', error: new Error('There is nothing marked to drill into.') });
-      return;
-    }
-    const on = markFilterOn(made, (member) => reachOf(member, to.chartId));
-    if ('unreached' in on) {
-      settle({
-        kind: 'failed',
-        error: new Error(
-          `This tile cannot reach ${memberTitle?.(on.unreached) ?? on.unreached}, so its marked items cannot be drilled into.`,
-        ),
-      });
+    if ('reason' in basis) {
+      settle({ kind: 'failed', error: new Error(basis.reason) });
       return;
     }
     let answered: AnswerMeta | undefined;
     void tileChartOf(drilledDocument(chart, to.option), async (query) => {
+      const asked = withLimit(withFilters(query, basis.applied), basis.limit);
       const result = (await loadTile({
-        query: withLimit(withLimit(withFilters(query, applied), asked[to.chartId]), on.filter),
+        query: basis.marked === undefined ? asked : withLimit(asked, basis.marked),
         ...(preview === undefined ? {} : { context: preview }),
       })) as { data?: Record<string, unknown>[] };
       answered = answerMetaOf(result);
@@ -3759,13 +3773,73 @@ export function DashboardView({
         settle({ kind: 'failed', error: result.error });
         return;
       }
-      const formats = drawn.specs[to.chartId]?.formats;
-      settle({
-        kind: 'done',
-        spec: formats === undefined ? result.spec : { ...result.spec, formats },
-        ...(answered === undefined ? {} : { answered }),
-      });
+      settle({ kind: 'done', spec: result.spec, ...(answered === undefined ? {} : { answered }) });
     });
+  }
+  /**
+   * A tile's drill while it still answers what the tile is under (T270's
+   * review): only while marking — not while editing, previewing or in
+   * cross-filter mode — only while the tile holds the chart it drilled, and
+   * only under the question it was asked (or the same refusal). Otherwise the
+   * tile draws its own chart, and never a drill gone stale.
+   */
+  function drillShown(tileId: string): Drill | undefined {
+    const drilled = drills[tileId];
+    if (drilled === undefined || !marking) return undefined;
+    const element = elementAt(live, tileId);
+    if (element === null || !isTile(element) || element.chartId !== drilled.chartId)
+      return undefined;
+    const basis = drillBasisOf(drilled.chartId, tileId);
+    const key = basis === undefined ? undefined : 'reason' in basis ? '' : basis.key;
+    return key === drilled.key ? drilled : undefined;
+  }
+  /**
+   * What a tile's drill is asked under (T270): every filter that reaches the
+   * tile and it takes, its limits, and its marking's filter — none when every
+   * item is marked (Mark all), the tile's whole answer. Its `key` is that
+   * question: a drill asked under another no longer answers what the tile is
+   * under, and is let go (T270's review). No basis while nothing is marked.
+   */
+  function drillBasisOf(
+    chartId: string,
+    tileId: string,
+  ):
+    | {
+        applied: NonNullable<(typeof reached)[string]>;
+        limit: CubeFilter | undefined;
+        marked: CubeFilter | undefined;
+        key: string;
+      }
+    | { reason: string }
+    | undefined {
+    const refused = filtered[chartId]?.uncovered ?? [];
+    const applied = (reached[chartId] ?? []).filter(({ filter }) => !refused.includes(filter.id));
+    const element = elementAt(live, tileId);
+    const markingId = element !== null && isTile(element) ? marksWithOf(element) : undefined;
+    if (markingId === undefined) return undefined;
+    const made = markFilterFrom(markingOf(marks, markingId), false, {
+      id: '',
+      markingName: '',
+      summary: '',
+    });
+    let marked: CubeFilter | undefined;
+    if ('refused' in made) {
+      if (made.everything !== true) return undefined;
+    } else {
+      const on = markFilterOn(made, (member) => reachOf(member, chartId));
+      if ('unreached' in on)
+        return {
+          reason: `This tile cannot reach ${memberTitle?.(on.unreached) ?? on.unreached}, so its marked items cannot be drilled into.`,
+        };
+      marked = on.filter;
+    }
+    const limit = asked[chartId];
+    return {
+      applied,
+      limit,
+      marked,
+      key: JSON.stringify([applied.map(({ filter }) => filter), limit ?? null, marked ?? null]),
+    };
   }
   /** The panel turned off from itself: the focus back on its tile's ⋯, where there is one. */
   const closePanel = () => {

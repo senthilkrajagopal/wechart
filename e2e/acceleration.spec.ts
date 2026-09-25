@@ -87,6 +87,74 @@ async function dashboardOn(request: APIRequestContext, cubes: readonly string[])
   return { id: dashboard.id, title };
 }
 
+/**
+ * T270 / AC-238: WHILE a tile shows a drilled view, THE SYSTEM SHALL show the
+ * drilled answer's own freshness: the pre-aggregation that served it, or
+ * that the database did. `Fails when: a drilled view the database answered
+ * shows the parent view's pre-aggregation.`
+ *
+ * `monthly_orders` by status is served by `by_status_month`; drilled by day
+ * it is finer than the rollup's month, and Cube asks the database (checked
+ * here first). Every item marked (Mark all), so the drill is the tile's whole
+ * answer by day.
+ */
+test('a drilled tile says what served its own answer, not the rollup that served its chart', async ({
+  page,
+  request,
+}) => {
+  const byDay = (await (
+    await request.post(`${API}/load`, {
+      data: {
+        query: {
+          measures: ['monthly_orders.count'],
+          timeDimensions: [{ dimension: 'monthly_orders.ordered_at', granularity: 'day' }],
+        },
+      },
+    })
+  ).json()) as { usedPreAggregations?: Record<string, unknown> };
+  expect(Object.keys(byDay.usedPreAggregations ?? {})).toHaveLength(0);
+
+  const { id, title } = await dashboardOn(request, ['monthly_orders']);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-monthly_orders"]');
+  const served = tile.getByTestId('acceleration');
+  await expect(served).toHaveText(/Accelerated/);
+
+  const marked = async () => {
+    await tile.getByRole('button', { name: /^Actions for / }).click();
+    return tile
+      .getByRole('menu', { name: /^Actions for / })
+      .getByRole('group', { name: /marked$/ });
+  };
+  await (await marked()).getByRole('menuitem', { name: 'Mark all' }).click();
+  await (await marked()).getByRole('menuitem', { name: /^Drill by/ }).click();
+  await page
+    .getByRole('menu', { name: /^Drill by/ })
+    .getByRole('group', { name: /^Time · / })
+    .getByRole('menuitem', { name: 'By day' })
+    .click();
+
+  await expect(tile.getByTestId('drill-crumb')).toBeVisible();
+  await expect(served).toHaveText(/Live/);
+  await expect(served).not.toHaveText(/Accelerated/);
+  // Nor does its Data as of name the rollup.
+  await tile.getByRole('button', { name: /^Actions for / }).click();
+  await tile
+    .getByRole('menu', { name: /^Actions for / })
+    .getByRole('menuitem', { name: /^Data as of/ })
+    .click();
+  await expect(page.getByRole('menu', { name: /^Data as of/ })).not.toContainText(
+    'by_status_month',
+  );
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+
+  // Back: the chart, served by its rollup again.
+  await tile.getByTestId('drill-crumb').getByRole('button', { name: '← Back' }).click();
+  await expect(served).toHaveText(/Accelerated/);
+});
+
 test('a tile served from a pre-aggregation says so with its age, and one from the database says live', async ({
   page,
   request,

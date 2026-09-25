@@ -2281,10 +2281,40 @@ test('Drill by regroups a tile’s marked items in place, with its own answer, a
   expect(await category.locator('svg text').allTextContents()).toEqual(categoryBefore);
   expect(await savedChart()).toBe(savedBefore);
 
-  // Back: the tile's own chart again, its marking still on it.
+  // Headed by the model's titles, as every tile is (T270's review).
+  const heads = await status.locator('thead th').allTextContents();
+  expect(heads.join('|')).toContain('Category');
+  expect(heads.join('|')).not.toContain('products.category');
+
+  // Back: the tile's own rows again — its statuses — its marking still on
+  // it, and the focus on its ⋯, where the drill was chosen.
   await crumb.getByRole('button', { name: '← Back' }).click();
   await expect(status.getByTestId('drill-crumb')).toHaveCount(0);
   await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect
+    .poll(async () => (await status.locator('tbody tr').allTextContents()).join('|'))
+    .toMatch(/shipped/);
+  await expect(status.getByRole('button', { name: /^Actions for / })).toBeFocused();
+
+  // A drill is of the marking it was made from: unmarked, it is let go, and
+  // no drill of what was marked is left over the tile (T270's review).
+  await status.getByRole('button', { name: /^Actions for / }).click();
+  await menu
+    .getByRole('group', { name: /marked$/ })
+    .getByRole('menuitem', { name: /^Drill by/ })
+    .click();
+  await page
+    .getByRole('menu', { name: /^Drill by/ })
+    .getByRole('group', { name: 'Products · via join' })
+    .getByRole('menuitem', { name: 'Category' })
+    .click();
+  await expect(status.getByTestId('drill-crumb')).toBeVisible();
+  await status.getByRole('button', { name: /^Actions for / }).click();
+  await menu
+    .getByRole('group', { name: /marked$/ })
+    .getByRole('menuitem', { name: 'Unmark' })
+    .click();
+  await expect(status.getByTestId('drill-crumb')).toHaveCount(0);
 });
 
 /**

@@ -137,20 +137,26 @@ export function drillOptions(
         });
       }
 
-  // The time of the tile's own cube or view, at the standard grains.
-  for (const each of own.dimensions) {
-    if (each.type !== 'time' || each.hidden) continue;
-    const at = tile.timeDimensions[each.name];
-    const finer = at === undefined ? GRAINS : GRAINS.slice(GRAINS.indexOf(at) + 1);
-    for (const granularity of finer)
-      options.push({
-        member: each.name,
-        title: each.title,
-        granularity,
-        kind: 'time',
-        from: fromOf(own),
-      });
-  }
+  // The time of the tile's own cube or view, then of its component's cubes,
+  // at the standard grains: only finer ones for a time the tile groups by —
+  // none past a day's — and none of a time marked on another tile, which is
+  // the marked member itself (T270's review).
+  for (const cube of reached)
+    for (const each of cube.dimensions) {
+      if (each.type !== 'time' || each.hidden) continue;
+      const at = tile.timeDimensions[each.name];
+      if (at === undefined && tile.marked.includes(each.name)) continue;
+      const finer =
+        at === undefined ? GRAINS : GRAINS.includes(at) ? GRAINS.slice(GRAINS.indexOf(at) + 1) : [];
+      for (const granularity of finer)
+        options.push({
+          member: each.name,
+          title: each.title,
+          granularity,
+          kind: 'time',
+          from: fromOf(cube),
+        });
+    }
 
   // The other dimensions: the tile's own cube's, then its component's.
   for (const cube of reached)
@@ -175,12 +181,17 @@ export function drilledDocument(
   to: { readonly member: string; readonly granularity?: TimeGranularity },
 ): ChartDocument {
   const { source, options, filters } = document.chart;
+  // A Top N would fold the drilled rows into N and "Other" (T270's review).
+  const kept =
+    options === undefined
+      ? undefined
+      : Object.fromEntries(Object.entries(options).filter(([key]) => key !== 'topN'));
   const time = to.granularity !== undefined;
   return {
     ...document,
     chart: {
       source,
-      ...(options === undefined ? {} : { options }),
+      ...(kept === undefined ? {} : { options: kept }),
       ...(filters === undefined ? {} : { filters }),
       wells: {
         measures: document.chart.wells.measures,

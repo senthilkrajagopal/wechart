@@ -18,6 +18,8 @@ export interface DrilledView {
   readonly loading: boolean;
   /** What Cube said of the drilled answer: its own pre-aggregation or the database. */
   readonly answered?: AnswerMeta | undefined;
+  /** The drill asked again: a failed one's Retry. */
+  readonly onRetry: () => void;
   readonly onBack: () => void;
 }
 

@@ -4435,6 +4435,32 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
       - It isn't saved and isn't kept on reload (the spec's F23 note). An answer to a drill already replaced or gone back from is dropped.
       - `DashboardPage` hands the model's meta down as `model`.
     - **Its own unit test is missing:** nothing below the e2e tests the dashboard's drill wiring.
+  - **Review 2026-09-25 (FAIL; fixed once):**
+    - **AC-238's first assertion couldn't fail:** both answers were Live. `e2e/acceleration.spec.ts` "a drilled tile says what served its own answer, not the rollup that served its chart" now shows it: `monthly_orders` by status is served by `by_status_month`, and with every item marked (Mark all), drilled by Ordered at › By day it says Live. Its Data as of names no rollup, and Back says Accelerated again. With the tile fed its chart's answer, the test fails.
+    - **The drilled chart lacked the model's titles and formats.** It now takes them as every tile does. The e2e checks the table's header reads "Category".
+    - **A drill went stale and outlived its marking and mode.** `drillBasisOf` is what a drill is asked under: the filters it takes, its limits and its marking's filter. `drillShown` shows a drill only:
+      - while marking (not editing, previewing or in cross-filter mode);
+      - while the tile holds that chart;
+      - under the same basis.
+      Otherwise the tile draws its own chart. Unmarking lets the drill go, which the e2e shows.
+    - **The parent's freshness showed through.** Data as of reads the drill's own answer (none while it loads), and the rollup note isn't drawn over a drill.
+    - **Other dashboard fixes:**
+      - The keyboard marks nothing on a drilled view.
+      - The menu's CSV and images are of the drill as drawn.
+      - Retry asks the drill again.
+      - Back puts the focus on the tile's ⋯, and brings back the tile's own rows.
+      - With everything marked (Mark all), a drill is of the tile's whole answer, not an error.
+    - **Core fixes** (`drill.ts`), whose tests failed first:
+      - A tile grouped by an hour, minute or second is offered no coarser grain.
+      - A time member marked on another tile isn't offered.
+      - Joined cubes' time dimensions are offered, after the tile's own.
+      - `drilledDocument` drops a Top N, which would fold the drilled rows.
+    - **Left as they are:**
+      - A cube in the tile's join component that Cube still can't join is offered. The component rules a cube out, not in, and the drill then shows Cube's reason. Ruling it in needs a dry-run per option.
+      - A hierarchy level that is a time dimension drills with no grain.
+      - There's no search in the submenu.
+      - A superseded drill's request isn't aborted; its answer is dropped.
+      - A table view switched on during a drill stays on after Back.
   - Files: `packages/core/src/drill.ts` (+test), `packages/web/src/dashboard/*`, `packages/web/src/tiles/ChartTile.tsx`, `e2e/drill.spec.ts`
   - Failing test:
     - The candidates are hierarchy level, finer grains, then the cube's and joined cubes' dimensions. No primary key, no marked member, and no other-component cube.

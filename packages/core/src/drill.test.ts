@@ -183,6 +183,66 @@ describe('what a tile drills by (AC-237)', () => {
     });
   });
 
+  /** T270's review: at an hour, a minute or a second, no grain is finer than the tile's. */
+  it('offers no coarser grain of a time grouped finer than a day', () => {
+    const options = drillOptions(META, {
+      source: 'orders',
+      dimensions: [],
+      timeDimensions: { 'orders.ordered_at': 'hour' },
+      marked: ['orders.ordered_at'],
+    });
+
+    expect(
+      options
+        .filter((option) => option.member === 'orders.ordered_at')
+        .map((option) => option.granularity),
+    ).toEqual([]);
+  });
+
+  /** T270's review: a time member marked through another tile is the marked member itself. */
+  it('offers no time member marked on another tile', () => {
+    const options = drillOptions(META, {
+      source: 'orders',
+      dimensions: ['orders.status'],
+      timeDimensions: {},
+      marked: ['orders.status', 'orders.ordered_at'],
+    });
+
+    expect(options.map((option) => option.member)).not.toContain('orders.ordered_at');
+    expect(options.map((option) => option.member)).toContain('orders.shipped_at');
+  });
+
+  /** T270's review: a joined cube's time is one of its dimensions, and offered with its grains. */
+  it('offers the time of the cubes joined to it, after the tile’s own', () => {
+    const joined = {
+      cubes: [
+        ...META.cubes.filter((cube) => cube.name !== 'customers'),
+        {
+          ...META.cubes.find((cube) => cube.name === 'customers'),
+          dimensions: [
+            ...(META.cubes.find((cube) => cube.name === 'customers')?.dimensions ?? []),
+            dimension('customers.signed_up_at', 'time'),
+          ],
+        },
+      ],
+    };
+    const time = drillOptions(joined, {
+      source: 'orders',
+      dimensions: ['orders.status'],
+      timeDimensions: {},
+      marked: ['orders.status'],
+    }).filter((option) => option.kind === 'time');
+
+    expect([...new Set(time.map((option) => option.member))]).toEqual([
+      'orders.ordered_at',
+      'orders.shipped_at',
+      'customers.signed_up_at',
+    ]);
+    expect(time.find((option) => option.member === 'customers.signed_up_at')?.from.joined).toBe(
+      true,
+    );
+  });
+
   it('offers nothing where the model is not known', () => {
     expect(
       drillOptions(undefined, { source: 'orders', dimensions: [], timeDimensions: {}, marked: [] }),
@@ -230,6 +290,21 @@ describe('the drilled chart (AC-236)', () => {
       filters: [{ member: 'orders.status', operator: 'equals', values: ['shipped'] }],
     });
     expect(drilled.title).toBe(CHART.title);
+  });
+
+  /**
+   * T270's review: a Top N folds rows into N and "Other" — the drilled rows
+   * would differ from Cube's answer for the chosen dimension (AC-236).
+   */
+  it('lets go of a Top N, which would fold the drilled rows', () => {
+    const topped: ChartDocument = {
+      ...CHART,
+      chart: { ...CHART.chart, options: { legend: 'bottom', topN: { n: 3, other: true } } },
+    };
+
+    expect(drilledDocument(topped, { member: 'products.category' }).chart.options).toEqual({
+      legend: 'bottom',
+    });
   });
 
   it('groups by a time dimension at the chosen grain', () => {
