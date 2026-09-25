@@ -400,7 +400,21 @@ main:has(.explore) {
   color: var(--wc-accent);
   font-weight: var(--wc-text-xs-strong-weight);
 }
-.outline__icon { width: 18px; flex: none; text-align: center; color: var(--wc-text-secondary); }
+/* The prototype's .ficon.dim at 18 px, and its .file row's 0 12 padding —
+   the left set by depth inline (T248, mismatch 26). */
+.outline__row { gap: 8px; padding-block: 0; padding-right: 12px; }
+.outline__icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 4px;
+  background: var(--wc-bg-role-dimension-soft);
+  color: var(--wc-role-dimension);
+  font-size: 10px;
+  font-weight: var(--wc-text-xs-strong-weight);
+}
 .outline__tab, .outline__empty {
   display: block;
   font-size: var(--wc-text-xs-size);
@@ -2013,8 +2027,23 @@ main:has(.dashboard) {
    most frustrating kind, because the user cannot tell whether it is broken,
    forbidden, or waiting on something they have not done. */
 .tile-limits { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
-.tile-limits legend { padding: 0 0 8px; font-weight: var(--wc-text-sm-strong-weight); }
-.tile-limits__row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+/* The prototype's .lbl over 28 px rows at 12/600 (T248, mismatch 25). */
+.tile-limits legend {
+  padding: 0 0 8px;
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
+.tile-limits__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 28px;
+  font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
 .tile-limits__reason {
   flex: 1 1 100%;
   padding-left: 24px;
@@ -2247,7 +2276,9 @@ main:has(.dashboard) {
 .panel-section__note { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 /* A chart tile's Chart section (AC-203): its title strong, its type and
    source beneath with the source in the code face, and Edit chart. */
-.chart-section__title { margin: 0; font-size: 13px; line-height: 20px; font-weight: 600; color: var(--wc-text-primary); }
+.chart-section__title { margin: 0; font-size: var(--wc-text-sm-size); line-height: 20px; font-weight: 600; color: var(--wc-text-primary); }
+/* Its buttons run the section's width, as the prototype's do (T248, mismatch 25). */
+.chart-section > button { width: 100%; justify-content: center; }
 .chart-section__source { font-family: var(--wc-font-code); }
 .chart-section > button { justify-self: start; }
 /* A sized tile's Layout, collapsed as the prototype's is: its summary set as
@@ -2265,7 +2296,8 @@ details.panel-section { display: block; }
 .layout-section > p { margin-top: 6px; }
 /* A chart tile's Ownership (T133, AC-127): Save and Cancel side by side. */
 .chart-ownership__actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.chart-ownership > button { justify-self: start; }
+/* "Save to folders…" at the section's width too (T248, mismatch 25). */
+.chart-ownership > button { justify-self: stretch; justify-content: center; }
 .field { display: grid; gap: 4px; }
 /* An inspector's controls are the prototype's .input.sm and .select.sm: 28 px
    at 12 px, direction.md §4's compact row for inspectors. */
@@ -2299,6 +2331,26 @@ details.panel-section { display: block; }
   cursor: pointer;
 }
 .add-panel button:hover { background: var(--wc-bg-hover); }
+/* An element's row: its kind's 24 px chip beside its name and hint, 10 px
+   apart, 50 px tall — the prototype's palette row (T248, mismatch 23). */
+.add-panel button:has(> .add-panel__icon) {
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 0;
+  align-items: center;
+}
+.add-panel__icon {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: var(--wc-bg-role-dimension-soft);
+  color: var(--wc-role-dimension);
+  font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
 .add-panel__label { font-weight: 600; }
 .add-panel__hint { font-size: 12px; line-height: 16px; color: var(--wc-text-muted); }
 /* The four filter kinds, under the Filter entry they came from. */
@@ -2737,13 +2789,22 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* The "+ Add" slot at the end of each container, and the selected element it
    competes with — both are aims at where the next insert lands (AC-058), so
    both have to be visible at a glance. */
+/* The prototype's .dadd: 56 px at 600, the accent on its tint when hovered
+   or focused (T248, mismatch 24). */
 .grid-canvas__add {
-  min-height: 32px;
+  min-height: 56px;
   border: 1px dashed var(--wc-border-strong);
   border-radius: 6px;
   background: none;
   color: var(--wc-text-secondary);
+  font-weight: var(--wc-text-sm-strong-weight);
   cursor: pointer;
+}
+.grid-canvas__add:hover:not([aria-pressed='true']),
+.grid-canvas__add:focus-visible {
+  border-color: var(--wc-accent);
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
 }
 .grid-canvas__add[aria-pressed='true'] {
   border-style: solid;
@@ -2898,9 +2959,10 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   outline-offset: 2px;
 }
 .dashboard[data-editing='true'] .grid-tile:hover { outline-color: var(--wc-accent); }
+/* 2 px out, as the prototype's .dtile.selected (T248, mismatch 25). */
 .dashboard[data-editing='true'] .grid-tile[data-selected='true'] {
   outline: 2px solid var(--wc-accent);
-  outline-offset: -1px;
+  outline-offset: 2px;
 }
 /* The focus ring still wins over both, as it does outside edit mode (AC-176). */
 .dashboard[data-editing='true'] .grid-tile:focus-visible {

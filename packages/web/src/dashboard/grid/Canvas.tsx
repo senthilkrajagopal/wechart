@@ -428,7 +428,15 @@ export function Canvas({
             addHere.onChoose(containerKey);
           }}
         >
-          ＋ Add here
+          {/* The prototype's words (T248): "＋ Add" after what a container
+              holds, and what it takes when it holds nothing. */}
+          {tiles.length > 0
+            ? '＋ Add'
+            : containerKey.startsWith('sec:')
+              ? '＋ Add to this section'
+              : containerKey.startsWith('tabs:')
+                ? '＋ Add to this tab'
+                : '＋ Add a chart, section or text'}
         </button>
       )}
 

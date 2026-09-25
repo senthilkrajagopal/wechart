@@ -165,6 +165,9 @@ describe('discarding a session', () => {
     first.focus();
     await userEvent.keyboard('{Shift>}{ArrowDown}{/Shift}');
     await userEvent.keyboard('{ArrowRight}');
+    // The page tabs are the dashboard's properties, shown with nothing
+    // selected (T248): Escape lets go of the tile first.
+    await userEvent.keyboard('{Escape}');
     await deletePage('p2');
 
     await discard();

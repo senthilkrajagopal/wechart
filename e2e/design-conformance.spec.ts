@@ -2058,3 +2058,117 @@ test.describe('T253: tile menus, the grip and the edit grid', () => {
     expect(bands).toMatch(/0\.04\)|4%/);
   });
 });
+
+/**
+ * T248: the edit sidebar's palette, the add slots, Properties and the Outline
+ * as dashboard.js draws them (recheck-dashboard F19, F23; mismatches 23–26).
+ * Its first half — the sidebar under a full-width band — came with T246.
+ */
+test.describe('T248: the edit sidebar', () => {
+  const sidebar = (page: Page) => page.getByRole('complementary', { name: 'Edit sidebar' });
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await expect(firstChart(page).getByTestId('chart-canvas')).toBeVisible();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(sidebar(page)).toBeVisible();
+  });
+
+  test('the palette’s rows carry the kind’s 24 px chip, and the add slot is the prototype’s', async ({
+    page,
+  }) => {
+    await sidebar(page).getByRole('tab', { name: 'Add' }).click();
+    // <span class="ficon dim" style="width:24px;height:24px">▦</span>, gap 10 (mismatch 23)
+    const chart = sidebar(page).getByTestId('add-chart');
+    const chip = chart.locator('.add-panel__icon');
+    expect(
+      await style(chip, 'width', 'height', 'border-radius', 'background-color', 'color'),
+    ).toEqual({
+      width: '24px',
+      height: '24px',
+      'border-radius': '4px',
+      'background-color': await token(page, 'bg-role-dimension-soft', 'background-color'),
+      color: await token(page, 'role-dimension'),
+    });
+    expect(await style(chart, 'column-gap')).toEqual({ 'column-gap': '10px' });
+    expect((await chart.boundingBox())?.height).toBe(50);
+
+    // .dadd { min-height: 56px; font-weight: 600 } reading "＋ Add" (mismatch 24)
+    const slot = page.getByRole('button', { name: /^Add to / }).first();
+    await expect(slot).toHaveText('＋ Add');
+    expect(await style(slot, 'min-height', 'font-weight')).toEqual({
+      'min-height': '56px',
+      'font-weight': '600',
+    });
+  });
+
+  test('Properties: the chart’s title at 14, its buttons full width, the limit list at 12/600', async ({
+    page,
+  }) => {
+    await firstChart(page).click();
+    const properties = sidebar(page);
+    await properties.getByRole('tab', { name: 'Properties' }).click();
+    // (mismatch 25)
+    expect(await style(properties.getByTestId('properties-chart-title'), 'font-size')).toEqual({
+      'font-size': '14px',
+    });
+    const section = properties.locator('.chart-section');
+    // Its content box: the section's width less its own padding.
+    const width = await section.evaluate((node) => {
+      const box = getComputedStyle(node);
+      return node.clientWidth - parseFloat(box.paddingLeft) - parseFloat(box.paddingRight);
+    });
+    const edit = await properties.getByRole('button', { name: /Edit chart/ }).boundingBox();
+    expect(edit?.width).toBeCloseTo(width, 0);
+    const limits = properties.locator('.tile-limits');
+    expect(
+      await style(limits.locator('legend'), 'font-size', 'line-height', 'font-weight', 'color'),
+    ).toEqual({
+      'font-size': '12px',
+      'line-height': '16px',
+      'font-weight': '600',
+      color: await token(page, 'text-secondary'),
+    });
+    const row = limits.locator('.tile-limits__row').first();
+    expect(await style(row, 'font-size', 'font-weight', 'min-height')).toEqual({
+      'font-size': '12px',
+      'font-weight': '600',
+      'min-height': '28px',
+    });
+    // The selected tile's ring 2 px out, as .dtile.selected (mismatch 25).
+    expect(await style(firstChart(page), 'outline-offset')).toEqual({ 'outline-offset': '2px' });
+  });
+
+  test('the page tabs are the dashboard’s properties, shown with nothing selected, and Escape selects nothing', async ({
+    page,
+  }) => {
+    await sidebar(page).getByRole('tab', { name: 'Properties' }).click();
+    const pageTabs = sidebar(page).getByRole('heading', { name: 'Page tabs', level: 3 });
+    await expect(pageTabs).toBeVisible();
+    // A tile selected: its own properties, and not the dashboard's (F19).
+    await firstChart(page).click();
+    await expect(pageTabs).toHaveCount(0);
+    // Escape lets go of the selection, as the prototype's does.
+    await page.keyboard.press('Escape');
+    await expect(pageTabs).toBeVisible();
+    await expect(firstChart(page)).not.toHaveAttribute('data-selected', 'true');
+  });
+
+  test('the Outline’s rows carry the kind’s 18 px chip, padded 0 12 0 26', async ({ page }) => {
+    await sidebar(page).getByRole('tab', { name: 'Outline' }).click();
+    const row = sidebar(page).locator('.outline__row').first();
+    // <button class="file" style="padding-left:26px"><span class="ficon dim" style="width:18px;height:18px"> (mismatch 26)
+    expect(await style(row, 'padding-top', 'padding-right', 'padding-left')).toEqual({
+      'padding-top': '0px',
+      'padding-right': '12px',
+      'padding-left': '26px',
+    });
+    expect(
+      await style(row.locator('.outline__icon'), 'width', 'height', 'background-color', 'color'),
+    ).toEqual({
+      width: '18px',
+      height: '18px',
+      'background-color': await token(page, 'bg-role-dimension-soft', 'background-color'),
+      color: await token(page, 'role-dimension'),
+    });
+  });
+});

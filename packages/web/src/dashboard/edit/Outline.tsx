@@ -1,4 +1,5 @@
 import { firstReadingOf } from '../../tiles/Markdown';
+import { KIND_ICON } from './kindIcon';
 import { elementAt, placeOf, type DashboardDocument, type Element_ } from '../model/document';
 
 /**
@@ -37,19 +38,6 @@ const KIND_LABEL: Record<string, string> = {
   filter: 'Filter',
   section: 'Section',
   tabs: 'Tab group',
-};
-
-/** The prototype's kind icons, for the eye; the label says the same in words. */
-const KIND_ICON: Record<string, string> = {
-  chart: '▦',
-  markdown: 'M↓',
-  header: 'H',
-  divider: '—',
-  image: '◩',
-  link: '↗',
-  filter: '⏷',
-  section: '▤',
-  tabs: '⊟',
 };
 
 /** How a row names an element: its kind, then what the reader knows it by. */

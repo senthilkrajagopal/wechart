@@ -3436,22 +3436,24 @@ export function DashboardView({
               {/**
                * The dashboard's page tabs, each deletable (AC-060), as the
                * prototype's Properties shows them rather than a row of ×
-               * under the tabs (AC-187). Always here, below the tile's own
-               * settings: a selection has no way back to none, and deleting a
-               * page must not wait on one.
+               * under the tabs (AC-187): the dashboard's own properties, shown
+               * with nothing selected, not under a tile's (T248, F19). Escape
+               * and an "＋ Add" slot both let go of a selection.
                */}
-              <PageTabsProperties
-                document={session.document}
-                onDelete={(page) => {
-                  const deletion = { kind: 'page', id: page } as const;
-                  const said = describeDeletion(session.document, deletion);
-                  const next = deleteFromDashboard(session.document, deletion);
-                  if (next === session.document) return;
-                  session.change(next);
-                  setDeleted(said);
-                  if (page === pageId) setOpenPage(next.pages[0]?.id ?? '');
-                }}
-              />
+              {selected === null ? (
+                <PageTabsProperties
+                  document={session.document}
+                  onDelete={(page) => {
+                    const deletion = { kind: 'page', id: page } as const;
+                    const said = describeDeletion(session.document, deletion);
+                    const next = deleteFromDashboard(session.document, deletion);
+                    if (next === session.document) return;
+                    session.change(next);
+                    setDeleted(said);
+                    if (page === pageId) setOpenPage(next.pages[0]?.id ?? '');
+                  }}
+                />
+              ) : null}
             </>
           ),
         })}
@@ -3948,6 +3950,15 @@ function DashboardPages({
      */
     onTileKeyDown: editing
       ? (event, tile) => {
+          // Escape lets go of the selection, as the prototype's does (T248):
+          // with nothing selected, Properties is the dashboard's own, its
+          // page tabs among them. A section as much as a tile.
+          if (event.key === 'Escape' && where.selected !== null) {
+            event.preventDefault();
+            event.stopPropagation();
+            onAim({ selected: null, addTarget: where.addTarget });
+            return;
+          }
           /**
            * Only a tile, exactly as the drag refuses containers. AC-057 says
            * "a tile", and Delete is the most destructive of the four keys —

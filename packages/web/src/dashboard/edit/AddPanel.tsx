@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { FILTER_WIDGETS, type FilterWidget } from '../../filters/model';
 import { StateLine } from '../../shell/StatusIcon';
 import { PALETTE, type PaletteId } from '../model/insert';
+import { KIND_ICON } from './kindIcon';
 import { SECTION_TEMPLATES, type TemplateId } from './templates';
 
 /**
@@ -80,6 +81,10 @@ export function AddPanel({
                   onAdd(entry.id);
                 }}
               >
+                {/* The prototype's kind chip (T248); the label names it. */}
+                <span className="add-panel__icon" aria-hidden="true">
+                  {KIND_ICON[entry.id] ?? '•'}
+                </span>
                 <span className="add-panel__label">{entry.label}</span>
                 <span className="add-panel__hint">{entry.hint}</span>
               </button>

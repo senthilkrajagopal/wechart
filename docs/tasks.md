@@ -3735,11 +3735,21 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
       - beside a Header or Divider (where, since T247 took their padding, it had sat on the heading's text; T247's review, finding 3).
       An element with no row of its own, such as Markdown or an image, keeps it at its corner.
     - **The edit grid:** each column is a band tinted 4 % accent, and 10 % while resizing; they were 1 px rules.
-- [ ] T248 (AC-187) Put the edit sidebar under the filter band, and match its palette, add slots, Properties and Outline to the prototype
-  - Files: `packages/web/src/dashboard/edit/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+- [x] T248 (AC-187) Put the edit sidebar under the filter band, and match its palette, add slots, Properties and Outline to the prototype
+  - Files: `packages/web/src/dashboard/edit/{AddPanel,Outline,kindIcon}.{tsx,ts}`, `packages/web/src/dashboard/grid/Canvas.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/edit/discard.test.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: the sidebar starts below a full-width band; palette rows carry the 24 px kind chip; the add slot is "＋ Add" at 56 px; Properties' buttons are full width and its limit rows 12/600; Outline rows carry the kind chip; the page-tab list is not under a tile's properties (recheck-dashboard F19, F23; mismatches 22–26).
   - Depends on: none
   - The sidebar already starts below a full-width band, done with T246's move of the band. Its test is T246's "the filter band: … full width while editing".
+  - Done 2026-09-24, all three browsers. `e2e/design-conformance.spec.ts` "T248: …" has four tests, and all four failed first.
+    - **The palette:** each row carries its kind's 24 px chip, `role-dimension` on its tint, 10 px from its name and hint. Rows are 50 px. The icons are shared with the Outline (`edit/kindIcon.ts`).
+    - **The add slot** is the prototype's `.dadd`, 56 px at 600, reading "＋ Add". An empty container reads "＋ Add a chart, section or text", or "＋ Add to this section" or "…tab". Its accessible name still names the container.
+    - **Properties:**
+      - the chart's title is 14 px;
+      - Edit chart and Save to folders… are full width;
+      - the limit list is 12/16/600 secondary over 28 px rows at 12/600;
+      - a selected tile's ring is 2 px out.
+    - **The Outline:** rows padded 0 12 with an 18 px chip.
+    - **The page tabs are the dashboard's own properties**, shown with nothing selected rather than under a tile's (F19). Escape on a selected element lets go of it, as the prototype's does, and an "＋ Add" slot already did. `discard.test.tsx`'s session now presses Escape before deleting a page, as a user would.
 - [ ] T249 (AC-187, AC-231) Give the dashboard settings page the prototype's bar, nav, content and tables, with Escape and an inactive banner
   - Files: `packages/web/src/dashboard/settings/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: a 41 px bar titled "Dashboard settings" with 24 px buttons and a primary Save; a 220 px nav with `accent-soft` selection; flat content with an 18 px h2; mode cards with descriptions; an inactive section says so in a banner; Escape leaves as Cancel does; markings tables at 29 px rows (recheck-dashboard F26–F29; mismatches 27–35).
