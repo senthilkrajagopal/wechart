@@ -208,6 +208,15 @@ Paths are under `node_modules/.pnpm/echarts@6.1.0/node_modules/echarts/lib/`.
   - `component/legend/LegendModel.js` (around lines 256–259) defaults `padding: 5`, `itemWidth: 25` and `itemHeight: 14`.
   - **Consequence:** `legend.textStyle: { width, overflow: 'truncate' }` keeps a legend's names within the room made for it. In a side room of R px that width is R − 2 × 5 − 25 − 5. wechart does this for a pie's side legend only (T309).
 
+### `showTip` on a data item (read from the 6.1.0 source, 2026-09-25, for T306)
+
+- `component/tooltip/install.js` (around lines 60–70) registers the `showTip` and `hideTip` actions.
+- `component/tooltip/TooltipView.js`, `manuallyShowTip` (around lines 162–255), shows the tooltip of a data item for `dispatchAction({ type: 'showTip', seriesIndex, dataIndex })`:
+  - where the tooltip's trigger is `'axis'`, through `_manuallyAxisShowTip` (around lines 266–296), which moves the axis pointer to that item;
+  - otherwise at the item's point, positioned `'bottom'` by default.
+- It returns early under `env.node`, or without a DOM (around line 179). So an SSR render shows no tooltip, and it is observable only in a browser.
+- `hideTip` hides it again (`manuallyHideTip`, around lines 256–265).
+
 ## Alternatives considered
 
 Not requested — ECharts is fixed by `CLAUDE.md`. No React wrapper is used; `echarts-for-react` was not evaluated.

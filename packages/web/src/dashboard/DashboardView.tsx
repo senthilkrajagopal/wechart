@@ -449,6 +449,14 @@ function masterTileNames(
   return [...names];
 }
 
+/** A tile's spec with the item its keyboard is on, where it is on one (T306). */
+function withKeyboardItem(
+  spec: RenderSpec | undefined,
+  item: string | undefined,
+): RenderSpec | undefined {
+  return spec === undefined || item === undefined ? spec : { ...spec, keyboardFocus: item };
+}
+
 function TileBody({
   tile,
   spec,
@@ -786,6 +794,8 @@ interface TileCharts {
     ((tileId: string, chartId: string) => ChartTileProps['rowMarking']) | undefined;
   /** Why a tile is not marked: its cube cannot reach the marking's members (AC-103). */
   readonly notLinked?: Readonly<Record<string, string>> | undefined;
+  /** The item a tile's keyboard is on, while the tile has the keyboard (T306, AC-176). */
+  readonly keyboardFocusOn?: ((tileId: string) => string | undefined) | undefined;
   /**
    * Why a marking-limited tile is showing something other than its chart
    * (AC-109, AC-111), by chart. A limited tile that has data to show is not
@@ -1322,7 +1332,7 @@ function Elements({
                 ].filter((note) => note !== null);
                 return said.length === 0 ? undefined : said;
               })()}
-              spec={charts.specs[chartId]}
+              spec={withKeyboardItem(charts.specs[chartId], charts.keyboardFocusOn?.(element.id))}
               error={charts.errors[chartId]}
               loading={charts.loading}
               // Asked again by a filter, or refreshed: either way, said (T183's review).
@@ -1969,6 +1979,29 @@ export function DashboardView({
   const [markFocus, setMarkFocus] = useState<
     Readonly<Record<string, { readonly focused: number; readonly anchor: number | null }>>
   >({});
+  /**
+   * The tile whose keyboard item is drawn (T306, AC-176): from its first
+   * marking key until focus leaves it or the pointer is used. Where the
+   * keyboard was is kept (`markFocus`); only the ring goes, since a ring left
+   * on a tile nobody is at would say the keyboard is still there.
+   */
+  const [keyShownOn, setKeyShownOn] = useState<string | null>(null);
+  useEffect(() => {
+    if (keyShownOn === null) return undefined;
+    const tile = [...window.document.querySelectorAll<HTMLElement>('[data-tile]')].find(
+      (each) => each.dataset['tile'] === keyShownOn,
+    );
+    const letGo = (event: Event) => {
+      if (event.type === 'focusin' && event.target === tile) return;
+      setKeyShownOn(null);
+    };
+    window.document.addEventListener('focusin', letGo);
+    window.document.addEventListener('pointerdown', letGo, true);
+    return () => {
+      window.document.removeEventListener('focusin', letGo);
+      window.document.removeEventListener('pointerdown', letGo, true);
+    };
+  }, [keyShownOn]);
   const [marksMode, setMarksMode] = useState(interactions.mode);
   if (marksMode !== interactions.mode) {
     setMarksMode(interactions.mode);
@@ -2705,6 +2738,8 @@ export function DashboardView({
       ...now,
       [tileId]: { focused: result.focused, anchor: result.anchor },
     }));
+    // Drawn from now until the keyboard leaves the tile (T306).
+    setKeyShownOn(tileId);
 
     const itemAt = (index: number) => [{ member, value: items[index] ?? '' }];
     switch (result.action) {
@@ -3376,6 +3411,11 @@ export function DashboardView({
               );
             };
           },
+          // The item its keyboard is on, while it has the keyboard (T306).
+          keyboardFocusOn: (tileId: string) =>
+            keyShownOn === tileId
+              ? markableItemsOf(tileId)[markFocus[tileId]?.focused ?? 0]
+              : undefined,
           markingOn: (tileId: string) => {
             const element = elementAt(live, tileId);
             if (element === null || !isTile(element)) return undefined;
@@ -3917,49 +3957,49 @@ export function DashboardView({
           // settings' Save writes it (T250's review). An edit session already
           // open keeps it, as it keeps its bar.
           narrow && !session.editing ? null : (
-          <button
-            ref={gear}
-            type="button"
-            className="dashboard__gear icon-button"
-            aria-label="Dashboard settings"
-            title="Dashboard settings"
-            /**
-             * Not while a save is under way (AC-184, T197). The header is
-             * outside the body a save makes inert, and a settings save made now
-             * goes to a session that takes no change — the page would close
-             * with the settings lost and nothing said.
-             */
-            // aria-disabled, not disabled: focus is given back to the gear as
-            // the settings page closes, and a natively disabled gear, while a
-            // view-mode save was answering, took none (T182's second round).
-            aria-disabled={session.saving ? 'true' : undefined}
-            onClick={() => {
-              if (session.saving) return;
-              // In view mode the settings page is an edit of its own, begun now
-              // with the dashboard as it stands: its save is checked against
-              // this moment's version (T198, AC-015). While editing, it is part
-              // of the session, which began earlier.
-              if (!session.editing) onEditStart?.();
-              setSettingsSection('General');
-              setSettingsOpen(true);
-            }}
-          >
-            {/* The prototype's gear (AC-187). */}
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+            <button
+              ref={gear}
+              type="button"
+              className="dashboard__gear icon-button"
+              aria-label="Dashboard settings"
+              title="Dashboard settings"
+              /**
+               * Not while a save is under way (AC-184, T197). The header is
+               * outside the body a save makes inert, and a settings save made now
+               * goes to a session that takes no change — the page would close
+               * with the settings lost and nothing said.
+               */
+              // aria-disabled, not disabled: focus is given back to the gear as
+              // the settings page closes, and a natively disabled gear, while a
+              // view-mode save was answering, took none (T182's second round).
+              aria-disabled={session.saving ? 'true' : undefined}
+              onClick={() => {
+                if (session.saving) return;
+                // In view mode the settings page is an edit of its own, begun now
+                // with the dashboard as it stands: its save is checked against
+                // this moment's version (T198, AC-015). While editing, it is part
+                // of the session, which began earlier.
+                if (!session.editing) onEditStart?.();
+                setSettingsSection('General');
+                setSettingsOpen(true);
+              }}
             >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
+              {/* The prototype's gear (AC-187). */}
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
           )
         }
         /**
@@ -5219,7 +5259,9 @@ function DashboardPages({
             {/* How to begin only where it can be begun: not while previewing,
                 nor in a narrow window (T250's review). */}
             <p>
-              {canEdit ? 'Nothing here yet. Edit the dashboard to add charts.' : 'Nothing here yet.'}
+              {canEdit
+                ? 'Nothing here yet. Edit the dashboard to add charts.'
+                : 'Nothing here yet.'}
             </p>
             {/* Not while previewing, where the dashboard cannot be edited. */}
             {canEdit ? (

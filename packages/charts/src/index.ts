@@ -46,6 +46,7 @@ export {
   type KeyboardState,
 } from './interaction/keyboardMarking';
 export { markFromPanel, panelOfTitleClick } from './interaction/panelMark';
+export { FOCUS_RING_PX, focusedItemOf } from './marking/focus';
 export {
   MARKED_OUTLINE_PX,
   UNMARKED_OPACITY,

@@ -48,6 +48,8 @@ function swapsFor(theme: ChartTheme): ReadonlyMap<string, string> {
   // `border-subtle` when the user turns them on (axis.ts).
   swaps.set(COLORS.light['border-subtle'].toLowerCase(), COLORS.dark['border-subtle']);
   swaps.set(COLORS.light['border-strong'].toLowerCase(), COLORS.dark['border-strong']);
+  // The ring on the item the keyboard is on (T306), in the theme's accent.
+  swaps.set(COLORS.light.accent.toLowerCase(), COLORS.dark.accent);
   return swaps;
 }
 

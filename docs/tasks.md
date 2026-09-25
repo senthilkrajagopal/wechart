@@ -4630,11 +4630,26 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
     - By category with a 21-member second dimension, neither bar nor horizontal bar is offered.
     - The editor and Explore e2e specs that involve a recommendation still pass (372 runs, all three browsers).
   - **Consequence:** with no rows yet, a dimension's cardinality is unknown, and an unknown count fails a cap (legality.ts). So a chart over time split by a dimension is recommended as a table until its rows arrive. That is the recommender's existing rule for unknown counts, and it now covers these candidates too.
-- [ ] T306 (AC-176, AC-100) Draw the item a tile's keyboard focus is on, distinct from the marking outline
+- [x] T306 (AC-176, AC-100) Draw the item a tile's keyboard focus is on, distinct from the marking outline
   - From T182's review. AC-100's arrows move a focused item, but `markFocus` is state only. A sighted keyboard user cannot see which item Space will mark.
   - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/charts/src/markings/*`, `e2e/keyboard-coverage.spec.ts`
   - Failing test: after → in a focused chart tile, the focused item is drawn with an indicator that differs from the marked outline in colour or width, and it moves with the arrows (AC-176).
   - Depends on: T182
+  - **Done 2026-09-25.**
+    - **Core:** `RenderSpec.keyboardFocus` is the category the tile's keyboard is on.
+    - **Charts:** `marking/focus.ts`, applied after the marking.
+      - `withKeyboardFocus` rings that item, in every series of a split chart, with a dashed 2 px accent border. The marked outline is solid 1.5 px in the marking's ink, so they differ in dash, width and colour. It also finds a slice by its category, a treemap leaf by its name, and a heatmap cell by its column.
+      - A focused item that is marked keeps its outline: an item has one border, and the ring would hide the marking exactly where the keyboard is.
+      - `themed` turns the accent to the dark theme's.
+    - **Canvas:** `ChartCanvas` also shows the item's tooltip with ECharts' `showTip`, as the prototype's `dashboard.js` does, and hides it when the keyboard goes.
+      - Research: `research/echarts.md`, "`showTip` on a data item", read from the 6.1.0 source. It does nothing under SSR, so only the browser shows it.
+    - **Dashboard:** `DashboardView` draws it from the first marking key until focus leaves the tile or the pointer is used (`keyShownOn`). Where the keyboard was is kept.
+  - **Tests, red first:**
+    - `charts/marking/focus.test.ts` (8): only the focused item is ringed; nothing is ringed without focus; a marked item keeps its outline and an unmarked one beside it is ringed; the drawn SVG has one dashed accent path; the dark accent; a donut slice and a heatmap column; every series of a split chart; the item for its tooltip.
+    - `e2e/keyboard-coverage.spec.ts` "T306: the item the keyboard is on". On the seeded split bar, → rings the second category's three bars in the accent at 2 px, with its tooltip. ← moves the ring left. Space leaves the three 1.5 px outlines and the tooltip. → rings the unmarked category. Tab takes both away. It first failed with no ring drawn.
+    - A first version ringed marked items too, over their outline. It failed T182's own test "marking by the keyboard, under a focus ring unlike the marking's outline", which looks for the 1.5 px outline on the tile while it has focus. So marked items now keep their outline.
+    - Passes in all three browsers with keyboard-coverage, markings, crossfilter and dashboard (369 runs).
+  - AC-176 stays unchecked for T307.
 - [ ] T307 (AC-176) Reach the pointer-only chart actions from the keyboard
   - From T182's review. These could only be done with the pointer:
     - cross-filtering from a mark;

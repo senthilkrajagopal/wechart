@@ -2,6 +2,7 @@ import {
   CLICK_SLOP_PX,
   dragGesture,
   echarts,
+  focusedItemOf,
   itemClicks,
   itemsInShape,
   optionFor,
@@ -63,6 +64,8 @@ export function ChartCanvas({
   const theme = useThemeName();
   const node = useRef<HTMLDivElement | null>(null);
   const instance = useRef<ReturnType<typeof echarts.init> | null>(null);
+  /** Whether the tooltip up is the keyboard's (T306). */
+  const tipShown = useRef(false);
   const [canvas, setCanvas] = useState<Canvas | null>(null);
   /** The latest, read by a click without rebinding the handlers each render. */
   const clicked = useRef(onItemClick);
@@ -384,7 +387,25 @@ export function ChartCanvas({
     // notMerge: a chart type change replaces the option outright. Merging
     // would leave the previous type's series in place beside the new one.
     // In the theme the page is in (AC-211), and again when it switches.
-    chart.setOption(themed(optionFor(spec, canvas), theme), true);
+    const option = themed(optionFor(spec, canvas), theme);
+    chart.setOption(option, true);
+
+    /**
+     * The item the tile's keyboard is on, told as the prototype tells it: its
+     * tooltip, shown as a hover would (T306, AC-176; research/echarts.md
+     * "showTip"). Beside the ring `optionFor` draws, and in its place on a
+     * marked item, which keeps its marking's outline. Put away once the
+     * keyboard has gone, and only then: a tooltip the pointer brought is the
+     * pointer's.
+     */
+    const item = focusedItemOf(option, spec);
+    if (item !== undefined) {
+      chart.dispatchAction({ type: 'showTip', ...item });
+      tipShown.current = true;
+    } else if (tipShown.current) {
+      chart.dispatchAction({ type: 'hideTip' });
+      tipShown.current = false;
+    }
   }, [spec, theme, canvas]);
 
   return (
