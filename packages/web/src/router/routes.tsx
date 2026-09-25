@@ -12,6 +12,7 @@ import { useCallback, useRef, useState } from 'react';
 
 import { DashboardPage } from '../dashboard/DashboardPage';
 import { ChartEditor } from '../editor/ChartEditor';
+import { LibraryChartNote } from '../editor/LibraryChartNote';
 import { chartDocumentWith, editorViewOf, loadChart, type EditorState } from '../editor/openChart';
 import { withDrawnAs } from '../editor/drawnAs';
 import { tileChartOf } from '../dashboard/chartSpec';
@@ -281,7 +282,8 @@ function ChartEditorSurface() {
    * in the folder it was made in.
    */
   const save = useMutation({
-    mutationFn: async () => {
+    /** Where to go once it is written: its page, unless Back says otherwise. */
+    mutationFn: async (then: string) => {
       const loaded = chart.data;
       // Refused, not a silent success that goes to the page with nothing
       // written (T227's review).
@@ -304,13 +306,37 @@ function ChartEditorSurface() {
       if (response.status === 409)
         throw new Error('This chart was changed elsewhere since it was opened. Reopen it to see.');
       if (!response.ok) throw new Error(`Could not save the chart (${String(response.status)}).`);
+      return then;
     },
-    onSuccess: () => {
-      globalThis.location.assign(`/explore/charts/${encodeURIComponent(chartId)}`);
+    onSuccess: (then) => {
+      globalThis.location.assign(then);
     },
   });
 
   const local = chart.data?.document.localToDashboardId !== undefined;
+  const fresh = chart.data?.fresh === true;
+  const page = `/explore/charts/${encodeURIComponent(chartId)}`;
+  /**
+   * The prototype's way back (T256, recheck-chart-editor N2): to Explore, in
+   * the chart's folder, for a chart never saved; to its page otherwise. Like
+   * the prototype's, it applies the edit on the way: a changed library chart
+   * is saved first, and a failed save keeps the editor open with its reason.
+   * A dashboard's own chart is saved with that dashboard, so it just leaves.
+   */
+  const folderId = chart.data?.document.folderId;
+  const backTo = fresh
+    ? folderId === undefined
+      ? '/explore'
+      : `/explore?folder=${encodeURIComponent(folderId)}`
+    : page;
+  const changed =
+    edited !== undefined &&
+    view.kind === 'editor' &&
+    JSON.stringify(edited) !== JSON.stringify(view.initial);
+  const back = () => {
+    if (changed && !local) save.mutate(backTo);
+    else globalThis.location.assign(backTo);
+  };
 
   return (
     <AppShell workspace="explore">
@@ -339,17 +365,25 @@ function ChartEditorSurface() {
           initial={view.initial}
           onChange={setEdited}
           head={{
-            // Whose it is (AC-214): a library chart is shared from its folder.
-            badges: (
+            start: (
+              <button
+                type="button"
+                className="btn-sm"
+                data-testid="editor-back"
+                disabled={save.isPending}
+                onClick={back}
+              >
+                {fresh ? '← Back to Explore' : '← Back to chart'}
+              </button>
+            ),
+            // Whose it is (AC-214), in the prototype's words (T256): new in its
+            // folder, or shared and on how many dashboards.
+            badges: local ? (
               <span className="badge" data-testid="editor-ownership">
-                {local ? (
-                  'Local to a dashboard'
-                ) : (
-                  <>
-                    <span aria-hidden="true">⛓ </span>Shared
-                  </>
-                )}
+                Local to a dashboard
               </span>
+            ) : (
+              <LibraryChartNote chartId={chartId} folderId={folderId} fresh={fresh} />
             ),
             end: (
               <>
@@ -365,7 +399,7 @@ function ChartEditorSurface() {
                     type="button"
                     className="btn-primary btn-sm"
                     disabled={save.isPending || edited === undefined}
-                    onClick={() => save.mutate()}
+                    onClick={() => save.mutate(page)}
                   >
                     {save.isPending ? 'Saving…' : 'Save chart'}
                   </button>

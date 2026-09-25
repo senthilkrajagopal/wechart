@@ -3783,10 +3783,15 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - **The fix:** the editor now reports the chart as it reads, with the typed title included, and still takes one undo step when the typing is set down. Discard also drops a half-typed title.
   - Failing test: `e2e/chart-editor.spec.ts`: type a new title in "Chart title" and press Save chart without leaving the field. The chart page and the stored document carry the typed title. The same holds for Save dashboard and Back from a dashboard tile's editor (recheck-chart-editor N1; it lost the title on the main path for creating a chart).
   - Depends on: none
-- [ ] T256 (AC-214, AC-213) Give the chart editor the prototype's way back and its ownership note
+- [x] T256 (AC-214, AC-213) Give the chart editor the prototype's way back and its ownership note
   - Files: `packages/web/src/editor/*`, `packages/web/src/router/routes.tsx`, `e2e/chart-editor.spec.ts`
   - Failing test: the library-chart editor's header starts with "← Back to Explore" for a new chart, or "← Back to chart" for an existing one. The bare "Shared" badge is the prototype's note: "New shared chart in ‹folder›" or "Shared chart · on n dashboard(s)…" (recheck-chart-editor N2, F4).
   - Depends on: T255
+  - Done 2026-09-24, all three browsers. `e2e/chart-editor.spec.ts` "T256: …" has three tests, and all three failed first; `openChart.test.ts` covers the new-chart signal.
+    - **A new chart** is one with no cube chosen yet, which is how the server upgrades a chart New › Chart made (`source.cube` is '', "none chosen yet"). Its header starts with "← Back to Explore", which goes to the folder it was made in, and its note is "New shared chart in ‹folder›".
+    - **A built chart** starts with "← Back to chart", to its page. Its note says how many dashboards use it: "not on a dashboard yet", "on 1 dashboard · edits change it", or, with the warning icon, "on n dashboards · edits change all of them".
+    - **Back applies the edit, as the prototype's does** ("Apply and return"): a changed library chart is saved first, and a failed save keeps the editor open with its reason. Discard changes, then Back, leaves without saving. A dashboard's own chart just leaves, since it is saved with its dashboard.
+    - T228's test read the old "⛓ Shared" badge on the seeded empty chart; it now reads "New shared chart in Shared".
 - [ ] T257 (AC-187, AC-214) Match the chart editor's header, field list, wells, preview tile, drawer and empty state to the prototype, measured
   - Files: `packages/web/src/editor/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: computed against the prototype's rules. Undo and Redo as `.iconbtn`; the title input borderless at 15/600; field icons as 18 px role chips with a 6 px "used" dot; wells dashed with a 12/600 label and an inline "+" button; pills role-tinted at radius 4; the preview in a tile; the drawer's tabs showing; the empty state's two lines in the tile; one name for a member in the list and in the pills (recheck-chart-editor F4–F7, F18, N3–N5).

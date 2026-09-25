@@ -116,6 +116,13 @@ export async function loadChart(
    * be written safely, which the save has to refuse rather than guess.
    */
   readonly version: number | undefined;
+  /**
+   * Not built yet: no cube or view chosen, as `POST /api/documents` stores a
+   * new chart and the server upgrades it on read (`source.cube` is '', "none
+   * chosen yet", in `chart-migrations.ts`). The editor calls it a new chart and
+   * goes back to Explore from it, not to a chart page (T256).
+   */
+  readonly fresh: boolean;
 }> {
   const response = await fetchImpl(`/api/documents/chart/${encodeURIComponent(chartId)}`);
 
@@ -134,6 +141,7 @@ export async function loadChart(
     document,
     state: editorStateOf(document),
     version: typeof stored.version === 'number' ? stored.version : undefined,
+    fresh: document.chart.source.cube === '',
   };
 }
 

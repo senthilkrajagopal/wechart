@@ -754,8 +754,8 @@ test('the editor is three panes under one header row, its preview in view at 144
   const head = page.getByTestId('editor-bar');
   await expect(head.getByTestId('result-row-count')).toHaveText('3 rows');
   await expect(head).toContainText('Orders');
-  // A library chart: shared from its folder.
-  await expect(head.getByTestId('editor-ownership')).toHaveText('⛓ Shared');
+  // A library chart not yet saved: new, and shared from its folder (T256).
+  await expect(head.getByTestId('editor-ownership')).toHaveText('New shared chart in Shared');
   const title = head.getByLabel('Chart title');
   const before = await title.inputValue();
   await title.fill('Orders by status, renamed');
@@ -1165,4 +1165,134 @@ test('a manual combo, or a pie of too many slices, warns why and offers the reco
   await expect(page.getByTestId('type-warning')).toContainText(
     'A pie is readable up to 6 slices; this has 240.',
   );
+});
+
+/**
+ * T256 (AC-214, AC-213; recheck-chart-editor N2, F4): the library-chart
+ * editor's way back and its ownership note, as `explore.js` 174–183 gives
+ * them: "← Back to Explore" for a new chart and "← Back to chart" for one
+ * already saved, with "New shared chart in ‹folder›" or "Shared chart · on n
+ * dashboard(s)…". The prototype's Back applies the edit and returns.
+ */
+test.describe('T256: the library-chart editor’s way back and ownership note', () => {
+  const api = 'http://localhost:4100/api';
+
+  /** A saved library chart in Finance, on `dashboards` dashboards of its own. */
+  async function savedChart(
+    request: import('@playwright/test').APIRequestContext,
+    dashboards: number,
+  ) {
+    const title = `Shared orders ${String(Date.now())}`;
+    const { id } = (await (
+      await request.post(`${api}/documents`, {
+        data: { kind: 'chart', title, folderId: 'seed-folder-0' },
+      })
+    ).json()) as { id: string };
+    await request.put(`${api}/documents/chart/${id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          owner: 'admin',
+          folderId: 'seed-folder-0',
+          chart: {
+            source: { cube: 'orders' },
+            wells: {
+              measures: ['orders.count'],
+              dimensions: ['orders.status'],
+              timeDimensions: [],
+            },
+            chartType: 'bar',
+          },
+        },
+      },
+    });
+    for (let each = 0; each < dashboards; each += 1) {
+      const name = `${title} board ${String(each)}`;
+      const board = (await (
+        await request.post(`${api}/documents`, {
+          data: { kind: 'dashboard', title: name, folderId: 'root' },
+        })
+      ).json()) as { id: string };
+      await request.put(`${api}/documents/dashboard/${board.id}`, {
+        data: {
+          version: 1,
+          body: {
+            schemaVersion: 1,
+            title: name,
+            folderId: 'root',
+            owner: 'admin',
+            settings: { width: 'fixed' },
+            pages: [
+              {
+                id: 'only',
+                title: 'Only',
+                items: [{ id: 'tile-shared', kind: 'chart', w: 6, h: 40, chartId: id }],
+              },
+            ],
+          },
+        },
+      });
+    }
+    return { id, title };
+  }
+
+  test('a new chart: "← Back to Explore" first in the header, and the folder it is new in', async ({
+    page,
+  }) => {
+    await page.goto('/explore?folder=seed-folder-0');
+    const contents = page.getByTestId('explore-contents');
+    await contents.getByRole('button', { name: 'New', exact: true }).click();
+    await page
+      .getByRole('menu', { name: 'New' })
+      .getByRole('menuitem', { name: /Chart$/ })
+      .click();
+    await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit$/);
+
+    const head = page.getByTestId('editor-bar');
+    const back = head.getByRole('button', { name: '← Back to Explore' });
+    await expect(back).toBeVisible();
+    // At the start of the row, before the title.
+    const [first] = await head.evaluate((row) =>
+      [...row.querySelectorAll('button, input')].map(
+        (control) => control.getAttribute('aria-label') ?? control.textContent,
+      ),
+    );
+    expect(first).toBe('← Back to Explore');
+    await expect(head.getByTestId('editor-ownership')).toHaveText('New shared chart in Finance');
+
+    // Nothing changed: back to the folder it was made in.
+    await back.click();
+    await expect(page).toHaveURL(/\/explore\?folder=seed-folder-0$/);
+  });
+
+  test('a saved chart: "← Back to chart", the dashboards it is on, and Back keeps the edit', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await savedChart(request, 2);
+    await page.goto(`/explore/charts/${id}/edit`);
+    const head = page.getByTestId('editor-bar');
+    await expect(head.getByTestId('result-row-count')).toHaveText('3 rows');
+    // On more than one dashboard: said as a warning, with its icon.
+    const note = head.getByTestId('editor-ownership');
+    await expect(note).toHaveText('Shared chart · on 2 dashboards · edits change all of them');
+    await expect(note.locator('svg[data-icon="warn"]')).toHaveCount(1);
+
+    // The prototype's Back applies the edit and returns: here, saves it.
+    const renamed = `Renamed ${String(Date.now())}`;
+    await head.getByLabel('Chart title').fill(renamed);
+    await head.getByRole('button', { name: '← Back to chart' }).click();
+    await expect(page).toHaveURL(new RegExp(`/explore/charts/${id}$`));
+    await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText(renamed);
+  });
+
+  test('a saved chart on no dashboard says so', async ({ page, request }) => {
+    const { id } = await savedChart(request, 0);
+    await page.goto(`/explore/charts/${id}/edit`);
+    await expect(page.getByTestId('editor-bar').getByTestId('editor-ownership')).toHaveText(
+      'Shared chart · not on a dashboard yet',
+    );
+  });
 });
