@@ -398,6 +398,16 @@ export function Canvas({
                 className="grid-tile__grip"
                 data-testid={`grip-${tile.id}`}
                 /**
+                 * Not a dead stop (T182): pressed from the keyboard it hands
+                 * focus to its tile, which is the keyboard's handle — the
+                 * tile's arrow keys move it (AC-057) and its name says so.
+                 */
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  event.currentTarget.closest<HTMLElement>('[data-tile]')?.focus();
+                }}
+                /**
                  * A real button with a name, not a bare handle: it is what a
                  * screen reader announces as the thing that moves this tile,
                  * and where T063's keyboard move will hang. Pressing it does

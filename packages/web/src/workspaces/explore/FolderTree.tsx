@@ -85,7 +85,34 @@ export function FolderTree({
   };
 
   return (
-    <ul role="tree" aria-label="Folders" className="folder-tree">
+    // A tree's arrow keys (T182, AC-176): ↑ and ↓ move between folders in
+    // the order shown, Home and End to the first and last. Each folder is
+    // still a button, so Tab and Enter do as they did.
+    <ul
+      role="tree"
+      aria-label="Folders"
+      className="folder-tree"
+      onKeyDown={(event) => {
+        const labels = [
+          ...event.currentTarget.querySelectorAll<HTMLElement>('.folder-tree__label'),
+        ];
+        const at = labels.indexOf(event.target as HTMLElement);
+        if (at < 0) return;
+        const next =
+          event.key === 'ArrowDown'
+            ? Math.min(at + 1, labels.length - 1)
+            : event.key === 'ArrowUp'
+              ? Math.max(at - 1, 0)
+              : event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? labels.length - 1
+                  : -1;
+        if (next < 0) return;
+        event.preventDefault();
+        labels[next]?.focus();
+      }}
+    >
       {roots.map((root) => node(root, 1))}
     </ul>
   );

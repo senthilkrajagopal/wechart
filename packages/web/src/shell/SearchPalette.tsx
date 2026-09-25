@@ -136,16 +136,25 @@ export function SearchPalette() {
         if (!open) show();
         return;
       }
-      if (event.key === 'Escape' && open) {
-        event.preventDefault();
-        close();
-      }
+    }
+    /**
+     * Escape closes the palette and nothing else (T182, AC-176). Heard on the
+     * way down and kept there: opened over a dialog, the dialog's own Escape
+     * closed it too, and focus went back to a dialog that was gone.
+     */
+    function onEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape' || !open || event.isComposing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
     }
 
     document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', onEscape, true);
     window.addEventListener(OPEN_SEARCH, show);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keydown', onEscape, true);
       window.removeEventListener(OPEN_SEARCH, show);
     };
   }, [open, close, show]);

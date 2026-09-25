@@ -225,6 +225,7 @@ import {
 } from './tiles/NothingMarked';
 import { clauseOf } from './grid/sentence';
 import { useNarrowWindow } from './useNarrowWindow';
+import { onTabKey } from '../shell/tabKeys';
 import { duplicateChartTile, duplicatePlainTile } from './model/duplicate';
 import { withLocalCharts } from './model/localCharts';
 
@@ -1474,12 +1475,20 @@ function TabGroupView({
             type="button"
             role="tab"
             aria-selected={tab.id === showing?.id}
+            // One Tab stop, the arrows along it (T182, APG tabs).
+            tabIndex={tab.id === showing?.id ? 0 : -1}
             /**
              * A tile dropped here goes into this tab, whether or not it is the
              * one on screen — the case AC-056 singles out.
              */
             data-droptab={tabKey(group.id, tab.id)}
             onClick={() => setOpen(tab.id)}
+            onKeyDown={(event) => {
+              onTabKey(event, (index) => {
+                const chosen = group.tabs[index];
+                if (chosen !== undefined) setOpen(chosen.id);
+              });
+            }}
           >
             {tab.title}
           </button>
@@ -1495,6 +1504,16 @@ function TabGroupView({
                 aria-label={`Delete tab ${tab.title}`}
                 onClick={() => {
                   affordances.onDeleteTab?.(group.id, tab.id);
+                  // Onto the group's tab now showing, not the page (T182).
+                  requestAnimationFrame(() => {
+                    const strip = window.document.querySelector(
+                      `[data-tab-group="${CSS.escape(group.id)}"] [role="tablist"]`,
+                    );
+                    (
+                      strip?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ??
+                      strip?.querySelector<HTMLElement>('[role="tab"]')
+                    )?.focus();
+                  });
                 }}
               >
                 <span aria-hidden="true">×</span>
@@ -3850,8 +3869,12 @@ export function DashboardView({
              * goes to a session that takes no change — the page would close
              * with the settings lost and nothing said.
              */
-            disabled={session.saving}
+            // aria-disabled, not disabled: focus is given back to the gear as
+            // the settings page closes, and a natively disabled gear, while a
+            // view-mode save was answering, took none (T182's second round).
+            aria-disabled={session.saving ? 'true' : undefined}
             onClick={() => {
+              if (session.saving) return;
               // In view mode the settings page is an edit of its own, begun now
               // with the dashboard as it stands: its save is checked against
               // this moment's version (T198, AC-015). While editing, it is part
@@ -4420,10 +4443,18 @@ function PageTabsRow({
             type="button"
             role="tab"
             aria-selected={page.id === showing?.id}
+            // One Tab stop, the arrows along it (T182, APG tabs).
+            tabIndex={page.id === showing?.id ? 0 : -1}
             // A tile dropped on a page tab moves to that page (AC-056).
             data-droptab={pageKey(page.id)}
             onClick={() => {
               onOpenPage(page.id);
+            }}
+            onKeyDown={(event) => {
+              onTabKey(event, (index) => {
+                const chosen = document.pages[index];
+                if (chosen !== undefined) onOpenPage(chosen.id);
+              });
             }}
           >
             {page.title}
