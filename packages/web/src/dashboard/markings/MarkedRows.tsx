@@ -84,7 +84,10 @@ export function MarkedRows({
     for: string;
     state: { kind: 'error'; message: string } | { kind: 'rows'; value: RowsAnswer };
   }>();
-  const [note, setNote] = useState<{ kind: StateKind; text: string } | undefined>(undefined);
+  /** A download's note, about the marking it was made for (T269's review). */
+  const [noted, setNoted] = useState<
+    { for: string | null; kind: StateKind; text: string } | undefined
+  >(undefined);
 
   // The latest `load`: read once on opening, where the dialog shows one
   // answer; as the panel, again each time the marking's query changes, the
@@ -123,15 +126,26 @@ export function MarkedRows({
       : answered?.for === asking
         ? answered.state
         : ({ kind: 'loading' } as const);
+  const note = noted?.for === asking ? noted : undefined;
+  const setNote = (said: { kind: StateKind; text: string }) => {
+    setNoted({ ...said, for: asking });
+  };
 
   // Escape closes the dialog, as every dialog here closes; focus starts on
-  // Close. The panel takes neither: the dashboard beside it keeps its keys.
+  // Close. The panel takes neither: the dashboard beside it keeps its keys —
+  // but opened where the focus was lost, pinned from the dialog whose switch
+  // had it, the focus goes to its own switch (T269's review).
+  const follower = useRef<HTMLButtonElement>(null);
   const closing = useRef(onClose);
   useEffect(() => {
     closing.current = onClose;
   }, [onClose]);
   useEffect(() => {
-    if (panel) return undefined;
+    if (panel) {
+      if (document.activeElement === null || document.activeElement === document.body)
+        follower.current?.focus();
+      return undefined;
+    }
     closer.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closing.current();
@@ -188,11 +202,12 @@ export function MarkedRows({
       <div className="marked-rows__follow">
         <span id={`${named}-follow`}>Details panel: follow the marking</span>
         <button
+          ref={follower}
           type="button"
           role="switch"
           aria-checked={panel}
           aria-labelledby={`${named}-follow`}
-          className="switch"
+          className="marked-rows__switch"
           onClick={() => {
             if (follow !== undefined) follow.onChange(false);
             else onFollow?.(true);
@@ -208,6 +223,21 @@ export function MarkedRows({
           {heading}: {title}
         </h2>
         {toggle}
+        {/* The drawer's ×, as state G has it: the switch turned off. */}
+        {follow === undefined ? null : (
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Close the details panel"
+            onClick={() => {
+              follow.onChange(false);
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.6" />
+            </svg>
+          </button>
+        )}
       </div>
       {panel ? (
         // One query a marking change while it's on (the analysis, P3).

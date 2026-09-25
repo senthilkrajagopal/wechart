@@ -216,6 +216,59 @@ describe('the details panel', () => {
     expect(onFollow).toHaveBeenCalledWith(false);
   });
 
+  /** T269's review: pinned from the dialog, whose switch had focus, the focus lands on the panel's. */
+  it('takes the focus to its switch when it opens where the focus was lost', () => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    render(
+      panel(
+        'shipped',
+        vi.fn<Load>(async () => ({ rows: [], total: 0 })),
+      ),
+    );
+
+    expect(document.activeElement).toBe(
+      screen.getByRole('switch', { name: 'Details panel: follow the marking' }),
+    );
+  });
+
+  it('closes from its own Close too, as the drawer does', async () => {
+    const onFollow = vi.fn();
+    render(
+      panel(
+        'shipped',
+        vi.fn<Load>(async () => ({ rows: [], total: 0 })),
+        onFollow,
+      ),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close the details panel' }));
+    expect(onFollow).toHaveBeenCalledWith(false);
+  });
+
+  /** T269's review: a download's note is about the marking it was made for. */
+  it('puts away a download’s note when the marking changes', async () => {
+    const load = vi.fn<Load>(async () => ({ rows: ROWS, total: 2 }));
+    const view = (key: string) => (
+      <MarkedRows
+        title="By status"
+        heading="Marked rows"
+        load={load}
+        follow={{ key, onChange: vi.fn() }}
+        onClose={vi.fn()}
+        save={vi.fn()}
+      />
+    );
+    const { rerender } = render(view('shipped'));
+    const region = screen.getByRole('region', { name: 'Marked rows: By status' });
+    await within(region).findByRole('table');
+    await userEvent.click(within(region).getByRole('button', { name: 'Download CSV' }));
+    expect(await within(region).findByText(/Downloaded 2 rows/)).toBeTruthy();
+
+    rerender(view('returned'));
+    await within(region).findByRole('table');
+    expect(within(region).queryByText(/Downloaded 2 rows/)).toBeNull();
+  });
+
   it('is turned on from the one-off view’s switch', async () => {
     const onFollow = vi.fn();
     render(

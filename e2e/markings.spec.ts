@@ -2039,8 +2039,13 @@ test('the details panel follows the marking, and is turned off from the menu and
   await inView();
   await clickBar(page, status, 'processing');
   await expect(panel.getByTestId('rows-count')).toHaveText('Showing 80 of 80 rows');
+  // All 80 of them processing: an empty table, still loading, would not do
+  // (T269's review).
   await expect
-    .poll(async () => (await statuses()).every((text) => text.includes('processing')))
+    .poll(async () => {
+      const now = await statuses();
+      return now.length === 80 && now.every((text) => text.includes('processing'));
+    })
     .toBe(true);
   expect((await statuses()).some((text) => text.includes('shipped'))).toBe(false);
 
@@ -2063,12 +2068,76 @@ test('the details panel follows the marking, and is turned off from the menu and
     .getByRole('group', { name: /marked$/ })
     .getByRole('menuitem', { name: 'View marked rows' })
     .click();
-  await page
-    .getByRole('dialog', { name: 'Marked rows: By status' })
-    .getByRole('switch', { name: 'Details panel: follow the marking' })
-    .click();
+  const once = page.getByRole('dialog', { name: 'Marked rows: By status' });
+  // Its rows in first: the dialog is centred, and grows as they come, moving
+  // its switch from under a press still going on (Firefox).
+  await expect(once.getByTestId('rows-count')).toHaveText('Showing 80 of 80 rows');
+  await once.getByRole('switch', { name: 'Details panel: follow the marking' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(panel.getByTestId('rows-count')).toHaveText('Showing 80 of 80 rows');
+});
+
+/**
+ * T269's review: the details panel keeps to its own switch — a one-off view
+ * of rows leaves it on, and a Space in the menu leaves the focus there — and
+ * to marking: gone while editing, and in cross-filter mode (AC-120).
+ */
+test('the details panel stays on through a one-off view, and only while marking', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  const panel = page.getByRole('region', { name: 'Marked rows: By status' });
+  const menu = async () => {
+    await status.getByRole('button', { name: /^Actions for / }).click();
+    return status.getByRole('menu', { name: /^Actions for / });
+  };
+  await (await menu()).getByRole('menuitemcheckbox', { name: 'Details panel' }).click();
+  await status.evaluate((element) => {
+    element.scrollIntoView({ block: 'end' });
+  });
+  await clickBar(page, status, 'shipped');
+  await expect(panel.getByTestId('rows-count')).toHaveText('Showing 80 of 80 rows');
+
+  // A one-off view of the same rows, and closed: the panel is still on.
+  await (
+    await menu()
+  )
+    .getByRole('group', { name: /marked$/ })
+    .getByRole('menuitem', { name: 'View marked rows' })
+    .click();
+  const dialog = page.getByRole('dialog', { name: 'Marked rows: By status' });
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(panel.getByTestId('rows-count')).toHaveText('Showing 80 of 80 rows');
+
+  // Space on the menu's checkbox: off, and the focus still on it, in the open menu.
+  const item = (await menu()).getByRole('menuitemcheckbox', { name: 'Details panel' });
+  await item.focus();
+  await page.keyboard.press('Space');
+  await expect(panel).toHaveCount(0);
+  await expect(item).toHaveAttribute('aria-checked', 'false');
+  await page.waitForTimeout(100);
+  await expect(item).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(panel).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // Not while editing: no marking there, and no menu to turn it off from.
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  await page.getByRole('button', { name: 'Discard' }).click();
+  await expect(panel).toBeVisible();
+
+  // Nor in cross-filter mode, which marks nothing (AC-120).
+  await page.getByRole('button', { name: 'Dashboard settings' }).click();
+  await page.getByRole('button', { name: /^Interactions/ }).click();
+  await page.getByRole('radio', { name: /^Cross-filtering/ }).check();
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.getByTestId('dashboard-settings')).toHaveCount(0);
+  await expect(panel).toHaveCount(0);
 });
 
 /**

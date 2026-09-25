@@ -1690,17 +1690,20 @@ fieldset.model-field > legend {
   color: var(--wc-text-secondary);
 }
 .marked-rows__note { margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
-.switch {
+/* Two classes deep, so a dialog's own button rule (.dialog button) doesn't
+   draw it as a button (T269's review). */
+.marked-rows__follow .marked-rows__switch {
   position: relative;
   flex: none;
   width: 28px;
   height: 16px;
+  min-height: 0;
   padding: 0;
   border: 1px solid var(--wc-border-strong);
   border-radius: 8px;
   background: var(--wc-bg-subtle);
 }
-.switch::after {
+.marked-rows__follow .marked-rows__switch::after {
   content: '';
   position: absolute;
   top: 1px;
@@ -1710,14 +1713,22 @@ fieldset.model-field > legend {
   border-radius: 50%;
   background: var(--wc-text-secondary);
 }
-.switch[aria-checked='true'] { border-color: var(--wc-accent); background: var(--wc-accent); }
-.switch[aria-checked='true']::after { left: 13px; background: var(--wc-bg-surface); }
+.marked-rows__follow .marked-rows__switch[aria-checked='true'] {
+  border-color: var(--wc-accent);
+  background: var(--wc-accent);
+}
+.marked-rows__follow .marked-rows__switch[aria-checked='true']::after {
+  left: 13px;
+  background: var(--wc-bg-surface);
+}
 /* The details panel (T269, AC-240): the rows pinned open under the tiles,
-   which give it room rather than go under it; its own table scrolls. */
+   which give it room rather than go under it; its own table scrolls. Of one
+   height, rows or none, so the tiles don't move as each answer comes (T269's
+   review). */
 .dashboard__foot {
   flex: none;
   display: flex;
-  max-height: 40vh;
+  height: 36vh;
   border-top: 1px solid var(--wc-border-strong);
   background: var(--wc-bg-surface);
 }

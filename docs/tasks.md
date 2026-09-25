@@ -4363,6 +4363,23 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
       - `EditChrome` docks it under the tiles in a `foot` slot, and the canvas gives it room (at most 40% of the height) rather than going under it.
     - **Tests that failed first:** `MarkedRows.test.tsx`'s five details-panel cases, `TileViewMenu.test.tsx`'s checkbox, and the e2e.
     - **The e2e:** it scrolls the tile's foot into view before each click, because the panel shortens the canvas, the more once its rows come. Scrolling ECharts' own labels instead detached them in Safari, so `clickBar` is unchanged.
+  - **Review 2026-09-25 (FAIL; AC-240 met; fixed once):**
+    - **The panel outlived its tile and its mode.** It stayed in cross-filter mode, a regression of AC-120, and while editing, for a deleted tile, and for a tile on another page. It's now shown only while marking (markings mode, not editing, not previewing) and for a tile on the page shown.
+    - **It shared the one-off view's state,** so opening View marked rows or View underlying rows turned it off. It has a slot of its own now (`panelFor`).
+    - **Focus fixes:**
+      - Pinned from the dialog, whose switch had the focus, the focus goes to the panel's switch.
+      - Turned off from the menu, the focus stays in the menu, which a Space leaves open.
+      - Turned off from the panel, it goes to the tile's ⋯.
+    - **The dialog's switch was drawn as a button,** because `.dialog button` outranked `.switch`. The switch is now `.marked-rows__switch`, two classes deep. The generic `.switch` is gone.
+    - **The canvas resized twice a marking.** The panel is now 36vh high whether it holds rows or not.
+    - **Also fixed:**
+      - The panel has state G's Close ×.
+      - A download's note is about the marking it was made for, and goes when the marking changes.
+    - **Tests:**
+      - Failed first: `MarkedRows.test.tsx` "takes the focus to its switch…", "closes from its own Close too…" and "puts away a download's note…".
+      - Written after the fix: `e2e/markings.spec.ts` "the details panel stays on through a one-off view, and only while marking". It covers the one-off view, Space in the menu, edit mode and cross-filter mode.
+      - The first e2e now asks for 80 processing rows inside its poll, so a table still loading can't pass it, and waits for the one-off dialog's rows before pressing its switch. In Firefox the centred dialog grew under the press.
+    - **Left as they were:** the menu checkbox's place in the marked group isn't asserted, and nothing covers a tile deleted under the panel beyond its being hidden.
   - Files: `packages/web/src/dashboard/*`, `e2e/markings.spec.ts`
   - Failing test: with the panel on, a new marking replaces its rows and total; the menu's checkbox and the panel's own control both turn it off.
   - Depends on: T120, T266

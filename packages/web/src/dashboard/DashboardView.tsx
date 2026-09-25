@@ -2330,13 +2330,17 @@ export function DashboardView({
   const [menuRequest, setMenuRequest] = useState<
     { tileId: string; seq: number; at?: { x: number; y: number } } | undefined
   >(undefined);
-  /**
-   * The rows open (T120, T268): once, over the dashboard; or `following`, as
-   * the details panel under it, asked again as the marking changes (T269).
-   */
+  /** The rows open once, over the dashboard (T120, T268). */
   const [rowsFor, setRowsFor] = useState<
-    { chartId: string; tileId: string; marked: boolean; following?: boolean } | undefined
+    { chartId: string; tileId: string; marked: boolean } | undefined
   >(undefined);
+  /**
+   * The tile the details panel follows (T269, AC-240): a slot of its own, so
+   * a one-off view of rows opened meanwhile leaves it be (T269's review).
+   */
+  const [panelFor, setPanelFor] = useState<{ chartId: string; tileId: string } | undefined>(
+    undefined,
+  );
   /**
    * The charts a refresh was asked for (T154, AC-148): once its answer is in,
    * one a pre-aggregation served says so — Cube read it from the rollup as
@@ -3245,13 +3249,14 @@ export function DashboardView({
       }
     },
     // On for one tile at a time; on for another tile, it follows that one.
+    // Off from the menu, the focus stays in the menu, which a Space leaves
+    // open (T269's review).
     detailsPanelOf: (chartId: string, tileId: string) => {
-      const on = rowsFor?.following === true && rowsFor.tileId === tileId;
+      const on = panelFor?.tileId === tileId;
       return {
         on,
         onToggle: () => {
-          if (on) closeRows();
-          else setRowsFor({ chartId, tileId, marked: true, following: true });
+          setPanelFor(on ? undefined : { chartId, tileId });
         },
       };
     },
@@ -3564,10 +3569,18 @@ export function DashboardView({
    * asks again; none while nothing is marked.
    */
   const followed = (() => {
-    if (rowsFor?.following !== true) return undefined;
-    const query = rowsQueryOf(rowsFor.chartId, rowsFor.tileId, true, 1);
+    if (panelFor === undefined) return undefined;
+    const query = rowsQueryOf(panelFor.chartId, panelFor.tileId, true, 1);
     return query === undefined ? undefined : JSON.stringify(query);
   })();
+  /** The panel turned off from itself: the focus back on its tile's ⋯, where there is one. */
+  const closePanel = () => {
+    const tile = panelFor?.tileId ?? '';
+    setPanelFor(undefined);
+    requestAnimationFrame(() => {
+      window.document.querySelector<HTMLElement>(`[data-view-menu="${CSS.escape(tile)}"]`)?.focus();
+    });
+  };
   const closeRows = () => {
     const opener = rowsFor?.tileId ?? '';
     setRowsFor(undefined);
@@ -3784,6 +3797,18 @@ export function DashboardView({
 
   const [openPage, setOpenPage] = useState<string | null>(null);
   const pageId = openPage ?? document.pages[0]?.id ?? '';
+  /** Whether an element is on the page shown, in any section or tab of it. */
+  const onPageShown = (id: string) => {
+    const holds = (items: readonly Element_[]): boolean =>
+      items.some(
+        (element) =>
+          element.id === id ||
+          (isSection(element) && holds(element.items)) ||
+          (isTabGroup(element) && element.tabs.some((tab) => holds(tab.items))),
+      );
+    const page = document.pages.find((each) => each.id === pageId);
+    return page !== undefined && holds(page.items);
+  };
   /** What the last delete took, for the undo toast (AC-060). */
   const [deleted, setDeleted] = useState('');
   const where = {
@@ -3837,14 +3862,16 @@ export function DashboardView({
           }}
         />
       )}
-      {rowsFor === undefined || rowsFor.following === true ? null : (
+      {rowsFor === undefined ? null : (
         <MarkedRows
           {...rowsProps(rowsFor)}
-          // Marked rows only: pinned open, they follow the marking (AC-240).
+          // Marked rows only: pinned open, they follow the marking (AC-240),
+          // and the panel takes the focus the dialog had.
           {...(rowsFor.marked
             ? {
                 onFollow: () => {
-                  setRowsFor({ ...rowsFor, following: true });
+                  setPanelFor({ chartId: rowsFor.chartId, tileId: rowsFor.tileId });
+                  setRowsFor(undefined);
                 },
               }
             : {})}
@@ -3917,49 +3944,49 @@ export function DashboardView({
           // settings' Save writes it (T250's review). An edit session already
           // open keeps it, as it keeps its bar.
           narrow && !session.editing ? null : (
-          <button
-            ref={gear}
-            type="button"
-            className="dashboard__gear icon-button"
-            aria-label="Dashboard settings"
-            title="Dashboard settings"
-            /**
-             * Not while a save is under way (AC-184, T197). The header is
-             * outside the body a save makes inert, and a settings save made now
-             * goes to a session that takes no change — the page would close
-             * with the settings lost and nothing said.
-             */
-            // aria-disabled, not disabled: focus is given back to the gear as
-            // the settings page closes, and a natively disabled gear, while a
-            // view-mode save was answering, took none (T182's second round).
-            aria-disabled={session.saving ? 'true' : undefined}
-            onClick={() => {
-              if (session.saving) return;
-              // In view mode the settings page is an edit of its own, begun now
-              // with the dashboard as it stands: its save is checked against
-              // this moment's version (T198, AC-015). While editing, it is part
-              // of the session, which began earlier.
-              if (!session.editing) onEditStart?.();
-              setSettingsSection('General');
-              setSettingsOpen(true);
-            }}
-          >
-            {/* The prototype's gear (AC-187). */}
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+            <button
+              ref={gear}
+              type="button"
+              className="dashboard__gear icon-button"
+              aria-label="Dashboard settings"
+              title="Dashboard settings"
+              /**
+               * Not while a save is under way (AC-184, T197). The header is
+               * outside the body a save makes inert, and a settings save made now
+               * goes to a session that takes no change — the page would close
+               * with the settings lost and nothing said.
+               */
+              // aria-disabled, not disabled: focus is given back to the gear as
+              // the settings page closes, and a natively disabled gear, while a
+              // view-mode save was answering, took none (T182's second round).
+              aria-disabled={session.saving ? 'true' : undefined}
+              onClick={() => {
+                if (session.saving) return;
+                // In view mode the settings page is an edit of its own, begun now
+                // with the dashboard as it stands: its save is checked against
+                // this moment's version (T198, AC-015). While editing, it is part
+                // of the session, which began earlier.
+                if (!session.editing) onEditStart?.();
+                setSettingsSection('General');
+                setSettingsOpen(true);
+              }}
             >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
+              {/* The prototype's gear (AC-187). */}
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
           )
         }
         /**
@@ -4274,17 +4301,19 @@ export function DashboardView({
          * one page (AC-207).
          */
         // The details panel, docked under the tiles while it follows the marking (T269, AC-240).
+        // Only while marking — not in cross-filter mode (AC-120), not while
+        // editing — and for a tile on the page shown (T269's review).
         foot={
-          rowsFor?.following === true ? (
+          panelFor !== undefined && marking && onPageShown(panelFor.tileId) ? (
             <MarkedRows
-              {...rowsProps(rowsFor)}
+              {...rowsProps({ ...panelFor, marked: true })}
               follow={{
                 key: followed,
                 onChange: (on) => {
-                  if (!on) closeRows();
+                  if (!on) closePanel();
                 },
               }}
-              onClose={closeRows}
+              onClose={closePanel}
             />
           ) : undefined
         }
@@ -5219,7 +5248,9 @@ function DashboardPages({
             {/* How to begin only where it can be begun: not while previewing,
                 nor in a narrow window (T250's review). */}
             <p>
-              {canEdit ? 'Nothing here yet. Edit the dashboard to add charts.' : 'Nothing here yet.'}
+              {canEdit
+                ? 'Nothing here yet. Edit the dashboard to add charts.'
+                : 'Nothing here yet.'}
             </p>
             {/* Not while previewing, where the dashboard cannot be edited. */}
             {canEdit ? (
