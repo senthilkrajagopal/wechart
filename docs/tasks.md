@@ -3310,7 +3310,14 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - A cold-cache p95. The user ruled on 2026-09-22 that AC-174 is measured as users see it, Cube's cache included, so no cold reading is needed.
     - The budget held on the first run; no red phase was seen.
     - AC-174 ticked under these conditions.
-- [ ] T181 (AC-175) Meet the 3-second p95 for a marking change on a 10-chart dashboard
+- [x] T181 (AC-175) Meet the 3-second p95 for a marking change on a 10-chart dashboard
+  - Done 2026-09-25. **AC-175 is ticked** on `e2e/perf/marking-update.spec.ts` "a marking change on a ten-chart dashboard updates every tile within 3 s at the 95th percentile", run alone in Chrome, Firefox and Safari.
+    - **Case.** The heaviest the dashboards have: one tile marks and the other nine are limited by its marking (AC-107), so every change sends nine new Cube questions to the compose warehouse. The seed has three statuses, so there are seven different mark sets. Each of three rounds marks all seven, on the dashboard opened afresh, so no answer comes from the browser's cache: 21 changes. Each is timed from the click until nine `/api/load` requests are sent and answered and no tile is `aria-busy`, checked on animation frames.
+    - **Measured p95:** Chrome 1,312 ms, Firefox 1,261 ms, Safari 1,261 ms (budget 3,000). No client concurrency bound was needed, so the planned `query/concurrency.ts` wasn't written.
+    - **Caveats:**
+      - This is a measurement: the test was written against behaviour that already existed, and fails only if the budget is exceeded.
+      - AC-104's marked-share query (T110) isn't built. When it is, it adds a query to each tile that marks with a marking whose members aren't among its groupings, and this test should run again then (phase-2 backlog).
+      - Perf tests are known to be slower under the full parallel run, so they are run alone, as T180's is.
   - Files: `e2e/perf/marking-update.spec.ts`, `packages/web/src/query/concurrency.ts`
   - Failing test: `e2e/perf/marking-update.spec.ts`: the p95 time to update every affected tile after a marking change is under 3 s (AC-175). The client-side concurrency bound is set here against Cube's queue concurrency.
   - Depends on: T110, T180

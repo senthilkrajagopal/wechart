@@ -643,7 +643,7 @@ Traces to: `[R3]`, `[R7]`, direction.md rules 1–5, 39, 52.
 
 - [x] AC-174 WHEN a dashboard of 10 charts on live warehouse data is opened, THE SYSTEM SHALL render every tile within 3 seconds at the 95th percentile, measured from wechart's own query timings.
       Fails when: the p95 across a repeated run exceeds 3 seconds.
-- [ ] AC-175 WHEN a marking changes on a dashboard of 10 charts, THE SYSTEM SHALL update every affected tile within 3 seconds at the 95th percentile.
+- [x] AC-175 WHEN a marking changes on a dashboard of 10 charts, THE SYSTEM SHALL update every affected tile within 3 seconds at the 95th percentile.
       Fails when: the p95 update time exceeds 3 seconds.
 - [x] AC-176 THE SYSTEM SHALL make every action reachable from the keyboard: navigation, authoring, marking, filtering and every dialog, with a visible focus indicator distinct from the marking outline (direction.md rules 39, 52).
       Fails when: an action can be performed only with a pointer, or focus is invisible on any control.
