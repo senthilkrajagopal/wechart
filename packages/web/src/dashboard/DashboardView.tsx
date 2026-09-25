@@ -224,6 +224,7 @@ import {
   type NothingMarkedState,
 } from './tiles/NothingMarked';
 import { clauseOf } from './grid/sentence';
+import { useNarrowWindow } from './useNarrowWindow';
 import { duplicateChartTile, duplicatePlainTile } from './model/duplicate';
 import { withLocalCharts } from './model/localCharts';
 
@@ -1813,6 +1814,12 @@ export function DashboardView({
    * editing reaches the tiles as they are being edited.
    */
   const [live, setLive] = useState<DashboardDocument>(document);
+  /**
+   * Below 1,024 px a dashboard is for reading (T250, direction.md §2): no
+   * Edit, no ✎, and its tiles stacked by the stylesheet. An edit session
+   * already open when the window narrows keeps its bar, so nothing is lost.
+   */
+  const narrow = useNarrowWindow();
   /**
    * Whether the dashboard is being edited, mirrored up with it: clicking a
    * mark selects the tile while editing, so cross-filtering is off there —
@@ -3818,7 +3825,7 @@ export function DashboardView({
          * `whyUnsaveable` for the wording and why it names Undo, not Discard.
          */
         saveBlocked={(shown) => whyUnsaveable(shown, dashboardId)}
-        readOnly={preview !== undefined}
+        readOnly={preview !== undefined || narrow}
         onStart={onEditStart}
         onDiscard={onDiscard}
         headerActions={(session) => (
@@ -4289,7 +4296,7 @@ export function DashboardView({
             <DashboardPages
               session={session}
               charts={charts}
-              canEdit={preview === undefined}
+              canEdit={preview === undefined && !narrow}
               markSaid={markSaid}
               {...(marking ? { markKeys: { onKey: onTileMarkKey, itemsOn: markableItemsOf } } : {})}
               // A duplicate's chart is made from the stored one and what it
@@ -4302,7 +4309,7 @@ export function DashboardView({
               }}
               // Not while previewing a security context: the editor asks as
               // wechart (T172's review), so a preview is read, not edited.
-              onEditChart={preview === undefined ? openEditor : undefined}
+              onEditChart={preview === undefined && !narrow ? openEditor : undefined}
               onSaveToFolders={(tileId) => {
                 setSelected(tileId);
                 setAddTarget(null);

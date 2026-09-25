@@ -266,7 +266,11 @@ export function ChartTile({
               setAsTable(!showingTable);
             }}
           >
-            {showingTable ? 'Chart view' : 'Table view'}
+            {/* Its words, drawn as an icon in a narrow head (T250), where the
+                title needs the room; still its name and its text there. */}
+            <span className="tile-head__action-label">
+              {showingTable ? 'Chart view' : 'Table view'}
+            </span>
           </button>
         ) : null}
       </div>

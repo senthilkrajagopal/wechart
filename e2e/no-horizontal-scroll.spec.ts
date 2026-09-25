@@ -87,3 +87,134 @@ test('the model editor does not scroll sideways at 1,280 px', async ({ page }) =
   );
   expect(await overflowOf(page)).toEqual(NONE);
 });
+
+/**
+ * A chart tile's title keeps its room beside the tile's badges (T250): shown
+ * whole, or at least 64 px of it — eight characters or so — never squeezed to
+ * nothing, which a three-column tile's head did at 1,440 px beside
+ * "● Live · as of …" and "Table view" (the Superset parity exercise,
+ * 2026-09-25).
+ */
+async function titleRoom(tile: import('@playwright/test').Locator) {
+  return tile.locator('.tile-head__title').evaluate((title) => ({
+    width: title.clientWidth,
+    whole: title.scrollWidth <= title.clientWidth,
+  }));
+}
+
+/**
+ * T250 (AC-187), direction.md §2: "<1024: view mode only. Dashboards stack
+ * to one column." recheck-dashboard N2: at 390 px the tiles stayed side by
+ * side at 163 px, a chart's title was gone, and Edit was still offered.
+ */
+test.describe('T250: below 1,024 px, a dashboard is for reading', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('at 390 × 844 its tiles stack to one column, each keeps its title, and Edit is not offered', async ({
+    page,
+  }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await expect(drawnTile(page, 'tile-status')).toBeVisible({ timeout: 15_000 });
+
+    // One column: every element on the page as wide as the grid.
+    const grid = page.locator('.grid-canvas').first();
+    const gridWidth = await grid.evaluate(
+      (element) =>
+        element.clientWidth -
+        parseFloat(getComputedStyle(element).paddingLeft) -
+        parseFloat(getComputedStyle(element).paddingRight),
+    );
+    for (const id of ['tile-status', 'tile-notes', 'section-detail']) {
+      const width = (await page.locator(`[data-tile="${id}"]`).boundingBox())?.width ?? 0;
+      expect(Math.abs(width - gridWidth)).toBeLessThanOrEqual(1);
+    }
+    // Stacked, not side by side: the notes are below the chart.
+    const status = (await page.locator('[data-tile="tile-status"]').boundingBox())!;
+    const notes = (await page.locator('[data-tile="tile-notes"]').boundingBox())!;
+    expect(notes.y).toBeGreaterThanOrEqual(status.y + status.height);
+
+    // Each chart keeps its title.
+    for (const id of ['tile-status', 'tile-region']) {
+      const room = await titleRoom(page.locator(`[data-tile="${id}"]`));
+      expect(room.whole || room.width >= 64).toBe(true);
+    }
+
+    // For reading: no Edit, no ✎, no way into edit mode.
+    await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
+    await expect(page.locator('[data-edit-chart]')).toHaveCount(0);
+    // The canvas does not scroll sideways.
+    expect((await overflowOf(page)).canvas).toBe(0);
+  });
+
+  test('widened past 1,024 px, the dashboard is its grid again, and Edit comes back', async ({
+    page,
+  }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await expect(drawnTile(page, 'tile-status')).toBeVisible({ timeout: 15_000 });
+    await page.setViewportSize({ width: 1280, height: 844 });
+    const status = (await page.locator('[data-tile="tile-status"]').boundingBox())!;
+    const notes = (await page.locator('[data-tile="tile-notes"]').boundingBox())!;
+    // Side by side again, six columns each.
+    expect(notes.y).toBe(status.y);
+    await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+  });
+});
+
+test('a three-column chart tile keeps its title beside its badges at 1,440 px (T250)', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = 'http://localhost:4100/api';
+  const name = `Narrow tiles ${String(Date.now())}`;
+  const { id } = (await (
+    await request.post(`${api}/documents`, {
+      data: { kind: 'dashboard', title: name, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  const chart = (await (
+    await request.post(`${api}/documents`, {
+      data: { kind: 'chart', title: 'Orders by category and status', folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  await request.put(`${api}/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: 'Orders by category and status',
+        owner: 'admin',
+        localToDashboardId: id,
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+          chartType: 'bar',
+        },
+      },
+    },
+  });
+  await request.put(`${api}/documents/dashboard/${id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: name,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [{ id: 'tile-narrow', kind: 'chart', w: 3, h: 40, chartId: chart.id }],
+          },
+        ],
+      },
+    },
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  const tile = page.locator('[data-tile="tile-narrow"]');
+  await expect(tile.getByTestId('data-as-of')).toBeVisible({ timeout: 15_000 });
+  const room = await titleRoom(tile);
+  expect(room.whole || room.width >= 64).toBe(true);
+});

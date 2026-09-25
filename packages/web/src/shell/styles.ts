@@ -2723,8 +2723,11 @@ button.filter-pill__clear {
      (26 + 2 + 26, and its 8 px gap) and nothing lies under them. */
   padding-right: 62px;
 }
+/* The title takes the head's room before the freshness badge does (T250):
+   the badge gives way first, its words cut short with the whole sentence in
+   its tooltip, so a narrow tile never squeezes its title to nothing. */
 .tile-head__title {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -2739,6 +2742,34 @@ button.filter-pill__clear {
    row by a pixel each way, so the head stays the prototype's 22 (T252,
    mismatch 9) with the badges beside it. */
 .tile-head .tile-head__action { margin: -1px 0 -1px auto; }
+/* "Table view" keeps its words on one line; the title and badge give way. */
+.tile-head .tile-head__action { flex: none; white-space: nowrap; }
+/* In a narrow head — a three- or four-column tile, or a tile in a phone's
+   column (T250) — "Table view" is drawn as an icon, its words kept as its
+   text and name, so the title keeps room beside the freshness badge. */
+.chart-tile > .tile-head { container: tile-head / inline-size; }
+@container tile-head (max-width: 360px) {
+  .tile-head__action > .tile-head__action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .tile-head .tile-head__action { width: 24px; padding: 0; justify-content: center; }
+  /* Decorative: the empty alternative keeps the glyph out of its name. */
+  .tile-head .tile-head__action::before {
+    content: '⊞';
+    content: '⊞' / '';
+    font-size: 14px;
+    line-height: 1;
+  }
+  .tile-head .tile-head__action[aria-pressed='true']::before {
+    content: '▥';
+    content: '▥' / '';
+  }
+}
 /* A chart whose filtered answer is on its way (AC-078): still drawn, dimmed. */
 /* What is drawn fades while it is asked again; the head — the title, and the
    "Updating…" that says so — keeps its contrast (T183's review, AC-005). */
@@ -3014,6 +3045,16 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
    because the painted lines only agree with the real tracks while the canvas,
    the geometry and this rule all use the same gutter. */
 .grid-canvas { align-content: start; }
+/* direction.md §2, Breakpoints: "<1024: view mode only. Dashboards stack to
+   one column" (T250). Every element takes the whole row, in document order;
+   heights are kept. The grid's columns are set inline, hence !important. An
+   edit session still open when the window narrows keeps its grid. */
+@media (max-width: 1023.98px) {
+  .dashboard:not([data-editing='true']) .grid-canvas {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .dashboard:not([data-editing='true']) .grid-canvas > * { grid-column: 1 / -1 !important; }
+}
 /* The prototype's .gridlines: each column a band tinted 4 % accent, the
    gutters clear (T253, mismatch 20) — where 1 px rules marked only the
    columns' edges. */
@@ -3936,6 +3977,10 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 /* With "Refresh now" there, the head keeps room for three corner controls:
    26 + 2 + 26 + 2 + 26, and its 8 px gap. */
 .grid-tile:has(.tile-refresh) .tile-head { padding-right: 90px; }
+/* With no ✎ — a narrow window's reading view (T250), or a preview — Refresh
+   takes the pencil's place, and the head the room it leaves. */
+.grid-tile:has(.tile-refresh):not(:has(.tile-pencil)) > .tile-refresh:not(.tile-sql) { right: 44px; }
+.grid-tile:has(.tile-refresh):not(:has(.tile-pencil)):not(:has(.tile-sql)) .tile-head { padding-right: 62px; }
 /* A chart's SQL as the previewed context (T174): only while previewing, when
    there is no pencil, so it takes the pencil's place; a word, not an icon. */
 .tile-refresh.tile-sql {
@@ -3967,11 +4012,22 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 }
 .tile-freshness,
 .acceleration { gap: 4px; }
+/* Gives way to the title (T250): shrinks far faster than it, cutting its
+   words short rather than the title's — but never below "● Live…" or
+   "⚡ 40m…", its state's icon and word (rule 3); the whole in its tooltip. */
+.tile-freshness {
+  display: block;
+  flex: 0 100 auto;
+  min-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 22px;
+}
 /* Its two parts are one badge's text (T252): no pill of their own inside it.
    Kept on screen while the marking badge shows, where the prototype hides it:
    AC-013 fails on an accelerated tile without its mark. */
 .tile-freshness > .acceleration,
-.tile-freshness > .tile-as-of { height: auto; padding: 0; background: none; }
+.tile-freshness > .tile-as-of { display: inline; height: auto; padding: 0; background: none; }
 .acceleration--accelerated { color: var(--wc-status-success); }
 @media (hover: none) {
   .tile-refresh,

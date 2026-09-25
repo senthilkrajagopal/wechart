@@ -4138,10 +4138,16 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - A limit the tile cannot take is muted ink, where the prototype has opacity .5, which takes the text under AA.
     - Mismatch 35 (the cross-filter default's segmented control at 420 px, "against inline-flex") is not changed. On the prototype it measures the content's full width, 872 px, because it sits in a grid `.field`.
     - Layout keeps its radio cards; the prototype has a `.seg`. AC-075's tests choose "Full width" as a radio.
-- [ ] T250 (AC-187) Below 1,024 pixels, stack a dashboard to one column in view mode only, keeping every tile's title
+- [x] T250 (AC-187) Below 1,024 pixels, stack a dashboard to one column in view mode only, keeping every tile's title
   - Files: `packages/web/src/dashboard/*`, `packages/web/src/shell/styles.ts`, `e2e/no-horizontal-scroll.spec.ts`
   - Failing test: at 390×844 tiles are full width, each title is visible, and Edit is not offered (recheck-dashboard N2; direction.md §2).
   - Depends on: none
+  - **Done 2026-09-25, all three browsers.** `e2e/no-horizontal-scroll.spec.ts` "T250: below 1,024 px, a dashboard is for reading" and "a three-column chart tile keeps its title beside its badges at 1,440 px". The 390 px test and the three-column test failed first. The widening test guards the way back and passed from the start. `dashboard/useNarrowWindow.test.tsx` covers the hook.
+    - **One column, in view mode:** below 1,024 px every element of the grid takes the whole row, in document order, at its own height. The stylesheet does it, since the columns are set inline. An edit session already open when the window narrows keeps its grid and its bar, so nothing is lost.
+    - **For reading:** below 1,024 px (`useNarrowWindow`, `matchMedia`) the dashboard is read-only, as while previewing. There is no Edit, no ✎, no Start editing, and no "Edit chart" in the tile's menu. A new dashboard asked to open in edit mode opens to be read. Widened again, all of them come back.
+    - **Every tile keeps its title.** The title takes the head's room before the freshness badge. The badge gives way first, down to "● Live…" or "⚡ 40m…", with the whole sentence in its tooltip. In a narrow head (360 px or less, by a container query), "Table view" is drawn as an icon (⊞, ▥ while showing the table), with its words kept as its text and name. Where there is no ✎, Refresh takes its place and the head the room it leaves.
+    - Measured: at 390 px a chart's title keeps 142 px, where it had 0. A three-column tile at 1,440 px keeps 108 px. This is the Superset exercise's "titles disappear on three-column tiles" (gap 2), fixed by the same rule.
+  - **Not done here:** direction.md's "the filter bar becomes a sheet" below 1,024 px. The filter band still wraps in place. The shell and Explore below 1,024 px are open question N16 for the user.
 - [ ] T251 (AC-187) Draw a dashboard's frame while it loads, and give a failed tile its details and its menu
   - Files: `packages/web/src/dashboard/*`, `e2e/dashboard.spec.ts`
   - Failing test: on a slow load the header, tabs and tile frames show before the data; a failed tile keeps its ⋯ menu and offers the query and error in a disclosure (recheck-dashboard F10, F15; direction.md §6, checklist 18).
