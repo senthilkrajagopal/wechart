@@ -4571,7 +4571,7 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
   - Files: `packages/core/src/pivot.ts`, its test, `packages/web/src/tiles/PivotTable.test.tsx`
   - Failing test: a pivot sorted by value descending lists its row groups by their totals, largest first. Sorted by label, it lists them alphabetically (AC-044).
   - Depends on: none
-- [ ] T304 (AC-187) Draw table and pivot tiles as the prototype's `.grid-table.comfy`
+- [x] T304 (AC-187) Draw table and pivot tiles as the prototype's `.grid-table.comfy`
   - Gap 9, second half, of the parity rebuild: the header row scrolled away with the rows. No rule styled `.data-table` or `.pivot-table`. Against the prototype's `.grid-table` (index.html:1089), a table tile had:
     - no sticky 28 px header on `bg-subtle`;
     - no 12 px tabular numerals (direction.md rule 1);
@@ -4580,6 +4580,16 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
   - Files: `packages/web/src/tiles/DataTable.tsx`, `packages/web/src/tiles/PivotTable.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: a table tile's header cell is sticky, 28 px, 600, on `bg-subtle`; its cells are 12 px in tabular numerals and 34 px tall, a measure's right-aligned; the same holds for a pivot (AC-187).
   - Depends on: none
+  - **Done 2026-09-25.**
+    - **Table:** `DataTable.tsx` draws `grid-table comfy`. A measure's head and cells are `num`, taken from the chart's measures. The virtualised row is 34 px.
+    - **Pivot:** `PivotTable.tsx` draws the same table. Its figures, column heads and Total heads are `num`, and its totals are 600 (`grid-table__total`).
+      - Its row names stay `<th scope="row">` for their semantics, drawn as pivotHtml's `td.strong`: 600 on the row's ground.
+      - Its corner sticks with the heads. A second or third row of column heads sticks 28 px under the one above.
+    - **Styles:** `styles.ts` has the comfy rows (body and foot only, so the head stays 28 px), the corner, and the row names.
+  - **Tests, red first:** `e2e/design-conformance.spec.ts` "T300 and T304…", two tests, one for the table and one for the pivot. Both first failed on a static 14 px/700 head.
+    - My first expectation that a dimension's cell computes `left` was wrong: the prototype's `td` sets no alignment, so it computes `start`, and the test now says so.
+    - All three browsers pass. So do the specs that use tables: table-view, tiles, markings, keyboard-coverage, dashboard, crossfilter and filters (459 runs).
+  - **Not done here:** the table's columns follow the row's keys, not the Metrics well's order (gap 9, first half). The prototype's `tableHtml` puts the dimensions first and then the measures in their well's order, but no criterion asks for column order. It is a proposed spec change.
 - [ ] T305 (AC-031) Hold a candidate that colours by a dimension to the 8-colour cap
   - Gap 11 of the parity rebuild. The recommender offered bars coloured by 21 countries. Its bar, line and area candidates carried no colour field, although `defaultEncoding` colours them by the dimension the wells hold, so the colour cap was never applied to them.
   - Files: `packages/recommender/src/recommend.ts`, its test

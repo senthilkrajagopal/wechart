@@ -2453,6 +2453,26 @@ main:has(.dashboard) {
 }
 .grid-table tbody tr:hover td { background: var(--wc-bg-hover); }
 .grid-table__self { color: var(--wc-text-muted); }
+/* A table or pivot in a tile, as the prototype's .grid-table.comfy (T304,
+   charts.js tableHtml and pivotHtml): 34 px rows. A pivot's corner sticks
+   with the heads, on their ground; its row names are pivotHtml's td.strong,
+   in 600 on the row's own ground, as are its totals. */
+.grid-table.comfy tbody td,
+.grid-table.comfy tfoot td { height: 34px; }
+.grid-table thead td {
+  height: 28px;
+  padding: 0 8px;
+  position: sticky;
+  top: 0;
+  background: var(--wc-bg-subtle);
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.grid-table tbody th,
+.grid-table tfoot th { background: transparent; }
+.grid-table.comfy tbody th,
+.grid-table.comfy tfoot th { height: 34px; }
+.grid-table tbody tr:hover th { background: var(--wc-bg-hover); }
+.grid-table__total { font-weight: 600; }
 /* The prototype's .select.sm, at this table's own 24 px row height rather
    than its 28 px, so a select does not stretch the row it sits in. */
 .select-sm {

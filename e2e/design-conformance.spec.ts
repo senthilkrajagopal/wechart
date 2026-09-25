@@ -3705,4 +3705,83 @@ test.describe('T300 and T304: KPI, table and pivot tiles', () => {
       'margin-bottom': '4px',
     });
   });
+
+  /**
+   * .grid-table { font-size: 12px; font-variant-numeric: tabular-nums }
+   * .grid-table th { position: sticky; top: 0; background: var(--bg-subtle);
+   *   font-weight: 600; height: 28px; padding: 0 8px }
+   * .grid-table td { padding: 0 8px } .grid-table.comfy td { height: 34px }
+   * .grid-table td.num, .grid-table th.num { text-align: right }
+   */
+  const asGridTable = async (page: Page, table: Locator, measureCell: Locator) => {
+    const head = table.locator('thead th').first();
+    expect(
+      await style(
+        head,
+        'position',
+        'top',
+        'font-size',
+        'font-weight',
+        'background-color',
+        'padding-left',
+      ),
+    ).toEqual({
+      position: 'sticky',
+      top: '0px',
+      'font-size': '12px',
+      'font-weight': '600',
+      'background-color': await token(page, 'bg-subtle', 'background-color'),
+      'padding-left': '8px',
+    });
+    expect((await table.locator('thead tr').first().boundingBox())?.height).toBeCloseTo(28, 0);
+    expect((await table.locator('tbody tr').first().boundingBox())?.height).toBeCloseTo(34, 0);
+    expect(
+      await style(measureCell, 'font-size', 'font-variant-numeric', 'text-align', 'padding-right'),
+    ).toEqual({
+      'font-size': '12px',
+      'font-variant-numeric': 'tabular-nums',
+      'text-align': 'right',
+      'padding-right': '8px',
+    });
+  };
+
+  test('a table tile is the prototype’s comfy grid table: a sticky head, 34 px rows, measures set right', async ({
+    page,
+  }) => {
+    const tile = page.locator('[data-tile="tile-table"]');
+    const table = tile.getByTestId('data-table').locator('table');
+    await expect(table.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 });
+    // Its columns: the status, then the count.
+    const count = table.locator('tbody tr').first().locator('td').last();
+    await asGridTable(page, table, count);
+    // A dimension's cell is left at the table's own start, as the
+    // prototype's td is: no text-align of its own.
+    expect(
+      await style(table.locator('tbody tr').first().locator('td').first(), 'text-align'),
+    ).toEqual({ 'text-align': 'start' });
+    expect(await style(table.locator('thead th').last(), 'text-align')).toEqual({
+      'text-align': 'right',
+    });
+  });
+
+  test('a pivot tile is the same grid table, its row names in 600 and its figures set right', async ({
+    page,
+  }) => {
+    const tile = page.locator('[data-tile="tile-pivot"]');
+    const table = tile.getByTestId('pivot-table').locator('table');
+    await expect(table.getByTestId('pivot-row').first()).toBeVisible({ timeout: 15_000 });
+    const cell = table.getByTestId('pivot-row').first().locator('td').first();
+    await asGridTable(page, table, cell);
+    // pivotHtml: <td class="strong">{row}</td>, on the row's own ground.
+    const rowName = table.getByTestId('pivot-row-header').first();
+    expect(await style(rowName, 'font-weight', 'background-color', 'position')).toEqual({
+      'font-weight': '600',
+      'background-color': 'rgba(0, 0, 0, 0)',
+      position: 'static',
+    });
+    // <th class="num">{column}</th>
+    expect(await style(table.getByTestId('pivot-column-header').first(), 'text-align')).toEqual({
+      'text-align': 'right',
+    });
+  });
 });

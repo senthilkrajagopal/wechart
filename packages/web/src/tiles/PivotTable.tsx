@@ -26,6 +26,16 @@ export interface PivotTableProps {
 
 const DEFAULT_HEIGHT = 320;
 
+/**
+ * Where a header row sticks: under the ones above it. Every column head of a
+ * `.grid-table` sticks at the top (T304), and a pivot with nested column
+ * dimensions or several measures has more than one row of them, each the
+ * prototype's 28 px.
+ */
+const HEAD_ROW_PX = 28;
+const stuckAt = (row: number) =>
+  row === 0 ? undefined : { top: `${String(row * HEAD_ROW_PX)}px` };
+
 /** Runs of equal values in one header level, so each gets a single cell. */
 function spans(headers: readonly (readonly string[])[], level: number) {
   const out: { value: string; span: number }[] = [];
@@ -85,7 +95,9 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
       data-testid="pivot-table"
       style={{ height: `${String(height)}px`, overflow: 'auto' }}
     >
-      <table>
+      {/* The prototype's pivot in a tile, charts.js pivotHtml (T304): its
+          figures set right, its row names and totals in 600. */}
+      <table className="grid-table comfy">
         <thead>
           {Array.from({ length: columnDepth }, (_, level) => (
             <tr key={level}>
@@ -96,13 +108,15 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
                   key={`${run.value}-${String(index)}`}
                   scope="col"
                   colSpan={run.span * measures.length}
+                  className="num"
+                  style={stuckAt(level)}
                   data-testid="pivot-column-header"
                 >
                   {headerText(columnMembers[level], run.value)}
                 </th>
               ))}
               {level === 0 ? (
-                <th scope="col" rowSpan={columnDepth} colSpan={measures.length}>
+                <th scope="col" rowSpan={columnDepth} colSpan={measures.length} className="num">
                   Total
                 </th>
               ) : null}
@@ -112,11 +126,16 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
           {measures.length > 1 ? (
             <tr>
               {Array.from({ length: rowDepth }, (_, index) => (
-                <td key={index} />
+                <td key={index} style={stuckAt(columnDepth)} />
               ))}
               {[...columnHeaders, null].flatMap((_, columnIndex) =>
                 measures.map((measure) => (
-                  <th scope="col" key={`${String(columnIndex)}-${measure}`}>
+                  <th
+                    scope="col"
+                    key={`${String(columnIndex)}-${measure}`}
+                    className="num"
+                    style={stuckAt(columnDepth)}
+                  >
                     {/* By its title (AC-220), never "orders.count". */}
                     {columnTitleOf(measure, spec.titles)}
                   </th>
@@ -136,11 +155,17 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
               ))}
               {columnHeaders.map((_, c) =>
                 measures.map((measure, m) => (
-                  <td key={`${String(c)}-${measure}`}>{show(cells[r]?.[c]?.[m] ?? null, m)}</td>
+                  <td key={`${String(c)}-${measure}`} className="num">
+                    {show(cells[r]?.[c]?.[m] ?? null, m)}
+                  </td>
                 )),
               )}
               {measures.map((measure, m) => (
-                <td key={`total-${measure}`} data-testid="pivot-row-total">
+                <td
+                  key={`total-${measure}`}
+                  className="num grid-table__total"
+                  data-testid="pivot-row-total"
+                >
                   {show(rowTotals[r]?.[m] ?? null, m)}
                 </td>
               ))}
@@ -155,13 +180,21 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
             </th>
             {columnHeaders.map((_, c) =>
               measures.map((measure, m) => (
-                <td key={`${String(c)}-${measure}`} data-testid="pivot-column-total">
+                <td
+                  key={`${String(c)}-${measure}`}
+                  className="num grid-table__total"
+                  data-testid="pivot-column-total"
+                >
                   {show(columnTotals[c]?.[m] ?? null, m)}
                 </td>
               )),
             )}
             {measures.map((measure, m) => (
-              <td key={`grand-${measure}`} data-testid="pivot-grand-total">
+              <td
+                key={`grand-${measure}`}
+                className="num grid-table__total"
+                data-testid="pivot-grand-total"
+              >
                 {show(grandTotals[m] ?? null, m)}
               </td>
             ))}
