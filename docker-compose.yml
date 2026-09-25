@@ -69,12 +69,14 @@ services:
 
   # The user's fork of Cube v1.7.45 (T275, R10): upstream v1.7.45 plus a
   # data-source introspection API, for generating cubes from a source's
-  # tables (docs/research/cube/introspection-api.md). Built locally, from the
-  # fork's checkout, and pushed nowhere:
-  #   docker build -f packages/cubejs-docker/overlay.Dockerfile -t cube:v1.7.45-introspection .
+  # tables (docs/research/cube/introspection-api.md), at the fork's commit
+  # f6355de982 (research/cube/introspection-api-f6355de982.md). Built locally,
+  # from the fork's checkout, and pushed nowhere; tagged by the fork's commit,
+  # so a rebuild is a new tag, not the same one over again:
+  #   docker build -f packages/cubejs-docker/overlay.Dockerfile -t cube:v1.7.45-introspection-<commit> .
   # Cube and its refresh worker run the same image.
   cube:
-    image: ${CUBE_IMAGE:-cube:v1.7.45-introspection}
+    image: ${CUBE_IMAGE:-cube:v1.7.45-introspection-f6355de982}
     container_name: wechart-cube
     depends_on: &cube-depends-on
       sample-db:
@@ -124,7 +126,7 @@ services:
   # "Topology"; pre-aggregations.md, "Observed locally"). A build asked for
   # through the jobs API runs in the API instance, though (upgrade-1.7.43.md).
   cube-refresh-worker:
-    image: ${CUBE_IMAGE:-cube:v1.7.45-introspection}
+    image: ${CUBE_IMAGE:-cube:v1.7.45-introspection-f6355de982}
     container_name: wechart-cube-refresh-worker
     depends_on: *cube-depends-on
     environment:

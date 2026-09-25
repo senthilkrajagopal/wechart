@@ -119,14 +119,18 @@ test('a data source’s tables become cubes, each column mapped or said to be le
 });
 
 /**
- * AC-139's `a column is dropped without saying so`, where Cube's scaffold
- * drops it unsaid (research, "Silent losses"; T145's review):
- * `generate.every_loss` has a time-typed key, `"Amount"` beside `amount`, a
- * `count` column and a quoted `"Visit Count"` (infra/sample-db/generate.sql).
- * The real Cube writes none of the first three as it should, and says nothing;
- * wechart says each.
+ * AC-139's `a column is dropped without saying so`, on the table that caught
+ * Cube's scaffold dropping columns unsaid (research, "Silent losses"; T145's
+ * review): `generate.every_loss` has a time-typed key, `"Amount"` beside
+ * `amount`, a `count` column and a quoted `"Visit Count"`
+ * (infra/sample-db/generate.sql). The fork at f6355de982 keeps them all
+ * (research/cube/introspection-api-f6355de982.md): each column a member, the
+ * count kept, the key a key; and wechart's own check (scaffoldCheck.ts) finds
+ * nothing to say.
  */
-test('what Cube’s scaffold drops unsaid, wechart says', async ({ page }) => {
+test('Cube’s scaffold keeps every column of a table that once lost three, and wechart finds nothing lost', async ({
+  page,
+}) => {
   await page.goto('/model');
   await page.getByRole('button', { name: 'Generate cubes' }).click();
   const dialog = page.getByRole('dialog', { name: 'Generate cubes from a data source' });
@@ -137,16 +141,24 @@ test('what Cube’s scaffold drops unsaid, wechart says', async ({ page }) => {
   await dialog.getByRole('button', { name: 'Generate 1 cube' }).click();
 
   const cube = dialog.getByRole('region', { name: 'cubes/every_loss.yml' });
-  await expect(cube.getByTestId('generated-yaml')).toContainText('sql: "{CUBE}.\\"Visit Count\\""');
-  await expect(cube.getByRole('list', { name: 'Columns left out' })).toHaveText(
-    'Amount (numeric): its member’s name is another column’s, and Cube kept only one',
+  const yaml = cube.getByTestId('generated-yaml');
+  await expect(yaml).toContainText('name: every_loss');
+  // Each member as the file has it: its name, then its SQL and type.
+  const member = (name: string, ...lines: string[]) =>
+    new RegExp(
+      `- name: ${name}\\s+${lines.map((line) => line.replace(/[{}".\\]/g, '\\$&')).join('\\s+')}`,
+    );
+  const text = (await yaml.textContent()) ?? '';
+  expect(text).toMatch(member('at', 'sql: at', 'type: time', 'primary_key: true'));
+  expect(text).toMatch(member('count', 'type: count'));
+  expect(text).toMatch(member('amount', 'sql: "{CUBE}.\\"Amount\\""', 'type: sum'));
+  expect(text).toMatch(member('amount_2', 'sql: amount', 'type: sum'));
+  expect(text).toMatch(member('count_2', 'sql: count', 'type: sum'));
+  expect(text).toMatch(member('visit_count', 'sql: "{CUBE}.\\"Visit Count\\""', 'type: sum'));
+  await expect(cube.getByText('Every column is in the cube.')).toBeVisible();
+  await expect(cube.getByText(/No count measure|Not marked as the cube’s primary key/)).toHaveCount(
+    0,
   );
-  await expect(
-    cube.getByText('No count measure: a column’s measure took its name, count.'),
-  ).toBeVisible();
-  await expect(
-    cube.getByText('Not marked as the cube’s primary key: at. A join to this cube needs one.'),
-  ).toBeVisible();
 });
 
 /**

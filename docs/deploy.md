@@ -36,10 +36,10 @@ docker build -f deploy/Dockerfile --target web -t wechart-web:$TAG .
 Cube runs the user's fork of v1.7.45, which adds the data-source introspection API wechart generates cubes with (T275; `docs/research/cube/introspection-api.md`). Build it from the fork's checkout (`~/Work/bi/cube`, branch `feat/data-source-introspection-api`):
 
 ```sh
-docker build -f packages/cubejs-docker/overlay.Dockerfile -t cube:v1.7.45-introspection .
+docker build -f packages/cubejs-docker/overlay.Dockerfile -t cube:v1.7.45-introspection-$(git rev-parse --short=10 HEAD) .
 ```
 
-`deploy/helm/values/docker-desktop.yaml` sets `cube.image` to it, for Cube and its refresh worker alike. docker-compose uses the same image.
+Tag it by the fork's commit, as with wechart's own images: a rebuild under the same tag doesn't restart the pods. The release runs `cube:v1.7.45-introspection-f6355de982` (the fork's fixes to its scaffold, `docs/research/cube/introspection-api-f6355de982.md`). `deploy/helm/values/docker-desktop.yaml` sets `cube.image` to it, for Cube and its refresh worker alike, and docker-compose uses the same image.
 
 Nothing is pushed. This cluster's node runs on the Docker engine (`kubectl get nodes -o wide` shows `docker://`), and its pods used the locally built images; Docker's own docs don't say so (`docs/research/helm.md`, "Open questions"). The chart pulls a wechart image only if it isn't there (`images.pullPolicy: IfNotPresent`). Give each build its own tag: an upgrade to the same tag doesn't restart the pods.
 
