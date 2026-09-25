@@ -2,6 +2,8 @@
 
 **Status:** written 2026-09-19 from the project interview (rounds R1–R6). Input files: `docs/inputs/2026-09-19-product-direction.md` (§1–13). Design work already done is in `docs/design/`; Cube research is in `docs/research/cube/`.
 
+**Phase 2 (2026-09-25):** Part 2 at the end of this file holds phase 2's requirements, from rounds R11–R17. Part 1, below, is phase 1's record. Where the two differ, Part 2 governs.
+
 Every statement traces to a round (`[R1]`–`[R6]`), an input file (`[docs/inputs §n]`), `[CLAUDE.md]`, or a research doc. Nothing here is Claude's assumption; anything undecided is in **Open questions**.
 
 ---
@@ -358,3 +360,249 @@ Questions are Claude's; answers are the user's, verbatim.
   A: "Anyone, phase 1 (Recommended)"
 - Q: When a generated cube's name or file name matches one already in the model store, what should happen? (options: refuse and say which / rename automatically / ask per clash)
   A: "Refuse and say which (Recommended)"
+
+---
+
+# Part 2 — Phase 2 requirements (2026-09-25)
+
+Written from the phase-2 interview, rounds R11–R17. Its inputs:
+- `docs/inputs/2026-09-25-phase-2-security-folders-workspaces.md`, cited as `[P2 input]`;
+- `docs/phase-2/backlog.md`, cited as `[backlog]`, which holds what phase 1 moved on.
+
+As in Part 1, every statement traces to a round or an input. Anything undecided is in §P2.8.
+
+## P2.1 Problem
+
+Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in and one trusted user. It has one Cube model and one data source for everything, and a change to shared content is live at once `[Part 1 §4]`. Phase 2 adds:
+
+- **Sign-in through OIDC/SSO, switchable.** Turned off, wechart runs in single-user mode, as in phase 1 `[P2 input]`.
+- **Folder access by AD group**, inherited down the tree, with three roles: Super-Admin, Admin and User `[P2 input]`.
+- **Models and data sources as folder items**, under the same access rules. The Model tab goes `[P2 input]`.
+- **A private workspace per user.** Creating and editing happen there, and work reaches shared folders only by being copied in and approved `[P2 input, R12]`.
+- **Names unique within a folder, not across the whole app.** A cube name resolves from the nearest folder upwards `[P2 input]`.
+- **Everything in the phase-2 backlog** `[R16]`.
+
+## P2.2 Users and roles
+
+**Sign-in.** With security on, every user signs in: Super-Admins, Admins and Users alike. Nothing is reachable without credentials `[R11]`.
+
+**Folder permissions.** A folder can have two optional settings: the AD groups with **read-only** access and the AD groups with **read-write** access `[R11]`.
+- An unset setting is inherited from the parent folder, each setting on its own `[R11]`.
+- Folders take AD groups only, never individual users `[P2 input]`.
+
+**How far a grant reaches** `[P2 input, R12]`:
+- **Down:** a grant on a folder reaches every descendant, read and write alike, even where a descendant sets its own groups. A descendant's own groups are added alongside, never in place.
+- **Up:** members of a group granted anywhere see everything in every ancestor folder up to the root (dashboards, charts, models and data sources), view-only.
+
+**Roles** `[P2 input, R12]`:
+
+| Role | Who | What they can do |
+|---|---|---|
+| **Super-Admin** | Members of one AD group, the Super-Admin group, named in the deployment's configuration `[R18]` | Read-write on every folder, plus every admin surface: Jobs, Schedules, Security, folder permissions and the audit trail. |
+| **Admin** | Members of a folder's read-write groups (set or inherited) | Create data sources, models, dashboards and charts in that folder, through their workspace and an approval (§P2.6). Create subfolders under it and set their permissions. Run and schedule builds of the folder's pre-aggregations in Jobs and Schedules `[R18]`. |
+| **User** | Members of a folder's read-only groups (set or inherited) | View the dashboards in that folder, its descendants and its ancestors. |
+
+**Workspaces.** Every Super-Admin and every member of any read-write group has a private workspace, which only they can open. Read-only users have none, and only view `[P2 input, R12]`.
+
+**Scale.** Phase 1's figure stands: 500 or more people `[R2, R13]`. One user can belong to hundreds of AD groups, nested groups included `[R12]`.
+
+**Who owns identities.** The identity provider owns users and groups, as decided in R7 (#10). wechart manages no users or groups. It keys each workspace, personal bookmark and audit entry by the user's identity from the provider `[R7, R12, R14]`.
+
+## P2.3 Success metrics
+
+| # | Metric | How it is measured |
+|---|---|---|
+| S1 | **Zero access leaks** `[R13]` | An automated suite asks every API route and page as users in and out of each group. Nothing outside their permitted folders is ever returned or shown. |
+| S2 | **Speed holds with security on** `[R13]` | A signed-in user's 10-chart dashboard, in a folder with its own models, renders in under 3 s at p95 (phase 1's M3), from wechart's own query timings. |
+| S3 | **Phase 1 intact with security off** `[R13]` | The full phase-1 end-to-end suite passes in single-user mode. **Checked once, at the end of phase 2, not on every task**: phase-2 testing focuses on security `[R13]`. |
+
+- Phase 1's M1–M4 carry over unchanged `[R13]`.
+- Folder listing has no budget of its own `[R13]`.
+
+## P2.4 Constraints
+
+**Identity**
+- **Any OIDC provider**, configured by issuer, client and the claim that carries groups `[R14]`.
+- **Development and tests use one provider**, the lightest self-hosted one research finds, whether Keycloak or something smaller `[R14, R15]`.
+- **Production is Microsoft Entra ID, or on-prem AD through an OIDC broker.** That is checked once, at the end of phase 2. Development doesn't test several providers `[R14, R15]`.
+- **Group counts:** a user can be in hundreds of groups, nested ones included. Research must show how the chosen sign-in handles that for each provider `[R12]`.
+
+**Security off.** wechart runs in single-user mode, as in phase 1 `[P2 input]`. Workspaces and approval work as they do with security on, and the one user approves their own copies `[R17]`.
+
+**Data inside cubes.** The signed-in user's AD groups go into Cube's security context, so the model's access policies can filter rows and members by group. For now it's groups only; user attributes come later `[R14]`.
+
+**Credentials.** Data-source credentials are encrypted in wechart's metadata database, with a key from the deployment's Secret. They are never shown again, and never sent to the browser. This holds in development and in production `[R14, R15]`.
+
+**Audit.** wechart records sign-ins, permission changes, copies proposed, approved and rejected, and data-source changes. Super-Admins can browse the record `[R14]`. How long records are kept is a deployment setting, one year by default `[R18]`.
+
+**Phase 1's content.** When security is first turned on, everything phase 1 created stays in place as the shared tree, with no groups set. Only Super-Admins see it until they assign groups `[R17]`.
+
+**Cube.** The user's Cube fork may be changed where Cube's own configuration can't meet these requirements. Changes go through the Cube-expert agent, on the fork's branch `[R15]`.
+
+**Relaxed from phase 1.** A cube's name no longer has to be unique across the whole model. Cubes, models, dashboards and data sources must be unique **within a folder** `[P2 input]`.
+
+## P2.5 Stack
+
+**Decided.** Phase 1's stack stands `[Part 1 §5]`. To it phase 2 adds:
+- credentials encrypted in the metadata database `[R14, R15]`;
+- changes to the Cube fork where needed, through the Cube-expert agent `[R15]`.
+
+**Still open, with what decides each**
+
+| Open item | Decided by |
+|---|---|
+| **How sign-in is built:** oauth2-proxy in front of wechart, or wechart's API as its own OIDC client | Research, on four points: users in hundreds of groups, passing groups to Cube, logout, and switching security off for single-user mode. Fit with Entra ID and a broker is checked at the end of phase 2 `[R15]`. |
+| **Development OIDC provider** | Research: the lightest self-hosted provider that puts groups in tokens and runs in docker-compose and on docker-desktop, Keycloak or smaller `[R15]`. |
+| **Per-folder models in Cube** | Research, which must show how Cube can:<br>• compile a model for each folder path, nearest name first;<br>• keep pre-aggregations apart per path, and build them;<br>• take connections from wechart's per-folder data sources.<br>Where Cube's configuration can't, the fork changes `[R15]`. |
+| **How credentials are encrypted** | Research, against §P2.4's constraints. |
+
+## P2.6 Scope
+
+**A. Sign-in and security** `[P2 input, R11, R14, R15]`
+- OIDC sign-in, switchable, with single-user mode when it's off.
+- Groups passed to Cube's security context.
+- The audit trail.
+
+**B. Folder permissions and roles** `[P2 input, R11, R12]`
+- Read-only and read-write group settings per folder, each inherited on its own when unset.
+- Reach down and up, as in §P2.2.
+- The three roles.
+- Read-write members create subfolders and set their permissions directly `[R12, R17]`.
+
+**C. Folders hold everything** `[P2 input]`
+- Dashboards, charts, models and data sources are all folder items.
+- The Model tab goes. Models open from the folder view.
+
+**D. Names and resolution** `[P2 input, R17]`
+- Cube, model, dashboard and data-source names are unique within a folder.
+- A dashboard's cubes resolve bottom-up, from its folder to the root, and the nearest definition wins. Children's cubes aren't used.
+- Models can use any data source in their folder's path and in all its children `[P2 input]`.
+
+**E. Workspaces, copying and approval** `[P2 input, R12, R17]`
+
+*Getting work into a workspace:*
+- Work starts in the workspace. A dashboard, model or data source is copied in from a folder; a dashboard alone is enough when only it changes.
+- A copied dashboard brings the folder charts it uses with it (library charts) `[R18]`.
+- A copied data source keeps its credentials, encrypted and never shown.
+- A workspace item resolves cubes in the workspace first, then along the path of the folder it was copied from. A new item names its target folder when it's created.
+
+*Getting work back out:*
+- Copying into a shared folder is a **proposal**, with an optional description of up to 1,000 characters.
+- A dashboard whose cubes resolve only through models in the author's workspace goes into the folder together with those models, as one proposal approved together `[R18]`.
+- **Every proposal is approved before it lands.** The author may approve their own, with security on or off, and so may another read-write member of the folder, or a Super-Admin. The step is never skipped `[R12, R17, R18]`.
+- The approver reviews the proposed item and its description.
+- A rejected proposal goes back to the author's workspace unchanged, with the approver's reason (optional, up to 1,000 characters). The folder is untouched `[R18]`.
+- While a proposal waits, the folder's readers see the old version. The folder's read-write members see a Reviews list with a count in the app, and that is the only notice `[R12]`.
+- An approved item replaces a same-named item in the folder. The **last 10 versions** are kept and can be restored `[R17]`.
+
+*What needs no approval:* creating subfolders, setting permissions, renaming, moving and deleting are direct for read-write members `[R17]`.
+
+**F. Bookmarks** `[R12]`
+- Personal to each user by default.
+- A user can share a bookmark with everyone who can see the dashboard.
+
+**G. Data sources: all of backlog F18, per folder** `[R16]`
+- A list per folder, with each source's health.
+- Adding a source with a connection test.
+- The six driver types, each with its own authentication.
+- The restart note and whether Cube has picked the change up.
+- Test history.
+- Credentials never shown.
+
+**H. The rest of the phase-2 backlog** `[R16, backlog]`
+- Quick calculations (F6).
+- Scheduling and build history (F17).
+- The markings refinements and keyboard gaps (AC-093, AC-097, AC-104, AC-116, AC-176).
+- The country map and box plot (R8), and the UI review's eight proposed spec changes.
+- The UI fixes: AC-187's style mismatches, the failing cases of AC-201, AC-220 and AC-246, and Edge (AC-180).
+
+## P2.7 Non-goals for phase 2
+
+- **Individual users on folders.** AD groups only `[P2 input, R16]`.
+- **User attributes in Cube's security context.** Groups only, for now `[R14, R16]`.
+- **Notices outside the app.** No email or chat `[R12, R16]`.
+- **Testing more than one identity provider during development.** Entra ID and brokers are checked at the end of phase 2 `[R14, R15, R16]`.
+
+Phase 1's non-goals still stand, except two that phase 2 brings into scope:
+- **Users, groups, roles and SSO** (§P2.6 A–B).
+- **Maps and geo charts:** the country map, from R8 and the backlog (§P2.6 H).
+
+The rest still apply: AI and chat authoring, scheduled delivery and alerts, embedding, `.dxp` migration tooling, Spotfire Subsets, Tags and Lists and data functions, touch, controls inside text tiles, and selling wechart `[Part 1 §7]`.
+
+## P2.8 Open questions
+
+**None.** All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9.
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Where the Super-Admin group is named | **In the deployment's configuration** |
+| 2 | Library charts when a dashboard is copied into a workspace | **Copied with it** |
+| 3 | A dashboard whose cubes resolve only through workspace models | **One proposal, together with those models** |
+| 4 | Who uses a folder's Jobs and Schedules | **Super-Admins, and the folder's read-write members** |
+| 5 | What rejecting a proposal does | **Back to the author's workspace, with the approver's reason** |
+| 6 | Audit retention | **A deployment setting, one year by default** |
+| 7 | Self-approval with security on | **Yes, always.** The approval step is never skipped |
+
+## P2.9 Interview log
+
+Questions are Claude's; answers are the user's, verbatim.
+
+**R11 — Problem**
+- Q: What stops phase 1 from being rolled out today, and who is the first rollout group? *(The user asked to clarify instead.)*
+  A: "we are not rolling out today.. we are building on phase 1.. based on the inputs i provided. If security is enabled, then security credentials have to be present for the super-admin/admin and users to use the application. when folder is created and permissions are set/edited.. the user can optionally set the AD group that has read permissions only or read-write permissions. if any of the permission are not set on the folder it will be inherited from parent. you can start with your interview now"
+
+**R12 — Users and roles**
+- Q: A group has read-write on /Sales; /Sales/EMEA sets its own read-write group. Does the /Sales group still have read-write in /Sales/EMEA? A: "Yes, write flows down too"
+- Q: A group is granted on /Sales/EMEA. In the ancestors, what do its members see? A: "Everything, view-only"
+- Q: What does a Super-Admin get? A: "Read-write everywhere + admin"
+- Q: Who can create folders and set or edit their AD-group permissions? A: "Super-Admin + read-write groups"
+- Q: Does a read-only user get a private workspace? A: "Read-write members only"
+- Q: Copying from a workspace into a shared folder requires what? A: "Read-write + an approval"
+- Q: How many AD groups can one user belong to? A: "Can be hundreds"
+- Q: Bookmarks: whose are they now? A: "Personal, can be shared"
+- Q (follow-up, the approval): Who can approve? A: "Another RW member or Super-Admin"
+- Q: While a copy waits, what do the folder's readers see? A: "The old version"
+- Q: How is an approver told? A: "In-app only"
+- Q: What does the approver review? A: "The proposed item + description of the change that the promoting user can type in.. (It can be empty. The description will be less than 1000 characters)"
+
+**R13 — Success metrics**
+- Q: Which outcomes should phase 2 be measured by? A: "Zero access leaks, "Phase 1 intact, security off", Speed holds with security on, "hase 1 intact, security off - this will be end of phase check.. dont waste iterations in terms of testing this every time.. focus on phase 2 security. After phase 2 is complete we can check \"Phase 1 intact, security off\"""
+- Q: A folder-listing budget? A: "No separate budget"
+- Q: Do phase 1's M1–M4 carry into phase 2? A: "Keep all four"
+
+**R14 — Constraints**
+- Q: Which identity provider issues the users and AD groups? A: "Any oidc provider.. for testing.. we will pick up keycloak... or if there are other options similar to keycloak that are smaller and lighter than we can use that. The end state deployment is Microsoft Entra ID or On-prem AD via a broker... we will do all testing on a single oidc provider that we select for development.. we dont have to test on all possible oidc providers during development."
+- Q: Do AD groups also limit the data inside a cube? A: "Yes pass groups to cube. We will add user attributes later on... but for now we will assume it is groups only"
+- Q: Where are data-source credentials kept? A: "For development we will use wechart DB, encrypted.."
+- Q: Is an audit trail needed in phase 2? A: "Yes, Super-Admin view"
+
+**R15 — Stack**
+- Q: How should sign-in be built? A: "Option 1 Research decides. Like i said.. we will test with any one oice provider.. we dont have to do "and working with both Entra ID and a broker" we can defer this to the end of phase.. where we will see if it works."
+- Q: Development OIDC provider? A: "Research picks lightest"
+- Q: Data-source credentials in production? A: "Same as development"
+- Q: May the Cube fork change if Cube's hooks can't do per-folder models cleanly? A: "Yes, via the Cube agent"
+
+**R16 — Non-goals and the backlog**
+- Q: Data sources (backlog F18): how much comes into phase 2? A: "All of F18, per folder"
+- Q: The design and UI fixes: phase 2? A: "In phase 2"
+- Q (asked again, the first answers came back empty): Which backlog groups are in phase 2? A: "All of them"
+- Q: Which of these are phase-2 non-goals (individual users on folders; user attributes in Cube; outside notifications; multi-IdP testing in development)? A: "All four"
+
+**R17 — Scope details**
+- Q: In a workspace, which folders' cubes does an item resolve against? A: "Its origin folder's path"
+- Q: A dashboard in a folder: which cubes can it use? A: "Current folder, then ancestors"
+- Q: An approved copy lands on a same-named item. What happens? A: "Replaces it, keeps history"
+- Q: Copying a data source into a workspace: its credentials? A: "Copied, never shown"
+- Q: When security is first turned on, what happens to phase 1's content? A: "Also lets have self approve.. but any change has to be approved even if it self approve. also for this questions Stays, Super-Admin only"
+- Q: With security off, how do workspaces and approval work? A: "Same flows, self-approve"
+- Q: Which changes to a shared folder need approval? A: "Content copies only"
+- Q: How much history does a replaced item keep? A: "Last 10 versions"
+
+**R18 — resolving the open questions** (asked before writing the spec, because write-spec requires no open questions)
+- Q: Where is the Super-Admin AD group named? A: "Deployment configuration"
+- Q: A dashboard that uses library charts is copied into a workspace. What happens to those charts? A: "Copied with it"
+- Q: A proposed dashboard's cubes resolve only through the workspace's models. What happens? A: "One proposal together"
+- Q: A folder's pre-aggregation jobs and schedules: who can use them? A: "Also the folder's RW"
+- Q: What does rejecting a proposal do? A: "Back with a reason"
+- Q: How long are audit records kept? A: "Configurable" (the option read: "A deployment setting, default 1 year")
+- Q: With security on, may the author approve their own proposal? A: "Yes, always"
