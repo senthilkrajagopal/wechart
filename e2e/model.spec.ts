@@ -635,8 +635,13 @@ test('Model is one workspace: a tree beside full-height form and code panes, Pro
   await expect(tree.getByRole('link', { name: /^customers\.yml/ })).toContainText('problems');
   await expect(tree.getByRole('link', { name: /^orders\.yml/ })).not.toContainText('problems');
 
-  // New cube and New view: a file of its own, open, and said to be unpublished.
+  // New cube and New view: a file of its own, open, and said to be unpublished
+  // — once customers.yml's edit is let go, which it asks about first (AC-226).
   await tree.getByRole('button', { name: 'New cube' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Leave with unpublished changes?' })
+    .getByRole('button', { name: 'Leave without publishing' })
+    .click();
   await expect(page).toHaveURL(/\/model\/files\/cubes%2Fnew_cube_1\.yml$/);
   await expect(page.getByRole('textbox', { name: 'cubes/new_cube_1.yml, as YAML' })).toContainText(
     'name: new_cube_1',

@@ -179,6 +179,13 @@ useBlocker({ shouldBlockFn: ({ current, next, action }) => boolean | Promise<boo
 - Types are at `RR/useBlocker.tsx:61-78`. The `enableBeforeUnload = true` default is at `RR/useBlocker.tsx:157-162`.
 - `current.search` and `next.search` are raw `parseSearch` output, not validated (`RR/useBlocker.tsx:191, 200`).
 - The blocker is registered through `history.block` inside a `useEffect` (`RR/useBlocker.tsx:176-261`).
+  - `shouldBlockFn` is in that effect's dependencies, so an unstable function re-registers the blocker on every render.
+- With `withResolver: true` (checked in the installed 1.170.38 source, 2026-09-24), the hook returns a `BlockerResolver` (`RR/useBlocker.tsx:43-59`):
+  - It is `{ status: 'idle' }` until `shouldBlockFn` returns true.
+  - It is then `{ status: 'blocked', current, next, action, proceed, reset }` until one of the two is called (`RR/useBlocker.tsx:219-247`).
+  - `proceed()` lets the navigation happen, and `reset()` keeps the page where it is (`resolve(false)` or `resolve(true)` at `RR/useBlocker.tsx:233-234`, where a truthy result blocks).
+  - A navigation from a not-found route to a found one is never blocked (`RR/useBlocker.tsx:207-212`).
+- The window's `beforeunload` handler is registered in the capture phase. It calls `preventDefault()` and sets `returnValue = ''` when any registered blocker's `enableBeforeUnload` is `true`, or is a function that returns `true` when called (`H:487-520, 586`; @tanstack/history 1.162.4). A test can therefore dispatch a cancelable `beforeunload` event and read `defaultPrevented`.
 - Docs: [navigation-blocking](https://tanstack.com/router/latest/docs/framework/react/guide/navigation-blocking).
 
 ### `router.subscribe(eventType, fn): () => void`

@@ -707,9 +707,9 @@ Model workspace:
       Fails when: any of those fields accepts free text.
 - [x] AC-225 THE SYSTEM SHALL show each member in a row with its name, its type, a preview of its SQL and badges for primary key, public and format, and when expanded, only the fields that apply to its type and to how it is defined, in named groups.
       Fails when: a collapsed row omits its type or SQL, a primary key carries no badge, or an expanded number dimension offers fields for a CASE, a switch or a geographic point.
-- [ ] AC-226 WHEN a model file has changes not yet published, THE SYSTEM SHALL say so in the editor's header and on the file's row in the tree, offer Discard, and ask before leaving the file with them unpublished.
+- [x] AC-226 WHEN a model file has changes not yet published, THE SYSTEM SHALL say so in the editor's header and on the file's row in the tree, offer Discard, and ask before leaving the file with them unpublished.
       Fails when: an edit shows no unpublished marker, or leaving the file loses it without asking.
-- [ ] AC-227 WHEN the model's code parses, THE SYSTEM SHALL list in Problems, with the line, every value outside the set Cube's validator allows and every required key that is missing, before the user publishes (direction.md rule 26).
+- [x] AC-227 WHEN the model's code parses, THE SYSTEM SHALL list in Problems, with the line, every value outside the set Cube's validator allows and every required key that is missing, before the user publishes (direction.md rule 26).
       Fails when: a measure of type "summ" leaves Problems empty.
 
 Jobs, Security, Schedules and Data sources:

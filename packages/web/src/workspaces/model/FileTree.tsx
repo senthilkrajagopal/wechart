@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import { StatusIcon } from '../../shell/StatusIcon';
 import { objectsOf } from './objects';
+import { validationProblems } from './validate';
 
 /**
  * The Model workspace's file tree (T234, AC-222), the prototype's left pane
@@ -20,8 +21,11 @@ export interface FileTreeProps {
    * show (T234's review).
    */
   readonly reported?: Readonly<Record<string, number>> | undefined;
-  /** Files made here and not yet published. */
-  readonly drafts?: ReadonlySet<string> | undefined;
+  /**
+   * Files with changes not yet published (AC-222, AC-226): made here, or
+   * edited in the open editor.
+   */
+  readonly unpublished?: ReadonlySet<string> | undefined;
   readonly onOpen: (path: string) => void;
   readonly onNew: (kind: 'cube' | 'view') => void;
 }
@@ -30,13 +34,18 @@ export function fileHref(path: string): string {
   return `/model/files/${encodeURIComponent(path)}`;
 }
 
-export function FileTree({ files, current, reported, drafts, onOpen, onNew }: FileTreeProps) {
-  // Each file read once for whether it parses, not on every render.
+export function FileTree({ files, current, reported, unpublished, onOpen, onNew }: FileTreeProps) {
+  // Each file read once for whether it parses, and whether Cube would take
+  // what it says (AC-227), not on every render.
   const unparsed = useMemo(
     () =>
       new Set(
         files
-          .filter((file) => objectsOf(file.path, file.content).problem !== undefined)
+          .filter(
+            (file) =>
+              objectsOf(file.path, file.content).problem !== undefined ||
+              validationProblems(file.path, file.content).length > 0,
+          )
           .map((file) => file.path),
       ),
     [files],
@@ -93,7 +102,7 @@ export function FileTree({ files, current, reported, drafts, onOpen, onNew }: Fi
                   >
                     <span className="model-tree__name">{file.path.slice(folder.length)}</span>
                     {/* Each with its icon and a word (direction.md rule 3). */}
-                    {drafts?.has(file.path) === true ? (
+                    {unpublished?.has(file.path) === true ? (
                       <span className="model-tree__tag">
                         <StatusIcon kind="idle" />
                         unpublished

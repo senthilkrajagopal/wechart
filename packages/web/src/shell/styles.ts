@@ -613,6 +613,19 @@ main:has(.model-page) {
    code face a path is written in (AC-223). */
 .model-workspace .model-editor__path { flex: 1; min-width: 0; margin: 0; font-family: var(--wc-font-code); overflow-wrap: anywhere; }
 .model-editor__outcome { margin: 0; color: var(--wc-text-secondary); font-size: 12px; }
+/* The file's unpublished changes, beside Discard (T237, AC-226). */
+.model-editor__changed {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+/* Leaving with them asks first: the warning bar under the head, in view
+   however far the form is scrolled. */
+.model-editor__warnbar.model-editor__leave { flex: none; align-items: center; margin: 8px 16px 0; }
 .model-editor__outcome--failed { color: var(--wc-status-error); }
 .yaml-editor .cm-editor {
   max-height: calc(100vh - 160px);

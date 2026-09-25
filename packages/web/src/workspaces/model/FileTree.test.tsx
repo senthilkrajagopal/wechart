@@ -84,8 +84,23 @@ describe('the model’s file tree (AC-222)', () => {
     expect(onNew.mock.calls).toEqual([['cube'], ['view']]);
   });
 
+  it('marks a file with a value Cube would refuse, as it marks one that does not parse (AC-227)', () => {
+    const refused = {
+      path: 'cubes/refused.yml',
+      content:
+        'cubes:\n  - name: refused\n    sql_table: t\n    measures:\n      - name: n\n        type: summ\n',
+    };
+    const { nav } = tree({ files: [...FILES, refused] });
+    expect(within(nav).getByRole('link', { name: /^refused\.yml/ }).textContent).toContain(
+      'problems',
+    );
+    expect(within(nav).getByRole('link', { name: /^orders\.yml/ }).textContent).not.toContain(
+      'problems',
+    );
+  });
+
   it('says a file not yet published is new', () => {
-    const { nav } = tree({ drafts: new Set(['cubes/orders.yml']) });
+    const { nav } = tree({ unpublished: new Set(['cubes/orders.yml']) });
     const orders = within(nav).getByRole('link', { name: /^orders\.yml/ });
     expect(orders.querySelector('.model-tree__tag')?.textContent).toBe('unpublished');
     // Its icon beside its word (direction.md rule 3).

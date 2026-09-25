@@ -1,9 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from '@tanstack/react-router';
+import { useBlocker, useRouter, type ShouldBlockFn } from '@tanstack/react-router';
 
 import { META_QUERY } from '../../query/meta';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { FileList, MODEL_FILES_QUERY } from './FileList';
 import { FileTree, fileHref } from './FileTree';
@@ -20,6 +20,7 @@ import { ReadOnlyFile } from './ReadOnlyFile';
 import { ReferencesWarning, type MemberReferences } from './ReferencesWarning';
 import { publishModel, referencesTo } from './publish';
 import { modelOf, withObject } from './sync';
+import { validationProblems } from './validate';
 import { YamlEditor } from './YamlEditor';
 
 /**
@@ -84,22 +85,30 @@ function keepRefusedRollups(problems: readonly CubeProblem[]): readonly CubeProb
 /** A problem that stops the file being read and published; a warning does not (AC-223). */
 const isError = (problem: Problem) => problem.severity !== 'warning';
 
+const orNone = (found: readonly Problem[]) => (found.length === 0 ? NONE : found);
+
 function FileEditor({
   path,
   content,
   published = true,
   onProblems,
+  onChanged,
   onText,
+  onDiscard,
 }: {
   path: string;
   content: string;
   /** False for a file made here and not yet published: there is nothing to go back to. */
   published?: boolean;
+  /** Discarding a file made here and not yet published: it goes (AC-226). */
+  onDiscard?: (() => void) | undefined;
   /**
    * The errors this editor knows of, by file, for the tree's marks (AC-222):
    * this file's own, and those Cube gave for any file on its last refusal.
    */
   onProblems?: (byPath: Readonly<Record<string, number>>) => void;
+  /** Whether the file has changes not yet published, for its row in the tree (AC-226). */
+  onChanged?: (changed: boolean) => void;
   /** Each change to the text, for a file made here to keep until it is published. */
   onText?: (text: string) => void;
 }) {
@@ -108,10 +117,35 @@ function FileEditor({
   /** The text the form reads: the last that parsed, once typing paused. */
   const [read, setRead] = useState(content);
   /** What stops `text` parsing, as of the last pause (T141, AC-135). */
-  const [problems, setProblems] = useState(() => {
-    const found = problemsOf(path, content);
-    return found.length === 0 ? NONE : found;
-  });
+  const [problems, setProblems] = useState(() => orNone(problemsOf(path, content)));
+  /**
+   * What Cube's validator would refuse in a text that parses, as of the last
+   * pause (AC-227): errors that hold the publish, and leave the form open to
+   * put them right.
+   */
+  const [invalid, setInvalid] = useState(() => orNone(validationProblems(path, content)));
+  /** Both, in the file's order, for Problems and the editor's marks. */
+  const listed = useMemo(
+    () =>
+      invalid.length === 0
+        ? problems
+        : problems.length === 0
+          ? invalid
+          : [...problems, ...invalid].sort((a, b) => a.from - b.from),
+    [problems, invalid],
+  );
+  /** Checks a text, and says whether it parses, for the form to read it. */
+  const check = useCallback(
+    (checked: string) => {
+      const found = problemsOf(path, checked);
+      const parses = !found.some(isError);
+      setProblems(orNone(found));
+      // What Cube would refuse is looked for only in a text that parses.
+      setInvalid(parses ? orNone(validationProblems(path, checked)) : NONE);
+      return parses;
+    },
+    [path],
+  );
 
   /** When the text first differed from what the form read: the wait counts from it. */
   const since = useRef<number | null>(null);
@@ -121,20 +155,20 @@ function FileEditor({
       since.current === null ? YAML_PAUSE_MS : since.current + YAML_MAX_WAIT_MS - Date.now();
     const timer = setTimeout(
       () => {
-        // Only a text that parses reaches the form; what stops one is listed.
-        const found = problemsOf(path, text);
-        setProblems(found.length === 0 ? NONE : found);
+        // Only a text that parses reaches the form; what stops one is listed,
+        // and what Cube would refuse in one that does. A warning does not
+        // stop it; an error does.
+        const parses = check(text);
         // Checked: the next keystroke starts the next wait.
         since.current = null;
-        // A warning does not stop it; an error does.
-        if (!found.some(isError) && text !== read) setRead(text);
+        if (parses && text !== read) setRead(text);
       },
       Math.max(0, Math.min(YAML_PAUSE_MS, cap)),
     );
     return () => {
       clearTimeout(timer);
     };
-  }, [path, text, read]);
+  }, [path, text, read, check]);
 
   // A file made here keeps what is typed until it is published (AC-222).
   const keepText = useRef(onText);
@@ -259,14 +293,94 @@ function FileEditor({
   const [refusedRollups, setRefusedRollups] = useState(readRefusedRollups);
   const [outcome, setOutcome] = useState<{ ok: boolean; text: string } | null>(null);
   const queryClient = useQueryClient();
-  /** Something to publish, that parses, that the form has caught up with, and nothing held. */
+  /** Changes not yet published (AC-226): for a file made here, all of it. */
+  const changed = text !== saved;
+  /**
+   * Something to publish, that parses, that the form has caught up with, and
+   * nothing held. What Cube's validator would refuse is listed, not enforced:
+   * Cube has the last word (AC-136), and a value it takes that the list
+   * misreads can still be published.
+   */
   const canPublish =
-    text !== saved &&
+    changed &&
     text === read &&
     errors.length === 0 &&
     pending === null &&
     references === null &&
     !publishing;
+
+  const reportChanged = useRef(onChanged);
+  useEffect(() => {
+    reportChanged.current = onChanged;
+  }, [onChanged]);
+  useEffect(() => {
+    reportChanged.current?.(changed);
+  }, [changed]);
+
+  /**
+   * Leaving the file with changes it has published nowhere asks first
+   * (AC-226): in the page, as the prototype's warning bar; on a reload or a
+   * closed tab, as the browser's own question. A file made here keeps its
+   * text for the tab, so moving about the tab loses nothing of it — but a
+   * closed tab does.
+   */
+  const unsaved = useRef({ published, changed });
+  useEffect(() => {
+    unsaved.current = { published, changed };
+  }, [published, changed]);
+  const shouldBlockFn = useCallback<ShouldBlockFn>(
+    ({ current, next }) =>
+      unsaved.current.published && unsaved.current.changed && current.pathname !== next.pathname,
+    [],
+  );
+  const enableBeforeUnload = useCallback(() => unsaved.current.changed, []);
+  const leaving = useBlocker({ shouldBlockFn, enableBeforeUnload, withResolver: true });
+  const stay = useRef<HTMLButtonElement>(null);
+  /** Where the focus was when leaving was asked about: where staying puts it back. */
+  const returnTo = useRef<HTMLElement | null>(null);
+  const { status: leave, reset } = leaving;
+  const stayHere = useCallback(() => {
+    reset?.();
+    returnTo.current?.focus();
+  }, [reset]);
+  useEffect(() => {
+    if (leave !== 'blocked') return undefined;
+    returnTo.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    stay.current?.focus();
+    // Escape stays, as it closes any question.
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') stayHere();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [leave, stayHere]);
+
+  /**
+   * Back to the file as it was last published, or read (AC-226) — and Cube's
+   * reasons for refusing the text it replaces go with it. A file made here
+   * has nothing to go back to: discarding it is the page's to do.
+   */
+  const discard = () => {
+    if (!published) {
+      onDiscard?.();
+      return;
+    }
+    setText(saved);
+    setRead(saved);
+    check(saved);
+    setPending(null);
+    setRefused(null);
+    setReferences(null);
+    setOutcome(null);
+    if (cubeProblems.length > 0) {
+      // The last publish was this file's, and refused: its rollups' too.
+      setCubeProblems([]);
+      setRefusedRollups(keepRefusedRollups([]));
+    }
+  };
 
   /**
    * The errors this editor knows of, by file, for the tree (AC-222): this
@@ -277,7 +391,7 @@ function FileEditor({
   useEffect(() => {
     reportProblems.current = onProblems;
   }, [onProblems]);
-  const ownErrors = errors.length;
+  const ownErrors = errors.length + invalid.length;
   useEffect(() => {
     const byPath: Record<string, number> = { [path]: ownErrors };
     for (const problem of [...cubeProblems, ...refusedRollups])
@@ -362,6 +476,19 @@ function FileEditor({
           <h1 className="workspace-title model-editor__path" data-testid="selected-object">
             {path}
           </h1>
+          {changed ? (
+            // Said beside the file's actions, with its icon (AC-226; direction.md rule 3).
+            // A state the head keeps, not news: no live region to announce it.
+            <span className="model-editor__changed">
+              <StatusIcon kind="idle" />
+              Unpublished changes
+            </span>
+          ) : null}
+          {changed && (published || onDiscard !== undefined) ? (
+            <button type="button" className="btn-sm" onClick={discard}>
+              Discard
+            </button>
+          ) : null}
           {outcome === null ? null : (
             <StateLine
               kind={outcome.ok ? 'ok' : 'err'}
@@ -390,6 +517,28 @@ function FileEditor({
             )}
           </button>
         </div>
+        {leaving.status === 'blocked' ? (
+          <div
+            className="model-editor__warnbar model-editor__leave"
+            role="alertdialog"
+            aria-labelledby="model-leave-title"
+            aria-describedby="model-leave-text"
+          >
+            <StatusIcon kind="warn" />
+            <span className="model-editor__warnbar-text">
+              <strong id="model-leave-title">Leave with unpublished changes?</strong>{' '}
+              <span id="model-leave-text">
+                <code>{path}</code> has changes that aren’t published. Leaving loses them.
+              </span>
+            </span>
+            <button type="button" className="btn-sm" onClick={leaving.proceed}>
+              Leave without publishing
+            </button>
+            <button ref={stay} type="button" className="btn-sm btn-primary" onClick={stayHere}>
+              Stay
+            </button>
+          </div>
+        ) : null}
         <div
           // Shown locked only for a parse error: the lock while typing catches up is brief.
           className={`model-editor__form${first === undefined ? '' : ' model-editor__form--frozen'}`}
@@ -538,7 +687,7 @@ function FileEditor({
                 setText(next);
               }}
               label={`${path}, as YAML`}
-              problems={problems}
+              problems={listed}
               goTo={goTo}
             />
           </div>
@@ -546,7 +695,7 @@ function FileEditor({
         {/* Docked beneath the code, its own scroll (AC-223). */}
         <ProblemsPanel
           path={path}
-          problems={problems}
+          problems={listed}
           cubeProblems={cubeProblems}
           onPick={(problem) => {
             // To the YAML, where the problem is (the prototype's click does too).
@@ -581,13 +730,17 @@ function FileBody({
   content,
   published,
   onProblems,
+  onChanged,
   onText,
+  onDiscard,
 }: {
   path: string;
   content: string;
   published: boolean;
   onProblems: (byPath: Readonly<Record<string, number>>) => void;
+  onChanged: (changed: boolean) => void;
   onText?: ((text: string) => void) | undefined;
+  onDiscard?: (() => void) | undefined;
 }) {
   const read = useMemo(() => objectsOf(path, content), [path, content]);
   // Code or a template: its text in the code view, read-only, with the reason (T146, AC-140).
@@ -606,6 +759,8 @@ function FileBody({
       content={content}
       published={published}
       onProblems={onProblems}
+      onChanged={onChanged}
+      onDiscard={onDiscard}
       {...(onText === undefined ? {} : { onText })}
     />
   );
@@ -679,13 +834,29 @@ export function ModelFilePage({ path }: { path?: string | undefined }) {
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY,
   }).data;
-  const setDrafts = (next: Readonly<Record<string, string>>) => {
-    queryClient.setQueryData(DRAFTS_KEY, next);
-    keepDrafts(next);
-  };
+  const setDrafts = useCallback(
+    (next: Readonly<Record<string, string>>) => {
+      queryClient.setQueryData(DRAFTS_KEY, next);
+      keepDrafts(next);
+    },
+    [queryClient],
+  );
+  /**
+   * A file New cube or New view made, kept as a draft once it opens: leaving
+   * the open file may be asked about, and staying makes no file (T237's
+   * review).
+   */
+  const [made, setMade] = useState<{ path: string; content: string }>();
+  useEffect(() => {
+    if (made === undefined || path !== made.path || made.path in drafts) return;
+    setDrafts({ ...drafts, [made.path]: made.content });
+  }, [path, made, drafts, setDrafts]);
   const stored = files.data ?? [];
   // A draft once published is a stored file: the store's copy wins.
-  const unpublished = Object.entries(drafts)
+  const unpublished = Object.entries({
+    ...drafts,
+    ...(made !== undefined && path === made.path ? { [made.path]: made.content } : {}),
+  })
     .filter(([draft]) => !stored.some((file) => file.path === draft))
     .map(([draftPath, content]) => ({ path: draftPath, content }));
   const all = [...stored, ...unpublished];
@@ -696,6 +867,12 @@ export function ModelFilePage({ path }: { path?: string | undefined }) {
     from: string;
     byPath: Readonly<Record<string, number>>;
   }>();
+  /** Whether the open file's editor has changes not yet published (AC-226). */
+  const [changed, setChanged] = useState<{ from: string; changed: boolean }>();
+  /** Marked in the tree: files made here, and the open file once it is edited. */
+  const unpublishedPaths = new Set(unpublished.map((each) => each.path));
+  if (changed !== undefined && changed.from === path && changed.changed)
+    unpublishedPaths.add(changed.from);
 
   const open = (next: string) => {
     router.history.push(fileHref(next));
@@ -704,9 +881,15 @@ export function ModelFilePage({ path }: { path?: string | undefined }) {
     const firstCube = stored
       .flatMap((each) => objectsOf(each.path, each.content).objects)
       .find((object) => object.kind === 'cube')?.name;
-    const made = newFileOf(kind, new Set(all.map((each) => each.path)), firstCube);
-    setDrafts({ ...drafts, [made.path]: made.content });
-    open(made.path);
+    const next = newFileOf(kind, new Set(all.map((each) => each.path)), firstCube);
+    setMade(next);
+    open(next.path);
+  };
+  /** A file made here, discarded: it goes, and the overview opens (AC-226). */
+  const discardDraft = (draft: string) => {
+    if (made?.path === draft) setMade(undefined);
+    setDrafts(Object.fromEntries(Object.entries(drafts).filter(([each]) => each !== draft)));
+    router.history.push('/model');
   };
 
   /**
@@ -726,7 +909,7 @@ export function ModelFilePage({ path }: { path?: string | undefined }) {
         files={all}
         current={path}
         reported={reported?.from === path ? reported?.byPath : undefined}
-        drafts={new Set(unpublished.map((each) => each.path))}
+        unpublished={unpublishedPaths}
         onOpen={open}
         onNew={makeNew}
       />
@@ -757,6 +940,16 @@ export function ModelFilePage({ path }: { path?: string | undefined }) {
             onProblems={(byPath) => {
               setReported({ from: file.path, byPath });
             }}
+            onChanged={(now) => {
+              setChanged({ from: file.path, changed: now });
+            }}
+            onDiscard={
+              isDraft
+                ? () => {
+                    discardDraft(file.path);
+                  }
+                : undefined
+            }
             // A new file keeps what is typed in it until it is published.
             onText={
               isDraft

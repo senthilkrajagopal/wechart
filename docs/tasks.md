@@ -3458,9 +3458,9 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Files: `packages/web/src/workspaces/model/form/{ObjectForm.tsx,schema.ts,memberRows.test.tsx,CubeForm.test.tsx}`, `packages/web/src/shell/styles.ts`, `e2e/model.spec.ts`, `e2e/publish-model.spec.ts`
   - Failing test: `e2e/model.spec.ts`: `orders.id` shows a PK badge and its SQL collapsed; expanded, a number dimension offers no CASE, switch or geo fields (AC-225).
   - Depends on: T234
-- [ ] T237 (AC-226, AC-227) Show unpublished changes with Discard and a leave warning, and validate enums and required keys on every parse
-  - Files: `packages/web/src/workspaces/model/ModelFilePage.tsx`, `packages/web/src/workspaces/model/validate.ts`, `e2e/model.spec.ts`
-  - Failing test: `e2e/model.spec.ts`: an edit marks the header and the tree row, Discard restores the file, leaving asks first; `type: summ` lists a problem at its line (AC-226, AC-227).
+- [x] T237 (AC-226, AC-227) Show unpublished changes with Discard and a leave warning, and validate enums and required keys on every parse
+  - Files: `packages/web/src/workspaces/model/{ModelFilePage.tsx,validate.ts,validate.test.ts,problems.ts,FileTree.tsx,FileTree.test.tsx}`, `packages/web/src/shell/styles.ts`, `e2e/model-unpublished.spec.ts`, `e2e/model.spec.ts`, `docs/research/router-search-history.md`
+  - Failing test: `e2e/model-unpublished.spec.ts`: an edit marks the header and the tree row, Discard restores the file, leaving asks first; `type: summ` lists a problem at its line (AC-226, AC-227).
   - Depends on: T234
 - [x] T238 (AC-231, AC-233) Give every workspace page its title style and table cards, and give Schedules and Data sources their frame
   - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/router/routes.tsx`, `packages/web/src/workspaces/admin/DeferredPage.tsx`, `packages/web/src/shell/{AppShell,WorkspaceSwitcher}.tsx`, the Jobs, Security, Model file and library chart pages' titles, `packages/ui/src/tokens.ts`, `e2e/admin.spec.ts`
