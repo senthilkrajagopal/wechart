@@ -510,6 +510,21 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
 > - **Sources:** `research/cube/refresh-key-schedule.md`, a sibling to
 >   `refresh-jobs-caching.md`.
 >
+> **AC-150 un-deferred and reworded, 2026-09-24, at the user's direction.** A
+> second independent analysis found that Cube Core blocks only half of it:
+> - **Builds wechart starts:** Cube's documented jobs API reports each one's
+>   final state.
+> - **Builds the refresh worker starts on a `refresh_key`:** no API reports them.
+>   Cube's documented `logger` option in `cube.js` receives the refresh worker's
+>   events, but the events themselves are Cube's internal wording.
+>
+> Asked what the history is for (finding out why a rollup's data is stale or
+> failing), the user chose "Build it, all builds", keeping the last 100 records
+> of each pre-aggregation. They also chose to research Cube v1.7.43 and move to
+> it: on v1.7.42 a failed import can report `done`. Sources:
+> `research/cube/job-records.md`, `research/cube/logger-build-events.md` and
+> `research/cube/upgrade-1.7.43.md`.
+>
 > **AC-151 deferred too, 2026-09-21, at the user's direction.** Cube's
 > documented jobs API starts builds and reports on tokens, but it can't list the
 > queue or cancel an entry. Only the undocumented `/cubejs-system/*` routes and
@@ -518,8 +533,8 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
 
 - [x] AC-149 WHEN the user starts a build for a pre-aggregation, THE SYSTEM SHALL submit it to Cube, show the job token, and poll until the job reports done, missing partition, failure or not found.
       Fails when: the job's terminal state is never shown, or the token is absent.
-- [ ] AC-150 WHEN a build finishes, THE SYSTEM SHALL record it in wechart's own history with its target, partitions, duration, outcome and log, and keep that record beyond Cube's 24-hour window.
-      Fails when: a build older than 24 hours is missing from the history.
+- [ ] AC-150 WHEN a pre-aggregation build finishes, whether wechart started it through Cube's jobs API or Cube's refresh worker started it on its refresh key, THE SYSTEM SHALL record it in wechart's own history with its pre-aggregation, partition, what started it, its duration, its outcome with Cube's error when it failed, and a log of what Cube reported for it. It SHALL also list the record in the Jobs workspace's Run history after Cube's own record of the job has expired, and keep the latest 100 records of each pre-aggregation.
+      Fails when: a build that finished more than 24 hours ago is missing from Run history, or lacks any of those fields; a rebuild of a rollup with a `* * * * *` refresh key is not in Run history within one of Cube's check periods of finishing; a build started from Jobs that finishes while no browser has Jobs open is not recorded; a recorded outcome differs from what Cube reported; or a pre-aggregation has more than 100 records.
 - [ ] AC-151 THE SYSTEM SHALL show the build queue with each entry's pre-aggregation, partition, state and token, and allow cancelling a queued entry.
       Fails when: a queued build is missing, or cancelling leaves it queued.
 - [x] AC-152 THE SYSTEM SHALL show every job and schedule with an icon and a text label for its state, never colour alone (direction.md rule 22).

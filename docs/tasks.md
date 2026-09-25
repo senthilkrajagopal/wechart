@@ -2583,7 +2583,9 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 > **2026-09-21: T156, T159, T160 and T161 are deferred.** Cube Core has no API for them: wechart's own build history and scheduler. The user: "for requirements that dont work with cube defer". See the status note under F17 in spec.md. T155, T157, T158 and T162 stay.
 >
-> **2026-09-24: T159 and T160 are back, re-scoped to Cube-owned schedules.** An independent analysis found Cube's refresh worker runs a pre-aggregation's `refresh_key` cron itself. The user chose "Cube-owned now", with the cron edited in Model's pre-aggregation form and a note that a run can start up to about five minutes late. T258 (the publish guard) comes first. The wechart scheduler moves to T259 (AC-234), deferred with T156 and T161.
+> **2026-09-24: T159 and T160 are back, re-scoped to Cube-owned schedules.** An independent analysis found Cube's refresh worker runs a pre-aggregation's `refresh_key` cron itself. The user chose "Cube-owned now", with the cron edited in Model's pre-aggregation form and a note that a run can start up to about five minutes late. T258 (the publish guard) comes first. The wechart scheduler moves to T259 (AC-234), deferred with T161.
+>
+> **2026-09-24: T156 is back too, as T263, T156, T261 and T262 (AC-150).** A second analysis found Cube Core blocks only the refresh worker's half of the history, which Cube's `logger` option can supply. Told what the history is for, the user chose "Build it, all builds", keeping the last 100 records of each pre-aggregation, and moving Cube to v1.7.43 after research.
 
 - [x] T155 (AC-149) Start a build, show its token, and poll to a terminal state
   - Files: `packages/api/src/jobs/build.ts`, `packages/web/src/workspaces/jobs/BuildPanel.tsx`, `packages/api/src/jobs/build.test.ts`
@@ -2611,10 +2613,33 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - **The accessibility sweep** covers the query log again (`/jobs?tab=queries` opens it). The e2e's job locator is the list item, not any `job-*` test id.
       - Left as found: a cube marked `public: false` is missing from the extended metadata outside dev mode, so its rollups can't be started here; the refresh worker still builds them.
     - AC-149 ticked. `e2e/jobs.spec.ts`, against the real Cube in all three browsers, builds the seed rollup from the Jobs page. The job's token appears, its state is followed to `done`, and it names its Cube Store table. Cube's own record of that token, asked afterwards, is `done`. `BuildPanel.test.tsx` shows the polling stopping at each finished state and not before.
-- [ ] T156 (AC-150) Keep build history in wechart beyond Cube's 24-hour window
-  - Files: `packages/api/src/repos/build-history.ts`, `packages/api/src/repos/build-history.test.ts`
-  - Failing test: `build-history.test.ts`: a build recorded more than 24 hours ago is still listed with its target, partitions, duration, outcome and log (AC-150).
-  - Depends on: T155
+- [ ] T263 (AC-150, AC-149) Move Cube and Cube Store to the version `docs/research/cube/upgrade-1.7.43.md` pins
+  - Files: `docker-compose.yml`, the research docs the upgrade doc corrects
+  - Failing test: `e2e/jobs.spec.ts`: a build whose import fails is reported as a failure, not `done`. It can only fail on v1.7.42 if the research shows how to make an import fail on purpose; if it doesn't, the task says so and the full suite is the check.
+  - **Why:** the user's decision of 2026-09-24 ("Proceed with cube update to 1.7.43", after research). On v1.7.42 a failed import can report `done`, and Run history would record it as a success.
+  - Depends on: `docs/research/cube/upgrade-1.7.43.md`
+- [ ] T156 (AC-150) Record every build wechart starts in its own history, followed by the API to its end
+  - Re-scoped 2026-09-24, when the user un-deferred AC-150 ("Build it, all builds"). It was a repository alone.
+  - Files: a migration and `packages/api/src/repos/build-history.ts` (+ test), `packages/api/src/jobs/build.ts` (+ test), `packages/api/src/jobs/follow.ts` (+ test)
+  - Failing test: `follow.test.ts` and `build-history.test.ts`:
+    - a build started through `POST /api/builds` is stored with its pre-aggregation, "started from Jobs", and each partition's token;
+    - the API itself asks Cube about each open token until it finishes, so a build finishes into the history with no browser polling;
+    - after a restart, open builds are followed again;
+    - a token Cube no longer knows is recorded as "Cube's record expired";
+    - the log keeps every state Cube reported, with the time wechart saw it;
+    - a 101st record of a pre-aggregation drops its oldest (AC-150).
+  - Depends on: T155, T263, `docs/research/cube/job-records.md`
+- [ ] T261 (AC-150) Record the refresh worker's builds through Cube's `logger` option
+  - Files: `infra/cube/cube.js`, `packages/api/src/jobs/events.ts` (+ test), `e2e/jobs.spec.ts`
+  - Failing test:
+    - `events.test.ts`: a completed or failed build event, in the shape the research records, is stored as "started by Cube's refresh worker", with its partition, duration and time in queue, or Cube's error.
+    - `e2e/jobs.spec.ts`: a rollup whose refresh key is `* * * * *` appears in Run history within one of Cube's check periods; this fails if Cube renames its events.
+    - `cube.js`'s logger never throws, and still prints every message as Cube's own logger would. When wechart can't be reached, Cube's builds and logging carry on, and only that build's record is lost (AC-150).
+  - Depends on: T156, `docs/research/cube/logger-build-events.md`
+- [ ] T262 (AC-150, AC-152) Show Run history in the Jobs workspace
+  - Files: `packages/api/src/jobs/build.ts` (a paged history route), `packages/web/src/workspaces/jobs/*`, `e2e/jobs.spec.ts`
+  - Failing test: `e2e/jobs.spec.ts`: Jobs › Run history lists builds newest first with the prototype's columns (started, pre-aggregation, partition, status with its icon and label, duration, what started it), filters by status and by what started it, and opens a build's log; a build older than Cube's 24 hours is still listed (AC-150, AC-152).
+  - Depends on: T156
 - [ ] T157 (AC-151) Show the build queue and cancel a queued entry
   - Files: `packages/web/src/workspaces/jobs/BuildQueue.tsx`, `packages/api/src/routes/jobs.ts`, `packages/api/src/jobs/queue.test.ts`
   - Failing test: `queue.test.ts`: every queued build appears with its pre-aggregation, partition, state and token, and cancelling removes it from the queue (AC-151).
@@ -3844,7 +3869,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-012 | T013       | AC-057 | T063 | AC-102 | T108 | AC-147 | T153       |
 | AC-013 | T014       | AC-058 | T064 | AC-103 | T109 | AC-148 | T154       |
 | AC-014 | T003, T186 | AC-059 | T065 | AC-104 | T110 | AC-149 | T155       |
-| AC-015 | T003, T198 | AC-060 | T066 | AC-105 | T111 | AC-150 | T156       |
+| AC-015 | T003, T198 | AC-060 | T066 | AC-105 | T111 | AC-150 | T263, T156, T261, T262 |
 | AC-016 | T015       | AC-061 | T067 | AC-106 | T112 | AC-151 | T157       |
 | AC-017 | T016       | AC-062 | T068 | AC-107 | T113 | AC-152 | T158       |
 | AC-018 | T023       | AC-063 | T069 | AC-108 | T114 | AC-153 | T258, T159 |
