@@ -42,6 +42,9 @@ export function DashboardLoading() {
               <span className="skeleton-bar" />
             </span>
           </div>
+          {/* The rest of the strip's rule, the whole width, as the
+              dashboard's own row draws it (T251's review). */}
+          <div className="page-tabs__rest" />
         </div>
         <div className="filter-bar" />
       </div>

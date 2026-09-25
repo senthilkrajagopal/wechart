@@ -187,6 +187,72 @@ test('a failed tile keeps its ⋯ menu, and its Details hold the error and the q
     'aria-disabled',
     'true',
   );
+  // View query works there: it reads the chart's document, not an answer
+  // (T251's review). Escape closes Export's submenu; the menu stays open.
+  await page.keyboard.press('Escape');
+  await items.getByRole('menuitem', { name: 'View query' }).click();
+  await expect(page.getByRole('dialog', { name: /query/i })).toContainText('"measures"');
+});
+
+test('a tile with no fields yet, or a chart that is gone, has no failure menu (T251’s review)', async ({
+  page,
+  request,
+}) => {
+  const api = 'http://localhost:4100/api';
+  const name = `Menus ${String(Date.now())}`;
+  const { id } = (await (
+    await request.post(`${api}/documents`, {
+      data: { kind: 'dashboard', title: name, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  const empty = (await (
+    await request.post(`${api}/documents`, {
+      data: { kind: 'chart', title: 'Not built yet', folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  await request.put(`${api}/documents/chart/${empty.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: 'Not built yet',
+        owner: 'admin',
+        localToDashboardId: id,
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: [], dimensions: [], timeDimensions: [] },
+          chartType: 'bar',
+        },
+      },
+    },
+  });
+  await request.put(`${api}/documents/dashboard/${id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: name,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [
+              { id: 'tile-empty', kind: 'chart', w: 6, h: 30, chartId: empty.id },
+              { id: 'tile-gone', kind: 'chart', w: 6, h: 30, chartId: 'no-such-chart' },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.locator('[data-tile="tile-empty"]').getByTestId('tile-empty-chart')).toBeVisible();
+  await expect(page.locator('[data-tile="tile-gone"]')).toContainText('no longer available');
+  await expect(page.getByTestId('tile-view-menu-tile-empty')).toHaveCount(0);
+  await expect(page.getByTestId('tile-view-menu-tile-gone')).toHaveCount(0);
 });
 
 test('a chart that cannot be read for a network failure is not called missing', async ({

@@ -4187,6 +4187,10 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
       - "Loading the dashboard…" as a status with its icon (rule 3).
     - **A failed tile keeps its ⋯ menu.** View query and Edit chart work there, since both read the chart's document, not an answer. Copy and Export stay in the menu, disabled with the reason "The chart could not be loaded, so nothing is drawn to copy or export." A chart that is gone still has no menu.
     - **The error's "Details" disclosure** (direction.md §6) holds Cube's message with the HTTP status, then the query that met it. It replaces "Show query", which revealed the query alone. The tests that pressed "Show query" now press "Details", one for one.
+  - **Cold review (one round), verdict FAIL. Fixed:**
+    - **A chart with no fields yet got a failure menu**, whose Copy and Export said "could not be loaded". It had failed at nothing. The failed tile's menu is now kept to a load that failed. It is not offered for a chart that is gone, has no fields yet, or has no type yet, nor without the chart's document in hand, which View query and the editor read.
+    - **The loading frame's tab rule** now runs the whole width, as the dashboard's own row draws it.
+    - **Tests:** a new e2e shows that a tile with no fields and a chart that is gone get no menu. It failed first, with the fix set aside. The failed-tile test now chooses View query and sees the query.
 
 ## Spec F23. The chart tile's menu (DSH-08), and F16's join refusal
 

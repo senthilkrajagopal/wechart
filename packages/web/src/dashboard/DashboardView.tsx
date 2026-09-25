@@ -720,6 +720,12 @@ interface TileCharts {
   readonly memberTitle?: ((member: string) => string | undefined) | undefined;
   /** A chart's own type, from its document (T132). */
   readonly typeOf?: ((chartId: string) => ChartType | undefined) | undefined;
+  /**
+   * Whether a chart's document is in hand (T251's review): a failed tile's
+   * menu reads its query and its editor from it, so without one there is no
+   * menu to offer.
+   */
+  readonly documented?: ((chartId: string) => boolean) | undefined;
   /** What Cube said of each chart's answer (T154, T014). */
   readonly answered?: Readonly<Record<string, AnswerMeta>> | undefined;
   /** Charts refreshed this session, whose answer may have come from a pre-aggregation (T154). */
@@ -1096,13 +1102,18 @@ function Elements({
                 "Download CSV", for a chart with something drawn — and for
                 one whose load failed, which keeps its menu to view its query
                 and edit it (T251; recheck-dashboard F10). Not for a chart
-                that is gone, which has neither. */}
+                that is gone, nor one with no fields or no type yet, which
+                failed at nothing; and only with its document in hand, which
+                its query and editor are read from (T251's review). */}
             {affordances.editing ||
             element.kind !== 'chart' ||
             element.chartId === undefined ||
             (charts.specs[chartId] === undefined &&
               (charts.errors[chartId] === undefined ||
-                charts.errors[chartId] === CHART_MISSING)) ? null : (
+                charts.errors[chartId] === CHART_MISSING ||
+                charts.errors[chartId] === CHART_UNTYPED ||
+                charts.errors[chartId] === NOTHING_CHOSEN ||
+                charts.documented?.(chartId) !== true)) ? null : (
               <TileViewMenu
                 tileId={element.id}
                 title={charts.titleOf?.(chartId) ?? element.text ?? 'chart'}
@@ -3392,6 +3403,7 @@ export function DashboardView({
     titleOf: chartTitleOf,
     memberTitle,
     typeOf: (chartId: string) => drawn.documents?.[chartId]?.chart.chartType,
+    documented: (chartId: string) => drawn.documents?.[chartId] !== undefined,
     answered: withFiltered.answered,
     ...(onRefresh === undefined ? {} : { onRefresh: refreshTile }),
     refreshedFromRollup,
