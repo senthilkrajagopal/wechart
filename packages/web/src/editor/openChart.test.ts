@@ -184,30 +184,6 @@ describe('opening a chart by id', () => {
     expect(version).toBe(4);
   });
 
-  it('says whether the chart is new, with no cube chosen, or built on one', async () => {
-    // A new chart from New › Chart reaches the editor as the server upgrades
-    // it, with no cube named (T256): its editor goes back to Explore, a built
-    // one's to its page.
-    const created = await loadChart(
-      'c-new',
-      answering(200, {
-        body: {
-          schemaVersion: 2,
-          title: 'Untitled chart',
-          owner: 'admin',
-          chart: {
-            source: { cube: '' },
-            wells: { measures: [], dimensions: [], timeDimensions: [] },
-          },
-        },
-        version: 1,
-      }),
-    );
-    expect(created.fresh).toBe(true);
-    const { fresh } = await loadChart('seed-chart-status', answering(200, { body: saved }));
-    expect(fresh).toBe(false);
-  });
-
   it('keeps every field this build does not know, so writing an edit back loses none', async () => {
     /**
      * The server replaces a chart's body whole, and `readChartDocument` keeps

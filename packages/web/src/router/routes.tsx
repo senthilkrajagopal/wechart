@@ -29,6 +29,8 @@ import { DataSourcesPage } from '../workspaces/admin/DeferredPage';
 import { SchedulesPage } from '../workspaces/schedules/SchedulesPage';
 import { ModelFilePage } from '../workspaces/model/ModelFilePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
+import { exploreHref } from '../workspaces/explore/folders';
+import { SHARED_ROOT } from '../workspaces/explore/roots';
 import { WORKSPACES, type WorkspaceId } from '../shell/WorkspaceSwitcher';
 
 /**
@@ -283,7 +285,7 @@ function ChartEditorSurface() {
    * in the folder it was made in.
    */
   const save = useMutation({
-    /** Where to go once it is written: its page, unless Back says otherwise. */
+    /** Where to go once it is written: the chart's page. */
     mutationFn: async (then: string) => {
       const loaded = chart.data;
       // Refused, not a silent success that goes to the page with nothing
@@ -314,30 +316,33 @@ function ChartEditorSurface() {
     },
   });
 
-  const local = chart.data?.document.localToDashboardId !== undefined;
-  const fresh = chart.data?.fresh === true;
+  const owner = chart.data?.document.localToDashboardId;
+  const local = owner !== undefined;
+  // New only as New › Chart opens it (T256's review): a saved chart with no
+  // fields yet is not new, and may already be on dashboards.
+  const fresh = chartEditorRoute.useSearch().new === true && !local;
   const page = `/explore/charts/${encodeURIComponent(chartId)}`;
   /**
-   * The prototype's way back (T256, recheck-chart-editor N2): to Explore, in
-   * the chart's folder, for a chart never saved; to its page otherwise. Like
-   * the prototype's, it applies the edit on the way: a changed library chart
-   * is saved first, and a failed save keeps the editor open with its reason.
-   * A dashboard's own chart is saved with that dashboard, so it just leaves.
+   * The prototype's way back (T256, recheck-chart-editor N2). Like the
+   * prototype's, it applies the edit on the way: a changed library chart is
+   * saved and its page opened, as Save chart does (AC-213), and a failed save
+   * keeps the editor open with its reason. Unchanged, a new chart goes back
+   * to Explore in its folder, and a saved one to its page. A dashboard's own
+   * chart is saved with that dashboard, so it goes back there as it is.
    */
   const folderId = chart.data?.document.folderId;
-  const backTo = fresh
-    ? folderId === undefined
-      ? '/explore'
-      : `/explore?folder=${encodeURIComponent(folderId)}`
-    : page;
+  const back = local
+    ? { label: '← Back to dashboard', to: `/explore/dashboards/${encodeURIComponent(owner)}` }
+    : fresh
+      ? { label: '← Back to Explore', to: exploreHref(folderId ?? SHARED_ROOT.id) }
+      : { label: '← Back to chart', to: page };
   const changed =
+    !local &&
     edited !== undefined &&
     view.kind === 'editor' &&
     JSON.stringify(edited) !== JSON.stringify(view.initial);
-  const back = () => {
-    if (changed && !local) save.mutate(backTo);
-    else globalThis.location.assign(backTo);
-  };
+  // Written and leaving: nothing more to press until the page goes.
+  const leaving = save.isPending || save.isSuccess;
 
   return (
     <AppShell workspace="explore">
@@ -365,16 +370,23 @@ function ChartEditorSurface() {
           key={chartId}
           initial={view.initial}
           onChange={setEdited}
+          // An edit made while it is written would be lost as the page goes.
+          busy={leaving}
           head={{
             start: (
               <button
                 type="button"
                 className="btn-sm"
                 data-testid="editor-back"
-                disabled={save.isPending}
-                onClick={back}
+                disabled={leaving}
+                // Said before it is pressed: Back writes a changed chart.
+                title={changed ? 'Saves the change, then opens the chart' : undefined}
+                onClick={() => {
+                  if (changed) save.mutate(page);
+                  else globalThis.location.assign(back.to);
+                }}
               >
-                {fresh ? '← Back to Explore' : '← Back to chart'}
+                {back.label}
               </button>
             ),
             // Whose it is (AC-214), in the prototype's words (T256): new in its
@@ -399,7 +411,7 @@ function ChartEditorSurface() {
                   <button
                     type="button"
                     className="btn-primary btn-sm"
-                    disabled={save.isPending || edited === undefined}
+                    disabled={leaving || edited === undefined}
                     onClick={() => save.mutate(page)}
                   >
                     {save.isPending ? 'Saving…' : 'Save chart'}
@@ -417,6 +429,10 @@ function ChartEditorSurface() {
 const chartEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/explore/charts/$objectId/edit',
+  /** Opened by New › Chart (T256's review): anything else is no flag. */
+  validateSearch: (search: Record<string, unknown>): { new?: true | undefined } => ({
+    new: search['new'] === true || search['new'] === 'true' ? true : undefined,
+  }),
   component: ChartEditorSurface,
 });
 

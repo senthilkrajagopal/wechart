@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { StateLine } from '../shell/StatusIcon';
+import { FOLDERS_QUERY } from '../workspaces/explore/folders';
 import { SHARED_ROOT, rootTitleOf } from '../workspaces/explore/roots';
 
 /**
@@ -31,15 +32,7 @@ export function LibraryChartNote({
     },
     enabled: !fresh,
   });
-  const folders = useQuery({
-    queryKey: ['folders'],
-    queryFn: async () => {
-      const response = await fetch('/api/folders');
-      if (!response.ok) throw new Error(String(response.status));
-      return (await response.json()) as { id: string; title: string }[];
-    },
-    enabled: fresh,
-  });
+  const folders = useQuery({ ...FOLDERS_QUERY, enabled: fresh });
 
   if (fresh) {
     // A root is no folder of its own; it is named from the one list.

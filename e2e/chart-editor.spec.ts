@@ -754,8 +754,11 @@ test('the editor is three panes under one header row, its preview in view at 144
   const head = page.getByTestId('editor-bar');
   await expect(head.getByTestId('result-row-count')).toHaveText('3 rows');
   await expect(head).toContainText('Orders');
-  // A library chart not yet saved: new, and shared from its folder (T256).
-  await expect(head.getByTestId('editor-ownership')).toHaveText('New shared chart in Shared');
+  // A library chart that exists, on no dashboard: shared, not new for having
+  // no fields when opened (T256's review).
+  await expect(head.getByTestId('editor-ownership')).toHaveText(
+    'Shared chart · not on a dashboard yet',
+  );
   const title = head.getByLabel('Chart title');
   const before = await title.inputValue();
   await title.fill('Orders by status, renamed');
@@ -1248,7 +1251,7 @@ test.describe('T256: the library-chart editor’s way back and ownership note', 
       .getByRole('menu', { name: 'New' })
       .getByRole('menuitem', { name: /Chart$/ })
       .click();
-    await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit$/);
+    await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
 
     const head = page.getByTestId('editor-bar');
     const back = head.getByRole('button', { name: '← Back to Explore' });
@@ -1294,5 +1297,97 @@ test.describe('T256: the library-chart editor’s way back and ownership note', 
     await expect(page.getByTestId('editor-bar').getByTestId('editor-ownership')).toHaveText(
       'Shared chart · not on a dashboard yet',
     );
+  });
+
+  // T256's review: Back on a changed new chart saves it, so it lands where
+  // Save chart does — the chart's page (AC-213), as the prototype's does.
+  test('a new chart changed, then Back: saved, and on its page', async ({ page }) => {
+    await page.goto('/explore?folder=seed-folder-0');
+    await page
+      .getByTestId('explore-contents')
+      .getByRole('button', { name: 'New', exact: true })
+      .click();
+    await page
+      .getByRole('menu', { name: 'New' })
+      .getByRole('menuitem', { name: /Chart$/ })
+      .click();
+    await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
+    const id = /\/explore\/charts\/([^/]+)\/edit/.exec(page.url())?.[1] ?? '';
+
+    const head = page.getByTestId('editor-bar');
+    const title = `Made and kept ${String(Date.now())}`;
+    await head.getByLabel('Chart title').fill(title);
+    const back = head.getByRole('button', { name: '← Back to Explore' });
+    // It says it saves before it is pressed.
+    await expect(back).toHaveAttribute('title', 'Saves the change, then opens the chart');
+    await back.click();
+    await expect(page).toHaveURL(new RegExp(`/explore/charts/${id}$`));
+    await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText(title);
+  });
+
+  test('Back with nothing changed leaves without writing', async ({ page, request }) => {
+    const { id } = await savedChart(request, 0);
+    await page.goto(`/explore/charts/${id}/edit`);
+    const head = page.getByTestId('editor-bar');
+    await expect(head.getByTestId('result-row-count')).toHaveText('3 rows');
+    const back = head.getByRole('button', { name: '← Back to chart' });
+    await expect(back).not.toHaveAttribute('title');
+    await back.click();
+    await expect(page).toHaveURL(new RegExp(`/explore/charts/${id}$`));
+    // Still the version the set-up wrote: nothing was saved.
+    const stored = (await (await request.get(`${api}/documents/chart/${id}`)).json()) as {
+      version: number;
+    };
+    expect(stored.version).toBe(2);
+  });
+
+  test('a save refused on the way back keeps the editor open, with the reason', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await savedChart(request, 0);
+    await page.goto(`/explore/charts/${id}/edit`);
+    const head = page.getByTestId('editor-bar');
+    await expect(head.getByTestId('result-row-count')).toHaveText('3 rows');
+    await page.route(`**/api/documents/chart/${id}`, (route) =>
+      route.request().method() === 'PUT'
+        ? route.fulfill({ status: 409, contentType: 'application/json', body: '{}' })
+        : route.fallback(),
+    );
+    await head.getByLabel('Chart title').fill(`Refused ${String(Date.now())}`);
+    await head.getByRole('button', { name: '← Back to chart' }).click();
+    await expect(head).toContainText(
+      'This chart was changed elsewhere since it was opened. Reopen it to see.',
+    );
+    await expect(page).toHaveURL(new RegExp(`/explore/charts/${id}/edit$`));
+  });
+
+  // A chart that exists is not new for having no fields: only New › Chart makes one.
+  test('a saved chart with no fields yet, opened to edit, is not called new', async ({
+    page,
+    request,
+  }) => {
+    const { id } = (await (
+      await request.post(`${api}/documents`, {
+        data: { kind: 'chart', title: `Unbuilt ${String(Date.now())}`, folderId: 'seed-folder-0' },
+      })
+    ).json()) as { id: string };
+    await page.goto(`/explore/charts/${id}/edit`);
+    const head = page.getByTestId('editor-bar');
+    await expect(head.getByRole('button', { name: '← Back to chart' })).toBeVisible();
+    const note = head.getByTestId('editor-ownership');
+    await expect(note).toHaveText('Shared chart · not on a dashboard yet');
+    // The prototype's `xs muted` note.
+    await expect(note).toHaveCSS('font-size', '12px');
+    await expect(note).toHaveCSS('line-height', '16px');
+  });
+
+  test('a dashboard’s own chart goes back to its dashboard', async ({ page }) => {
+    await page.goto('/explore/charts/seed-chart-status/edit');
+    const back = page
+      .getByTestId('editor-bar')
+      .getByRole('button', { name: '← Back to dashboard' });
+    await back.click();
+    await expect(page).toHaveURL(/\/explore\/dashboards\/seed-root-dashboard-1$/);
   });
 });

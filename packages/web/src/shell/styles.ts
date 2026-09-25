@@ -3358,6 +3358,8 @@ main:has(.chart-editor) {
    it past the window (AC-179, T228's review). */
 .chart-editor__head > * { min-width: 0; }
 .chart-editor__head .state-line { margin: 0; flex: 0 1 auto; font-size: 12px; line-height: 16px; }
+/* A library chart's plain note: the prototype's \`xs muted\` (T256's review). */
+.chart-editor__note { flex: 0 1 auto; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .chart-editor__head .shared-chart-notice { flex: 0 1 auto; margin: 0; }
 .chart-editor__head [data-testid='editor-back'] {
   flex: 0 1 auto;

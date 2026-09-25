@@ -124,10 +124,11 @@ export function ExplorePage() {
         setRenameOf({ folder: created.id, text: DEFAULT_TITLES.folder });
         return;
       }
-      // A chart opens in the editor, to be built (AC-213); a dashboard, in
-      // edit mode, as the prototype's New opens it (T245, N15).
+      // A chart opens in the editor, to be built (AC-213), and new there
+      // (T256's review); a dashboard, in edit mode, as the prototype's New
+      // opens it (T245, N15).
       globalThis.location.assign(
-        `/explore/${created.kind}s/${encodeURIComponent(created.id)}${created.kind === 'chart' ? '/edit' : '?editing=true'}`,
+        `/explore/${created.kind}s/${encodeURIComponent(created.id)}${created.kind === 'chart' ? '/edit?new=true' : '?editing=true'}`,
       );
     },
   });

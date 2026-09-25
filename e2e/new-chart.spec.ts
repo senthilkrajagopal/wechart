@@ -24,8 +24,8 @@ test('New › Chart opens the editor on an untitled chart, and saving it opens i
     .click();
 
   // The editor, on the new chart.
-  await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit$/);
-  const id = /\/explore\/charts\/([^/]+)\/edit$/.exec(page.url())?.[1] ?? '';
+  await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
+  const id = /\/explore\/charts\/([^/]+)\/edit\?new=true$/.exec(page.url())?.[1] ?? '';
   // Its title, in the editor's header to change (AC-214).
   await expect(page.getByLabel('Chart title')).toHaveValue('Untitled chart');
 
@@ -66,7 +66,7 @@ test('a title typed and saved at once, without leaving the field, is the one sav
     .getByRole('menu', { name: 'New' })
     .getByRole('menuitem', { name: /Chart$/ })
     .click();
-  await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit$/);
+  await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
 
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
   await page.getByTestId('add-measures').selectOption('orders.count');
