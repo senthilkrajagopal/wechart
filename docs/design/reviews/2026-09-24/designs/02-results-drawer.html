@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 02 · Results drawer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4;
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8; --role-measure: #a85400; --role-measure-soft: #f8ecdf;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --grid: #ecebe7; --axis: #c9c7c1;
+    --cm-key: #1f6f86; --cm-str: #8a4b00; --cm-num: #2d6ab4; --cm-com: #6e6c67; --cm-atom: #7a3fb0;
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; font-weight: 600; }
+  .doc-head p { margin: 0; color: #d6d5cf; max-width: 1120px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 36px; }
+  .notes h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .notes > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1100px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; font-weight: 600; }
+  .notelist span.t { color: var(--text-secondary); }
+  .notes code, .states code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .prop { display: inline-block; font: 600 12px/16px var(--font-ui); color: #6b3fa0; background: #f1e9f8; border-radius: 3px; padding: 0 4px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .states h2 { margin: 0 0 16px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .srow { display: grid; grid-template-columns: 1fr 800px; gap: 24px; align-items: start; margin-bottom: 28px; }
+  .state h3 { margin: 0 0 4px; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .state p { margin: 0 0 8px; font-size: 13px; line-height: 19px; color: var(--text-secondary); }
+  .frame { background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: 6px; position: relative; overflow: hidden; }
+
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 260px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .search kbd { margin-left: auto; font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 4px; }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 6px; color: var(--text-secondary); }
+  .iconbtn.sm { width: 24px; height: 24px; }
+  .iconbtn.dis { opacity: .4; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .select, .input { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 8px; width: 100%; display: flex; align-items: center; gap: 6px; }
+  .select.sm, .input.sm { height: 28px; font-size: 12px; }
+  .select::after { content: ''; margin-left: auto; width: 8px; height: 8px; border-right: 1.5px solid var(--text-secondary); border-bottom: 1.5px solid var(--text-secondary); transform: rotate(45deg) translate(-2px, -2px); flex: none; }
+  .input.ph { color: var(--text-muted); }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; }
+  .seg span { height: 22px; padding: 0 8px; font-size: 12px; display: flex; align-items: center; background: var(--bg-surface); border-left: 1px solid var(--border-subtle); }
+  .seg span:first-child { border-left: 0; }
+  .seg span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .xs { font-size: 12px; line-height: 16px; } .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .tnum { font-variant-numeric: tabular-nums; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; background: var(--bg-subtle); color: var(--text-secondary); white-space: nowrap; }
+  .ed-head { height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); position: relative; }
+  .title-in { width: 300px; height: 32px; border: 1px solid transparent; border-radius: 4px; padding: 0 8px; font-size: 15px; font-weight: 600; display: flex; align-items: center; }
+  .note-warn { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--warn); }
+  .workbench { display: grid; grid-template-columns: 280px 800px 360px; height: 804px; }
+  .pane { background: var(--bg-surface); display: flex; flex-direction: column; min-height: 0; }
+  .pane.left { border-right: 1px solid var(--border-subtle); }
+  .pane.right { border-left: 1px solid var(--border-subtle); }
+  .pane-head { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); }
+  .pane-head h2 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .tree-search { padding: 8px 12px; }
+  .tgroup { padding: 4px 0; }
+  .tgroup-head { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .tgroup-head .count { margin-left: auto; font-weight: 400; color: var(--text-muted); }
+  .tgroup-head .via { font-weight: 400; color: var(--text-muted); }
+  .tgroup-head .car { width: 10px; color: var(--text-muted); font-weight: 400; }
+  .frow { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 22px; font-size: 12px; margin: 0 4px; border-radius: 4px; }
+  .frow .fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .frow.used .fname::after { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 6px; vertical-align: middle; }
+  .frow .fmeta { color: var(--text-muted); font-size: 12px; }
+  .ficon { width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; font: 600 12px var(--font-code); flex: none; }
+  .ficon.dim { color: var(--role-dim); background: var(--role-dim-soft); }
+  .ficon.measure { color: var(--role-measure); background: var(--role-measure-soft); }
+  .center { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .canvas-wrap { flex: 1; min-height: 0; padding: 12px; display: grid; grid-template-rows: auto 1fr; gap: 8px; }
+  .canvas-tool { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+  .tile { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 16px; min-height: 0; display: flex; flex-direction: column; }
+  .drawer { border-top: 1px solid var(--border-subtle); background: var(--bg-surface); display: flex; flex-direction: column; position: relative; }
+  .grip { position: absolute; top: -5px; left: 50%; width: 44px; height: 10px; margin-left: -22px; display: grid; place-items: center; cursor: row-resize; z-index: 2; }
+  .grip i { width: 32px; height: 4px; border-radius: 2px; background: var(--border-strong); display: block; }
+  .tabs { display: flex; align-items: center; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); }
+  .tabs .tb { height: 36px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .tabs .tools * { white-space: nowrap; }
+  .tabs .tb.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .tabs .tb .ct { font-weight: 400; color: var(--text-muted); }
+  .tabs .tools { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+  .grid-table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; font-weight: 600; height: 28px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; position: sticky; top: 0; }
+  .grid-table td { height: 24px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table .num { text-align: right; }
+  .grid-table tr.hl td { background: var(--bg-hover); }
+  .grid-table th .ficon { display: inline-grid; width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; font-size: 11px; }
+  .grid-table .rn { color: var(--text-muted); text-align: right; width: 36px; }
+  .grid-table td.dim { color: var(--text-muted); }
+  .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+  .section { padding: 12px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 8px; }
+  .field { display: grid; gap: 4px; }
+  .lbl { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); display: flex; gap: 6px; align-items: baseline; }
+  .lbl .opt { font-weight: 400; color: var(--text-muted); }
+  .reco-row { display: grid; grid-template-columns: 28px 1fr; gap: 8px; align-items: center; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px; }
+  .ico { width: 28px; height: 28px; border-radius: 6px; background: var(--bg-subtle); display: grid; place-items: center; color: var(--text-secondary); }
+  .reco-name { font-size: 12px; font-weight: 600; line-height: 16px; }
+  .reco-why { font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .reco-why u { text-decoration: none; color: var(--accent); font-weight: 600; }
+  .quick { display: flex; gap: 4px; align-items: center; }
+  .qb { height: 24px; min-width: 28px; padding: 0 6px; border: 1px solid var(--border-strong); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text-secondary); }
+  .qb.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .well { border: 1px dashed var(--border-strong); border-radius: 6px; padding: 5px; min-height: 36px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .pill { height: 24px; display: inline-flex; align-items: center; gap: 4px; padding: 0 2px 0 6px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+  .pill.dim { background: var(--role-dim-soft); color: var(--role-dim); }
+  .pill.measure { background: var(--role-measure-soft); color: var(--role-measure); }
+  .pill .agg { font-weight: 400; opacity: .85; }
+  .pill .x { width: 18px; height: 18px; display: grid; place-items: center; font-weight: 400; }
+  .addbtn { height: 24px; padding: 0 6px; font-size: 12px; color: var(--text-muted); display: inline-flex; align-items: center; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tip { position: absolute; z-index: 60; background: var(--text-primary); color: #f2f2f0; font-size: 12px; line-height: 16px; padding: 8px 10px; border-radius: 6px; width: 290px; box-shadow: var(--shadow-pop); }
+  .tip::before { content: ''; position: absolute; top: -5px; left: 40px; width: 10px; height: 10px; background: var(--text-primary); transform: rotate(45deg); }
+  .tip b { color: #fff; }
+  .tip a { color: #7fc8de; font-weight: 600; text-decoration: none; }
+  pre.code { margin: 0; padding: 10px 12px; font: 400 12px/18px var(--font-code); }
+  .k1 { color: var(--cm-key); } .s1 { color: var(--cm-str); } .n1 { color: var(--cm-num); } .c1 { color: var(--cm-com); font-style: italic; } .kw { color: var(--cm-atom); }
+  .dline { display: flex; gap: 8px; align-items: center; padding: 6px 12px; font-size: 12px; line-height: 16px; border-bottom: 1px solid var(--border-subtle); color: var(--text-secondary); }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+  .info { display: grid; grid-template-columns: 16px 1fr; gap: 8px; padding: 8px 10px; border-radius: 6px; background: var(--accent-soft); font-size: 12px; line-height: 16px; color: var(--text-primary); }
+  svg text { font-family: var(--font-ui); }
+</style>
+</head>
+<body>
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI review 2026-09-24 · Design 02 of 07 · for approval</div>
+    <h1>Chart editor — the results drawer</h1>
+    <p>The prototype's drawer (<code style="color:#f2f2f0;background:#333">editor.js</code> 416–479), kept open under the preview: a tab strip that is always visible, a resizable pane, and a real data grid formatted the way the model says. The app's fourth tab, Acceleration (AC-144), joins the same strip. The screen shows the drawer resized to 360 px on Results; the other tabs are drawn below at full size.</p>
+    <div class="ids">Addresses UX-058 UX-024 UX-062 UX-095 · Numbers are illustrative; members are the sample model's.</div>
+  </header>
+
+  <div class="screen">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span class="on">Explore</span><span>Model</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>Security</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>Search wechart<kbd>⌘K</kbd></div>
+      <span class="iconbtn"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></svg></span>
+      <span class="avatar">AD</span>
+    </div>
+    <div class="ed-head">
+      <span class="btn sm">← Back to chart</span>
+      <span class="title-in">Total Amount by country and status</span>
+      <span class="badge" style="background:var(--bg-hover);color:var(--text-primary)"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.2"/><path d="M8 7v4M8 4.6v.4"/></svg>Raw query</span>
+      <span class="badge tnum">24 rows · 42 ms</span>
+      <span class="xs muted">Shared chart · not on a dashboard yet</span>
+      <span class="spacer"></span>
+      <span class="iconbtn">↶</span><span class="iconbtn dis">↷</span>
+      <span class="btn sm">Discard changes</span>
+      <span class="btn sm primary">Save chart</span>
+      <div class="tip" style="left:432px;top:46px"><b>Not served by a pre-aggregation.</b> Cube queried the source database. If Cube runs in rollup-only mode it would refuse this chart. <a>Details in Acceleration</a></div>
+    </div>
+
+    <div class="workbench">
+      <aside class="pane left">
+        <div class="pane-head"><h2>Cube: <span class="mono" style="font-size:13px">orders</span></h2><span class="xs muted" style="margin-left:auto">3 cubes</span></div>
+        <div class="tree-search"><div class="input sm ph">Search fields</div></div>
+        <div>
+          <div class="tgroup">
+            <div class="tgroup-head"><span class="car">▾</span>Orders<span class="count">6</span></div>
+            <div class="frow"><span class="ficon measure">Σ</span><span class="fname">Count</span><span class="fmeta">count</span></div>
+            <div class="frow used"><span class="ficon measure">Σ</span><span class="fname">Total Amount</span><span class="fmeta">sum</span></div>
+            <div class="frow"><span class="ficon measure">Σ</span><span class="fname">Average Amount</span><span class="fmeta">avg</span></div>
+            <div class="frow"><span class="ficon dim">#</span><span class="fname">ID</span><span class="fmeta">1,184</span></div>
+            <div class="frow used"><span class="ficon dim">Aa</span><span class="fname">Status</span><span class="fmeta">3</span></div>
+            <div class="frow"><span class="ficon dim">◷</span><span class="fname">Ordered at</span><span class="fmeta">time</span></div>
+          </div>
+          <div class="tgroup">
+            <div class="tgroup-head"><span class="car">▾</span>Customers <span class="via">· via join</span><span class="count">4</span></div>
+            <div class="frow"><span class="ficon measure">Σ</span><span class="fname">Count</span><span class="fmeta">count</span></div>
+            <div class="frow"><span class="ficon dim">Aa</span><span class="fname">Name</span><span class="fmeta">96</span></div>
+            <div class="frow used"><span class="ficon dim">Aa</span><span class="fname">Country</span><span class="fmeta">8</span></div>
+            <div class="frow"><span class="ficon dim">◷</span><span class="fname">Signed up at</span><span class="fmeta">time</span></div>
+          </div>
+          <div class="tgroup"><div class="tgroup-head"><span class="car">▸</span>Products <span class="via">· via join</span><span class="count">3</span></div></div>
+        </div>
+      </aside>
+
+      <section class="center">
+        <div class="canvas-wrap">
+          <div class="canvas-tool">Showing <b style="color:var(--text-secondary)">Bar, horizontal, stacked by Status</b> · auto · click a segment to drill, keep or exclude</div>
+          <div class="tile">
+            <svg width="744" height="364" viewBox="0 0 744 364" role="img" aria-label="Total Amount by country, stacked by status">
+              <g font-size="12" fill="var(--text-secondary)">
+                <rect x="250" y="3" width="10" height="10" rx="2" fill="var(--s1)"/><text x="265" y="12">shipped</text>
+                <rect x="330" y="3" width="10" height="10" rx="2" fill="var(--s2)"/><text x="345" y="12">completed</text>
+                <rect x="425" y="3" width="10" height="10" rx="2" fill="var(--s3)"/><text x="440" y="12">processing</text>
+              </g>
+              <g stroke="var(--grid)"><line x1="266" y1="28" x2="266" y2="322"/><line x1="420" y1="28" x2="420" y2="322"/><line x1="574" y1="28" x2="574" y2="322"/><line x1="728" y1="28" x2="728" y2="322"/></g>
+              <g>
+                <rect x="112" y="35" width="284.7" height="22" fill="var(--s1)"/><rect x="398.7" y="35" width="206.3" height="22" fill="var(--s2)"/><path d="M607 35h50q4 0 4 4v14q0 4-4 4h-50z" fill="var(--s3)"/>
+                <rect x="112" y="71" width="195.7" height="22" fill="var(--s1)"/><rect x="309.7" y="71" width="142" height="22" fill="var(--s2)"/><path d="M453.7 71h32.7q4 0 4 4v14q0 4-4 4h-32.7z" fill="var(--s3)"/>
+                <rect x="112" y="107" width="174.9" height="22" fill="var(--s1)"/><rect x="288.9" y="107" width="126.6" height="22" fill="var(--s2)"/><path d="M417.5 107h28.9q4 0 4 4v14q0 4-4 4h-28.9z" fill="var(--s3)"/>
+                <rect x="112" y="143" width="141.8" height="22" fill="var(--s1)"/><rect x="255.8" y="143" width="102.3" height="22" fill="var(--s2)"/><path d="M360.2 143h22.7q4 0 4 4v14q0 4-4 4h-22.7z" fill="var(--s3)"/>
+                <rect x="112" y="179" width="125.7" height="22" fill="var(--s1)"/><rect x="239.7" y="179" width="90.4" height="22" fill="var(--s2)"/><path d="M332.1 179h19.3q4 0 4 4v14q0 4-4 4h-19.3z" fill="var(--s3)"/>
+                <rect x="112" y="215" width="104.5" height="22" fill="var(--s1)"/><rect x="218.5" y="215" width="75" height="22" fill="var(--s2)"/><path d="M295.5 215h15.4q4 0 4 4v14q0 4-4 4h-15.4z" fill="var(--s3)"/>
+                <rect x="112" y="251" width="87.2" height="22" fill="var(--s1)"/><rect x="201.2" y="251" width="62.7" height="22" fill="var(--s2)"/><path d="M265.9 251h11.9q4 0 4 4v14q0 4-4 4h-11.9z" fill="var(--s3)"/>
+                <rect x="112" y="287" width="72.9" height="22" fill="var(--s1)"/><rect x="186.9" y="287" width="52.3" height="22" fill="var(--s2)"/><path d="M241.2 287h9.2q4 0 4 4v14q0 4-4 4h-9.2z" fill="var(--s3)"/>
+              </g>
+              <g font-size="12" fill="var(--text-secondary)" text-anchor="end">
+                <text x="104" y="50">United States</text><text x="104" y="86">Germany</text><text x="104" y="122">United Kingdom</text><text x="104" y="158">France</text>
+                <text x="104" y="194">Canada</text><text x="104" y="230">Brazil</text><text x="104" y="266">Japan</text><text x="104" y="302">India</text>
+              </g>
+              <line x1="112" y1="322" x2="728" y2="322" stroke="var(--axis)"/><line x1="112" y1="28" x2="112" y2="322" stroke="var(--axis)"/>
+              <g font-size="12" fill="var(--text-muted)" text-anchor="middle" style="font-variant-numeric:tabular-nums"><text x="112" y="340">$0</text><text x="266" y="340">$40K</text><text x="420" y="340">$80K</text><text x="574" y="340">$120K</text><text x="720" y="340">$160K</text></g>
+            </svg>
+          </div>
+        </div>
+        <div class="drawer" style="height:360px">
+          <span class="grip" title="Drag to resize · double-click to reset"><i></i></span>
+          <div class="tabs">
+            <span class="tb on">Results <span class="ct">24</span></span><span class="tb">Underlying rows</span><span class="tb">Cube query</span><span class="tb">Acceleration <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="var(--text-muted)" stroke-width="1.6"><circle cx="8" cy="8" r="6"/></svg></span>
+            <span class="tools"><span class="xs muted tnum" style="margin-right:6px">24 rows · 42 ms</span><span class="btn sm ghost">Copy</span><span class="btn sm ghost">Download CSV</span><span class="iconbtn sm" title="Collapse">⌄</span></span>
+          </div>
+          <div style="overflow:hidden">
+            <table class="grid-table" style="width:100%">
+              <thead><tr><th class="rn">#</th><th style="width:220px"><span class="ficon dim">Aa</span>Country</th><th style="width:170px"><span class="ficon dim">Aa</span>Status</th><th class="num" style="width:150px"><span class="ficon measure">Σ</span>Total Amount</th><th></th></tr></thead>
+              <tbody>
+                <tr><td class="rn">1</td><td>United States</td><td><span class="sw" style="background:var(--s1)"></span>shipped</td><td class="num">$74,203</td><td></td></tr>
+                <tr><td class="rn">2</td><td>United States</td><td><span class="sw" style="background:var(--s2)"></span>completed</td><td class="num">$54,118</td><td></td></tr>
+                <tr><td class="rn">3</td><td>United States</td><td><span class="sw" style="background:var(--s3)"></span>processing</td><td class="num">$14,297</td><td></td></tr>
+                <tr class="hl"><td class="rn">4</td><td>Germany</td><td><span class="sw" style="background:var(--s1)"></span>shipped</td><td class="num">$51,090</td><td></td></tr>
+                <tr><td class="rn">5</td><td>Germany</td><td><span class="sw" style="background:var(--s2)"></span>completed</td><td class="num">$37,412</td><td></td></tr>
+                <tr><td class="rn">6</td><td>Germany</td><td><span class="sw" style="background:var(--s3)"></span>processing</td><td class="num">$9,802</td><td></td></tr>
+                <tr><td class="rn">7</td><td>United Kingdom</td><td><span class="sw" style="background:var(--s1)"></span>shipped</td><td class="num">$45,688</td><td></td></tr>
+                <tr><td class="rn">8</td><td>United Kingdom</td><td><span class="sw" style="background:var(--s2)"></span>completed</td><td class="num">$33,431</td><td></td></tr>
+                <tr><td class="rn">9</td><td>United Kingdom</td><td><span class="sw" style="background:var(--s3)"></span>processing</td><td class="num">$8,796</td><td></td></tr>
+                <tr><td class="rn">10</td><td>France</td><td><span class="sw" style="background:var(--s1)"></span>shipped</td><td class="num">$37,120</td><td></td></tr>
+                <tr><td class="rn">11</td><td>France</td><td><span class="sw" style="background:var(--s2)"></span>completed</td><td class="num">$27,084</td><td></td></tr>
+                <tr><td class="rn">12</td><td>France</td><td><span class="sw" style="background:var(--s3)"></span>processing</td><td class="num">$7,198</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <aside class="pane right">
+        <div class="tabs"><span class="tb on">Data</span><span class="tb">Customize</span></div>
+        <div>
+          <div class="section">
+            <div class="field"><span class="lbl">Cube or view</span><div class="select sm mono"><span class="muted" style="font-family:var(--font-ui)">Cube ·</span> orders</div></div>
+            <div class="field"><span class="lbl">Chart type</span>
+              <div class="reco-row"><span class="ico"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4h7M3 8h10M3 12h5"/></svg></span><span><span class="reco-name">Auto · Bar, horizontal, stacked</span><br><span class="reco-why">Picked by the recommender; changes as you add fields · <u>Change…</u></span></span></div>
+              <div class="quick" style="margin-top:2px"><span class="qb on">Auto</span><span class="qb"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 13V7M5 13V5M10 13V8M12 13V4"/></svg></span><span class="qb"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12"/><path d="M6 2v12M10 2v12M2 6h12M2 10h12"/></svg></span><span class="qb"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10"/><path d="M2 6h12M6 3v10M10 3v10M2 9.5h12"/></svg></span><span class="xs muted" style="margin-left:4px">Suggested for these fields</span></div>
+            </div>
+          </div>
+          <div class="section">
+            <div class="field"><span class="lbl">Metrics</span><div class="well"><span class="pill measure">Total Amount <span class="agg">sum</span><span class="x">×</span></span><span class="addbtn">+ metric</span></div></div>
+            <div class="field"><span class="lbl">Dimensions <span class="opt">(group by)</span></span><div class="well"><span class="pill dim">Country <span class="agg">Y</span><span class="x">×</span></span><span class="pill dim">Status <span class="agg">colour</span><span class="x">×</span></span><span class="addbtn">+ dimension</span></div></div>
+            <div class="field"><span class="lbl">Time</span><div class="well"><span class="addbtn">+ time dimension</span></div></div>
+            <div class="field"><span class="lbl">Filters</span><div class="well"><span class="addbtn">+ filter</span></div></div>
+            <div class="row2"><div class="field"><span class="lbl">Sort by</span><div class="select sm">Metric, high to low</div></div><div class="field"><span class="lbl">Top N <span class="opt">(+ Other)</span></span><div class="input sm ph">All</div></div></div>
+          </div>
+          <div class="section" style="border-bottom:0"><span class="xs" style="padding:4px 0"><span class="muted">▸</span> Why this recommendation?</span></div>
+        </div>
+      </aside>
+    </div>
+
+    <span class="pin" style="left:712px;top:522px">1</span>
+    <span class="pin" style="left:268px;top:536px">2</span>
+    <span class="pin" style="left:808px;top:520px">3</span>
+    <span class="pin" style="left:268px;top:580px">4</span>
+    <span class="pin" style="left:860px;top:606px">5</span>
+    <span class="pin" style="left:410px;top:72px">6</span>
+    <span class="pin" style="left:1068px;top:352px">7</span>
+  </div>
+
+  <section class="notes">
+    <h2>What changes, and why</h2>
+    <p>Today the drawer is a lone 73 × 32 px "Results" button; opened, it shows four identical bordered buttons and a browser-default table (14 px, 1 px padding, centred headers, left-aligned numbers). The analyst uses this drawer to check that the chart is right, so it has to be visible, legible and exact.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Open by default, and resizable</b><span class="t">240 px when the editor opens (the prototype's 220 plus a row), dragged from 160 px to half the canvas (direction.md §2 "Bottom drawer"), double-click to reset. The preview keeps its tile and simply gets shorter.</span><span class="fix">UX-058</span></div></li>
+      <li><span class="n">2</span><div><b>A real tab strip, always visible</b><span class="t">The prototype's <code>.tabs</code>: 36 px, 12/600, the selected tab in accent with a 2 px underline. Results shows its row count; Acceleration shows a hollow dot when no pre-aggregation serves the chart (✓ when one does). Collapsing leaves only this strip (state E), so the drawer is never hidden behind a button.</span><span class="fix">UX-058 · UX-095</span></div></li>
+      <li><span class="n">3</span><div><b>What the answer is, and what to do with it</b><span class="t">"24 rows · 42 ms", then Copy (tab-separated, pastes into a spreadsheet), Download CSV, and collapse. <i>Copy and Download CSV go beyond the prototype; the dashboard tile menu already downloads CSV.</i></span><span class="fix">UX-058</span></div></li>
+      <li><span class="n">4</span><div><b>One data grid for every table in the product</b><span class="t">12 px, a sticky 28 px <code>bg-subtle</code> header with the role chip, 24 px rows with rules, a muted row number. The same grid serves the preview's Table view and the dashboard tile's Table view, which are browser-default tables today.</span><span class="fix">UX-024</span></div></li>
+      <li><span class="n">5</span><div><b>Numbers read as numbers</b><span class="t">Measures right-aligned in tabular figures and in the model's format (currency here); dimensions left-aligned; a colour dimension carries its series swatch, so a row can be found in the chart.</span><span class="fix">UX-024 · checklist 1</span></div></li>
+      <li><span class="n">6</span><div><b>The rollup-only note lives with the badge it explains</b><span class="t">Hovering or focusing "Raw query" says what it means and links to Acceleration. It is shown as a banner only when Cube is known to run in rollup-only mode, where it is a real problem. The per-chart note the capability inventory asks for is kept; only its weight changes.</span><span class="fix">UX-062</span></div></li>
+      <li><span class="n">7</span><div><b>The inspector is Design 01</b><span class="t">Shown here in Auto, where no Recommended card is needed and Auto is the pressed quick pick.</span><span class="fix">UX-050 … UX-056</span></div></li>
+    </ol>
+  </section>
+
+  <section class="states">
+    <h2>The other tabs and states (drawer width 800 px, drawn at full size)</h2>
+
+    <div class="srow">
+      <div class="state">
+        <h3>B · Underlying rows — records you can trace</h3>
+        <p>Today this tab repeats the chart's own columns with a count of 1 per row, so no row leads to a record. Here the underlying query adds the measure's <b>drill members</b> when the model declares them (Cube returns <code>drillMembers</code> in <code>/v1/meta</code>, <code>docs/research/cube/data-apis.md</code>), and otherwise the cube's primary key and time dimension.</p>
+        <p><span class="prop">Proposal — needs the user's approval</span> It changes the underlying query's members, which AC-036 describes as "the underlying rows … for the current chart".</p>
+        <p>The cap is said, as the app already does ("first 200"), and Download CSV exports the same capped query.</p>
+      </div>
+      <div class="frame" style="height:320px">
+        <div class="tabs"><span class="tb">Results <span class="ct">24</span></span><span class="tb on">Underlying rows</span><span class="tb">Cube query</span><span class="tb">Acceleration</span><span class="tools"><span class="btn sm ghost">Download CSV</span><span class="iconbtn sm">⌄</span></span></div>
+        <div class="dline"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="1.6"><circle cx="8" cy="8" r="6.2"/><path d="M8 7v4M8 4.6v.4"/></svg>First 200 of 1,184 orders behind this chart · columns from Total Amount's drill members · the chart's filters applied</div>
+        <table class="grid-table" style="width:100%">
+          <thead><tr><th><span class="ficon dim">#</span>Order ID</th><th><span class="ficon dim">◷</span>Ordered at</th><th><span class="ficon dim">Aa</span>Customer</th><th><span class="ficon dim">Aa</span>Country</th><th><span class="ficon dim">Aa</span>Status</th><th class="num"><span class="ficon measure">Σ</span>Amount</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">1184</td><td>Aug 29, 2026 16:42</td><td>Alder &amp; Finch</td><td>Germany</td><td>processing</td><td class="num">$1,240.00</td></tr>
+            <tr><td class="mono">1183</td><td>Aug 29, 2026 11:05</td><td>Harbor Supply Co.</td><td>United States</td><td>shipped</td><td class="num">$860.50</td></tr>
+            <tr><td class="mono">1182</td><td>Aug 28, 2026 19:30</td><td>Kestrel Tools</td><td>Canada</td><td>completed</td><td class="num">$1,115.00</td></tr>
+            <tr><td class="mono">1181</td><td>Aug 28, 2026 09:12</td><td>Precision Works KK</td><td>Japan</td><td>shipped</td><td class="num">$2,030.75</td></tr>
+            <tr><td class="mono">1180</td><td>Aug 27, 2026 14:58</td><td>Atelier Lumen</td><td>France</td><td>completed</td><td class="num">$645.00</td></tr>
+            <tr><td class="mono">1179</td><td>Aug 27, 2026 08:21</td><td>Oakline Instruments</td><td>United Kingdom</td><td>shipped</td><td class="num">$1,378.20</td></tr>
+            <tr><td class="mono">1178</td><td>Aug 26, 2026 17:44</td><td>Rio Componentes</td><td>Brazil</td><td>shipped</td><td class="num">$512.40</td></tr>
+            <tr><td class="mono">1177</td><td>Aug 26, 2026 10:03</td><td>Harbor Supply Co.</td><td>United States</td><td>completed</td><td class="num">$934.00</td></tr>
+            <tr><td class="mono">1176</td><td>Aug 25, 2026 15:37</td><td>Nordlicht GmbH</td><td>Germany</td><td>shipped</td><td class="num">$1,006.10</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="srow">
+      <div class="state">
+        <h3>C · Cube query — readable, copyable, with the SQL beside it</h3>
+        <p>The JSON the chart sent, highlighted with the model editor's code colours, and a JSON | SQL switch showing the SQL Cube generated for it (the app already asks Cube's <code>/v1/sql</code> to decide acceleration). Copy copies the view that is showing.</p>
+        <p>Today: <code>JSON.stringify</code> in a plain block with no copy.</p>
+      </div>
+      <div class="frame" style="height:300px">
+        <div class="tabs"><span class="tb">Results <span class="ct">24</span></span><span class="tb">Underlying rows</span><span class="tb on">Cube query</span><span class="tb">Acceleration</span><span class="tools"><span class="seg"><span class="on">JSON</span><span>SQL</span></span><span class="btn sm ghost">Copy</span><span class="iconbtn sm">⌄</span></span></div>
+<pre class="code"><span class="muted">{</span>
+  <span class="k1">"measures"</span>: [<span class="s1">"orders.total_amount"</span>],
+  <span class="k1">"dimensions"</span>: [<span class="s1">"customers.country"</span>, <span class="s1">"orders.status"</span>],
+  <span class="k1">"filters"</span>: [],
+  <span class="k1">"order"</span>: { <span class="s1">"orders.total_amount"</span>: <span class="s1">"desc"</span> },
+  <span class="k1">"timezone"</span>: <span class="s1">"UTC"</span>,
+  <span class="k1">"limit"</span>: <span class="n1">5000</span>
+<span class="muted">}</span></pre>
+        <div class="dline" style="border-top:1px solid var(--border-subtle);border-bottom:0;position:absolute;left:0;right:0;bottom:0"><span class="muted">Sent to</span> <span class="mono">POST /cubejs-api/v1/load</span> <span class="muted">· 42 ms · 24 rows</span></div>
+      </div>
+    </div>
+
+    <div class="srow">
+      <div class="state">
+        <h3>D · Acceleration — the answer to "why is this slow?"</h3>
+        <p>The app's existing Acceleration tab, given the grid's typography and a clear next step. It states which pre-aggregation served the chart, or why none could, and where to add one. The rollup-only sentence sits here as information rather than as a warning on every chart.</p>
+      </div>
+      <div class="frame" style="height:230px">
+        <div class="tabs"><span class="tb">Results <span class="ct">24</span></span><span class="tb">Underlying rows</span><span class="tb">Cube query</span><span class="tb on">Acceleration</span><span class="tools"><span class="iconbtn sm">⌄</span></span></div>
+        <div style="padding:12px;display:grid;gap:10px">
+          <span class="status" style="color:var(--text-secondary)"><svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>Not served by a pre-aggregation</span>
+          <div class="xs">Stopped by <span class="mono">customers.country</span>: the cube <span class="mono">customers</span> has no pre-aggregation that also holds <span class="mono">orders.total_amount</span>.</div>
+          <div class="info"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="1.6"><circle cx="8" cy="8" r="6.2"/><path d="M8 7v4M8 4.6v.4"/></svg><span>If Cube runs in rollup-only mode (<span class="mono">CUBEJS_ROLLUP_ONLY</span>) it would refuse this chart. It is a note here, and becomes a warning only where wechart knows that mode is on.</span></div>
+          <div style="display:flex;gap:6px"><span class="btn sm">Open in Model › Pre-aggs</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="srow">
+      <div class="state">
+        <h3>E · Collapsed</h3>
+        <p>Collapsing keeps the 37 px strip, with the row count and an expand chevron, so the drawer is discoverable and one click away. The preview gets the height back.</p>
+      </div>
+      <div class="frame" style="height:37px">
+        <div class="tabs" style="border-bottom:0"><span class="tb">Results <span class="ct">24</span></span><span class="tb">Underlying rows</span><span class="tb">Cube query</span><span class="tb">Acceleration</span><span class="tools"><span class="xs muted tnum" style="margin-right:6px">24 rows · 42 ms</span><span class="iconbtn sm" title="Expand">⌃</span></span></div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

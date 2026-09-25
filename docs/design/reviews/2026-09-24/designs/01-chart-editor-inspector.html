@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 01 · Chart editor inspector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  /* tokens: docs/design/direction.md §5 and §7d (light), component rules from docs/design/prototype/index.html */
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4;
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8; --role-measure: #a85400; --role-measure-soft: #f8ecdf;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --grid: #ecebe7; --axis: #c9c7c1;
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  button, input, select { font: inherit; color: inherit; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; font-weight: 600; }
+  .doc-head p { margin: 0; color: #d6d5cf; max-width: 1120px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 36px; }
+  .notes h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .notes > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1100px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; font-weight: 600; }
+  .notelist span.t { color: var(--text-secondary); }
+  .notelist code, .notes code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .states h2 { margin: 0 0 16px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .srow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .state h3 { margin: 0 0 4px; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .state p { margin: 0 0 10px; font-size: 12px; line-height: 16px; color: var(--text-secondary); min-height: 32px; }
+  .frame { background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: 6px; position: relative; overflow: hidden; }
+
+  /* ---- shell ---- */
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 260px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .search kbd { margin-left: auto; font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 4px; }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--text-secondary); padding: 0; }
+  .iconbtn.dis { opacity: .4; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+
+  /* ---- controls ---- */
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .select, .input { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 8px; width: 100%; display: flex; align-items: center; gap: 6px; }
+  .select.sm, .input.sm { height: 28px; font-size: 12px; }
+  .select::after { content: ''; margin-left: auto; width: 8px; height: 8px; border-right: 1.5px solid var(--text-secondary); border-bottom: 1.5px solid var(--text-secondary); transform: rotate(45deg) translate(-2px, -2px); flex: none; }
+  .input.ph { color: var(--text-muted); }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; }
+  .seg span { height: 26px; padding: 0 10px; font-size: 12px; display: flex; align-items: center; background: var(--bg-surface); border-left: 1px solid var(--border-subtle); }
+  .seg span:first-child { border-left: 0; }
+  .seg span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .xs { font-size: 12px; line-height: 16px; }
+  .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .strong { font-weight: 600; } .tnum { font-variant-numeric: tabular-nums; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; background: var(--bg-subtle); color: var(--text-secondary); white-space: nowrap; }
+  .badge.accent { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+  /* ---- editor ---- */
+  .ed-head { height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); }
+  .title-in { width: 262px; height: 32px; border: 1px solid transparent; border-radius: 4px; padding: 0 8px; font-size: 15px; font-weight: 600; display: flex; align-items: center; }
+  .note-warn { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--warn); }
+  .workbench { display: grid; grid-template-columns: 280px 800px 360px; height: 804px; }
+  .pane { background: var(--bg-surface); display: flex; flex-direction: column; min-height: 0; }
+  .pane.left { border-right: 1px solid var(--border-subtle); }
+  .pane.right { border-left: 1px solid var(--border-subtle); }
+  .pane-head { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); }
+  .pane-head h2 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .tree-search { padding: 8px 12px; }
+  .tgroup { padding: 4px 0; }
+  .tgroup-head { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .tgroup-head .count { margin-left: auto; font-weight: 400; color: var(--text-muted); }
+  .tgroup-head .via { font-weight: 400; color: var(--text-muted); }
+  .tgroup-head .car { width: 10px; color: var(--text-muted); font-weight: 400; }
+  .frow { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 22px; font-size: 12px; margin: 0 4px; border-radius: 4px; }
+  .frow.hover { background: var(--bg-hover); }
+  .frow .fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .frow.used .fname::after { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 6px; vertical-align: middle; }
+  .frow .fmeta { color: var(--text-muted); font-size: 12px; }
+  .ficon { width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; font: 600 12px var(--font-code); flex: none; }
+  .ficon.dim { color: var(--role-dim); background: var(--role-dim-soft); }
+  .ficon.measure { color: var(--role-measure); background: var(--role-measure-soft); }
+  .center { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .canvas-wrap { flex: 1; min-height: 0; padding: 12px; display: grid; grid-template-rows: auto 1fr; gap: 8px; }
+  .canvas-tool { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+  .tile { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 16px; min-height: 0; display: flex; flex-direction: column; }
+  .drawer { height: 240px; border-top: 1px solid var(--border-subtle); background: var(--bg-surface); display: flex; flex-direction: column; position: relative; }
+  .drawer .grip { position: absolute; top: -4px; left: 50%; width: 36px; height: 8px; margin-left: -18px; display: grid; place-items: center; }
+  .drawer .grip i { width: 28px; height: 3px; border-radius: 2px; background: var(--border-strong); display: block; }
+  .tabs { display: flex; align-items: center; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); }
+  .tabs .tb { height: 36px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 4px; }
+  .tabs .tb.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .tabs .tools { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .grid-table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; font-weight: 600; height: 28px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; position: sticky; top: 0; }
+  .grid-table td { height: 24px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table .num { text-align: right; }
+  .grid-table tr.hl td { background: var(--bg-hover); }
+  .grid-table th .ficon { display: inline-grid; width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; font-size: 11px; }
+
+  /* inspector */
+  .section { padding: 12px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 8px; }
+  .field { display: grid; gap: 4px; }
+  .lbl { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); display: flex; gap: 6px; align-items: baseline; }
+  .lbl .opt { font-weight: 400; color: var(--text-muted); }
+  .reco-row { display: grid; grid-template-columns: 28px 1fr; gap: 8px; align-items: center; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px; background: var(--bg-surface); }
+  .ico { width: 28px; height: 28px; border-radius: 6px; background: var(--bg-subtle); display: grid; place-items: center; color: var(--text-secondary); }
+  .reco-name { font-size: 12px; font-weight: 600; line-height: 16px; }
+  .reco-why { font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .reco-why u { text-decoration: none; color: var(--accent); font-weight: 600; }
+  .quick { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .qb { height: 24px; min-width: 28px; padding: 0 6px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-surface); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text-secondary); }
+  .qb.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .pinned { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; align-items: start; padding: 8px; border-radius: 6px; background: var(--bg-subtle); font-size: 12px; line-height: 16px; }
+  .pinned .ic { color: var(--text-secondary); padding-top: 1px; }
+  .well { border: 1px dashed var(--border-strong); border-radius: 6px; padding: 5px; min-height: 36px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; background: var(--bg-surface); position: relative; }
+  .pill { height: 24px; display: inline-flex; align-items: center; gap: 4px; padding: 0 2px 0 6px; border-radius: 4px; font-size: 12px; font-weight: 600; max-width: 100%; }
+  .pill.dim { background: var(--role-dim-soft); color: var(--role-dim); }
+  .pill.measure { background: var(--role-measure-soft); color: var(--role-measure); }
+  .pill .agg { font-weight: 400; opacity: .85; }
+  .pill .agg.menu::after { content: ''; display: inline-block; width: 4px; height: 4px; border-right: 1.3px solid currentColor; border-bottom: 1.3px solid currentColor; transform: rotate(45deg); margin: 0 2px 3px 5px; }
+  .pill .x { width: 18px; height: 18px; border-radius: 3px; display: grid; place-items: center; font-weight: 400; }
+  .pill.off { background: var(--bg-surface); color: var(--text-muted); outline: 1px dashed var(--border-strong); outline-offset: -1px; }
+  .addbtn { height: 24px; padding: 0 6px; border-radius: 4px; font-size: 12px; color: var(--text-muted); display: inline-flex; align-items: center; }
+  .addbtn.act { background: var(--bg-hover); color: var(--text-primary); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .picker { position: absolute; top: 100%; left: 0; z-index: 20; margin-top: 4px; width: 264px; background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 4px; }
+  .picker .pf { padding: 2px 2px 6px; }
+  .picker .pg { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-muted); padding: 6px 6px 2px; display: flex; gap: 6px; }
+  .picker .pg .via { font-weight: 400; }
+  .picker .it { display: flex; align-items: center; gap: 8px; height: 28px; border-radius: 4px; font-size: 12px; padding: 0 6px; }
+  .picker .it .m { margin-left: auto; color: var(--text-muted); }
+  .picker .it.focus { background: var(--bg-hover); }
+  .picker .it.dis { opacity: .5; }
+  .picker .foot { border-top: 1px solid var(--border-subtle); margin-top: 4px; padding: 6px 6px 2px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+  .whybtn { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 6px; font-size: 12px; border-radius: 6px; justify-self: start; }
+  .check { display: grid; grid-template-columns: 20px 1fr; gap: 6px; align-items: start; font-size: 12px; line-height: 16px; padding: 3px 0; }
+  .warnline { display: grid; grid-template-columns: 16px 1fr; gap: 6px; font-size: 12px; line-height: 16px; padding: 8px; border-radius: 6px; background: color-mix(in srgb, var(--warn-icon) 16%, var(--bg-surface)); }
+  .tip { position: absolute; z-index: 30; background: var(--text-primary); color: #f2f2f0; font-size: 12px; line-height: 16px; padding: 6px 8px; border-radius: 4px; max-width: 240px; }
+  svg text { font-family: var(--font-ui); }
+</style>
+</head>
+<body>
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI review 2026-09-24 · Design 01 of 07 · for approval</div>
+    <h1>Chart editor — the prototype's inspector, finished</h1>
+    <p>The Data tab rebuilt to the approved prototype (<code style="color:#f2f2f0;background:#333">editor.js</code> 248–310): Cube or view, a Chart type card with quick picks, a Recommended card with a data-derived reason and <b>Use</b>, compact dashed wells with role-tinted pills and an inline <b>+ metric</b> picker, Sort beside Top N, and "Why this recommendation?" last. The field list gains joined cubes. The results drawer at the bottom is detailed in Design 02.</p>
+    <div class="ids">Addresses UX-050 UX-051 UX-052 UX-053 UX-054 UX-055 UX-056 UX-057 UX-059 UX-060 UX-061 UX-062 UX-063 UX-065 · Numbers are illustrative; members are the sample model's (orders, customers, products).</div>
+  </header>
+
+  <div class="screen">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span class="on">Explore</span><span>Model</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>Security</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>Search wechart<kbd>⌘K</kbd></div>
+      <span class="iconbtn"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></svg></span>
+      <span class="avatar">AD</span>
+    </div>
+
+    <!-- editor header -->
+    <div class="ed-head">
+      <span class="btn sm">← Back to chart</span>
+      <span class="title-in">Total Amount by country</span>
+      <span class="badge">Raw query</span>
+      <span class="badge tnum">8 rows · 42 ms</span>
+      <span class="note-warn"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" fill="var(--warn-icon)"/><path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" stroke-width="1.6"/></svg>Shared chart · on 2 dashboards · edits change both</span>
+      <span class="spacer"></span>
+      <span class="iconbtn" title="Undo">↶</span><span class="iconbtn dis" title="Redo">↷</span>
+      <span class="btn sm">Discard changes</span>
+      <span class="btn sm primary">Save chart</span>
+    </div>
+
+    <div class="workbench">
+      <!-- field list -->
+      <aside class="pane left">
+        <div class="pane-head"><h2>Cube: <span class="mono" style="font-size:13px">orders</span></h2><span class="xs muted" style="margin-left:auto">3 cubes</span></div>
+        <div class="tree-search"><div class="input sm ph">Search fields</div></div>
+        <div style="overflow:hidden">
+          <div class="tgroup">
+            <div class="tgroup-head"><span class="car">▾</span>Orders<span class="count">6</span></div>
+            <div class="frow"><span class="ficon measure">Σ</span><span class="fname">Count</span><span class="fmeta">count</span></div>
+            <div class="frow used"><span class="ficon measure">Σ</span><span class="fname">Total Amount</span><span class="fmeta">sum</span></div>
+            <div class="frow"><span class="ficon measure">Σ</span><span class="fname">Average Amount</span><span class="fmeta">avg</span></div>
+            <div class="frow"><span class="ficon dim">#</span><span class="fname">ID</span><span class="fmeta">1,184</span></div>
+            <div class="frow hover"><span class="ficon dim">Aa</span><span class="fname">Status</span><span class="fmeta">3</span></div>
+            <div class="frow"><span class="ficon dim">◷</span><span class="fname">Ordered at</span><span class="fmeta">time</span></div>
+          </div>
+          <div class="tgroup">
+            <div class="tgroup-head"><span class="car">▾</span>Customers <span class="via">· via join</span><span class="count">4</span></div>
+            <div class="frow"><span class="ficon measure">Σ</span><span class="fname">Count</span><span class="fmeta">count</span></div>
+            <div class="frow"><span class="ficon dim">Aa</span><span class="fname">Name</span><span class="fmeta">96</span></div>
+            <div class="frow used"><span class="ficon dim">Aa</span><span class="fname">Country</span><span class="fmeta">8</span></div>
+            <div class="frow"><span class="ficon dim">◷</span><span class="fname">Signed up at</span><span class="fmeta">time</span></div>
+          </div>
+          <div class="tgroup">
+            <div class="tgroup-head"><span class="car">▸</span>Products <span class="via">· via join</span><span class="count">3</span></div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- preview + drawer -->
+      <section class="center">
+        <div class="canvas-wrap">
+          <div class="canvas-tool">Showing <b style="color:var(--text-secondary)">Bar, horizontal</b> · chosen manually · click a bar to drill, keep or exclude</div>
+          <div class="tile">
+            <svg width="744" height="484" viewBox="0 0 744 484" role="img" aria-label="Total Amount by country, horizontal bars">
+              <g stroke="var(--grid)" stroke-width="1">
+                <line x1="266" y1="8" x2="266" y2="448"/><line x1="420" y1="8" x2="420" y2="448"/><line x1="574" y1="8" x2="574" y2="448"/><line x1="728" y1="8" x2="728" y2="448"/>
+              </g>
+              <g fill="var(--s1)">
+                <path d="M112 19h545q4 0 4 4v24q0 4-4 4h-545z"/>
+                <path d="M112 73h374.5q4 0 4 4v24q0 4-4 4h-374.5z"/>
+                <path d="M112 127h334.4q4 0 4 4v24q0 4-4 4h-334.4z"/>
+                <path d="M112 181h270.9q4 0 4 4v24q0 4-4 4h-270.9z"/>
+                <path d="M112 235h239.3q4 0 4 4v24q0 4-4 4h-239.3z"/>
+                <path d="M112 289h198.9q4 0 4 4v24q0 4-4 4h-198.9z"/>
+                <path d="M112 343h165.8q4 0 4 4v24q0 4-4 4h-165.8z"/>
+                <path d="M112 397h138.5q4 0 4 4v24q0 4-4 4h-138.5z"/>
+              </g>
+              <g font-size="12" fill="var(--text-secondary)" text-anchor="end">
+                <text x="104" y="39">United States</text><text x="104" y="93">Germany</text><text x="104" y="147">United Kingdom</text><text x="104" y="201">France</text>
+                <text x="104" y="255">Canada</text><text x="104" y="309">Brazil</text><text x="104" y="363">Japan</text><text x="104" y="417">India</text>
+              </g>
+              <line x1="112" y1="448" x2="728" y2="448" stroke="var(--axis)"/>
+              <line x1="112" y1="8" x2="112" y2="448" stroke="var(--axis)"/>
+              <g font-size="12" fill="var(--text-muted)" text-anchor="middle" style="font-variant-numeric:tabular-nums">
+                <text x="112" y="466">$0</text><text x="266" y="466">$40K</text><text x="420" y="466">$80K</text><text x="574" y="466">$120K</text><text x="720" y="466">$160K</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+        <div class="drawer">
+          <span class="grip"><i></i></span>
+          <div class="tabs">
+            <span class="tb on">Results</span><span class="tb">Underlying rows</span><span class="tb">Cube query</span><span class="tb">Acceleration</span>
+            <span class="tools"><span class="xs muted tnum">8 rows · 42 ms</span><span class="btn sm ghost">Copy</span><span class="btn sm ghost">Download CSV</span><span class="iconbtn" style="width:24px;height:24px">⌄</span></span>
+          </div>
+          <div style="overflow:hidden">
+            <table class="grid-table">
+              <thead><tr><th style="width:260px"><span class="ficon dim">Aa</span>Country</th><th class="num" style="width:160px"><span class="ficon measure">Σ</span>Total Amount</th><th style="width:380px"></th></tr></thead>
+              <tbody>
+                <tr><td>United States</td><td class="num">$142,618</td><td></td></tr>
+                <tr><td>Germany</td><td class="num">$98,304</td><td></td></tr>
+                <tr><td>United Kingdom</td><td class="num">$87,915</td><td></td></tr>
+                <tr><td>France</td><td class="num">$71,402</td><td></td></tr>
+                <tr><td>Canada</td><td class="num">$63,187</td><td></td></tr>
+                <tr><td>Brazil</td><td class="num">$52,690</td><td></td></tr>
+                <tr><td>Japan</td><td class="num">$44,093</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- inspector -->
+      <aside class="pane right">
+        <div class="tabs"><span class="tb on">Data</span><span class="tb">Customize</span></div>
+        <div>
+          <div class="section">
+            <div class="field"><span class="lbl">Cube or view</span><div class="select sm mono"><span class="muted" style="font-family:var(--font-ui)">Cube ·</span> orders</div></div>
+            <div class="field">
+              <span class="lbl">Chart type</span>
+              <div class="reco-row">
+                <span class="ico"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4h7M3 8h10M3 12h5"/></svg></span>
+                <span><span class="reco-name">Bar, horizontal</span><br><span class="reco-why">Chosen manually · <u>Change…</u></span></span>
+              </div>
+              <div class="quick" style="margin-top:2px">
+                <span class="qb">Auto</span>
+                <span class="qb" title="Bar"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 13V8M8 13V4M13 13V9"/></svg></span>
+                <span class="qb on" title="Bar, horizontal"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4h7M3 8h10M3 12h5"/></svg></span>
+                <span class="qb" title="Donut"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2.5"/><path d="M8 2v3.5"/></svg></span>
+                <span class="qb" title="Table"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10"/><path d="M2 6h12M6 3v10"/></svg></span>
+                <span class="xs muted" style="margin-left:4px">Suggested for these fields</span>
+              </div>
+            </div>
+            <div class="pinned">
+              <span class="ic"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 13V8M8 13V4M13 13V9"/></svg></span>
+              <span><b>Recommended: Bar</b><br><span class="sec">8 countries × 1 measure → bars, sorted by value</span></span>
+              <span class="btn sm">Use</span>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="field"><span class="lbl">Metrics</span>
+              <div class="well"><span class="pill measure">Total Amount <span class="agg menu">sum</span><span class="x">×</span></span><span class="addbtn">+ metric</span></div>
+            </div>
+            <div class="field"><span class="lbl">Dimensions <span class="opt">(group by)</span></span>
+              <div class="well"><span class="pill dim" title="Customers › Country, via join">Country <span class="agg">Y</span><span class="x">×</span></span><span class="addbtn">+ dimension</span></div>
+            </div>
+            <div class="field"><span class="lbl">Time</span>
+              <div class="well"><span class="addbtn">+ time dimension</span></div>
+            </div>
+            <div class="field"><span class="lbl">Filters</span>
+              <div class="well"><span class="pill dim">Status <span class="agg menu">is not</span> <span style="font-weight:400">processing</span><span class="x">×</span></span><span class="addbtn">+ filter</span></div>
+            </div>
+            <div class="row2">
+              <div class="field"><span class="lbl">Sort by</span><div class="select sm">Metric, high to low</div></div>
+              <div class="field"><span class="lbl">Top N <span class="opt">(+ Other)</span></span><div class="input sm ph">All</div></div>
+            </div>
+          </div>
+
+          <div class="section" style="border-bottom:0">
+            <span class="whybtn"><span style="color:var(--text-muted)">▸</span> Why this recommendation?</span>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <span class="pin" style="left:384px;top:36px">1</span>
+    <span class="pin" style="left:1px;top:393px">2</span>
+    <span class="pin" style="left:1068px;top:146px">3</span>
+    <span class="pin" style="left:1068px;top:204px">4</span>
+    <span class="pin" style="left:1068px;top:318px">5</span>
+    <span class="pin" style="left:1068px;top:410px">6</span>
+    <span class="pin" style="left:1410px;top:410px">7</span>
+    <span class="pin" style="left:1068px;top:684px">8</span>
+    <span class="pin" style="left:1068px;top:748px">9</span>
+    <span class="pin" style="left:284px;top:122px">10</span>
+    <span class="pin" style="left:284px;top:640px">11</span>
+  </div>
+
+  <section class="notes">
+    <h2>What changes, and why</h2>
+    <p>The layout, order and component rules are the prototype's; where this design goes beyond the prototype it says so. Every change keeps the app's existing behaviour behind it (history, AC-217's gallery, AC-029's trace, AC-216's grain and filters).</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Header reads like a page title, with the answer's facts as badges</b><span class="t">Borderless title (its field appears on hover and focus), <code>Raw query</code> or <code>✓ Pre-aggregation</code>, and <code>8 rows · 42 ms</code>; the ownership note with ⚠ when more than one dashboard uses the chart; ↶ ↷ icon buttons. The rollup-only sentence moves into the Raw query badge's tooltip and the Acceleration tab instead of a yellow banner over every chart.</span><span class="fix">UX-062</span></div></li>
+      <li><span class="n">2</span><div><b>Joined cubes in the field list</b><span class="t">Every cube reachable from <code>orders</code> through its joins is a group marked "via join" (collapsed after the first). Country comes from Customers, and now you can see where. Fields carry the 18 px role chip, their aggregation or distinct count, and a 6 px accent dot when used. One name per field: "Total Amount" here and on the pill.</span><span class="fix">UX-060 · UX-061</span></div></li>
+      <li><span class="n">3</span><div><b>Cube or view at the top of the inspector</b><span class="t">As in the prototype. It also stays named in the field pane's head so the list says whose fields they are.</span><span class="fix">UX-050</span></div></li>
+      <li><span class="n">4</span><div><b>Chart type card with quick picks</b><span class="t">Icon, name and "Chosen manually · Change…" (Change opens the existing gallery). Under it, Auto plus the recommender's top pick and runners-up as 24 px icon buttons, the drawn one pressed. Auto replaces the separate "Back to recommended" button and is hidden while already in Auto. Each icon's tooltip carries its runner-up reason.</span><span class="fix">UX-051 · UX-065</span></div></li>
+      <li><span class="n">5</span><div><b>A Recommended card only when your pick differs, with a reason from the data</b><span class="t">"8 countries × 1 measure → bars, sorted by value": the signature and cardinalities the recommender already computes, in ≤ 80 characters (AC-028), and a <b>Use</b> button. Replaces the fixed per-type sentence and the "Or" bullet list. <i>Goes beyond the app's current recommender strings; the data is already there.</i></span><span class="fix">UX-052</span></div></li>
+      <li><span class="n">6</span><div><b>Compact dashed wells, role-tinted pills</b><span class="t">12/600 label above a 36 px dashed well (radius 6); pills 24 px, radius 4, blue for dimensions and orange for measures, the aggregation as a tag that opens a small menu (sum, avg… where the model allows). The four wells now take 256 px instead of ~480.</span><span class="fix">UX-053 · UX-056</span></div></li>
+      <li><span class="n">7</span><div><b>"+ metric" opens the picker, not a native select</b><span class="t">A 264 px menu with a filter box, measures with orange Σ chips grouped by cube ("via join" for the others), each with its aggregation; members already used are shown checked and disabled. Fully keyboard-driven (↑ ↓ Enter Esc), which is also checklist rule 11's route. See state A below.</span><span class="fix">UX-054 · UX-096</span></div></li>
+      <li><span class="n">8</span><div><b>Sort beside Top N, directly under the wells</b><span class="t">The control that changes the chart most is no longer at the bottom of the tab. The app's richer choices stay (label A→Z / Z→A).</span><span class="fix">UX-055</span></div></li>
+      <li><span class="n">9</span><div><b>"Why this recommendation?" last, as a readable checklist</b><span class="t">Collapsed by default. Open, it lists the signature, each field's distinct values and only the rules that decided, in sentences with ✓ / ⚠ icons; "Show every rule for every type" keeps AC-029's full table one click away. See state C.</span><span class="fix">UX-059</span></div></li>
+      <li><span class="n">10</span><div><b>The preview sits in a tile, under a one-line status</b><span class="t">Same frame as on a dashboard (1 px border-subtle, radius 6, 16 px padding), so what you see is what the tile will be. The status line names the drawn form and what a click does.</span><span class="fix">UX-063</span></div></li>
+      <li><span class="n">11</span><div><b>Results drawer open by default</b><span class="t">Tabs always visible; a formatted grid (Design 02 has every tab and state).</span><span class="fix">UX-058</span></div></li>
+    </ol>
+  </section>
+
+  <section class="states">
+    <h2>States of the same inspector</h2>
+    <div class="srow">
+      <div class="state">
+        <h3>A · "+ metric" picker open</h3>
+        <p>Focus is in the filter box; ↓ moves to the first row. Total Amount is already in the chart, so it shows checked and disabled.</p>
+        <div class="frame" style="height:392px">
+          <div class="section" style="border:0">
+            <div class="field"><span class="lbl">Metrics</span>
+              <div class="well"><span class="pill measure">Total Amount <span class="agg menu">sum</span><span class="x">×</span></span><span class="addbtn act">+ metric</span>
+                <div class="picker" style="left:118px">
+                  <div class="pf"><div class="input sm" style="border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)"><span class="muted">Filter measures</span></div></div>
+                  <div class="pg">Orders</div>
+                  <div class="it focus"><span class="ficon measure">Σ</span>Count<span class="m">count</span></div>
+                  <div class="it dis"><span class="ficon measure">Σ</span>Total Amount<span class="m">✓ in chart</span></div>
+                  <div class="it"><span class="ficon measure">Σ</span>Average Amount<span class="m">avg</span></div>
+                  <div class="pg">Customers <span class="via">· via join</span></div>
+                  <div class="it"><span class="ficon measure">Σ</span>Count<span class="m">count</span></div>
+                  <div class="pg">Products <span class="via">· via join</span></div>
+                  <div class="it"><span class="ficon measure">Σ</span>Count<span class="m">count</span></div>
+                  <div class="foot">↑ ↓ move · Enter adds · Esc closes</div>
+                </div>
+              </div>
+            </div>
+            <div class="field"><span class="lbl">Dimensions <span class="opt">(group by)</span></span><div class="well"><span class="pill dim">Country <span class="agg">Y</span><span class="x">×</span></span></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="state">
+        <h3>B · A metric the form can't draw</h3>
+        <p>Today a second metric is queried but silently not drawn. Here its pill says so, and the forms that draw both are one click away.</p>
+        <div class="frame" style="height:392px">
+          <div class="section" style="border:0">
+            <div class="field"><span class="lbl">Metrics</span>
+              <div class="well"><span class="pill measure">Total Amount <span class="agg menu">sum</span><span class="x">×</span></span><span class="pill off" title="Not drawn">Count <span class="agg">count · not drawn</span><span class="x">×</span></span><span class="addbtn">+ metric</span></div>
+            </div>
+            <div class="warnline"><svg width="14" height="14" viewBox="0 0 16 16" style="margin-top:1px"><path d="M8 1.5l7 12.5H1z" fill="var(--warn-icon)"/><path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" stroke-width="1.6"/></svg><span><b>Bar, horizontal draws one metric.</b> Count is in the query and the results, but not on the chart.<span style="display:flex;gap:6px;margin-top:8px"><span class="btn sm">Small multiples</span><span class="btn sm">Table</span><span class="btn sm ghost">Remove Count</span></span></span></div>
+            <div class="field"><span class="lbl">Dimensions <span class="opt">(group by)</span></span><div class="well"><span class="pill dim">Country <span class="agg">Y</span><span class="x">×</span></span><span class="addbtn">+ dimension</span></div></div>
+            <p class="xs muted" style="margin:0">In Auto the recommender never picks a form that drops a metric: two metrics on different scales become small multiples (direction.md §6).</p>
+          </div>
+        </div>
+      </div>
+      <div class="state">
+        <h3>C · "Why this recommendation?" open</h3>
+        <p>The prototype's checklist: what the recommender saw and the rules that decided. AC-029's full table stays behind the last link.</p>
+        <div class="frame" style="height:392px">
+          <div class="section" style="border:0;gap:2px">
+            <span class="whybtn" style="padding-left:0"><span style="color:var(--text-muted)">▾</span> Why this recommendation?</span>
+            <div class="check"><svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="var(--ok-icon)"/><path d="M4.5 8.2l2.2 2.2 4.8-4.8" stroke="#fff" stroke-width="1.8" fill="none"/></svg><span>Signature: 1 category × 1 measure, no time (from Cube's member types)</span></div>
+            <div class="check"><svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="var(--ok-icon)"/><path d="M4.5 8.2l2.2 2.2 4.8-4.8" stroke="#fff" stroke-width="1.8" fill="none"/></svg><span>Country: 8 distinct values in this result</span></div>
+            <div class="check"><svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="var(--ok-icon)"/><path d="M4.5 8.2l2.2 2.2 4.8-4.8" stroke="#fff" stroke-width="1.8" fill="none"/></svg><span>Colour: not needed — one measure, one series</span></div>
+            <div class="check"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" fill="var(--warn-icon)"/><path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" stroke-width="1.6"/></svg><span>Donut: 8 slices is more than 6 → ranked lower</span></div>
+            <div class="check"><svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="var(--ok-icon)"/><path d="M4.5 8.2l2.2 2.2 4.8-4.8" stroke="#fff" stroke-width="1.8" fill="none"/></svg><span>One value axis: a single measure needs no second scale</span></div>
+            <div class="check"><svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="var(--ok-icon)"/><path d="M4.5 8.2l2.2 2.2 4.8-4.8" stroke="#fff" stroke-width="1.8" fill="none"/></svg><span><b>Picked Bar:</b> 8 countries × 1 measure → bars, sorted by value</span></div>
+            <div class="check"><span></span><span class="muted">Runners-up: Bar, horizontal · Donut · Table</span></div>
+            <span class="xs" style="color:var(--accent);font-weight:600;margin-top:8px">Show every rule for every type (4 types × 7 rules)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>
