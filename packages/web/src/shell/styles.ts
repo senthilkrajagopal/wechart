@@ -2131,6 +2131,8 @@ main:has(.dashboard) {
    sits between the title and whatever the mode puts on the right. */
 /* The settings gear: the prototype's icon button, last in the header. */
 .dashboard__gear { flex: none; }
+/* Copy link with marks, said beside the chips (T129). */
+.mark-chip-note { color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); white-space: nowrap; }
 /* Bookmarks (T127): a reader's control, before the gear. */
 .dashboard__bookmarks { flex: none; }
 .dashboard__bookmarks-button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; }

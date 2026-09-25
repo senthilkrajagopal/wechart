@@ -1861,7 +1861,15 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/dashboard/bookmarks/applyBookmark.ts`, `packages/web/src/dashboard/bookmarks/applyBookmark.test.ts`
   - Failing test: `applyBookmark.test.ts`: applying restores the state and leaves the stored dashboard definition byte-identical (AC-122).
   - Depends on: T127
-- [ ] T129 (AC-123) Produce a link that reproduces the current filters and marks
+- [x] T129 (AC-123) Produce a link that reproduces the current filters and marks
+  - Done 2026-09-25. **AC-123 is ticked** on `e2e/markings.spec.ts` "Copy link with marks gives a URL that opens the dashboard with the same filters, marks and page tab", in Chrome, Firefox and Safari. The test marks two bars under a filter, moves to the second tab, and chooses the chip's ▾ › Copy link with marks, recording what the app hands to the clipboard. It then opens the dashboard afresh (unmarked), then opens the link. The link restores the Second tab, "2 marked", the chip's "shipped, completed", and the filter in the URL. The `view` parameter leaves the URL once taken, and the first tab is marked too.
+    - **The link** (`markings/shareLink.ts`) is the dashboard's own URL:
+      - Its filters' values go in `filters`, as AC-081 writes them.
+      - The page tab, marks, "Filter to marked" filters and source tiles go in `view`, as JSON.
+      - The author's `edit`, `editing` and `preview` are dropped.
+    - **Opening it.** The route checks `view` is an object, reads it with `viewFromLink` (checked as a bookmark is), and `DashboardView` seeds its marks, marking filters, sources and page tab from it, fitted by `viewFor`. Then `onViewTaken` drops `view` from the URL (replace). The URL therefore never claims marks the reader has since changed, and a reload opens unmarked, consistent with AC-124 (a small decision).
+    - **The action.** It is in the chip's ▾, before Unmark, as in the prototype. The tile ⋯ menu doesn't have it yet; direction.md lists it there too, and an e2e pins that menu's order. A note beside the chips shows for four seconds and is also said in the marking live region; without a clipboard the page says so. `pageClipboard` and `NO_CLIPBOARD` are now exported from `TileViewMenu`, and marking-filter numbering skips past restored ids (`numberedPast`).
+    - **Test that failed first:** `shareLink.test.ts` (round trip to the same view; no `filters` when none; no view without `view`). The e2e was written after the code.
   - Files: `packages/web/src/dashboard/markings/shareLink.ts`, `packages/web/src/dashboard/markings/shareLink.test.ts`
   - Failing test: `shareLink.test.ts`: opening the copied URL reproduces the same filters and the same marks (AC-123).
   - Depends on: T087, T101

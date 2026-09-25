@@ -25,6 +25,8 @@ export interface MarkChipProps {
   readonly tileTitleOf?: ((tileId: string) => string | undefined) | undefined;
   /** Unmark it: the chip's × and its menu's Unmark (AC-200). */
   readonly onUnmark?: (() => void) | undefined;
+  /** Its menu's Copy link with marks, as the prototype's chip has it (T129, AC-123). */
+  readonly onCopyLink?: (() => void) | undefined;
 }
 
 /**
@@ -107,6 +109,7 @@ export function MarkChip({
   from,
   tileTitleOf,
   onUnmark,
+  onCopyLink,
 }: MarkChipProps) {
   // "Every *non-empty* marking has a chip": an empty one has nothing to name.
   if (isEmptyPredicate(predicate)) return null;
@@ -130,14 +133,19 @@ export function MarkChip({
       {from === undefined ? null : <span className="mark-chip__from">from {from}</span>}
       {onUnmark === undefined ? null : (
         <>
-          {/* The prototype's ▾: what can be done with what is marked. Its
-              other actions arrive with their criteria (AC-113, AC-114,
-              AC-123). */}
+          {/* The prototype's ▾: what can be done with what is marked, in its
+              order. Filter to marked and View marked rows are in the tile's
+              ⋯ menu (AC-113, AC-114). */}
           <MenuButton
             label={`${marking.name} menu`}
             className="mark-chip__button"
             align="end"
-            items={[{ key: 'unmark', label: 'Unmark', onSelect: onUnmark }]}
+            items={[
+              ...(onCopyLink === undefined
+                ? []
+                : [{ key: 'link', label: 'Copy link with marks', onSelect: onCopyLink }]),
+              { key: 'unmark', label: 'Unmark', onSelect: onUnmark },
+            ]}
           >
             <span aria-hidden="true">▾</span>
           </MenuButton>

@@ -84,7 +84,8 @@ import { openSidebarPanel } from './edit/EditSidebar';
 import { MoveToMenu } from './edit/MoveToMenu';
 import { NOTHING_CHOSEN, needsOf, templateElements } from './edit/templates';
 import { PreviewBanner } from './PreviewBanner';
-import { TileViewMenu } from './TileViewMenu';
+import { NO_CLIPBOARD, pageClipboard, TileViewMenu } from './TileViewMenu';
+import { linkWithMarks } from './markings/shareLink';
 import { SettingsPage, type SettingsSection } from './settings/SettingsPage';
 import { createDetailsTile } from './tiles/createDetails';
 import { placeInGrammar } from './model/grammar';
@@ -352,6 +353,14 @@ export interface DashboardViewProps {
   readonly urlFilterValues?: FilterValues | undefined;
   /** Put these filter values in the URL (AC-081). */
   readonly onFilterValues?: ((values: FilterValues) => void) | undefined;
+  /**
+   * What a link with marks carries (T129, AC-123): its page tab, marks, the
+   * filters "Filter to marked" made, and where each marking was marked from.
+   * Taken as the dashboard opens — its filters come in `urlFilterValues` —
+   * and then `onViewTaken` drops it from the URL.
+   */
+  readonly urlView?: ViewState | undefined;
+  readonly onViewTaken?: (() => void) | undefined;
   /** Name a tile in the URL as the one open in the editor, or none. */
   readonly onEditTile?: ((tileId: string | undefined) => void) | undefined;
   /**
@@ -1816,6 +1825,18 @@ const NO_SELECTIONS: readonly CrossSelection[] = [];
  * from the tokens rather than a CSS variable, because ECharts paints a mark
  * with a colour value, not with a custom property.
  */
+/**
+ * The highest number a "Filter to marked" filter was given (`mark-filter-n`),
+ * of these and `from`: a new one is numbered past those a bookmark or a link
+ * brought back, so no two share an id (T128, T129).
+ */
+function numberedPast(from: number, filters: readonly { readonly id: string }[]): number {
+  return filters.reduce(
+    (most, filter) => Math.max(most, Number(/^mark-filter-(\d+)$/.exec(filter.id)?.[1] ?? 0)),
+    from,
+  );
+}
+
 function markingColour(slot: MarkingSlot, theme: 'light' | 'dark'): string {
   return COLORS[theme][slot];
 }
@@ -1857,6 +1878,8 @@ export function DashboardView({
   onStartedEditing,
   urlFilterValues,
   onFilterValues,
+  urlView,
+  onViewTaken,
   onSave,
 }: DashboardViewProps) {
   /**
@@ -2011,21 +2034,39 @@ export function DashboardView({
    */
   const theme = useThemeName();
   const markings = markingsFrom(live.markings);
-  const [marks, setMarks] = useState<MarkingState>({});
+  /**
+   * A link with marks, as the dashboard opens (T129, AC-123), fitted to it as
+   * a bookmark is (`viewFor`): what the marks and the page tab start as.
+   */
+  const [linked] = useState(() => (urlView === undefined ? undefined : viewFor(document, urlView)));
+  const [marks, setMarks] = useState<MarkingState>(() => linked?.marks ?? {});
   /**
    * The filters "Filter to marked" and "Filter out marked" made (AC-113,
    * direction.md rule 53): each a marking's predicate, or its negation, as one
    * Cube filter, shown in the filter bar until removed. View state, as the
    * marks they came from are: a saved dashboard holds neither (rule 54).
    */
-  const [markFilters, setMarkFilters] = useState<readonly MarkFilter[]>([]);
-  /** Numbers each marking filter, so two made alike stay two (AC-113). */
-  const markFilterSeq = useRef(0);
+  const [markFilters, setMarkFilters] = useState<readonly MarkFilter[]>(
+    () => linked?.markFilters ?? [],
+  );
+  /**
+   * Numbers each marking filter, so two made alike stay two (AC-113) — past
+   * any a link or a bookmark brought (`numberedPast`).
+   */
+  const markFilterSeq = useRef(numberedPast(0, linked?.markFilters ?? []));
   /**
    * The tile each marking was last marked from, which its chip names (AC-200,
    * the prototype's "from ‹tile›"). View state, like the marks themselves.
    */
-  const [markSources, setMarkSources] = useState<Readonly<Record<string, string>>>({});
+  const [markSources, setMarkSources] = useState<Readonly<Record<string, string>>>(
+    () => linked?.from ?? {},
+  );
+  // The link's view is the dashboard's now: out of the URL (T129).
+  useEffect(() => {
+    if (urlView !== undefined) onViewTaken?.();
+    // Once, as the dashboard opens: what the link said is taken then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   /**
    * What is marked, dropped when the saved mode changes (AC-071), as the
    * cross-filter selections above are: during render, so the marks of the
@@ -4066,7 +4107,8 @@ export function DashboardView({
     }
   }, [settingsOpen]);
 
-  const [openPage, setOpenPage] = useState<string | null>(null);
+  // A link with marks opens on its page tab (T129).
+  const [openPage, setOpenPage] = useState<string | null>(() => linked?.page ?? null);
   const pageId = openPage ?? document.pages[0]?.id ?? '';
   /** Whether an element is on the page shown, in any section or tab of it. */
   const onPageShown = (id: string) => {
@@ -4099,10 +4141,49 @@ export function DashboardView({
     setCrossSelections([]);
     setDrills({});
     // A "Filter to marked" made after this is numbered past those restored.
-    for (const filter of view.markFilters) {
-      const made = Number(/^mark-filter-(\d+)$/.exec(filter.id)?.[1] ?? 0);
-      if (made > markFilterSeq.current) markFilterSeq.current = made;
+    markFilterSeq.current = numberedPast(markFilterSeq.current, view.markFilters);
+  };
+  /**
+   * Copy link with marks (T129, AC-123), from a marking's chip: this
+   * dashboard's URL with its filters, page tab and marks (`linkWithMarks`),
+   * on the clipboard, said beside the chips for a few seconds and to a
+   * screen reader.
+   */
+  const [linkNote, setLinkNote] = useState('');
+  useEffect(() => {
+    if (linkNote === '') return undefined;
+    const shown = setTimeout(() => {
+      setLinkNote('');
+    }, 4000);
+    return () => {
+      clearTimeout(shown);
+    };
+  }, [linkNote]);
+  const copyLinkWithMarks = () => {
+    const said = (text: string) => {
+      setLinkNote(text);
+      setMarkSaid(text);
+    };
+    const clipboard = pageClipboard();
+    if (clipboard === null) {
+      said(NO_CLIPBOARD);
+      return;
     }
+    const link = linkWithMarks(window.location.href, {
+      page: pageId,
+      filters: filterValues,
+      marks,
+      markFilters,
+      from: markSources,
+    });
+    clipboard.writeText(link).then(
+      () => {
+        said('Copied a link to this view, with its marks.');
+      },
+      () => {
+        said('The link could not be copied: the browser refused the clipboard.');
+      },
+    );
   };
   /** What the last delete took, for the undo toast (AC-060). */
   const [deleted, setDeleted] = useState('');
@@ -4703,8 +4784,14 @@ export function DashboardView({
                           onUnmark={() => {
                             unmarkAll(each);
                           }}
+                          onCopyLink={copyLinkWithMarks}
                         />
                       ))}
+                      {linkNote === '' ? null : (
+                        <span className="mark-chip-note" data-testid="link-note">
+                          {linkNote}
+                        </span>
+                      )}
                     </>
                   ) : markFilters.length > 0 ? null : (
                     <span className="filter-bar__hint">

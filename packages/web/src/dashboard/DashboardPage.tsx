@@ -17,6 +17,7 @@ import { DashboardView } from './DashboardView';
 import { chartWritesOf, drawnWithDrafts } from './edit/chartDrafts';
 import { saveDashboard } from './edit/save';
 import { chartIdsOf, type DashboardDocument } from './model/document';
+import type { ViewState } from './bookmarks/viewState';
 import { dashboardOf, type StoredDocument } from './model/stored';
 
 /**
@@ -79,6 +80,10 @@ export interface DashboardPageProps {
   readonly urlFilterValues?: FilterValues | undefined;
   /** Put these filter values in the URL (AC-081). */
   readonly onFilterValues?: ((values: FilterValues) => void) | undefined;
+  /** What a link with marks carries: its page tab, marks and marking filters (T129, AC-123). */
+  readonly urlView?: ViewState | undefined;
+  /** The link's view is taken: drop it from the URL (T129). */
+  readonly onViewTaken?: (() => void) | undefined;
   /**
    * A security context previewed from the Security workspace (T172, AC-166):
    * every query this dashboard asks is signed with its claims.
@@ -96,6 +101,8 @@ export function DashboardPage({
   onStartedEditing,
   urlFilterValues,
   onFilterValues,
+  urlView,
+  onViewTaken,
   preview,
   onExitPreview,
 }: DashboardPageProps) {
@@ -160,6 +167,8 @@ export function DashboardPage({
       onStartedEditing={onStartedEditing}
       urlFilterValues={urlFilterValues}
       onFilterValues={onFilterValues}
+      urlView={urlView}
+      onViewTaken={onViewTaken}
       preview={preview}
       onExitPreview={onExitPreview}
     />
@@ -181,6 +190,8 @@ function LoadedDashboard({
   onStartedEditing,
   urlFilterValues,
   onFilterValues,
+  urlView,
+  onViewTaken,
   preview,
   onExitPreview,
 }: {
@@ -193,6 +204,8 @@ function LoadedDashboard({
   onStartedEditing: (() => void) | undefined;
   urlFilterValues: FilterValues | undefined;
   onFilterValues: ((values: FilterValues) => void) | undefined;
+  urlView: ViewState | undefined;
+  onViewTaken: (() => void) | undefined;
   preview: Readonly<Record<string, unknown>> | undefined;
   onExitPreview: (() => void) | undefined;
 }) {
@@ -542,6 +555,8 @@ function LoadedDashboard({
         onStartedEditing={onStartedEditing}
         urlFilterValues={urlFilterValues}
         onFilterValues={onFilterValues}
+        urlView={urlView}
+        onViewTaken={onViewTaken}
         onEditStart={() => {
           setEditBase(version);
           setSavedToFolders('');

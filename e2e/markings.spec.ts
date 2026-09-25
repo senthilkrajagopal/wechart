@@ -1054,6 +1054,72 @@ test('a bookmark keeps the page tab, the filters’ values and the marks, and re
   expect(await stored()).toEqual(before);
 });
 
+/**
+ * T129 / AC-123: WHEN the user copies a link with marks, THE SYSTEM SHALL
+ * produce a URL that reproduces the current filters and marks when opened.
+ * `Fails when: opening the link produces different marks or filters.`
+ *
+ * Copied from the marking's chip, as the prototype has it, and recorded as the
+ * app hands it to the clipboard (as the Copy test does); opened in the same
+ * browser afresh.
+ */
+test('Copy link with marks gives a URL that opens the dashboard with the same filters, marks and page tab', async ({
+  page,
+  request,
+}) => {
+  await page.addInitScript(() => {
+    const texts: string[] = [];
+    Object.assign(window, { __texts: texts });
+    const { writeText } = Clipboard.prototype;
+    Clipboard.prototype.writeText = function (this: Clipboard, text: string) {
+      texts.push(text);
+      return writeText.call(this, text);
+    };
+  });
+  const { id, title } = await markingDashboard(request, { twoPages: true, limited: true });
+  const filters = [
+    { id: 'f-status', member: 'orders.status', value: { kind: 'values', values: ['shipped'] } },
+  ];
+  const param = (key: string) => {
+    const raw = new URL(page.url()).searchParams.get(key);
+    return raw === null ? null : (JSON.parse(raw) as unknown);
+  };
+
+  await page.goto(
+    `/explore/dashboards/${id}?filters=${encodeURIComponent(JSON.stringify(filters))}`,
+  );
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+  await clickBar(page, tile(page, 'tile-status'), 'completed', ['ControlOrMeta']);
+  await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toContainText('2 marked');
+  await page.getByRole('tab', { name: 'Second' }).click();
+
+  await page.getByRole('button', { name: 'Marking menu' }).click();
+  await page.getByRole('menuitem', { name: 'Copy link with marks' }).click();
+  await expect(page.getByTestId('link-note')).toHaveText(
+    'Copied a link to this view, with its marks.',
+  );
+  const copied = await page.evaluate(() => (window as unknown as { __texts: string[] }).__texts);
+  expect(copied).toHaveLength(1);
+  const link = new URL(copied[0] ?? '');
+  expect(link.pathname).toBe(`/explore/dashboards/${id}`);
+
+  // Afresh, then the link.
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('tab', { name: 'Only', selected: true })).toBeVisible();
+  await expect(page.getByTestId('mark-chip')).toHaveCount(0);
+  await page.goto(`${link.pathname}${link.search}`);
+
+  await expect(page.getByRole('tab', { name: 'Second', selected: true })).toBeVisible();
+  await expect(tile(page, 'tile-elsewhere').getByTestId('mark-badge')).toContainText('2 marked');
+  await expect(page.getByTestId('mark-chip')).toContainText('shipped, completed');
+  await expect.poll(() => param('filters')).toEqual(filters);
+  // Taken: the view leaves the address, and the filters stay in it (AC-081).
+  await expect.poll(() => param('view')).toBeNull();
+  await page.getByRole('tab', { name: 'Only' }).click();
+  await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toContainText('2 marked');
+});
+
 test('Settings › Markings adds, renames, recolours, deletes and defaults markings, and sets each tile’s', async ({
   page,
   request,

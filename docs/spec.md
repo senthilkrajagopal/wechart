@@ -396,7 +396,7 @@ Traces to: `[R7]`, direction.md §7a.
       Fails when: applying the bookmark restores a different tab, filter value or mark set.
 - [x] AC-122 WHEN the user applies a bookmark, THE SYSTEM SHALL restore that state without changing the dashboard's saved definition.
       Fails when: applying a bookmark modifies the dashboard for other users.
-- [ ] AC-123 WHEN the user copies a link with marks, THE SYSTEM SHALL produce a URL that reproduces the current filters and marks when opened.
+- [x] AC-123 WHEN the user copies a link with marks, THE SYSTEM SHALL produce a URL that reproduces the current filters and marks when opened.
       Fails when: opening the link produces different marks or filters.
 - [x] AC-124 WHEN a dashboard is opened without a bookmark or link parameters, THE SYSTEM SHALL open it with no marks (direction.md rule 54).
       Fails when: a dashboard opens with marks the author left behind.

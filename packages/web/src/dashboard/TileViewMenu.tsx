@@ -33,7 +33,7 @@ export interface CopyTarget {
  * clipboard-and-image-export.md, "Support detection"): only on a secure page
  * — HTTPS, or localhost — does a browser offer one at all.
  */
-function pageClipboard(): CopyTarget | null {
+export function pageClipboard(): CopyTarget | null {
   if (typeof window === 'undefined' || !window.isSecureContext) return null;
   if (!('clipboard' in navigator)) return null;
   return navigator.clipboard;
@@ -47,7 +47,7 @@ function copiesImages(): boolean {
   );
 }
 
-const NO_CLIPBOARD = 'Copying needs a secure page: HTTPS, or localhost.';
+export const NO_CLIPBOARD = 'Copying needs a secure page: HTTPS, or localhost.';
 /** Why a failed tile's menu has nothing to copy or export (T251). */
 const FAILED = 'The chart could not be loaded, so nothing is drawn to copy or export.';
 

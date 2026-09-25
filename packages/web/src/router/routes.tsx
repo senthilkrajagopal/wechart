@@ -11,6 +11,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
 
 import { DashboardPage } from '../dashboard/DashboardPage';
+import { viewFromLink } from '../dashboard/markings/shareLink';
 import { ChartEditor } from '../editor/ChartEditor';
 import { LibraryChartNote } from '../editor/LibraryChartNote';
 import { chartDocumentWith, editorViewOf, loadChart, type EditorState } from '../editor/openChart';
@@ -108,9 +109,21 @@ const workspaceRoutes = WORKSPACES.map((workspace) =>
 function DashboardSurface() {
   const params = useParams({ strict: false }) as { objectId?: string };
   const dashboardId = decodeURIComponent(params.objectId ?? '');
-  const { edit, editing, filters, preview } = dashboardRoute.useSearch();
+  const { edit, editing, filters, preview, view } = dashboardRoute.useSearch();
   const navigate = dashboardRoute.useNavigate();
   const router = useRouter();
+  /**
+   * A link with marks, taken (T129, AC-123): its view is dropped from the
+   * address once the dashboard has it, so the URL never claims marks the
+   * reader has since changed — a reload then opens it unmarked (AC-124).
+   */
+  const onViewTaken = useCallback(() => {
+    void navigate({
+      search: (prev) => ({ ...prev, view: undefined }),
+      replace: true,
+      resetScroll: false,
+    });
+  }, [navigate]);
   /** Leaving a security context preview (T172): the dashboard as wechart asks. */
   const onExitPreview = useCallback(() => {
     void navigate({ search: (prev) => ({ ...prev, preview: undefined }) });
@@ -196,6 +209,8 @@ function DashboardSurface() {
         onStartedEditing={onStartedEditing}
         urlFilterValues={valuesFromSearch(filters)}
         onFilterValues={onFilterValues}
+        urlView={view === undefined ? undefined : viewFromLink({ filters, view })}
+        onViewTaken={onViewTaken}
         {...(preview === undefined ? {} : { preview, onExitPreview })}
       />
     </AppShell>
@@ -218,6 +233,7 @@ const dashboardRoute = createRoute({
     editing?: true | undefined;
     filters?: SearchFilter[] | undefined;
     preview?: Record<string, unknown> | undefined;
+    view?: Record<string, unknown> | undefined;
   } => ({
     edit: typeof search['edit'] === 'string' && search['edit'] !== '' ? search['edit'] : undefined,
     // Open in edit mode (T245): a new dashboard from Explore's New, as the
@@ -229,6 +245,14 @@ const dashboardRoute = createRoute({
     // AC-166): a JSON object, as it runs — less the claims wechart sets
     // itself — or no preview at all.
     preview: previewClaimsOf(search['preview']),
+    // A link with marks' page tab, marks and marking filters (T129, AC-123):
+    // an object, each part checked as the dashboard takes it (`viewFromLink`).
+    view:
+      typeof search['view'] === 'object' &&
+      search['view'] !== null &&
+      !Array.isArray(search['view'])
+        ? (search['view'] as Record<string, unknown>)
+        : undefined,
   }),
   component: DashboardSurface,
 });
