@@ -50,6 +50,21 @@ describe('the join diagram’s layout', () => {
     expect(layOut(cubes(4), ring(4)).width).toBeGreaterThan(469);
   });
 
+  /**
+   * The full suite's model, many cubes one joins to every other (as orders
+   * does), drew 510 px in the 469 px pane: a join between boxes far apart bent
+   * out by a sixth of its length, past the pane (T144's fix, found by the e2e).
+   */
+  it('fits the pane’s width with joins from one cube to many far away', () => {
+    for (let count = 8; count <= 30; count += 1) {
+      const star = cubes(count)
+        .slice(1)
+        .map(({ name }) => ({ from: 'cube_0', to: name }));
+      const { width } = layOut(cubes(count), star, 469);
+      expect(width, `${String(count)} cubes`).toBeLessThanOrEqual(469);
+    }
+  });
+
   it('never lays one box over another, fitted to any width or not', () => {
     for (const fit of [undefined, 300, 469, 900])
       for (let count = 1; count <= 14; count += 1) {

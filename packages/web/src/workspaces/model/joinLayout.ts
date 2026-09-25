@@ -176,7 +176,9 @@ export function drawJoin(from: Placed, to: Placed): { d: string; label: Point } 
   const length = Math.hypot(dx, dy) || 1;
   // Its right-hand side: the way back bends the other way.
   const normal = { x: -dy / length, y: dx / length };
-  const lift = Math.max(28, length * 0.16);
+  // Bent by a sixth of its length, up to 40 px: a join between boxes far
+  // apart would otherwise bow out past the pane (found by the full suite).
+  const lift = Math.min(40, Math.max(28, length * 0.16));
   const bend = { x: (a.x + b.x) / 2 + normal.x * lift, y: (a.y + b.y) / 2 + normal.y * lift };
   const start = borderToward(from, bend);
   const end = borderToward(to, bend);

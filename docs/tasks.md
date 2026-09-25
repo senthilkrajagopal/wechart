@@ -2430,6 +2430,10 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - `joinLayout.test.ts`: fits 469 px for 3 to 14 cubes (four had taken 528); no box over another at any width; as big as it draws and no bigger (a band had been left); a circle where there's room.
       - `e2e/model.spec.ts` "the join diagram fits its pane's width, every box in view": 528 against 469 with the old component. It passes in Chrome, Firefox and Safari.
     - **Not looked at on screen:** the two-column layout. No local model has enough cubes.
+    - **Found by the full suite (Firefox and Safari), fixed:**
+      - Under the full run the model holds many cubes, and the diagram drew 510 px in the 469 px pane. A join between boxes far apart bent out by a sixth of its length, past the pane.
+      - A join now bends by at most 40 px.
+      - `joinLayout.test.ts` "fits the pane's width with joins from one cube to many far away" failed first: 19 cubes drew 481 px.
 - [x] T275 (AC-250, AC-139) Run the user's Cube fork, and grant its `introspection` scope only to the tokens the API signs for it
   - Done 2026-09-25. **AC-250 is not ticked yet.** Its tokens are shown: Cube grants the scope to the introspection token alone, never to a query's, a store's or a draft's.
     - Its "never to the browser" has no surface until T145's proxy exists, so it is ticked there, on a test that the proxy's responses carry no token.
