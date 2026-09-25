@@ -2927,6 +2927,34 @@ export function DashboardView({
     return specs;
   }, [coloured, wholeKey]);
   /**
+   * A tile's items that it draws marked by this marking, as `render.ts` marks
+   * them: every one while the tile is marked whole and still filtered as it
+   * was then, or else each whose drawn rows match the marking. For the menu's
+   * "n of N" (AC-247) and Copy › Marked values (AC-241) alike, so neither
+   * counts or lists an item the tile does not draw marked (T267's and T271's
+   * reviews: a Mark all counted, and listed, every item after the filters had
+   * changed). None for a tile whose click marks rows or series.
+   */
+  const drawnMarkedItemsOf = (
+    tileId: string,
+    predicate: MarkingPredicate,
+  ): MarkedItem[] | undefined => {
+    const items = tileItemsOf(tileId);
+    const element = elementAt(live, tileId);
+    const chartId = element !== null && isTile(element) ? element.chartId : undefined;
+    const spec = chartId === undefined ? undefined : withWholes[chartId];
+    if (items === undefined || spec === undefined) return undefined;
+    if (spec.marking?.whole === true) return items;
+    return items.filter((item) => {
+      const part = item[0];
+      if (part === undefined) return false;
+      return spec.rows.some(
+        (row) =>
+          String(row[part.member]) === String(part.value) && matchesPredicate(predicate, row),
+      );
+    });
+  };
+  /**
    * Each filtered chart's filters in words, for the empty state (AC-043):
    * named by the field each was set on — the filter bar's field, not the name
    * a view takes it by.
@@ -3288,21 +3316,10 @@ export function DashboardView({
              */
             const onTile = () => {
               const items = tileItemsOf(tileId);
-              const chartId = element.chartId;
-              const spec = chartId === undefined ? undefined : withWholes[chartId];
-              if (items === undefined || spec === undefined) return undefined;
-              const drawnWhole = spec.marking?.whole === true;
-              const marked = items.filter((item) => {
-                if (drawnWhole) return true;
-                const part = item[0];
-                if (part === undefined) return false;
-                return spec.rows.some(
-                  (row) =>
-                    String(row[part.member]) === String(part.value) &&
-                    matchesPredicate(predicate, row),
-                );
-              }).length;
-              return { marked, of: items.length };
+              const marked = drawnMarkedItemsOf(tileId, predicate);
+              return items === undefined || marked === undefined
+                ? undefined
+                : { marked: marked.length, of: items.length };
             };
             return {
               marking: found,
@@ -3312,7 +3329,11 @@ export function DashboardView({
               // Copy › Marked values (T271, AC-241): a whole tile's items as
               // that tile draws them.
               valuesTsv: () =>
-                markedValuesTsv(predicate, (member) => memberTitle?.(member), tileItemsOf),
+                markedValuesTsv(
+                  predicate,
+                  (member) => memberTitle?.(member),
+                  (wholeTile) => drawnMarkedItemsOf(wholeTile, predicate),
+                ),
               onTile,
             };
           },

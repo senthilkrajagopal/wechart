@@ -90,6 +90,24 @@ describe('copying a tile’s chart to another dashboard', () => {
     ]);
   });
 
+  it('says the dashboard changed meanwhile, that nothing was written, and to copy again (T271’s review)', async () => {
+    const fetchImpl = async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'PUT'
+        ? new Response(JSON.stringify({ error: 'stale' }), { status: 409 })
+        : new Response(
+            JSON.stringify({
+              id: 'target',
+              version: 3,
+              body: { schemaVersion: 1, title: 'Sales', settings: {}, pages: [] },
+            }),
+          );
+    await expect(
+      copyChartToDashboard({ targetId: 'target', chart: CHART, size: { w: 6 }, fetchImpl }),
+    ).rejects.toThrow(
+      'That dashboard was saved by someone else while copying, so nothing was written. Copy again to add it to the dashboard as it is now.',
+    );
+  });
+
   it('says why when the chosen dashboard cannot be read', async () => {
     await expect(
       copyChartToDashboard({

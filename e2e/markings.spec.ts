@@ -2231,6 +2231,24 @@ test('Copy puts the marked values and the chart’s image on the clipboard, and 
   const [marked = 0, faded = 0] = image?.light ?? [];
   expect(marked).toBeLessThan(faded);
 
+  // After Mark all: every status the tile draws marked, each once — the two
+  // clicked are in the whole tile too (T271's review).
+  await status.getByRole('button', { name: 'Actions for By status' }).click();
+  await status
+    .getByRole('menu', { name: /^Actions for / })
+    .getByRole('group', { name: /marked$/ })
+    .getByRole('menuitem', { name: 'Mark all' })
+    .click();
+  menu = await copyMenu();
+  await menu.getByRole('menuitem', { name: 'Marked values' }).click();
+  await expect(note).toContainText('Copied 3 marked values.');
+  const afterAll = await page.evaluate(
+    () => (window as unknown as { __texts: string[] }).__texts.at(-1) ?? '',
+  );
+  const [head, ...values] = afterAll.split('\n');
+  expect(head).toBe('Orders Status');
+  expect(values.sort()).toEqual(['completed', 'processing', 'shipped']);
+
   // To dashboard: found by its title, and copied there as a chart of its own.
   menu = await copyMenu();
   await menu.getByRole('menuitem', { name: 'To dashboard…' }).click();

@@ -1,6 +1,6 @@
 import type { ChartDocument } from '@wechart/core';
 
-import { saveDashboard } from './edit/save';
+import { saveDashboard, StaleSaveError } from './edit/save';
 import { pageKey } from './model/document';
 import { insertElement } from './model/insert';
 import { dashboardOf, type StoredDocument } from './model/stored';
@@ -60,12 +60,24 @@ export async function copyChartToDashboard({
     },
     { key: pageKey(page.id), index: null },
   );
-  await saveDashboard({
-    dashboardId: targetId,
-    document: next,
-    version: stored.version ?? 1,
-    charts: [{ id: chartId, document: copy, version: 0 }],
-    fetchImpl,
-  });
+  try {
+    await saveDashboard({
+      dashboardId: targetId,
+      document: next,
+      version: stored.version ?? 1,
+      charts: [{ id: chartId, document: copy, version: 0 }],
+      fetchImpl,
+    });
+  } catch (error) {
+    // Said as what happened here, not as the edit session's refusal: no one
+    // was editing, nothing is lost, and a copy again reads the dashboard
+    // afresh (T271's review).
+    if (error instanceof StaleSaveError)
+      throw new Error(
+        'That dashboard was saved by someone else while copying, so nothing was written. Copy again to add it to the dashboard as it is now.',
+        { cause: error },
+      );
+    throw error;
+  }
   return { title: target.title, chartId };
 }

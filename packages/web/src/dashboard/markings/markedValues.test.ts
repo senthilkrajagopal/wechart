@@ -88,6 +88,29 @@ describe('the marked values as tab-separated text', () => {
     ).toBe('Status\nshipped\ncompleted');
   });
 
+  it('lists an item once, when it is both marked by a click and in a whole tile (T271’s review)', () => {
+    expect(
+      markedValuesTsv(
+        {
+          items: [[{ member: 'orders.status', value: 'shipped' }]],
+          ranges: [],
+          wholes: [
+            {
+              tileId: 't1',
+              filters: [{ member: 'orders.region', operator: 'equals', values: ['EU'] }],
+              count: 2,
+            },
+          ],
+        },
+        titleOf,
+        () => [
+          [{ member: 'orders.status', value: 'shipped' }],
+          [{ member: 'orders.status', value: 'completed' }],
+        ],
+      ),
+    ).toBe('Status\nshipped\ncompleted');
+  });
+
   it('is nothing when nothing is marked', () => {
     expect(markedValuesTsv({ items: [], ranges: [] }, titleOf)).toBe('');
   });

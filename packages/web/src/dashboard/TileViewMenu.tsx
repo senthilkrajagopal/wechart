@@ -325,7 +325,16 @@ export function TileViewMenu({
   const target = clipboard === undefined ? pageClipboard() : clipboard;
   const copyMarkedValues = () => {
     const text = marked?.valuesTsv?.() ?? '';
-    const lines = text === '' ? 0 : text.split('\n').length - 1;
+    // Nothing to copy — a whole tile's items no longer drawn, say — leaves
+    // the clipboard as it was, and says so (T271's review).
+    if (text === '') {
+      setNote({
+        kind: 'warn',
+        text: 'Nothing marked is drawn to copy; the clipboard is unchanged.',
+      });
+      return;
+    }
+    const lines = text.split('\n').length - 1;
     target?.writeText(text).then(
       () => {
         setNote({

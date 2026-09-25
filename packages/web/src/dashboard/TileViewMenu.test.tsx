@@ -422,6 +422,29 @@ describe('a tile’s view-mode menu', () => {
     }
   });
 
+  it.each(['kpi', 'pivot'] as const)(
+    'offers Copy › Image disabled on a %s tile, saying why (AC-242, T271’s review)',
+    async (chartType) => {
+      render(
+        <TileViewMenu
+          tileId="t1"
+          title="Total"
+          spec={{ ...SPEC, chartType }}
+          save={vi.fn()}
+          clipboard={{ writeText: vi.fn(), write: vi.fn() }}
+        />,
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Actions for Total' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /^Copy/ }));
+
+      const image = screen.getByRole('menuitem', { name: 'Image' });
+      expect(image.getAttribute('aria-disabled')).toBe('true');
+      expect(
+        document.getElementById(image.getAttribute('aria-describedby') ?? '')?.textContent,
+      ).toBe('A KPI, table or pivot is drawn as text, not as a chart image.');
+    },
+  );
+
   /**
    * T267 / AC-247: WHILE the tile's marking holds items, THE SYSTEM SHALL
    * head the tile's menu with the marking's name, the marked values by their

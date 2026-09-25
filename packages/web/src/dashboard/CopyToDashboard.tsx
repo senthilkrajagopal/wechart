@@ -77,7 +77,12 @@ export function CopyToDashboard({
             ),
           });
         })
-        .catch(() => undefined);
+        .catch(() => {
+          // A search that never answered says so, rather than list nothing
+          // (T271's review); one given up for newer text says nothing.
+          if (!aborted.signal.aborted)
+            setFound({ needle, items: [], failed: 'Could not search: the server did not answer.' });
+        });
     }, 150);
     return () => {
       clearTimeout(timer);

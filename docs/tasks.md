@@ -4202,6 +4202,16 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
       - The source dashboard's stored version and body are unchanged.
       - The copy draws when opened.
     - The AC-199 menu test's list gained Copy, and its header no longer says Download CSV. The AC-102 test's comment, orphaned above T272's test, is back above its own test.
+  - **T271's review, 2026-09-25.** It judged AC-242 and AC-243 met, and AC-241 unmet after a Mark all. Fixed in one commit:
+    - **M1.**
+      - **What was wrong:** Copy › Marked values listed every item a whole tile draws now, whatever it was filtered by when marked. It also listed an item clicked before the Mark all twice, since `markAllOfTile` keeps it.
+      - **Now:** a whole tile's items are the ones it draws marked (`drawnMarkedItemsOf`, the same reading as the heading's "n of N", which it now shares), and each item is listed once.
+      - Where nothing marked is drawn, nothing is copied and the note says so. Before, the clipboard was emptied and the note said "Copied 0".
+      - **Tests:** `markedValues.test.ts` (failed first) and the e2e, which copies after a Mark all and gets the three statuses once each.
+    - **L1.** A save overtaken while copying (409) now says so: nothing was written, so copy again. Before, it showed the edit session's "discards yours" message. `copyChartTo.test.ts` covers it and failed first.
+    - **L2.** A dashboard search that never answers now says "Could not search", instead of listing nothing.
+    - **L3.** Copy › Image is shown disabled, with its reason, on a KPI and a pivot (`TileViewMenu.test.tsx`), beside the e2e's table.
+    - **L4 (process, not changed):** the Chromium clipboard read-back the research suggested is not added. The recorder shows what the app hands each engine, and each note waits for the browser's own write.
   - Files: `packages/web/src/dashboard/*`, `packages/web/src/tiles/ChartCanvas.tsx`, `e2e/tile-menu.spec.ts`
   - Failing test:
     - The clipboard holds the marked values as tab-separated text with a header row.

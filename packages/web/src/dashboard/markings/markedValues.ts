@@ -8,8 +8,8 @@ import type { MarkedItem, MarkingPredicate } from '@wechart/core';
  * - A column for each member any item names, in the order first named; an
  *   item that does not name one leaves it empty, as items of several members
  *   do.
- * - A whole tile marked (Mark all, AC-115) is its items, where its tile can
- *   still name them.
+ * - A whole tile marked (Mark all, AC-115) is the items that tile draws
+ *   marked (`itemsOfTile`), each item once.
  * - A blank is written as nothing, and a tab or line break inside a value as
  *   a space: TSV carries neither inside a field (IANA TSV, research/
  *   clipboard-and-image-export.md, Gotchas; decided so by T271).
@@ -20,10 +20,22 @@ export function markedValuesTsv(
   titleOf: (member: string) => string | undefined,
   itemsOfTile?: (tileId: string) => readonly MarkedItem[] | undefined,
 ): string {
+  // Each item once: one marked by a click can be in a whole tile's too (a
+  // Mark all keeps what was clicked; T271's review).
+  const seen = new Set<string>();
   const items: MarkedItem[] = [
     ...predicate.items,
     ...(predicate.wholes ?? []).flatMap((whole) => itemsOfTile?.(whole.tileId) ?? []),
-  ];
+  ].filter((item) => {
+    const key = JSON.stringify(
+      [...item]
+        .map((part) => [part.member, part.value])
+        .sort(([a], [b]) => String(a).localeCompare(String(b))),
+    );
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   const rows: Map<string, string>[] = [
     ...items.map((item) => new Map(item.map((part) => [part.member, field(part.value)] as const))),
     ...predicate.ranges.map(
