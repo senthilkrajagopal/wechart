@@ -4689,6 +4689,10 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
     - `e2e/dashboard.spec.ts` "a narrow donut with its legend at the right draws its ring clear of the legend": products by name in a 3-column tile. With the fix set aside it failed in all three browsers, the ring's right edge at 282 px against the legend at 236. It passes with dashboard and chart-editor (297 runs).
     - A first version truncated every side legend. It broke the AC-219 e2e test, which reads the full name "Orders Average Amount" in a bar chart's right legend, so it was narrowed to pies.
   - **Not done here:** slice data labels still truncate to "$…" in a narrow tile (gap 3, second half). No criterion covers how a label fits, so it is a proposed spec change.
+  - **Cold review of T300–T305 and T309 (one round), 2026-09-25.** It judged AC-210 met, and T309's research citations accurate against the 6.1.0 source.
+    - **Its one finding, fixed:** the e2e test could pass with no legend drawn. `Math.min` of no swatches is `Infinity`, which any ring is left of. It now first asserts the four products' swatches.
+    - The review also found the coverage table short of this section's tasks. They are now listed: AC-028 (T305), AC-031, AC-039, AC-044, AC-100 (T306), AC-176 (T306, T307), AC-187 (T300, T304), AC-210 and AC-219.
+    - It judged T300, T302, T303 and T304 met with no real bugs. Two T300 details it noted as not worth a round were left: the empty KPI's "No value" sits above its name, and kpiHtml's bottom alignment was not carried over.
 
 ---
 
@@ -4705,7 +4709,7 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
 | AC-007 | T004, T024 | AC-052 | T058 | AC-097 | T103 | AC-142 | T148       |
 | AC-008 | T004       | AC-053 | T059, T023 | AC-098 | T104 | AC-143 | T149       |
 | AC-009 | T010       | AC-054 | T060, T023 | AC-099 | T105 | AC-144 | T150       |
-| AC-010 | T011       | AC-055 | T061 | AC-100 | T106 | AC-145 | T151       |
+| AC-010 | T011       | AC-055 | T061 | AC-100 | T106, T306 | AC-145 | T151       |
 | AC-011 | T012       | AC-056 | T062 | AC-101 | T107 | AC-146 | T152       |
 | AC-012 | T013       | AC-057 | T063 | AC-102 | T108 | AC-147 | T153       |
 | AC-013 | T014       | AC-058 | T064 | AC-103 | T109 | AC-148 | T154       |
@@ -4723,10 +4727,10 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
 | AC-025 | T024       | AC-070 | T076 | AC-115 | T121 | AC-160 | T166       |
 | AC-026 | T025       | AC-071 | T077 | AC-116 | T122 | AC-161 | T167       |
 | AC-027 | T026       | AC-072 | T078 | AC-117 | T123 | AC-162 | T168       |
-| AC-028 | T028       | AC-073 | T079 | AC-118 | T124 | AC-163 | T169       |
+| AC-028 | T028, T305 | AC-073 | T079 | AC-118 | T124 | AC-163 | T169       |
 | AC-029 | T029       | AC-074 | T080 | AC-119 | T125 | AC-164 | T170       |
 | AC-030 | T027, T028 | AC-075 | T081 | AC-120 | T126 | AC-165 | T171       |
-| AC-031 | T027, T028 | AC-076 | T082 | AC-121 | T127 | AC-166 | T172       |
+| AC-031 | T027, T028, T305 | AC-076 | T082 | AC-121 | T127 | AC-166 | T172       |
 | AC-032 | T030       | AC-077 | T083 | AC-122 | T128 | AC-167 | T173       |
 | AC-033 | T031       | AC-078 | T084 | AC-123 | T129 | AC-168 | T174       |
 | AC-034 | T032, T193 | AC-079 | T085 | AC-124 | T130 | AC-169 | T175       |
@@ -4734,23 +4738,23 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
 | AC-036 | T034       | AC-081 | T087 | AC-126 | T132 | AC-171 | T177       |
 | AC-037 | T035–T044, T186, T188, T242 | AC-082 | T088 | AC-127 | T133 | AC-172 | T178 |
 | AC-038 | T045       | AC-083 | T089 | AC-128 | T134 | AC-173 | T179       |
-| AC-039 | T046, T023 | AC-084 | T090 | AC-129 | T135 | AC-174 | T180       |
+| AC-039 | T046, T023, T301 | AC-084 | T090 | AC-129 | T135 | AC-174 | T180       |
 | AC-040 | T047       | AC-085 | T091 | AC-130 | T136 | AC-175 | T181       |
-| AC-041 | T048       | AC-086 | T092 | AC-131 | T137 | AC-176 | T182       |
+| AC-041 | T048       | AC-086 | T092 | AC-131 | T137 | AC-176 | T182, T306, T307 |
 | AC-042 | T049       | AC-087 | T093 | AC-132 | T138 | AC-177 | T183       |
 | AC-043 | T050       | AC-088 | T094 | AC-133 | T139 | AC-178 | T041       |
-| AC-044 | T051       | AC-089 | T095 | AC-134 | T140 | AC-179 | T184       |
+| AC-044 | T051, T303 | AC-089 | T095 | AC-134 | T140 | AC-179 | T184       |
 | AC-045 | T043       | AC-090 | T096 | AC-135 | T141 | AC-180 | T001, T185 |
 | AC-181 | T187       | AC-182 | T191 | AC-183 | T192 | AC-184 | T197       |
-| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225, T244–T254 | AC-188 | T206       |
+| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225, T244–T254, T300, T304 | AC-188 | T206       |
 | AC-189 | T207       | AC-190 | T211 | AC-191 | T211 | AC-192 | T212       |
 | AC-193 | T213, T243 | AC-194 | T214 | AC-195 | T216 | AC-196 | T217       |
 | AC-197 | T215       | AC-198 | T218 | AC-199 | T219, T118–T121 | AC-200 | T220       |
 | AC-201 | T219       | AC-202 | T221 | AC-203 | T222 | AC-204 | T223       |
 | AC-205 | T223       | AC-206 | T223 | AC-207 | T217 | AC-208 | T221       |
-| AC-209 | T224       | AC-210 | T224 | AC-211 | T210 | AC-212 | T226       |
+| AC-209 | T224       | AC-210 | T224, T309 | AC-211 | T210 | AC-212 | T226       |
 | AC-213 | T227, T256 | AC-214 | T228, T255–T257 | AC-215 | T229 | AC-216 | T229       |
-| AC-217 | T230       | AC-218 | T230 | AC-219 | T231 | AC-220 | T232       |
+| AC-217 | T230       | AC-218 | T230 | AC-219 | T231, T302 | AC-220 | T232       |
 | AC-221 | T232       | AC-222 | T234 | AC-223 | T234 | AC-224 | T235       |
 | AC-225 | T236       | AC-226 | T237 | AC-227 | T237 | AC-228 | T239, T241 |
 | AC-229 | T239       | AC-230 | T240 | AC-231 | T238, T244, T249 | AC-232 | T241       |

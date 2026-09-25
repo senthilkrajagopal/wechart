@@ -1988,11 +1988,15 @@ test('a narrow donut with its legend at the right draws its ring clear of the le
       const ring = marks.filter((box) => !swatch(box) && box.width > 2);
       return {
         slices: ring.length,
+        swatches: marks.filter(swatch).length,
         ringRight: Math.max(...ring.map((box) => box.right)),
         legendLeft: Math.min(...marks.filter(swatch).map((box) => box.left)),
       };
     });
   await expect.poll(async () => (await drawn()).slices).toBeGreaterThan(1);
-  const { ringRight, legendLeft } = await drawn();
+  const { swatches, ringRight, legendLeft } = await drawn();
+  // The legend is there to be clear of: a swatch for each of the four
+  // products (T309's review — with none, the comparison below meant nothing).
+  expect(swatches).toBe(4);
   expect(ringRight).toBeLessThanOrEqual(legendLeft);
 });
