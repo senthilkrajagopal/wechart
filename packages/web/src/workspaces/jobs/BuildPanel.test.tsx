@@ -135,6 +135,20 @@ describe('building a pre-aggregation', () => {
     expect(statusAsks()).toBe(asked);
   });
 
+  /** T273 / AC-245: Data as of › Open in Jobs names the pre-aggregation in the address. */
+  it('opens on the pre-aggregation it is asked for', async () => {
+    api(['done'], ['78f5612']);
+    render(
+      <QueryClientProvider client={client()}>
+        <BuildPanel pollMs={10} selectedFirst="monthly_orders.by_status_month" />
+      </QueryClientProvider>,
+    );
+
+    const row = (await screen.findByRole('cell', { name: 'monthly_orders.by_status_month' }))
+      .parentElement as HTMLElement;
+    expect(row.getAttribute('aria-selected')).toBe('true');
+  });
+
   it('shows every token of a build, one per partition', async () => {
     serving(['done'], ['aaa111', 'bbb222']);
 

@@ -85,7 +85,14 @@ export function TileViewMenu({
   clipboard,
   onCopyToDashboard,
   undrawn,
+  dataAsOf,
 }: {
+  /**
+   * The Data as of submenu (T273, AC-245): its label and what it holds
+   * (`dataAsOf`), asked only while the menu is open. Absent, or answering
+   * nothing, before there is an answer to date.
+   */
+  dataAsOf?: (() => { label: string; entries: MenuEntry[] } | undefined) | undefined;
   /**
    * Why the tile draws no chart just now — a limited tile waiting for a
    * marking — so there is no image of it to make (T272's review).
@@ -658,6 +665,17 @@ export function TileViewMenu({
     ...(onEditChart === undefined
       ? []
       : [{ kind: 'item' as const, key: 'edit', label: 'Edit chart', onSelect: onEditChart }]),
+    // Last, as the mockup's footer: how fresh the answer is, and where that
+    // is set (T273, AC-245). Read only while the menu is open.
+    ...((): MenuEntry[] => {
+      const said = open ? dataAsOf?.() : undefined;
+      return said === undefined
+        ? []
+        : [
+            { kind: 'separator', key: 'before-as-of' },
+            { kind: 'submenu', key: 'as-of', label: said.label, entries: said.entries },
+          ];
+    })(),
   ];
 
   return (

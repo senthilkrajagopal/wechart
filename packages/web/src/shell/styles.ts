@@ -3241,6 +3241,16 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
    unlike the marking outline (AC-176; research gotcha 9). */
 .menu__item:focus { outline: 2px solid var(--wc-accent); outline-offset: -2px; background: var(--wc-bg-hover); }
 .menu__item[aria-disabled='true'] { color: var(--wc-text-muted); cursor: not-allowed; }
+/* A line of information (T273): read, not run — in the secondary ink, as
+   long as it needs to be, and no "not allowed" pointer over words. */
+.menu__item.menu__text {
+  height: auto;
+  min-height: 24px;
+  padding-block: 2px;
+  color: var(--wc-text-secondary);
+  white-space: normal;
+  cursor: default;
+}
 .menu__check { width: 12px; flex: 0 0 auto; color: var(--wc-accent); }
 .menu__chevron { margin-left: auto; color: var(--wc-text-muted); }
 .menu__separator { height: 1px; margin: 4px 0; background: var(--wc-border-subtle); }

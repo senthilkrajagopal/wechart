@@ -178,6 +178,22 @@ describe('the tile menu', () => {
     expect(onClose).toHaveBeenLastCalledWith('tab');
   });
 
+  it('reads out a line of information in turn, and runs nothing on it (T273)', async () => {
+    const { onClose } = menu([
+      { kind: 'text', key: 't', text: 'Pre-aggregation a.b' },
+      { kind: 'item', key: 'a', label: 'Refresh now', onSelect: vi.fn() },
+    ]);
+
+    expect(focused()).toBe('Pre-aggregation a.b');
+    expect(
+      screen.getByRole('menuitem', { name: 'Pre-aggregation a.b' }).getAttribute('aria-disabled'),
+    ).toBe('true');
+    await userEvent.keyboard('{Enter}');
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(focused()).toBe('Refresh now');
+  });
+
   it('reaches a submenu inside a group, and opens and closes it (T266’s review)', async () => {
     menu([
       { kind: 'item', key: 'a', label: 'View query', onSelect: vi.fn() },

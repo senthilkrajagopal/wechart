@@ -1036,7 +1036,15 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
         /^(Filter to marked|Filter out marked|View marked rows|Invert marking|Mark all|Unmark|Create details tile)$/,
     }),
     // Export holds the CSV now, with the images (T272, AC-244).
-  ).toHaveText(['View as table', 'View query', /^Copy/, /^Export/, 'Edit chart']);
+  ).toHaveText([
+    'View as table',
+    'View query',
+    /^Copy/,
+    /^Export/,
+    'Edit chart',
+    // How fresh its answer is, last (T273, AC-245).
+    /^Data as of \d/,
+  ]);
 
   // View as table: the tile shows its rows.
   await menu.getByRole('menuitem', { name: 'View as table' }).click();

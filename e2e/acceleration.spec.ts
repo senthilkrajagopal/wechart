@@ -162,3 +162,78 @@ test('refreshing a tile a pre-aggregation serves says its data is as of the last
   await note.getByRole('button', { name: 'Dismiss' }).click();
   await expect(note).toHaveCount(0);
 });
+
+/**
+ * T273 / AC-245: WHEN the user opens the tile menu's Data as of submenu, THE
+ * SYSTEM SHALL show, for an answer a pre-aggregation served, its name, its
+ * last build, its refresh schedule in words and as written, and its next run
+ * with how late it may start, with Refresh now, Open in Jobs on that
+ * pre-aggregation and Edit schedule in Model; and, for an answer the database
+ * served, say so, with Refresh now and Why not accelerated.
+ * `Fails when: one of those items is missing, Open in Jobs does not select
+ * that pre-aggregation, or a database answer is described as a
+ * pre-aggregation's.`
+ *
+ * The seed rollup is refreshed every hour, so the worker may start a run up
+ * to 5½ minutes after its turn-over (research/cube/refresh-key-schedule.md).
+ */
+test('Data as of says what served a tile, how fresh it is and where that is set', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardOn(request, ['monthly_orders', 'orders']);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const accelerated = page.locator('[data-tile="tile-monthly_orders"]');
+  const live = page.locator('[data-tile="tile-orders"]');
+  await expect(accelerated.getByTestId('acceleration')).toHaveText(/Accelerated/);
+  await expect(live.getByTestId('acceleration')).toHaveText(/Live/);
+  const asOf = async (tile: typeof live) => {
+    await tile.getByRole('button', { name: /^Actions for / }).click();
+    await tile.getByRole('menuitem', { name: /^Data as of \d/ }).click();
+    return tile.getByRole('menu', { name: /^Data as of \d/ });
+  };
+
+  // A pre-aggregation's answer: what it is, when built, when it runs next.
+  let menu = await asOf(accelerated);
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    'Pre-aggregation monthly_orders.by_status_month',
+    /^Last built \d/,
+    'Refreshed every 1 hour',
+    'As written: every: "1 hour"',
+    /^Next run \d{2}:\d{2}, may start up to 5½ min late$/,
+    'Refresh now',
+    'Open in Jobs',
+    'Edit schedule in Model',
+  ]);
+  // Open in Jobs: that pre-aggregation, selected.
+  await menu.getByRole('menuitem', { name: 'Open in Jobs' }).click();
+  await expect(page).toHaveURL(/\/jobs\?preagg=monthly_orders\.by_status_month$/);
+  await expect(
+    page.getByRole('cell', { name: 'monthly_orders.by_status_month' }).locator('xpath=..'),
+  ).toHaveAttribute('aria-selected', 'true');
+
+  // Edit schedule in Model: its file, on its cube's pre-aggregations.
+  await page.goto(`/explore/dashboards/${id}`);
+  menu = await asOf(accelerated);
+  await menu.getByRole('menuitem', { name: 'Edit schedule in Model' }).click();
+  await expect(page).toHaveURL(
+    /\/model\/files\/cubes%2Fmonthly_orders\.yml\?cube=monthly_orders&tab=pre_aggregations$/,
+  );
+
+  // The database's answer is said to be the database's, and why not a rollup.
+  await page.goto(`/explore/dashboards/${id}`);
+  menu = await asOf(live);
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    'Answered by the database, not a pre-aggregation',
+    'Refresh now',
+    'Why not accelerated?',
+  ]);
+  await menu.getByRole('menuitem', { name: 'Why not accelerated?' }).click();
+  const why = page.getByRole('dialog', { name: /is not accelerated$/ });
+  await expect(why.getByTestId('acceleration-miss')).toContainText(
+    'orders has no pre-aggregations',
+  );
+  await page.keyboard.press('Escape');
+  await expect(why).toHaveCount(0);
+});

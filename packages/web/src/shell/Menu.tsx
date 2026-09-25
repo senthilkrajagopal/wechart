@@ -65,7 +65,13 @@ export type MenuEntry =
       readonly labelledBy?: string | undefined;
       readonly entries: readonly MenuEntry[];
     }
-  | { readonly kind: 'separator'; readonly key: string };
+  | { readonly kind: 'separator'; readonly key: string }
+  /**
+   * A line of information in a menu that runs nothing — what Data as of
+   * says of an answer (T273). An item that is off, so the arrows reach it and
+   * a screen reader reads it in turn, with no reason to give.
+   */
+  | { readonly kind: 'text'; readonly key: string; readonly text: string };
 
 /** Why the menu is closing: Escape at its top, Tab, or an item that ran. */
 export type MenuClose = 'escape' | 'tab' | 'selected';
@@ -154,7 +160,7 @@ export function Menu({
   };
 
   const run = (entry: MenuEntry, how: 'enter' | 'space' | 'click') => {
-    if (entry.kind === 'group' || entry.kind === 'separator') return;
+    if (entry.kind === 'group' || entry.kind === 'separator' || entry.kind === 'text') return;
     if (entry.disabled !== undefined) return;
     if (entry.kind === 'submenu') {
       setOpenKey(entry.key);
@@ -267,6 +273,19 @@ export function Menu({
             aria-orientation="horizontal"
             className="menu__separator"
           />
+        );
+      case 'text':
+        return (
+          <div
+            key={entry.key}
+            role="menuitem"
+            tabIndex={-1}
+            data-key={entry.key}
+            aria-disabled
+            className="menu__item menu__text"
+          >
+            {entry.text}
+          </div>
         );
       case 'group':
         return (

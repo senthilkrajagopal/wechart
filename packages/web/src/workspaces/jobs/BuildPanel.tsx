@@ -167,7 +167,17 @@ function BuildJobs({
   );
 }
 
-export function BuildPanel({ pollMs = 1500 }: { pollMs?: number }) {
+export function BuildPanel({
+  pollMs = 1500,
+  selectedFirst = null,
+}: {
+  pollMs?: number;
+  /**
+   * The pre-aggregation to open on (T273, AC-245): the one a tile's Data as
+   * of › Open in Jobs names, `?preagg=` in the address.
+   */
+  selectedFirst?: string | null;
+}) {
   const scopes = useScopes();
   const buildable = useQuery({
     queryKey: ['preaggregations'],
@@ -192,7 +202,7 @@ export function BuildPanel({ pollMs = 1500 }: { pollMs?: number }) {
   // started together are still two.
   const [builds, setBuilds] = useState<{ id: string; tokens: string[]; n: number }[]>([]);
   /** The pre-aggregation whose details the pane shows (AC-228). */
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(selectedFirst);
   const latestOf = (id: string) => builds.find((build) => build.id === id);
   const started = useRef(0);
   const start = useMutation({

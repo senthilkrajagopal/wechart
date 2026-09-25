@@ -4220,7 +4220,23 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/core/src/export/*`, `e2e/tile-menu.spec.ts`
   - Failing test: each item downloads its file. The SVG and PNG are the chart as drawn. The marked rows' CSV appears only while the marking holds items.
   - Depends on: T266, T120, `docs/research/clipboard-and-image-export.md`
-- [ ] T273 (AC-245) Data as of › the pre-aggregation, its last build, schedule and next run, Refresh now, Open in Jobs, Edit schedule in Model
+- [x] T273 (AC-245) Data as of › the pre-aggregation, its last build, schedule and next run, Refresh now, Open in Jobs, Edit schedule in Model
+  - Done 2026-09-25, all three browsers.
+    - **AC-245 is ticked** on `e2e/acceleration.spec.ts` "Data as of says what served a tile, how fresh it is and where that is set".
+    - **Tests that failed first:** `dataAsOf.test.ts` and `BuildPanel.test.tsx`'s `selectedFirst` case. The e2e and the Menu test for text entries were written after the code.
+    - **The submenu** is last in the tile menu, as the mockup's footer, labelled "Data as of ‹time›": the answer's `lastRefreshTime`, the clock alone for today (`dataAsOf.ts`). It is read only while the menu is open.
+    - **A pre-aggregation's answer** shows:
+      - its id, from `usedPreAggregations[…].preAggregationId`;
+      - "Last built", from `lastUpdatedAt`;
+      - its schedule in words ("Refreshed every 1 hour"), and as written (`every: "1 hour"`, with its timezone if any), from T160's `/api/schedules`;
+      - "Next run 10:00, may start up to 5½ min late", from `nextRefreshes` and `refreshLagSeconds` (research/cube/refresh-key-schedule.md);
+      - then Refresh now, Open in Jobs (`/jobs?preagg=‹id›`, where `BuildPanel` opens with that row selected) and Edit schedule in Model (T160's link). A schedule that can't be read says so rather than guessing one.
+    - **A database's answer** shows "Answered by the database, not a pre-aggregation", then Refresh now and **Why not accelerated?**.
+      - Why not accelerated? opens a dialog with the chart editor's acceleration panel (T150, AC-144), asked of the query the tile runs, its dashboard filters included.
+      - **A decision taken here:** the design review's P6 named the editor's panel. A reader has nothing to edit, and the editor would ask the chart without the dashboard's filters.
+    - **`Menu` gains a `text` entry:** a line of information that runs nothing. It is an item that is off, so the arrows reach it and a screen reader reads it in turn.
+    - **The schedules are fetched by the view itself**, once any tile's answer came from a pre-aggregation. They go through no query client, which a view rendered alone in its tests does not have.
+    - The AC-199 menu test's list gained Data as of.
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/web/src/workspaces/jobs/*` (`?preagg=`), `packages/web/src/router/routes.tsx`, `e2e/tile-menu.spec.ts`
   - Failing test:
     - A rollup-served tile's submenu names the pre-aggregation, its last build, "every hour" as written, and the next run with its lateness.

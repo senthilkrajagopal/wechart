@@ -98,7 +98,11 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
         aria-labelledby={`${base}-preaggs`}
         hidden={open !== 'preaggs'}
       >
-        <BuildPanel {...(pollMs === undefined ? {} : { pollMs })} />
+        <BuildPanel
+          {...(pollMs === undefined ? {} : { pollMs })}
+          // `?preagg=`, from a tile's Data as of › Open in Jobs (T273, AC-245).
+          selectedFirst={new URLSearchParams(window.location.search).get('preagg')}
+        />
       </div>
       <div
         role="tabpanel"

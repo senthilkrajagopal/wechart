@@ -113,6 +113,9 @@ import {
 import { DOWNLOADED, MarkedRows } from './markings/MarkedRows';
 import { markedValuesTsv } from './markings/markedValues';
 import { CopyToDashboard } from './CopyToDashboard';
+import { clockTimeOf, dataAsOf, type ScheduleSaid } from './dataAsOf';
+import { WhyNotAccelerated } from './WhyNotAccelerated';
+import type { MenuEntry } from '../shell/Menu';
 import { markingOf, withMarking, type MarkingState } from './markings/store';
 import { interactionsOf, type InteractionMode } from './settings/interactionMode';
 import { describeFilter } from '../filters/describe';
@@ -817,6 +820,13 @@ interface TileCharts {
     | undefined;
   /** The query a tile's chart asks, and its SQL (AC-199's View query). */
   readonly onViewQuery?: ((chartId: string, tileId: string) => void) | undefined;
+  /** A tile's Data as of submenu (T273, AC-245), read when its menu opens. */
+  readonly dataAsOfOf?:
+    | ((
+        chartId: string,
+        tileId: string,
+      ) => () => { label: string; entries: MenuEntry[] } | undefined)
+    | undefined;
   /** Copy › To dashboard (T271, AC-243): the dialog that picks one. */
   readonly onCopyToDashboard?: ((chartId: string, tileId: string) => void) | undefined;
   /**
@@ -1124,6 +1134,7 @@ function Elements({
                         charts.onViewQuery?.(chartId, element.id);
                       }
                 }
+                dataAsOf={charts.dataAsOfOf?.(chartId, element.id)}
                 undrawn={
                   // A limited tile waiting shows its message, not its chart.
                   charts.limitedStates?.[chartId] === undefined
@@ -2221,6 +2232,32 @@ export function DashboardView({
     undefined,
   );
   /** The tile whose chart Copy › To dashboard is copying (T271, AC-243). */
+  /** The tile whose Why not accelerated? is open (T273, AC-245). */
+  const [whyNotFor, setWhyNotFor] = useState<{ chartId: string; tileId: string } | undefined>(
+    undefined,
+  );
+  /**
+   * The model's refresh schedules (T160's `/api/schedules`), for Data as of
+   * on a tile a pre-aggregation answered (T273): read once one has.
+   */
+  const anyRollup = Object.values(withFiltered.answered ?? {}).some(
+    (meta) => Object.keys(meta.usedPreAggregations ?? {}).length > 0,
+  );
+  // Fetched here, as the view's other reads are, rather than through the
+  // query client, which a view rendered on its own does not have.
+  const [schedules, setSchedules] = useState<readonly ScheduleSaid[] | undefined>(undefined);
+  useEffect(() => {
+    if (!anyRollup || schedules !== undefined) return undefined;
+    const aborted = new AbortController();
+    void fetch('/api/schedules', { signal: aborted.signal })
+      .then(async (response) => {
+        if (response.ok) setSchedules((await response.json()) as ScheduleSaid[]);
+      })
+      .catch(() => undefined);
+    return () => {
+      aborted.abort();
+    };
+  }, [anyRollup, schedules]);
   const [copyFor, setCopyFor] = useState<{ chartId: string; tileId: string } | undefined>(
     undefined,
   );
@@ -3050,6 +3087,28 @@ export function DashboardView({
     onViewQuery: (chartId: string, tileId: string) => {
       if (queryOf(chartId) !== undefined) setQueryFor({ chartId, tileId });
     },
+    dataAsOfOf: (chartId: string, tileId: string) => () =>
+      dataAsOf(
+        {
+          answered: withFiltered.answered?.[chartId],
+          schedules,
+          onRefresh:
+            onRefresh === undefined
+              ? undefined
+              : () => {
+                  refreshTile(chartId);
+                },
+          onWhyNot: () => {
+            if (queryOf(chartId) !== undefined) setWhyNotFor({ chartId, tileId });
+          },
+          // Another workspace: the whole page, as the tile's other links go.
+          onOpen: (href) => {
+            window.location.assign(href);
+          },
+        },
+        new Date(),
+        (date) => clockTimeOf(date),
+      ),
     // A saved chart to copy: not while previewing another context, whose
     // answers are not the chart.
     ...(preview === undefined
@@ -3384,6 +3443,17 @@ export function DashboardView({
   };
   const sqlQuery = sqlFor === undefined ? undefined : queryOf(sqlFor.chartId);
   const viewedQuery = queryFor === undefined ? undefined : queryOf(queryFor.chartId);
+  const whyNotQuery = whyNotFor === undefined ? undefined : queryOf(whyNotFor.chartId);
+  const closeWhyNot = () => {
+    const opener = whyNotFor?.tileId ?? '';
+    setWhyNotFor(undefined);
+    // Back to the ⋯ menu it was opened from.
+    requestAnimationFrame(() => {
+      window.document
+        .querySelector<HTMLElement>(`[data-view-menu="${CSS.escape(opener)}"]`)
+        ?.focus();
+    });
+  };
   const closeQuery = () => {
     const opener = queryFor?.tileId ?? '';
     setQueryFor(undefined);
@@ -3598,6 +3668,13 @@ export function DashboardView({
           query={viewedQuery}
           context={preview}
           onClose={closeQuery}
+        />
+      )}
+      {whyNotFor === undefined || whyNotQuery === undefined ? null : (
+        <WhyNotAccelerated
+          title={chartTitleOf(whyNotFor.chartId) ?? 'this chart'}
+          query={whyNotQuery}
+          onClose={closeWhyNot}
         />
       )}
       {copyFor === undefined || drawn.documents?.[copyFor.chartId] === undefined ? null : (
