@@ -5003,7 +5003,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `effectiveGroups` lists each level's groups nearest first, each once, with its source folder and whether it is set here. `folderAccess` gives the higher of a user's grants on the folder or above it.
     - The cold review (PASS) added three tests: a descendant naming the same group read-only doesn't lower read-write; the reverse inheritance case; a cycle in bad data stops the walk.
     - AC-255, AC-260 and AC-261 stay unticked until a real route uses the rule. AC-255 and AC-261 are now also traced to T325 and T408, which do.
-- [ ] T313 (AC-262, AC-263, AC-264, AC-265, AC-256) Decide what each user may see and change in each folder
+- [x] T313 (AC-262, AC-263, AC-264, AC-265, AC-256) Decide what each user may see and change in each folder
   - Files: `packages/core/src/access/visibility.ts` (+ test)
   - Failing test: `visibility.test.ts`:
     - a read-write member of /A/B sees every kind of item in /A and the root, view-only (AC-262);
@@ -5011,6 +5011,18 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - a user in no group that reaches a folder gets nothing for it (AC-264);
     - a member of the configured Super-Admin group writes everywhere (AC-256, AC-265).
   - Depends on: T312
+  - **Done 2026-09-25.**
+    - `folderRights` maps every visible folder of the shared tree to a right:
+      - write;
+      - view-only, every kind;
+      - view-only, dashboards (and the charts on them).
+    - Folders it leaves out are invisible. `isSuperAdmin` matches the configured group exactly.
+    - The cold review (PASS) led to three changes:
+      - tests pinning that the widest right wins and that a read grant below never lowers inherited read-write;
+      - grant levels now computed by walking each folder's chain, as `folderAccess` does, so a cycle in bad data or a very deep tree can't change or break the result;
+      - workspaces (`ws:` ids) never granted, Super-Admins included (AC-276).
+    - Which *items* a read-only user sees (a library chart shown on their dashboard but not listed) is T326's.
+    - The criteria stay open until a route uses the rule (T323, T325–T327).
 - [ ] T314 (AC-259, AC-260) Store each folder's groups and serve its effective access
   - Files: `packages/api/src/repos/folder-access.ts` (+ test), `packages/api/src/routes/access.ts` (+ test), `packages/api/src/server.ts`
   - Failing test: `access.test.ts`:

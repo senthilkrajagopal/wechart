@@ -191,3 +191,5 @@ export {
   type FolderLevel,
   type GroupList,
 } from './access/effective';
+
+export { folderRights, isSuperAdmin, type FolderRight, type Viewer } from './access/visibility';
