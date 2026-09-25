@@ -84,7 +84,13 @@ export function TileViewMenu({
   openAt,
   clipboard,
   onCopyToDashboard,
+  undrawn,
 }: {
+  /**
+   * Why the tile draws no chart just now — a limited tile waiting for a
+   * marking — so there is no image of it to make (T272's review).
+   */
+  undrawn?: string | undefined;
   /**
    * Where Copy writes (T271): the page's clipboard unless a test says; null
    * where there is none, which Copy then says.
@@ -212,6 +218,9 @@ export function TileViewMenu({
    */
   const counting = useRef<AbortController | null>(null);
   useEffect(() => () => counting.current?.abort(), []);
+  /** A marked-rows export being read (T272), stopped only by the next one or by leaving. */
+  const exporting = useRef<AbortController | null>(null);
+  useEffect(() => () => exporting.current?.abort(), []);
   const download = () => {
     const written = spec.rows.length;
     save(csvFileName(title), `${BYTE_ORDER_MARK}${csvOf(spec)}`);
@@ -238,9 +247,11 @@ export function TileViewMenu({
    */
   const exportMarkedRows = (exportRows: NonNullable<NonNullable<typeof marked>['exportRows']>) => {
     setNote({ kind: 'run', text: 'Reading the marked rows…' });
-    counting.current?.abort();
+    // Its own: a CSV download chosen meanwhile must not cancel this file,
+    // only say its own note after it (T272's review).
+    exporting.current?.abort();
     const mine = new AbortController();
-    counting.current = mine;
+    exporting.current = mine;
     exportRows(mine.signal).then(
       ({ text, written, total }) => {
         if (mine.signal.aborted) return;
@@ -361,12 +372,16 @@ export function TileViewMenu({
     );
   };
   /** Why a tile has no image to export: it is drawn as text, not by ECharts. */
-  const imageless =
-    tableView || ['kpi', 'table', 'pivot'].includes(spec.chartType)
-      ? tableView
-        ? 'Shown as a table: view it as a chart to export its image.'
-        : 'A KPI, table or pivot is drawn as text, not as a chart image.'
-      : undefined;
+  const imageless = tableView
+    ? 'Shown as a table: view it as a chart to export its image.'
+    : ['kpi', 'table', 'pivot'].includes(spec.chartType)
+      ? 'A KPI, table or pivot is drawn as text, not as a chart image.'
+      : // Nothing drawn: a limited tile waiting, or an answer with no rows
+        // (T272's review: offered, then "not drawn yet" when chosen).
+        (undrawn ??
+        (spec.rows.length === 0
+          ? 'The tile has no rows drawn, so there is no image of it.'
+          : undefined));
   const trigger = useRef<HTMLButtonElement>(null);
   const why = useId();
   const wrapper = useRef<HTMLDivElement>(null);

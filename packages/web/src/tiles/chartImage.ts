@@ -15,6 +15,8 @@ export interface DrawnChart {
   getWidth(): number;
   getHeight(): number;
   renderToSVGString(): string;
+  /** ECharts' own, to clear a hover before the picture is taken (T272's review). */
+  dispatchAction?: (action: { type: string }) => void;
 }
 
 /** The ECharts instance drawing a tile's chart, or none for a tile drawn in DOM. */
@@ -49,6 +51,15 @@ export function chartSvg(
 ): { svg: string; width: number; height: number } {
   const cssWidth = chart.getWidth();
   const cssHeight = chart.getHeight();
+  /**
+   * The display list holds whatever the pointer is resting on (the research's
+   * "Hover and emphasis state"): a menu opened by its keys leaves the pointer
+   * where it was. `downplay` puts hover emphasis away (research/
+   * cross-highlight.md, "Drive states from code"); the marking is drawn in
+   * item styles, not emphasis, so it stays. The axis pointer's line has no
+   * action researched to clear it, and may be in the picture.
+   */
+  chart.dispatchAction?.({ type: 'downplay' });
   const doc = new DOMParser().parseFromString(chart.renderToSVGString(), 'image/svg+xml');
   if (doc.querySelector('parsererror') !== null) throw new Error('The chart’s SVG did not parse.');
   const root = doc.documentElement;
@@ -58,7 +69,9 @@ export function chartSvg(
   root.setAttribute('height', String(height));
   root.setAttribute('viewBox', `0 0 ${String(cssWidth)} ${String(cssHeight)}`);
   const style = doc.createElementNS(SVG_NS, 'style');
-  style.textContent = 'text{font-variant-numeric:tabular-nums}';
+  // `!important`, as the page's rule is: a text zrender writes with the `font:`
+  // shorthand resets the property inline (echarts-text-and-grid.md, Q2).
+  style.textContent = 'text{font-variant-numeric:tabular-nums !important}';
   root.insertBefore(style, root.firstChild);
   if (surface !== undefined) {
     const back = doc.createElementNS(SVG_NS, 'rect');
@@ -87,19 +100,25 @@ export function svgToPng({
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext('2d');
-      if (context === null) {
-        reject(new Error('This browser gave no canvas to draw the image on.'));
-        return;
+      // A throw in here is outside the executor, so caught here, or the
+      // promise never settles and the note waits for ever (T272's review).
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d');
+        if (context === null) {
+          reject(new Error('This browser gave no canvas to draw the image on.'));
+          return;
+        }
+        context.drawImage(image, 0, 0, width, height);
+        canvas.toBlob((png) => {
+          if (png === null) reject(new Error('The browser could not make the PNG.'));
+          else resolve(png);
+        }, 'image/png');
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error('The browser could not make the PNG.'));
       }
-      context.drawImage(image, 0, 0, width, height);
-      canvas.toBlob((png) => {
-        if (png === null) reject(new Error('The browser could not make the PNG.'));
-        else resolve(png);
-      }, 'image/png');
     };
     image.onerror = () => {
       reject(new Error('The chart’s SVG did not load as an image.'));

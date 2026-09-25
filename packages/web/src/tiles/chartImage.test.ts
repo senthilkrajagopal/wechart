@@ -41,6 +41,26 @@ describe('a chart as an SVG file', () => {
     );
   });
 
+  it('keeps tabular figures over a text’s own font shorthand, and draws no hover (T272’s review)', () => {
+    const actions: unknown[] = [];
+    const { svg } = chartSvg({
+      ...chart,
+      dispatchAction: (action: unknown) => {
+        actions.push(action);
+      },
+    });
+    const root = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
+
+    // A text zrender writes with the `font:` shorthand resets the property
+    // inline (research/echarts-text-and-grid.md, Q2), as the page's rule is
+    // `!important` against.
+    expect(root.querySelector('style')?.textContent).toBe(
+      'text{font-variant-numeric:tabular-nums !important}',
+    );
+    // What the pointer rests on is not part of the chart as drawn.
+    expect(actions).toEqual([{ type: 'downplay' }]);
+  });
+
   it('is its size times the pixel ratio, drawn in the same coordinates', () => {
     const { svg, width, height } = chartSvg(chart, { pixelRatio: 2 });
     const root = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;

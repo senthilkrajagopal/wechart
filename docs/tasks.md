@@ -4199,6 +4199,24 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
       - The PNG has the PNG signature and the chart's size × `devicePixelRatio`. Decoded in the page, the marked bar's pixel is opaque and darker than a faded bar's.
       - The marked rows' CSV is 80 shipped rows.
     - **The e2e tests that clicked Download CSV** now open Export and click CSV: `export.spec.ts`, `status-labels.spec.ts` and the menu lists in `markings.spec.ts`.
+  - **T272's review, 2026-09-25.** It passed AC-244 and AC-199 at HEAD. Its code findings, fixed in one commit:
+    - **M1.** Export › CSV cancelled a Marked rows CSV still being read, silently: they shared one AbortController. The marked-rows export now has its own, stopped only by the next one or by leaving. `TileViewMenu.test.tsx` covers it; the test was written after the fix.
+    - **L1.** The image's tabular-figures rule is `!important`, as the page's is. A text zrender writes with the `font:` shorthand, such as the scroll legend's counter, resets it inline (`echarts-text-and-grid.md` Q2).
+    - **L2.** A throw inside the image's `onload` now rejects the PNG, rather than leaving the note waiting.
+    - **L3.** Hover emphasis is put away (`downplay`, researched in `cross-highlight.md`) before the picture is taken. **The axis pointer's line is not cleared:** no action for it is researched, so it may appear in the image when the menu is opened by keys with the pointer resting on a line chart.
+    - **L4.** SVG and PNG are disabled, with the reason, where the tile draws nothing: a limited tile waiting for a marking, or an answer with no rows. Before, they were offered and then failed with "not drawn yet".
+    - **L6.** Tests now show the images disabled while an answer is on its way, in table view, and with nothing drawn.
+    - **L8.** Fixed with T271: the orphaned AC-102 comment, and the stale "Download CSV" header.
+    - **Not changed:**
+      - L7: the asking reason's place under the popup.
+      - L9: the note under ⋯, as the CSV's always was.
+      - L5: history. AC-244 was ticked at 734f799 while `count` was T267's per-tile number; it holds at HEAD.
+    - **M2, for the user:** four choices the research reserved for the spec were made here. They are:
+      1. the image carries the tile's surface;
+      2. PNGs are at the device pixel ratio;
+      3. images are disabled while a newer answer is on its way;
+      4. the tile's title is not in the image.
+      They are recorded, and put to the user.
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/core/src/export/*`, `e2e/tile-menu.spec.ts`
   - Failing test: each item downloads its file. The SVG and PNG are the chart as drawn. The marked rows' CSV appears only while the marking holds items.
   - Depends on: T266, T120, `docs/research/clipboard-and-image-export.md`

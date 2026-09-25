@@ -1124,6 +1124,12 @@ function Elements({
                         charts.onViewQuery?.(chartId, element.id);
                       }
                 }
+                undrawn={
+                  // A limited tile waiting shows its message, not its chart.
+                  charts.limitedStates?.[chartId] === undefined
+                    ? undefined
+                    : 'Nothing is marked yet, so the tile draws no chart.'
+                }
                 onCopyToDashboard={
                   charts.onCopyToDashboard === undefined
                     ? undefined

@@ -337,6 +337,70 @@ describe('a tile’s view-mode menu', () => {
     }
   });
 
+  it('still downloads the marked rows when the CSV is chosen while they are read (T272’s review)', async () => {
+    const saved: string[] = [];
+    let answer: (rows: { text: string; written: number; total: number }) => void = () => undefined;
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="By status"
+        spec={SPEC}
+        countRows={async () => ({ returned: 2, total: 2 })}
+        marked={{
+          name: 'Marking',
+          count: 1,
+          onUnmark: vi.fn(),
+          exportRows: () =>
+            new Promise((resolve) => {
+              answer = resolve;
+            }),
+        }}
+        save={(name) => {
+          saved.push(name);
+        }}
+      />,
+    );
+    const trigger = screen.getByRole('button', { name: 'Actions for By status' });
+    await userEvent.click(trigger);
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Export/ }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Marked rows CSV' }));
+    await userEvent.click(trigger);
+    await exportCsv();
+
+    answer({ text: 'Status\r\nshipped', written: 1, total: 1 });
+    await vi.waitFor(() => {
+      expect(saved).toEqual(['By status.csv', 'By status - marked rows.csv']);
+    });
+  });
+
+  it('offers no image while a newer answer is on its way, in table view, or with nothing drawn', async () => {
+    const reasonOf = (name: string) => {
+      const item = screen.getByRole('menuitem', { name });
+      expect(item.getAttribute('aria-disabled')).toBe('true');
+      return document.getElementById(item.getAttribute('aria-describedby') ?? '')?.textContent;
+    };
+    const cases = [
+      { props: { asking: true }, why: 'Its newest answer is still on its way.' },
+      {
+        props: { tableView: true, onTableView: vi.fn() },
+        why: 'Shown as a table: view it as a chart to export its image.',
+      },
+      {
+        props: { undrawn: 'Nothing is marked yet, so the tile draws no chart.' },
+        why: 'Nothing is marked yet, so the tile draws no chart.',
+      },
+    ];
+    for (const { props, why } of cases) {
+      const { unmount } = render(
+        <TileViewMenu tileId="t1" title="T" spec={SPEC} save={vi.fn()} {...props} />,
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /^Export/ }));
+      expect([reasonOf('SVG image'), reasonOf('PNG image')]).toEqual([why, why]);
+      unmount();
+    }
+  });
+
   it('offers no image of a tile drawn as text, and says why', async () => {
     render(
       <TileViewMenu
