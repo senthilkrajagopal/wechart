@@ -4029,7 +4029,12 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 .grid-tile:has(.tile-refresh) .tile-head { padding-right: 90px; }
 /* With no ✎ — a narrow window's reading view (T250), or a preview — Refresh
    takes the pencil's place, and the head the room it leaves. */
-.grid-tile:has(.tile-refresh):not(:has(.tile-pencil)) > .tile-refresh:not(.tile-sql) { right: 44px; }
+/* Not while previewing, where SQL already has the pencil's place (T250's review). */
+.grid-tile:has(.tile-refresh):not(:has(.tile-pencil)):not(:has(.tile-sql)) > .tile-refresh { right: 44px; }
+/* SQL is a word, wider than the pencil it replaces: Refresh stands clear of
+   it, and the head keeps room for both (T250's review). */
+.grid-tile:has(.tile-sql) > .tile-refresh:not(.tile-sql) { right: 78px; }
+.grid-tile:has(.tile-sql):has(.tile-refresh:not(.tile-sql)) .tile-head { padding-right: 112px; }
 .grid-tile:has(.tile-refresh):not(:has(.tile-pencil)):not(:has(.tile-sql)) .tile-head { padding-right: 62px; }
 /* A chart's SQL as the previewed context (T174): only while previewing, when
    there is no pencil, so it takes the pencil's place; a word, not an icon. */
@@ -4078,6 +4083,10 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
    AC-013 fails on an accelerated tile without its mark. */
 .tile-freshness > .acceleration,
 .tile-freshness > .tile-as-of { display: inline; height: auto; padding: 0; background: none; }
+/* The badge's 4 px between its parts, as inline text now (T250's review):
+   its gap no longer applies, and the markup has no spaces of its own. */
+.tile-freshness > * + * { margin-left: 4px; }
+.tile-freshness .acceleration--accelerated > .acceleration__short { margin-left: 4px; }
 .acceleration--accelerated { color: var(--wc-status-success); }
 @media (hover: none) {
   .tile-refresh,

@@ -5,9 +5,9 @@ import { useState, type ReactNode } from 'react';
 import type { ClickedItem } from '../dashboard/crossfilter/clicked';
 import type { AnswerMeta } from '../query/answerMeta';
 import { StateLine, StatusIcon } from '../shell/StatusIcon';
-import { AccelerationBadge } from './AccelerationBadge';
+import { AccelerationBadge, accelerationOf } from './AccelerationBadge';
 import { ChartCanvas, type ChartCanvasProps } from './ChartCanvas';
-import { DataAsOf } from './DataAsOf';
+import { DataAsOf, dataAsOfText } from './DataAsOf';
 import { DataTable, type DataTableProps } from './DataTable';
 import { Kpi } from './Kpi';
 import { PivotTable } from './PivotTable';
@@ -206,7 +206,22 @@ export function ChartTile({
       {/* One badge, the prototype's .badge, for where the data is from and
           when (T252, recheck-dashboard F8): two pills took the title's room. */}
       {served === undefined && asOf === undefined ? null : (
-        <span className="tile-freshness" data-testid="tile-freshness">
+        <span
+          className="tile-freshness"
+          data-testid="tile-freshness"
+          // Its whole sentence, however little of it the head has room for
+          // (T250's review).
+          title={[
+            served === undefined
+              ? undefined
+              : accelerationOf(served).accelerated
+                ? 'Accelerated'
+                : 'Live',
+            asOf === undefined ? undefined : dataAsOfText(asOf),
+          ]
+            .filter((part) => part !== undefined)
+            .join(' · ')}
+        >
           {served === undefined ? null : <AccelerationBadge result={served} />}
           {/* Only between two parts: DataAsOf draws nothing for a time it
               cannot read (T252's review). */}
@@ -261,6 +276,8 @@ export function ChartTile({
             type="button"
             className="btn-ghost btn-sm tile-head__action"
             data-testid="toggle-table-view"
+            // Its words for a pointer, where a narrow head draws it as an icon.
+            title={showingTable ? 'Chart view' : 'Table view'}
             aria-pressed={showingTable}
             onClick={() => {
               setAsTable(!showingTable);

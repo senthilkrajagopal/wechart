@@ -139,9 +139,27 @@ test.describe('T250: below 1,024 px, a dashboard is for reading', () => {
       expect(room.whole || room.width >= 64).toBe(true);
     }
 
-    // For reading: no Edit, no ✎, no way into edit mode.
+    // For reading: no Edit, no ✎, no way into edit mode — nor into the
+    // settings, whose Save writes the dashboard (T250's review).
     await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
     await expect(page.locator('[data-edit-chart]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Dashboard settings' })).toHaveCount(0);
+    const statusTile = page.locator('[data-tile="tile-status"]');
+    await statusTile.getByTestId('tile-view-menu-tile-status').click();
+    const menu = statusTile.getByRole('menu', { name: /^Actions for / });
+    await expect(menu.getByRole('menuitem', { name: 'View query' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Edit chart' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    // In the narrow head, Table view is an icon — still named, and titled for
+    // a pointer (T250's review).
+    const table = statusTile.getByRole('button', { name: 'Table view' });
+    await expect(table).toHaveAttribute('title', 'Table view');
+    expect((await table.boundingBox())?.width).toBe(24);
+    // The badge says the whole of itself in its tooltip, however little room it has.
+    await expect(statusTile.getByTestId('tile-freshness')).toHaveAttribute(
+      'title',
+      /^Live · Data as of /,
+    );
     // The canvas does not scroll sideways.
     expect((await overflowOf(page)).canvas).toBe(0);
   });
@@ -157,7 +175,34 @@ test.describe('T250: below 1,024 px, a dashboard is for reading', () => {
     // Side by side again, six columns each.
     expect(notes.y).toBe(status.y);
     await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+    // With room, the freshness badge's parts keep the prototype's 4 px apart
+    // (T250's review: its gap stopped applying to inline parts).
+    const gaps = await page
+      .locator('[data-tile="tile-status"]')
+      .getByTestId('tile-freshness')
+      .evaluate((badge) => {
+        const parts = [...badge.children].map((part) => part.getBoundingClientRect());
+        return parts.slice(1).map((part, at) => part.left - (parts[at]?.right ?? 0));
+      });
+    expect(gaps.length).toBeGreaterThan(0);
+    for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(3);
   });
+});
+
+test('while previewing, Refresh and SQL each keep their own place in the tile’s corner (T250’s review)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(
+    `/explore/dashboards/seed-root-dashboard-1?preview=${encodeURIComponent(JSON.stringify({}))}`,
+  );
+  const tile = page.locator('[data-tile="tile-status"]');
+  await expect(tile.getByTestId('chart-canvas')).toBeVisible({ timeout: 15_000 });
+  await tile.hover();
+  const refresh = (await tile.getByRole('button', { name: /^Refresh / }).boundingBox())!;
+  const sql = (await tile.getByRole('button', { name: /^SQL for / }).boundingBox())!;
+  const apart = refresh.x + refresh.width <= sql.x || sql.x + sql.width <= refresh.x;
+  expect(apart).toBe(true);
 });
 
 test('a three-column chart tile keeps its title beside its badges at 1,440 px (T250)', async ({

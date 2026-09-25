@@ -3833,7 +3833,11 @@ export function DashboardView({
         readOnly={preview !== undefined || narrow}
         onStart={onEditStart}
         onDiscard={onDiscard}
-        headerActions={(session) => (
+        headerActions={(session) =>
+          // Not below 1,024 px, where the dashboard is for reading: the
+          // settings' Save writes it (T250's review). An edit session already
+          // open keeps it, as it keeps its bar.
+          narrow && !session.editing ? null : (
           <button
             ref={gear}
             type="button"
@@ -3873,7 +3877,8 @@ export function DashboardView({
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
           </button>
-        )}
+          )
+        }
         /**
          * The settings page, opened over the dashboard rather than navigated to,
          * so the edit session survives it (AC-069, and AC-074 later).
@@ -5105,7 +5110,11 @@ function DashboardPages({
             editing, the canvas's own drop zones and the Add panel are that. */}
         {!editing && (showing?.items.length ?? 0) === 0 ? (
           <div className="dashboard-empty">
-            <p>Nothing here yet. Edit the dashboard to add charts.</p>
+            {/* How to begin only where it can be begun: not while previewing,
+                nor in a narrow window (T250's review). */}
+            <p>
+              {canEdit ? 'Nothing here yet. Edit the dashboard to add charts.' : 'Nothing here yet.'}
+            </p>
             {/* Not while previewing, where the dashboard cannot be edited. */}
             {canEdit ? (
               <button type="button" className="btn-primary" onClick={session.edit}>
