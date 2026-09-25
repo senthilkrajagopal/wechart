@@ -3726,6 +3726,19 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
       - the cross-filter helper waits for a settled box too;
       - the unsourced claim about Inter's digits is marked UNVERIFIED.
     - **Recorded choice:** the grid keeps ECharts' default 25 % clamp, not the research's 0. Very long labels then overflow, rather than shrinking the plot to nothing, which would itself draw empty axes. `nameMoveOverlap` stays at its default, which keeps axis titles clear of the labels and, under `'all'`, inside the grid.
+- [ ] T255 (AC-214) Save a chart with the title as it reads, one still being typed included
+  - Files: `packages/web/src/editor/ChartEditor.tsx`, `packages/web/src/router/routes.tsx`, `packages/web/src/dashboard/edit/ChartEditorOverlay.tsx`, `e2e/chart-editor.spec.ts`
+  - Failing test: `e2e/chart-editor.spec.ts`: type a new title in "Chart title" and press Save chart without leaving the field. The chart page and the stored document carry the typed title. The same holds for Save dashboard and Back from a dashboard tile's editor (recheck-chart-editor N1; it lost the title on the main path for creating a chart).
+  - Depends on: none
+- [ ] T256 (AC-214, AC-213) Give the chart editor the prototype's way back and its ownership note
+  - Files: `packages/web/src/editor/*`, `packages/web/src/router/routes.tsx`, `e2e/chart-editor.spec.ts`
+  - Failing test: the library-chart editor's header starts with "← Back to Explore" for a new chart, or "← Back to chart" for an existing one. The bare "Shared" badge is the prototype's note: "New shared chart in ‹folder›" or "Shared chart · on n dashboard(s)…" (recheck-chart-editor N2, F4).
+  - Depends on: T255
+- [ ] T257 (AC-187, AC-214) Match the chart editor's header, field list, wells, preview tile, drawer and empty state to the prototype, measured
+  - Files: `packages/web/src/editor/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: computed against the prototype's rules. Undo and Redo as `.iconbtn`; the title input borderless at 15/600; field icons as 18 px role chips with a 6 px "used" dot; wells dashed with a 12/600 label and an inline "+" button; pills role-tinted at radius 4; the preview in a tile; the drawer's tabs showing; the empty state's two lines in the tile; one name for a member in the list and in the pills (recheck-chart-editor F4–F7, F18, N3–N5).
+  - Depends on: a measured re-critique. The 2026-09-24 pass stopped when its DevTools server hung, before any value was measured (`docs/design/critiques/2026-09-24-recheck-chart-editor.md`).
+  - Also noted there (N6): New › Chart writes the document before Save. Whether leaving it unsaved leaves an "Untitled chart" behind is unchecked.
 - [x] T253 (AC-187) Use the prototype's picker for tile menus, its inline grip, and its tinted edit grid
   - Files: `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: a tile's ⋯ menu is 250 px, `border-strong` with the pop shadow, 28 px items at 12 px, its heading 12/16 muted and Delete in `status-error`; the grip sits inline in the head at 14 px muted; the edit grid's columns are tinted bands (recheck-dashboard N4; mismatches 14, 19, 20).
@@ -3830,7 +3843,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-201 | T219       | AC-202 | T221 | AC-203 | T222 | AC-204 | T223       |
 | AC-205 | T223       | AC-206 | T223 | AC-207 | T217 | AC-208 | T221       |
 | AC-209 | T224       | AC-210 | T224 | AC-211 | T210 | AC-212 | T226       |
-| AC-213 | T227       | AC-214 | T228 | AC-215 | T229 | AC-216 | T229       |
+| AC-213 | T227, T256 | AC-214 | T228, T255–T257 | AC-215 | T229 | AC-216 | T229       |
 | AC-217 | T230       | AC-218 | T230 | AC-219 | T231 | AC-220 | T232       |
 | AC-221 | T232       | AC-222 | T234 | AC-223 | T234 | AC-224 | T235       |
 | AC-225 | T236       | AC-226 | T237 | AC-227 | T237 | AC-228 | T239, T241 |
