@@ -1,5 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
+import type { SecurityMode } from './auth/user';
+
 /**
  * Everything the service reads from its environment.
  *
@@ -42,6 +44,12 @@ export interface Config {
    * (T162, AC-156). Without it the worker is shown as not watched.
    */
   readonly cubeWorkerUrl?: string;
+  /**
+   * `WECHART_SECURITY`: `off` (the default) runs as phase 1's single user, a
+   * Super-Admin; `oidc` signs every user in (AC-251, AC-254). Unset here means
+   * off, so a configuration built in code keeps phase 1's behaviour.
+   */
+  readonly security?: SecurityMode;
 }
 
 /** `infra/cube/model`, three levels up from `src/` or `dist/` in this package. */
@@ -82,7 +90,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   }
 
+  // An unknown mode must never run open: "on" is not "oidc".
+  const security = env['WECHART_SECURITY'] ?? 'off';
+  if (security !== 'off' && security !== 'oidc') {
+    throw new ConfigError(
+      `WECHART_SECURITY is "${security}". It is "off" (single-user mode) or "oidc" (sign-in).`,
+    );
+  }
+
   return {
+    security,
     cubeApiUrl,
     cubeApiSecret,
     securityContext: parseSecurityContext(env['WECHART_SECURITY_CONTEXT']),

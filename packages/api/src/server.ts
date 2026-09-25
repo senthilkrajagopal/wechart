@@ -20,6 +20,7 @@ import { scopesOf } from './cube/scopes';
 import { healthOf, originOf } from './cube/health';
 import { MetaCache } from './cube/meta-cache';
 import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
+import { registerUser, Unauthenticated, userOf } from './auth/user';
 import { registerBuilds } from './jobs/build';
 import { registerSchedules } from './jobs/schedules';
 import { registerIntrospection } from './model/introspection';
@@ -119,13 +120,6 @@ export interface DocumentWriter {
   ): Promise<readonly { id: string; version: number }[]>;
 }
 
-/**
- * Phase 1 has one user and no login (requirements §4, "Single user, no
- * login"): the owner of everything created, and the name the top bar's
- * avatar shows. Users arrive in phase 2, and this is where they replace it.
- */
-export const SINGLE_USER = 'admin';
-
 /** The slice of the catalog repository the server exposes. */
 export interface CatalogReader {
   folders(): Promise<unknown[]>;
@@ -166,6 +160,8 @@ export function buildServer({
   introspectionRetryMs,
 }: BuildOptions): FastifyInstance {
   const app = Fastify({ logger });
+  const security = config.security ?? 'off';
+  registerUser(app, security);
 
   /**
    * The Cube deployment's health and the refresh worker's state (T162,
@@ -217,8 +213,15 @@ export function buildServer({
 
   app.get('/api/meta', async () => meta.meta());
 
-  /** Who is signed in: phase 1's single user (AC-190), named once, here. */
-  app.get('/api/me', async () => ({ name: SINGLE_USER }));
+  /**
+   * Who is signed in (AC-190, AC-252, AC-254): the name the top bar shows,
+   * whether they are a Super-Admin, and the security mode, so the top bar can
+   * show "Single-user mode" in place of Sign out.
+   */
+  app.get('/api/me', async (request) => {
+    const user = userOf(request);
+    return { name: user.name, superAdmin: user.superAdmin, security };
+  });
 
   /**
    * The Cube API scopes wechart's own context has (T176, AC-170), each probed
@@ -399,6 +402,7 @@ export function buildServer({
    * overwrite an existing object by claiming its id.
    */
   app.post('/api/documents', async (request, reply) => {
+    const owner = userOf(request).key;
     const body = request.body as { kind?: string; title?: string; folderId?: string } | undefined;
 
     const kind = body?.kind;
@@ -411,7 +415,6 @@ export function buildServer({
     if (!docs) throw new BadRequest('Persistence is not configured');
 
     const folderId = body?.folderId ?? 'root';
-    const owner = SINGLE_USER;
 
     /**
      * A dashboard is created with its interaction mode and its default
@@ -987,6 +990,11 @@ export function buildServer({
 
     if (error instanceof BadRequest) {
       return reply.status(400).send({ error: error.message });
+    }
+
+    // Nobody signed in (AC-251): no content, whatever the route.
+    if (error instanceof Unauthenticated) {
+      return reply.status(401).send({ error: 'unauthenticated' });
     }
 
     app.log.error(error);

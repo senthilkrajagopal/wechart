@@ -4981,10 +4981,16 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.0 Foundations: the request's user and effective access
 
-- [ ] T311 [P] (AC-254) Carry the request's user, and run as the single Super-Admin while security is off
+- [x] T311 [P] (AC-254) Carry the request's user, and run as the single Super-Admin while security is off
   - Files: `packages/api/src/config.ts` (`WECHART_SECURITY=off|oidc`, default `off`), `packages/api/src/auth/user.ts` (+ test), `packages/api/src/server.ts` (an `onRequest` hook filling `request.wechartUser`; `/api/me` returns `{ name, superAdmin, security }`)
   - Failing test: `user.test.ts` and `server.test.ts`: with security off, `/api/me` answers `{ name: 'admin', superAdmin: true, security: 'off' }`, and every route answers without a session (AC-254).
   - Depends on: none
+  - **Done 2026-09-25.**
+    - `WECHART_SECURITY` refuses anything other than `off` or `oidc`, so an unknown mode never runs open.
+    - Handlers take the user through `userOf(request)`, which answers 401 when there is none.
+    - The cold review (FAIL) found the handlers falling back to the single Super-Admin when nobody was signed in with security on. They no longer do, and two tests with `oidc` hold that: `/api/me` answers 401, and a create makes nothing.
+    - The review's sweep of every route with security off is added to T318's test.
+    - AC-254 stays unticked: its workspace and proposal half is T359's.
 - [ ] T312 [P] (AC-260, AC-261, AC-255) Compute each folder's effective read-only and read-write groups
   - Files: `packages/core/src/access/effective.ts` (+ test), `packages/core/src/index.ts`
   - Failing test: `effective.test.ts`:
@@ -5025,7 +5031,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Depends on: T316
 - [ ] T318 (AC-251) Refuse every API route without a session, except health and sign-in, and prove no route is unclassified
   - Files: `packages/api/src/auth/guard.ts` (+ test), `packages/api/src/server.ts` (each route's `config.access`), `packages/api/src/model/publish.ts`, `packages/api/src/model/introspection.ts`, `packages/api/src/jobs/*.ts`
-  - Failing test: `guard.test.ts`: with security on and no session, every route registered on the server (collected with an `onRoute` hook) answers 401 `{ error: 'unauthenticated' }` and no data, except `/api/health`, `/api/cube-health`, `/api/auth/*` and the key-guarded `/api/cube-model/*`; a route registered without an access class fails the test (AC-251).
+  - Failing test: `guard.test.ts`: with security on and no session, every route registered on the server (collected with an `onRoute` hook) answers 401 `{ error: 'unauthenticated' }` and no data, except `/api/health`, `/api/cube-health`, `/api/auth/*` and the key-guarded `/api/cube-model/*`; with security off, no route answers 401 (T311's review); a route registered without an access class fails the test (AC-251).
   - Depends on: T316
 - [ ] T319 (AC-252, AC-254) Show the account button and menu, or the single-user chip
   - Files: `packages/web/src/shell/AccountMenu.tsx` (+ test), `packages/web/src/shell/AppShell.tsx`

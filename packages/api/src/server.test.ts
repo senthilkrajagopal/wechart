@@ -296,7 +296,9 @@ describe('who is signed in (AC-190)', () => {
     const app = buildServer({ config, cube: stubCube(() => ({})) });
     const response = await app.inject({ method: 'GET', url: '/api/me' });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ name: 'admin' });
+    // Phase 2 adds whether they are a Super-Admin and the security mode
+    // (AC-252, AC-254); with security off it is still phase 1's one user.
+    expect(response.json()).toEqual({ name: 'admin', superAdmin: true, security: 'off' });
   });
 });
 
