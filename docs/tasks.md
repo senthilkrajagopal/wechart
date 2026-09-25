@@ -2419,7 +2419,24 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - There's no zoom or pan: the pane scrolls.
     - Leaving through a link doesn't warn of unpublished edits, as elsewhere. The user has ruled out hardening save edge cases.
     - Joins declared in JavaScript or Jinja files aren't drawn: those files are read-only and aren't read as YAML.
-- [ ] T275 (AC-250, AC-139) Run the user's Cube fork, and grant its `introspection` scope only to the tokens the API signs for it
+- [x] T275 (AC-250, AC-139) Run the user's Cube fork, and grant its `introspection` scope only to the tokens the API signs for it
+  - Done 2026-09-25. **AC-250 is not ticked yet.** Its tokens are shown: Cube grants the scope to the introspection token alone, never to a query's, a store's or a draft's.
+    - Its "never to the browser" has no surface until T145's proxy exists, so it is ticked there, on a test that the proxy's responses carry no token.
+    - **Tests that failed first:** `cube-config.test.ts`, whose `contextToApiScopes` gave no `introspection`, and `client.test.ts`, where `introspect` was missing.
+    - `e2e/cube-scopes.spec.ts` asks the real compose Cube with the tokens the API signs. It answers 200 for the introspection claim, and 403 "API scope is missing: introspection" for a query's, a store's, a draft's, and a draft claiming it.
+    - **`infra/cube/cube.js`:** `introspection` is granted only for `wechartIntrospection: true`, never with `wechartDraft`, and only instead of `jobs`. Every other token keeps `jobs`, as before.
+    - **The claim can't be set any other way:** a previewed context can't carry it, since `previewClaimsOf` already strips every `wechart…` claim.
+    - **`CubeClient.introspect(path, init)`** asks Cube's `/v1/introspection/data-sources…` routes alone, each with a token of its own that carries the claim and lives 60 seconds. It returns Cube's status and body as they are, for the proxy to put in the API's words.
+    - **Images:**
+      - `docker-compose.yml` runs `cube:v1.7.45-introspection` for Cube and its refresh worker (`CUBE_IMAGE` overrides it), with Cube Store at v1.7.45. This carries out T263's move, which stays open for its own check of a failed import.
+      - `deploy/helm/values/docker-desktop.yaml` sets `cube.image` to the same local image. The chart's Cube template already pulls `IfNotPresent`.
+      - `docs/deploy.md` says how to build the image from the fork.
+    - **The whole suite against the fork's Cube:** 1,566 passed. It failed only:
+      - the known perf test;
+      - Safari's 1,000-item shape, which passes alone;
+      - "a marking whose items the filters exclude…", which passes alone;
+      - the palette's "arrows and Enter" test. That one races results from three sources and fails on repeat in Chrome. It is recorded, not yet fixed.
+    - **The fork's second commit:** `95ea166012` arrived meanwhile. The image was rebuilt from it and the compose Cube recreated on it; it reports a foreign key's schema.
   - Planned 2026-09-25 `[R10]`.
   - `docker-compose.yml`: both `cube` and `cube-refresh-worker` use `cube:v1.7.45-introspection`, built locally. This takes in T263's move of Cube Store to v1.7.45.
   - The Helm values' `cube.image` points at the same local image (`pullPolicy: IfNotPresent`, as wechart's own images).

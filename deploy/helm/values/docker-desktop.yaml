@@ -10,6 +10,10 @@ web:
     port: 8089
 
 cube:
+  # The user's Cube fork, built locally and pushed nowhere (T275, R10): the
+  # node runs on Docker's engine, so the pods use the local image, as they do
+  # wechart's own (docs/deploy.md). Cube and its refresh worker both run it.
+  image: cube:v1.7.45-introspection
   dataSource:
     type: postgres
     host: superset-postgresql.superset.svc.cluster.local

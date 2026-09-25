@@ -22,6 +22,7 @@ interface CubeConfig {
     dataSchemaFiles: () => Promise<{ fileName: string; content: string }[]>;
   };
   schemaVersion: (context: unknown) => Promise<string>;
+  contextToApiScopes: (context: unknown, defaultScopes: string[]) => Promise<string[]>;
   maxCompilerCacheKeepAlive?: number;
   updateCompilerCacheKeepAlive?: boolean;
 }
@@ -113,6 +114,35 @@ describe('Cube’s configuration', () => {
     expect(requested.map((request) => request.url)).toEqual(
       Array.from({ length: 5 }, () => `${STORE}/api/cube-model/files`),
     );
+  });
+
+  /**
+   * T275 / AC-250: THE SYSTEM SHALL grant Cube's `introspection` scope only to
+   * the short-lived tokens its API signs to browse a data source and generate
+   * cubes, never to a draft's token or to any other request's token.
+   */
+  it('grants introspection to the API’s introspection token alone, and never with a draft', async () => {
+    const config = load();
+    const defaults = ['graphql', 'meta', 'data'];
+
+    expect(await config.contextToApiScopes({ wechartIntrospection: true }, defaults)).toEqual([
+      ...defaults,
+      'introspection',
+    ]);
+    // Every other token wechart signs: jobs as before, never introspection.
+    expect(await config.contextToApiScopes({ wechartStore: STORE }, defaults)).toEqual([
+      ...defaults,
+      'jobs',
+    ]);
+    expect(await config.contextToApiScopes(undefined, defaults)).toEqual([...defaults, 'jobs']);
+    // A draft, even one claiming it, is compiled to be checked and no more.
+    expect(
+      await config.contextToApiScopes({ wechartDraft: 'd1', wechartIntrospection: true }, defaults),
+    ).toEqual(defaults);
+    // Only the claim as the API sets it: `true`, not a string that says so.
+    expect(
+      await config.contextToApiScopes({ wechartIntrospection: 'true' }, defaults),
+    ).not.toContain('introspection');
   });
 
   it('lets idle compiled models go, so the drafts Cube compiles do not pile up', () => {

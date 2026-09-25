@@ -120,10 +120,19 @@ module.exports = {
   // scope"; `contextToApiScopes`). Not for a draft's token: a draft is compiled
   // to be checked, never built — kept so by Cube as well as by wechart (T155's
   // review).
-  contextToApiScopes: async (securityContext, defaultScopes) =>
-    securityContext && securityContext.wechartDraft !== undefined
-      ? defaultScopes
-      : [...defaultScopes, 'jobs'],
+  //
+  // `introspection` — the user's Cube fork's data-source browsing and cube
+  // scaffolding (T275, AC-250; docs/research/cube/introspection-api.md) — goes
+  // only to the short-lived token wechart's API signs for it, which carries
+  // `wechartIntrospection: true`: the scope reads the warehouse's whole
+  // catalog. Never with a draft, and a previewed context can't claim it: the
+  // API strips every `wechart…` claim from one.
+  contextToApiScopes: async (securityContext, defaultScopes) => {
+    if (securityContext && securityContext.wechartDraft !== undefined) return defaultScopes;
+    if (securityContext && securityContext.wechartIntrospection === true)
+      return [...defaultScopes, 'introspection'];
+    return [...defaultScopes, 'jobs'];
+  },
 
   // What the refresh worker builds rollups for: the mounted model, and each
   // trusted store's — the model Cube answers wechart from. Without this the

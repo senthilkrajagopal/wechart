@@ -112,6 +112,63 @@ describe('security context (AC-008)', () => {
   });
 });
 
+/**
+ * T275 / AC-250: THE SYSTEM SHALL grant Cube's `introspection` scope only to
+ * the short-lived tokens its API signs to browse a data source and generate
+ * cubes. The scope is Cube's to grant, from the claim (infra/cube/cube.js);
+ * this is the claim, on those tokens and no others.
+ */
+describe('the introspection token (AC-250)', () => {
+  it('carries wechart’s introspection claim, for a minute, beside the security context', async () => {
+    const cube = client();
+    respond = () => ({ status: 200, body: JSON.stringify({ dataSources: [] }) });
+
+    const answer = await cube.introspect('/v1/introspection/data-sources');
+
+    expect(answer).toEqual({ status: 200, body: { dataSources: [] } });
+    const payload = payloadOf(received[0]!);
+    expect(payload).toMatchObject({ tenant: 'acme', role: 'analyst', wechartIntrospection: true });
+    expect(Number(payload['exp']) - Number(payload['iat'])).toBe(60);
+    expect(received[0]!.url).toBe('/v1/introspection/data-sources');
+  });
+
+  it('is on no other request’s token', async () => {
+    const cube = client();
+    await cube.meta();
+    await cube.load({ measures: ['orders.count'] });
+    await cube.meta({ wechartDraft: 'd1' });
+
+    for (const request of received)
+      expect(payloadOf(request)).not.toHaveProperty('wechartIntrospection');
+  });
+
+  it('asks only Cube’s introspection routes', async () => {
+    await expect(client().introspect('/v1/load')).rejects.toThrow(
+      'Only Cube’s introspection routes are asked with an introspection token.',
+    );
+    expect(received).toHaveLength(0);
+  });
+
+  it('passes Cube’s refusals back as they are, for the API to turn into its own', async () => {
+    const cube = client();
+    respond = () => ({
+      status: 404,
+      body: JSON.stringify({ error: "The 'default' data source has no table public.ghost" }),
+    });
+
+    expect(
+      await cube.introspect('/v1/introspection/data-sources/default/columns', {
+        method: 'POST',
+        body: JSON.stringify({ tables: [{ schema: 'public', table: 'ghost' }] }),
+      }),
+    ).toEqual({
+      status: 404,
+      body: { error: "The 'default' data source has no table public.ghost" },
+    });
+    expect(received[0]!.headers['content-type']).toBe('application/json');
+  });
+});
+
 describe('the secret never leaves the service (AC-007)', () => {
   it('is not in the metadata result wechart hands back', async () => {
     const result = await client({ apiSecret: 'super-secret-value' }).meta();

@@ -164,6 +164,34 @@ export class CubeClient {
   }
 
   /**
+   * The user's Cube fork's data-source introspection (T275, AC-250;
+   * research/cube/introspection-api.md): its routes alone, each with a token of
+   * its own that carries `wechartIntrospection: true` — the claim
+   * `infra/cube/cube.js` grants the `introspection` scope for — and lives a
+   * minute. The scope reads the warehouse's whole catalog, so no other token
+   * wechart signs has it, and none reaches the browser. Answered as Cube
+   * answers — status and body, refusals included — for the API to say in its
+   * own words.
+   */
+  async introspect(
+    path: string,
+    init: { method?: string; body?: string } = {},
+  ): Promise<{ status: number; body: unknown }> {
+    if (!/^\/v1\/introspection\/data-sources(?:[/?]|$)/.test(path))
+      throw new Error('Only Cube’s introspection routes are asked with an introspection token.');
+    const response = await this.#fetch(`${this.#apiUrl}${path}`, {
+      method: init.method ?? 'GET',
+      headers: {
+        ...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
+        authorization: `Bearer ${this.#token({ wechartIntrospection: true }, undefined, INTROSPECTION_TTL_SECONDS)}`,
+      },
+      ...(init.body === undefined ? {} : { body: init.body }),
+    });
+    const text = await response.text();
+    return { status: response.status, body: text ? safeJson(text) : null };
+  }
+
+  /**
    * One request signed as wechart, answered as Cube answers it — its status
    * and body, refusals included — for the scope probes (T176), which read a
    * refusal's words rather than failing on it.
@@ -216,7 +244,11 @@ export class CubeClient {
    * with a JWT library: it is three base64url segments and an HMAC, and this
    * keeps the secret from travelling through another dependency.
    */
-  #token(context?: Record<string, unknown>, preview?: Record<string, unknown>): string {
+  #token(
+    context?: Record<string, unknown>,
+    preview?: Record<string, unknown>,
+    ttl: number = this.#ttl,
+  ): string {
     const issuedAt = Math.floor(Date.now() / 1000);
     const header = { alg: 'HS256', typ: 'JWT' };
     const payload = {
@@ -230,7 +262,7 @@ export class CubeClient {
         ? { ...this.#securityContext, ...context }
         : { ...previewClaimsOf(preview), ...wechartClaimsOf(this.#securityContext) }),
       iat: issuedAt,
-      exp: issuedAt + this.#ttl,
+      exp: issuedAt + ttl,
     };
 
     const unsigned = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
@@ -239,6 +271,9 @@ export class CubeClient {
     return `${unsigned}.${signature}`;
   }
 }
+
+/** An introspection token's life: one request's, and no more (T275, AC-250). */
+const INTROSPECTION_TTL_SECONDS = 60;
 
 /** How long `ask` waits: long enough for a busy Cube, short enough that a hung one reads unknown. */
 const ASK_TIMEOUT_MS = 5000;

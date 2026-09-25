@@ -51,18 +51,26 @@ services:
   # Cube Store backs the query queue and cache; the cache driver defaults to
   # cubestore in production mode (research/cube/configuration-deployment.md).
   #
-  # The image is per-architecture: cubejs/cubestore:v1.7.42 is amd64 only, and
-  # Apple Silicon needs the -arm64v8 tag. CI sets CUBESTORE_IMAGE.
+  # The image is per-architecture: cubejs/cubestore:v1.7.45 is amd64 only, and
+  # Apple Silicon needs the -arm64v8 tag; CUBESTORE_IMAGE picks the other.
+  # v1.7.45, the user's choice of 2026-09-24 (research/cube/upgrade-1.7.43.md):
+  # from v1.7.43 a failed build is no longer reported as done.
   cubestore:
-    image: ${CUBESTORE_IMAGE:-cubejs/cubestore:v1.7.42-arm64v8}
+    image: ${CUBESTORE_IMAGE:-cubejs/cubestore:v1.7.45-arm64v8}
     container_name: wechart-cubestore
     environment:
       CUBESTORE_SERVER_NAME: cubestore:9999
     volumes:
       - wechart-cubestore-data:/cube/data
 
+  # The user's fork of Cube v1.7.45 (T275, R10): upstream v1.7.45 plus a
+  # data-source introspection API, for generating cubes from a source's
+  # tables (docs/research/cube/introspection-api.md). Built locally, from the
+  # fork's checkout, and pushed nowhere:
+  #   docker build -f packages/cubejs-docker/overlay.Dockerfile -t cube:v1.7.45-introspection .
+  # Cube and its refresh worker run the same image.
   cube:
-    image: cubejs/cube:v1.7.42
+    image: ${CUBE_IMAGE:-cube:v1.7.45-introspection}
     container_name: wechart-cube
     depends_on: &cube-depends-on
       sample-db:
@@ -107,11 +115,12 @@ services:
 
   # Cube's refresh worker: the same image and configuration, told only to
   # build and refresh pre-aggregations. The API instance above is in
-  # production mode and builds none itself — a query a rollup would serve is
-  # refused until this has built it (docs/research/cube/refresh-jobs-caching.md,
-  # "Topology"; pre-aggregations.md, "Observed locally").
+  # production mode and builds none for queries — a query a rollup would serve
+  # is refused until this has built it (docs/research/cube/refresh-jobs-caching.md,
+  # "Topology"; pre-aggregations.md, "Observed locally"). A build asked for
+  # through the jobs API runs in the API instance, though (upgrade-1.7.43.md).
   cube-refresh-worker:
-    image: cubejs/cube:v1.7.42
+    image: ${CUBE_IMAGE:-cube:v1.7.45-introspection}
     container_name: wechart-cube-refresh-worker
     depends_on: *cube-depends-on
     environment:
