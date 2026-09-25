@@ -1164,6 +1164,101 @@ test('the marking’s chip names its values by title and its tile, is bordered i
 });
 
 /**
+ * T246 / AC-187: the chip and the badge as dashboard.js draws them
+ * (recheck-dashboard mismatches 8 and 11):
+ * - `.mchip { padding: 0 2px 0 8px }`, its `.msum` secondary, its "from"
+ *   `.xs.muted`, and `.mchip button { height: 20px; min-width: 20px; padding: 0 4px }`;
+ * - `.mbadge { padding: 0 6px; color: var(--text-secondary); background: var(--bg-subtle) }`;
+ * - each swatch a `.mk-swatch`: radius 3, ringed `inset 0 0 0 1px var(--border-strong)`,
+ *   10 px in the chip and 8 px in the badge.
+ */
+test('the chip and the badge are the prototype’s: their padding, inks and ringed swatches (T246)', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  await clickBar(page, status, 'shipped');
+
+  const computed = (target: Locator, ...properties: string[]) =>
+    target.evaluate(
+      (element, names) =>
+        Object.fromEntries(
+          names.map((name) => [name, getComputedStyle(element).getPropertyValue(name)]),
+        ),
+      properties,
+    );
+  /** A declaration's value as the page computes it, through a probe. */
+  const probe = (property: string, value: string) =>
+    page.evaluate(
+      ([name, declared]) => {
+        const element = document.createElement('span');
+        element.style.setProperty(name, declared);
+        document.body.append(element);
+        const read = getComputedStyle(element).getPropertyValue(name);
+        element.remove();
+        return read;
+      },
+      [property, value] as const,
+    );
+  const ring = await probe('box-shadow', 'inset 0 0 0 1px var(--wc-border-strong)');
+
+  const chip = page.getByRole('region', { name: 'Filters' }).getByTestId('mark-chip');
+  await expect(chip).toBeVisible();
+  expect(await computed(chip, 'padding-left', 'padding-right')).toEqual({
+    'padding-left': '8px',
+    'padding-right': '2px',
+  });
+  expect(await computed(chip.locator('.mark-chip__summary'), 'color')).toEqual({
+    color: await probe('color', 'var(--wc-text-secondary)'),
+  });
+  expect(await computed(chip.getByText(/^from /), 'color', 'line-height')).toEqual({
+    color: await probe('color', 'var(--wc-text-muted)'),
+    'line-height': '16px',
+  });
+  expect(
+    await computed(
+      chip.getByTestId('mark-chip-swatch'),
+      'width',
+      'height',
+      'border-radius',
+      'box-shadow',
+    ),
+  ).toEqual({ width: '10px', height: '10px', 'border-radius': '3px', 'box-shadow': ring });
+  for (const button of [
+    chip.getByRole('button', { name: 'Marking menu' }),
+    chip.getByRole('button', { name: 'Unmark Marking' }),
+  ])
+    expect(await computed(button, 'height', 'min-width', 'padding-left', 'padding-right')).toEqual({
+      height: '20px',
+      'min-width': '20px',
+      'padding-left': '4px',
+      'padding-right': '4px',
+    });
+
+  const badge = status.getByTestId('mark-badge');
+  await expect(badge).toBeVisible();
+  expect(
+    await computed(badge, 'padding-left', 'padding-right', 'color', 'background-color'),
+  ).toEqual({
+    'padding-left': '6px',
+    'padding-right': '6px',
+    color: await probe('color', 'var(--wc-text-secondary)'),
+    'background-color': await probe('background-color', 'var(--wc-bg-subtle)'),
+  });
+  expect(
+    await computed(
+      badge.getByTestId('mark-swatch'),
+      'width',
+      'height',
+      'border-radius',
+      'box-shadow',
+    ),
+  ).toEqual({ width: '8px', height: '8px', 'border-radius': '3px', 'box-shadow': ring });
+});
+
+/**
  * T077 / AC-071: WHEN the interaction mode changes and the settings are
  * saved, THE SYSTEM SHALL clear current marks and cross-filters.
  * `Fails when: a mark or cross-filter from the previous mode still affects a

@@ -297,9 +297,20 @@ main:has(.explore) {
 .crumbs__step { display: inline-flex; align-items: center; gap: 4px; }
 /* A dashboard's or a chart's way back to its folder (AC-195): its own row
    above the title, as the prototype's .dash-head nav. */
-.item-crumbs { flex-basis: 100%; color: var(--wc-text-secondary); }
+.item-crumbs { flex-basis: 100%; gap: 2px; color: var(--wc-text-muted); }
 .item-crumbs a { color: inherit; padding: 2px 4px; border-radius: 4px; text-decoration: none; }
 .item-crumbs a:hover { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
+/* "← Explore" is the prototype's .btn.ghost.sm: 24 px, padded 0 8, radius 6,
+   in the primary ink; the folders after it are its .muted span (T246,
+   mismatches 1–2). The row is the button's 24 px, so the header is 80. */
+.item-crumbs a.item-crumbs__back {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--wc-text-primary);
+}
 /* 24 px at 12/20 (N5): without a height of its own a crumb took the plain
    button's 32 px minimum. */
 .crumbs button {
@@ -1793,19 +1804,22 @@ main:has(.dashboard) {
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  /* What scrolls into view stops below the fixed band (T217's review). */
-  scroll-padding-top: var(--dashboard-band, 0px);
 }
-/* The page tabs and filter bar, held at the top of the canvas while the tiles
-   scroll beneath (AC-196): the prototype's fixed .dash-tabs and .filterbar
-   rows. Opaque, so a tile scrolling under them does not show through. */
+/* The page tabs and filter bar (AC-196): the prototype's .dash-tabs and
+   .filterbar rows, above the canvas and the sidebar at full width (T246) —
+   so the canvas scrolls beneath them and nothing scrolls under them. Raised,
+   so a filter's popover or a chip's menu opens over the tiles below. */
 .dashboard__fixed {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 4;
   background: var(--wc-bg-page);
 }
-.filter-bar__hint { color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
+/* <span class="xs muted"> (T246, mismatch 6). */
+.filter-bar__hint {
+  color: var(--wc-text-muted);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+}
 /* A page with no tiles (AC-207): the prototype's centred sentence. */
 .dashboard-empty {
   display: grid;
@@ -2078,9 +2092,12 @@ main:has(.dashboard) {
   border-color: transparent;
   background: none;
   color: var(--wc-text-secondary);
-  font-size: 16px;
+  font-size: var(--wc-text-sm-size);
 }
 .edit-bar .icon-button:hover:not([aria-disabled='true']) { background: var(--wc-bg-hover); }
+/* Nothing to undo: the prototype's ↶ and ↷ at opacity .4 in their own ink
+   (T246, mismatch 4), not the muted ink the other buttons take. */
+.edit-bar .icon-button[aria-disabled='true'] { color: var(--wc-text-secondary); opacity: 0.4; }
 .edit-bar .edit-bar__save[aria-disabled='true'] {
   background: var(--wc-bg-surface);
   color: var(--wc-text-muted);
@@ -2218,6 +2235,10 @@ details.panel-section { display: block; }
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  /* The height a pill gives it, 10 + 32 + 10 and the rule, whatever it holds:
+     a hint or a chip left it shorter, and the tiles jumped as it changed
+     (T246, recheck-dashboard N8). */
+  min-height: 53px;
   padding: 10px 24px;
   background: var(--wc-bg-page);
   border-bottom: 1px solid var(--wc-border-subtle);
@@ -2541,10 +2562,13 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 .mark-badge {
   flex: 0 0 auto;
   height: 20px;
-  padding: 0 8px;
+  /* .mbadge { padding: 0 6px; color: var(--text-secondary); background: var(--bg-subtle) }
+     (T246, mismatch 11). */
+  padding: 0 6px;
   border: 1px solid var(--wc-border-strong);
   border-radius: 999px;
-  color: var(--wc-text-primary);
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
   font-weight: var(--wc-text-xs-strong-weight);
   white-space: nowrap;
 }
@@ -2556,20 +2580,26 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   font-size: var(--wc-text-xs-size);
   font-weight: var(--wc-text-xs-strong-weight);
 }
+/* The prototype's .mk-swatch: radius 3, ringed in border-strong so a pale
+   marking colour still reads on the surface — 8 px in a badge, 10 in a chip
+   (T246, mismatches 8 and 11). */
 .mark-badge__swatch,
 .mark-chip__swatch {
   width: 8px;
   height: 8px;
-  border-radius: 2px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--wc-border-strong);
   flex: 0 0 auto;
 }
+.mark-chip__swatch { width: 10px; height: 10px; }
 /* The prototype's .mchip (AC-200): 24 px high, 999 px radius, 12 px, bordered
    1.5 px in the marking's colour (set inline) on the surface; the name at 600
    and the rest at 400 — the prototype's weights, where references-markings.md
    had the whole chip at 600. */
 .mark-chip {
   height: 24px;
-  padding: 0 4px 0 10px;
+  /* .mchip { padding: 0 2px 0 8px } (T246, mismatch 8). */
+  padding: 0 2px 0 8px;
   border: 1.5px solid var(--wc-border-strong);
   border-radius: 999px;
   background: var(--wc-bg-surface);
@@ -2581,13 +2611,20 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 .mark-chip__name { font-weight: var(--wc-text-xs-strong-weight); }
 /* The summary gives way first: bounded to two values and "+n" already, and
    ellipsised past the chip's width, the whole of it in its title. */
-.mark-chip__summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.mark-chip__from { color: var(--wc-text-secondary); }
+/* .msum in the secondary ink; "from …" a .xs.muted span (T246, mismatch 8). */
+.mark-chip__summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--wc-text-secondary);
+}
+.mark-chip__from { color: var(--wc-text-muted); line-height: var(--wc-text-xs-line); }
 .mark-chip .menu-button { display: inline-flex; position: relative; }
+/* .mchip button { height: 20px; min-width: 20px; padding: 0 4px }. */
 .mark-chip__button {
-  width: 18px;
-  height: 18px;
-  padding: 0;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
   border: 0;
   border-radius: 999px;
   background: none;
@@ -2749,7 +2786,13 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 .dashboard[data-editing='true'] .grid-tile:has(> .dashboard-section):hover {
   outline-color: var(--wc-accent);
 }
-.dashboard__editing { font-weight: 400; color: var(--wc-text-secondary); }
+/* <h1 style="font-size:20px"><span class="muted" style="font-weight:400">Editing</span> …
+   (T246, mismatch 3). */
+.dashboard[data-editing='true'] .dashboard__header h1 { font-size: var(--wc-text-lg-size); }
+.dashboard__editing { font-weight: 400; color: var(--wc-text-muted); }
+/* "+ Page tab" is a .btn.ghost.sm among the prototype's .dash-tabs buttons,
+   whose rule gives it their 600 weight and secondary ink (T246, mismatch 5). */
+.page-tabs__add { font-weight: var(--wc-text-xs-strong-weight); color: var(--wc-text-secondary); }
 /* The tabs, then the rest of the row carrying the same rule, where "+ Page
    tab" sits beside the last tab while editing, as the prototype's does. */
 .page-tabs__row { display: flex; }

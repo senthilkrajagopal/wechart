@@ -3613,10 +3613,32 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
       - a 6 px Close;
       - a fresh query each time it opens.
     - **New › Dashboard** opens the new dashboard with `?editing=true`. The dashboard enters edit mode once it loads, then takes the flag out of the address, so a reload or a link opens it to be read.
-- [ ] T246 (AC-187) Match the dashboard header, filter band, marking chip and badge to the prototype
-  - Files: `packages/web/src/dashboard/*`, `packages/web/src/filters/FilterBar.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+- [x] T246 (AC-187) Match the dashboard header, filter band, marking chip and badge to the prototype
+  - Files: `packages/web/src/dashboard/DashboardView.tsx` (`PageTabsRow`, the `band`), `packages/web/src/dashboard/edit/EditChrome.tsx` (`band`), `packages/web/src/workspaces/explore/FolderCrumbs.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`, `e2e/markings.spec.ts`, `e2e/dashboard.spec.ts`
   - Failing test: header 80 px with a 24 px ghost breadcrumb in the prototype's colours; the filter band always 53 px with a 12/16 `text-muted` hint, full width in edit mode; the chip and badge at the prototype's padding, colours and swatch (recheck-dashboard F3, N8; mismatches 1–8, 11).
   - Depends on: none
+  - Done 2026-09-24, all three browsers. Four tests, and all four failed first:
+    - `e2e/design-conformance.spec.ts` "T246: the dashboard header and the filter band" (three tests);
+    - `e2e/markings.spec.ts` "the chip and the badge are the prototype's…".
+  - **What changed:**
+    - **The header:**
+      - it is 80 px;
+      - "← Explore" is the prototype's 24 px ghost button, in the primary ink, with the folders after it muted;
+      - editing, the title is 20 px after a muted "Editing";
+      - Undo and Redo are 14 px secondary, at .4 while there is nothing to undo;
+      - "+ Page tab" is 12/600 secondary.
+    - **The filter band:** 53 px whatever it holds, with a 12/16 muted hint.
+    - **The chip and badge:**
+      - the chip is padded 0 2 0 8 and its summary is secondary;
+      - "from" is 12/16 muted;
+      - its buttons are 20 px high, padded 0 4;
+      - the badge is secondary on `bg-subtle`, padded 0 6;
+      - both swatches have radius 3 and a `border-strong` ring, 10 px in the chip and 8 px in the badge.
+  - **The band is now full width, the prototype's structure.** The page tabs and filter bar moved out of the canvas into their own row, which EditChrome draws between the header and the body (its `band`). So the band spans the canvas and the sidebar, and the sidebar begins below it, which is the first half of T248.
+    - The canvas no longer needs a scroll padding the band's height, since nothing scrolls under the band.
+    - AC-196's e2e now asserts that directly: the canvas begins where the band ends.
+    - The band is inert during a save, as it was inside the body.
+  - The Published badge and the Markings button (F3's other items) are not in this task's failing test, and stay with F3.
 - [ ] T247 (AC-187) Draw tab-group tabs, Header and Markdown elements, and chart text as the prototype does, and use its picker for tile menus
   - Files: `packages/web/src/dashboard/*`, `packages/charts/src/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: a tab group's selected tab has the page tab's underline and the others do not; Header has no tile chrome and a `text-lg` 600 heading; `##` is a 20/26 h2; chart text is Inter with tabular numerals; no band under the axis labels; one freshness badge, hidden while marked; tile ⋯ menus are the 250 px picker with 28 px items and Delete in `status-error`; sections on the prototype's band; Markdown tiles named by their text (recheck-dashboard N1, N4–N7, N9, F8, F9, F13; mismatches 9–21).
@@ -3625,6 +3647,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Files: `packages/web/src/dashboard/edit/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: the sidebar starts below a full-width band; palette rows carry the 24 px kind chip; the add slot is "＋ Add" at 56 px; Properties' buttons are full width and its limit rows 12/600; Outline rows carry the kind chip; the page-tab list is not under a tile's properties (recheck-dashboard F19, F23; mismatches 22–26).
   - Depends on: none
+  - The sidebar already starts below a full-width band, done with T246's move of the band. Its test is T246's "the filter band: … full width while editing".
 - [ ] T249 (AC-187, AC-231) Give the dashboard settings page the prototype's bar, nav, content and tables, with Escape and an inactive banner
   - Files: `packages/web/src/dashboard/settings/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: a 41 px bar titled "Dashboard settings" with 24 px buttons and a primary Save; a 220 px nav with `accent-soft` selection; flat content with an 18 px h2; mode cards with descriptions; an inactive section says so in a banner; Escape leaves as Cancel does; markings tables at 29 px rows (recheck-dashboard F26–F29; mismatches 27–35).

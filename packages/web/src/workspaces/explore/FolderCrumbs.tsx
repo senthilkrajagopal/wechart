@@ -44,7 +44,9 @@ export function FolderCrumbs({ folderId }: { readonly folderId: string | undefin
 
   return (
     <nav className="crumbs item-crumbs" aria-label="Breadcrumb">
-      <a href={exploreHref(home)}>← Explore</a>
+      <a className="item-crumbs__back" href={exploreHref(home)}>
+        ← Explore
+      </a>
       {chain.map((crumb) => (
         <span key={crumb.id} className="crumbs__step">
           <span aria-hidden="true">/</span>

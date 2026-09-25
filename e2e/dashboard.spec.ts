@@ -1426,14 +1426,15 @@ test('the page tabs and filter bar stay above the tiles as they scroll, the bar 
   expect(scrolled).toBeGreaterThan(100);
   await expect(tabs).toBeInViewport({ ratio: 1 });
   await expect(bar).toBeInViewport({ ratio: 1 });
-  const barTop = (await bar.boundingBox())?.y ?? 0;
-  expect(barTop).toBeGreaterThanOrEqual(48);
-  // A tile scrolled into view stops below the band, not under it.
-  const [padding, band] = await canvas.evaluate((node) => [
-    getComputedStyle(node).scrollPaddingTop,
-    `${String((node.querySelector('.dashboard__fixed') as HTMLElement).offsetHeight)}px`,
-  ]);
-  expect(padding).toBe(band);
+  const barBox = await bar.boundingBox();
+  expect(barBox?.y ?? 0).toBeGreaterThanOrEqual(48);
+  // A tile scrolled into view stops below the band, not under it: since
+  // T246 the band sits above the canvas, which begins where it ends (it was
+  // inside the canvas, held off by a scroll padding of its height).
+  expect((await canvas.boundingBox())?.y).toBeGreaterThanOrEqual(
+    (barBox?.y ?? 0) + (barBox?.height ?? 0),
+  );
+  expect(await canvas.locator('[role="tablist"][aria-label="Pages"]').count()).toBe(0);
 });
 
 /**

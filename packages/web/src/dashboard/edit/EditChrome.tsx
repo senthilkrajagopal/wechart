@@ -155,6 +155,12 @@ export interface EditChromeProps<T> {
    * ask as wechart under a banner saying otherwise.
    */
   readonly readOnly?: boolean | undefined;
+  /**
+   * The rows between the header and the canvas — a dashboard's page tabs and
+   * filter bar — full width above the canvas and the sidebar alike, as the
+   * prototype stacks them (T246), and so held while the canvas scrolls.
+   */
+  readonly band?: ((session: EditSession<T>) => ReactNode) | undefined;
   readonly children: (session: EditSession<T>) => ReactNode;
 }
 
@@ -170,6 +176,7 @@ export function EditChrome<T>({
   onStart,
   onDiscard,
   readOnly = false,
+  band,
   children,
 }: EditChromeProps<T>) {
   const [editing, setEditing] = useState(false);
@@ -401,6 +408,13 @@ export function EditChrome<T>({
           {/* Last, as the prototype has the settings gear. */}
           {typeof headerActions === 'function' ? headerActions(session) : headerActions}
         </header>
+
+        {band === undefined ? null : (
+          // Inert with the body while a save is under way, as it was inside it.
+          <div className="dashboard__fixed" inert={saving}>
+            {band(session)}
+          </div>
+        )}
 
         <div className="dashboard__body" inert={saving} aria-busy={saving}>
           {/* The canvas scrolls on its own, so rule 40 has a position to keep. */}

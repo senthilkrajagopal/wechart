@@ -3434,6 +3434,83 @@ export function DashboardView({
             </>
           ),
         })}
+        /**
+         * The page tabs, then the filter bar, as the prototype stacks its
+         * `.dash-tabs` and `.filterbar`: full width above the canvas and, while
+         * editing, the sidebar too (T246, recheck-dashboard mismatch 7) — held
+         * there while the tiles scroll (AC-196). The tab strip shows even for
+         * one page (AC-207).
+         */
+        band={(session) => (
+          <>
+            <PageTabsRow session={session} pageId={pageId} onOpenPage={setOpenPage} />
+            <FilterBar
+              /**
+               * The right-hand group (direction.md §7): the cross-filters
+               * in effect (AC-119), or a chip per non-empty marking
+               * (AC-098) — and, while nothing is set, the one-line hint
+               * on how to mark or filter (AC-196), so the bar is always
+               * there and says something.
+               */
+              chips={
+                crossFiltering && crossSelections.length > 0 ? (
+                  <CrossFilterChips
+                    selections={crossSelections}
+                    onClear={clearCrossFilter}
+                    memberTitle={memberTitle}
+                    tileName={chartTitleOfTile}
+                  />
+                ) : marking && markings.some((each) => markedCountOf(each.id) > 0) ? (
+                  <>
+                    {markings.map((each) => (
+                      <MarkChip
+                        key={each.id}
+                        marking={each}
+                        colour={markingColour(each.slot, theme)}
+                        predicate={markingOf(marks, each.id)}
+                        // By the members' titles, from its tile (AC-200).
+                        titleOf={memberTitle}
+                        from={markSourceTitle(each.id)}
+                        // A tile marked whole, by its title (AC-115).
+                        tileTitleOf={(tileId) => {
+                          const element = elementAt(live, tileId);
+                          return element !== null &&
+                            isTile(element) &&
+                            element.chartId !== undefined
+                            ? chartTitleOf(element.chartId)
+                            : undefined;
+                        }}
+                        onUnmark={() => {
+                          unmarkAll(each);
+                        }}
+                      />
+                    ))}
+                  </>
+                ) : (
+                  <span className="filter-bar__hint">
+                    {interactionHint(interactions.mode, session.editing, preview !== undefined)}
+                  </span>
+                )
+              }
+              filters={session.document.filters ?? []}
+              dashboard={session.document}
+              chartTitleOf={chartTitleOf}
+              values={filterValues}
+              onValue={(key, value) => {
+                setFilterValues((current) => {
+                  const next = { ...current };
+                  if (value === undefined) delete next[key];
+                  else next[key] = value;
+                  return next;
+                });
+              }}
+              editing={session.editing}
+              onFilters={(next) => {
+                session.change({ ...session.document, filters: next });
+              }}
+            />
+          </>
+        )}
       >
         {(session: EditSession<DashboardDocument>) => (
           <>
@@ -3448,78 +3525,6 @@ export function DashboardView({
               onEditing={setSessionEditing}
             />
             <DashboardPages
-              /**
-               * Under the page tabs, as the prototype has it (AC-187: its
-               * `.dash-tabs`, then `.filterbar`), so an open filter's popover
-               * lies over the tiles rather than over the tabs.
-               */
-              filterBar={
-                <FilterBar
-                  /**
-                   * The right-hand group (direction.md §7): the cross-filters
-                   * in effect (AC-119), or a chip per non-empty marking
-                   * (AC-098) — and, while nothing is set, the one-line hint
-                   * on how to mark or filter (AC-196), so the bar is always
-                   * there and says something.
-                   */
-                  chips={
-                    crossFiltering && crossSelections.length > 0 ? (
-                      <CrossFilterChips
-                        selections={crossSelections}
-                        onClear={clearCrossFilter}
-                        memberTitle={memberTitle}
-                        tileName={chartTitleOfTile}
-                      />
-                    ) : marking && markings.some((each) => markedCountOf(each.id) > 0) ? (
-                      <>
-                        {markings.map((each) => (
-                          <MarkChip
-                            key={each.id}
-                            marking={each}
-                            colour={markingColour(each.slot, theme)}
-                            predicate={markingOf(marks, each.id)}
-                            // By the members' titles, from its tile (AC-200).
-                            titleOf={memberTitle}
-                            from={markSourceTitle(each.id)}
-                            // A tile marked whole, by its title (AC-115).
-                            tileTitleOf={(tileId) => {
-                              const element = elementAt(live, tileId);
-                              return element !== null &&
-                                isTile(element) &&
-                                element.chartId !== undefined
-                                ? chartTitleOf(element.chartId)
-                                : undefined;
-                            }}
-                            onUnmark={() => {
-                              unmarkAll(each);
-                            }}
-                          />
-                        ))}
-                      </>
-                    ) : (
-                      <span className="filter-bar__hint">
-                        {interactionHint(interactions.mode, session.editing, preview !== undefined)}
-                      </span>
-                    )
-                  }
-                  filters={session.document.filters ?? []}
-                  dashboard={session.document}
-                  chartTitleOf={chartTitleOf}
-                  values={filterValues}
-                  onValue={(key, value) => {
-                    setFilterValues((current) => {
-                      const next = { ...current };
-                      if (value === undefined) delete next[key];
-                      else next[key] = value;
-                      return next;
-                    });
-                  }}
-                  editing={session.editing}
-                  onFilters={(next) => {
-                    session.change({ ...session.document, filters: next });
-                  }}
-                />
-              }
               session={session}
               charts={charts}
               canEdit={preview === undefined}
@@ -3551,7 +3556,6 @@ export function DashboardView({
                 setSelected(next.selected);
                 setAddTarget(next.addTarget);
               }}
-              onOpenPage={setOpenPage}
               deleted={deleted}
               onDeleted={setDeleted}
             />
@@ -3612,6 +3616,66 @@ function SessionMirror({
   return null;
 }
 
+/**
+ * The page tabs (AC-018, AC-207), and "+ Page tab" beside them while editing
+ * (AC-206, the prototype's): in the band above the canvas, the tablist holding
+ * only tabs, and a new tab opened at once, empty and ready to fill.
+ */
+function PageTabsRow({
+  session,
+  pageId,
+  onOpenPage,
+}: {
+  session: EditSession<DashboardDocument>;
+  pageId: string;
+  onOpenPage: (pageId: string) => void;
+}) {
+  const { document, editing } = session;
+  const showing = document.pages.find((page) => page.id === pageId) ?? document.pages[0];
+  return (
+    <div className="page-tabs__row">
+      <div role="tablist" aria-label="Pages" className="page-tabs">
+        {document.pages.map((page) => (
+          <button
+            key={page.id}
+            type="button"
+            role="tab"
+            aria-selected={page.id === showing?.id}
+            // A tile dropped on a page tab moves to that page (AC-056).
+            data-droptab={pageKey(page.id)}
+            onClick={() => {
+              onOpenPage(page.id);
+            }}
+          >
+            {page.title}
+          </button>
+        ))}
+      </div>
+      <div className="page-tabs__rest">
+        {editing ? (
+          <button
+            type="button"
+            className="btn-ghost btn-sm page-tabs__add"
+            onClick={() => {
+              const id = `page-${String(Date.now())}-${String(counter++)}`;
+              session.change({
+                ...document,
+                pages: [
+                  ...document.pages,
+                  { id, title: `Page ${String(document.pages.length + 1)}`, items: [] },
+                ],
+              });
+              onOpenPage(id);
+            }}
+          >
+            + Page tab
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function DashboardPages({
   session,
   charts,
@@ -3623,8 +3687,6 @@ function DashboardPages({
   editorOpenFor,
   where,
   onAim,
-  onOpenPage,
-  filterBar,
   deleted,
   onDeleted,
   duplicateFrom,
@@ -3659,8 +3721,6 @@ function DashboardPages({
         readonly errors: Readonly<Record<string, unknown>>;
       }
     | undefined;
-  /** The filter bar, drawn under the page tabs. */
-  filterBar?: ReactNode;
   /**
    * What the last delete took, for the toast (AC-060). Held above, because a
    * page tab is deleted from the sidebar's Properties, outside this.
@@ -3689,7 +3749,6 @@ function DashboardPages({
   /** Where the next insert is aimed, owned above so the sidebar agrees. */
   where: { selected: string | null; addTarget: string | null; pageId: string };
   onAim: (next: { selected: string | null; addTarget: string | null }) => void;
-  onOpenPage: (pageId: string) => void;
   /** Whether the dashboard can be edited here — not while previewing (AC-207). */
   canEdit?: boolean;
 }) {
@@ -3698,12 +3757,6 @@ function DashboardPages({
   // user is actually looking at.
   const open = where.pageId;
 
-  /**
-   * The fixed band's height, given to the canvas as its scroll padding
-   * (T217's review): a tile scrolled or focused into view would otherwise
-   * come to rest under the band, hidden (WCAG 2.4.11).
-   */
-  const band = useRef<HTMLDivElement>(null);
   /** The chart tiles showing their table (AC-178), switched there or from ⋯ (AC-199). */
   const [tableTiles, setTableTiles] = useState<ReadonlySet<string>>(() => new Set());
   /** The sections collapsed (AC-202), kept across view and edit mode. */
@@ -3731,21 +3784,6 @@ function DashboardPages({
     setFollowedSelection(where.selected);
     if (where.selected !== null) expandAround(where.selected);
   }
-  useEffect(() => {
-    const node = band.current;
-    const canvas = node?.parentElement;
-    if (node === null || canvas === null || canvas === undefined) return undefined;
-    const measure = () => {
-      canvas.style.setProperty('--dashboard-band', `${String(node.offsetHeight)}px`);
-    };
-    measure();
-    if (typeof ResizeObserver === 'undefined') return undefined;
-    const watching = new ResizeObserver(measure);
-    watching.observe(node);
-    return () => {
-      watching.disconnect();
-    };
-  }, []);
 
   /**
    * Asked to open in edit mode (T245): entered once, as Edit would enter it —
@@ -4224,60 +4262,6 @@ function DashboardPages({
 
   return (
     <>
-      {/**
-       * The page tabs and the filter bar, held at the top of the canvas while
-       * the tiles scroll beneath (AC-196): the prototype's fixed rows, so a
-       * marking's chips stay in sight on the way down to a details tile. The
-       * tab strip shows even for one page (AC-207), as the prototype's does.
-       */}
-      <div className="dashboard__fixed" ref={band}>
-        <div className="page-tabs__row">
-          <div role="tablist" aria-label="Pages" className="page-tabs">
-            {document.pages.map((page) => (
-              <button
-                key={page.id}
-                type="button"
-                role="tab"
-                aria-selected={page.id === showing?.id}
-                // A tile dropped on a page tab moves to that page (AC-056).
-                data-droptab={pageKey(page.id)}
-                onClick={() => {
-                  onOpenPage(page.id);
-                }}
-              >
-                {page.title}
-              </button>
-            ))}
-          </div>
-          {/* A page tab added where the tabs are, while editing (AC-206, the
-              prototype's "+ Page tab"): beside the tablist, which holds only
-              tabs, and opened at once, empty and ready to fill. */}
-          <div className="page-tabs__rest">
-            {editing ? (
-              <button
-                type="button"
-                className="btn-ghost btn-sm page-tabs__add"
-                onClick={() => {
-                  const id = `page-${String(Date.now())}-${String(counter++)}`;
-                  session.change({
-                    ...document,
-                    pages: [
-                      ...document.pages,
-                      { id, title: `Page ${String(document.pages.length + 1)}`, items: [] },
-                    ],
-                  });
-                  onOpenPage(id);
-                }}
-              >
-                + Page tab
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        {filterBar}
-      </div>
-
       <div
         data-testid="dashboard-page"
         className="dashboard-page"

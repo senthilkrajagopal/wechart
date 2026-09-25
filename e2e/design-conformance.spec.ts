@@ -1297,3 +1297,114 @@ test.describe('T245: the app bar’s search and avatar, the palette, and a new d
     await expect.poll(() => new URL(page.url()).searchParams.has('editing')).toBe(false);
   });
 });
+
+/**
+ * T246: the dashboard's header and filter band as dashboard.js draws them
+ * (recheck-dashboard F3, N8; AC-187 mismatches 1–7).
+ */
+test.describe('T246: the dashboard header and the filter band', () => {
+  const title = (page: Page) =>
+    page.getByRole('heading', { name: 'Company dashboard 01', level: 1 });
+  const band = (page: Page) => page.getByRole('region', { name: 'Filters' });
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await expect(title(page)).toBeVisible();
+  });
+
+  test('the header: 80 px, its way back a 24 px ghost button, its folder muted', async ({
+    page,
+  }) => {
+    // .dash-head { padding: 12px 24px 0; gap: 12px }: the breadcrumb's 24 px
+    // row, then the 32 px title (mismatch 1).
+    expect((await title(page).locator('..').boundingBox())?.height).toBe(80);
+    const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+    // <button class="btn ghost sm" data-back>← Explore</button> (mismatches 1–2)
+    expect(
+      await style(
+        crumbs.getByRole('link', { name: '← Explore' }),
+        'height',
+        'padding-left',
+        'padding-right',
+        'border-radius',
+        'font-size',
+        'color',
+      ),
+    ).toEqual({
+      height: '24px',
+      'padding-left': '8px',
+      'padding-right': '8px',
+      'border-radius': '6px',
+      'font-size': '12px',
+      color: await token(page, 'text-primary'),
+    });
+    // <span class="muted"> / Shared /</span>
+    expect(await style(crumbs.getByRole('link', { name: 'Shared' }), 'color')).toEqual({
+      color: await token(page, 'text-muted'),
+    });
+  });
+
+  test('editing: a 20 px title after a muted "Editing", 14 px Undo and Redo, and "+ Page tab" 12/600 secondary', async ({
+    page,
+  }) => {
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    const bar = page.getByRole('toolbar', { name: 'Dashboard editing' });
+    await expect(bar).toBeVisible();
+
+    // <h1 style="font-size:20px"><span class="muted" style="font-weight:400">Editing</span> …</h1> (mismatch 3)
+    expect(await style(title(page), 'font-size')).toEqual({ 'font-size': '20px' });
+    expect(
+      await style(title(page).getByText('Editing', { exact: true }), 'color', 'font-weight'),
+    ).toEqual({ color: await token(page, 'text-muted'), 'font-weight': '400' });
+    // .iconbtn ↶ and ↷: 14 px text-secondary, at .4 while there is nothing to
+    // undo (mismatch 4).
+    for (const name of ['Undo', 'Redo'])
+      expect(
+        await style(bar.getByRole('button', { name }), 'font-size', 'color', 'opacity'),
+      ).toEqual({
+        'font-size': '14px',
+        color: await token(page, 'text-secondary'),
+        opacity: '0.4',
+      });
+    // <button class="btn ghost sm" data-addtoptab>+ Page tab</button> (mismatch 5)
+    expect(
+      await style(
+        page.getByRole('button', { name: '+ Page tab' }),
+        'font-size',
+        'font-weight',
+        'color',
+      ),
+    ).toEqual({
+      'font-size': '12px',
+      'font-weight': '600',
+      color: await token(page, 'text-secondary'),
+    });
+  });
+
+  test('the filter band: 53 px whatever it holds, its hint 12/16 muted, and full width while editing', async ({
+    page,
+  }) => {
+    // .filterbar { padding: 10px 24px } around a 32 px pill, ruled off: 53 px
+    // with only its hint as with a pill (N8, mismatch 6).
+    await expect(band(page)).toBeVisible();
+    expect((await band(page).boundingBox())?.height).toBe(53);
+    const hint = band(page).getByText(/to mark|to cross-filter/);
+    expect(await style(hint, 'font-size', 'line-height', 'color')).toEqual({
+      'font-size': '12px',
+      'line-height': '16px',
+      color: await token(page, 'text-muted'),
+    });
+
+    // Editing, the band runs the full width over the canvas and the sidebar
+    // alike, and the sidebar begins below it (mismatch 7).
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+    await expect(sidebar).toBeVisible();
+    const across = await band(page).boundingBox();
+    expect(across?.x).toBe(0);
+    expect(across?.width).toBe(page.viewportSize()?.width);
+    expect((await sidebar.boundingBox())?.y).toBeGreaterThanOrEqual(
+      (across?.y ?? 0) + (across?.height ?? 0),
+    );
+    expect((await band(page).boundingBox())?.height).toBe(53);
+  });
+});
