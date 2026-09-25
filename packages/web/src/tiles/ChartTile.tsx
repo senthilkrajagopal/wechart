@@ -178,8 +178,15 @@ export function ChartTile({
           Updating…
         </span>
       ) : null}
-      {served === undefined ? null : <AccelerationBadge result={served} />}
-      {asOf === undefined ? null : <DataAsOf at={asOf} />}
+      {/* One badge, the prototype's .badge, for where the data is from and
+          when (T252, recheck-dashboard F8): two pills took the title's room. */}
+      {served === undefined && asOf === undefined ? null : (
+        <span className="tile-freshness" data-testid="tile-freshness">
+          {served === undefined ? null : <AccelerationBadge result={served} />}
+          {served === undefined || asOf === undefined ? null : <span aria-hidden="true">·</span>}
+          {asOf === undefined ? null : <DataAsOf at={asOf} />}
+        </span>
+      )}
     </>
   );
   const saysOfData = busy === true || served !== undefined || asOf !== undefined;

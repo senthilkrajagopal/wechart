@@ -1679,3 +1679,107 @@ test.describe('T247: the tab group, the Header, Markdown and the section band', 
     ).toEqual({ 'border-radius': '6px' });
   });
 });
+
+const firstChart = (page: Page) =>
+  page
+    .locator('[data-tile]')
+    .filter({ has: page.getByTestId('chart-canvas') })
+    .first();
+
+/**
+ * T252: a chart tile's badges, head and incomplete state as dashboard.js
+ * draws them (recheck-dashboard F8, F13; mismatches 9, 10, 21).
+ */
+test.describe('T252: a chart tile’s badges, head and incomplete state', () => {
+  test('one freshness badge, the prototype’s, and a head no taller than 22 px', async ({
+    page,
+  }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    const tile = firstChart(page);
+    const head = tile.locator('.tile-head').first();
+    await expect(head.getByTestId('data-as-of')).toBeVisible();
+
+    // One .badge — 22 px, bg-subtle, secondary — holding where the data is
+    // from and when (F8, mismatch 10); two pills took the title's room.
+    const badges = head.getByTestId('tile-freshness');
+    await expect(badges).toHaveCount(1);
+    await expect(badges.getByTestId('acceleration')).toHaveCount(1);
+    await expect(badges.getByTestId('data-as-of')).toHaveCount(1);
+    expect(await style(badges, 'height', 'background-color', 'color', 'font-size')).toEqual({
+      height: '22px',
+      'background-color': await token(page, 'bg-subtle', 'background-color'),
+      color: await token(page, 'text-secondary'),
+      'font-size': '12px',
+    });
+    // The prototype's head is 20–22 px; "Table view" made it 24 (mismatch 9).
+    expect((await head.boundingBox())?.height).toBeLessThanOrEqual(22);
+  });
+
+  test('an incomplete chart keeps its head, says what it needs at 12 px, and hints at editing only while editing', async ({
+    page,
+    request,
+  }) => {
+    const api = 'http://localhost:4100/api';
+    const name = `Incomplete ${String(Date.now())}`;
+    const { id } = (await (
+      await request.post(`${api}/documents`, {
+        data: { kind: 'dashboard', title: name, folderId: 'root' },
+      })
+    ).json()) as { id: string };
+    const chart = (await (
+      await request.post(`${api}/documents`, {
+        data: { kind: 'chart', title: 'Revenue KPI', folderId: 'root' },
+      })
+    ).json()) as { id: string };
+    await request.put(`${api}/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: 'Revenue KPI',
+          owner: 'admin',
+          localToDashboardId: id,
+          chart: {
+            source: { cube: 'orders' },
+            wells: { measures: [], dimensions: [], timeDimensions: [] },
+            chartType: 'kpi',
+          },
+        },
+      },
+    });
+    await request.put(`${api}/documents/dashboard/${id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: name,
+          folderId: 'root',
+          owner: 'admin',
+          settings: { width: 'fixed' },
+          pages: [
+            {
+              id: 'only',
+              title: 'Only',
+              items: [{ id: 'tile-kpi', kind: 'chart', w: 3, h: 13, chartId: chart.id }],
+            },
+          ],
+        },
+      },
+    });
+    await page.goto(`/explore/dashboards/${id}`);
+    const tile = page.locator('[data-tile="tile-kpi"]');
+    const empty = tile.getByTestId('tile-empty-chart');
+    await expect(empty).toBeVisible();
+
+    // A head with its title, as a drawn chart has (F13, mismatch 21).
+    await expect(tile.getByRole('heading', { name: 'Revenue KPI' })).toBeVisible();
+    expect(await style(empty.locator('p').first(), 'font-size', 'color')).toEqual({
+      'font-size': '12px',
+      color: await token(page, 'text-secondary'),
+    });
+    // "Its ✎, or E when the tile is selected" is for editing.
+    await expect(empty).not.toContainText('✎');
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(empty).toContainText('✎');
+  });
+});

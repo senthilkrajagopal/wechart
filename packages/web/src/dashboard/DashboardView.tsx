@@ -498,14 +498,23 @@ function TileBody({
        */
       if (tile.chartId === undefined || error === NOTHING_CHOSEN) {
         return (
-          <div data-testid="tile-empty-chart" className="tile-empty">
-            {needsOf(chartType).map((sentence) => (
-              <p key={sentence}>{sentence}</p>
-            ))}
-            {tile.chartId === undefined || !canEditChart ? null : (
-              <p>Add its fields in the chart editor: its ✎, or E when the tile is selected.</p>
+          <>
+            {/* Headed by its chart's title, as a drawn one is (T252, F13). */}
+            {title === undefined || title.trim() === '' ? null : (
+              <div className="tile-head">
+                <h3 className="tile-head__title">{title}</h3>
+              </div>
             )}
-          </div>
+            <div data-testid="tile-empty-chart" className="tile-empty">
+              {needsOf(chartType).map((sentence) => (
+                <p key={sentence}>{sentence}</p>
+              ))}
+              {/* The pencil and E are edit mode's (F13). */}
+              {tile.chartId === undefined || !canEditChart || editing !== true ? null : (
+                <p>Add its fields in the chart editor: its ✎, or E when the tile is selected.</p>
+              )}
+            </div>
+          </>
         );
       }
       /**

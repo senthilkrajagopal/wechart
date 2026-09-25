@@ -2516,7 +2516,9 @@ button.filter-pill__clear {
   font-weight: var(--wc-text-sm-strong-weight);
   color: var(--wc-text-primary);
 }
-.tile-head__action { margin-left: auto; }
+/* 22 px, the height of the badges beside it: at the small button's 24 it made
+   the head taller than the prototype's 20–22 (T252, mismatch 9). */
+.tile-head .tile-head__action { margin-left: auto; height: 22px; min-height: 22px; }
 /* A chart whose filtered answer is on its way (AC-078): still drawn, dimmed. */
 /* What is drawn fades while it is asked again; the head — the title, and the
    "Updating…" that says so — keeps its contrast (T183's review, AC-005). */
@@ -2595,13 +2597,17 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
    is instruction rather than failure: secondary ink and no error colour, set
    away from the tile's edges so it reads as a waiting tile rather than a
    broken one. */
+/* At 12 px under the tile's head, as the prototype says what a chart still
+   needs (T252, F13); the tile's own padding is its edge. */
 .tile-empty {
   display: grid;
   gap: 4px;
   place-content: center;
-  height: 100%;
-  padding: 16px;
+  flex: 1;
+  min-height: 0;
   color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
   text-align: center;
 }
 .tile-empty p { margin: 0; }
@@ -2773,7 +2779,8 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
    the table ran 66 px past the tile's clipped bottom: the table's last rows,
    its scrollbar and its focus ring with them. A zero basis outranks the
    pixel height the body is drawn with, and the chart follows its box. */
-.grid-tile:has(> .chart-tile) { display: flex; flex-direction: column; }
+.grid-tile:has(> .chart-tile),
+.grid-tile:has(> .tile-empty) { display: flex; flex-direction: column; }
 .grid-tile > .chart-tile {
   display: flex;
   flex: 1 1 0;
@@ -3371,6 +3378,7 @@ main:has(.chart-editor) {
 /* Where the chart's answer came from (T014, AC-013) and when its data is from
    (T154): the prototype's .badge in the tile head, where its tiles carry their
    data's age — "ok"-coloured when a pre-aggregation served it. */
+.tile-freshness,
 .acceleration,
 .tile-as-of {
   display: inline-flex;
@@ -3384,7 +3392,13 @@ main:has(.chart-editor) {
   font-size: 12px;
   white-space: nowrap;
 }
+.tile-freshness,
 .acceleration { gap: 4px; }
+/* Its two parts are one badge's text (T252): no pill of their own inside it.
+   Kept on screen while the marking badge shows, where the prototype hides it:
+   AC-013 fails on an accelerated tile without its mark. */
+.tile-freshness > .acceleration,
+.tile-freshness > .tile-as-of { height: auto; padding: 0; background: none; }
 .acceleration--accelerated { color: var(--wc-status-success); }
 @media (hover: none) {
   .tile-refresh,

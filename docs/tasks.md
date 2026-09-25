@@ -3668,10 +3668,20 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
       - A Markdown tile is named by its first line as it reads, with no heading, list, emphasis or code marks.
       - A tile's accessible name no longer doubles the full stop after a name that ends one.
     - The Divider isn't in the task's own line. It shares the Header's `.dplain` rule in the prototype, so it is drawn and tested with it.
-- [ ] T252 (AC-187) Draw a chart tile's text, plot and badges as the prototype does
-  - Files: `packages/charts/src/*`, `packages/web/src/dashboard/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
-  - Failing test: the chart's text is Inter with tabular numerals on the axes; no band under the axis labels (the grid's bottom 8 px); one freshness badge, hidden while the marking badge shows; the tile head no taller than 22 px; an incomplete chart keeps its head and says so at 12 px secondary, with no editing hint in view mode (recheck-dashboard N7, F8, F9, F13; mismatches 9, 10, 12, 13, 21).
+- [x] T252 (AC-187) Draw a chart tile's badges, head and incomplete state as the prototype does
+  - Files: `packages/web/src/tiles/ChartTile.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: one freshness badge; the tile head no taller than 22 px; an incomplete chart keeps its head and says so at 12 px secondary, with no editing hint in view mode (recheck-dashboard F8, F13; mismatches 9, 10, 21).
   - Depends on: none
+  - Split 2026-09-24: the chart's own text and plot (N7, F9) went to T254, which waits on research into ECharts' text and grid options.
+  - Done 2026-09-24, all three browsers. `e2e/design-conformance.spec.ts` "T252: …" has two tests, and both failed first.
+    - **One freshness badge.** "● Live" or "⚡ 40m", then "as of …", are one prototype `.badge` (22 px, `bg-subtle`, secondary); they were two pills. Its parts keep their test ids, so AC-013's and AC-148's tests read them as before.
+    - **The badge is not hidden while the marking badge shows, as the prototype hides it.** AC-013 fails on an accelerated tile without its indicator. This is recorded as a deviation.
+    - **The head is at most 22 px.** "Table view" is 22 px, the badges' height. It stays a button in the head, not the prototype's menu item, since rule 5 wants the table one click away.
+    - **An incomplete chart** keeps its head with its chart's title, and says what it needs at 12 px secondary. "Its ✎, or E when the tile is selected" shows only while editing.
+- [ ] T254 (AC-187) Draw a chart's text in Inter with tabular numerals, and its plot down to the tile's foot, as the prototype does
+  - Files: `packages/charts/src/*`, `packages/web/src/shell/styles.ts`, `docs/research/echarts-text-and-grid.md`, `e2e/design-conformance.spec.ts`
+  - Failing test: `e2e/design-conformance.spec.ts` "T254: …": every SVG text is Inter, with tabular numerals; the lowest label is no more than 12 px above the chart's foot (the prototype's `grid: { bottom: 8, containLabel: true }`) (recheck-dashboard N7, F9; mismatches 12, 13).
+  - Depends on: `docs/research/echarts-text-and-grid.md` (ECharts 6.1's global `textStyle`, how its SVG writes text, and v6's grid label bounds)
 - [ ] T253 (AC-187) Use the prototype's picker for tile menus, its inline grip, and its tinted edit grid
   - Files: `packages/web/src/dashboard/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: a tile's ⋯ menu is 250 px, `border-strong` with the pop shadow, 28 px items at 12 px, its heading 12/16 muted and Delete in `status-error`, `role=menu`; the grip sits inline in the head at 14 px muted; the edit grid's columns are tinted bands (recheck-dashboard N4; mismatches 14, 19, 20).
@@ -3746,7 +3756,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-044 | T051       | AC-089 | T095 | AC-134 | T140 | AC-179 | T184       |
 | AC-045 | T043       | AC-090 | T096 | AC-135 | T141 | AC-180 | T001, T185 |
 | AC-181 | T187       | AC-182 | T191 | AC-183 | T192 | AC-184 | T197       |
-| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225, T244–T253 | AC-188 | T206       |
+| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225, T244–T254 | AC-188 | T206       |
 | AC-189 | T207       | AC-190 | T211 | AC-191 | T211 | AC-192 | T212       |
 | AC-193 | T213, T243 | AC-194 | T214 | AC-195 | T216 | AC-196 | T217       |
 | AC-197 | T215       | AC-198 | T218 | AC-199 | T219, T118–T121 | AC-200 | T220       |
