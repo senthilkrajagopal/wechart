@@ -1585,6 +1585,17 @@ export function DashboardView({
    * the prototype's "from ‹tile›"). View state, like the marks themselves.
    */
   const [markSources, setMarkSources] = useState<Readonly<Record<string, string>>>({});
+  /**
+   * What is marked, dropped when the saved mode changes (AC-071), as the
+   * cross-filter selections above are: during render, so the marks of the
+   * mode left are never drawn again, and not brought back on the way in.
+   */
+  const [marksMode, setMarksMode] = useState(interactions.mode);
+  if (marksMode !== interactions.mode) {
+    setMarksMode(interactions.mode);
+    setMarks({});
+    setMarkSources({});
+  }
   const noteSource = (markingId: string, tileId: string) => {
     setMarkSources((now) => (now[markingId] === tileId ? now : { ...now, [markingId]: tileId }));
   };

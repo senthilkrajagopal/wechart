@@ -243,7 +243,7 @@ Traces to: `[docs/inputs §12]`, direction.md §2, rules 13, 32, 56.
       Fails when: a section is missing, or leaving the page applies changes that were not saved.
 - [x] AC-070 WHEN the user changes the interaction mode, THE SYSTEM SHALL keep both configurations, activate the chosen one and label the other as inactive (direction.md rule 56).
       Fails when: switching discards the other mode's configuration, or both modes are active at once.
-- [ ] AC-071 WHEN the interaction mode changes and the settings are saved, THE SYSTEM SHALL clear current marks and cross-filters.
+- [x] AC-071 WHEN the interaction mode changes and the settings are saved, THE SYSTEM SHALL clear current marks and cross-filters.
       Fails when: a mark or cross-filter from the previous mode still affects a tile.
 - [x] AC-072 WHEN a new dashboard is created, THE SYSTEM SHALL set its interaction mode to Markings with one marking named "Marking" as the default (direction.md rule 57).
       Fails when: a new dashboard starts in cross-filter mode, or without a default marking.

@@ -1160,6 +1160,47 @@ test('the marking’s chip names its values by title and its tile, is bordered i
 });
 
 /**
+ * T077 / AC-071: WHEN the interaction mode changes and the settings are
+ * saved, THE SYSTEM SHALL clear current marks and cross-filters.
+ * `Fails when: a mark or cross-filter from the previous mode still affects a
+ * tile.` (Cross-filters: `e2e/crossfilter.spec.ts`, "switching the
+ * interaction mode and back leaves no cross-filter behind".)
+ */
+test('switching the interaction mode and back leaves no mark behind', async ({ page, request }) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  await clickBar(page, status, 'shipped');
+  await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
+
+  const settings = async () => {
+    await page.getByRole('button', { name: 'Dashboard settings' }).click();
+    await page.getByRole('button', { name: /^Interactions/ }).click();
+  };
+  // Settings looked at and left: the mode is the same, and so are the marks.
+  await settings();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByTestId('dashboard-settings')).toHaveCount(0);
+  await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
+
+  const setMode = async (label: string | RegExp) => {
+    await settings();
+    await page.getByRole('radio', { name: label }).check();
+    await page.getByRole('button', { name: 'Save settings' }).click();
+    await expect(page.getByTestId('dashboard-settings')).toHaveCount(0);
+  };
+  await setMode(/^Cross-filtering/);
+  await setMode('Markings');
+
+  // Back in Markings mode with nothing marked: what was marked before the
+  // dashboard changed mode does not come back with it.
+  await expect(status.getByTestId('chart-canvas')).toBeVisible();
+  await expect(status.getByTestId('mark-badge')).toHaveCount(0);
+  await expect(page.getByTestId('mark-chip')).toHaveCount(0);
+  expect((await opacities(status)).every((value) => value === 1)).toBe(true);
+});
+
+/**
  * T112 / AC-106: WHILE a dashboard is in edit mode, THE SYSTEM SHALL select
  * the tile on click and change no marking.
  * `Fails when: a click in edit mode changes a marking.`
