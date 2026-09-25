@@ -366,8 +366,9 @@ describe('generating cubes from a data source (AC-139)', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 2 cubes' }));
 
     const stores = await within(dialog).findByRole('region', { name: 'cubes/chrome_stores.yml' });
+    // "In the model": the dialog's files are the store's and the unpublished drafts (T276's review).
     expect(within(stores).getByRole('list', { name: 'Clashes with the model' }).textContent).toBe(
-      'cubes/chrome_stores.yml is already in the model store.',
+      'cubes/chrome_stores.yml is already in the model.',
     );
     const visits = within(dialog).getByRole('region', { name: 'cubes/chrome_visits.yml' });
     expect(within(visits).getByRole('list', { name: 'Clashes with the model' }).textContent).toBe(
@@ -382,6 +383,74 @@ describe('generating cubes from a data source (AC-139)', () => {
     ).toBeTruthy();
     await userEvent.click(publish);
     expect(asked.some((each) => each.url === '/api/model/publish')).toBe(false);
+  });
+
+  /** T276's review: once published, the cubes are the model's — not a clash with it. */
+  it('marks no clash with the files it has just published itself', async () => {
+    api();
+    const props = { onClose: vi.fn(), onPublished: vi.fn() };
+    const { rerender } = render(<GenerateCubes existing={[]} {...props} />);
+    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
+    await userEvent.selectOptions(
+      await within(dialog).findByRole('combobox', { name: 'Schema' }),
+      'generate',
+    );
+    const tables = await within(dialog).findByRole('table', { name: 'Tables in generate' });
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
+    // One table chosen; the stub's scaffold answers with its two cubes all the same.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 1 cube' }));
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Publish 2 cubes' }));
+    expect(await within(dialog).findByText('Published 2 cubes.')).toBeTruthy();
+
+    // The page reads the store again, and hands the dialog what it now holds.
+    rerender(
+      <GenerateCubes
+        existing={[
+          { path: 'cubes/chrome_stores.yml', content: STORES },
+          { path: 'cubes/chrome_visits.yml', content: VISITS },
+        ]}
+        {...props}
+      />,
+    );
+    expect(within(dialog).queryByRole('list', { name: 'Clashes with the model' })).toBeNull();
+    expect(within(dialog).queryByText(/Nothing is published while a cube clashes/)).toBeNull();
+  });
+
+  /** T276's review: the API's refusal of a clash the dialog could not see is shown as it gives it. */
+  it('shows the API’s refusal of a clash, naming the file', async () => {
+    api();
+    const fetchStub = vi.mocked(fetch);
+    const answer = fetchStub.getMockImplementation();
+    fetchStub.mockImplementation(async (input, init) =>
+      String(input) === '/api/model/publish'
+        ? new Response(
+            JSON.stringify({
+              errors: [
+                {
+                  path: 'cubes/chrome_stores.yml',
+                  message: '`chrome_stores` is already a cube in cubes/stores.js.',
+                },
+              ],
+            }),
+            { status: 422 },
+          )
+        : ((await answer?.(input, init)) ?? new Response('{}')),
+    );
+    render(<GenerateCubes existing={[]} onClose={vi.fn()} onPublished={vi.fn()} />);
+    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
+    await userEvent.selectOptions(
+      await within(dialog).findByRole('combobox', { name: 'Schema' }),
+      'generate',
+    );
+    const tables = await within(dialog).findByRole('table', { name: 'Tables in generate' });
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 1 cube' }));
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Publish 2 cubes' }));
+
+    const refused = await within(dialog).findByRole('alert');
+    expect(refused.textContent).toBe(
+      'Nothing was published:cubes/chrome_stores.yml: `chrome_stores` is already a cube in cubes/stores.js.',
+    );
   });
 
   it('says why when a source cannot be browsed, rather than list nothing', async () => {

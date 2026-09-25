@@ -154,8 +154,9 @@ function clashesWith(
       return found === undefined ? [] : [{ name, ...found }];
     });
     const said = [
+      // "The model": the store's files and the unpublished drafts (T276's review).
       ...(paths.has(file.path) && !byName.some((clash) => clash.path === file.path)
-        ? [`${file.path} is already in the model store.`]
+        ? [`${file.path} is already in the model.`]
         : []),
       ...byName.map(({ name, kind, path }) => `\`${name}\` is already a ${kind} in ${path}.`),
     ];
@@ -271,10 +272,18 @@ export function GenerateCubes({
     );
   };
 
+  /**
+   * The model as it was when the cubes were generated: what they must not
+   * clash with. Not the model after they are published, which holds them
+   * (T276's review).
+   */
+  const [against, setAgainst] = useState(existing);
+
   const generate = () => {
     if (sourceUrl === undefined || chosen.size === 0) return;
     const turn = (turns.current.generate += 1);
     const current = () => turns.current.generate === turn;
+    setAgainst(existing);
     setGenerated({ kind: 'run' });
     setPublished({ kind: 'idle' });
     askApi<{ cubes: Generated[] }>(`${sourceUrl}/scaffold`, {
@@ -301,7 +310,7 @@ export function GenerateCubes({
   const clashes =
     generated.kind === 'ok'
       ? clashesWith(
-          existing,
+          against,
           generated.value.map((cube) => ({ path: pathOf(cube), content: cube.content })),
         )
       : new Map<string, string[]>();

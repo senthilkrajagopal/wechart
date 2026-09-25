@@ -6,7 +6,7 @@ import { CubeError, type CubeClient } from '../cube/client';
 import type { MetaCache } from '../cube/meta-cache';
 import type { Config } from '../config';
 import type { ModelFile, ModelFileStore } from '../server';
-import { clashesOf } from './clashes';
+import { clashesOf, compiledIn } from './clashes';
 import { refreshKeyProblemsOf } from './refreshKeys';
 import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
 import { compileErrorsOf, type CompileError } from './validate';
@@ -176,7 +176,13 @@ export function registerModelPublishing(
     // Files generated from a data source are new ones: never over what the
     // store has, file or name (T276, AC-249), whatever the browser checked.
     if (body?.create === true) {
-      const clashes = clashesOf(changed, live);
+      // Cube's model names the cubes of files not read here as YAML; asked
+      // as wechart asks it everything, and without it the files alone decide.
+      const compiled = await client.metaExtended().then(compiledIn, (error: unknown) => {
+        app.log.warn({ err: error }, 'could not read Cube’s model to check generated names');
+        return [];
+      });
+      const clashes = clashesOf(changed, live, compiled);
       if (clashes.length > 0) return reply.status(422).send({ errors: clashes });
     }
     const paths = new Set(changed.map((file) => file.path));

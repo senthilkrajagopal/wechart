@@ -665,6 +665,56 @@ describe('publishing generated cubes (AC-249)', () => {
     await app.close();
   });
 
+  /**
+   * T276's review: a cube declared in a file wechart doesn't read as YAML — its
+   * JavaScript, a Jinja template — is in the model all the same; Cube's
+   * compiled model names it, and its file (`/v1/meta?extended`,
+   * research/cube/data-apis.md).
+   */
+  it('refuses a cube declared in a file it cannot read, naming the file from Cube’s model', async () => {
+    const store = memory([
+      { path: 'cubes/orders.js', content: 'cube(`orders`, { sql_table: `public.orders` });\n' },
+      { path: 'cubes/lines.yml', content: 'cubes:\n  - name: {{ "lines" }}\n' },
+    ]);
+    const { holder, cube, contexts } = compiling();
+    const compiled = Object.create(cube, {
+      metaExtended: {
+        value: async () => ({
+          cubes: [
+            { name: 'orders', type: 'cube', fileName: 'cubes/orders.js' },
+            { name: 'lines', type: 'cube', fileName: 'cubes/lines.yml' },
+          ],
+        }),
+      },
+    }) as CubeClient;
+    const app = buildServer({ config, modelFiles: store, cube: compiled });
+    holder.app = app;
+
+    const response = await create(app, [
+      generated('cubes/public_orders.yml', 'orders'),
+      generated('cubes/public_lines.yml', 'lines'),
+    ]);
+
+    expect([response.statusCode, response.json()]).toEqual([
+      422,
+      {
+        errors: [
+          {
+            path: 'cubes/public_orders.yml',
+            message: '`orders` is already a cube in cubes/orders.js.',
+          },
+          {
+            path: 'cubes/public_lines.yml',
+            message: '`lines` is already a cube in cubes/lines.yml.',
+          },
+        ],
+      },
+    ]);
+    expect(store.files.map((file) => file.path)).toEqual(['cubes/orders.js', 'cubes/lines.yml']);
+    expect(contexts).toEqual([]);
+    await app.close();
+  });
+
   it('names the cube once when its file and its name are the same stored file’s', async () => {
     const store = memory([ORDERS]);
     const { holder, cube } = compiling();

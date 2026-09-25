@@ -2522,11 +2522,23 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - `publish.test.ts` "refuses a file already stored, and a cube or view already declared, naming each";
       - `GenerateCubes.test.tsx` "marks a generated cube whose name or file the model has…" and the flow test's `create: true`.
       Tests that pin behaviour already in place: "names the cube once…", "publishes generated files that clash with nothing", "still overwrites a stored file when an edit … is published".
+  - **Review 2026-09-25 (FAIL on two bugs; fixed once):**
+    - **After a publish, the dialog marked every cube as clashing with itself:** the page hands it the store again, now holding them. Clashes are now read against the model as it was when the cubes were generated.
+    - **A cube declared in a file not read as YAML was missed:** JavaScript, Python, a Jinja template, or YAML past `yaml`'s 100-alias cap.
+      - The API now also takes the names from Cube's compiled model, whose `/v1/meta?extended` gives each cube's and view's `fileName` (research/cube/data-apis.md, observed on the compose Cube). The refusal names that file, for example "`orders` is already a cube in cubes/orders.js.".
+      - The alias cap is lifted, since js-yaml, which Cube uses, has none.
+      - If Cube's model can't be read, the files alone decide, and the check says so in the log.
+    - **The dialog's words for a path clash:** "… is already in the model.", because its files include unpublished drafts. The API, which reads only the store, keeps "… is already in the model store.".
+    - **New tests:**
+      - `publish.test.ts` "refuses a cube declared in a file it cannot read, naming the file from Cube's model";
+      - `GenerateCubes.test.tsx` "marks no clash with the files it has just published itself";
+      - `GenerateCubes.test.tsx` "shows the API's refusal of a clash, naming the file", which pins how the refusal is shown.
+    - **Left as it is:** a second attempt of T145's e2e on the same store finds its own cubes and can't publish. Locally each run starts its own API with `WECHART_RESET_DATA`. CI's one retry would fail the same way, as the first attempt's failure already will have.
   - Planned 2026-09-25 `[R10]`. Cube's scaffold knows nothing of wechart's model (research, "Scaffold ignores the existing model").
     - The review step marks each clash: a cube name any model file declares, or a file path already stored. It names the existing cube or file.
     - Save is refused while any selected table clashes. The user deselects it, and nothing existing is written.
-    - The API refuses a save that would overwrite a stored file, whatever the browser sent.
-  - Files: `packages/api/src/model/introspection.ts`, `packages/web/src/workspaces/model/GenerateCubes.tsx`, their tests, `e2e/generate-cubes.spec.ts`
+    - The API refuses a generated file, published with `create: true`, that would overwrite a stored file or declare a name the model has, whatever the browser checked. An edit is published without `create`, and still overwrites.
+  - Files: `packages/api/src/model/clashes.ts` and `publish.ts`, `packages/web/src/workspaces/model/GenerateCubes.tsx` and `publish.ts`, their tests, `e2e/generate-cubes.spec.ts`
   - Failing test: generating `orders` when the model already has an `orders` cube marks it "`orders` is already a cube in cubes/orders.yml", refuses to save it, and leaves that file byte-for-byte unchanged (AC-249).
   - Depends on: T145
 - [x] T146 (AC-140) Open Jinja, Python and JavaScript model files read-only with a reason
