@@ -4,6 +4,7 @@ import { parse, stringify } from 'yaml';
 import { StatusIcon } from '../../../shell/StatusIcon';
 import { CUBE_PARSE } from '../objects';
 import { IndexColumns } from '../preagg/IndexEditor';
+import { isSchedule, RefreshSchedule } from '../preagg/RefreshSchedule';
 import { MemberChips, MemberSelect } from './MemberPicker';
 import { SCHEMA, type Field, type ObjectSchema } from './schema';
 import { canonicalOf, optionsFor, PickerScopeContext } from './scopes';
@@ -90,6 +91,8 @@ function fits(field: Field, value: unknown): boolean {
       return Array.isArray(value) && value.every(isPlain);
     case 'object':
       return isPlain(value);
+    case 'refresh-schedule':
+      return isSchedule(value);
     case 'yaml':
       return true;
   }
@@ -327,6 +330,8 @@ function Control({
           }}
         />
       );
+    case 'refresh-schedule':
+      return <RefreshSchedule id={id} value={value} onChange={onChange} />;
     case 'yaml':
     case 'list':
     case 'object':

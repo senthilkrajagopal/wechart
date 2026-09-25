@@ -228,12 +228,17 @@ test('taking away a member another file’s rollup names is refused, and that ro
   const basePath = await ownCubeFile(
     page.request,
     base,
-    `cubes:\n  - name: ${base}\n    sql_table: public.orders\n    dimensions:\n      - name: status\n        sql: status\n        type: string\n      - name: region\n        sql: status\n        type: string\n    measures:\n      - name: count\n        type: count\n`,
+    `cubes:\n  - name: ${base}\n    sql_table: public.orders\n    dimensions:\n      - name: id\n        sql: id\n        type: number\n        primary_key: true\n      - name: status\n        sql: status\n        type: string\n      - name: region\n        sql: status\n        type: string\n    measures:\n      - name: count\n        type: count\n`,
   );
+  // Joined to the base cube, so the rollup is one Cube can plan: without a
+  // join path, Cube compiles it and then fails every plan of it — the
+  // refresh worker's whole run for this model included, which starved the
+  // other tests' rollups (T159's e2e; research/cube/refresh-key-schedule.md,
+  // gotcha 1).
   const userPath = await ownCubeFile(
     page.request,
     user,
-    `cubes:\n  - name: ${user}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n    pre_aggregations:\n      - name: by_region\n        measures: [CUBE.count]\n        dimensions: [${base}.region]\n`,
+    `cubes:\n  - name: ${user}\n    sql_table: public.orders\n    joins:\n      - name: ${base}\n        relationship: one_to_one\n        sql: "{CUBE}.id = {${base}}.id"\n    dimensions:\n      - name: id\n        sql: id\n        type: number\n        primary_key: true\n    measures:\n      - name: count\n        type: count\n    pre_aggregations:\n      - name: by_region\n        measures: [CUBE.count]\n        dimensions: [${base}.region]\n`,
   );
 
   await page.goto(`/model/files/${encodeURIComponent(basePath)}`);

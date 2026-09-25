@@ -64,3 +64,111 @@ export function refreshEveryRefusal(every: string): string | undefined {
   }
   return undefined;
 }
+
+/** Seconds in each interval unit, and in each cron field's step. */
+const UNIT: Readonly<Record<string, number>> = {
+  second: 1,
+  minute: 60,
+  hour: 3600,
+  day: 86400,
+  week: 604800,
+  'day of the week': 86400,
+};
+
+/**
+ * How often a key Cube can run turns over, and where from (T159, AC-153):
+ * the period I and phase D of Cube's `floor((O + t − D) / I)`, in seconds.
+ * A cron's are its closed form — I by how far its numbers reach, D the
+ * seconds from the epoch, a Thursday, to its first run — which Cube's own
+ * tests pin (research/cube/refresh-key-schedule.md, "The equal-interval
+ * rule"). An interval's phase is 0: it counts from the epoch.
+ */
+export function refreshPeriodOf(
+  every: string,
+): { period: number; phase: number; cron: boolean } | undefined {
+  const interval = INTERVAL.exec(every);
+  if (interval !== null)
+    return { period: Number(interval[1]) * (UNIT[interval[2] ?? ''] ?? 0), phase: 0, cron: false };
+  if (refreshEveryRefusal(every) !== undefined) return undefined;
+  const fields = every.replace(/ +/g, ' ').trim().split(' ');
+  const own = [...fields.slice(0, -3), fields[fields.length - 1] ?? ''];
+  const named = fields.length === 6 ? FIELDS : FIELDS.slice(1);
+  const firstStar = own.indexOf('*');
+  const period = firstStar === -1 ? (UNIT['week'] ?? 0) : (UNIT[named[firstStar]?.name ?? ''] ?? 0);
+  const phase = own.reduce((sum, field, at) => {
+    if (field === '*') return sum;
+    const name = named[at]?.name ?? '';
+    // Days from Thursday, the epoch's day; Sunday may be 7.
+    const value = name === 'day of the week' ? ((Number(field) % 7) - 4 + 7) % 7 : Number(field);
+    return sum + value * (UNIT[name] ?? 0);
+  }, 0);
+  return { period, phase, cron: true };
+}
+
+/** A zone's offset east of UTC at a moment, in seconds; undefined for a zone this runtime lacks. */
+function offsetOf(zone: string, at: Date): number | undefined {
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+    }).formatToParts(at);
+  } catch {
+    return undefined;
+  }
+  const part = (type: string) => Number(parts.find((each) => each.type === type)?.value ?? 0);
+  const wall = Date.UTC(
+    part('year'),
+    part('month') - 1,
+    part('day'),
+    part('hour'),
+    part('minute'),
+    part('second'),
+  );
+  return Math.round((wall - at.getTime()) / 60000) * 60;
+}
+
+/**
+ * The next `count` times Cube's refresh key turns over after `now`: when the
+ * refresh worker will see it stale and rebuild (T159, AC-153). A cron runs in
+ * its zone, or in UTC with none; an interval counts from the epoch in the
+ * zone wechart builds in, UTC (research, "Turn-over formula"). The zone's
+ * offset is taken now, as Cube takes it when it generates the key's SQL, so a
+ * daylight-saving change between now and a run is not reflected: Cube's own
+ * snapshot can outlive one too (research, "Across a DST change").
+ */
+export function nextRefreshes(
+  every: string,
+  timezone: string | undefined,
+  now: Date,
+  count: number,
+): Date[] {
+  const read = refreshPeriodOf(every);
+  if (read === undefined || read.period <= 0) return [];
+  const offset = read.cron && timezone !== undefined ? offsetOf(timezone, now) : 0;
+  if (offset === undefined) return [];
+  const { period, phase } = read;
+  const first = Math.floor((offset + now.getTime() / 1000 - phase) / period) + 1;
+  return Array.from(
+    { length: count },
+    (_, at) => new Date((phase - offset + (first + at) * period) * 1000),
+  );
+}
+
+/**
+ * At most how long after a turn-over Cube's refresh worker starts the rebuild,
+ * in seconds, before the build itself: how stale Cube lets the cached key get,
+ * `min(max(round(I / 10), 1), 300)`, plus the worker's 30 s beat (research,
+ * "Refresh worker cadence"). Undefined for what Cube can't run.
+ */
+export function refreshLagSeconds(every: string): number | undefined {
+  const read = refreshPeriodOf(every);
+  if (read === undefined) return undefined;
+  return Math.min(Math.max(Math.round(read.period / 10), 1), 300) + 30;
+}

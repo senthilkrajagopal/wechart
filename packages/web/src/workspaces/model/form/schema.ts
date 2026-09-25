@@ -37,6 +37,12 @@ export type FieldKind =
   | 'list'
   /** An object the schema describes, edited as its own fields. */
   | 'object'
+  /**
+   * A pre-aggregation's refresh key as a schedule: a cron or an interval and a
+   * time zone, with the next runs it implies (T159, AC-153). A key of SQL is
+   * not a schedule, and is edited as YAML.
+   */
+  | 'refresh-schedule'
   /** Anything else — lists of strings or filters, `meta` — edited as YAML. */
   | 'yaml';
 
@@ -570,7 +576,7 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       f('partition_granularity', 'enum', {
         options: ['hour', 'day', 'week', 'month', 'quarter', 'year'],
       }),
-      f('refresh_key', 'yaml'),
+      f('refresh_key', 'refresh-schedule'),
       f('scheduled_refresh', 'flag'),
       f('build_range_start', 'yaml'),
       f('build_range_end', 'yaml'),

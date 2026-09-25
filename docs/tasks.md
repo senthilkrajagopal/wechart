@@ -2687,7 +2687,22 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Failing test: a pre-aggregation whose `refresh_key.every` is a cron Cube can't run (a range, list, step, day-of-month or month field, e.g. `55 7 * * 1-5`) is listed as a problem in the model editor and refused at publish. An equal-interval cron and an interval string are accepted.
   - **Why first:** such a cron passes Cube's compile check and wechart's publish check today, then fails later, at refresh time (per the 2026-09-24 analysis; the sources go in `docs/research/cube/refresh-key-schedule.md`). It is needed whatever else is built.
   - Depends on: `docs/research/cube/refresh-key-schedule.md`
-- [ ] T159 (AC-153) Set a pre-aggregation's refresh schedule as a cron in the model editor, with the next runs it implies
+- [x] T159 (AC-153) Set a pre-aggregation's refresh schedule as a cron in the model editor, with the next runs it implies
+  - Done 2026-09-25, all three browsers. AC-153 is ticked on `e2e/model-schedule.spec.ts` "a refresh schedule set in Model shows its next runs, is published, and Cube rebuilds on it", which failed first, run against the real Cube and its refresh worker. Also tested: `packages/core/src/refresh-key.test.ts` and `preagg/RefreshSchedule.test.tsx`, which failed first too.
+    - **The next runs are Cube's own turn-over,** `floor((O + t − D) / I)` (`@wechart/core` `refreshPeriodOf`, `nextRefreshes`, `refreshLagSeconds`, from `research/cube/refresh-key-schedule.md`):
+      - I and D come from the cron's closed form, checked against Cube's own test vectors (`0 10 * * *` → 86400/36000, `30 5 * * 5` → 604800/106200, …).
+      - A cron runs in its zone, or in UTC with none. An interval counts from the epoch in UTC, where wechart builds.
+    - **Model › a cube › Pre-aggregations › a rollup › Refresh key** is now a schedule control, not free YAML:
+      - it takes a cron or an interval, and a time zone for a cron;
+      - it shows the next five runs in that zone;
+      - it refuses what Cube can't run, with T258's reason, and writes nothing then;
+      - it keeps `incremental` and `update_window`;
+      - it drops a zone Cube would ignore on an interval;
+      - a key of SQL stays as YAML.
+    - **Writes and publishes** `refresh_key: { every, timezone }` through the model's own path. The YAML quotes the cron.
+    - **The note** says how late a run can start: 300 s of staleness and the 30 s beat for hourly and longer, "about 5½ minutes", or 36 s for a minute. It adds "while the worker keeps up — longer while it is busy". That was measured: under the e2e suite's load the rebuild came 2–3 minutes after the turn-over, as the research's bound (plus the time a run takes to reach the partition) allows. The e2e holds the rebuild to follow the turn-over and come within the 5½-minute bound. It times the rebuild after the new key's first build: the default key's build can land minutes before the publish while the form is used, and the new key's first build comes when the worker next reads it, not at a minute's turn. Timed from the default build, a full run failed once in Firefox by 40 s.
+    - **Found on the way, fixed:** `e2e/preaggregations.spec.ts` published a rollup naming another cube's member with no join between them. Cube compiles that, then aborts the refresh worker's whole run for the model at it, every tick, so no other rollup there was rebuilt. That is research gotcha 1, seen for real. The fixture now joins the cubes; the test is about the other file's member, not the join.
+    - **Put to the user:** wechart's publish doesn't refuse a rollup that names a cube it can't join to. Cube accepts it at compile, then it starves every scheduled refresh in that model. The user, 2026-09-25: "if it is not possible to rollup.. then refuse providing reason why it cannot be done" (a new AC and task, once the research on Cube's join rule is in).
   - Re-scoped 2026-09-24 at the user's direction ("Cube-owned now"; the cron is edited in Model's pre-aggregation form). This task was a wechart scheduler on pg-boss; that is now AC-234 (T259), deferred.
   - Files: `packages/web/src/workspaces/model/form/*` (the pre-aggregation's refresh key), a next-runs function by Cube's own rule, `e2e/model*.spec.ts`
   - Failing test:
