@@ -9,7 +9,7 @@ AC-139 / T145 ("generate cubes from a data source's tables") was deferred on 202
 The user has since added that API to a fork of Cube:
 
 - **Repository:** https://github.com/senthilkrajagopal/cube
-- **Branch:** `feat/data-source-introspection-api`, commit `e01fd079d7`, based on upstream `v1.7.45`
+- **Branch:** `feat/data-source-introspection-api`, commits `e01fd079d7` and `95ea166012`, based on upstream `v1.7.45`
 - **Local checkout:** `~/Work/bi/cube`
 - **Image:** `cube:v1.7.45-introspection`, built locally from `packages/cubejs-docker/overlay.Dockerfile`. It is the published `cubejs/cube:v1.7.45` with the changed TypeScript packages laid over it. It has not been pushed to any registry.
 - **Build command** (from the Cube checkout's root):
@@ -78,7 +78,7 @@ Query parameters:
 | `schema`  | Required. Repeat it for several schemas (`schema=a&schema=b`).                               |
 | `search`  | Case-insensitive substring match on the table name.                                          |
 | `type`    | Repeatable. One of `table`, `view`, `materialized_view`, `external`.                         |
-| `limit`   | 1–10000. All tables when absent.                                                             |
+| `limit`   | At least 1. All tables when absent.                                                          |
 | `offset`  | Defaults to 0.                                                                               |
 
 Tables are sorted by schema, then name. `total` counts the matches before `limit` and `offset` are applied. `type` is `null` when the driver can't tell; `rawType` is the source's own word for it.
@@ -95,7 +95,7 @@ Tables are sorted by schema, then name. `total` counts the matches before `limit
 
 ### `POST /v1/introspection/data-sources/{dataSource}/columns`
 
-The body names 1–100 tables. `schema` may be `""` for sources without schemas.
+The body names at least 1 table, and at most `CUBEJS_INTROSPECTION_MAX_TABLES` (a Cube environment variable, default 100). `schema` may be `""` for sources without schemas.
 
 ```json
 { "tables": [{ "schema": "public", "table": "orders" }] }
@@ -105,6 +105,7 @@ Tables come back in the order asked for. Columns come back in the source's order
 
 - `type` is the Cube type scaffolding would give the column: `time`, `number`, `string` or `boolean`.
 - `rawType` is the source's own type.
+- A foreign key's `schema` is the target table's schema. It is `null` when the driver doesn't report it; Postgres and MySQL do.
 
 ```json
 {
@@ -119,7 +120,7 @@ Tables come back in the order asked for. Columns come back in the source's order
           "rawType": "integer",
           "type": "number",
           "primaryKey": false,
-          "foreignKeys": [{ "table": "customers", "column": "id" }]
+          "foreignKeys": [{ "schema": "public", "table": "customers", "column": "id" }]
         },
         { "name": "created_at", "rawType": "timestamp with time zone", "type": "time", "primaryKey": false, "foreignKeys": [] }
       ]
@@ -156,9 +157,10 @@ The response has one entry per table, in order. Nothing is written anywhere.
 The generation rules, as Cube's Playground applies them:
 
 - Names are snake_case, and the cube uses `sql_table`.
+- A cube is named after its table. Tables of the same name in different schemas within one request are named `<schema>_<table>` instead (for example `public_orders` and `sales_orders`), and so are their files and the joins to them. If even that name is taken, a number is appended (`_2`).
 - There is a dimension for each string, boolean and time column, and for each key column (`primary_key` from the database, or a column named `id`).
 - There is a `sum` measure for each number column whose name ends like a measure word (`amount`, `price`, `count`, `balance`, `total`, `number`, `cost`, `qty`, `quantity`, `duration`, `value`), plus a `count` measure.
-- Joins (`many_to_one`) are generated **only between tables generated in the same request**. They come from foreign keys, or from `<table>_id` columns.
+- Joins (`many_to_one`) are generated **only between tables generated in the same request**. They come from foreign keys, or from `<table>_id` columns. When the target table's name exists in several schemas, a join goes to the one the foreign key names, or else to the one in the table's own schema.
 - `data_source: <name>` is written when the data source isn't `default`.
 - The file ends with a commented `pre_aggregations` placeholder.
 
@@ -169,8 +171,6 @@ The generation rules, as Cube's Playground applies them:
 - `not_mapped`: a fallback reason.
 
 A column used only in a join's SQL (for example `customer_id`) is still listed as unmapped.
-
-If two tables in one request would generate the same cube name (for example `public.orders` and `sales.orders`), the response is `400` and nothing is generated.
 
 ### Errors, for every endpoint
 
@@ -187,14 +187,15 @@ Every request reads the catalog live, through that data source's Cube query queu
 
 ## 4. Known limits
 
-- **Postgres materialized views are not listed.** Postgres leaves them out of `information_schema`. The sample and northwind databases are Postgres.
-- **Databricks** reports no table type (`type: null`).
-- **Drivers without incremental schema loading** (for example DuckDB, Trino/Presto, Druid) read the whole catalog on each request, and their tables have `type: null`.
+- **Some drivers still lack incremental schema loading:** Druid, Dremio, Firebolt, Hive, ksqlDB, MongoBI, Oracle, Pinot, QuestDB, SQLite, Vertica and the generic JDBC driver. For these, each request reads the whole catalog, and tables have `type: null`. Postgres (and the Redshift, Crate and Materialize drivers built on it), MySQL, MSSQL, Snowflake, BigQuery, ClickHouse, Athena, Databricks, DuckDB, Presto and Trino all load incrementally.
+- **Databricks types come from `SHOW VIEWS`.** A relation is `view` or `materialized_view` if that command lists it, and `table` otherwise; external tables are not told apart. If `SHOW VIEWS` fails, the schema's tables are listed with `type: null`. This is covered by unit tests only, not by a live Databricks run.
 - **BigQuery and Databricks** report generic column types in `rawType`, not native ones.
-- **Scaffold ignores the existing model.** It knows nothing of cubes already in wechart's model store, so wechart must detect name and file clashes itself.
+- **Scaffold ignores the existing model.** It knows nothing of cubes already in wechart's model store, so wechart must detect name and file clashes with existing files itself.
 
 ## 5. Also fixed in the fork (these change behaviour wechart may already observe)
 
 - **Postgres `numeric` columns are typed `number`.** They were typed `string`, so money columns became string dimensions instead of sums.
 - **Postgres foreign keys are reported even when the referenced table isn't requested.** Before, a foreign key only appeared when its target table was also requested.
 - **Cube's orchestrator methods for listing schemas, tables and columns work.** Before, they sent the operation to the database as SQL and failed.
+- **Postgres materialized views are listed, with their columns.** `information_schema` leaves them out, so they are read from `pg_matviews` and `pg_attribute`. Postgres columns now come back in ordinal order.
+- **MySQL foreign keys and primary keys are reported.** Before, a foreign key named its own column as its target, and the primary-key query failed silently, so no MySQL column had a key.
