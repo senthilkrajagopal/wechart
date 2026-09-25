@@ -2582,6 +2582,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 ## F17. Jobs, builds and scheduling
 
 > **2026-09-21: T156, T159, T160 and T161 are deferred.** Cube Core has no API for them: wechart's own build history and scheduler. The user: "for requirements that dont work with cube defer". See the status note under F17 in spec.md. T155, T157, T158 and T162 stay.
+>
+> **2026-09-24: T159 and T160 are back, re-scoped to Cube-owned schedules.** An independent analysis found Cube's refresh worker runs a pre-aggregation's `refresh_key` cron itself. The user chose "Cube-owned now", with the cron edited in Model's pre-aggregation form and a note that a run can start up to about five minutes late. T258 (the publish guard) comes first. The wechart scheduler moves to T259 (AC-234), deferred with T156 and T161.
 
 - [x] T155 (AC-149) Start a build, show its token, and poll to a terminal state
   - Files: `packages/api/src/jobs/build.ts`, `packages/web/src/workspaces/jobs/BuildPanel.tsx`, `packages/api/src/jobs/build.test.ts`
@@ -2641,18 +2643,38 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - **The panel's tests check the words** it shows for every finished state, not only the hidden `data-state`.
       - Left as found: a raw queue state Cube might pass through reads as waiting, which the research doesn't settle. The accessibility sweep doesn't start a build before auditing `/jobs`; the status colours are held to contrast by the token audit.
     - AC-152 ticked. `StateBadge.test.tsx` checks every state's words, and that its icon is of its kind, a different drawing for each kind, and hidden from a screen reader. `e2e/jobs.spec.ts`, against the real Cube in all three browsers, shows the seed rollup's build job as "Done" with the ok icon.
-- [ ] T159 (AC-153) Create a cron schedule, show the next runs and run it at those times
-  - Files: `packages/api/src/scheduler/{schedules,worker}.ts`, `packages/web/src/workspaces/schedules/ScheduleForm.tsx`, `packages/api/src/scheduler/schedules.test.ts`
-  - Failing test: `schedules.test.ts`: the next runs shown match the cron expression, and with a fake clock a due run starts (AC-153). Runs on pg-boss per `docs/research/scheduler.md`.
-  - Depends on: T155
-- [ ] T160 (AC-154) Label each schedule's owner and show Cube-owned schedules as read-only
-  - Files: `packages/web/src/workspaces/schedules/ScheduleList.tsx`, `packages/web/src/workspaces/schedules/ownership.test.ts`
-  - Failing test: `ownership.test.ts`: a `refresh_key` schedule is labelled as Cube's and is not editable, and a wechart schedule is labelled and editable (AC-154).
-  - Depends on: T159
-- [ ] T161 (AC-155) Suspend a repeatedly failing schedule and offer Resume
+- [ ] T258 (AC-153) Refuse a refresh key's cron that Cube's refresh worker cannot run
+  - Files: `packages/web/src/workspaces/model/validate.ts` (+ test), `packages/api/src/model/publish.ts` (+ test)
+  - Failing test: a pre-aggregation whose `refresh_key.every` is a cron Cube can't run (a range, list, step, day-of-month or month field, e.g. `55 7 * * 1-5`) is listed as a problem in the model editor and refused at publish. An equal-interval cron and an interval string are accepted.
+  - **Why first:** such a cron passes Cube's compile check and wechart's publish check today, then fails later, at refresh time (per the 2026-09-24 analysis; the sources go in `docs/research/cube/refresh-key-schedule.md`). It is needed whatever else is built.
+  - Depends on: `docs/research/cube/refresh-key-schedule.md`
+- [ ] T159 (AC-153) Set a pre-aggregation's refresh schedule as a cron in the model editor, with the next runs it implies
+  - Re-scoped 2026-09-24 at the user's direction ("Cube-owned now"; the cron is edited in Model's pre-aggregation form). This task was a wechart scheduler on pg-boss; that is now AC-234 (T259), deferred.
+  - Files: `packages/web/src/workspaces/model/form/*` (the pre-aggregation's refresh key), a next-runs function by Cube's own rule, `e2e/model*.spec.ts`
+  - Failing test:
+    - the pre-aggregation form takes a cron and a time zone;
+    - it shows the next runs Cube's refresh key implies, with the note that a run can start up to about five minutes late;
+    - it refuses a cron Cube can't run (T258);
+    - Save writes `refresh_key: { every, timezone }` and publishes through the model's path.
+    - A rebuild within one of Cube's check periods of a shown run is observed on a `* * * * *` key in the e2e.
+  - Depends on: T258
+- [ ] T160 (AC-154) List every pre-aggregation's refresh schedule in Schedules, labelled Cube's and read-only, linking to Model
+  - Re-scoped 2026-09-24: Schedules lists the Cube-owned schedules; wechart-owned ones arrive with AC-234.
+  - Files: `packages/web/src/workspaces/schedules/*`, `packages/api/src/jobs/build.ts` (the extended meta it already reads), `e2e/schedules.spec.ts`; AC-233's test (Schedules no longer says it is out of phase)
+  - Failing test:
+    - Schedules lists each pre-aggregation with its refresh key, labelled "Cube's refresh worker";
+    - nothing on the page edits it;
+    - its link opens the pre-aggregation in the model editor;
+    - one with no refresh schedule says it is not scheduled.
+  - Depends on: `docs/research/cube/refresh-key-schedule.md`
+- [ ] T161 (AC-155) Suspend a repeatedly failing schedule and offer Resume — **deferred with AC-155** (wechart's scheduler)
   - Files: `packages/api/src/scheduler/suspend.ts`, `packages/api/src/scheduler/suspend.test.ts`
   - Failing test: `suspend.test.ts`: after the configured number of consecutive failures the schedule stops running, says so, and a Resume action restarts it (AC-155).
-  - Depends on: T159
+  - Depends on: T259
+- [ ] T259 (AC-234) Run a wechart-owned cron schedule through Cube's jobs API — **deferred** (2026-09-24)
+  - Files: `packages/api/src/scheduler/{schedules,worker}.ts` (pg-boss per `docs/research/scheduler.md`), `packages/web/src/workspaces/schedules/ScheduleForm.tsx`
+  - Failing test: `schedules.test.ts`: the next runs shown match the cron expression, and with a fake clock a due run starts (AC-234).
+  - Depends on: T160
 - [x] T162 (AC-156) Show the refresh worker's state and the Cube deployment's health
   - Files: `packages/web/src/workspaces/jobs/Health.tsx`, `packages/api/src/cube/health.ts`, `packages/api/src/cube/health.test.ts`
   - Failing test: `health.test.ts`: an unhealthy reply from Cube's health endpoint marks the deployment down, and the refresh worker's state is shown (AC-156).
@@ -3813,7 +3835,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-015 | T003, T198 | AC-060 | T066 | AC-105 | T111 | AC-150 | T156       |
 | AC-016 | T015       | AC-061 | T067 | AC-106 | T112 | AC-151 | T157       |
 | AC-017 | T016       | AC-062 | T068 | AC-107 | T113 | AC-152 | T158       |
-| AC-018 | T023       | AC-063 | T069 | AC-108 | T114 | AC-153 | T159       |
+| AC-018 | T023       | AC-063 | T069 | AC-108 | T114 | AC-153 | T258, T159 |
 | AC-019 | T017       | AC-064 | T070 | AC-109 | T115 | AC-154 | T160       |
 | AC-020 | T018       | AC-065 | T071 | AC-110 | T116 | AC-155 | T161       |
 | AC-021 | T019       | AC-066 | T072, T032 | AC-111 | T117 | AC-156 | T162       |
@@ -3854,6 +3876,6 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-221 | T232       | AC-222 | T234 | AC-223 | T234 | AC-224 | T235       |
 | AC-225 | T236       | AC-226 | T237 | AC-227 | T237 | AC-228 | T239, T241 |
 | AC-229 | T239       | AC-230 | T240 | AC-231 | T238, T244, T249 | AC-232 | T241       |
-| AC-233 | T238       |        |      |        |      |        |            |
+| AC-233 | T238, T160 | AC-234 | T259 |        |      |        |            |
 
 Reopened 2026-09-24 and now also covered by the prototype-alignment tasks: AC-004 → T008, T233 · AC-005 → T008, T210 · AC-019 → T017, T212 · AC-042 → T049, T208 (re-ticked) · AC-053 → T059, T209.

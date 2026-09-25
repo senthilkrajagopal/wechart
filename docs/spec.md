@@ -499,6 +499,17 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
 > Starting a build, the state badges and deployment health (AC-149, AC-152,
 > AC-156) are Cube's own APIs and stay.
 >
+> **Amended 2026-09-24, at the user's direction.** An independent analysis found that
+> Cube Core's schedule is the model's `refresh_key`, which wechart already edits
+> and publishes. The user chose "Cube-owned now":
+> - **AC-153 and AC-154 are reworded and no longer deferred.** A schedule is set in
+>   the model editor's pre-aggregation form, the user's choice. The next runs carry
+>   a note that a run can start up to about five minutes late.
+> - **The wechart-scheduler half of the old AC-153** becomes AC-234. It stays
+>   deferred, with AC-150 and AC-155.
+> - **Sources:** `research/cube/refresh-key-schedule.md`, a sibling to
+>   `refresh-jobs-caching.md`.
+>
 > **AC-151 deferred too, 2026-09-21, at the user's direction.** Cube's
 > documented jobs API starts builds and reports on tokens, but it can't list the
 > queue or cancel an entry. Only the undocumented `/cubejs-system/*` routes and
@@ -513,12 +524,14 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
       Fails when: a queued build is missing, or cancelling leaves it queued.
 - [x] AC-152 THE SYSTEM SHALL show every job and schedule with an icon and a text label for its state, never colour alone (direction.md rule 22).
       Fails when: a state is conveyed only by colour.
-- [ ] AC-153 WHEN the user creates a schedule for a pre-aggregation build or a cache warm-up, THE SYSTEM SHALL accept a cron expression, show the next runs it implies, and run it at those times.
-      Fails when: the next runs shown do not match the expression, or a due run does not start.
-- [ ] AC-154 THE SYSTEM SHALL label each schedule with its owner, Cube's refresh worker or wechart's scheduler, and show Cube-owned schedules as read-only (direction.md rule 34).
-      Fails when: a `refresh_key` schedule is editable in wechart, or is unlabelled.
+- [ ] AC-153 WHEN the user sets a pre-aggregation's refresh schedule in the model editor as a cron expression and time zone, THE SYSTEM SHALL accept only expressions Cube's refresh worker can run, show the next runs Cube's refresh key implies with a note that a run can start up to about five minutes after its time, and write the schedule into the model as that pre-aggregation's `refresh_key`, validated and published as any model change.
+      Fails when: a shown run differs from when Cube's refresh key turns over, an expression Cube cannot run is published, or the pre-aggregation is not rebuilt within one of Cube's check periods of a shown run.
+- [ ] AC-154 THE SYSTEM SHALL list every pre-aggregation's refresh schedule in Schedules, label each with its owner, Cube's refresh worker or wechart's scheduler, show Cube-owned schedules read-only there with a link opening the pre-aggregation in the model editor, and say when one is not scheduled (direction.md rule 34).
+      Fails when: a `refresh_key` schedule is editable on the Schedules page, is unlabelled, or its link does not open the model editor.
 - [ ] AC-155 IF a scheduled build fails repeatedly, THEN THE SYSTEM SHALL suspend the schedule after the configured number of consecutive failures, say so on the schedule, and offer Resume.
       Fails when: the schedule keeps running after the limit, or offers no Resume.
+- [ ] AC-234 WHEN the user creates a schedule for a pre-aggregation build or a cache warm-up that a refresh key cannot express, THE SYSTEM SHALL accept a cron expression and time zone, show the next runs it implies, and start each run at its time through Cube's jobs API. **Deferred with AC-150 and AC-155** (see the status note above).
+      Fails when: the next runs shown do not match the expression, or a due run does not start.
 - [x] AC-156 THE SYSTEM SHALL show the refresh worker's state and the Cube deployment's health, and mark the deployment as down when Cube's health endpoint does not report healthy.
       Fails when: the indicator stays healthy while Cube reports otherwise.
 
@@ -724,7 +737,7 @@ Jobs, Security, Schedules and Data sources:
       Fails when: a workspace page title is not 20 px at weight 600, or a workspace table's numbers are not tabular.
 - [x] AC-232 WHEN the user opens Security, THE SYSTEM SHALL offer a preset context for each group the policies name, list every cube and view with the access the current context gives it and why, start a dashboard preview from a bounded list of dashboards that says when nothing matches, link each policy to its file in Model, and keep the edited context for the session.
       Fails when: effective access is missing, a search with no match shows nothing, a policy's source does not open Model, or the context is reset after a preview.
-- [x] AC-233 WHEN the user opens Schedules or Data sources, THE SYSTEM SHALL show the page's title and a note saying what the page is for and that managing it is not part of this phase, and SHALL treat "/sources" as Data sources.
+- [x] AC-233 WHEN the user opens Schedules or Data sources, THE SYSTEM SHALL show the page's title and a note saying what the page is for, on Data sources that managing connections is not part of this phase, and SHALL treat "/sources" as Data sources.
       Fails when: either page renders nothing, or "/sources" shows Not found.
 
 ---
@@ -784,7 +797,7 @@ Copied from [requirements.md §7](./requirements.md):
 | Scope: model authoring with form and code `[docs/inputs §4b]`                                 | AC-131 … AC-141                                                       |
 | Scope: generate cubes from database tables `[R7]`                                             | AC-139                                                                |
 | Scope: pre-aggregations `[docs/inputs §1]`                                                    | AC-142 … AC-148, AC-189                                               |
-| Scope: jobs, builds, schedules, run history `[docs/inputs §1, §7]`                            | AC-149 … AC-156                                                       |
+| Scope: jobs, builds, schedules, run history `[docs/inputs §1, §7]`                            | AC-149 … AC-156, AC-234                                               |
 | Scope: data sources with testing `[docs/inputs §1, §7]`                                       | AC-157 … AC-164                                                       |
 | Scope: security policies and context preview `[docs/inputs §1, §7]`                           | AC-165 … AC-170                                                       |
 | Scope: export `[R6]`                                                                          | AC-171 … AC-173                                                       |
