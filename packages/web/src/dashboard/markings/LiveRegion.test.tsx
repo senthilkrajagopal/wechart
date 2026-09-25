@@ -33,6 +33,12 @@ describe('what a marking change says', () => {
     expect(said).toContain('Orders by status');
   });
 
+  it('groups a count in the thousands', () => {
+    expect(announceMarking({ marking, markedCount: 1000, tileName: 'Every item' })).toContain(
+      '1,000 items marked',
+    );
+  });
+
   it('says one marked item in the singular', () => {
     expect(announceMarking({ marking, markedCount: 1, tileName: 'Orders by status' })).toContain(
       '1 item marked',

@@ -38,6 +38,12 @@ describe('the badge on a tile that uses a marking', () => {
     expect(badge.textContent).toContain('3 marked');
   });
 
+  it('groups a count in the thousands, as the limit it is measured against is written', () => {
+    render(<MarkBadge marking={marking} colour="#151107" markedCount={1500} />);
+
+    expect(screen.getByTestId('mark-badge').textContent).toContain('1,500 marked');
+  });
+
   it('counts one item in the singular, because "1 marked items" reads as a bug', () => {
     render(<MarkBadge marking={marking} colour="#151107" markedCount={1} />);
 

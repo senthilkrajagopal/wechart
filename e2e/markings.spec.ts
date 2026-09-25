@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
+import { ownCubeFile } from './model-files';
+
 /**
  * T190: the marking subsystem, connected to the rendering path.
  *
@@ -1643,6 +1645,128 @@ test.describe('marking with a shape', () => {
     await expect(chip).toContainText(right.name);
     await expect(chip).not.toContainText(left.name);
   });
+});
+
+/**
+ * AC-102: IF a marking would exceed 1,000 items, THEN THE SYSTEM SHALL refuse
+ * the additional items and explain the limit; "Mark all" SHALL be exempt
+ * because it stores the tile's filter rather than a list.
+ * `Fails when: a marking holds more than 1,000 enumerated items, or Mark all
+ * is refused on a tile with more than 1,000 items.`
+ *
+ * On a tile of 1,500 bars, from a cube of the browser's own over a generated
+ * series: a rectangle across all of them marks 1,000 and says why the rest
+ * were not; Mark all then marks every one.
+ */
+test('a shape over more than 1,000 items marks 1,000 and says why, and Mark all is exempt', async ({
+  page,
+  request,
+  browserName,
+}) => {
+  test.setTimeout(120_000);
+  const cube = `many_${browserName}`;
+  await ownCubeFile(
+    request,
+    cube,
+    `cubes:
+  - name: ${cube}
+    sql: >
+      SELECT n AS id, 'item ' || lpad(n::text, 4, '0') AS label
+      FROM generate_series(1, 1500) AS n
+    dimensions:
+      - name: id
+        sql: id
+        type: number
+        primary_key: true
+      - name: label
+        sql: label
+        type: string
+    measures:
+      - name: count
+        type: count
+`,
+  );
+  const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const title = `Many ${unique}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  const chart = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'chart', title: 'Every item', folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  await request.put(`${API}/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: 'Every item',
+        owner: 'admin',
+        localToDashboardId: dashboard.id,
+        chart: {
+          source: { cube },
+          wells: { measures: [`${cube}.count`], dimensions: [`${cube}.label`], timeDimensions: [] },
+          chartType: 'bar',
+        },
+      },
+    },
+  });
+  await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed', interactions: { mode: 'markings' } },
+        markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [{ id: 'tile-many', kind: 'chart', w: 12, h: 50, chartId: chart.id }],
+          },
+        ],
+      },
+    },
+  });
+
+  await page.goto(`/explore/dashboards/${dashboard.id}`);
+  const many = tile(page, 'tile-many');
+  const canvas = many.getByTestId('chart-canvas');
+  await expect(canvas).toBeVisible();
+  // Drawn: every bar is a path, so wait for well over 1,000 of them.
+  await expect
+    .poll(() => canvas.locator('svg path[fill]').count(), { timeout: 30_000 })
+    .toBeGreaterThan(1_000);
+  const box = await canvas.boundingBox();
+  if (box === null) throw new Error('no canvas');
+
+  // Across the whole plot, corner to corner.
+  await page.mouse.move(box.x + 4, box.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.move(box.x + box.width - 4, box.y + box.height - 4, { steps: 4 });
+  await page.mouse.up();
+
+  const badge = many.getByTestId('mark-badge');
+  await expect(badge).toContainText('1,000 marked');
+  await expect(page.getByTestId('marking-announcer')).toContainText(
+    'A marking holds at most 1,000 items. 500 were not added.',
+  );
+
+  // Mark all stores the tile's filter, so the cap does not apply to it.
+  await many.getByRole('button', { name: /^Actions for / }).click();
+  await many
+    .getByRole('list', { name: /^Actions for / })
+    .getByRole('group', { name: /marked$/ })
+    .getByRole('button', { name: 'Mark all' })
+    .click();
+  await expect(badge).toContainText('1,500 marked');
 });
 
 test('a click while editing selects the tile and leaves the marking as it was', async ({

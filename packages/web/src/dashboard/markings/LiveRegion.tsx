@@ -33,7 +33,8 @@ export function announceMarking({ marking, markedCount, tileName }: MarkingAnnou
    */
   if (markedCount <= 0) return `${marking.name} cleared${where}`;
 
-  const items = markedCount === 1 ? '1 item marked' : `${String(markedCount)} items marked`;
+  const items =
+    markedCount === 1 ? '1 item marked' : `${markedCount.toLocaleString('en-GB')} items marked`;
 
   return `${marking.name}: ${items}${where}`;
 }

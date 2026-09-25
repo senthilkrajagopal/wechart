@@ -37,7 +37,8 @@ export function MarkBadge({ marking, colour, markedCount }: MarkBadgeProps) {
         aria-hidden="true"
         style={{ background: colour }}
       />
-      {marking.name}: {markedCount} marked
+      {/* Grouped, as the 1,000-item limit it is read against is (AC-102). */}
+      {marking.name}: {markedCount.toLocaleString('en-GB')} marked
     </span>
   );
 }
