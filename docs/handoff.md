@@ -1,5 +1,18 @@
 # Handoff — 2026-09-24
 
+> **Phase 1 closed on 2026-09-25, at the user's decision.** Start phase 2 from
+> `docs/phase-2/backlog.md`, not from §4 below. The backlog holds:
+> - every criterion moved out of `docs/spec.md`, word for word, with why it moved;
+> - the tasks marked `[moved to phase 2]` in `docs/tasks.md`;
+> - review follow-ups;
+> - the questions still waiting for the user;
+> - the UI review stream's report.
+>
+> Phase 2 runs the workflow from the top, with that backlog and the new
+> requirements as input: project-interview, then write-spec, and so on. The
+> sections below record phase 1 as it stood on 2026-09-24. §1's standing
+> instructions and §5's time-savers still apply.
+
 Written at the user's request so a new session can pick the work up. Read this
 with `CLAUDE.md`, `docs/spec.md` and `docs/tasks.md`; it says what is *not* in
 those files.
