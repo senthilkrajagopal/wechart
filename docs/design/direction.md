@@ -1,6 +1,7 @@
 # wechart design direction
 
 **Status:** proposed on 2026-09-19. Waiting for the user to accept it after reviewing the prototype.
+**Phase 2 (2026-09-25):** principles 6–9, §7e and rules 59–89 extend this direction to sign-in, folder access, workspaces, proposals, history, bookmarks, the audit trail, the country map and the box plot. Evidence: `references.md` › "Phase 2". **Accepted by the user on 2026-09-25.**
 **Sources:**
 
 - `references.md`: six enterprise BI products studied, with a committed direction.
@@ -35,6 +36,17 @@ User roles are **provisional** until the requirements interview. Input IDs (IN-x
    _Evidence:_ Superset's charts, where 12 px makes up 63 of 92 text nodes; Metabase's 12–13 px body text; the Fluent 2 ramp. _Role:_ analyst and engineer.
 5. **Every state has a shape.** Status, validation, and job state always pair an icon with a label, never colour alone. The inspector is the complete path to every setting from the keyboard; on-canvas editing is only a shortcut.
    _Evidence:_ Superset's alert icons, and Power BI's own statement that its on-object mode has accessibility gaps. _Roles:_ all three.
+
+Phase 2 adds four (evidence in `references.md` › Phase 2):
+
+6. **Show only what's permitted, and never hint at the rest.** Hidden folders, items, counts, search hits and links behave as if they don't exist.
+   _Evidence:_ Metabase ("won't be listed"), Spotfire ("will not be seen"). _ACs:_ AC-264, AC-268. _Roles:_ all.
+7. **Access is read where it applies.** Every group that reaches a folder is shown on that folder, and an inherited one names the folder it comes from.
+   _Evidence:_ Looker's inheritance indicator, Grafana's locked inherited rows, Tableau's effective permissions. _ACs:_ AC-259–AC-261. _Roles:_ Super-Admin, Admin.
+8. **Private until proposed, and nothing lands unreviewed, your own work included.**
+   _Evidence:_ Power BI's workspace as a "staging area", Sigma's Draft, Looker's Development Mode, GitHub pull requests. _ACs:_ AC-278, AC-284, AC-286. _Role:_ Admin.
+9. **The reviewer sees the thing, not a description of it.**
+   _Evidence:_ GitHub's Files changed, Power BI's Change review, Grafana's Changes and Compare. _AC:_ AC-287. _Roles:_ Admin, Super-Admin.
 
 ## 2. Layout
 
@@ -430,6 +442,54 @@ The user asked that the UI "align with the ui styles in" the design prototype (`
 - **`--wc-shadow-pop`**, the prototype's popover shadow, in each theme. It is a shadow, not a colour text sits on, so it is outside the audited tokens.
 - **Layout:** the dashboard runs edge to edge. The header, the page tabs, the filter band and the tiles are each padded 24 px from the sides, the filter band sits below the page tabs, and the edit sidebar is docked with a rule on its left.
 
+## 7e. Phase 2: security, folders, workspaces and proposals (accepted 2026-09-25)
+
+**Direction.** Govern where the content lives. Explore shows each person only what they may see. Access is edited in a panel docked beside the folder, separating "Set here" from "From _ancestor_", for AD groups only. All authoring happens in a clearly banded "My workspace". Work reaches a shared folder only through a proposal whose review view renders the item itself, and a restore is itself a proposal. Bookmarks are private or shared the Spotfire way. Super-Admins get an audit trail inside Security.
+
+Nothing in §2–§7d changes. No new colour and no new type size is added: every new state is an icon plus a label on the existing roles (rule 3). The full surface text, with every string, state and keyboard rule, is in `references.md` › Phase 2 › Surfaces 1–10, and is binding where this section is silent.
+
+**Where each surface lives**
+
+| Surface | Placement | Size | ACs |
+| --- | --- | --- | --- |
+| Account | Top bar, right, after Reviews and the theme toggle: a 28 px avatar with initials plus the name (12/16, 600), truncated at 160 px, name hidden below 1,280 px. Menu: identity, a Super-Admin badge, Sign out. Security off: a "Single-user mode" chip (open padlock, `status-warning`) with no Sign out. | — | AC-251–AC-254 |
+| Signed-out and failure states | Product mark, one sentence, one action: signed out; sign-in failed (provider text in Details); no group list received; session ended (modal); no access anywhere (Explore empty state naming no folder). | — | AC-251 |
+| Access panel | Docked right from the folder header's Access button (read-write and Super-Admin only). Read-write groups, then read-only groups; each splits Set here / From ancestors (lock icon, source folder as a link, no remove); "Not set here. Inherits from _folder_."; "Only Super-Admins can see this folder" when nothing reaches it. Save _n_ changes; Undo toast. | 360 px; rows 28 | AC-259–AC-261, AC-265, AC-267 |
+| Explore by role | Tree: My workspace first (person icon), then "Our analytics" with only visible folders. Folder header: access chip (Super-Admin, Read-write or View only). Read-only users see subfolders and dashboards only, with no actions that change anything. | — | AC-192, AC-194, AC-262–AC-264, AC-277 |
+| Models and data sources as items | Listing rows with Type as text. A model opens in the model editor under the folder breadcrumb, read-only in a shared folder; a data source opens its settings (General, Connection, Test history, Usage). Credentials show only as "Stored · encrypted". | — | AC-131, AC-157, AC-222, AC-269 |
+| My workspace | A 32 px `bg-subtle` band "My workspace · only you can see this" on every workspace page. Each item shows its origin ("Copied from _path_ · version _n_" or "New") and its target. "Edit in my workspace" dialog; "Open my copy" when a copy exists. New items pick a target from read-write folders only. | dialogs 520 px | AC-276–AC-283 |
+| Proposals | Propose dialog: target, new or replaces v_n_, bundled workspace models with the reason, description with a "_n_ / 1,000" counter that blocks above 1,000. Top-bar Reviews control with a count pill. Reviews page: To review / My proposals. Review view: full viewport, 240 / fluid / 360, rendering the item (dashboard drawn read-only with Proposed / Current, model YAML diff, data-source settings diff). Approve (confirmed) and Reject (optional reason) only there. "Approve my own proposal" when the reviewer is the author. | 520 / 400 px dialogs; rows 34 | AC-284–AC-291 |
+| History | Docked right from the History button: last 10 versions, newest first, Current tagged; View, Compare with current, Propose restoring… (never a direct restore). | 360 px; rows 48 | AC-288, AC-289 |
+| Bookmarks | The phase-1 Bookmarks popover gains Mine then Shared, each newest first; visibility as icon and label ("Only me", "Shared"); owner menu with Share or Stop sharing; others get "Save a copy to mine". | 320 px | AC-292, AC-293 |
+| Audit trail | Security › Audit trail (Super-Admin only). Filters User, Event, Folder, Time combine with AND as chips. Table: Time, User, Event, Folder, Item, Details, newest first; inspector with the full record; a footnote naming the retention period. | rows 34 | AC-294–AC-296 |
+| Data sources, Jobs, Schedules | Data sources lists every visible source with Folder, Driver, Health (icon, label, last test) and Used by. Jobs and Schedules add a Folder column and filter, with a scope note for non-Super-Admins. The connection test shows each check Cube ran (AC-159). | rows 34 | AC-157, AC-158, AC-233, AC-297 |
+
+**Group identifiers** are shown exactly as the groups claim carries them, in the code face (IBM Plex Mono 12/16), because Entra sends object IDs by default. The picker is labelled "AD group" and never offers a person.
+
+**Decisions on the gaps the research found** (`references.md` › Phase 2 › Open for the user; accepted by the user 2026-09-25, requirements R23):
+1. Groups are shown exactly as the token carries them; wechart stores no group labels.
+2. A proposal is a snapshot; later edits in the workspace are flagged "not in the proposal".
+3. After approval the workspace copy stays, marked "In folder as v_n_".
+4. "Edit in my workspace" isn't offered where the user is view-only.
+5. History is shown to read-write members and Super-Admins, never to read-only users.
+6. **Read-only users don't see Data sources in the switcher at all** (AC-001 reworded). This replaces `references.md` surface 10's empty-state page for them.
+7. Sign out lives in the account menu, which is in the top bar.
+8. In shared folders the Owner column shows the author of the current version.
+9. The review view includes the Proposed / Current compare and the diffs.
+
+**Country map** (AC-305, AC-313; research `country-map.md`)
+- Equal Earth projection (an equal-area projection, which choropleths require), through d3-geo 3.1.1.
+- Colour: §5's sequential ramp (`#cde2fb` … `#0d366b`); countries with no value take §5's null neutral (`#b3b1ab` / `#5c5b57`), and the legend adds a "No data" swatch. The pair's separation from the ramp's pale end must pass the palette validator before shipping.
+- Legend: a horizontal continuous bar below the map, with its two end values formatted by the measure's format.
+- Codes that can't be placed are named in a note under the map ("Not on the map: XKX, …"), in wechart's DOM, not in the chart canvas.
+- Hover: the country's name, then the measure; "No data" when it has none. Marking a country uses outline and fade, never fill (§7a).
+
+**Box plot** (AC-306, AC-314, AC-315; research `box-plot.md`)
+- One box per category: box from Q1 to Q3, a median line, whiskers per the chart option, and outliers as dots in the category's colour at 60 % opacity.
+- The "Each point is" field sits in the box plot's wells below the value.
+- Over Cube's row limit, a warning band on the tile reads "Computed from _n_ of _N_ rows", with the status-warning icon.
+- Hover on a box: the category, n, minimum, Q1, median, Q3 and maximum (and the whisker ends when Tukey is on), in tabular numerals.
+
 ## 8. Components (primitives and states)
 
 - **Shell:** TopBar, WorkspaceSwitcher, Pane (with collapsed rail), Splitter, Drawer, CommandPalette.
@@ -456,6 +516,17 @@ The user asked that the UI "align with the ui styles in" the design prototype (`
   - Schedule editor
   - JobDetail (history table and dependency graph)
 - **Markdown:** MarkdownTile with typed live-value tokens: `{{filter:region}}`, `{{measure:orders.revenue}}`, `{{sparkline:…}}`. No raw HTML.
+- **Phase 2:**
+  - AccountButton and AccountMenu; SingleUserChip; SignedOutState (the five states of §7e)
+  - AccessPanel, GroupRow (set here, inherited with source link, outranked), GroupCombobox
+  - AccessChip (Super-Admin, Read-write, View only)
+  - WorkspaceBand; OriginLine; TargetPicker (read-write folders only)
+  - EditInWorkspaceDialog; ProposeDialog (with the character counter); ProposalStatus (Waiting, Approved, Rejected; icon and label)
+  - ReviewsControl (count pill); ReviewsList; ReviewView (item pane, rendered item or diff, inspector); YamlDiff; SettingsDiff
+  - HistoryPanel and VersionRow
+  - BookmarkRow (visibility icon and label)
+  - AuditTable, AuditFilters and AuditRecord
+  - CountryMapTile (map, legend, "No data" swatch, unplaced-codes note); BoxPlotTile (row-limit warning band)
 
 ## 9. Checklist (numbered rules for design-critic and write-spec)
 
@@ -517,3 +588,37 @@ The user asked that the UI "align with the ui styles in" the design prototype (`
 56. The settings page keeps both interaction configurations and labels the inactive one. Saving settings while editing is one undoable change.
 57. A new dashboard starts in Markings mode, with one marking named "Marking" set as the default (user decision 2026-09-19).
 58. When a tile is first limited by a marking, its nothing-marked state defaults to "Message on empty background", pre-filled with the master tiles' names (user decision 2026-09-19).
+
+Phase 2 (§7e; evidence in `references.md` › Phase 2):
+
+59. The top bar shows the signed-in user's name beside a 28 px avatar at widths of 1280 px and above. The account menu holds the identity, a Super-Admin label for Super-Admins, and Sign out. With security off, the same place shows a "Single-user mode" chip (icon and label) and there is no Sign out.
+60. The signed-out, sign-in-failed, no-group-list and session-ended states show only the product mark, one sentence and one action. No folder, item or wechart content renders behind them.
+61. A signed-in user with no folder access sees an Explore empty state that names no folder and says access comes from AD groups.
+62. The Access panel lists read-write groups before read-only groups. Each list separates "Set here" from "From ancestors". Every inherited group names its source folder as a link. Inherited rows carry a lock icon and have no remove control.
+63. An unset list says "Not set here. Inherits from _folder_." When nothing reaches a folder, its header and Access panel both say "Only Super-Admins can see this folder".
+64. The group picker is labelled "AD group". It suggests only the editor's own groups and groups already set on folders the editor may see, and it never offers a person.
+65. Access changes apply only on Save, and the Save button counts pending changes. A save that would remove the editor's own read-write access asks first. Every saved change can be undone from its toast and appears in the audit trail.
+66. A group set on a folder that an ancestor already grants at a higher level states which grant outranks it.
+67. No tree, listing, count, search result or link reveals a folder or item the user may not see. A link to one renders the same Not found page as a missing item, and there are no locked or greyed placeholders.
+68. A read-only user's Explore has no "+ Folder", New menu, My workspace, Access, History or pencil, lists only subfolders and dashboards, and offers no row action that changes anything.
+69. Every folder header shows the user's access there as a chip with icon and label: Super-Admin, Read-write or View only.
+70. Models and data sources appear in folder listings with their kind as text in Type. They open in the model editor or the source settings under the folder's breadcrumb, read-only in shared folders.
+71. A shared item offers no in-place editing. For read-write members its primary action is "Edit in my workspace", or "Open my copy" when a copy exists. In folders where the user is view-only, neither appears.
+72. "My workspace" is the first tree root, above the shared root, with a person icon. Every page inside it carries the band "My workspace · only you can see this".
+73. Every workspace item shows its origin ("Copied from _path_ · version _n_" or "New") and its target folder. The Edit in my workspace dialog for a dashboard lists models and data sources unchecked, and says that uncopied ones are used from their folders.
+74. Creating a dashboard, chart, model or data source in the workspace asks for a target folder from a picker that lists only folders where the user has read-write access.
+75. The Propose dialog names the target and says whether the item is new or replaces version _n_. It warns when the item it replaces isn't its origin, and lists bundled workspace models with the reason and no way to remove them. Its description counter reads "_n_ / 1,000" and blocks submission above 1,000 without truncating.
+76. The top-bar Reviews control appears only to users who may approve something. Its count equals the rows in To review, and its accessible name includes the count.
+77. Approve and Reject are available only in the review view. That view renders the proposed item: a drawn dashboard with a Proposed / Current switch, a model YAML diff, or a data-source settings diff with no credential values. Approve asks for confirmation. Reject offers an optional reason with a "_n_ / 1,000" counter.
+78. When the reviewer is the author, the review view says so and the button reads "Approve my own proposal".
+79. Proposal states always pair an icon and a label: Waiting for review, Approved, Rejected. A rejected workspace item shows the approver, the time and the reason at the top of the item.
+80. History lists at most 10 versions, newest first, each with number, time, author, approver and description, and marks the current one. Restoring always opens "Propose restoring version _n_" and never replaces directly.
+81. Bookmarks list Mine before Shared, newest first within each. New bookmarks are "Only me". Each row shows its visibility as icon and label, and shared rows name who shared them. Only the owner sees Update, Rename, Stop sharing and Delete; others see "Save a copy to mine".
+82. The audit trail sits under Security and is shown to Super-Admins only. It lists newest first with time, user, event (icon and label), folder, item and details. Its User, Event, Folder and Time filters combine with AND as removable chips, and the page states the retention period.
+83. No stored credential renders as text anywhere, including diffs and audit records. The UI shows "Stored · encrypted", "Kept from _folder_ · encrypted" or "replaced".
+84. Data sources lists each source with its folder path, driver, health (icon, label and last-test time) and the cubes using it. Jobs and Schedules show a Folder column and filter. A scoped user's page says it shows only their read-write folders and names no other folder. Read-only users see none of the three in the switcher.
+85. Every new panel, dialog and popover takes focus on open, closes on Esc (asking first when there are unsaved changes), and returns focus to the control that opened it. No approval, rejection or access change is bound to a single-key shortcut.
+86. A country map uses an equal-area projection and §5's sequential ramp. Countries without a value take the null neutral, and the legend shows a "No data" swatch beside the continuous bar, whose two ends are labelled with formatted values.
+87. A country map names every code it can't place in a text note under the map, in page DOM rather than inside the chart.
+88. A box plot draws Q1–Q3 boxes with a median line, whiskers per its option, and outliers as dots. Its tooltip lists n and the five statistics in tabular numerals.
+89. A box plot drawn from fewer rows than its data holds shows "Computed from _n_ of _N_ rows" on the tile, with the warning icon.

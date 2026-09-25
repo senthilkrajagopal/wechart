@@ -650,3 +650,9 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
+
+**R23 — accepting the phase-2 design direction** (`docs/design/direction.md` §7e)
+- Q: Do you accept the phase-2 design direction, including the listed defaults? A: "Accept (Recommended)"
+- Q: How should the Access panel show a group? A: "Exactly as the token sends it (Recommended)"
+- Q: Should read-only users see a dashboard's or model's version History? A: "No, read-write and Super-Admin only (Recommended)"
+- Q: AC-001 lists the Data sources page for every user, but read-only users may see no data sources. What should they get? A: "Hide it from read-only users (Recommended)"

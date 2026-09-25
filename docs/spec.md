@@ -53,7 +53,7 @@ Acceptance criteria are global and sequential. A criterion is checked only when 
 Purpose: one workbench for authoring and administration, addressable by URL.
 Traces to: `[R2]`, `[docs/inputs §8]`, direction.md §2.
 
-- [ ] AC-001 WHEN the application loads, THE SYSTEM SHALL show a top bar whose workspace switcher lists Explore and Data sources to every user, Jobs and Schedules to Super-Admins and read-write members, and Security to Super-Admins. It SHALL list no Model workspace (phase 2: `[P2 input, R18, R19]`).
+- [ ] AC-001 WHEN the application loads, THE SYSTEM SHALL show a top bar whose workspace switcher lists Explore to every user; Data sources, Jobs and Schedules to Super-Admins and read-write members; and Security to Super-Admins. It SHALL list no Model workspace (phase 2: `[P2 input, R18, R19, R23]`).
       Fails when: the switcher shows a "Dashboards" or "Model" entry, omits an entry the user's role may use, or shows one it may not.
 - [x] AC-002 WHEN the user opens a workspace, a dashboard, a chart or a model file, THE SYSTEM SHALL change the URL so that reloading it restores the same surface and the same selected object.
       Fails when: after reload the application shows a different workspace, dashboard, chart or file than the URL names.
@@ -993,8 +993,8 @@ Traces to: §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
       Fails when: a proposal the user may approve is missing, the number differs from the list, or a proposal is shown to someone who may not approve it.
 - [ ] AC-288 WHEN a proposal is approved, THE SYSTEM SHALL put its item into the folder, replacing any item of the same kind and name, and keep the replaced version in the item's history (`[R17]`).
       Fails when: the folder shows the old version after approval, or the replaced version is missing from history.
-- [ ] AC-289 THE SYSTEM SHALL keep an item's last 10 versions, each with its author, approver, time and description, and SHALL let a read-write member restore one through a proposal (`[R17]`).
-      Fails when: an item that has had more than 10 versions keeps other than its last 10, or a restore lands without an approval.
+- [ ] AC-289 THE SYSTEM SHALL keep an item's last 10 versions, each with its author, approver, time and description, show them to the folder's read-write members and to Super-Admins only, and SHALL let a read-write member restore one through a proposal (`[R17, R23]`).
+      Fails when: an item that has had more than 10 versions keeps other than its last 10, a read-only user can open its history, or a restore lands without an approval.
 - [ ] AC-290 WHEN a proposal is rejected, THE SYSTEM SHALL return it unchanged to the author's workspace, with the approver's reason of at most 1,000 characters, and leave the folder as it was (`[R18]`).
       Fails when: the folder changes, the author's workspace loses the work, or the author isn't shown the reason.
 - [ ] AC-291 WHEN a read-write member creates a subfolder, sets permissions, or renames, moves or deletes an item in a folder they may write, THE SYSTEM SHALL apply it at once, without a proposal. A move SHALL need read-write access to both folders (`[R17]`).
