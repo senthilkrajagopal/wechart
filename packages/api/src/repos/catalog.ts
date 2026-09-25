@@ -25,6 +25,12 @@ export interface CatalogItem {
   readonly folderId: string | null;
   /** A chart's saved type; null when the recommender picks it, or it has none. */
   readonly chartType: string | null;
+  /**
+   * What a chart that follows the recommendation was drawn as when last
+   * saved (T243, AC-193): Explore names it by that, as it cannot query each.
+   * Null for a chart with a saved type, or one never drawn.
+   */
+  readonly drawnAs: string | null;
   /** The cube or view a chart is built on. */
   readonly source: string | null;
   /** Whether a chart has any field in its wells — one with none is incomplete. */
@@ -62,6 +68,7 @@ export function catalog(db: Kysely<Database>) {
       // What the Type and Built on columns say (AC-193), read from the body
       // like the rest, so they cannot disagree with the object.
       .select(sql<string | null>`body -> 'chart' ->> 'chartType'`.as('chart_type'))
+      .select(sql<string | null>`body -> 'chart' ->> 'drawnAs'`.as('drawn_as'))
       .select(sql<string | null>`body -> 'chart' -> 'source' ->> 'cube'`.as('source'))
       .select(
         // Silent: a body with no chart, or no wells, has no fields rather
@@ -248,6 +255,7 @@ interface Row {
   description: string | null;
   folder_id: string | null;
   chart_type: string | null;
+  drawn_as: string | null;
   source: string | null;
   has_fields: boolean;
   pages: number | null;
@@ -266,6 +274,8 @@ function toItem(row: Row): CatalogItem {
     description: row.description?.trim() ? row.description : null,
     folderId: row.folder_id,
     chartType: chart ? row.chart_type : null,
+    // Only beside no saved type: a chosen type is the chart's name.
+    drawnAs: chart && row.chart_type === null ? row.drawn_as : null,
     source: chart ? row.source : null,
     hasFields: chart && row.has_fields,
     // A dashboard opens on one page before any is added (DashboardPage).

@@ -38,19 +38,23 @@ test('arrow keys move the selection and Enter opens it', async ({ page, request 
 
   const rows = contents.locator('tbody tr');
   await expect(rows).toHaveCount(2);
+  // The selection is the focused row, the one in the tab order — a plain
+  // table's rows take no aria-selected (recheck-shell-explore F27).
   await rows.first().focus();
-  await expect(rows.first()).toHaveAttribute('aria-selected', 'true');
+  await expect(rows.first()).toBeFocused();
+  await expect(rows.first()).toHaveAttribute('tabindex', '0');
 
   await page.keyboard.press('ArrowDown');
-  await expect(rows.nth(1)).toHaveAttribute('aria-selected', 'true');
-  await expect(rows.first()).toHaveAttribute('aria-selected', 'false');
+  await expect(rows.nth(1)).toBeFocused();
+  await expect(rows.nth(1)).toHaveAttribute('tabindex', '0');
+  await expect(rows.first()).toHaveAttribute('tabindex', '-1');
 
   await page.keyboard.press('ArrowUp');
-  await expect(rows.first()).toHaveAttribute('aria-selected', 'true');
+  await expect(rows.first()).toBeFocused();
 
   // Both rows in this folder are dashboards, so Enter must open a dashboard.
   await page.keyboard.press('ArrowDown');
-  await expect(rows.nth(1)).toHaveAttribute('aria-selected', 'true');
+  await expect(rows.nth(1)).toBeFocused();
   await page.keyboard.press('Enter');
 
   await expect(page).toHaveURL(/\/explore\/dashboards\//);
@@ -81,8 +85,10 @@ test('Home and End jump to the ends of the list', async ({ page }) => {
   await rows.first().focus();
 
   await page.keyboard.press('End');
-  await expect(rows.last()).toHaveAttribute('aria-selected', 'true');
+  await expect(rows.last()).toBeFocused();
+  await expect(rows.last()).toHaveAttribute('tabindex', '0');
 
   await page.keyboard.press('Home');
-  await expect(rows.first()).toHaveAttribute('aria-selected', 'true');
+  await expect(rows.first()).toBeFocused();
+  await expect(rows.first()).toHaveAttribute('tabindex', '0');
 });

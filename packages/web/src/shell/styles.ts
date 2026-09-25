@@ -1468,9 +1468,25 @@ svg[data-icon] { flex: none; }
    its ground, so it keeps the words' contrast in either theme. */
 .undo-toast > svg[data-icon='ok'] path { stroke: var(--wc-text-primary); }
 
-/* The selected row is marked by more than the focus ring, so the selection is
-   still visible when focus moves into a control inside the row. */
-.folder-contents tbody tr[aria-selected='true'] { background: var(--wc-bg-subtle); }
+/* A row is one target, as the prototype's (recheck-shell-explore N11): the
+   pointer, and bg-hover under it. The selection is the focused row, in the
+   prototype's selection colour — nothing is selected at rest (N12, F27). */
+.folder-contents tbody tr { cursor: pointer; }
+.folder-contents tbody tr:hover > * { background: var(--wc-bg-hover); }
+.folder-contents tbody tr:focus-within > * { background: var(--wc-bg-accent-soft); }
+/* Move to, over the row beside its ⋯ rather than in its place (N14). */
+.folder-contents__actions { position: relative; }
+.folder-contents__move {
+  position: absolute;
+  top: calc(100% - 4px);
+  right: 8px;
+  z-index: 5;
+  padding: 4px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  background: var(--wc-bg-raised);
+  box-shadow: var(--wc-shadow-pop);
+}
 
 /* Dashboard chrome (AC-053). The sidebar is docked at 300 px and the canvas
    takes the rest, per direction.md section 2. Only the chrome is styled here;

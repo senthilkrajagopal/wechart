@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { ChartEditor } from '../../editor/ChartEditor';
+import { withDrawnAs } from '../../editor/drawnAs';
 import {
   changesChart,
   chartDocumentWith,
@@ -182,10 +183,12 @@ export function ChartEditorOverlay({
       }
 
       setApplying(true);
-      const document = chartDocumentWith(opened.document, state);
+      const edited = chartDocumentWith(opened.document, state);
       // Drawn by the very function every tile uses, so an emptied chart reads
       // "no fields yet" rather than the tile keeping its old chart.
-      then({ document, drawn: await tileChartOf(document, loadRows), version: opened.version });
+      const drawn = await tileChartOf(edited, loadRows);
+      // And what it was drawn as recorded, for Explore to name it by (AC-193).
+      then({ document: withDrawnAs(edited, drawn), drawn, version: opened.version });
     },
     [opened],
   );
@@ -209,10 +212,10 @@ export function ChartEditorOverlay({
     leaving.current = true;
     setApplying(true);
     try {
-      const document = chartDocumentWith(opened.document, latest.current ?? opened.state);
-      const drawn = await tileChartOf(document, loadRows);
+      const edited = chartDocumentWith(opened.document, latest.current ?? opened.state);
+      const drawn = await tileChartOf(edited, loadRows);
       setCopied(true);
-      onMakeLocalCopy({ document, drawn });
+      onMakeLocalCopy({ document: withDrawnAs(edited, drawn), drawn });
     } finally {
       leaving.current = false;
       setApplying(false);

@@ -80,7 +80,8 @@ test('a chart keeps its address after being moved to another folder', async ({ p
   await page
     .getByTestId(`item-${chart.id}`)
     .getByRole('combobox')
-    .selectOption({ label: `To ${unique}` });
+    // By its path (recheck-shell-explore F16).
+    .selectOption({ label: `Shared / To ${unique}` });
 
   // It left the folder it was in...
   await expect(page.getByTestId(`item-${chart.id}`)).toBeHidden();

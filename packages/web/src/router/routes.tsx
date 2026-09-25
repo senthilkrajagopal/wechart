@@ -13,6 +13,9 @@ import { useCallback, useRef, useState } from 'react';
 import { DashboardPage } from '../dashboard/DashboardPage';
 import { ChartEditor } from '../editor/ChartEditor';
 import { chartDocumentWith, editorViewOf, loadChart, type EditorState } from '../editor/openChart';
+import { withDrawnAs } from '../editor/drawnAs';
+import { tileChartOf } from '../dashboard/chartSpec';
+import { loadTile } from '../query/loadTile';
 import type { FilterValues } from '../filters/model';
 import { valuesFromSearch, valuesToSearch, type SearchFilter } from '../filters/url';
 import { previewClaimsOf } from '../query/securityPreview';
@@ -269,13 +272,17 @@ function ChartEditorSurface() {
         throw new Error('The chart has not finished opening, so there is nothing to save yet.');
       if (loaded.version === undefined)
         throw new Error('This chart was read without its version, so it cannot be saved safely.');
+      const document = chartDocumentWith(loaded.document, edited);
+      // Drawn as a tile draws it, for what it was drawn as (AC-193): Explore
+      // names a chart that follows the recommendation by that.
+      const drawn = await tileChartOf(document, async (query) => {
+        const result = (await loadTile({ query })) as { data?: Record<string, unknown>[] };
+        return result.data ?? [];
+      });
       const response = await fetch(`/api/documents/chart/${encodeURIComponent(chartId)}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          version: loaded.version,
-          body: chartDocumentWith(loaded.document, edited),
-        }),
+        body: JSON.stringify({ version: loaded.version, body: withDrawnAs(document, drawn) }),
       });
       if (response.status === 409)
         throw new Error('This chart was changed elsewhere since it was opened. Reopen it to see.');

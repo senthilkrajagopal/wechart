@@ -199,6 +199,34 @@ describe("the contents' columns (AC-193)", () => {
     expect(byId.get(empty)).toMatchObject({ chartType: null, source: null, hasFields: false });
   });
 
+  it('gives a chart that follows the recommendation what it was drawn as when saved (T243)', async () => {
+    const here = await folder('Drawn');
+    const drawn = randomUUID();
+    const typed = randomUUID();
+    const wells = { measures: ['orders.count'], dimensions: [], timeDimensions: [] };
+    await repo().create({
+      kind: 'chart',
+      id: drawn,
+      body: {
+        title: 'Drawn',
+        folderId: here,
+        chart: { source: { cube: 'orders' }, wells, drawnAs: 'kpi' },
+      },
+    });
+    await repo().create({
+      kind: 'chart',
+      id: typed,
+      body: {
+        title: 'Typed',
+        folderId: here,
+        chart: { source: { cube: 'orders' }, wells, chartType: 'bar' },
+      },
+    });
+    const byId = new Map((await cat().contents(here)).map((item) => [item.id, item]));
+    expect(byId.get(drawn)).toMatchObject({ chartType: null, drawnAs: 'kpi' });
+    expect(byId.get(typed)).toMatchObject({ chartType: 'bar', drawnAs: null });
+  });
+
   it('gives a dashboard its number of page tabs, one when it has no pages yet', async () => {
     const here = await folder('Dashboards');
     const three = randomUUID();

@@ -3541,8 +3541,9 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 
 ### The 2026-09-24 re-critique's fixes
 
-- [ ] T243 (AC-193) Name an Explore chart by its drawn type, move a folder into a sibling, and make each row one target
-  - Files: `packages/web/src/explore/*`, `packages/api/src/*` (the contents contract's chart type), `e2e/explore.spec.ts`
+- [x] T243 (AC-193) Name an Explore chart by its drawn type, move a folder into a sibling, and make each row one target
+  - Files: `packages/web/src/workspaces/explore/{FolderContents,chartTypeLabels}.{tsx,ts}` and tests, `packages/web/src/editor/drawnAs.ts` (+ test), `packages/web/src/dashboard/edit/ChartEditorOverlay.tsx`, `packages/web/src/router/routes.tsx`, `packages/api/src/repos/catalog.ts` (+ test), `packages/web/src/shell/styles.ts`, `e2e/explore.spec.ts`, `e2e/explore-keyboard.spec.ts`, `e2e/explore-rename-move.spec.ts`
+  - Done 2026-09-24. A chart following the recommendation records what it was drawn as when saved (`drawnAs`, kept beside the chart like any field the editor does not edit), and Explore reads "Bar · auto" from it; one saved before reads "Automatic" until it is saved again. Move to excludes only the folder, what is beneath it and where the item is, names each folder by its path, and opens over the row. The selection is the focused row, with no `aria-selected` on a plain table (AC-024's e2e now reads focus and the roving tabindex). `e2e/dashboard.spec.ts`'s settings test now finds Name exactly: the Folder select's name took in a folder another test had renamed.
   - Failing test: `e2e/explore.spec.ts`: an automatic chart's row reads its drawn type, not "Automatic"; a folder's Move to offers its sibling folders, named by path, without reflowing the table; a row opens from any cell, with a hover; no row is selected at rest (recheck-shell-explore N1, N17, F16, N14, N11, N12, F27, F19).
   - Depends on: T225's re-critique
 - [ ] T244 (AC-187, AC-231) Dock Explore's folder tree, and set its table, header and states to the prototype's measures

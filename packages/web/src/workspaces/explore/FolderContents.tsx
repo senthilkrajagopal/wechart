@@ -23,6 +23,8 @@ export interface CatalogItem {
   readonly folderId?: string | null;
   /** A chart's saved type; null when the recommender picks it. */
   readonly chartType?: string | null;
+  /** What a chart the recommender picks for was drawn as when saved (T243). */
+  readonly drawnAs?: string | null;
   /** The cube or view a chart is built on. */
   readonly source?: string | null;
   /** Whether a chart has any field — one with none is incomplete. */
@@ -88,21 +90,53 @@ function builtOnText(item: CatalogItem, kinds: ReadonlyMap<string, 'cube' | 'vie
  * into its own subtree would detach from the tree altogether.
  */
 function targetsFor(item: CatalogItem, folders: readonly FolderMove[]): FolderMove[] {
-  const excluded = new Set<string>();
-  if (item.folderId != null) excluded.add(item.folderId);
+  // The folder itself and what is beneath it — walked from the folder alone:
+  // walked from its parent too, every sibling came out with it
+  // (recheck-shell-explore N17).
+  const beneath = new Set<string>();
   if (item.kind === 'folder') {
-    excluded.add(item.id);
+    beneath.add(item.id);
     // Bounded by the number of folders, so a cycle in stored data cannot hang it.
     for (let grew = true, guard = 0; grew && guard <= folders.length; guard += 1) {
       grew = false;
       for (const folder of folders)
-        if (folder.parentId != null && excluded.has(folder.parentId) && !excluded.has(folder.id)) {
-          excluded.add(folder.id);
+        if (folder.parentId != null && beneath.has(folder.parentId) && !beneath.has(folder.id)) {
+          beneath.add(folder.id);
           grew = true;
         }
     }
   }
-  return folders.filter((folder) => !excluded.has(folder.id));
+  return folders.filter((folder) => !beneath.has(folder.id) && folder.id !== item.folderId);
+}
+
+/**
+ * The Updated column's date, as the prototype writes it: "Sep 19", with the
+ * year where it is not this one (recheck-shell-explore F19). The moment in
+ * full is the element's title, and its `dateTime` the machine's.
+ */
+function shortDate(iso: string): string {
+  const at = new Date(iso);
+  const thisYear = at.getFullYear() === new Date().getFullYear();
+  return at.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(thisYear ? {} : { year: 'numeric' }),
+  });
+}
+
+/**
+ * A folder by its path — "Operations / sss / hello" — as Settings › General
+ * names one (recheck-shell-explore F16): two folders may share a name.
+ */
+function pathOf(folder: FolderMove, folders: readonly FolderMove[]): string {
+  const byId = new Map(folders.map((each) => [each.id, each]));
+  const names: string[] = [];
+  let at: FolderMove | undefined = folder;
+  for (let guard = 0; at !== undefined && guard <= folders.length; guard += 1) {
+    names.unshift(at.title);
+    at = at.parentId == null ? undefined : byId.get(at.parentId);
+  }
+  return names.join(' / ');
 }
 
 export function FolderContents({
@@ -218,10 +252,22 @@ export function FolderContents({
               ref={(element) => {
                 rowRefs.current[index] = element;
               }}
+              // The selection is the row in the tab order, shown when it has
+              // the focus: a plain table's rows take no `aria-selected`
+              // (recheck-shell-explore F27, N12).
               tabIndex={index === selected ? 0 : -1}
-              aria-selected={index === selected}
               onKeyDown={(event) => onKeyDown(event, index)}
               onFocus={() => setSelected(index)}
+              // The whole row opens it, as the prototype's does, but not
+              // its name's button (which does already), its menu, or a
+              // rename or move under way (recheck-shell-explore N11).
+              onClick={(event) => {
+                const target = event.target as HTMLElement;
+                if (target.closest('button, a, input, select, textarea, form, [role="menu"]'))
+                  return;
+                if (renaming === item.id || moving === item.id) return;
+                onOpen?.(item);
+              }}
             >
               <th scope="row">
                 {renaming === item.id ? (
@@ -289,7 +335,9 @@ export function FolderContents({
               <td>{typeText(item)}</td>
               <td className="folder-contents__built-on">{builtOn(item)}</td>
               <td>
-                <time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleString()}</time>
+                <time dateTime={item.updatedAt} title={new Date(item.updatedAt).toLocaleString()}>
+                  {shortDate(item.updatedAt)}
+                </time>
               </td>
               <td>{item.owner ?? '—'}</td>
               <td
@@ -299,8 +347,29 @@ export function FolderContents({
                   else actionRefs.current.set(item.id, element);
                 }}
               >
+                <MenuButton
+                  label={`Actions for ${item.title}`}
+                  className="btn-ghost btn-sm folder-contents__menu"
+                  items={[
+                    {
+                      key: 'rename',
+                      label: 'Rename',
+                      onSelect: () => {
+                        setRenaming(item.id);
+                        setDraft(item.title);
+                      },
+                    },
+                    ...(onMove && targets.length > 0
+                      ? [{ key: 'move', label: 'Move to…', onSelect: () => setMoving(item.id) }]
+                      : []),
+                  ]}
+                >
+                  <span aria-hidden="true">⋯</span>
+                </MenuButton>
+                {/* Over the row, beside its ⋯, rather than in its place: the
+                    table does not reflow (recheck-shell-explore N14). */}
                 {moving === item.id ? (
-                  <>
+                  <div className="folder-contents__move">
                     <label htmlFor={`move-${item.id}`} className="visually-hidden">
                       Move {item.title} to
                     </label>
@@ -323,32 +392,12 @@ export function FolderContents({
                       <option value="">Move to…</option>
                       {targets.map((folder) => (
                         <option key={folder.id} value={folder.id}>
-                          {folder.title}
+                          {pathOf(folder, folders)}
                         </option>
                       ))}
                     </select>
-                  </>
-                ) : (
-                  <MenuButton
-                    label={`Actions for ${item.title}`}
-                    className="btn-ghost btn-sm folder-contents__menu"
-                    items={[
-                      {
-                        key: 'rename',
-                        label: 'Rename',
-                        onSelect: () => {
-                          setRenaming(item.id);
-                          setDraft(item.title);
-                        },
-                      },
-                      ...(onMove && targets.length > 0
-                        ? [{ key: 'move', label: 'Move to…', onSelect: () => setMoving(item.id) }]
-                        : []),
-                    ]}
-                  >
-                    <span aria-hidden="true">⋯</span>
-                  </MenuButton>
-                )}
+                  </div>
+                ) : null}
               </td>
             </tr>
           );

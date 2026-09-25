@@ -20,6 +20,14 @@ describe("a listed chart's type (AC-193)", () => {
     expect(chartTypeText({ chartType: null, hasFields: false })).toBe('Incomplete');
   });
 
+  it('says what a chart following the recommendation was drawn as, as its page does (T243)', () => {
+    expect(chartTypeText({ chartType: null, drawnAs: 'kpi', hasFields: true })).toBe('KPI · auto');
+    // A saved type is the name, whatever was drawn.
+    expect(chartTypeText({ chartType: 'hbar', drawnAs: 'kpi', hasFields: true })).toBe(
+      'Bar, horizontal',
+    );
+  });
+
   it('shows a type this build does not know as stored, rather than hiding it', () => {
     expect(chartTypeText({ chartType: 'sankey', hasFields: true })).toBe('sankey');
   });

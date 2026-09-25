@@ -270,6 +270,49 @@ test('the contents are listed under Name, Type, Built on, Updated and Owner, sub
   await expect(cells(made.auto).nth(3)).toHaveText('admin');
 });
 
+/**
+ * T243 / AC-193 (recheck-shell-explore N1, N11, F19): a chart that follows
+ * the recommendation is listed by what it was drawn as when saved — as its
+ * own page names it — not "Automatic"; a row opens from any of its cells;
+ * the date is the prototype's short one.
+ */
+test('a saved automatic chart is listed by its drawn type, and its row opens from any cell', async ({
+  page,
+  request,
+}) => {
+  const unique = String(Date.now());
+  const home = await folderIn(request, 'root', `Drawn ${unique}`);
+  const chart = await documentIn(request, 'chart', home, {
+    title: `Drawn ${unique}`,
+    chart: {
+      source: { cube: 'orders' },
+      wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+    },
+  });
+
+  await page.goto(`/explore/charts/${chart}/edit`);
+  const head = page.getByTestId('editor-bar');
+  await expect(head.getByTestId('result-row-count')).toHaveText('3 rows');
+  const title = head.getByLabel('Chart title');
+  await title.fill(`Drawn ${unique}, saved`);
+  await title.press('Enter');
+  await head.getByRole('button', { name: 'Save chart' }).click();
+  await expect(page).toHaveURL(new RegExp(`/explore/charts/${chart}$`));
+  // Once drawn, the page names its type as the recommender's.
+  await expect(page.getByTestId('chart-type')).toHaveText(/ · auto$/);
+  const drawnAs = (await page.getByTestId('chart-type').textContent())?.trim() ?? '';
+
+  await page.goto(`/explore?folder=${home}`);
+  const row = page.getByTestId(`item-${chart}`);
+  const cells = row.getByRole('cell');
+  await expect(cells.nth(0)).toHaveText(drawnAs);
+  await expect(cells.nth(2)).toHaveText(/^[A-Z][a-z]{2} \d{1,2}(, \d{4})?$/);
+
+  // Any cell opens it, as the prototype's rows do.
+  await cells.nth(1).click();
+  await expect(page).toHaveURL(new RegExp(`/explore/charts/${chart}$`));
+});
+
 test("rename and move are in each row's menu, and a move never offers where the item already is", async ({
   page,
   request,
@@ -289,9 +332,16 @@ test("rename and move are in each row's menu, and a move never offers where the 
   await menu.getByRole('menuitem', { name: 'Move to…' }).click();
   const chartTargets = chartRow.getByRole('combobox', { name: `Move A typed ${made.unique} to` });
   await expect(chartTargets).toBeFocused();
-  // Its own folder is not a place to move it to; the others are.
-  await expect(chartTargets.getByRole('option', { name: `Listed ${made.unique}` })).toHaveCount(0);
-  await expect(chartTargets.getByRole('option', { name: `Sub ${made.unique}` })).toHaveCount(1);
+  // Its own folder is not a place to move it to; the others are — each by
+  // its path, as two folders may share a name (recheck-shell-explore F16).
+  const exactly = (name: string) => ({ name, exact: true });
+  const listedPath = `Shared / Listed ${made.unique}`;
+  await expect(chartTargets.getByRole('option', exactly(listedPath))).toHaveCount(0);
+  await expect(
+    chartTargets.getByRole('option', exactly(`${listedPath} / Sub ${made.unique}`)),
+  ).toHaveCount(1);
+  // Over the row, not in its place: the row keeps its height (N14).
+  await expect(chartRow.getByRole('button', { name: /^Actions for / })).toBeVisible();
 
   // A folder: never itself, nor a folder inside it.
   const folderRow = page.getByTestId(`item-${made.sub}`);
@@ -301,11 +351,15 @@ test("rename and move are in each row's menu, and a move never offers where the 
     .getByRole('menuitem', { name: 'Move to…' })
     .click();
   const folderTargets = folderRow.getByRole('combobox', { name: `Move Sub ${made.unique} to` });
-  for (const excluded of [`Listed ${made.unique}`, `Sub ${made.unique}`, `Inner ${made.unique}`])
-    await expect(folderTargets.getByRole('option', { name: excluded })).toHaveCount(0);
+  for (const excluded of [
+    listedPath,
+    `${listedPath} / Sub ${made.unique}`,
+    `${listedPath} / Sub ${made.unique} / Inner ${made.unique}`,
+  ])
+    await expect(folderTargets.getByRole('option', exactly(excluded))).toHaveCount(0);
   // The top is somewhere a folder can go.
   await expect(folderTargets.getByRole('option', { name: 'Shared', exact: true })).toHaveCount(1);
-  await expect(folderTargets.getByRole('option', { name: 'My workspace' })).toHaveCount(1);
+  await expect(folderTargets.getByRole('option', exactly('My workspace'))).toHaveCount(1);
 
   // Rename, from the menu, renames in place.
   await chartRow.getByRole('button', { name: `Actions for A typed ${made.unique}` }).click();

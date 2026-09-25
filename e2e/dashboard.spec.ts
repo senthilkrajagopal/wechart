@@ -1378,7 +1378,9 @@ test('a settings save that fails keeps the page, the entry and the reason', asyn
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: `Settings ${unique}` })).toBeVisible();
   await page.getByRole('button', { name: 'Dashboard settings' }).click();
-  const name = page.getByLabel('Name');
+  // Exactly: the Folder select's name takes in its options, and a folder
+  // another test renamed ("Renamed …") holds the word too.
+  const name = page.getByLabel('Name', { exact: true });
   await name.fill(`Renamed ${unique}`);
 
   // Someone else saves first, so ours is the stale one that 409s.

@@ -81,8 +81,10 @@ describe('folder contents (AC-017)', () => {
   it('carries a machine-readable timestamp alongside the shown one', () => {
     render(<FolderContents items={items} />);
 
-    const time = within(screen.getByTestId('item-d1')).getByText(/2026|9\/19/);
+    const time = within(screen.getByTestId('item-d1')).getByText(/^Sep 19(, 2026)?$/);
     expect(time.closest('time')?.getAttribute('datetime')).toBe('2026-09-19T12:00:00.000Z');
+    // The prototype's short date, the moment in full on hover (recheck-shell-explore F19).
+    expect(time.closest('time')?.getAttribute('title')).toContain('2026');
   });
 
   it('opens an item when its name is activated', async () => {
@@ -92,6 +94,18 @@ describe('folder contents (AC-017)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Revenue' }));
 
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'd1' }));
+  });
+
+  it('opens an item from anywhere on its row, but not from its menu (recheck-shell-explore N11)', async () => {
+    const onOpen = vi.fn();
+    render(<FolderContents items={items} onOpen={onOpen} onRename={vi.fn()} />);
+
+    await userEvent.click(within(rowFor('d1')).getAllByRole('cell')[0] as HTMLElement);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'd1' }));
+
+    await userEvent.click(within(rowFor('d1')).getByRole('button', { name: /^Actions for / }));
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
   it('says the folder is empty rather than rendering a headers-only table', () => {
@@ -134,7 +148,11 @@ describe('keyboard navigation (AC-024)', () => {
 
     await userEvent.keyboard('{ArrowDown}');
     expect(document.activeElement).toBe(rowFor('c1'));
-    expect(rowFor('c1').getAttribute('aria-selected')).toBe('true');
+    // The selection is the row in the tab order — not `aria-selected`, which
+    // a plain table's rows do not take (recheck-shell-explore F27).
+    expect(rowFor('c1').getAttribute('tabindex')).toBe('0');
+    expect(rowFor('d1').getAttribute('tabindex')).toBe('-1');
+    expect(rowFor('c1').hasAttribute('aria-selected')).toBe(false);
 
     await userEvent.keyboard('{ArrowUp}');
     expect(document.activeElement).toBe(rowFor('d1'));
@@ -328,7 +346,26 @@ describe("the contents' columns and row menu (AC-193)", () => {
     const offered = within(within(rowFor('top')).getByRole('combobox'))
       .getAllByRole('option')
       .map((option) => option.textContent);
-    expect(offered).toEqual(['Move to…', 'Home', 'Sub', 'Inner', 'Elsewhere']);
+    // Each by its path: two folders may share a name (recheck-shell-explore F16).
+    expect(offered).toEqual([
+      'Move to…',
+      'Shared / Home',
+      'Shared / Home / Sub',
+      'Shared / Home / Sub / Inner',
+      'Shared / Elsewhere',
+    ]);
+  });
+
+  it('offers a folder its sibling folders (recheck-shell-explore N17)', async () => {
+    const home: CatalogItem = { ...listed[0]!, id: 'home', title: 'Home', folderId: 'root' };
+    render(<FolderContents items={[home]} folders={folders} onMove={vi.fn()} />);
+
+    await chooseFromMenu(rowFor('home'), 'Home', 'Move to…');
+    const offered = within(within(rowFor('home')).getByRole('combobox'))
+      .getAllByRole('option')
+      .map((option) => option.textContent);
+    // Not the folder it is in, itself or what is beneath it; its sibling, yes.
+    expect(offered).toEqual(['Move to…', 'Shared / Elsewhere']);
   });
 
   it('shows no rename or move control on a row until its menu is opened', () => {
@@ -350,9 +387,15 @@ describe("the contents' columns and row menu (AC-193)", () => {
     const offered = within(list)
       .getAllByRole('option')
       .map((option) => option.textContent);
-    expect(offered).toEqual(['Move to…', 'Shared', 'Sub', 'Inner', 'Elsewhere']);
+    expect(offered).toEqual([
+      'Move to…',
+      'Shared',
+      'Shared / Home / Sub',
+      'Shared / Home / Sub / Inner',
+      'Shared / Elsewhere',
+    ]);
 
-    await userEvent.selectOptions(list, 'Elsewhere');
+    await userEvent.selectOptions(list, 'Shared / Elsewhere');
     expect(onMove).toHaveBeenCalledWith(expect.objectContaining({ id: 'auto' }), 'elsewhere');
   });
 
@@ -363,7 +406,7 @@ describe("the contents' columns and row menu (AC-193)", () => {
     const offered = within(within(rowFor('sub')).getByRole('combobox'))
       .getAllByRole('option')
       .map((option) => option.textContent);
-    expect(offered).toEqual(['Move to…', 'Shared', 'Elsewhere']);
+    expect(offered).toEqual(['Move to…', 'Shared', 'Shared / Elsewhere']);
   });
 
   it('puts the Move list away with Escape, back on the row menu', async () => {

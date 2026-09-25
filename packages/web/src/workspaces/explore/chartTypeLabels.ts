@@ -8,18 +8,24 @@ import { CHART_TYPE_NAMES } from '@wechart/core';
 export const CHART_TYPE_LABEL = CHART_TYPE_NAMES;
 
 /**
- * What a listed chart's Type column says (AC-193): its saved type; "Automatic"
- * when the recommender picks it as it is drawn, which depends on the rows it
- * returns and so cannot be named without querying; "Incomplete" when it has
- * no fields to draw — the prototype's word. A stored type this build does not
- * know is shown as stored rather than hidden.
+ * What a listed chart's Type column says (AC-193): its saved type; where the
+ * recommender picks it, what it was drawn as when saved — "KPI · auto", as
+ * its own page says (T243) — or "Automatic" for one saved before that was
+ * recorded; "Incomplete" when it has no fields to draw — the prototype's
+ * word. A stored type this build does not know is shown as stored rather
+ * than hidden.
  */
 export function chartTypeText(chart: {
   readonly chartType?: string | null;
+  readonly drawnAs?: string | null;
   readonly hasFields?: boolean;
 }): string {
-  const { chartType } = chart;
-  if (chartType !== null && chartType !== undefined && chartType !== '')
-    return (CHART_TYPE_LABEL as Readonly<Record<string, string>>)[chartType] ?? chartType;
-  return chart.hasFields === true ? 'Automatic' : 'Incomplete';
+  const named = (type: string) =>
+    (CHART_TYPE_LABEL as Readonly<Record<string, string>>)[type] ?? type;
+  const { chartType, drawnAs } = chart;
+  if (chartType !== null && chartType !== undefined && chartType !== '') return named(chartType);
+  if (chart.hasFields !== true) return 'Incomplete';
+  return drawnAs !== null && drawnAs !== undefined && drawnAs !== ''
+    ? `${named(drawnAs)} · auto`
+    : 'Automatic';
 }
