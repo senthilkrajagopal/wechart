@@ -9,12 +9,16 @@ import { checkScaffold } from './scaffoldCheck';
  * unreported (research/cube/introspection-api.md, "Silent losses"). What Cube
  * does not say, wechart finds by reading the file against the table.
  */
-const column = (name: string, rawType = 'integer') => ({ name, rawType });
+const column = (name: string, rawType = 'integer', primaryKey = false) => ({
+  name,
+  rawType,
+  primaryKey,
+});
 
 describe('what a generated cube lost without saying so', () => {
   it('names a column whose member another column’s took, as Cube leaves it unsaid', () => {
     const checked = checkScaffold(
-      [column('id'), column('Amount', 'numeric'), column('amount', 'numeric')],
+      [column('id', 'integer', true), column('Amount', 'numeric'), column('amount', 'numeric')],
       {
         content: [
           'cubes:',
@@ -38,6 +42,7 @@ describe('what a generated cube lost without saying so', () => {
     expect(checked).toEqual({
       unmappedColumns: [{ name: 'Amount', rawType: 'numeric', reason: 'member_name_taken' }],
       countMeasure: true,
+      unmarkedKeys: [],
     });
   });
 
@@ -60,7 +65,7 @@ describe('what a generated cube lost without saying so', () => {
       ].join('\n'),
       unmappedColumns: [],
     });
-    expect(checked).toEqual({ unmappedColumns: [], countMeasure: true });
+    expect(checked).toEqual({ unmappedColumns: [], countMeasure: true, unmarkedKeys: [] });
   });
 
   it('keeps Cube’s own reasons, and says when a column’s sum took the count’s name', () => {
@@ -83,16 +88,47 @@ describe('what a generated cube lost without saying so', () => {
     expect(checked).toEqual({
       unmappedColumns: [{ name: '_loaded_at', rawType: 'date', reason: 'underscore_prefix' }],
       countMeasure: false,
+      unmarkedKeys: [],
     });
   });
 
-  it('leaves a file it cannot read as Cube said it', () => {
+  /**
+   * T145's review: Cube writes a time-typed key twice under one name, as a
+   * key and as a time, and keeps the time — so the cube has no primary key,
+   * which a join to it needs (research, "Silent losses").
+   */
+  it('names a primary key column the cube no longer marks as its key', () => {
+    const checked = checkScaffold(
+      [column('at', 'timestamp with time zone', true), column('venue', 'text')],
+      {
+        content: [
+          'cubes:',
+          '  - name: ticks',
+          '    dimensions:',
+          '      - name: venue',
+          '        sql: venue',
+          '        type: string',
+          '      - name: at',
+          '        sql: at',
+          '        type: time',
+          '    measures:',
+          '      - name: count',
+          '        type: count',
+        ].join('\n'),
+        unmappedColumns: [],
+      },
+    );
+    expect(checked).toEqual({ unmappedColumns: [], countMeasure: true, unmarkedKeys: ['at'] });
+  });
+
+  it('says it could not check a file it cannot read, keeping what Cube said', () => {
     const unmappedColumns = [
       { name: 'store_id', rawType: 'integer', reason: 'numeric_not_measure' },
     ];
-    expect(checkScaffold([column('store_id')], { content: ': : :', unmappedColumns })).toEqual({
-      unmappedColumns,
-      countMeasure: true,
-    });
+    for (const content of [': : :', 'cubes: []'])
+      expect(checkScaffold([column('store_id')], { content, unmappedColumns }), content).toEqual({
+        unmappedColumns,
+        unchecked: true,
+      });
   });
 });

@@ -207,6 +207,136 @@ describe('generating cubes from a data source (AC-139)', () => {
     ).toBeTruthy();
   });
 
+  /** T145's review: a key Cube wrote as a time alone, and a file the API could not check. */
+  it('says when a key column is no longer the cube’s key, and when a file could not be checked', async () => {
+    api({
+      cubes: [
+        {
+          cube: 'chrome_stores',
+          fileName: 'chrome_stores.yml',
+          content: STORES,
+          unmappedColumns: [],
+          countMeasure: true,
+          unmarkedKeys: ['opened_at'],
+        },
+        {
+          cube: 'chrome_visits',
+          fileName: 'chrome_visits.yml',
+          content: VISITS,
+          unmappedColumns: [],
+          unchecked: true,
+        },
+      ],
+    });
+    render(<GenerateCubes existing={[]} onClose={vi.fn()} onPublished={vi.fn()} />);
+    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
+    await userEvent.selectOptions(
+      await within(dialog).findByRole('combobox', { name: 'Schema' }),
+      'generate',
+    );
+    const tables = await within(dialog).findByRole('table', { name: 'Tables in generate' });
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_visits' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 2 cubes' }));
+
+    const stores = await within(dialog).findByRole('region', { name: 'cubes/chrome_stores.yml' });
+    expect(
+      within(stores).getByText(
+        'Not marked as the cube’s primary key: opened_at. A join to this cube needs one.',
+      ),
+    ).toBeTruthy();
+    const visits = within(dialog).getByRole('region', { name: 'cubes/chrome_visits.yml' });
+    expect(within(visits).queryByText('Every column is in the cube.')).toBeNull();
+    expect(
+      within(visits).getByText(
+        'wechart could not read this file to check it against its table: only Cube’s list of what it left out is shown.',
+      ),
+    ).toBeTruthy();
+  });
+
+  /** T145's review: the Next page, and a type, are asked of the API as chosen. */
+  it('asks for the next page, and for a type from the first page', async () => {
+    const asked = api();
+    const fetchStub = vi.mocked(fetch);
+    const answer = fetchStub.getMockImplementation();
+    fetchStub.mockImplementation(async (input, init) => {
+      if (!String(input).includes('/tables?'))
+        return (await answer?.(input, init)) ?? new Response('{}');
+      asked.push({ url: String(input) });
+      return new Response(JSON.stringify({ tables: [], total: 120 }), { status: 200 });
+    });
+    render(<GenerateCubes existing={[]} onClose={vi.fn()} onPublished={vi.fn()} />);
+    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
+    await userEvent.selectOptions(
+      await within(dialog).findByRole('combobox', { name: 'Schema' }),
+      'generate',
+    );
+    expect(await within(dialog).findByText('120 tables · showing 1–50')).toBeTruthy();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Next' }));
+    expect(await within(dialog).findByText('120 tables · showing 51–100')).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Views' }));
+    expect(await within(dialog).findByText('120 tables · showing 1–50')).toBeTruthy();
+
+    expect(asked.map((each) => each.url).filter((url) => url.includes('/tables?'))).toEqual([
+      '/api/introspection/sources/default/tables?schema=generate&limit=50&offset=0',
+      '/api/introspection/sources/default/tables?schema=generate&limit=50&offset=50',
+      '/api/introspection/sources/default/tables?schema=generate&type=view&limit=50&offset=0',
+    ]);
+  });
+
+  /** T145's review: an answer for a table looked at before shows under no other's name. */
+  it('shows the columns of the table last looked at, whichever answer comes last', async () => {
+    api();
+    const fetchStub = vi.mocked(fetch);
+    const answer = fetchStub.getMockImplementation();
+    const pending = new Map<string, (response: Response) => void>();
+    fetchStub.mockImplementation(async (input, init) => {
+      if (!String(input).endsWith('/columns'))
+        return (await answer?.(input, init)) ?? new Response('{}');
+      const table = (JSON.parse(String(init?.body)) as { tables: { table: string }[] }).tables[0]
+        ?.table;
+      return new Promise<Response>((resolve) => pending.set(table ?? '', resolve));
+    });
+    const columnsOf = (table: string, column: string) =>
+      new Response(
+        JSON.stringify({
+          tables: [
+            {
+              schema: 'generate',
+              name: table,
+              columns: [
+                {
+                  name: column,
+                  rawType: 'text',
+                  type: 'string',
+                  primaryKey: false,
+                  foreignKeys: [],
+                },
+              ],
+            },
+          ],
+        }),
+      );
+    render(<GenerateCubes existing={[]} onClose={vi.fn()} onPublished={vi.fn()} />);
+    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
+    await userEvent.selectOptions(
+      await within(dialog).findByRole('combobox', { name: 'Schema' }),
+      'generate',
+    );
+    const tables = await within(dialog).findByRole('table', { name: 'Tables in generate' });
+    await userEvent.click(within(tables).getByRole('button', { name: 'Columns of chrome_stores' }));
+    await userEvent.click(within(tables).getByRole('button', { name: 'Columns of chrome_visits' }));
+
+    pending.get('chrome_visits')?.(columnsOf('chrome_visits', 'visited_at'));
+    const columns = await within(dialog).findByRole('table', { name: 'Columns of chrome_visits' });
+    expect(await within(columns).findByText('visited_at')).toBeTruthy();
+    pending.get('chrome_stores')?.(columnsOf('chrome_stores', 'city'));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(within(columns).queryByText('city')).toBeNull();
+    expect(within(columns).getByText('visited_at')).toBeTruthy();
+  });
+
   /**
    * T276 / AC-249: IF a cube generated from a data source has the name or file
    * name of a cube or file already in the model store, THEN THE SYSTEM SHALL

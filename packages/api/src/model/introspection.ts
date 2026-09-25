@@ -75,12 +75,21 @@ export function registerIntrospection(
         await new Promise((resolve) => setTimeout(resolve, retryMs));
         continue;
       }
-      if (status === 403)
+      // Cube's 403s: a missing scope, or a token it would not take (a secret
+      // it doesn't share, a clock past the token's minute) — T145's review.
+      if (status === 403 && typeof error === 'string' && /^API scope is missing/.test(error))
         return {
           status: 503,
           body: {
             error:
               'Cube did not let wechart browse its data sources: its introspection scope is not granted (infra/cube/cube.js).',
+          },
+        };
+      if (status === 403)
+        return {
+          status: 502,
+          body: {
+            error: `Cube refused wechart’s token: ${typeof error === 'string' ? error : 'no reason given'}`,
           },
         };
       if (isWait(status, error))
@@ -101,6 +110,15 @@ export function registerIntrospection(
 
   const send = (reply: FastifyReply, { status, body }: Answer) => reply.status(status).send(body);
   const sourcePath = (source: string) => `${base}/${encodeURIComponent(source)}`;
+  /**
+   * `.` and `..` are no data source's name, and `encodeURIComponent` leaves
+   * them as they are: fetch would resolve them out of the source's routes
+   * (T145's review). Cube's own word for a name it doesn't know.
+   */
+  const unknownSource = (reply: FastifyReply, source: string) =>
+    source === '.' || source === '..'
+      ? reply.status(404).send({ error: `Unknown data source: '${source}'` })
+      : undefined;
 
   app.get('/api/introspection/sources', async (_request, reply) =>
     send(reply, await askCube(base)),
@@ -108,17 +126,25 @@ export function registerIntrospection(
 
   app.get('/api/introspection/sources/:source/schemas', async (request, reply) => {
     const { source } = request.params as { source: string };
-    return send(reply, await askCube(`${sourcePath(source)}/schemas${queryOf(request.url)}`));
+    return (
+      unknownSource(reply, source) ??
+      send(reply, await askCube(`${sourcePath(source)}/schemas${queryOf(request.url)}`))
+    );
   });
 
   app.get('/api/introspection/sources/:source/tables', async (request, reply) => {
     const { source } = request.params as { source: string };
-    return send(reply, await askCube(`${sourcePath(source)}/tables${queryOf(request.url)}`));
+    return (
+      unknownSource(reply, source) ??
+      send(reply, await askCube(`${sourcePath(source)}/tables${queryOf(request.url)}`))
+    );
   });
 
   for (const route of ['columns', 'scaffold'] as const)
     app.post(`/api/introspection/sources/:source/${route}`, async (request, reply) => {
       const { source } = request.params as { source: string };
+      const refused = unknownSource(reply, source);
+      if (refused !== undefined) return refused;
       const tables = tablesOf(request.body);
       if (tables === undefined)
         return reply
@@ -158,7 +184,13 @@ function checked(scaffold: unknown, columns: unknown): unknown {
       const table = tables.find(
         (each) => each.schema === cube.table?.schema && each.name === cube.table.table,
       );
-      return { ...cube, ...checkScaffold(table?.columns ?? [], cube) };
+      // A cube whose table isn't among the columns read can't be checked, and says so.
+      return {
+        ...cube,
+        ...(table === undefined
+          ? { unmappedColumns: cube.unmappedColumns, unchecked: true }
+          : checkScaffold(table.columns, cube)),
+      };
     }),
   };
 }
@@ -166,4 +198,5 @@ function checked(scaffold: unknown, columns: unknown): unknown {
 interface Column {
   readonly name: string;
   readonly rawType: string;
+  readonly primaryKey?: boolean;
 }

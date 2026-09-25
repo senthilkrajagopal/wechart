@@ -28,7 +28,11 @@ services:
       retries: 30
       start_period: 5s
 
-  # The warehouse Cube reads. Seeded once from infra/sample-db/init.sql.
+  # The warehouse Cube reads. Seeded once, on an empty volume, from every
+  # infra/sample-db/*.sql in name order: generate.sql (tables to generate cubes
+  # from, T145) and init.sql. A volume seeded before a script existed doesn't
+  # have its tables: run it with `docker exec -i wechart-sample-db psql -U
+  # sample -d sample < infra/sample-db/<script>.sql`.
   sample-db:
     image: postgres:18-alpine
     container_name: wechart-sample-db

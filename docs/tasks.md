@@ -2447,7 +2447,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - `cube.js`'s `contextToApiScopes` grants `introspection` for that claim alone, and not with `wechartDraft`;
     - the dev Cube answers `/v1/introspection/data-sources` for the API's token and 403s a query token (AC-250).
   - Depends on: `docs/research/cube/introspection-api.md`
-- [x] T145 (AC-139) Generate cubes from a data source's tables
+- [x] T145 (AC-139, AC-250) Generate cubes from a data source's tables
   - Done 2026-09-25. **AC-139 and AC-250 are ticked.**
     - **AC-139 is shown by `e2e/generate-cubes.spec.ts`** against the compose Cube (the user's fork), in Chrome, Firefox and Safari. Each browser project works on its own pair of tables in the sample database's `generate` schema (`infra/sample-db/generate.sql`), because cube names are global and the projects run at the same time.
       - It browses the source, then the schema, then a search.
@@ -2476,6 +2476,22 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - "Generate N cubes" shows each `cubes/<file>` with its YAML and "Columns left out";
       - "Publish N cubes" goes through `publishModel` (validate, then publish), then offers "Open cubes/<file>" buttons.
     - **Left for T276:** clashes with the model store. Nothing yet refuses a generated name or file already in the store (AC-249).
+    - **The planned e2e** named three tables. The test uses a pair per browser project, stores and visits, which is enough for a join between generated cubes.
+  - **Review 2026-09-25 (PASS; bugs fixed once):**
+    - **A time-typed primary key** loses `primary_key`: Cube writes it as a key and again as a time, and keeps the time. `scaffoldCheck` now names the table's key columns that no dimension marks, as `unmarkedKeys`, and the dialog says "Not marked as the cube's primary key: … A join to this cube needs one."
+    - **A file the check can't read** as one cube, or whose table isn't among the columns read, is `unchecked`. The dialog says so instead of "Every column is in the cube.".
+      - Quote marks are no longer un-doubled, since the base driver's `quoteIdentifier` doesn't double them.
+      - Null list items no longer throw.
+    - **Checked against the real fork:** `generate.every_loss` in `generate.sql` has a time-typed key, `"Amount"` beside `amount`, a `count` column and `"Visit Count"`. The scaffold drops the first three without saying so, and writes `sql: "{CUBE}.\"Visit Count\""`, as the unit test assumed. The e2e "what Cube's scaffold drops unsaid, wechart says" shows the dialog saying all three.
+    - **Stale answers dropped:** looking at one table's columns, then another's, no longer shows the first answer under the second's name. A generation answered after another, or after the data source changed, is dropped. Changing the source clears the columns, the cubes and the publish state.
+    - **A 403 is a missing scope only when Cube says "API scope is missing".** Any other 403, such as "Invalid token", answers 502 "Cube refused wechart's token: <Cube's reason>".
+    - **A data source named `.` or `..` answers 404 before Cube is asked.** `encodeURIComponent` leaves them as they are, and fetch would resolve them out of the source's routes. The test goes over a socket with a raw path, because `inject` and URL strings resolve dots first.
+    - **Tests the reviewer asked for:** the Next page and a type filter. Both already worked.
+    - **Left as they are** (nits):
+      - `introspect` has no abort and no timeout of its own;
+      - at 30 retries of Cube's roughly 10-second wait, a scaffold can take several minutes.
+    - **Asked of the user, not decided here:** a table with a numeric column named `count` gets no count measure, because Cube's sum takes its name. The dialog says so, but a cube with a count would mean changing Cube's output (renaming the sum, or adding a count under another name).
+    - **Small decisions taken, with minimal impact** (per the user's standing instruction): the hardening (the introspection token gets `['introspection']` alone, and the defaults never carry it), and the retry bound of 30.
   - **Deferred 2026-09-21 with F18**, under the user's rule "for requirements that dont work with cube defer". It depended on T165, the connection test. Reading a source's tables went through Cube's drivers called from wechart's server, as a test does, and not through a Cube API: `research/cube-capabilities.md` §6 has "Schema and table browsing: Core (driver methods; dev-only route)".
   - **Re-planned 2026-09-25 `[R10]`**, on the introspection API in the user's Cube fork (`research/cube/introspection-api.md`). It no longer depends on T165.
     - The API proxies the five endpoints under `/api/introspection/…`, signing the introspection token itself (T275). It retries Cube's "Continue wait".
@@ -4445,7 +4461,7 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
 | AC-237 | T270       | AC-238 | T270 | AC-239 | T268 | AC-240 | T269       |
 | AC-241 | T271       | AC-242 | T271 | AC-243 | T271 | AC-244 | T272       |
 | AC-245 | T273       | AC-246 | T266 | AC-247 | T267 | AC-248 | T274       |
-| AC-249 | T276       | AC-250 | T275 |        |      |        |            |
+| AC-249 | T276       | AC-250 | T275, T145 |        |      |        |            |
 
 AC-139 is covered by T145 and T275 (the fork's Cube and its scope, R10).
 

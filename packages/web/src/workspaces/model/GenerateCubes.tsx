@@ -46,6 +46,10 @@ interface Generated {
   readonly unmappedColumns: readonly { name: string; rawType: string; reason: string }[];
   /** False when a column's measure took the count's name (the API's check). */
   readonly countMeasure?: boolean;
+  /** The table's key columns no dimension marks `primary_key` (the API's check). */
+  readonly unmarkedKeys?: readonly string[];
+  /** The API could not read the file to check it: Cube's list alone is shown. */
+  readonly unchecked?: boolean;
 }
 
 type Asked<T> =
@@ -230,14 +234,23 @@ export function GenerateCubes({
     };
   }, []);
 
-  /** A new question about the tables starts from the first page, and forgets what was made. */
+  /** A new question about the tables starts from the first page. */
   const narrow = (change: () => void) => {
     change();
     setOffset(0);
   };
 
+  /**
+   * The latest look at columns and the latest generation, each by its turn:
+   * an answer to an earlier one, or to another data source's, is dropped
+   * (T145's review).
+   */
+  const turns = useRef({ look: 0, generate: 0 });
+
   const lookAt = (table: TableRow) => {
     if (sourceUrl === undefined) return;
+    const turn = (turns.current.look += 1);
+    const current = () => turns.current.look === turn;
     setPeek(table);
     setColumns({ kind: 'run' });
     askApi<{ tables: { columns: Column[] }[] }>(`${sourceUrl}/columns`, {
@@ -246,19 +259,22 @@ export function GenerateCubes({
       body: JSON.stringify({ tables: [{ schema: table.schema, table: table.name }] }),
     }).then(
       (answer) => {
-        setColumns({ kind: 'ok', value: answer.tables[0]?.columns ?? [] });
+        if (current()) setColumns({ kind: 'ok', value: answer.tables[0]?.columns ?? [] });
       },
       (error: unknown) => {
-        setColumns({
-          kind: 'err',
-          message: error instanceof Error ? error.message : 'Its columns could not be read.',
-        });
+        if (current())
+          setColumns({
+            kind: 'err',
+            message: error instanceof Error ? error.message : 'Its columns could not be read.',
+          });
       },
     );
   };
 
   const generate = () => {
     if (sourceUrl === undefined || chosen.size === 0) return;
+    const turn = (turns.current.generate += 1);
+    const current = () => turns.current.generate === turn;
     setGenerated({ kind: 'run' });
     setPublished({ kind: 'idle' });
     askApi<{ cubes: Generated[] }>(`${sourceUrl}/scaffold`, {
@@ -269,13 +285,14 @@ export function GenerateCubes({
       }),
     }).then(
       (answer) => {
-        setGenerated({ kind: 'ok', value: answer.cubes });
+        if (current()) setGenerated({ kind: 'ok', value: answer.cubes });
       },
       (error: unknown) => {
-        setGenerated({
-          kind: 'err',
-          message: error instanceof Error ? error.message : 'The cubes could not be generated.',
-        });
+        if (current())
+          setGenerated({
+            kind: 'err',
+            message: error instanceof Error ? error.message : 'The cubes could not be generated.',
+          });
       },
     );
   };
@@ -333,10 +350,16 @@ export function GenerateCubes({
               <select
                 value={source ?? ''}
                 onChange={(event) => {
+                  // Another source: nothing of this one's stays, nor lands later.
+                  turns.current.look += 1;
+                  turns.current.generate += 1;
                   setSource(event.target.value);
                   setSchema('');
                   setChosen(new Map());
+                  setPeek(undefined);
+                  setColumns({ kind: 'idle' });
                   setGenerated({ kind: 'idle' });
+                  setPublished({ kind: 'idle' });
                 }}
               >
                 {sources.value.dataSources.map((each) => (
@@ -539,8 +562,16 @@ export function GenerateCubes({
               >
                 <h3>{pathOf(cube)}</h3>
                 <pre data-testid="generated-yaml">{cube.content}</pre>
+                {cube.unchecked === true ? (
+                  <p>
+                    wechart could not read this file to check it against its table: only Cube’s list
+                    of what it left out is shown.
+                  </p>
+                ) : null}
                 {cube.unmappedColumns.length === 0 ? (
-                  <p>Every column is in the cube.</p>
+                  cube.unchecked === true ? null : (
+                    <p>Every column is in the cube.</p>
+                  )
                 ) : (
                   <>
                     <p>Left out of the cube:</p>
@@ -557,6 +588,12 @@ export function GenerateCubes({
                 {cube.countMeasure === false ? (
                   <p>No count measure: a column’s measure took its name, count.</p>
                 ) : null}
+                {(cube.unmarkedKeys ?? []).length === 0 ? null : (
+                  <p>
+                    Not marked as the cube’s primary key: {(cube.unmarkedKeys ?? []).join(', ')}. A
+                    join to this cube needs one.
+                  </p>
+                )}
                 {(clashes.get(pathOf(cube)) ?? []).length === 0 ? null : (
                   <ul aria-label="Clashes with the model" className="generate-cubes__clashes">
                     {(clashes.get(pathOf(cube)) ?? []).map((clash) => (

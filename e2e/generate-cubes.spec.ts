@@ -119,6 +119,37 @@ test('a data source’s tables become cubes, each column mapped or said to be le
 });
 
 /**
+ * AC-139's `a column is dropped without saying so`, where Cube's scaffold
+ * drops it unsaid (research, "Silent losses"; T145's review):
+ * `generate.every_loss` has a time-typed key, `"Amount"` beside `amount`, a
+ * `count` column and a quoted `"Visit Count"` (infra/sample-db/generate.sql).
+ * The real Cube writes none of the first three as it should, and says nothing;
+ * wechart says each.
+ */
+test('what Cube’s scaffold drops unsaid, wechart says', async ({ page }) => {
+  await page.goto('/model');
+  await page.getByRole('button', { name: 'Generate cubes' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Generate cubes from a data source' });
+  await dialog.getByLabel('Schema').selectOption('generate');
+  await dialog.getByLabel('Find a table').fill('every_loss');
+  const tables = dialog.getByRole('table', { name: 'Tables in generate' });
+  await tables.getByRole('checkbox', { name: 'every_loss' }).check();
+  await dialog.getByRole('button', { name: 'Generate 1 cube' }).click();
+
+  const cube = dialog.getByRole('region', { name: 'cubes/every_loss.yml' });
+  await expect(cube.getByTestId('generated-yaml')).toContainText('sql: "{CUBE}.\\"Visit Count\\""');
+  await expect(cube.getByRole('list', { name: 'Columns left out' })).toHaveText(
+    'Amount (numeric): its member’s name is another column’s, and Cube kept only one',
+  );
+  await expect(
+    cube.getByText('No count measure: a column’s measure took its name, count.'),
+  ).toBeVisible();
+  await expect(
+    cube.getByText('Not marked as the cube’s primary key: at. A join to this cube needs one.'),
+  ).toBeVisible();
+});
+
+/**
  * T276 / AC-249: IF a cube generated from a data source has the name or file
  * name of a cube or file already in the model store, THEN THE SYSTEM SHALL
  * refuse to save it, name the existing cube or file, and leave the existing

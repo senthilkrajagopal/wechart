@@ -54,3 +54,19 @@ BEGIN
   END LOOP;
 END
 $$;
+
+-- What Cube's scaffold loses without saying so (research, "Silent losses";
+-- T145's review), for wechart to say: generated, never published, so one
+-- table serves every browser project.
+--   at            a time-typed primary key: written as a key and as a time,
+--                 and kept as the time alone
+--   "Amount"      a member name another column's takes ("amount" follows it)
+--   count         named like a measure: its sum takes the count's name
+--   "Visit Count" quoted in the file as {CUBE}."Visit Count": a sum, read
+CREATE TABLE generate.every_loss (
+  at             timestamptz PRIMARY KEY,
+  "Amount"       numeric(10, 2) NOT NULL,
+  amount         numeric(10, 2) NOT NULL,
+  count          integer NOT NULL,
+  "Visit Count"  integer NOT NULL
+);

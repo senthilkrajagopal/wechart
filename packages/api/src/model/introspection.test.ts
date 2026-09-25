@@ -111,7 +111,8 @@ describe('browsing a data source through wechart (AC-139)', () => {
           fileName: 'chrome_stores.yml',
           content: 'cubes: []',
           unmappedColumns: [],
-          countMeasure: true,
+          // No cube in it to check against the table, and said so (T145's review).
+          unchecked: true,
         },
       ],
     });
@@ -253,7 +254,7 @@ describe('browsing a data source through wechart (AC-139)', () => {
         ? json({ error: "Unknown data source: 'nowhere'" }, 404)
         : path.endsWith('/columns')
           ? json({ error: "The 'default' data source has no table public.ghost" }, 404)
-          : new Response('', { status: 403 }),
+          : json({ error: 'API scope is missing: introspection' }, 403),
     );
 
     const unknown = await app.inject({ url: '/api/introspection/sources/nowhere/schemas' });
@@ -278,6 +279,43 @@ describe('browsing a data source through wechart (AC-139)', () => {
           'Cube did not let wechart browse its data sources: its introspection scope is not granted (infra/cube/cube.js).',
       },
     ]);
+    await app.close();
+  });
+
+  /** T145's review: a 403 is a missing scope only when Cube says so. */
+  it('gives Cube’s reason when it refuses wechart’s token for another cause than the scope', async () => {
+    const { app } = cubeAnswering(() => json({ error: 'Invalid token' }, 403));
+
+    const refused = await app.inject({ url: '/api/introspection/sources' });
+    expect([refused.statusCode, refused.json()]).toEqual([
+      502,
+      { error: 'Cube refused wechart’s token: Invalid token' },
+    ]);
+    await app.close();
+  });
+
+  /** T145's review: `..` would climb out of the data source's routes once fetch resolves it. */
+  it('asks Cube of no data source named . or ..', async () => {
+    const { app, sent } = cubeAnswering(() => json({ tables: [], total: 0 }));
+    // Over a socket: `inject` resolves dots in the URL itself, as an HTTP server does not.
+    const { port } = new URL(await app.listen({ port: 0, host: '127.0.0.1' }));
+    const { request } = await import('node:http');
+    // A raw path: a URL string would be parsed, and its dots resolved, before sending.
+    const statusOf = (path: string) =>
+      new Promise<number | undefined>((resolve, reject) => {
+        request({ host: '127.0.0.1', port: Number(port), path }, (response) => {
+          response.resume();
+          resolve(response.statusCode);
+        })
+          .on('error', reject)
+          .end();
+      });
+
+    for (const source of ['%2E%2E', '%2e', '.%2E'])
+      expect(await statusOf(`/api/introspection/sources/${source}/tables?schema=x`), source).toBe(
+        404,
+      );
+    expect(sent).toEqual([]);
     await app.close();
   });
 
