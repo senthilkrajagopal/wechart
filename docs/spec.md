@@ -440,13 +440,13 @@ Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[researc
       Fails when: a published member is missing from the field list while Cube reports the new schema version.
 - [x] AC-138 WHEN the user opens the join editor for a cube, THE SYSTEM SHALL show the join graph with each relationship's direction and let the user add a join by choosing the target cube, the relationship and the condition.
       Fails when: the diagram omits a declared join, or shows a direction the model does not declare.
-- [ ] AC-139 WHEN the user generates cubes from a data source, THE SYSTEM SHALL browse that connection's schemas and tables and create a cube per selected table with its columns mapped to dimensions and a count measure (`[R7]`).
+- [x] AC-139 WHEN the user generates cubes from a data source, THE SYSTEM SHALL browse that connection's schemas and tables and create a cube per selected table with its columns mapped to dimensions and a count measure (`[R7]`).
       Fails when: a selected table produces no cube, or a column is dropped without saying so.
       > Deferred 2026-09-21 with F18, at the user's direction ("for requirements that dont work with cube defer"). Browsing a connection's tables is Cube's drivers called from wechart's server, not a Cube API (`research/cube-capabilities.md` §6).
       > **Un-deferred 2026-09-25 `[R10]`.** Browsing and generating go through the data-source introspection API in the user's Cube fork (`research/cube/introspection-api.md`). The generated YAML is shown with the columns Cube left unmapped and each one's reason, saved to wechart's model store, and published as any model change is (AC-136, AC-137).
 - [ ] AC-249 IF a cube generated from a data source has the name or file name of a cube or file already in the model store, THEN THE SYSTEM SHALL refuse to save it, name the existing cube or file, and leave the existing one unchanged (`[R10]`).
       Fails when: an existing model file changes, or a clashing cube is saved, or the refusal does not name what it clashes with.
-- [ ] AC-250 THE SYSTEM SHALL grant Cube's `introspection` scope only to the short-lived tokens its API signs to browse a data source and generate cubes, never to a draft's token or to any other request's token, and never to the browser (`[R10]`).
+- [x] AC-250 THE SYSTEM SHALL grant Cube's `introspection` scope only to the short-lived tokens its API signs to browse a data source and generate cubes, never to a draft's token or to any other request's token, and never to the browser (`[R10]`).
       Fails when: a token signed for a query, a publish or a draft is granted `introspection`, or a response to the browser carries a token that has it.
 - [x] AC-140 WHEN a model file uses Jinja, Python or JavaScript generation, THE SYSTEM SHALL open it read-only in the code view and say why it cannot be edited as a form.
       Fails when: such a file opens in an editable form, or gives no reason.

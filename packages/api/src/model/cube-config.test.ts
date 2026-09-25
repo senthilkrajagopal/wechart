@@ -125,10 +125,15 @@ describe('Cube’s configuration', () => {
     const config = load();
     const defaults = ['graphql', 'meta', 'data'];
 
+    // Introspection and nothing else: the token reads no model and loads no
+    // data (research/cube/introspection-api.md, "Two further hardening steps").
     expect(await config.contextToApiScopes({ wechartIntrospection: true }, defaults)).toEqual([
-      ...defaults,
       'introspection',
     ]);
+    // Nor do the defaults carry it, should CUBEJS_DEFAULT_API_SCOPES name it.
+    const named = [...defaults, 'introspection'];
+    expect(await config.contextToApiScopes(undefined, named)).toEqual([...defaults, 'jobs']);
+    expect(await config.contextToApiScopes({ wechartDraft: 'd1' }, named)).toEqual(defaults);
     // Every other token wechart signs: jobs as before, never introspection.
     expect(await config.contextToApiScopes({ wechartStore: STORE }, defaults)).toEqual([
       ...defaults,

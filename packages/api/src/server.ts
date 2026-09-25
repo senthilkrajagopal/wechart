@@ -22,6 +22,7 @@ import { MetaCache } from './cube/meta-cache';
 import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
 import { registerBuilds } from './jobs/build';
 import { registerSchedules } from './jobs/schedules';
+import { registerIntrospection } from './model/introspection';
 import type { Config } from './config';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, type ReferenceDocument } from './model/references';
@@ -49,6 +50,8 @@ export interface BuildOptions {
    */
   readonly healthFetch?: typeof fetch;
   readonly logger?: boolean;
+  /** How long before a "Continue wait" is asked again (T145); a second unless a test says. */
+  readonly introspectionRetryMs?: number;
 }
 
 /** One model file: its path under the model directory, and its text. */
@@ -156,6 +159,7 @@ export function buildServer({
   modelFiles,
   healthFetch,
   logger = false,
+  introspectionRetryMs,
 }: BuildOptions): FastifyInstance {
   const app = Fastify({ logger });
 
@@ -230,6 +234,12 @@ export function buildServer({
   registerBuilds(app, client);
   // With the model's files: a key's SQL is read there (T273's review).
   registerSchedules(app, client, modelFiles);
+  // A data source's catalog, through Cube's introspection API (T145, AC-139).
+  registerIntrospection(
+    app,
+    client,
+    introspectionRetryMs === undefined ? {} : { retryMs: introspectionRetryMs },
+  );
 
   /**
    * The charts and dashboards that use the members an edit changes, listed

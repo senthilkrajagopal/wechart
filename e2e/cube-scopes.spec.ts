@@ -46,6 +46,22 @@ test('the real Cube lets the API’s introspection token browse sources, and no 
     dataSource: 'default',
     dbType: 'postgres',
   });
+  // And that token does nothing else: it reads no model and loads no data
+  // (research/cube/introspection-api.md, "Two further hardening steps").
+  const token = { authorization: `Bearer ${sign({ wechartIntrospection: true })}` };
+  const meta = await request.get('http://localhost:54000/cubejs-api/v1/meta', { headers: token });
+  expect([meta.status(), await meta.json()]).toEqual([
+    403,
+    { error: 'API scope is missing: meta' },
+  ]);
+  const load = await request.get(
+    `http://localhost:54000/cubejs-api/v1/load?query=${encodeURIComponent(JSON.stringify({ measures: ['orders.count'] }))}`,
+    { headers: token },
+  );
+  expect([load.status(), await load.json()]).toEqual([
+    403,
+    { error: 'API scope is missing: data' },
+  ]);
   // A query's token, a store's, a draft's — and a draft claiming it too.
   for (const claims of [
     {},

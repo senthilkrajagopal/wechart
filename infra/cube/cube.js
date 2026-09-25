@@ -126,12 +126,15 @@ module.exports = {
   // only to the short-lived token wechart's API signs for it, which carries
   // `wechartIntrospection: true`: the scope reads the warehouse's whole
   // catalog. Never with a draft, and a previewed context can't claim it: the
-  // API strips every `wechart…` claim from one.
+  // API strips every `wechart…` claim from one. That token gets nothing else —
+  // no model, no data — and the defaults never carry it, though
+  // CUBEJS_DEFAULT_API_SCOPES is an unchecked list (research, "Two further
+  // hardening steps").
   contextToApiScopes: async (securityContext, defaultScopes) => {
-    if (securityContext && securityContext.wechartDraft !== undefined) return defaultScopes;
-    if (securityContext && securityContext.wechartIntrospection === true)
-      return [...defaultScopes, 'introspection'];
-    return [...defaultScopes, 'jobs'];
+    const defaults = defaultScopes.filter((scope) => scope !== 'introspection');
+    if (securityContext && securityContext.wechartDraft !== undefined) return defaults;
+    if (securityContext && securityContext.wechartIntrospection === true) return ['introspection'];
+    return [...defaults, 'jobs'];
   },
 
   // What the refresh worker builds rollups for: the mounted model, and each

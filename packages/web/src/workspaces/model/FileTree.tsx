@@ -28,13 +28,23 @@ export interface FileTreeProps {
   readonly unpublished?: ReadonlySet<string> | undefined;
   readonly onOpen: (path: string) => void;
   readonly onNew: (kind: 'cube' | 'view') => void;
+  /** Generate cubes from a data source's tables (T145, AC-139). */
+  readonly onGenerate?: (() => void) | undefined;
 }
 
 export function fileHref(path: string): string {
   return `/model/files/${encodeURIComponent(path)}`;
 }
 
-export function FileTree({ files, current, reported, unpublished, onOpen, onNew }: FileTreeProps) {
+export function FileTree({
+  files,
+  current,
+  reported,
+  unpublished,
+  onOpen,
+  onNew,
+  onGenerate,
+}: FileTreeProps) {
   // Each file read once for whether it parses, and whether Cube would take
   // what it says (AC-227), not on every render.
   const unparsed = useMemo(
@@ -73,6 +83,11 @@ export function FileTree({ files, current, reported, unpublished, onOpen, onNew 
         <button type="button" className="btn-sm" onClick={() => onNew('view')}>
           New view
         </button>
+        {onGenerate === undefined ? null : (
+          <button type="button" className="btn-sm" onClick={onGenerate}>
+            Generate cubes
+          </button>
+        )}
       </div>
       <div className="model-tree__body">
         {[...folders.entries()].map(([folder, inside]) => (

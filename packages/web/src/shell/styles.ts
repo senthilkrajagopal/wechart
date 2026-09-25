@@ -1593,6 +1593,47 @@ fieldset.model-field > legend {
   grid-template-columns: minmax(0, 1fr);
 }
 .dialog.view-query h3 { margin: 8px 0 0; font-size: var(--wc-text-sm-size); font-weight: 600; }
+/* Generate cubes (T145, AC-139): wide, bounded to the window and scrolling
+   inside, its actions kept in view at the foot — so Publish is reachable
+   however many cubes it shows. */
+.dialog.generate-cubes {
+  width: min(960px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+}
+.generate-cubes .dialog__actions {
+  position: sticky;
+  bottom: -16px;
+  margin: 0 -16px -16px;
+  padding: 8px 16px 16px;
+  border-top: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
+}
+.generate-cubes__where,
+.generate-cubes__filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.generate-cubes__where label,
+.generate-cubes__filters label { display: grid; gap: 4px; }
+.generate-cubes__filters fieldset { display: flex; gap: 12px; margin: 0; border: 0; padding: 0; }
+.generate-cubes__filters fieldset label { display: flex; align-items: center; gap: 4px; }
+.generate-cubes__list { max-height: 280px; overflow: auto; border: 1px solid var(--wc-border-subtle); border-radius: 6px; }
+.generate-cubes table { width: 100%; border-collapse: collapse; font-size: var(--wc-text-xs-size); }
+.generate-cubes th { text-align: left; padding: 4px 8px; color: var(--wc-text-secondary); }
+.generate-cubes td { padding: 4px 8px; border-top: 1px solid var(--wc-border-subtle); }
+.generate-cubes td label { display: flex; align-items: center; gap: 6px; }
+.generate-cubes__cube pre {
+  max-height: 240px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border-radius: 4px;
+  background: var(--wc-bg-raised);
+  font-family: var(--wc-font-mono, ui-monospace, monospace);
+  font-size: var(--wc-text-xs-size);
+}
+.generate-cubes__cube h3 { margin: 8px 0 4px; font-size: var(--wc-text-sm-size, 13px); }
+.generate-cubes__cube ul { margin: 4px 0 0; padding-left: 20px; color: var(--wc-text-secondary); }
+
 /* Copy › To dashboard (T271, AC-243): a search, the dashboards it finds as a
    list that scrolls within the dialog, and Copy and Close. */
 .copy-to-dashboard__search { display: grid; gap: 4px; }

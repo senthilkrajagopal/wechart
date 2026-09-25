@@ -6,6 +6,7 @@ import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { FileList, MODEL_FILES_QUERY } from './FileList';
+import { GenerateCubes } from './GenerateCubes';
 import { FileTree, fileHref } from './FileTree';
 import { objectsOf } from './objects';
 import { CubeForm } from './form/CubeForm';
@@ -918,6 +919,8 @@ export function ModelFilePage({
   const open = (next: string) => {
     router.history.push(fileHref(next));
   };
+  /** Whether Generate cubes is open (T145, AC-139). */
+  const [generating, setGenerating] = useState(false);
   const makeNew = (kind: 'cube' | 'view') => {
     const firstCube = stored
       .flatMap((each) => objectsOf(each.path, each.content).objects)
@@ -953,7 +956,26 @@ export function ModelFilePage({
         unpublished={unpublishedPaths}
         onOpen={open}
         onNew={makeNew}
+        onGenerate={() => {
+          setGenerating(true);
+        }}
       />
+      {generating ? (
+        <GenerateCubes
+          existing={all}
+          onClose={() => {
+            setGenerating(false);
+          }}
+          onPublished={() => {
+            // The store now has them: read it again, so the tree lists them.
+            void queryClient.invalidateQueries({ queryKey: MODEL_FILES_QUERY.queryKey });
+          }}
+          onOpen={(opened) => {
+            setGenerating(false);
+            open(opened);
+          }}
+        />
+      ) : null}
       <div className="model-page__main">
         {files.isPending ? (
           // Untitled while it reads: the title comes once, with what it heads.

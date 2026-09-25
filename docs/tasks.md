@@ -2447,7 +2447,35 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - `cube.js`'s `contextToApiScopes` grants `introspection` for that claim alone, and not with `wechartDraft`;
     - the dev Cube answers `/v1/introspection/data-sources` for the API's token and 403s a query token (AC-250).
   - Depends on: `docs/research/cube/introspection-api.md`
-- [ ] T145 (AC-139) Generate cubes from a data source's tables
+- [x] T145 (AC-139) Generate cubes from a data source's tables
+  - Done 2026-09-25. **AC-139 and AC-250 are ticked.**
+    - **AC-139 is shown by `e2e/generate-cubes.spec.ts`** against the compose Cube (the user's fork), in Chrome, Firefox and Safari. Each browser project works on its own pair of tables in the sample database's `generate` schema (`infra/sample-db/generate.sql`), because cube names are global and the projects run at the same time.
+      - It browses the source, then the schema, then a search.
+      - It looks at the visits table's columns: its key, and the foreign key `→ <stores>.id`.
+      - It generates both cubes. The YAML has their keys, strings and times as dimensions, a count, and a sum for `spend_amount`. The columns left out are listed exactly, each with its reason: `floor_area`, `store_id`, `visitors` and `_loaded_at`.
+      - It publishes both at once and opens one in the tree.
+      - `/api/load` then answers across the generated join: 20 visits in Lisbon, 10 in Porto.
+    - **AC-250's "never to the browser"** is shown by the same e2e, where no `/api/introspection/` answer holds a JWT, and by `introspection.test.ts`, where the proxy's response holds neither the token it signed nor any other.
+    - **What Cube's scaffold drops without saying so** (research, "Silent losses") is found by `packages/api/src/model/scaffoldCheck.ts`:
+      - two columns whose generated member names coincide;
+      - a column whose sum takes the count measure's name.
+      The scaffold route reads the tables' columns first. It adds a column no member's `sql` reads and Cube didn't list as `member_name_taken`, and returns `countMeasure: false` when no count is left. The dialog says both.
+      - The test and the module were written in one step, so I checked the test by disabling the check: both behaviour tests failed.
+    - **Retrying "Continue wait":** the proxy retries both the documented 200 and the 500 `{"error":"Error: Continue wait"}` the fork actually produces (research, "Errors"), up to 30 times. After that it answers 504 with a sentence.
+    - **Hardening** (research, "Two further hardening steps"), a small change to T275's `infra/cube/cube.js`:
+      - the introspection token gets `['introspection']` alone;
+      - `introspection` is filtered out of `defaultScopes`, since `CUBEJS_DEFAULT_API_SCOPES` is unchecked.
+      `cube-config.test.ts` pins both. `e2e/cube-scopes.spec.ts` now also has the real Cube refuse that token `/v1/meta` ("API scope is missing: meta") and `/v1/load` ("… data").
+    - **Tests that failed first:**
+      - `introspection.test.ts`: the proxy's routes; the 500 wait; the scaffold's check; no scaffold when the columns can't be read.
+      - `GenerateCubes.test.tsx`: the flow, and the dialog's words for both losses.
+      - `generate-cubes.spec.ts`.
+    - **The flow:** the Model file tree's **Generate cubes** button opens the dialog "Generate cubes from a data source":
+      - data source, schema, "Find a table", a types filter, and pages of 50;
+      - "Columns of <table>";
+      - "Generate N cubes" shows each `cubes/<file>` with its YAML and "Columns left out";
+      - "Publish N cubes" goes through `publishModel` (validate, then publish), then offers "Open cubes/<file>" buttons.
+    - **Left for T276:** clashes with the model store. Nothing yet refuses a generated name or file already in the store (AC-249).
   - **Deferred 2026-09-21 with F18**, under the user's rule "for requirements that dont work with cube defer". It depended on T165, the connection test. Reading a source's tables went through Cube's drivers called from wechart's server, as a test does, and not through a Cube API: `research/cube-capabilities.md` §6 has "Schema and table browsing: Core (driver methods; dev-only route)".
   - **Re-planned 2026-09-25 `[R10]`**, on the introspection API in the user's Cube fork (`research/cube/introspection-api.md`). It no longer depends on T165.
     - The API proxies the five endpoints under `/api/introspection/…`, signing the introspection token itself (T275). It retries Cube's "Continue wait".
