@@ -4536,7 +4536,7 @@ Added 2026-09-25 by the UI review stream. Its sources:
 
 Only gaps that break an accepted criterion or a numbered direction.md rule are tasks here. The rest are proposed spec changes for the user, not built.
 
-- [ ] T300 (AC-187) Draw the KPI tile as the prototype does
+- [x] T300 (AC-187) Draw the KPI tile as the prototype does
   - Gap 1 of the parity rebuild. A KPI's value was body text: nothing styled `.kpi`, `.kpi__value` or `.kpi__label`. That breaks AC-187 (a tile's font size and weight), and direction.md rule 1 (KPIs in tabular numerals).
   - The prototype's rules:
     - `.kpi-val`: 32 px, 600, tabular numerals, −0.01 em tracking;
@@ -4547,6 +4547,11 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
   - Files: `packages/web/src/tiles/Kpi.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts`: a KPI tile's value is 32 px at 600 in tabular numerals, with a 36 px line; its name above it is 12/16 at 600 in `text-secondary`; the tile is padded 12 16 (AC-187).
   - Depends on: none
+  - **Done 2026-09-25.**
+    - `Kpi.tsx` puts the measure's name above its value, as `kpiHtml` does.
+    - `styles.ts` draws both. `.kpi__value` is on a 40 px line on its own, and 36 px in a tile.
+  - **Test, red first:** `e2e/design-conformance.spec.ts` "T300 and T304: KPI, table and pivot tiles" › "a KPI tile draws its value at 32 px…". It builds its own dashboard of a KPI, a table and a pivot through the API. It first failed on the value's 14 px at 400. It passes in all three browsers.
+  - **Not done here:** the label still reads "<cube title> <measure title>" (gap 13), which AC-220 allows. It is a proposed spec change.
 - [ ] T301 (AC-039) Colour a pie's slices and a treemap's rectangles by the dashboard's assignment, and let only tiles that draw categorical colour claim a colour
   - Gaps 5 and 3 of the parity rebuild.
     - The dashboard assigned colours to each tile's *series*. A pie or treemap has one series, its measure, so its categories were coloured by position. The same member was one colour in a bar split by it and another in a pie of it, which fails AC-039.

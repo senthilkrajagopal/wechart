@@ -38,17 +38,18 @@ export function Kpi({ spec }: KpiProps) {
     );
   }
 
+  // Its name above its value, as the prototype's kpiHtml has them (T300).
   return (
     <div className="kpi" data-testid="kpi">
+      <p className="kpi__label" data-testid="kpi-label">
+        {label}
+      </p>
       <p className="kpi__value" data-testid="kpi-value">
         {/* The measure's own format, so a currency KPI reads as money
             (AC-046). FORMAT is the fallback for a member that declares none. */}
         {measure === undefined
           ? FORMAT.format(value)
           : formatValue(value, measure, spec.formats ?? {})}
-      </p>
-      <p className="kpi__label" data-testid="kpi-label">
-        {label}
       </p>
     </div>
   );

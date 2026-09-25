@@ -3262,6 +3262,28 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* What a tile says of its answer, under its head (T253's review): as tall as
    its lines, the chart taking the rest. */
 .tile-notes { flex: none; margin-bottom: 4px; }
+/* The KPI, as the prototype draws it (T300, AC-187, direction rule 1): its
+   name in .xs.sec.strong over its value in .kpi-val, 32 px at 600 in tabular
+   numerals, on a 36 px line in a dashboard's .dtile.kpi, which is padded
+   12 16 with 4 px under its head. */
+.kpi { display: flex; flex-direction: column; min-height: 0; }
+.kpi p { margin: 0; }
+.kpi__label {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+}
+.kpi__value {
+  font-size: 32px;
+  line-height: 40px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.grid-tile:has(> .chart-tile .kpi) { padding: 12px 16px; }
+.grid-tile:has(> .chart-tile .kpi) .tile-head { margin-bottom: 4px; }
+.grid-tile .kpi__value { line-height: 36px; }
 /* A Markdown or Image element's head while editing: the prototype's
    tile-head naming its kind in xs muted, the content under it
    (dashboard.js:319, :322). */

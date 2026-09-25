@@ -2988,15 +2988,27 @@ test.describe('T257: the chart editor', () => {
     await expect(add).toBeFocused();
 
     // The other wells' buttons say what they add (editor.js 275–297).
-    await expect(page.getByTestId('well-dimensions').getByRole('button', { name: 'Add to Dimensions' })).toHaveText('+ dimension');
-    await expect(page.getByTestId('well-timeDimensions').getByRole('button', { name: 'Add to Time' })).toHaveText('+ time');
-    await expect(page.getByTestId('well-filters').getByRole('button', { name: 'Add a filter' })).toHaveText('+ filter');
+    await expect(
+      page.getByTestId('well-dimensions').getByRole('button', { name: 'Add to Dimensions' }),
+    ).toHaveText('+ dimension');
+    await expect(
+      page.getByTestId('well-timeDimensions').getByRole('button', { name: 'Add to Time' }),
+    ).toHaveText('+ time');
+    await expect(
+      page.getByTestId('well-filters').getByRole('button', { name: 'Add a filter' }),
+    ).toHaveText('+ filter');
 
     // Sort by and Top N side by side under the wells, as .input.sm / .select.sm (editor.js 298–307).
     const sort = inspector.getByLabel('Sort');
     const top = inspector.getByLabel('Top N (+ Other)');
-    expect(await style(sort, 'height', 'font-size')).toEqual({ height: '28px', 'font-size': '12px' });
-    expect(await style(top, 'height', 'font-size')).toEqual({ height: '28px', 'font-size': '12px' });
+    expect(await style(sort, 'height', 'font-size')).toEqual({
+      height: '28px',
+      'font-size': '12px',
+    });
+    expect(await style(top, 'height', 'font-size')).toEqual({
+      height: '28px',
+      'font-size': '12px',
+    });
     expect((await sort.boundingBox())!.y).toBe((await top.boundingBox())!.y);
   });
 
@@ -3222,7 +3234,9 @@ test.describe('T249: the dashboard settings page', () => {
     return settings;
   };
   const section = (settings: Locator, name: string) =>
-    settings.getByRole('navigation', { name: 'Settings sections' }).locator(`[data-section="${name}"]`);
+    settings
+      .getByRole('navigation', { name: 'Settings sections' })
+      .locator(`[data-section="${name}"]`);
 
   test('the bar: 41 px, titled "Dashboard settings", its buttons 24 px and Save the primary', async ({
     page,
@@ -3340,7 +3354,11 @@ test.describe('T249: the dashboard settings page', () => {
     });
     // .settings-inner h2 { font-size: 18px }
     expect(
-      await style(panel.getByRole('heading', { name: 'General', level: 2 }), 'font-size', 'font-weight'),
+      await style(
+        panel.getByRole('heading', { name: 'General', level: 2 }),
+        'font-size',
+        'font-weight',
+      ),
     ).toEqual({ 'font-size': '18px', 'font-weight': '600' });
     // .field > label 12/16/600 secondary; Name and Folder side by side (.formgrid), Description wide
     const name = panel.getByLabel('Name', { exact: true });
@@ -3383,13 +3401,13 @@ test.describe('T249: the dashboard settings page', () => {
     // .radio-card { padding: 12px; border: 1px solid var(--border-strong); border-radius: 8px }
     // .radio-card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) }
     const card = (radio: Locator) => radio.locator('xpath=ancestor::label[1]');
-    expect(
-      await style(card(markings), 'padding-top', 'border-radius', 'border-top-color'),
-    ).toEqual({
-      'padding-top': '12px',
-      'border-radius': '8px',
-      'border-top-color': await token(page, 'accent', 'background-color'),
-    });
+    expect(await style(card(markings), 'padding-top', 'border-radius', 'border-top-color')).toEqual(
+      {
+        'padding-top': '12px',
+        'border-radius': '8px',
+        'border-top-color': await token(page, 'accent', 'background-color'),
+      },
+    );
     expect(await style(card(cross), 'border-top-color')).toEqual({
       'border-top-color': await token(page, 'border-strong', 'background-color'),
     });
@@ -3406,7 +3424,9 @@ test.describe('T249: the dashboard settings page', () => {
     const settings = await openSettings(page);
     await section(settings, 'Cross-filtering').click();
     // .warnbar with SV.warn: "Inactive: this dashboard uses Markings. …"
-    const banner = settings.getByRole('note').filter({ hasText: 'Inactive: this dashboard uses Markings' });
+    const banner = settings
+      .getByRole('note')
+      .filter({ hasText: 'Inactive: this dashboard uses Markings' });
     await expect(banner).toBeVisible();
     await expect(banner.locator('[data-icon="warn"]')).toHaveCount(1);
     expect(await style(banner, 'font-size', 'border-radius', 'padding-left')).toEqual({
@@ -3514,9 +3534,7 @@ test.describe('T249: the dashboard settings page', () => {
     // [aria-checked='true'] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) }
     const slot = (n: number) =>
       row.getByRole('radio', { name: `Colour ${String(n)}` }).locator('xpath=ancestor::label[1]');
-    expect(
-      await style(slot(1), 'width', 'height', 'border-radius', 'border-top-color'),
-    ).toEqual({
+    expect(await style(slot(1), 'width', 'height', 'border-radius', 'border-top-color')).toEqual({
       width: '22px',
       height: '24px',
       'border-radius': '4px',
@@ -3549,6 +3567,142 @@ test.describe('T249: the dashboard settings page', () => {
       'border-top-width': '1px',
       'border-top-color': await token(page, 'border-subtle', 'background-color'),
       'border-radius': '6px',
+    });
+  });
+});
+
+/**
+ * T300 and T304: the tiles that draw in the DOM, as the prototype draws them
+ * (the Superset-parity rebuild's gaps 1 and 9). The rules cited are
+ * index.html's, and charts.js's kpiHtml, pivotHtml and tableHtml.
+ */
+test.describe('T300 and T304: KPI, table and pivot tiles', () => {
+  const api = 'http://localhost:4100/api';
+
+  async function chartOn(
+    request: APIRequestContext,
+    dashboardId: string,
+    title: string,
+    chartType: string,
+    wells: { measures: string[]; dimensions: string[] },
+  ) {
+    const chart = (await (
+      await request.post(`${api}/documents`, { data: { kind: 'chart', title, folderId: 'root' } })
+    ).json()) as { id: string };
+    await request.put(`${api}/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          owner: 'admin',
+          localToDashboardId: dashboardId,
+          chart: {
+            source: { cube: 'orders' },
+            wells: { ...wells, timeDimensions: [] },
+            chartType,
+          },
+        },
+      },
+    });
+    return chart.id;
+  }
+
+  test.beforeEach(async ({ page, request }) => {
+    const stamp = String(Date.now());
+    const title = `DOM tiles ${stamp}`;
+    const { id } = (await (
+      await request.post(`${api}/documents`, {
+        data: { kind: 'dashboard', title, folderId: 'root' },
+      })
+    ).json()) as { id: string };
+    const kpi = await chartOn(request, id, `Order count ${stamp}`, 'kpi', {
+      measures: ['orders.count'],
+      dimensions: [],
+    });
+    const table = await chartOn(request, id, `Orders table ${stamp}`, 'table', {
+      measures: ['orders.count'],
+      dimensions: ['orders.status'],
+    });
+    const pivot = await chartOn(request, id, `Orders pivot ${stamp}`, 'pivot', {
+      measures: ['orders.count'],
+      dimensions: ['products.category', 'orders.status'],
+    });
+    await request.put(`${api}/documents/dashboard/${id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          folderId: 'root',
+          owner: 'admin',
+          settings: { width: 'fixed' },
+          pages: [
+            {
+              id: 'only',
+              title: 'Only',
+              items: [
+                { id: 'tile-kpi', kind: 'chart', w: 3, h: 13, chartId: kpi },
+                { id: 'tile-table', kind: 'chart', w: 4, h: 24, chartId: table },
+                { id: 'tile-pivot', kind: 'chart', w: 5, h: 24, chartId: pivot },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    await page.goto(`/explore/dashboards/${id}`);
+  });
+
+  test('a KPI tile draws its value at 32 px in tabular numerals, under its name', async ({
+    page,
+  }) => {
+    const tile = page.locator('[data-tile="tile-kpi"]');
+    const value = tile.getByTestId('kpi-value');
+    await expect(value).toBeVisible({ timeout: 15_000 });
+
+    // .kpi-val { font-size: 32px; line-height: 40px; font-weight: 600;
+    // font-variant-numeric: tabular-nums; letter-spacing: -0.01em }
+    // .dtile.kpi .kpi-val { line-height: 36px }
+    expect(
+      await style(
+        value,
+        'font-size',
+        'line-height',
+        'font-weight',
+        'font-variant-numeric',
+        'letter-spacing',
+      ),
+    ).toEqual({
+      'font-size': '32px',
+      'line-height': '36px',
+      'font-weight': '600',
+      'font-variant-numeric': 'tabular-nums',
+      'letter-spacing': '-0.32px',
+    });
+    // kpiHtml: <div class="xs sec strong">{title}</div> above the value.
+    const label = tile.getByTestId('kpi-label');
+    expect(await style(label, 'font-size', 'line-height', 'font-weight', 'color')).toEqual({
+      'font-size': '12px',
+      'line-height': '16px',
+      'font-weight': '600',
+      color: await token(page, 'text-secondary'),
+    });
+    const labelBox = await label.boundingBox();
+    const valueBox = await value.boundingBox();
+    expect((labelBox?.y ?? 0) + (labelBox?.height ?? 0)).toBeLessThanOrEqual(valueBox?.y ?? 0);
+
+    // .dtile.kpi { padding: 12px 16px } .dtile.kpi .tile-head { margin-bottom: 4px }
+    expect(
+      await style(tile, 'padding-top', 'padding-right', 'padding-bottom', 'padding-left'),
+    ).toEqual({
+      'padding-top': '12px',
+      'padding-right': '16px',
+      'padding-bottom': '12px',
+      'padding-left': '16px',
+    });
+    expect(await style(tile.locator('.tile-head'), 'margin-bottom')).toEqual({
+      'margin-bottom': '4px',
     });
   });
 });
