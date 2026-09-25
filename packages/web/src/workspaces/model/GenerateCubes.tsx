@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 
 import { StateLine } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
+import { objectsOf } from './objects';
 import { publishModel } from './publish';
 
 /**
@@ -127,7 +128,40 @@ const PAGE = 50;
 
 const keyOf = (table: { schema: string; name: string }) => `${table.schema}.${table.name}`;
 
+/**
+ * Where generated files clash with the model's, by generated path (T276,
+ * AC-249): a file the model has at that path, or a cube or view it declares
+ * already — one namespace in Cube. In the words the API refuses them with
+ * (packages/api/src/model/clashes.ts), which it does whatever this says.
+ */
+function clashesWith(
+  existing: readonly { readonly path: string; readonly content: string }[],
+  created: readonly { readonly path: string; readonly content: string }[],
+): Map<string, string[]> {
+  const paths = new Set(existing.map((file) => file.path));
+  const names = new Map<string, { kind: 'cube' | 'view'; path: string }>();
+  for (const file of existing)
+    for (const { kind, name } of objectsOf(file.path, file.content).objects)
+      if (!names.has(name)) names.set(name, { kind, path: file.path });
+  const clashes = new Map<string, string[]>();
+  for (const file of created) {
+    const byName = objectsOf(file.path, file.content).objects.flatMap(({ name }) => {
+      const found = names.get(name);
+      return found === undefined ? [] : [{ name, ...found }];
+    });
+    const said = [
+      ...(paths.has(file.path) && !byName.some((clash) => clash.path === file.path)
+        ? [`${file.path} is already in the model store.`]
+        : []),
+      ...byName.map(({ name, kind, path }) => `\`${name}\` is already a ${kind} in ${path}.`),
+    ];
+    if (said.length > 0) clashes.set(file.path, said);
+  }
+  return clashes;
+}
+
 export function GenerateCubes({
+  existing,
   onClose,
   onPublished,
   onOpen,
@@ -247,11 +281,19 @@ export function GenerateCubes({
   };
 
   const pathOf = (cube: Generated) => `cubes/${cube.fileName}`;
+  const clashes =
+    generated.kind === 'ok'
+      ? clashesWith(
+          existing,
+          generated.value.map((cube) => ({ path: pathOf(cube), content: cube.content })),
+        )
+      : new Map<string, string[]>();
+  const clashing = clashes.size > 0;
   const publish = () => {
     if (generated.kind !== 'ok') return;
     const files = generated.value.map((cube) => ({ path: pathOf(cube), content: cube.content }));
     setPublished({ kind: 'run' });
-    void publishModel(files).then((outcome) => {
+    void publishModel(files, { create: true }).then((outcome) => {
       if (outcome.kind === 'published') {
         setPublished({ kind: 'done', count: files.length });
         onPublished(files.map((file) => file.path));
@@ -515,6 +557,13 @@ export function GenerateCubes({
                 {cube.countMeasure === false ? (
                   <p>No count measure: a column’s measure took its name, count.</p>
                 ) : null}
+                {(clashes.get(pathOf(cube)) ?? []).length === 0 ? null : (
+                  <ul aria-label="Clashes with the model" className="generate-cubes__clashes">
+                    {(clashes.get(pathOf(cube)) ?? []).map((clash) => (
+                      <li key={clash}>{clash}</li>
+                    ))}
+                  </ul>
+                )}
               </section>
             ))}
             <p className="generate-cubes__note">
@@ -549,7 +598,8 @@ export function GenerateCubes({
         {published.kind === 'err' ? <StateLine kind="err">{published.message}</StateLine> : null}
         {published.kind === 'refused' ? (
           <div role="alert">
-            <p>Cube refused the model, so nothing was published:</p>
+            {/* Cube's compile, or the API's own refusal of a clash (T276). */}
+            <p>Nothing was published:</p>
             <ul>
               {published.problems.map((problem, at) => (
                 <li key={at}>
@@ -561,9 +611,20 @@ export function GenerateCubes({
           </div>
         ) : null}
 
+        {clashing ? (
+          <p className="generate-cubes__note">
+            Nothing is published while a cube clashes with the model: leave its table out and
+            generate again.
+          </p>
+        ) : null}
         <div className="dialog__actions">
           {generated.kind === 'ok' && published.kind !== 'done' ? (
-            <button type="button" disabled={published.kind === 'run'} onClick={publish}>
+            <button
+              type="button"
+              disabled={published.kind === 'run'}
+              aria-disabled={clashing}
+              onClick={clashing ? undefined : publish}
+            >
               Publish {cubes(generated.value.length)}
             </button>
           ) : null}

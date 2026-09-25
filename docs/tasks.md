@@ -2490,7 +2490,22 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - `introspection.test.ts`: the proxy passes each endpoint's parameters through, retries "Continue wait", and turns Cube's refusals into the API's.
     - `e2e/generate-cubes.spec.ts`: from the sample source, three tables selected produce three cubes, each with its columns as dimensions, a count measure, and every unmapped column listed with its reason. Once published, a chart can ask the generated cubes across their join (AC-139).
   - Depends on: T275, T142
-- [ ] T276 (AC-249) Refuse a generated cube whose name or file name is already in the model store, naming it
+- [x] T276 (AC-249) Refuse a generated cube whose name or file name is already in the model store, naming it
+  - Done 2026-09-25. **AC-249 is ticked** on `e2e/generate-cubes.spec.ts` "a generated cube the model already has is marked, named, and refused, and the stored one kept", which passes in Chrome, Firefox and Safari.
+    - The sample database's `public.orders` generates `orders` in `orders.yml`, which is the seed's own cube in its own file.
+    - The dialog marks it "`orders` is already a cube in cubes/orders.yml.", and its Publish is `aria-disabled` and publishes nothing when clicked.
+    - Sent straight to the API as a generated file, it is refused with 422 and the same words.
+    - `cubes/orders.yml` in the store is unchanged, byte for byte.
+    - **The API, whatever the browser checked:** `POST /api/model/publish` with `create: true`, which generated files are published with, runs `packages/api/src/model/clashes.ts` before Cube is asked. It refuses, per file:
+      - a path the store has: "<path> is already in the model store.";
+      - a cube or view name any stored YAML file declares: "`<name>` is already a cube in <path>." (or "a view"). Cube keeps both in one namespace.
+      When a name's clash is with the file at the same path, it is named once. Nothing is written, and Cube isn't asked. A publish without `create` still overwrites, as an edit does.
+    - **The dialog:** `clashesWith` reads the model's files, stored and drafted, with `objectsOf`, in the API's words. Each clashing cube lists its "Clashes with the model". While any does, Publish is `aria-disabled` and a note says "Nothing is published while a cube clashes with the model: leave its table out and generate again." The whole batch is held back, because a join in a clean cube could name the clashing cube and would otherwise resolve to the model's.
+    - The refusal alert now reads "Nothing was published:", since the API can refuse as well as Cube.
+    - **Tests that failed first:**
+      - `publish.test.ts` "refuses a file already stored, and a cube or view already declared, naming each";
+      - `GenerateCubes.test.tsx` "marks a generated cube whose name or file the model has…" and the flow test's `create: true`.
+      Tests that pin behaviour already in place: "names the cube once…", "publishes generated files that clash with nothing", "still overwrites a stored file when an edit … is published".
   - Planned 2026-09-25 `[R10]`. Cube's scaffold knows nothing of wechart's model (research, "Scaffold ignores the existing model").
     - The review step marks each clash: a cube name any model file declares, or a file path already stored. It names the existing cube or file.
     - Save is refused while any selected table clashes. The user deselects it, and nothing existing is written.

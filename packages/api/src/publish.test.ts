@@ -606,3 +606,115 @@ describe('publishing a refresh key Cube can’t run', () => {
     }
   });
 });
+
+/**
+ * T276 / AC-249: IF a cube generated from a data source has the name or file
+ * name of a cube or file already in the model store, THEN THE SYSTEM SHALL
+ * refuse to save it, name the existing cube or file, and leave the existing
+ * one unchanged. `Fails when: an existing model file changes, or a clashing
+ * cube is saved, or the refusal does not name what it clashes with.`
+ *
+ * Generated files are published as new ones (`create: true`): whatever the
+ * browser sent, the API refuses one that would overwrite a stored file or
+ * declare a cube or view the store already has.
+ */
+describe('publishing generated cubes (AC-249)', () => {
+  const compiling = () => {
+    const holder: { app?: FastifyInstance } = {};
+    return { holder, ...cubeReading(holder, () => ({ cubes: [] })) };
+  };
+  const create = (app: FastifyInstance, files: readonly ModelFile[]) =>
+    app.inject({ method: 'POST', url: '/api/model/publish', payload: { files, create: true } });
+  const generated = (path: string, cube: string) => ({
+    path,
+    content: `cubes:\n  - name: ${cube}\n    sql_table: public.${cube}\n`,
+  });
+
+  it('refuses a file already stored, and a cube or view already declared, naming each', async () => {
+    const store = memory([ORDERS, VIEW]);
+    const { holder, cube, contexts } = compiling();
+    const app = buildServer({ config, modelFiles: store, cube });
+    holder.app = app;
+
+    const response = await create(app, [
+      generated('cubes/orders.yml', 'public_orders'),
+      generated('cubes/sales_orders.yml', 'orders'),
+      generated('cubes/summary.yml', 'summary'),
+      generated('cubes/customers.yml', 'customers'),
+    ]);
+
+    expect([response.statusCode, response.json()]).toEqual([
+      422,
+      {
+        errors: [
+          { path: 'cubes/orders.yml', message: 'cubes/orders.yml is already in the model store.' },
+          {
+            path: 'cubes/sales_orders.yml',
+            message: '`orders` is already a cube in cubes/orders.yml.',
+          },
+          {
+            path: 'cubes/summary.yml',
+            message: '`summary` is already a view in views/summary.yml.',
+          },
+        ],
+      },
+    ]);
+    // Nothing is written, the clashing or the rest; and Cube is not asked.
+    expect(store.files).toEqual([ORDERS, VIEW]);
+    expect(contexts).toEqual([]);
+    await app.close();
+  });
+
+  it('names the cube once when its file and its name are the same stored file’s', async () => {
+    const store = memory([ORDERS]);
+    const { holder, cube } = compiling();
+    const app = buildServer({ config, modelFiles: store, cube });
+    holder.app = app;
+
+    const response = await create(app, [generated('cubes/orders.yml', 'orders')]);
+
+    expect([response.statusCode, response.json()]).toEqual([
+      422,
+      {
+        errors: [
+          { path: 'cubes/orders.yml', message: '`orders` is already a cube in cubes/orders.yml.' },
+        ],
+      },
+    ]);
+    expect(store.files).toEqual([ORDERS]);
+    await app.close();
+  });
+
+  it('publishes generated files that clash with nothing', async () => {
+    const store = memory([ORDERS]);
+    const { holder, cube } = compiling();
+    const app = buildServer({ config, modelFiles: store, cube });
+    holder.app = app;
+
+    const response = await create(app, [generated('cubes/customers.yml', 'customers')]);
+
+    expect(response.statusCode).toBe(200);
+    expect(store.files.map((file) => file.path)).toEqual([
+      'cubes/customers.yml',
+      'cubes/orders.yml',
+    ]);
+    await app.close();
+  });
+
+  it('still overwrites a stored file when an edit, not a generation, is published', async () => {
+    const store = memory([ORDERS]);
+    const { holder, cube } = compiling();
+    const app = buildServer({ config, modelFiles: store, cube });
+    holder.app = app;
+    const edited = {
+      path: 'cubes/orders.yml',
+      content: 'cubes:\n  - name: orders\n    title: O\n',
+    };
+
+    const response = await publish(app, [edited]);
+
+    expect(response.statusCode).toBe(200);
+    expect(store.files).toEqual([edited]);
+    await app.close();
+  });
+});

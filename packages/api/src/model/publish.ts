@@ -6,6 +6,7 @@ import { CubeError, type CubeClient } from '../cube/client';
 import type { MetaCache } from '../cube/meta-cache';
 import type { Config } from '../config';
 import type { ModelFile, ModelFileStore } from '../server';
+import { clashesOf } from './clashes';
 import { refreshKeyProblemsOf } from './refreshKeys';
 import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
 import { compileErrorsOf, type CompileError } from './validate';
@@ -148,7 +149,7 @@ export function registerModelPublishing(
    * errors come back on the files they are about.
    */
   app.post('/api/model/publish', async (request, reply) => {
-    const body = request.body as { files?: unknown } | undefined;
+    const body = request.body as { files?: unknown; create?: unknown } | undefined;
     const files = Array.isArray(body?.files) ? (body.files as unknown[]) : [];
     const changed = files.filter(
       (file): file is ModelFile =>
@@ -172,6 +173,12 @@ export function registerModelPublishing(
       });
 
     const live = await modelFiles.list();
+    // Files generated from a data source are new ones: never over what the
+    // store has, file or name (T276, AC-249), whatever the browser checked.
+    if (body?.create === true) {
+      const clashes = clashesOf(changed, live);
+      if (clashes.length > 0) return reply.status(422).send({ errors: clashes });
+    }
     const paths = new Set(changed.map((file) => file.path));
     const overTemplate = live.find((file) => paths.has(file.path) && JINJA.test(file.content));
     if (overTemplate !== undefined)

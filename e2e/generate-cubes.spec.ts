@@ -117,3 +117,62 @@ test('a data source’s tables become cubes, each column mapped or said to be le
   expect(answers.length).toBeGreaterThan(3);
   for (const answer of answers) expect(answer).not.toMatch(/eyJ[\w-]+\.[\w-]+\.[\w-]+/);
 });
+
+/**
+ * T276 / AC-249: IF a cube generated from a data source has the name or file
+ * name of a cube or file already in the model store, THEN THE SYSTEM SHALL
+ * refuse to save it, name the existing cube or file, and leave the existing
+ * one unchanged. `Fails when: an existing model file changes, or a clashing
+ * cube is saved, or the refusal does not name what it clashes with.`
+ *
+ * The sample database's `public.orders` generates `orders` in `orders.yml`:
+ * the seeded model's own cube, in its own file. Generated there, it is marked
+ * and not published; asked of the API directly, it is refused all the same;
+ * and the stored file is as it was, byte for byte.
+ */
+test('a generated cube the model already has is marked, named, and refused, and the stored one kept', async ({
+  page,
+  request,
+}) => {
+  const storedOrders = async () =>
+    (
+      (await (await request.get('/api/model/files')).json()) as {
+        files: { path: string; content: string }[];
+      }
+    ).files.find((file) => file.path === 'cubes/orders.yml')?.content;
+  const before = await storedOrders();
+  expect(before).toContain('name: orders');
+
+  await page.goto('/model');
+  await page.getByRole('button', { name: 'Generate cubes' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Generate cubes from a data source' });
+  await dialog.getByLabel('Schema').selectOption('public');
+  await dialog.getByLabel('Find a table').fill('orders');
+  const tables = dialog.getByRole('table', { name: 'Tables in public' });
+  await tables.getByRole('checkbox', { name: 'orders', exact: true }).check();
+  await dialog.getByRole('button', { name: 'Generate 1 cube' }).click();
+
+  const orders = dialog.getByRole('region', { name: 'cubes/orders.yml' });
+  await expect(orders.getByRole('list', { name: 'Clashes with the model' })).toHaveText(
+    '`orders` is already a cube in cubes/orders.yml.',
+  );
+  const publish = dialog.getByRole('button', { name: 'Publish 1 cube' });
+  await expect(publish).toHaveAttribute('aria-disabled', 'true');
+  await publish.click({ force: true });
+  await expect(dialog.getByText('Published 1 cube.')).toHaveCount(0);
+
+  // Whatever the browser sends, the API refuses it, naming the cube it has.
+  const generated = await orders.getByTestId('generated-yaml').textContent();
+  const refused = await request.post('/api/model/publish', {
+    data: { files: [{ path: 'cubes/orders.yml', content: generated }], create: true },
+  });
+  expect([refused.status(), await refused.json()]).toEqual([
+    422,
+    {
+      errors: [
+        { path: 'cubes/orders.yml', message: '`orders` is already a cube in cubes/orders.yml.' },
+      ],
+    },
+  ]);
+  expect(await storedOrders()).toBe(before);
+});

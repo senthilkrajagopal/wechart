@@ -153,12 +153,14 @@ describe('generating cubes from a data source (AC-139)', () => {
       'cubes/chrome_stores.yml',
       'cubes/chrome_visits.yml',
     ]);
-    // One publish of both, so their join compiles with them (AC-136, AC-137).
+    // One publish of both, so their join compiles with them (AC-136, AC-137);
+    // as new files, which the API refuses over any it has (T276, AC-249).
     expect(asked.find((each) => each.url === '/api/model/publish')?.body).toEqual({
       files: [
         { path: 'cubes/chrome_stores.yml', content: STORES },
         { path: 'cubes/chrome_visits.yml', content: VISITS },
       ],
+      create: true,
     });
     // Asked of the chosen schema, and of the tables chosen, as YAML by the API.
     expect(asked.map((each) => each.url)).toContain(
@@ -203,6 +205,53 @@ describe('generating cubes from a data source (AC-139)', () => {
     expect(
       within(visits).getByText('No count measure: a column’s measure took its name, count.'),
     ).toBeTruthy();
+  });
+
+  /**
+   * T276 / AC-249: IF a cube generated from a data source has the name or file
+   * name of a cube or file already in the model store, THEN THE SYSTEM SHALL
+   * refuse to save it, name the existing cube or file, and leave the existing
+   * one unchanged.
+   */
+  it('marks a generated cube whose name or file the model has, naming it, and publishes nothing', async () => {
+    const asked = api();
+    render(
+      <GenerateCubes
+        existing={[
+          { path: 'cubes/chrome_stores.yml', content: 'cubes:\n  - name: stores\n' },
+          { path: 'views/visits.yml', content: 'views:\n  - name: chrome_visits\n' },
+        ]}
+        onClose={vi.fn()}
+        onPublished={vi.fn()}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
+    await userEvent.selectOptions(
+      await within(dialog).findByRole('combobox', { name: 'Schema' }),
+      'generate',
+    );
+    const tables = await within(dialog).findByRole('table', { name: 'Tables in generate' });
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_visits' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 2 cubes' }));
+
+    const stores = await within(dialog).findByRole('region', { name: 'cubes/chrome_stores.yml' });
+    expect(within(stores).getByRole('list', { name: 'Clashes with the model' }).textContent).toBe(
+      'cubes/chrome_stores.yml is already in the model store.',
+    );
+    const visits = within(dialog).getByRole('region', { name: 'cubes/chrome_visits.yml' });
+    expect(within(visits).getByRole('list', { name: 'Clashes with the model' }).textContent).toBe(
+      '`chrome_visits` is already a view in views/visits.yml.',
+    );
+    const publish = within(dialog).getByRole('button', { name: 'Publish 2 cubes' });
+    expect(publish.getAttribute('aria-disabled')).toBe('true');
+    expect(
+      within(dialog).getByText(
+        'Nothing is published while a cube clashes with the model: leave its table out and generate again.',
+      ),
+    ).toBeTruthy();
+    await userEvent.click(publish);
+    expect(asked.some((each) => each.url === '/api/model/publish')).toBe(false);
   });
 
   it('says why when a source cannot be browsed, rather than list nothing', async () => {
