@@ -1203,7 +1203,7 @@ test('switching the interaction mode and back leaves no mark behind', async ({ p
 /**
  * T112 / AC-106: WHILE a dashboard is in edit mode, THE SYSTEM SHALL select
  * the tile on click and change no marking.
- * `Fails when: a click in edit mode changes a marking.`
+ * `Fails when: clicking a chart in edit mode changes a marking.`
  */
 test('a click while editing selects the tile and leaves the marking as it was', async ({
   page,

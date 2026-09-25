@@ -67,7 +67,7 @@ import { MoveToMenu } from './edit/MoveToMenu';
 import { NOTHING_CHOSEN, needsOf, templateElements } from './edit/templates';
 import { PreviewBanner } from './PreviewBanner';
 import { TileViewMenu } from './TileViewMenu';
-import { SettingsPage } from './settings/SettingsPage';
+import { SettingsPage, type SettingsSection } from './settings/SettingsPage';
 import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
 import { activeFilters, withFilters, withLimit, type ActiveFilter } from '../filters/apply';
@@ -1590,9 +1590,18 @@ export function DashboardView({
    * cross-filter selections above are: during render, so the marks of the
    * mode left are never drawn again, and not brought back on the way in.
    */
+  /** The last marking change, for the polite live region (AC-101). */
+  const [markSaid, setMarkSaid] = useState('');
+  /** Which item a tile's keyboard is on, and where a Shift-extend began. */
+  const [markFocus, setMarkFocus] = useState<
+    Readonly<Record<string, { readonly focused: number; readonly anchor: number | null }>>
+  >({});
   const [marksMode, setMarksMode] = useState(interactions.mode);
   if (marksMode !== interactions.mode) {
     setMarksMode(interactions.mode);
+    // What was said and where the keyboard was, with them (T077's review).
+    setMarkSaid('');
+    setMarkFocus({});
     setMarks({});
     setMarkSources({});
   }
@@ -1625,8 +1634,6 @@ export function DashboardView({
       (next ?? window.document.querySelector<HTMLElement>('section.filter-bar'))?.focus();
     });
   };
-  /** The last marking change, for the polite live region (AC-101). */
-  const [markSaid, setMarkSaid] = useState('');
   /** How many items a marking holds now: its items and its ranges. */
   const markedCountOf = (markingId: string) => {
     const predicate = markingOf(marks, markingId);
@@ -2036,11 +2043,6 @@ export function DashboardView({
       return [];
     }
   };
-
-  /** Which item a tile's keyboard is on, and where a Shift-extend began. */
-  const [markFocus, setMarkFocus] = useState<
-    Readonly<Record<string, { readonly focused: number; readonly anchor: number | null }>>
-  >({});
 
   /**
    * The marking keys on a focused tile in view mode (AC-100, direction.md
@@ -2783,6 +2785,8 @@ export function DashboardView({
    * back through it — the same reason the selection is held out here.
    */
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** The section it opens on: General from the gear, another from a link into it. */
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>('General');
   /**
    * Back to the gear once the page closes (T182, AC-176): the gear is gone
    * while the page is open, so focus left with it.
@@ -2903,6 +2907,7 @@ export function DashboardView({
               // this moment's version (T198, AC-015). While editing, it is part
               // of the session, which began earlier.
               if (!session.editing) onEditStart?.();
+              setSettingsSection('General');
               setSettingsOpen(true);
             }}
           >
@@ -2934,6 +2939,7 @@ export function DashboardView({
           settingsOpen ? (
             <SettingsPage
               document={session.document}
+              section={settingsSection}
               // How the cross-filter matrix names each tile (AC-118).
               titleOf={chartTitleOf}
               onCancel={() => {
@@ -3110,67 +3116,93 @@ export function DashboardView({
                         choose={publishing.tileId === tile.id ? publishing.asked : 0}
                       />
                     )}
-                    <MarkingSection>
-                      {/* Which marking clicking in this tile changes (AC-085). */}
-                      <TileMarking
-                        key={`marking-${tile.id}`}
-                        markings={markingsFrom(session.document.markings)}
-                        marksWith={tile.marksWith}
-                        onChange={(marksWith) => {
-                          session.update((current) =>
-                            changeTile(current, tile.id, (each) => ({ ...each, marksWith })),
-                          );
-                        }}
-                      />
-                      {/* Which markings limit what it shows (AC-107, AC-108),
+                    {interactionsOf(session.document.settings).mode !== 'markings' ? (
+                      /**
+                       * Cross-filtering: no marking control here (AC-120), as
+                       * the prototype's Properties has none (`markingProps`) —
+                       * what a click here does is set in the settings.
+                       */
+                      <section className="panel-section marking-section">
+                        <h3>Interactions</h3>
+                        <p className="panel-section__note">
+                          This dashboard uses cross-filtering. What a click here does to each other
+                          tile is set in{' '}
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => {
+                              setSettingsSection('Cross-filtering');
+                              setSettingsOpen(true);
+                            }}
+                          >
+                            Dashboard settings › Cross-filtering
+                          </button>
+                          .
+                        </p>
+                      </section>
+                    ) : (
+                      <MarkingSection>
+                        {/* Which marking clicking in this tile changes (AC-085). */}
+                        <TileMarking
+                          key={`marking-${tile.id}`}
+                          markings={markingsFrom(session.document.markings)}
+                          marksWith={tile.marksWith}
+                          onChange={(marksWith) => {
+                            session.update((current) =>
+                              changeTile(current, tile.id, (each) => ({ ...each, marksWith })),
+                            );
+                          }}
+                        />
+                        {/* Which markings limit what it shows (AC-107, AC-108),
                         and what it does while they are empty (AC-109). */}
-                      <TileLimits
-                        key={`limits-${tile.id}`}
-                        markings={markingsFrom(session.document.markings)}
-                        marksWith={tile.marksWith}
-                        limitedBy={tile.limitedBy ?? []}
-                        combination={tile.limitCombination ?? 'all'}
-                        nothingMarked={tile.nothingMarked ?? NOTHING_MARKED_DEFAULT}
-                        nothingMarkedMessage={tile.nothingMarkedMessage ?? ''}
-                        onChange={(next) => {
-                          session.update((current) =>
-                            changeTile(current, tile.id, (each) => ({
-                              ...each,
-                              ...next,
-                              /**
-                               * AC-110: a tile limited for the first time gets
-                               * the message state and a message naming the
-                               * tiles it now waits on.
-                               *
-                               * **Only while the tile has no message of its
-                               * own**, not merely on every 0→1 transition.
-                               * Switching which marking a tile follows is two
-                               * clicks — uncheck one, check another — and the
-                               * second is a 0→1 transition on a tile whose
-                               * message the user may have written themselves.
-                               * The message box is hidden between the clicks,
-                               * so overwriting it there is invisible until
-                               * afterwards.
-                               */
-                              ...(each.nothingMarkedMessage === undefined &&
-                              (next.limitedBy ?? []).length > 0
-                                ? {
-                                    nothingMarked: NOTHING_MARKED_DEFAULT,
-                                    nothingMarkedMessage: defaultNothingMarkedMessage(
-                                      masterTileNames(
-                                        session.document,
-                                        next.limitedBy ?? [],
-                                        chartTitleOfTile,
-                                        defaultMarking?.id,
+                        <TileLimits
+                          key={`limits-${tile.id}`}
+                          markings={markingsFrom(session.document.markings)}
+                          marksWith={tile.marksWith}
+                          limitedBy={tile.limitedBy ?? []}
+                          combination={tile.limitCombination ?? 'all'}
+                          nothingMarked={tile.nothingMarked ?? NOTHING_MARKED_DEFAULT}
+                          nothingMarkedMessage={tile.nothingMarkedMessage ?? ''}
+                          onChange={(next) => {
+                            session.update((current) =>
+                              changeTile(current, tile.id, (each) => ({
+                                ...each,
+                                ...next,
+                                /**
+                                 * AC-110: a tile limited for the first time gets
+                                 * the message state and a message naming the
+                                 * tiles it now waits on.
+                                 *
+                                 * **Only while the tile has no message of its
+                                 * own**, not merely on every 0→1 transition.
+                                 * Switching which marking a tile follows is two
+                                 * clicks — uncheck one, check another — and the
+                                 * second is a 0→1 transition on a tile whose
+                                 * message the user may have written themselves.
+                                 * The message box is hidden between the clicks,
+                                 * so overwriting it there is invisible until
+                                 * afterwards.
+                                 */
+                                ...(each.nothingMarkedMessage === undefined &&
+                                (next.limitedBy ?? []).length > 0
+                                  ? {
+                                      nothingMarked: NOTHING_MARKED_DEFAULT,
+                                      nothingMarkedMessage: defaultNothingMarkedMessage(
+                                        masterTileNames(
+                                          session.document,
+                                          next.limitedBy ?? [],
+                                          chartTitleOfTile,
+                                          defaultMarking?.id,
+                                        ),
                                       ),
-                                    ),
-                                  }
-                                : {}),
-                            })),
-                          );
-                        }}
-                      />
-                    </MarkingSection>
+                                    }
+                                  : {}),
+                              })),
+                            );
+                          }}
+                        />
+                      </MarkingSection>
+                    )}
                   </>
                 )}
               />

@@ -358,10 +358,10 @@ test('Escape clears the cross-filters, as the bar says it does', async ({ page, 
 });
 
 /**
- * T077 / AC-071, the half of it cross-filters can answer: WHEN the
- * interaction mode changes and the settings are saved, THE SYSTEM SHALL clear
- * current marks and cross-filters. Marking is deferred, so AC-071 stays
- * unticked until the other half can be shown too.
+ * T077 / AC-071, the cross-filter half: WHEN the interaction mode changes and
+ * the settings are saved, THE SYSTEM SHALL clear current marks and
+ * cross-filters. The marks half is `e2e/markings.spec.ts`, "switching the
+ * interaction mode and back leaves no mark behind".
  */
 test('switching the interaction mode and back leaves no cross-filter behind', async ({
   page,
@@ -391,10 +391,11 @@ test('switching the interaction mode and back leaves no cross-filter behind', as
 /**
  * T126 / AC-120: WHILE a dashboard is in cross-filter mode, THE SYSTEM SHALL
  * offer no marking controls, chips or badges anywhere in that dashboard.
- * `Fails when: a marking control, chip or badge appears in cross-filter mode.`
+ * `Fails when: a marking control appears in cross-filter mode.`
  *
- * With a marking configured, kept from Markings mode: there is one to show,
- * and nothing shows it.
+ * Marked in Markings mode first, then switched: there is a marking to show,
+ * with something in it, and nothing shows it — in view mode, from the
+ * keyboard, in a tile's menu, or in edit mode's Properties.
  */
 test('a cross-filtering dashboard shows no marking control, chip or badge', async ({
   page,
@@ -403,14 +404,31 @@ test('a cross-filtering dashboard shows no marking control, chip or badge', asyn
   const { id, title } = await crossFilterDashboard(request, { markings: true });
   await open(page, id, title);
   const status = tile(page, 'tile-status');
+  const setMode = async (label: string | RegExp) => {
+    await page.getByRole('button', { name: 'Dashboard settings' }).click();
+    await page.getByRole('button', { name: /^Interactions/ }).click();
+    await page.getByRole('radio', { name: label }).check();
+    await page.getByRole('button', { name: 'Save settings' }).click();
+    await expect(page.getByTestId('dashboard-settings')).toHaveCount(0);
+  };
 
-  // A click, and a Ctrl-click, cross-filter; neither marks.
+  // Marked, and said, in Markings mode.
+  await setMode('Markings');
   await clickBar(page, status, 'shipped');
-  await expect(page.getByTestId('cross-filter-chip')).toContainText('shipped');
-  await page.keyboard.down('Control');
+  await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(page.getByTestId('mark-chip')).toContainText('shipped');
+  await expect(page.getByTestId('marking-announcer')).toContainText('1');
+
+  // Cross-filtering: none of it left, and a click cross-filters.
+  await setMode(/^Cross-filtering/);
+  for (const affordance of ['mark-badge', 'mark-chip'])
+    await expect(page.getByTestId(affordance)).toHaveCount(0);
+  await expect(page.getByTestId('marking-announcer')).toHaveText('');
   await clickBar(page, status, 'completed');
-  await page.keyboard.up('Control');
-  await page.waitForLoadState('networkidle');
+  await expect(page.getByTestId('cross-filter-chip')).toContainText('completed');
+  // The keyboard marks nothing either.
+  await status.focus();
+  await page.keyboard.press('Space');
   for (const affordance of ['mark-badge', 'mark-chip'])
     await expect(page.getByTestId(affordance)).toHaveCount(0);
   await expect(page.getByTestId('marking-announcer')).toHaveText('');
@@ -421,6 +439,22 @@ test('a cross-filtering dashboard shows no marking control, chip or badge', asyn
   await expect(menu).toBeVisible();
   await expect(menu).not.toContainText('marked');
   await expect(menu.getByRole('button', { name: 'Unmark' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  // Nor in edit mode's Properties: where the clicks are set, instead.
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await status.getByTestId('chart-canvas').click({ position: { x: 8, y: 8 } });
+  const panel = page.getByRole('tabpanel', { name: 'Properties' });
+  await expect(panel.getByRole('heading', { name: 'Interactions' })).toBeVisible();
+  await expect(panel.getByLabel('Marking', { exact: true })).toHaveCount(0);
+  await expect(panel.getByRole('heading', { name: 'Marking' })).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Dashboard settings › Cross-filtering' }).click();
+  // Opened on the section the link names.
+  const settings = page.getByTestId('dashboard-settings');
+  await expect(settings.getByRole('button', { name: /^Cross-filtering/ })).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
 });
 
 test('a pair set to None leaves the other tile untouched', async ({ page, request }) => {

@@ -128,6 +128,8 @@ export interface SettingsPageProps {
   readonly onSave: (next: DashboardDocument) => void | Promise<unknown>;
   /** A chart's title, which is how the cross-filter matrix names a tile (AC-118). */
   readonly titleOf?: ((chartId: string) => string | undefined) | undefined;
+  /** The section it opens on, where a link into it names one; General otherwise. */
+  readonly section?: SettingsSection | undefined;
 }
 
 /** The document without one optional field — absent, not set to undefined. */
@@ -183,8 +185,14 @@ function useFolders(): readonly FolderChoice[] {
   return folders;
 }
 
-export function SettingsPage({ document, onCancel, onSave, titleOf }: SettingsPageProps) {
-  const [open, setOpen] = useState<SettingsSection>('General');
+export function SettingsPage({
+  document,
+  onCancel,
+  onSave,
+  titleOf,
+  section = 'General',
+}: SettingsPageProps) {
+  const [open, setOpen] = useState<SettingsSection>(section);
   const folders = useFolders();
 
   /**

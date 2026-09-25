@@ -1739,7 +1739,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **Tests:** `CrossFilterChip.test.tsx` (what a chip says, what each control clears, and that nothing shows when nothing is active); `e2e/crossfilter.spec.ts` — the chip names the field, value and source tile on the real dashboard, dismissing it leaves the other tile unfiltered, and Escape does the same.
     - AC-119 ticked on those.
 - [x] T126 (AC-120) Offer no marking affordances in cross-filter mode
-  - Files: `e2e/crossfilter.spec.ts` (the behaviour was already in place: every marking affordance is gated on Markings mode)
+  - Files: `e2e/crossfilter.spec.ts`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/settings/SettingsPage.tsx`
+  - The view-mode affordances were already gated on Markings mode. The cold review found two that were not: edit mode's Properties › Marking, now replaced in cross-filter mode by the prototype's Interactions note linking to Settings › Cross-filtering (`markingProps`); and the marking announcer, which kept its last words across a mode change and is now cleared with the marks (with the keyboard's marking focus). The test marks in Markings mode first, then switches, so there is something to hide.
   - Failing test: `e2e/crossfilter.spec.ts`: in cross-filter mode no marking control, chip or badge appears anywhere in the dashboard (AC-120).
   - Depends on: T123, T104
 
