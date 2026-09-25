@@ -898,6 +898,86 @@ test('the same set of marks asks Cube the same question, whatever order it was m
  * `Fails when: any of those changes cannot be made on that page, or the tiles
  * table is missing.`
  */
+/**
+ * T131 / AC-125: THE SYSTEM SHALL save marking definitions — names, colours,
+ * the default, which tile marks with which, and the limits — with the
+ * dashboard, and never the marked items (direction.md rule 54).
+ * `Fails when: reopening a saved dashboard restores marked items.`
+ * T130 / AC-124: WHEN a dashboard is opened without a bookmark or link
+ * parameters, THE SYSTEM SHALL open it with no marks.
+ * `Fails when: a dashboard opens with marks the author left behind.`
+ *
+ * Saved with something marked: the store has the definitions and not the
+ * marked value, and the dashboard reopens with them and with nothing marked.
+ */
+test('a dashboard saved with marks on keeps its marking definitions, never its marks, and opens unmarked', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request, { limited: true });
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  await clickBar(page, status, 'shipped');
+  await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
+
+  const settings = async () => {
+    await page.getByRole('button', { name: 'Dashboard settings' }).click();
+    await page
+      .getByRole('navigation', { name: 'Settings sections' })
+      .locator('[data-section="Markings"]')
+      .click();
+    const panel = page.getByRole('region', { name: 'Markings settings' });
+    return {
+      panel,
+      markings: panel.getByRole('table', { name: 'Markings', exact: true }),
+      tiles: panel.getByRole('table', { name: 'Tiles and markings' }),
+    };
+  };
+  // A second marking, its own colour and the default, By category marking
+  // with it and the details tile limited by it — saved with shipped marked.
+  let shown = await settings();
+  await shown.panel.getByRole('button', { name: '+ New marking' }).click();
+  const region = shown.markings.getByRole('row').nth(2);
+  await region.getByRole('textbox', { name: 'Name of marking 2' }).fill('Region');
+  await region.getByRole('radio', { name: 'Colour 3' }).click();
+  await region.getByRole('radio', { name: 'Default marking' }).click();
+  await shown.tiles.getByRole('combobox', { name: 'Marking for By category' }).selectOption({
+    label: 'Region (default)',
+  });
+  await shown.tiles.getByRole('checkbox', { name: 'Details by status limited by Region' }).check();
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.getByTestId('dashboard-settings')).toHaveCount(0);
+
+  // Stored: every definition, and not the marked value.
+  const stored = JSON.stringify(await (await request.get(`/api/documents/dashboard/${id}`)).json());
+  expect(stored).toMatch(
+    /"name":"Region","slot":"mk3","isDefault":true|"isDefault":true[^}]*"name":"Region"/,
+  );
+  expect(stored).toContain('"limitedBy":[');
+  expect(stored).not.toContain('shipped');
+
+  // Reopened: nothing marked — no chip, no badge, every bar solid — and the
+  // definitions as saved.
+  await page.reload();
+  await expect(status.getByTestId('chart-canvas')).toBeVisible();
+  await expect(page.getByTestId('mark-chip')).toHaveCount(0);
+  await expect(status.getByTestId('mark-badge')).toHaveCount(0);
+  expect((await opacities(status)).every((value) => value === 1)).toBe(true);
+  shown = await settings();
+  const again = shown.markings.getByRole('row').nth(2);
+  await expect(again.getByRole('textbox', { name: 'Name of marking 2' })).toHaveValue('Region');
+  await expect(again.getByRole('radio', { name: 'Colour 3' })).toBeChecked();
+  await expect(again.getByRole('radio', { name: 'Default marking' })).toBeChecked();
+  await expect(
+    shown.tiles
+      .getByRole('combobox', { name: 'Marking for By category' })
+      .locator('option:checked'),
+  ).toHaveText('Region (default)');
+  await expect(
+    shown.tiles.getByRole('checkbox', { name: 'Details by status limited by Region' }),
+  ).toBeChecked();
+});
+
 test('Settings › Markings adds, renames, recolours, deletes and defaults markings, and sets each tile’s', async ({
   page,
   request,

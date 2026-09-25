@@ -1835,11 +1835,22 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/dashboard/markings/shareLink.ts`, `packages/web/src/dashboard/markings/shareLink.test.ts`
   - Failing test: `shareLink.test.ts`: opening the copied URL reproduces the same filters and the same marks (AC-123).
   - Depends on: T087, T101
-- [ ] T130 (AC-124) Open a dashboard with no marks when no bookmark or link parameters are given
+- [x] T130 (AC-124) Open a dashboard with no marks when no bookmark or link parameters are given
+  - Done 2026-09-25, with T131, on the same e2e. **AC-124 is ticked** on `e2e/markings.spec.ts` "a dashboard saved with marks on keeps its marking definitions, never its marks, and opens unmarked", in Chrome, Firefox and Safari.
+    - The dashboard is saved with "shipped" marked, then reopened with no parameters. There's no chip, no badge, and every bar is solid.
+    - Marks were always the page's state alone (T087, T090). This test shows it.
+    - **It passed on its first run,** as the behaviour was there. It was not seen failing.
+    - This task's dependency on T129 (links) was for the "no link parameters" half. Until links carry marks, every open has none.
   - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/openEmpty.test.ts`
   - Failing test: `openEmpty.test.ts`: a plain open leaves every marking empty (AC-124).
   - Depends on: T129
-- [ ] T131 (AC-125) Save marking definitions with the dashboard and never the marked items
+- [x] T131 (AC-125) Save marking definitions with the dashboard and never the marked items
+  - Done 2026-09-25. **AC-125 is ticked** on `e2e/markings.spec.ts` "a dashboard saved with marks on keeps its marking definitions, never its marks, and opens unmarked", in Chrome, Firefox and Safari:
+    - With "shipped" marked, Settings › Markings adds "Region" in colour 3 as the default, sets By category to mark with it and the details tile to be limited by it, and is saved.
+    - The stored dashboard has Region with `slot: mk3` and `isDefault`, and the tiles' `limitedBy`. "shipped" appears nowhere in it.
+    - Reopened, it has the same definitions and nothing marked (AC-124, T130).
+    - The document has always held the definitions (`markings`, a tile's `marksWith`, `limitedBy` and `limitMode`) and no marked items (T071, T090). This test shows it.
+    - **It passed on its first run,** once its option names matched the page ("Region (default)"). It was not seen failing.
   - Files: `packages/api/src/repos/dashboards.ts`, `packages/api/src/repos/markingPersistence.test.ts`
   - Failing test: `markingPersistence.test.ts`: names, colours, the default, tile assignments and limits persist, and reopening restores no marked items (AC-125).
   - Depends on: T071, T090

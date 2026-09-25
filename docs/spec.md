@@ -398,9 +398,9 @@ Traces to: `[R7]`, direction.md §7a.
       Fails when: applying a bookmark modifies the dashboard for other users.
 - [ ] AC-123 WHEN the user copies a link with marks, THE SYSTEM SHALL produce a URL that reproduces the current filters and marks when opened.
       Fails when: opening the link produces different marks or filters.
-- [ ] AC-124 WHEN a dashboard is opened without a bookmark or link parameters, THE SYSTEM SHALL open it with no marks (direction.md rule 54).
+- [x] AC-124 WHEN a dashboard is opened without a bookmark or link parameters, THE SYSTEM SHALL open it with no marks (direction.md rule 54).
       Fails when: a dashboard opens with marks the author left behind.
-- [ ] AC-125 THE SYSTEM SHALL save marking definitions — names, colours, the default, which tile marks with which, and the limits — with the dashboard, and never the marked items (direction.md rule 54).
+- [x] AC-125 THE SYSTEM SHALL save marking definitions — names, colours, the default, which tile marks with which, and the limits — with the dashboard, and never the marked items (direction.md rule 54).
       Fails when: reopening a saved dashboard restores marked items.
 
 ## F14. Chart ownership: local and library charts
