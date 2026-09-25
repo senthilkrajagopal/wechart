@@ -1,4 +1,4 @@
-import type { MarkingPredicate } from './predicate';
+import { markingMembers, type MarkingPredicate } from './predicate';
 
 /**
  * Whether a marking applies to a tile (AC-103).
@@ -47,8 +47,8 @@ export function markingApplicability(
     if (!wanted.includes(member)) wanted.push(member);
   };
 
-  for (const item of predicate.items) for (const part of item) want(part.member);
-  for (const range of predicate.ranges) want(range.member);
+  // Its items', its ranges', and each whole tile's own and filters' (AC-103).
+  for (const member of markingMembers(predicate)) want(member);
 
   const resolvable = new Set(resolvableMembers);
   const missing = wanted.filter((member) => !resolvable.has(member));

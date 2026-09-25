@@ -27,6 +27,11 @@ export function createDetailsTile(
     mintChartId: () => string;
     /** The marking the tile marks with, which limits the new one. */
     markingId: string;
+    /**
+     * The tiles that mark with it, by title, which its message names
+     * (AC-110); the tile's own title where none are given.
+     */
+    masters?: readonly string[];
   },
 ): { document: DashboardDocument; tileId: string } | undefined {
   let chartId: string | undefined;
@@ -44,7 +49,9 @@ export function createDetailsTile(
     marksWith: '',
     limitedBy: [options.markingId],
     nothingMarked: NOTHING_MARKED_DEFAULT,
-    nothingMarkedMessage: defaultNothingMarkedMessage([title]),
+    nothingMarkedMessage: defaultNothingMarkedMessage(
+      options.masters !== undefined && options.masters.length > 0 ? options.masters : [title],
+    ),
   }));
   return {
     document: {

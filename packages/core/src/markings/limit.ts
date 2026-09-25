@@ -1,5 +1,5 @@
 import { isItemMarked } from './apply';
-import type { MarkedItem, MarkingPredicate } from './predicate';
+import { matchesPredicate, type MarkedItem, type MarkingPredicate } from './predicate';
 
 /**
  * The cap on how many items one marking stores, and the one operation exempt
@@ -121,9 +121,15 @@ export function invertTileItems(
 ): LimitedMarking {
   const rest = withoutTile(predicate, tileId, tileItems);
   if (markedWhole(predicate, tileId)) return { predicate: rest, refused: 0 };
+  // Unmarked as drawn: an item another tile's whole already marks is marked
+  // here too, and that whole is not this tile's to undo (T121's third
+  // review) — so it is neither added nor taken away.
+  const drawnMarked = (item: MarkedItem) =>
+    isItemMarked(predicate, item) ||
+    matchesPredicate(rest, Object.fromEntries(item.map((part) => [part.member, part.value])));
   return addItemsWithinLimit(
     rest,
-    tileItems.filter((item) => !isItemMarked(predicate, item)),
+    tileItems.filter((item) => !drawnMarked(item)),
   );
 }
 
@@ -131,20 +137,30 @@ export function invertTileItems(
  * Mark all on one tile (AC-115), stored as the tile's filter — what it was
  * drawn with — and how many items it showed, never as a list (AC-102, the
  * user's decision of 2026-09-24): so it is never refused, and stores nothing
- * the cap counts. The tile's own items and any earlier whole of it go, since
- * the whole holds them; other tiles' items are kept.
+ * the cap counts. Any earlier whole of it goes. Items equal to the tile's go
+ * only where the whole marks every row: filtered, the whole may be narrower
+ * than an item another tile marked across everything, and one item cannot be
+ * told from the other (T121's third review).
  */
 export function markAllOfTile(
   predicate: MarkingPredicate,
   tileId: string,
   filters: readonly Readonly<Record<string, unknown>>[],
   tileItems: readonly MarkedItem[],
+  /** The member the tile's items are values of (AC-103). */
+  member?: string,
 ): LimitedMarking {
-  const rest = withoutTile(predicate, tileId, tileItems);
+  const rest =
+    filters.length === 0
+      ? withoutTile(predicate, tileId, tileItems)
+      : withoutTile(predicate, tileId, []);
   return {
     predicate: {
       ...rest,
-      wholes: [...(rest.wholes ?? []), { tileId, filters, count: tileItems.length }],
+      wholes: [
+        ...(rest.wholes ?? []),
+        { tileId, ...(member === undefined ? {} : { member }), filters, count: tileItems.length },
+      ],
     },
     refused: 0,
   };

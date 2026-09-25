@@ -1363,9 +1363,10 @@ test('Create details tile adds a tile limited by the tile’s marking, its messa
   await expect(bar).toBeHidden();
   const made = tile(page, madeId);
 
-  // Nothing marked: its message, naming the tile to mark in.
+  // Nothing marked: its message, naming every tile that marks with the
+  // marking, as a first limit's does (AC-110).
   await expect(made.getByTestId('nothing-marked')).toContainText(
-    'Nothing is marked in By status. Mark something there to fill this tile.',
+    'Nothing is marked in By status or By category. Mark something there to fill this tile.',
   );
   // Marked: only what is marked, while the tile it came from draws everything.
   await clickBar(page, status, 'shipped');

@@ -136,6 +136,7 @@ export {
   EMPTY_PREDICATE,
   isEmptyPredicate,
   markedCount,
+  markingMembers,
   matchesPredicate,
   predicateProblems,
   withItem,

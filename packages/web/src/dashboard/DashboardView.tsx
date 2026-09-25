@@ -6,6 +6,8 @@ import {
   invertTileItems,
   markAllOfTile,
   markedCount,
+  markingMembers,
+  MARKING_ITEM_LIMIT,
   OTHER_LABEL,
   type MarkedItem,
   applyItemClick,
@@ -2020,9 +2022,18 @@ export function DashboardView({
     // A tile marked whole (Mark all), as its items again, so a Ctrl-click
     // takes one of them away rather than doing nothing (AC-115).
     const held = markingOf(marks, markingId);
-    const before = toggle
-      ? expandWholeTile(held, tileId, tileItemsOf(tileId) ?? []).predicate
-      : held;
+    const expanded = toggle
+      ? expandWholeTile(held, tileId, tileItemsOf(tileId) ?? [])
+      : { predicate: held, refused: 0 };
+    // More items than a marking holds: said, and nothing changed — the
+    // whole is not cut short behind the reader's back (AC-102).
+    if (expanded.refused > 0) {
+      setMarkSaid(
+        `This tile is marked whole and has more items than a marking holds (${MARKING_ITEM_LIMIT.toLocaleString('en-GB')}). Unmark it to mark its items one by one.`,
+      );
+      return;
+    }
+    const before = expanded.predicate;
     const after =
       clicked === undefined
         ? /**
@@ -2130,11 +2141,17 @@ export function DashboardView({
     const filters = Array.isArray(query['filters']) ? (query['filters'] as CubeFilter[]) : [];
     const ranges = (
       Array.isArray(query['timeDimensions']) ? (query['timeDimensions'] as CubeFilter[]) : []
-    ).flatMap((time) =>
-      Array.isArray(time['dateRange']) && typeof time['dimension'] === 'string'
-        ? [{ member: time['dimension'], operator: 'inDateRange', values: time['dateRange'] }]
-        : [],
-    );
+    ).flatMap((time) => {
+      const range = time['dateRange'];
+      if (typeof time['dimension'] !== 'string') return [];
+      // Two bounds, or one relative range ("last 30 days"), which
+      // `inDateRange` takes as its one value (data-apis.md).
+      if (Array.isArray(range))
+        return [{ member: time['dimension'], operator: 'inDateRange', values: range }];
+      if (typeof range === 'string')
+        return [{ member: time['dimension'], operator: 'inDateRange', values: [range] }];
+      return [];
+    });
     return [...filters, ...ranges];
   };
 
@@ -2210,11 +2227,20 @@ export function DashboardView({
       case 'replace':
       case 'toggle': {
         const toggling = result.action === 'toggle';
-        // As a Ctrl-click: a tile marked whole is its items again first (AC-115).
-        const base = toggling
-          ? expandWholeTile(before, tileId, tileItemsOf(tileId) ?? []).predicate
-          : before;
-        const after = applyItemClick(base, itemAt(result.focused), { toggle: toggling });
+        // As a Ctrl-click: a tile marked whole is its items again first (AC-115),
+        // and one with more than a marking holds is said so, not cut short.
+        const expanded = toggling
+          ? expandWholeTile(before, tileId, tileItemsOf(tileId) ?? [])
+          : { predicate: before, refused: 0 };
+        if (expanded.refused > 0) {
+          setMarkSaid(
+            `This tile is marked whole and has more items than a marking holds (${MARKING_ITEM_LIMIT.toLocaleString('en-GB')}). Unmark it to mark its items one by one.`,
+          );
+          return;
+        }
+        const after = applyItemClick(expanded.predicate, itemAt(result.focused), {
+          toggle: toggling,
+        });
         setMarks((now) => withMarking(now, markingId, after));
         noteSource(markingId, tileId);
         say(after);
@@ -2311,10 +2337,10 @@ export function DashboardView({
     for (const [chartId, shown] of Object.entries(markedSpecs ?? {})) {
       const predicate = markingOf(marks, shown.markingId);
       if (isEmptyPredicate(predicate)) continue;
-      const members = new Set<string>();
-      for (const item of predicate.items) for (const part of item) members.add(part.member);
-      for (const range of predicate.ranges) members.add(range.member);
-      const reachable = [...members].filter((member) => reachOf(member, chartId) !== false);
+      // Every member it names, a whole tile's included (AC-103).
+      const reachable = markingMembers(predicate).filter(
+        (member) => reachOf(member, chartId) !== false,
+      );
       // Naming what it cannot reach by its title (AC-220).
       const applicability = markingApplicability(predicate, reachable, memberTitle);
       if (!applicability.linked) said[chartId] = applicability.label;
@@ -2432,25 +2458,46 @@ export function DashboardView({
       // A tile that cannot reach the marking's members draws none of it
       // (AC-103); its label says why.
       if (spec === undefined || notLinked[chartId] !== undefined) continue;
-      const predicate = markingOf(marks, shown.markingId);
-      // Marked whole on a tile of this chart: every item it draws (AC-115).
-      const whole = (predicate.wholes ?? []).some((each) => {
-        const marked = elementAt(live, each.tileId);
-        return marked !== null && isTile(marked) && marked.chartId === chartId;
-      });
       specs[chartId] = {
         ...spec,
-        marking: { predicate, colour: shown.colour, ...(whole ? { whole } : {}) },
+        marking: { predicate: markingOf(marks, shown.markingId), colour: shown.colour },
       };
     }
     return specs;
-  }, [withHighlights, markedSpecs, marks, notLinked, live]);
+  }, [withHighlights, markedSpecs, marks, notLinked]);
 
   // The assignment is held across renders, so a filter that hides a member
   // does not hand its colour to whoever is now first (AC-039).
   // The dashboard as the session has it: a tile added in it — a duplicate's
   // copy (T068) — is drawn, and coloured, before the dashboard is saved.
   const coloured = useDashboardColours(live, withMarkings);
+  /**
+   * The charts of tiles marked whole (Mark all, AC-115) that are still
+   * filtered as they were then: each draws every item marked. One filtered
+   * otherwise since is read row by row like any other (T121's third review).
+   * Keyed by that set, so the specs change only when it does.
+   */
+  const wholeKey = Object.values(marks)
+    .flatMap((predicate) => predicate.wholes ?? [])
+    .flatMap((whole) => {
+      const element = elementAt(live, whole.tileId);
+      if (element === null || !isTile(element) || element.chartId === undefined) return [];
+      return JSON.stringify(filtersOfChart(element.chartId)) === JSON.stringify(whole.filters)
+        ? [element.chartId]
+        : [];
+    })
+    .sort()
+    .join('\n');
+  const withWholes = useMemo(() => {
+    if (wholeKey === '') return coloured;
+    const specs: Record<string, RenderSpec> = { ...coloured };
+    for (const chartId of wholeKey.split('\n')) {
+      const spec = specs[chartId];
+      if (spec?.marking !== undefined)
+        specs[chartId] = { ...spec, marking: { ...spec.marking, whole: true } };
+    }
+    return specs;
+  }, [coloured, wholeKey]);
   /**
    * Each filtered chart's filters in words, for the empty state (AC-043):
    * named by the field each was set on — the filter bar's field, not the name
@@ -2541,7 +2588,7 @@ export function DashboardView({
   }, [notCovered, reached, filtered, crossEffects, highlighted]);
 
   const charts: TileCharts = {
-    specs: coloured,
+    specs: withWholes,
     errors: withFiltered.errors,
     loading,
     /**
@@ -2647,7 +2694,13 @@ export function DashboardView({
                 how === 'invert'
                   ? invertTileItems(before, tileId, tileItems)
                   : // What the tile is filtered by, not what that matched (AC-102).
-                    markAllOfTile(before, tileId, filtersOfChart(chartId), tileItems);
+                    markAllOfTile(
+                      before,
+                      tileId,
+                      filtersOfChart(chartId),
+                      tileItems,
+                      tileItems[0]?.[0]?.member,
+                    );
               setMarks((now) => withMarking(now, markingId, after.predicate));
               noteSource(markingId, tileId);
               const named = markings.find((each) => each.id === markingId);
@@ -2733,7 +2786,9 @@ export function DashboardView({
    * chart's, with the filters that reach it and that Cube could join — the
    * same query `FilteredCharts` asks — so the SQL shown is the SQL it runs.
    */
-  const queryOf = (chartId: string): Record<string, unknown> | undefined => {
+  // A declaration, hoisted: what a whole tile was filtered by is compared
+  // with this above, where each render's specs are made (AC-115).
+  function queryOf(chartId: string): Record<string, unknown> | undefined {
     const chart = drawn.documents?.[chartId];
     if (chart === undefined) return undefined;
     const refused = filtered[chartId]?.uncovered ?? [];
@@ -2749,7 +2804,7 @@ export function DashboardView({
     } catch {
       return undefined;
     }
-  };
+  }
   const sqlQuery = sqlFor === undefined ? undefined : queryOf(sqlFor.chartId);
   const viewedQuery = queryFor === undefined ? undefined : queryOf(queryFor.chartId);
   const closeQuery = () => {
@@ -3962,18 +4017,32 @@ function DashboardPages({
             const shown = charts.markingOn?.(tileId);
             if (shown === undefined) return;
             const detailsId = `el-${String(Date.now())}-${String(counter++)}`;
+            const chartIdOfCopy = mintChartId();
+            const make = (current: DashboardDocument) =>
+              createDetailsTile(current, tileId, {
+                ...duplicateFrom,
+                mintTileId: () => detailsId,
+                mintChartId: () => chartIdOfCopy,
+                markingId: shown.marking.id,
+                // Every tile that marks with it, as AC-110 names them.
+                masters: masterTileNames(
+                  current,
+                  [shown.marking.id],
+                  (id) => {
+                    const element = elementAt(current, id);
+                    return element !== null && isTile(element) && element.chartId !== undefined
+                      ? charts.titleOf?.(element.chartId)
+                      : undefined;
+                  },
+                  defaultMarkingOf(current)?.id,
+                ),
+              });
+            // Nothing made — a chart not yet read — is no change, and not said.
+            if (make(document) === undefined) return;
             // From view mode, editing first, which holds the new tile until it
             // is saved — or Discard takes it away.
             session.edit();
-            session.update(
-              (current) =>
-                createDetailsTile(current, tileId, {
-                  ...duplicateFrom,
-                  mintTileId: () => detailsId,
-                  mintChartId,
-                  markingId: shown.marking.id,
-                })?.document ?? current,
-            );
+            session.update((current) => make(current)?.document ?? current);
             onAim({ selected: detailsId, addTarget: null });
             drag.say(`Details tile added, limited by ${shown.marking.name}.`);
             requestAnimationFrame(() => {

@@ -88,6 +88,17 @@ describe('Create details tile (AC-112)', () => {
     });
   });
 
+  it('names every tile that marks with the marking in its message, as AC-110 does', () => {
+    const made = createDetailsTile(DASHBOARD, 't1', {
+      ...options,
+      masters: ['Orders by status', 'Orders by region'],
+    });
+    const tile = made?.document.pages[0]?.items[1] as { nothingMarkedMessage?: string };
+    expect(tile.nothingMarkedMessage).toBe(
+      'Nothing is marked in Orders by status or Orders by region. Mark something there to fill this tile.',
+    );
+  });
+
   it('makes nothing of a tile that is not a chart', () => {
     expect(createDetailsTile(DASHBOARD, 't2', options)).toBeUndefined();
   });

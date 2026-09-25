@@ -1684,6 +1684,8 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Done 2026-09-24. AC-115 ticked. **AC-199 stays open**: T118–T120's actions (details tile, Filter to/out marked, View marked rows) are not built yet, so T121 is not the last of the group after all; the last of those ticks it.
   - A tile's items are the categories it draws as the filters leave them (the ones a click or its keyboard marks), none blank and not Top N's "Other"; offered only where a click marks the x category — not on a series chart (stacked/grouped bar, multi-line, stacked area, combo, scatter), a trellis, a table or a pivot (`clickMarksCategory`). Invert keeps to the 1,000-item cap and says so (AC-102).
   - **Mark all stores the tile's filter, not a list** (the user's decision of 2026-09-24, as AC-102 is written): a `WholeTile` alternative in the predicate — the tile's effective Cube filters and time range as it was drawn, and how many items it showed, which is what the badge counts. The tile marked whole draws every item marked; another tile matches its rows against those filters; a tile limited by the marking gets them as a filter group, and an unfiltered whole limits nothing. A Ctrl-click on a wholly marked tile turns it back into its items first; Invert of a whole tile marks none of it. The cold review's first round (e0279de's) listed items instead, and offered it on series and table tiles; both are fixed here.
+  - **The third review's fixes, and the rules they settle** (the last round on this, by the standing instruction): a whole records its tile's member, so a tile that cannot reach it says "not linked" (AC-103); the tile draws every item marked only while it is filtered as it was then, and is read row by row otherwise; a relative date range is kept as `inDateRange`'s one value; the filter evaluator follows Cube's semantics (case-insensitive text, NULL passing no comparison, the "OrOn" and "not" operators); a whole with more items than a marking holds is not cut short by a Ctrl-click — it is said so; a filtered Mark all keeps every other item (one tile's item cannot be told from another's); Invert adds no item another tile's whole already marks, and cannot take that whole away. `markedCount` adds a whole's count to the items, so an item a whole also covers is counted twice — left as it is.
+  - Create details tile (T118) names every tile that marks with the marking (AC-110), and makes no change when there is nothing to make.
 - [ ] T122 (AC-116) Render marking and measure tokens in text tiles
   - Files: `packages/web/src/dashboard/tiles/TextTokens.ts`, `packages/web/src/dashboard/tiles/TextTokens.test.ts`
   - Failing test: `TextTokens.test.ts`: a marking token renders the summary or count, and a measure token limited by a marking shows the measure over the marked rows, or over all data when nothing is marked (AC-116).
@@ -3534,7 +3536,47 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 - [ ] T225 (AC-187) Re-run the design critique on every surface, and tick AC-187 only on measured conformance
   - Files: `docs/design/critiques/`
   - Failing test: the `design-critic` report finds no `STRUCTURE` or AC-187 finding on the surfaces above (AC-187).
-  - Depends on: T208–T241
+  - Depends on: T208–T241, and T243–T251 (the re-critique's fixes)
+  - Re-critiques of 2026-09-24: `2026-09-24-recheck-shell-explore.md` (14 of 27 earlier findings fixed, 17 new, 23 AC-187 mismatches) and `2026-09-24-recheck-dashboard.md` (16 of 30 fixed, 10 new, 35 mismatches). Their fixes are T243–T251; the chart editor, Model and admin re-critiques follow.
+
+### The 2026-09-24 re-critique's fixes
+
+- [ ] T243 (AC-193) Name an Explore chart by its drawn type, move a folder into a sibling, and make each row one target
+  - Files: `packages/web/src/explore/*`, `packages/api/src/*` (the contents contract's chart type), `e2e/explore.spec.ts`
+  - Failing test: `e2e/explore.spec.ts`: an automatic chart's row reads its drawn type, not "Automatic"; a folder's Move to offers its sibling folders, named by path, without reflowing the table; a row opens from any cell, with a hover; no row is selected at rest (recheck-shell-explore N1, N17, F16, N14, N11, N12, F27, F19).
+  - Depends on: T225's re-critique
+- [ ] T244 (AC-187, AC-231) Dock Explore's folder tree, and set its table, header and states to the prototype's measures
+  - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/explore/*`, `e2e/design-conformance.spec.ts`
+  - Failing test: `e2e/design-conformance.spec.ts`: the tree pane is 260 px on `bg-surface` with a 44 px head and 12 px rows, the selection `accent-soft`; table rows are 34 px with 12/600 names and a 22 px icon chip; crumbs 24 px, search 28×260, rename 36 px; the table scrolls in its card with sticky headers; empty and no-result states keep the header (recheck-shell-explore F6–F8, F14, F17, F20, F22–F25, N2–N5, N13; AC-187 mismatches 5–23).
+  - Depends on: T243
+- [ ] T245 (AC-187) Match the app bar's search trigger, avatar and palette to the prototype, and open a new dashboard in edit mode
+  - Files: `packages/web/src/shell/*`, `packages/web/src/explore/*`, `e2e/design-conformance.spec.ts`
+  - Failing test: the ⌘K hint is `text-muted` at normal height; the avatar is `role-dim`; the palette's Close is radius 6, its backdrop covers the app bar, it has the pop shadow and opens with its query cleared; New › Dashboard opens editing (recheck-shell-explore N6–N10, N15; mismatches 1–4).
+  - Depends on: none
+- [ ] T246 (AC-187) Match the dashboard header, filter band, marking chip and badge to the prototype
+  - Files: `packages/web/src/dashboard/*`, `packages/web/src/filters/FilterBar.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: header 80 px with a 24 px ghost breadcrumb in the prototype's colours; the filter band always 53 px with a 12/16 `text-muted` hint, full width in edit mode; the chip and badge at the prototype's padding, colours and swatch (recheck-dashboard F3, N8; mismatches 1–8, 11).
+  - Depends on: none
+- [ ] T247 (AC-187) Draw tab-group tabs, Header and Markdown elements, and chart text as the prototype does, and use its picker for tile menus
+  - Files: `packages/web/src/dashboard/*`, `packages/charts/src/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: a tab group's selected tab has the page tab's underline and the others do not; Header has no tile chrome and a `text-lg` 600 heading; `##` is a 20/26 h2; chart text is Inter with tabular numerals; no band under the axis labels; one freshness badge, hidden while marked; tile ⋯ menus are the 250 px picker with 28 px items and Delete in `status-error`; sections on the prototype's band; Markdown tiles named by their text (recheck-dashboard N1, N4–N7, N9, F8, F9, F13; mismatches 9–21).
+  - Depends on: none
+- [ ] T248 (AC-187) Put the edit sidebar under the filter band, and match its palette, add slots, Properties and Outline to the prototype
+  - Files: `packages/web/src/dashboard/edit/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: the sidebar starts below a full-width band; palette rows carry the 24 px kind chip; the add slot is "＋ Add" at 56 px; Properties' buttons are full width and its limit rows 12/600; Outline rows carry the kind chip; the page-tab list is not under a tile's properties (recheck-dashboard F19, F23; mismatches 22–26).
+  - Depends on: none
+- [ ] T249 (AC-187, AC-231) Give the dashboard settings page the prototype's bar, nav, content and tables, with Escape and an inactive banner
+  - Files: `packages/web/src/dashboard/settings/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: a 41 px bar titled "Dashboard settings" with 24 px buttons and a primary Save; a 220 px nav with `accent-soft` selection; flat content with an 18 px h2; mode cards with descriptions; an inactive section says so in a banner; Escape leaves as Cancel does; markings tables at 29 px rows (recheck-dashboard F26–F29; mismatches 27–35).
+  - Depends on: none
+- [ ] T250 (AC-187) Below 1,024 pixels, stack a dashboard to one column in view mode only, keeping every tile's title
+  - Files: `packages/web/src/dashboard/*`, `packages/web/src/shell/styles.ts`, `e2e/no-horizontal-scroll.spec.ts`
+  - Failing test: at 390×844 tiles are full width, each title is visible, and Edit is not offered (recheck-dashboard N2; direction.md §2).
+  - Depends on: none
+- [ ] T251 (AC-187) Draw a dashboard's frame while it loads, and give a failed tile its details and its menu
+  - Files: `packages/web/src/dashboard/*`, `e2e/dashboard.spec.ts`
+  - Failing test: on a slow load the header, tabs and tile frames show before the data; a failed tile keeps its ⋯ menu and offers the query and error in a disclosure (recheck-dashboard F10, F15; direction.md §6, checklist 18).
+  - Depends on: none
 
 ---
 
@@ -3588,9 +3630,9 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-044 | T051       | AC-089 | T095 | AC-134 | T140 | AC-179 | T184       |
 | AC-045 | T043       | AC-090 | T096 | AC-135 | T141 | AC-180 | T001, T185 |
 | AC-181 | T187       | AC-182 | T191 | AC-183 | T192 | AC-184 | T197       |
-| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225 | AC-188 | T206       |
+| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225, T244–T251 | AC-188 | T206       |
 | AC-189 | T207       | AC-190 | T211 | AC-191 | T211 | AC-192 | T212       |
-| AC-193 | T213       | AC-194 | T214 | AC-195 | T216 | AC-196 | T217       |
+| AC-193 | T213, T243 | AC-194 | T214 | AC-195 | T216 | AC-196 | T217       |
 | AC-197 | T215       | AC-198 | T218 | AC-199 | T219, T118–T121 | AC-200 | T220       |
 | AC-201 | T219       | AC-202 | T221 | AC-203 | T222 | AC-204 | T223       |
 | AC-205 | T223       | AC-206 | T223 | AC-207 | T217 | AC-208 | T221       |
@@ -3599,7 +3641,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-217 | T230       | AC-218 | T230 | AC-219 | T231 | AC-220 | T232       |
 | AC-221 | T232       | AC-222 | T234 | AC-223 | T234 | AC-224 | T235       |
 | AC-225 | T236       | AC-226 | T237 | AC-227 | T237 | AC-228 | T239, T241 |
-| AC-229 | T239       | AC-230 | T240 | AC-231 | T238 | AC-232 | T241       |
+| AC-229 | T239       | AC-230 | T240 | AC-231 | T238, T244, T249 | AC-232 | T241       |
 | AC-233 | T238       |        |      |        |      |        |            |
 
 Reopened 2026-09-24 and now also covered by the prototype-alignment tasks: AC-004 → T008, T233 · AC-005 → T008, T210 · AC-019 → T017, T212 · AC-042 → T049, T208 (re-ticked) · AC-053 → T059, T209.

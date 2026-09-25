@@ -54,6 +54,11 @@ export type MarkedItem = readonly MemberValue[];
 export interface WholeTile {
   /** The tile it was marked on, which draws every item marked. */
   readonly tileId: string;
+  /**
+   * The member the tile's items are values of: a tile that cannot reach it
+   * cannot be marked by the whole, and says so (AC-103).
+   */
+  readonly member?: string;
   readonly filters: readonly Readonly<Record<string, unknown>>[];
   /** How many items the tile showed when marked: what its badge counts. */
   readonly count: number;
@@ -89,6 +94,30 @@ export function markedCount(predicate: MarkingPredicate): number {
 
 type Filter = Readonly<Record<string, unknown>>;
 
+/** The members a Cube filter reads, its groups' too. */
+function filterMembers(filter: Filter): string[] {
+  const groups = [filter['or'], filter['and']].filter(Array.isArray) as Filter[][];
+  if (groups.length > 0) return groups.flatMap((group) => group.flatMap(filterMembers));
+  return typeof filter['member'] === 'string' ? [filter['member']] : [];
+}
+
+/**
+ * Every member a marking names — its items', its ranges', and each whole
+ * tile's own and its filters' — once each, in order: what a tile must reach
+ * to show the marking (AC-103).
+ */
+export function markingMembers(predicate: MarkingPredicate): string[] {
+  const members = [
+    ...predicate.items.flatMap((item) => item.map((part) => part.member)),
+    ...predicate.ranges.map((range) => range.member),
+    ...(predicate.wholes ?? []).flatMap((whole) => [
+      ...(whole.member === undefined ? [] : [whole.member]),
+      ...whole.filters.flatMap(filterMembers),
+    ]),
+  ];
+  return [...new Set(members)];
+}
+
 /**
  * Whether a row passes a Cube filter, read as Cube reads it
  * (research/cube/data-apis.md, the filter operators), for drawing a whole
@@ -106,30 +135,40 @@ function passes(filter: Filter, row: Record<string, unknown>): boolean {
   const values = (Array.isArray(filter['values']) ? (filter['values'] as unknown[]) : []).map(
     String,
   );
-  const text = value === null || value === undefined ? undefined : String(value);
+  // A NULL (or blank) passes no comparison, as in SQL; only `notSet` claims it.
+  if (value === null || value === undefined || value === '') return filter['operator'] === 'notSet';
+  const text = String(value);
+  const lower = text.toLowerCase();
   const number = Number(value);
+  // Cube's text operators are a case-insensitive LIKE (data-apis.md).
+  const like = (test: (needle: string) => boolean) =>
+    values.some((each) => test(each.toLowerCase()));
+  /** A day as a bound: its first instant as a start, its last as an end, as ISO text. */
+  const bound = (at: string | undefined, end: boolean) =>
+    at !== undefined && end && /^\d{4}-\d{2}-\d{2}$/.test(at) ? `${at}T23:59:59.999` : at;
+  const from = bound(values[0], false) ?? '';
+  const to = bound(values[1] ?? values[0], true) ?? '';
+  // A relative range ("last 7 days") is Cube's to resolve: no row claims it here.
+  const dated = (at: string) => /^\d{4}-\d{2}-\d{2}/.test(at);
   switch (filter['operator']) {
     case 'equals':
-      return text !== undefined && values.includes(text);
+      return values.includes(text);
     case 'notEquals':
-      return text === undefined || !values.includes(text);
+      return !values.includes(text);
     case 'set':
-      return text !== undefined;
-    case 'notSet':
-      return text === undefined;
+      return true;
     case 'contains':
-      return (
-        text !== undefined && values.some((each) => text.toLowerCase().includes(each.toLowerCase()))
-      );
+      return like((each) => lower.includes(each));
     case 'notContains':
-      return (
-        text === undefined ||
-        !values.some((each) => text.toLowerCase().includes(each.toLowerCase()))
-      );
+      return !like((each) => lower.includes(each));
     case 'startsWith':
-      return text !== undefined && values.some((each) => text.startsWith(each));
+      return like((each) => lower.startsWith(each));
+    case 'notStartsWith':
+      return !like((each) => lower.startsWith(each));
     case 'endsWith':
-      return text !== undefined && values.some((each) => text.endsWith(each));
+      return like((each) => lower.endsWith(each));
+    case 'notEndsWith':
+      return !like((each) => lower.endsWith(each));
     case 'gt':
       return values.some((each) => number > Number(each));
     case 'gte':
@@ -139,19 +178,19 @@ function passes(filter: Filter, row: Record<string, unknown>): boolean {
     case 'lte':
       return values.some((each) => number <= Number(each));
     case 'inDateRange':
-      return (
-        text !== undefined && text >= (values[0] ?? '') && text.slice(0, 10) <= (values[1] ?? '')
-      );
+      return dated(from) && dated(to) && text >= from && text <= to;
     case 'notInDateRange':
-      return (
-        text !== undefined && (text < (values[0] ?? '') || text.slice(0, 10) > (values[1] ?? ''))
-      );
+      return dated(from) && dated(to) && (text < from || text > to);
     case 'beforeDate':
-      return text !== undefined && text < (values[0] ?? '');
+      return dated(from) && text < from;
+    case 'beforeOrOnDate':
+      return dated(to) && text <= to;
     case 'afterDate':
-      return text !== undefined && text > (values[0] ?? '');
+      return dated(to) && text > to;
+    case 'afterOrOnDate':
+      return dated(from) && text >= from;
     default:
-      // An operator not read here claims nothing.
+      // An operator not read here — `notSet` on a value among them — claims nothing.
       return false;
   }
 }
