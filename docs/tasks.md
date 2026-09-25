@@ -3941,6 +3941,58 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Failing test: on a slow load the header, tabs and tile frames show before the data; a failed tile keeps its ⋯ menu and offers the query and error in a disclosure (recheck-dashboard F10, F15; direction.md §6, checklist 18).
   - Depends on: none
 
+## Spec F23. The chart tile's menu (DSH-08), and F16's join refusal
+
+Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/chart-context-menu.md`. Every task names the renderer and an e2e spec (T190's lesson). The user's order: finish charts and dashboards, then the Superset-parity test. These go after the marking and bookmark tasks they build on (T119, T120, T190).
+
+- [ ] T265 (AC-235) Refuse at publish a rollup naming cubes Cube cannot join, with the rollup, its file and Cube's reason
+  - Files: `packages/api/src/model/publish.ts` and a check beside `rollupReferences.ts`, `packages/api/src/publish.test.ts`, `packages/web/src/workspaces/model/*` (the refusal as shown), `e2e/preaggregations.spec.ts`
+  - Failing test: publishing a rollup on `base` that names `user.city` with no join between them is refused with 422, naming the rollup, its file and Cube's reason, and the store is unchanged. The same rollup with a join publishes.
+  - Depends on: `docs/research/cube/rollup-join-paths.md`
+- [ ] T266 (AC-199, AC-246) Make the tile menu a menu with submenus, opened by ⋯, a right-click on the plot, Shift+F10 and the Menu key
+  - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/web/src/tiles/ChartCanvas.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/shell/styles.ts`, `e2e/markings.spec.ts` or `e2e/tile-menu.spec.ts`
+  - Failing test: a right-click on a bar opens the menu at the pointer, prevents the browser's menu, and changes no marking; Shift+F10 on a focused tile opens it at the tile; the submenus open with Right arrow and close with Left or Escape.
+  - Depends on: `docs/research/context-menu-and-submenus.md`
+- [ ] T267 (AC-247) Head the tile menu with the marking, its values by title, and "n of N"
+  - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `e2e/markings.spec.ts`
+  - Failing test: with two of six countries marked, the heading reads the marking's name, both countries under the member's title, and "2 of 6".
+  - Depends on: T266
+- [ ] T268 (AC-239) View underlying rows for the whole tile when nothing is marked
+  - Files: `packages/web/src/dashboard/*` (the rows view T120 builds), `e2e/markings.spec.ts`
+  - Failing test: with nothing marked, View underlying rows shows the tile's query ungrouped with its filters, and states the total.
+  - Depends on: T120
+- [ ] T269 (AC-240) A details panel that follows the marking, toggled from the menu and the panel
+  - Files: `packages/web/src/dashboard/*`, `e2e/markings.spec.ts`
+  - Failing test: with the panel on, a new marking replaces its rows and total; the menu's checkbox and the panel's own control both turn it off.
+  - Depends on: T120, T266
+- [ ] T270 (AC-236, AC-237, AC-238) Drill a tile's marked items by another dimension, in place, with a breadcrumb and Back
+  - Files: `packages/core/src/drill.ts` (+test), `packages/web/src/dashboard/*`, `packages/web/src/tiles/ChartTile.tsx`, `e2e/drill.spec.ts`
+  - Failing test:
+    - The candidates are hierarchy level, finer grains, then the cube's and joined cubes' dimensions. No primary key, no marked member, and no other-component cube.
+    - Choosing one redraws the tile to match a Cube query of that dimension filtered to the marked items.
+    - The badge shows the drilled answer's freshness.
+    - Back restores the tile, and the saved chart is unchanged.
+  - Depends on: T266
+- [ ] T271 (AC-241, AC-242, AC-243) Copy › Marked values, Image and To dashboard
+  - Files: `packages/web/src/dashboard/*`, `packages/web/src/tiles/ChartCanvas.tsx`, `e2e/tile-menu.spec.ts`
+  - Failing test:
+    - The clipboard holds the marked values as tab-separated text with a header row.
+    - A PNG of the chart as drawn, with the marking's outline, is on the clipboard.
+    - A KPI's Copy image is disabled with its reason.
+    - Copy to dashboard adds a local copy there and leaves the source's saved definition unchanged.
+  - Depends on: T266, `docs/research/clipboard-and-image-export.md`
+- [ ] T272 (AC-244, AC-199) Export › the tile's CSV, the marked rows' CSV, SVG and PNG
+  - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/core/src/export/*`, `e2e/tile-menu.spec.ts`
+  - Failing test: each item downloads its file. The SVG and PNG are the chart as drawn. The marked rows' CSV appears only while the marking holds items.
+  - Depends on: T266, T120, `docs/research/clipboard-and-image-export.md`
+- [ ] T273 (AC-245) Data as of › the pre-aggregation, its last build, schedule and next run, Refresh now, Open in Jobs, Edit schedule in Model
+  - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/web/src/workspaces/jobs/*` (`?preagg=`), `packages/web/src/router/routes.tsx`, `e2e/tile-menu.spec.ts`
+  - Failing test:
+    - A rollup-served tile's submenu names the pre-aggregation, its last build, "every hour" as written, and the next run with its lateness.
+    - Open in Jobs selects that pre-aggregation.
+    - A database-served tile says so, with Why not accelerated.
+  - Depends on: T266, T264 (the schedule's words)
+
 ---
 
 ## Coverage: acceptance criterion → task
@@ -4005,6 +4057,11 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-221 | T232       | AC-222 | T234 | AC-223 | T234 | AC-224 | T235       |
 | AC-225 | T236       | AC-226 | T237 | AC-227 | T237 | AC-228 | T239, T241 |
 | AC-229 | T239       | AC-230 | T240 | AC-231 | T238, T244, T249 | AC-232 | T241       |
-| AC-233 | T238, T160 | AC-234 | T259 |        |      |        |            |
+| AC-233 | T238, T160 | AC-234 | T259 | AC-235 | T265 | AC-236 | T270       |
+| AC-237 | T270       | AC-238 | T270 | AC-239 | T268 | AC-240 | T269       |
+| AC-241 | T271       | AC-242 | T271 | AC-243 | T271 | AC-244 | T272       |
+| AC-245 | T273       | AC-246 | T266 | AC-247 | T267 |        |            |
+
+AC-199 is also covered by T266 and T272 (its reworded Export item). AC-153 by T264, AC-154 by T160 and T264.
 
 Reopened 2026-09-24 and now also covered by the prototype-alignment tasks: AC-004 → T008, T233 · AC-005 → T008, T210 · AC-019 → T017, T212 · AC-042 → T049, T208 (re-ticked) · AC-053 → T059, T209.

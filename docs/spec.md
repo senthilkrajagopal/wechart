@@ -496,6 +496,9 @@ Traces to: `[R4]`, `[docs/inputs §1]`, direction.md §7c; `[research/cube/pre-a
 - [x] AC-148 WHEN the user asks to refresh a chart's data, THE SYSTEM SHALL re-query Cube bypassing wechart's cached result and show the new data-as-of time; and WHEN a pre-aggregation serves the chart, THE SYSTEM SHALL say that its data is as of that pre-aggregation's last build, and name the Jobs workspace as where to rebuild it.
       Fails when: a chart the database serves shows its previous result again with an unchanged timestamp after a refresh; or a refreshed chart a pre-aggregation serves shows no message naming that pre-aggregation, saying its data is as of the last build, and linking to the Jobs workspace.
       > Reworded 2026-09-22 at the user's decision: Cube answers a refresh of a rollup-served chart from the rollup as last built, so its data-as-of time need not move (research/cube/refresh-jobs-caching.md). The refresh says so rather than rebuilding it.
+- [ ] AC-235 WHEN the user publishes a model change in which a rollup names members of cubes Cube cannot join, THE SYSTEM SHALL refuse the publish, name the rollup and its file, and give Cube's reason.
+      Fails when: such a change is published, or the refusal names no rollup or gives no reason.
+      > Added 2026-09-25 at the user's direction: "if it is not possible to rollup.. then refuse providing reason why it cannot be done". Cube compiles such a rollup, then its refresh worker aborts its run for the whole model at it, so no scheduled refresh in that model happens (research/cube/refresh-key-schedule.md; seen in T159). How Cube decides a rollup can be joined is in research/cube/rollup-join-paths.md.
 
 ## F17. Jobs, builds and scheduling
 
@@ -689,7 +692,8 @@ Dashboards:
       Fails when: the folder or the description cannot be changed there, or a saved description does not appear in Explore.
 - [x] AC-198 WHEN the user opens Settings › Markings, THE SYSTEM SHALL list the dashboard's markings with their colour, name, whether each is the default and how many tiles mark with or are limited by it, let the user add a marking (up to four), rename, recolour, delete and make one the default, and show a table of every chart tile with the marking it marks with and the markings that limit it.
       Fails when: any of those changes cannot be made on that page, or the tiles table is missing.
-- [ ] AC-199 WHEN the user opens a chart tile's menu in view mode, THE SYSTEM SHALL offer View as table, View query, Download CSV and Edit chart, and, while the dashboard is in Markings mode, the marked-rows actions headed by the tile's marking and its count.
+- [ ] AC-199 WHEN the user opens a chart tile's menu in view mode, THE SYSTEM SHALL offer View as table, View query, Export and Edit chart, and, while the dashboard is in Markings mode, the marked-rows actions headed by the tile's marking and its count.
+      > Reworded 2026-09-25 with F23: "Download CSV" is now Export's first item (AC-244).
       Fails when: one of those items is missing, or the marked-rows actions appear outside Markings mode.
 - [x] AC-200 THE SYSTEM SHALL show each non-empty marking in the filter bar as a chip bordered in the marking's colour, naming the marking, summarising its values by the members' titles, naming the tile it came from, and offering a menu and a control that unmarks it.
       Fails when: a chip shows a member's internal name, omits the source tile, or cannot unmark from the chip.
@@ -769,6 +773,48 @@ Jobs, Security, Schedules and Data sources:
 - [x] AC-233 WHEN the user opens Schedules or Data sources, THE SYSTEM SHALL show the page's title and a note saying what the page is for, on Data sources that managing connections is not part of this phase, and SHALL treat "/sources" as Data sources.
       Fails when: either page renders nothing, or "/sources" shows Not found.
 
+## F23. The chart tile's menu (DSH-08)
+
+Purpose: act on a chart tile and its marked items from one menu, opened by its ⋯ button, a right-click on the chart, or the keyboard.
+Traces to: the user, 2026-09-25; `[docs/design/reviews/2026-09-24/chart-context-menu.md]` (DSH-08, proposals P1–P8); direction.md rule 31, §7a.
+
+> **Status, 2026-09-25: added at the user's direction.** From the chart context menu
+> analysis, the user chose "Drill by, Underlying rows + panel, Data-as-of +
+> right-click, Copy & export submenus". Every item is answered by Cube Core's REST
+> API or by the browser (the analysis §1). Decided with it, as small choices the
+> user may overturn:
+> - Drill by redraws the tile in place.
+> - A drilled view does not mark, and is not kept on reload, since it hangs on
+>   marks, which a dashboard opens without (AC-124).
+> - Drill by is offered while the tile's marking holds items.
+> - Excel export waits for a research doc and the user's approval of its package.
+> - PDF stays out, as a server renderer's.
+
+- [ ] AC-236 WHEN the user chooses Drill by and a dimension on a chart tile whose marking holds items, THE SYSTEM SHALL redraw that tile in place grouped by the chosen dimension and filtered to the marked items, with a breadcrumb naming the drilled items and a Back control, and SHALL leave the saved chart and every other tile unchanged.
+      Fails when: the drilled tile's rows differ from a Cube query of the chosen dimension filtered to the marked items, Back does not restore the previous view, or the saved chart changes.
+- [ ] AC-237 WHEN the user opens Drill by on a tile, THE SYSTEM SHALL offer the next level of the member's hierarchy first, then finer time granularities, then the dimensions of the tile's cube and of the cubes Cube reports joined to it, and SHALL offer neither a primary key nor the marked member itself.
+      Fails when: a primary key or the marked member is offered, or a dimension of a cube Cube reports in another join component is offered.
+- [ ] AC-238 WHILE a tile shows a drilled view, THE SYSTEM SHALL show the drilled answer's own freshness: the pre-aggregation that served it, or that the database did.
+      Fails when: a drilled view the database answered shows the parent view's pre-aggregation.
+- [ ] AC-239 WHEN the user chooses View underlying rows on a chart tile with nothing marked, THE SYSTEM SHALL show the rows behind the whole tile, as its query ungrouped with its filters, and state the total number of rows.
+      Fails when: the rows differ from the tile's query ungrouped, or the total is absent.
+- [ ] AC-240 WHILE the details panel is on, WHEN the marking changes, THE SYSTEM SHALL show the rows behind the newly marked items and their total, and the panel SHALL be turned on and off both from the tile's menu and from the panel itself.
+      Fails when: the panel shows rows of a previous marking after the change, or either control does not toggle it.
+- [ ] AC-241 WHEN the user chooses Copy › Marked values, THE SYSTEM SHALL put the marked items' member values on the clipboard as tab-separated text with a header row of the members' titles.
+      Fails when: the clipboard text differs from the marked items, or has no header row.
+- [ ] AC-242 WHEN the user chooses Copy › Image on a tile ECharts draws, THE SYSTEM SHALL put a PNG of the chart as drawn, marking included, on the clipboard; on a KPI, table or pivot tile THE SYSTEM SHALL offer it disabled and say why.
+      Fails when: the clipboard holds no image, the image omits the marking's drawing, or a KPI, table or pivot tile offers it enabled.
+- [ ] AC-243 WHEN the user chooses Copy › To dashboard and picks a dashboard, THE SYSTEM SHALL add a dashboard-local copy of the tile's chart to that dashboard, and SHALL leave the source dashboard unchanged.
+      Fails when: the chosen dashboard lacks the copy, the copy is the source's chart rather than its own, or the source dashboard's saved definition changes.
+- [ ] AC-244 THE SYSTEM SHALL offer under a chart tile's Export the tile's CSV, the marked rows' CSV while the marking holds items, and SVG and PNG images of a chart ECharts draws, each downloading the chart as drawn.
+      Fails when: one of those items is missing where it applies, or an image file is not the chart as drawn.
+- [ ] AC-245 WHEN the user opens the tile menu's Data as of submenu, THE SYSTEM SHALL show, for an answer a pre-aggregation served, its name, its last build, its refresh schedule in words and as written, and its next run with how late it may start, with Refresh now, Open in Jobs on that pre-aggregation and Edit schedule in Model; and, for an answer the database served, say so, with Refresh now and Why not accelerated.
+      Fails when: one of those items is missing, Open in Jobs does not select that pre-aggregation, or a database answer is described as a pre-aggregation's.
+- [ ] AC-246 WHEN the user right-clicks a chart tile's plot, or presses Shift+F10 or the Menu key on a focused chart tile, THE SYSTEM SHALL open the tile's menu at the pointer or at the tile, and the browser's own menu SHALL not open there.
+      Fails when: the browser's context menu opens instead, the keys do nothing, or a right-click changes a marking.
+- [ ] AC-247 WHILE the tile's marking holds items, THE SYSTEM SHALL head the tile's menu with the marking's name, the marked values by their members' titles, and the count marked out of the tile's items.
+      Fails when: the heading omits the values, or either count differs from the marked items or the tile's items.
+
 ---
 
 ## Non-goals (phase 1)
@@ -833,3 +879,5 @@ Copied from [requirements.md §7](./requirements.md):
 | Scope: filters `[docs/inputs §2]`                                                             | AC-076 … AC-083                                                       |
 | Scope: chart rendering and customisation `[docs/inputs §2]`                                   | AC-037 … AC-046                                                       |
 | Scope: following the prototype's structure, "My workspace", global search scope `[R7, R9]`   | AC-187, AC-190 … AC-233                                               |
+| Scope: a rollup Cube can't join is refused at publish (the user, 2026-09-25)                  | AC-235                                                                |
+| Scope: the chart tile's menu, DSH-08 (the user, 2026-09-25)                                   | AC-199, AC-236 … AC-247                                               |
