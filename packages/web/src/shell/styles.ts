@@ -2588,7 +2588,7 @@ button.filter-pill__clear {
 /* A chart whose filtered answer is on its way (AC-078): still drawn, dimmed. */
 /* What is drawn fades while it is asked again; the head — the title, and the
    "Updating…" that says so — keeps its contrast (T183's review, AC-005). */
-.chart-tile--busy > :not(.tile-head) { opacity: 0.55; transition: opacity 120ms ease-in; }
+.chart-tile--busy > :not(.tile-head, .tile-notes) { opacity: 0.55; transition: opacity 120ms ease-in; }
 /* Said in the head, as well as by the fade (T183, AC-177). */
 .tile-busy {
   display: inline-flex;
@@ -2717,7 +2717,8 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 .tile-menu__group { display: grid; border-bottom: 1px solid var(--wc-border-subtle); }
 /* A group's heading in the picker: 12/16 muted at 400 (T253, mismatch 14). */
 .tile-menu__heading {
-  padding: 4px 6px;
+  /* The prototype's picker heading, padded 6 6 2 (dashboard.js:247, :273). */
+  padding: 6px 6px 2px;
   color: var(--wc-text-muted);
   font-size: var(--wc-text-xs-size);
   line-height: var(--wc-text-xs-line);
@@ -2846,7 +2847,7 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
    stronger one during a drag or resize" — the columns are what a resize is
    aiming at, so they step forward while one is happening (the prototype's
    .guides, 10 %). */
-.grid-canvas[data-gridlines='true'][data-resizing='true'] {
+.grid-canvas[data-gridlines='true'][data-guides='true'] {
   background-image: repeating-linear-gradient(
     to right,
     color-mix(in srgb, var(--wc-accent) 10%, transparent) 0 var(--wc-grid-column),
@@ -2881,7 +2882,24 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   flex-direction: column;
   min-height: 0;
 }
-.grid-tile > .chart-tile > :not(.tile-head) { flex: 1 1 0; min-height: 0; }
+.grid-tile > .chart-tile > :not(.tile-head, .tile-notes) { flex: 1 1 0; min-height: 0; }
+/* What a tile says of its answer, under its head (T253's review): as tall as
+   its lines, the chart taking the rest. */
+.tile-notes { flex: none; margin-bottom: 4px; }
+/* A Markdown or Image element's head while editing: the prototype's
+   tile-head naming its kind in xs muted, the content under it
+   (dashboard.js:319, :322). */
+.grid-tile:has(> .tile-head--kind) { display: flex; flex-direction: column; }
+.grid-tile > .tile-head--kind { flex: none; margin-bottom: 0; }
+.grid-tile > .tile-head--kind:has(+ .image-tile) { margin-bottom: 4px; }
+.grid-tile > .tile-head--kind ~ .image-tile,
+.grid-tile > .tile-head--kind ~ .markdown { flex: 1 1 0; min-height: 0; height: auto; }
+.tile-head__kind {
+  flex: 1;
+  color: var(--wc-text-muted);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+}
 
 /* Resize handles (AC-055, direction.md rule 36). Right edge, bottom edge and
    corner — the three direction.md names. They are invisible until the tile is
@@ -2913,8 +2931,10 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* The prototype's .grip: 14 px at line height 1, padded 2 by 4, muted — at the
    start of the element's first row, as its inline grip is (T253, mismatch
    19). Placed absolutely there, since the canvas draws the grip and the
-   element its own row; the row makes room for it while editing. An element
-   with no row of its own keeps it at its corner. */
+   element its own row; the row makes room for it while editing. Markdown and
+   Image take the prototype's head row while editing for it; an element with
+   no row at all (a Link, or a chart still loading) keeps it at its corner.
+   Sections and tab groups have none: they move from their menus. */
 .grid-tile__grip {
   position: absolute;
   top: 4px;
@@ -2934,19 +2954,31 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   touch-action: none;
 }
 .grid-tile__grip:hover { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
-/* A chart's head: 16 px in, its row 22 px high. */
+/* A 24 px target however small the glyph is drawn (WCAG 2.5.8, T253's
+   review): the pointer is caught by this square centred on it. The grip is
+   the only way to start a drag with a pointer, so it gets no exception. */
+.grid-tile__grip::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+}
+/* A chart's head, and a Markdown or Image head while editing: 16 px in, its
+   row 22 px high. The head is the element's first row: what a tile says of
+   its answer is drawn under it (T253's review). */
 .grid-tile:has(.tile-head) > .grid-tile__grip { top: 18px; left: 16px; }
-/* A section's head: 8 px down and 12 in, its row 36 px high. */
-.grid-tile:has(> .dashboard-section) > .grid-tile__grip { top: 17px; left: 12px; }
-/* The Header and the Divider, which have no padding: centred on their row. */
+/* The Header and the Divider, which have no padding: centred on their row,
+   4 px in, so the tile's edge cuts neither its target nor its focus ring. */
 .grid-tile:has(> .dashboard-heading) > .grid-tile__grip,
 .grid-tile:has(> .dashboard-divider) > .grid-tile__grip {
   top: 50%;
-  left: 0;
+  left: 4px;
   transform: translateY(-50%);
 }
 .dashboard[data-editing='true'] .grid-tile:has(> .grid-tile__grip) .tile-head,
-.dashboard[data-editing='true'] .grid-tile:has(> .grid-tile__grip) > .dashboard-section > .dashboard-section__head,
 .dashboard[data-editing='true'] .grid-tile:has(> .grid-tile__grip):has(> .dashboard-heading),
 .dashboard[data-editing='true'] .grid-tile:has(> .grid-tile__grip):has(> .dashboard-divider) {
   padding-left: 26px;
@@ -3119,7 +3151,13 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   line-height: 16px;
 }
 .grid-tile:has(.tile-export-note) { overflow: visible; }
-.tile-menu__empty { padding: 4px 8px; color: var(--wc-text-secondary); }
+/* At the picker's 12 px, as its items are (T253's review). */
+.tile-menu__empty {
+  padding: 4px 6px;
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+}
 /* Delete sits apart from the destinations above it: one changes where a thing
    is, the other takes it away. */
 .tile-menu__delete { margin-top: 4px; border-top: 1px solid var(--wc-border-subtle); }
@@ -3130,6 +3168,17 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 .tile-menu__move:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
 .tile-menu__move .tile-menu__heading { display: block; }
 .tile-menu__targets { margin: 0; padding: 0; list-style: none; max-height: 168px; overflow: auto; }
+/* A target is a whole path, "Page › Section › Tab", and its end is what tells
+   two apart, so it wraps within the picker rather than run past it: 28 px a
+   line, taller when it needs two (T253's review). */
+.tile-menu__targets button {
+  height: auto;
+  min-height: 28px;
+  padding-block: 6px;
+  line-height: var(--wc-text-xs-line);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 
 /* Deleting a page tab or a tab (AC-060), beside the strip they belong to. */
 /* Page tabs: the prototype's .dash-tabs — underlined, on a subtle rule. */

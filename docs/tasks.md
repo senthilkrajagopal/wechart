@@ -3780,10 +3780,22 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
       - Delete in `status-error`.
     - **The grip** is the prototype's: 14 px, muted, padded 2 by 4. It sits at the start of its element's first row, and that row makes room for it while editing:
       - in a chart's head;
-      - in a section's head (where the corner grip had partly covered the ▾);
       - beside a Header or Divider (where, since T247 took their padding, it had sat on the heading's text; T247's review, finding 3).
-      An element with no row of its own, such as Markdown or an image, keeps it at its corner.
     - **The edit grid:** each column is a band tinted 4 % accent, and 10 % while resizing; they were 1 px rules.
+  - **The cold review failed it, fixed** (`e2e/design-conformance.spec.ts` "T253’s review: …", eight tests, all of which failed first; all three browsers):
+    - **A narrow tile's menu ran past the canvas.** 250 px opened leftwards from the ⋯ of a tile under about 243 px wide, past the canvas's left edge, where nothing reaches it. An open menu is now moved right just far enough to clear that edge (`dashboard/keepInside.ts`, used by both tile menus).
+    - **The grip was under 24 px**, and it is the only way to start a drag with a pointer. It keeps the prototype's look, and a 24 px square centred on it now catches the pointer. On a Header or Divider it sits 4 px in, so the tile's edge cuts neither that square nor its focus ring.
+    - **The grip covered a "Not filtered by…" note** that came before the head. A tile's notes (not filtered, not linked, refreshed from a rollup) are now drawn under its head, in every state that has one, so the head is always the first row. This shows in view mode too.
+    - **Markdown and Image take the prototype's head row while editing** (dashboard.js:319, :322): the grip, then "Markdown" or "Image" in xs muted, with the content under it. The grip had sat on the content's corner, and on an image's missing-alt warning.
+    - **Long Move to targets wrap** within the picker, 28 px a line, where one line cut off the part that tells two targets apart.
+    - **The stronger bands show during a drag too**, as direction.md §2 says ("during a drag or resize"), not only during a resize.
+    - **Smaller:** the picker's heading is padded 6 6 2, and its empty line is 12 px.
+    - **Tests made stronger:** a band is measured against the grid's own track; the gutters are asserted clear; the picker's surface is asserted in the dark theme, where `bg-raised` differs from `bg-surface`; the Divider's grip is tested.
+    - **Corrected record:** sections and tab groups have no grip (`canDrag` is tiles only); they move from their menus. The section-grip rules were dead and are gone. The prototype does give a section a grip (dashboard.js:357), so that is a deviation.
+    - **Left:**
+      - A Link keeps its corner grip, where the prototype draws it inline in a plain row.
+      - Bands are drawn in the grids nested in sections too; the prototype draws them only on the page's grid.
+      - The muted grip on a Header over a 10 % band measures about 4.2:1. That meets the 3:1 needed for a non-text graphic.
 - [x] T248 (AC-187) Put the edit sidebar under the filter band, and match its palette, add slots, Properties and Outline to the prototype
   - Files: `packages/web/src/dashboard/edit/{AddPanel,Outline,kindIcon}.{tsx,ts}`, `packages/web/src/dashboard/grid/Canvas.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/edit/discard.test.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: the sidebar starts below a full-width band; palette rows carry the 24 px kind chip; the add slot is "＋ Add" at 56 px; Properties' buttons are full width and its limit rows 12/600; Outline rows carry the kind chip; the page-tab list is not under a tile's properties (recheck-dashboard F19, F23; mismatches 22–26).

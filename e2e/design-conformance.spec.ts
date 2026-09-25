@@ -2060,6 +2060,354 @@ test.describe('T253: tile menus, the grip and the edit grid', () => {
 });
 
 /**
+ * T253's review: a menu kept inside the canvas, a grip that is a 24 px target
+ * on its element's own row, Move to's targets wrapped, and the bands measured.
+ */
+test.describe('T253’s review: menus, the grip and the bands', () => {
+  const api = 'http://localhost:4100/api';
+  const section = 'Regional performance by territory and sales channel';
+  const tabs = ['Revenue by region and customer segment', 'Revenue by region and sales channel'];
+
+  /** A chart local to the dashboard, counting `measure` by `dimension` on `source`. */
+  async function chartOn(
+    request: APIRequestContext,
+    dashboardId: string,
+    title: string,
+    source: string,
+    measure: string,
+    dimension: string,
+  ) {
+    const chart = (await (
+      await request.post(`${api}/documents`, { data: { kind: 'chart', title, folderId: 'root' } })
+    ).json()) as { id: string };
+    await request.put(`${api}/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          owner: 'admin',
+          localToDashboardId: dashboardId,
+          chart: {
+            source: { cube: source },
+            wells: { measures: [measure], dimensions: [dimension], timeDimensions: [] },
+            chartType: 'bar',
+          },
+        },
+      },
+    });
+    return chart.id;
+  }
+
+  test.beforeEach(async ({ page, request }) => {
+    const title = `Review ${String(Date.now())}`;
+    const { id } = (await (
+      await request.post(`${api}/documents`, {
+        data: { kind: 'dashboard', title, folderId: 'root' },
+      })
+    ).json()) as { id: string };
+    const narrow = await chartOn(request, id, 'Narrow', 'orders', 'orders.count', 'orders.status');
+    const summary = await chartOn(
+      request,
+      id,
+      'Summary',
+      'order_summary',
+      'order_summary.count',
+      'order_summary.status',
+    );
+    await request.put(`${api}/documents/dashboard/${id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          folderId: 'root',
+          owner: 'admin',
+          settings: { width: 'fixed' },
+          filters: [{ id: 'f-category', widget: 'checkbox', member: 'products.category' }],
+          pages: [
+            {
+              id: 'only',
+              title: 'Only',
+              items: [
+                { id: 'tile-narrow', kind: 'chart', w: 2, h: 40, chartId: narrow },
+                { id: 'tile-summary', kind: 'chart', w: 6, h: 40, chartId: summary },
+                { id: 'el-notes', kind: 'markdown', w: 4, h: 20, text: 'Orders by status.' },
+                { id: 'el-header', kind: 'header', w: 12, text: 'Definitions' },
+                { id: 'el-divider', kind: 'divider', w: 12 },
+                { id: 'el-image', kind: 'image', w: 4, h: 20 },
+                {
+                  id: 'el-region',
+                  kind: 'section',
+                  title: section,
+                  items: [
+                    {
+                      id: 'el-group',
+                      kind: 'tabs',
+                      w: 12,
+                      tabs: tabs.map((name, index) => ({
+                        id: `tab-${String(index)}`,
+                        title: name,
+                        items: [],
+                      })),
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    await page.goto(`/explore/dashboards/${id}`);
+    await expect(
+      page.locator('[data-tile="tile-narrow"]').getByTestId('chart-canvas'),
+    ).toBeVisible();
+  });
+
+  const edit = async (page: Page) => {
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(page.getByRole('complementary', { name: 'Edit sidebar' })).toBeVisible();
+  };
+
+  /** Whether an open menu lies wholly within the canvas that scrolls it. */
+  const withinCanvas = (menu: Locator) =>
+    menu.evaluate((list) => {
+      const box = list.getBoundingClientRect();
+      const canvas = (
+        list.closest('.dashboard__canvas') ?? document.documentElement
+      ).getBoundingClientRect();
+      return { left: box.left - canvas.left, right: canvas.right - box.right };
+    });
+
+  test('a narrow tile’s menu opens within the canvas, in view mode and while editing', async ({
+    page,
+  }) => {
+    // Finding 1: 250 px opened leftwards from the ⋯ of a tile narrower than
+    // about 243 px ran past the canvas's left edge, where nothing reaches it.
+    const tile = page.locator('[data-tile="tile-narrow"]');
+    await tile.hover();
+    await tile.getByRole('button', { name: /^Actions for / }).click();
+    const viewing = await withinCanvas(tile.getByRole('list', { name: /^Actions for / }));
+    expect(viewing.left).toBeGreaterThanOrEqual(0);
+    expect(viewing.right).toBeGreaterThanOrEqual(0);
+    await page.keyboard.press('Escape');
+
+    await edit(page);
+    await tile.hover();
+    await tile.getByRole('button', { name: /^Actions for / }).click();
+    const editing = await withinCanvas(tile.getByRole('list', { name: /^Actions for / }));
+    expect(editing.left).toBeGreaterThanOrEqual(0);
+    expect(editing.right).toBeGreaterThanOrEqual(0);
+  });
+
+  test('long Move to targets wrap inside the picker, and nothing scrolls sideways', async ({
+    page,
+  }) => {
+    // Finding 5: "Only › Regional performance… › Revenue by region and …"
+    // kept to one line cut off the part that tells two targets apart.
+    await edit(page);
+    const tile = page.locator('[data-tile="tile-summary"]');
+    await tile.hover();
+    await tile.getByRole('button', { name: /^Actions for / }).click();
+    const menu = tile.getByRole('list', { name: /^Actions for / });
+    const targets = menu.getByRole('list', { name: /^Move / });
+    const last = targets.getByRole('button', { name: new RegExp(`${tabs[1] ?? ''}$`) });
+    await expect(last).toBeVisible();
+    expect(await style(menu, 'width')).toEqual({ width: '250px' });
+    const [wide, shown] = await targets.evaluate((list) => [list.scrollWidth, list.clientWidth]);
+    expect(wide).toBeLessThanOrEqual(shown ?? 0);
+    const [text, room] = await last.evaluate((button) => [button.scrollWidth, button.clientWidth]);
+    expect(text).toBeLessThanOrEqual(room ?? 0);
+    // Wrapped, it is taller than one 28 px line, and no shorter than one.
+    expect((await last.boundingBox())?.height).toBeGreaterThan(28);
+    // The heading is the prototype's: padded 6 6 2 (finding 10).
+    expect(
+      await style(
+        menu.getByText('Move to', { exact: true }),
+        'padding-top',
+        'padding-left',
+        'padding-bottom',
+      ),
+    ).toEqual({ 'padding-top': '6px', 'padding-left': '6px', 'padding-bottom': '2px' });
+  });
+
+  test('the grip is a 24 px target wherever it sits, and its focus ring is not cut off', async ({
+    page,
+    browserName,
+  }) => {
+    // Finding 3: 14 px padded 2 by 4 is under WCAG 2.5.8's 24 px, and the
+    // grip is the only way to start a drag with the pointer. Finding 8: at the
+    // Header's very edge the tile clipped the ring's left side.
+    await edit(page);
+    for (const id of ['tile-narrow', 'el-notes', 'el-header', 'el-divider', 'el-image']) {
+      const tile = page.locator(`[data-tile="${id}"]`);
+      const grip = page.getByTestId(`grip-${id}`);
+      const reached = await grip.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const [x, y] = [box.left + box.width / 2, box.top + box.height / 2];
+        return [
+          [-11.5, -11.5],
+          [11.5, -11.5],
+          [-11.5, 11.5],
+          [11.5, 11.5],
+        ].every(
+          ([dx, dy]) =>
+            document.elementFromPoint(x + (dx ?? 0), y + (dy ?? 0))?.closest('.grid-tile__grip') ===
+            element,
+        );
+      });
+      expect(reached, `${id}: every corner of a 24 px square on the grip is the grip`).toBe(true);
+
+      // By the keyboard, as a ring is drawn for: Tab from its tile. WebKit on
+      // macOS tabs to buttons only with Option held, as Safari does.
+      await tile.focus();
+      await page.keyboard.press(browserName === 'webkit' ? 'Alt+Tab' : 'Tab');
+      await expect(grip).toBeFocused();
+      const ring = await grip.evaluate((element) => {
+        const style = getComputedStyle(element);
+        const reach = parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth);
+        const box = element.getBoundingClientRect();
+        return {
+          visible: element.matches(':focus-visible') && style.outlineStyle !== 'none',
+          left: box.left - reach,
+          top: box.top - reach,
+        };
+      });
+      const clip = await tile.evaluate((element) => element.getBoundingClientRect());
+      expect(ring.visible, `${id}: a focus ring`).toBe(true);
+      expect(ring.left, `${id}: the ring's left inside the tile`).toBeGreaterThanOrEqual(clip.left);
+      expect(ring.top, `${id}: the ring's top inside the tile`).toBeGreaterThanOrEqual(clip.top);
+    }
+  });
+
+  test('Markdown and Image take the prototype’s head row while editing, with the grip in it', async ({
+    page,
+  }) => {
+    // Finding 7: dashboard.js:319 and :322 give each a tile-head while
+    // editing (the grip, then "Markdown" or "Image" in xs muted), so the grip
+    // never sits on the content's corner. View mode has no such row.
+    await expect(page.locator('[data-tile="el-notes"]')).toBeVisible();
+    await expect(page.locator('[data-tile="el-notes"] .tile-head')).toHaveCount(0);
+    await edit(page);
+    for (const [id, kind] of [
+      ['el-notes', 'Markdown'],
+      ['el-image', 'Image'],
+    ] as const) {
+      const tile = page.locator(`[data-tile="${id}"]`);
+      const head = tile.locator('.tile-head');
+      await expect(head).toHaveText(kind);
+      expect(await style(head.getByText(kind), 'font-size', 'color')).toEqual({
+        'font-size': '12px',
+        color: await token(page, 'text-muted'),
+      });
+      const row = await head.boundingBox();
+      const grip = await page.getByTestId(`grip-${id}`).boundingBox();
+      const middle = (grip?.y ?? 0) + (grip?.height ?? 0) / 2;
+      expect(middle).toBeGreaterThanOrEqual(row?.y ?? 0);
+      expect(middle).toBeLessThanOrEqual((row?.y ?? 0) + (row?.height ?? 0));
+      // The content starts below the row.
+      const content = tile.locator(id === 'el-notes' ? '.markdown' : '.image-tile');
+      expect((await content.boundingBox())?.y).toBeGreaterThanOrEqual(
+        (row?.y ?? 0) + (row?.height ?? 0),
+      );
+    }
+  });
+
+  test('the grip sits on the chart’s head, not on a note above it', async ({ page }) => {
+    // Finding 6: with a filter the chart's cube can't reach, the note comes
+    // first, and the grip at the tile's first row covered it.
+    const bar = page.getByRole('region', { name: 'Filters' });
+    await bar.locator('[data-widget="checkbox"] button[aria-expanded]').click();
+    await bar.getByRole('checkbox', { name: 'Components' }).check();
+    const tile = page.locator('[data-tile="tile-summary"]');
+    await expect(tile.getByTestId('not-covered')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await edit(page);
+    await expect(tile.getByTestId('not-covered')).toBeVisible();
+
+    const note = await tile.getByTestId('not-covered').boundingBox();
+    const head = await tile.locator('.tile-head').boundingBox();
+    const grip = await page.getByTestId('grip-tile-summary').boundingBox();
+    const middle = (grip?.y ?? 0) + (grip?.height ?? 0) / 2;
+    expect(middle).toBeGreaterThanOrEqual(head?.y ?? 0);
+    expect(middle).toBeLessThanOrEqual((head?.y ?? 0) + (head?.height ?? 0));
+    // The head comes first and the note under it, clear of the grip.
+    expect(note?.y ?? 0).toBeGreaterThanOrEqual((head?.y ?? 0) + (head?.height ?? 0));
+    expect(note?.y ?? 0).toBeGreaterThanOrEqual((grip?.y ?? 0) + (grip?.height ?? 0));
+  });
+
+  test('the bands are the grid’s own columns, and step up while a tile is dragged', async ({
+    page,
+  }) => {
+    // Finding 4: a 4 % match alone passes bands of any width. Measured here:
+    // a band is one of the grid's tracks, and its gutter is the grid's gap.
+    await edit(page);
+    const canvas = page.locator('.grid-canvas[data-gridlines="true"]').first();
+    const measured = await canvas.evaluate((grid) => {
+      const probe = document.createElement('div');
+      probe.style.cssText = 'position:absolute;left:0;top:0;height:1px;width:var(--wc-grid-column)';
+      const was = grid.style.position;
+      if (getComputedStyle(grid).position === 'static') grid.style.position = 'relative';
+      grid.append(probe);
+      const band = probe.getBoundingClientRect().width;
+      probe.remove();
+      grid.style.position = was;
+      const style = getComputedStyle(grid);
+      return {
+        band,
+        track: parseFloat(style.gridTemplateColumns.split(' ')[0] ?? '0'),
+        gap: style.columnGap,
+        image: style.backgroundImage,
+      };
+    });
+    expect(Math.abs(measured.band - measured.track)).toBeLessThan(0.5);
+    expect(measured.gap).toBe('16px');
+    // Tinted 4 %, with the gutters between the bands left clear.
+    expect(measured.image).toMatch(/0\.04\)|4%/);
+    expect(measured.image).toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+
+    // direction.md §2: "a stronger one during a drag or resize" (finding 11).
+    const grip = page.getByTestId('grip-el-notes');
+    const at = await grip.boundingBox();
+    await page.mouse.move((at?.x ?? 0) + 4, (at?.y ?? 0) + 4);
+    await page.mouse.down();
+    await page.mouse.move((at?.x ?? 0) + 40, (at?.y ?? 0) + 40, { steps: 4 });
+    await expect
+      .poll(() => canvas.evaluate((grid) => getComputedStyle(grid).backgroundImage))
+      .toMatch(/0\.1\)|10%/);
+    await page.mouse.up();
+  });
+
+  test('in the dark theme the picker is on the raised surface', async ({ page }) => {
+    // Finding 4: bg-raised and bg-surface are both white in the light theme.
+    await page.getByRole('button', { name: /theme/i }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    const raised = await token(page, 'bg-raised', 'background-color');
+    expect(raised).not.toBe(await token(page, 'bg-surface', 'background-color'));
+    const tile = page.locator('[data-tile="tile-narrow"]');
+    await tile.hover();
+    await tile.getByRole('button', { name: /^Actions for / }).click();
+    expect(
+      await style(tile.getByRole('list', { name: /^Actions for / }), 'background-color'),
+    ).toEqual({ 'background-color': raised });
+  });
+
+  test('a menu with nowhere to move to says so at the picker’s 12 px', async ({ page }) => {
+    // Finding 10: the empty line inherited 14 px inside a 12 px menu.
+    await edit(page);
+    const tile = page.locator('[data-tile="el-region"]');
+    await tile
+      .getByRole('button', { name: /^Actions for / })
+      .first()
+      .click();
+    const empty = tile.getByText('Nowhere else to move it yet.');
+    await expect(empty).toBeVisible();
+    expect(await style(empty, 'font-size')).toEqual({ 'font-size': '12px' });
+  });
+});
+
+/**
  * T248: the edit sidebar's palette, the add slots, Properties and the Outline
  * as dashboard.js draws them (recheck-dashboard F19, F23; mismatches 23–26).
  * Its first half — the sidebar under a full-width band — came with T246.

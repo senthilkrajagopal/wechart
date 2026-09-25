@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { useKeepInside } from '../keepInside';
 import type { ContainerKey } from '../model/document';
 
 /**
@@ -46,6 +47,8 @@ export function MoveToMenu({
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLUListElement>(null);
+  useKeepInside(list, open);
 
   /**
    * Escape closes it and gives focus back, and a press elsewhere dismisses it.
@@ -96,7 +99,7 @@ export function MoveToMenu({
          * chart is, then Move to with its targets — the only part that
          * scrolls, however many there are — and Delete last, set apart.
          */
-        <ul className="tile-menu__list" aria-label={`Actions for ${tileLabel}`}>
+        <ul className="tile-menu__list" ref={list} aria-label={`Actions for ${tileLabel}`}>
           {onDuplicate === undefined ? null : (
             <li className="tile-menu__duplicate">
               <button

@@ -2,6 +2,7 @@ import { csvOf, exportNoteOf, rowsText, type RenderSpec } from '@wechart/core';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { StateLine, StatusIcon, type StateKind } from '../shell/StatusIcon';
+import { useKeepInside } from './keepInside';
 
 /** A file name from a chart's title: the characters file systems refuse replaced. */
 export function csvFileName(title: string): string {
@@ -145,6 +146,8 @@ export function TileViewMenu({
   const trigger = useRef<HTMLButtonElement>(null);
   const why = useId();
   const wrapper = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLUListElement>(null);
+  useKeepInside(list, open);
   /** Put away, and back to ⋯. */
   const close = () => {
     setOpen(false);
@@ -191,7 +194,7 @@ export function TileViewMenu({
         <span aria-hidden="true">⋯</span>
       </button>
       {open ? (
-        <ul className="tile-menu__list" aria-label={`Actions for ${title}`}>
+        <ul className="tile-menu__list" ref={list} aria-label={`Actions for ${title}`}>
           {/* The marked-rows group first, as the prototype's: headed by the
               tile's marking and how much it holds (AC-199). Shown with
               nothing marked too: Unmark is then unavailable, while Invert,

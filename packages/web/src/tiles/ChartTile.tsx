@@ -81,6 +81,12 @@ export interface ChartTileProps {
    * prototype's `.mbadge`, rather than a line above that pushed the title down.
    */
   readonly badge?: ReactNode;
+  /**
+   * What the dashboard says of this tile's answer — a filter it is not
+   * reached by, a marking it cannot follow — under the head, so the head stays
+   * the tile's first row (T253's review).
+   */
+  readonly notes?: ReactNode;
 }
 
 interface ChartBodyProps {
@@ -147,6 +153,7 @@ export function ChartTile({
   onItemClick,
   rowMarking,
   badge,
+  notes,
 }: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
@@ -213,6 +220,7 @@ export function ChartTile({
             {dataAsOf}
           </div>
         )}
+        {notes}
         <TileEmpty inEffect={inEffect} />
       </div>
     );
@@ -244,6 +252,7 @@ export function ChartTile({
           </button>
         ) : null}
       </div>
+      {notes}
 
       {showingTable ? (
         // The same rows the chart drew, not a second query — the drawer at

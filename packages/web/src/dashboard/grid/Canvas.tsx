@@ -228,7 +228,9 @@ export function Canvas({
       /** What the document calls this container, so a drop can name it. */
       data-container={containerKey}
       data-gridlines={editing ? 'true' : undefined}
-      data-resizing={dragging === null ? undefined : 'true'}
+      // The stronger columns "during a drag or resize" (direction.md §2): a
+      // tile's resize here, or a tile being dragged anywhere (T253's review).
+      data-guides={dragging === null && (drag?.draggingId ?? null) === null ? undefined : 'true'}
       style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${String(COLUMNS)}, minmax(0, 1fr))`,

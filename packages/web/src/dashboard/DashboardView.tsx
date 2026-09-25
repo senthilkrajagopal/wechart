@@ -369,6 +369,20 @@ function TileMissing() {
 }
 
 /**
+ * A Markdown or Image element's head while editing: the prototype's
+ * tile-head, naming the kind in xs muted (dashboard.js:319, :322). It is the
+ * row the grip sits at the start of, so the grip never lies on the content
+ * (T253's review, finding 7). View mode has none: the content is the tile.
+ */
+function KindHead({ kind }: { kind: string }) {
+  return (
+    <div className="tile-head tile-head--kind">
+      <span className="tile-head__kind">{kind}</span>
+    </div>
+  );
+}
+
+/**
  * The marking a tile marks with when it names none (direction.md rule 44):
  * the dashboard's default, or its first marking where none is marked default.
  *
@@ -437,8 +451,11 @@ function TileBody({
   tableView,
   onTableViewChange,
   memberTitle,
+  notes,
 }: {
   tile: Tile;
+  /** What the tile says of its answer, drawn under its head (T253's review). */
+  notes?: readonly ReactNode[] | undefined;
   /** A member's title from the model, for what the tile says of one (AC-220). */
   memberTitle?: ((member: string) => string | undefined) | undefined;
   /** The marked-items badge, for the chart's header row (AC-201). */
@@ -482,6 +499,8 @@ function TileBody({
   // the context, not a failure of the chart (T173, AC-167).
   const preview = useContext(SecurityPreview);
   const hidden = preview === undefined ? undefined : hiddenMemberOf(error);
+  // Under the head where the state has one, and first where it has none.
+  const noted = notes === undefined ? null : <div className="tile-notes">{notes}</div>;
   switch (tile.kind) {
     case 'chart':
       /**
@@ -506,6 +525,7 @@ function TileBody({
                 <h3 className="tile-head__title">{title}</h3>
               </div>
             )}
+            {noted}
             <div data-testid="tile-empty-chart" className="tile-empty">
               {needsOf(chartType).map((sentence) => (
                 <p key={sentence}>{sentence}</p>
@@ -536,16 +556,35 @@ function TileBody({
       if (limited !== undefined) {
         if (limited.kind === 'filtered-out')
           return (
-            <StateLine kind="idle" role="status" testId="marks-filtered-out">
-              The marked items are hidden by the filters in effect.
-            </StateLine>
+            <>
+              {noted}
+              <StateLine kind="idle" role="status" testId="marks-filtered-out">
+                The marked items are hidden by the filters in effect.
+              </StateLine>
+            </>
           );
-        return <NothingMarked state={limited.state} message={limited.message} />;
+        return (
+          <>
+            {noted}
+            <NothingMarked state={limited.state} message={limited.message} />
+          </>
+        );
       }
       if (hidden !== undefined)
-        return <TileUnavailable member={hidden} title={memberTitle?.(hidden)} />;
+        return (
+          <>
+            {noted}
+            <TileUnavailable member={hidden} title={memberTitle?.(hidden)} />
+          </>
+        );
       // Gone, not failed: the missing-chart state, with nothing to retry.
-      if (error === CHART_MISSING) return <TileMissing />;
+      if (error === CHART_MISSING)
+        return (
+          <>
+            {noted}
+            <TileMissing />
+          </>
+        );
       if (error !== undefined)
         return (
           <>
@@ -556,6 +595,7 @@ function TileBody({
                 <h3 className="tile-head__title">{title}</h3>
               </div>
             )}
+            {noted}
             <TileError
               error={error}
               // A chart with no type fails the same way however often it is
@@ -571,12 +611,22 @@ function TileBody({
        * took — the missing-chart state showing on charts that were perfectly
        * fine (AC-042, AC-010).
        */
-      if (loading) return <TileSkeleton chartType="bar" />;
+      if (loading)
+        return (
+          <>
+            {noted}
+            <TileSkeleton chartType="bar" />
+          </>
+        );
       return spec === undefined ? (
-        <TileMissing />
+        <>
+          {noted}
+          <TileMissing />
+        </>
       ) : (
         <ChartTile
           spec={spec}
+          notes={noted}
           busy={busy}
           inEffect={inEffect}
           title={title}
@@ -592,13 +642,23 @@ function TileBody({
       );
     case 'markdown':
       // Its subset of markdown, as elements — never as HTML (AC-208).
-      return <Markdown text={tile.text ?? ''} />;
+      return (
+        <>
+          {editing ? <KindHead kind="Markdown" /> : null}
+          <Markdown text={tile.text ?? ''} />
+        </>
+      );
     case 'header':
       return <h3 className="dashboard-heading">{tile.text}</h3>;
     case 'divider':
       return <hr className="dashboard-divider" />;
     case 'image':
-      return <ImageTile tile={tile} editing={editing} />;
+      return (
+        <>
+          {editing ? <KindHead kind="Image" /> : null}
+          <ImageTile tile={tile} editing={editing} />
+        </>
+      );
     case 'link':
       return <LinkTile tile={tile} editing={editing} carried={carried} />;
     default:
@@ -1046,32 +1106,51 @@ function Elements({
                 ownership={affordances.ownershipOf?.(element.id)}
               />
             )}
-            {charts.notCovered?.[chartId] === undefined ? null : (
-              <NotCovered
-                members={charts.notCovered[chartId].map((each) => each.filter.member ?? '')}
-              />
-            )}
-            {/* A marking this tile's cube cannot reach: unmarked, and said
-                rather than left looking like "none of it is in here"
-                (AC-103). */}
-            {charts.notLinked?.[chartId] === undefined ? null : (
-              <StateLine kind="idle" testId="not-linked" className="tile-not-covered">
-                {charts.notLinked[chartId]}
-              </StateLine>
-            )}
-            {/* After a refresh, if a pre-aggregation answered it (T154, AC-148):
-                in view mode, as Refresh is — its Jobs link would leave an edit. */}
-            {affordances.editing ||
-            charts.refreshedFromRollup?.has(chartId) !== true ||
-            !accelerationOf(charts.answered?.[chartId]).accelerated ? null : (
-              <RollupRefreshNote
-                preAggregation={accelerationOf(charts.answered?.[chartId]).preAggregation ?? ''}
-                builtAt={accelerationOf(charts.answered?.[chartId]).lastUpdatedAt}
-                onDismiss={() => charts.onDismissRollupNote?.(chartId)}
-              />
-            )}
             <TileBody
               tile={element}
+              /**
+               * What the tile says of its answer, under its head: the head
+               * stays the tile's first row, where the grip sits while editing
+               * (T253's review, finding 6). Above it, the grip covered a note.
+               */
+              notes={(() => {
+                const said = [
+                  charts.notCovered?.[chartId] === undefined ? null : (
+                    <NotCovered
+                      key="not-covered"
+                      members={charts.notCovered[chartId].map((each) => each.filter.member ?? '')}
+                    />
+                  ),
+                  // A marking this tile's cube cannot reach: unmarked, and said
+                  // rather than left looking like "none of it is in here" (AC-103).
+                  charts.notLinked?.[chartId] === undefined ? null : (
+                    <StateLine
+                      key="not-linked"
+                      kind="idle"
+                      testId="not-linked"
+                      className="tile-not-covered"
+                    >
+                      {charts.notLinked[chartId]}
+                    </StateLine>
+                  ),
+                  // After a refresh, if a pre-aggregation answered it (T154,
+                  // AC-148): in view mode, as Refresh is — its Jobs link would
+                  // leave an edit.
+                  affordances.editing ||
+                  charts.refreshedFromRollup?.has(chartId) !== true ||
+                  !accelerationOf(charts.answered?.[chartId]).accelerated ? null : (
+                    <RollupRefreshNote
+                      key="rollup"
+                      preAggregation={
+                        accelerationOf(charts.answered?.[chartId]).preAggregation ?? ''
+                      }
+                      builtAt={accelerationOf(charts.answered?.[chartId]).lastUpdatedAt}
+                      onDismiss={() => charts.onDismissRollupNote?.(chartId)}
+                    />
+                  ),
+                ].filter((note) => note !== null);
+                return said.length === 0 ? undefined : said;
+              })()}
               spec={charts.specs[chartId]}
               error={charts.errors[chartId]}
               loading={charts.loading}
