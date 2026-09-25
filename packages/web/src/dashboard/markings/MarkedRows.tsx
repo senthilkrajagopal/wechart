@@ -36,7 +36,7 @@ const SHOWN = 100;
  * (research/cube/data-apis.md, `CUBEJS_DB_QUERY_DEFAULT_LIMIT`), past which
  * `exportNoteOf` says the file was cut short.
  */
-const DOWNLOADED = 10_000;
+export const DOWNLOADED = 10_000;
 
 export function MarkedRows({
   title,

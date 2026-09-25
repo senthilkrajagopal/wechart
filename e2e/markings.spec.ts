@@ -1035,7 +1035,8 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
       hasNotText:
         /^(Filter to marked|Filter out marked|View marked rows|Invert marking|Mark all|Unmark|Create details tile)$/,
     }),
-  ).toHaveText(['View as table', 'View query', 'Download CSV', 'Edit chart']);
+    // Export holds the CSV now, with the images (T272, AC-244).
+  ).toHaveText(['View as table', 'View query', /^Export/, 'Edit chart']);
 
   // View as table: the tile shows its rows.
   await menu.getByRole('menuitem', { name: 'View as table' }).click();
@@ -1226,7 +1227,7 @@ test('outside Markings mode, a chart tile’s menu has no marked-rows actions', 
   const status = tile(page, 'tile-status');
   await status.getByRole('button', { name: 'Actions for By status' }).click();
   const menu = status.getByRole('menu', { name: 'Actions for By status' });
-  await expect(menu.getByRole('menuitem', { name: 'Download CSV' })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Export' })).toBeVisible();
   await expect(menu.getByRole('group')).toHaveCount(0);
   await expect(menu.getByRole('menuitem', { name: 'Unmark' })).toHaveCount(0);
 });
@@ -2096,6 +2097,146 @@ test('a filter made from a marking leaves a tile that cannot reach it unfiltered
  * series: a rectangle across all of them marks 1,000 and says why the rest
  * were not; Mark all then marks every one.
  */
+/**
+ * T272 / AC-244: THE SYSTEM SHALL offer under a chart tile's Export the
+ * tile's CSV, the marked rows' CSV while the marking holds items, and SVG and
+ * PNG images of a chart ECharts draws, each downloading the chart as drawn.
+ * `Fails when: one of those items is missing where it applies, or an image
+ * file is not the chart as drawn.`
+ *
+ * The status tile draws three bars of 80 orders each (infra/sample-db/
+ * init.sql), so a point just above the axis under a label is inside its bar.
+ */
+test('Export offers the tile’s CSV, its marked rows’ CSV while marked, and SVG and PNG of the chart as drawn', async ({
+  page,
+  request,
+}) => {
+  const { readFile } = await import('node:fs/promises');
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  const canvas = status.getByTestId('chart-canvas');
+  const exportMenu = async () => {
+    await status.getByRole('button', { name: 'Actions for By status' }).click();
+    await status.getByRole('menuitem', { name: 'Export' }).click();
+    return status.getByRole('menu', { name: 'Export' });
+  };
+  const download = async (menu: Locator, name: string) => {
+    const [file] = await Promise.all([
+      page.waitForEvent('download'),
+      menu.getByRole('menuitem', { name, exact: true }).click(),
+    ]);
+    return { name: file.suggestedFilename(), path: await file.path() };
+  };
+
+  // Nothing marked: no marked rows to export.
+  let menu = await exportMenu();
+  await expect(menu.getByRole('menuitem')).toHaveText(['CSV', 'SVG image', 'PNG image']);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+
+  await clickBar(page, status, 'shipped');
+  await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
+  menu = await exportMenu();
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    'CSV',
+    'Marked rows CSV',
+    'SVG image',
+    'PNG image',
+  ]);
+
+  // The SVG: what the tile draws — its labels, and the marking's fade on the
+  // unmarked bars — as ECharts drew it.
+  const drawn = await canvas
+    .locator('svg')
+    .first()
+    .evaluate((svg) => ({
+      texts: [...svg.querySelectorAll('text')].map((text) => text.textContent),
+      faded: [...svg.querySelectorAll('path[fill-opacity]')].map((path) =>
+        path.getAttribute('fill-opacity'),
+      ),
+    }));
+  const svgFile = await download(menu, 'SVG image');
+  expect(svgFile.name).toBe('By status.svg');
+  const inFile = await page.evaluate(
+    (text) => {
+      const svg = new DOMParser().parseFromString(text, 'image/svg+xml').documentElement;
+      return {
+        texts: [...svg.querySelectorAll('text')].map((each) => each.textContent),
+        faded: [...svg.querySelectorAll('path[fill-opacity]')].map((path) =>
+          path.getAttribute('fill-opacity'),
+        ),
+      };
+    },
+    await readFile(svgFile.path, 'utf8'),
+  );
+  expect(drawn.faded.length).toBeGreaterThan(0);
+  expect(inFile).toEqual(drawn);
+
+  // The PNG: the chart's size at the screen's pixel ratio, the marked bar
+  // solid and the others faded, on the tile's surface.
+  menu = await exportMenu();
+  const pngFile = await download(menu, 'PNG image');
+  expect(pngFile.name).toBe('By status.png');
+  const png = await readFile(pngFile.path);
+  expect([...png.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  const size = await canvas.evaluate((node) => ({
+    width: node.clientWidth,
+    height: node.clientHeight,
+    ratio: window.devicePixelRatio,
+  }));
+  expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([
+    Math.round(size.width * size.ratio),
+    Math.round(size.height * size.ratio),
+  ]);
+  const inBar = async (category: string) =>
+    canvas
+      .locator('svg text', { hasText: category })
+      .first()
+      .evaluate((text, ratio) => {
+        const label = text.getBoundingClientRect();
+        const box = (
+          text.closest('[data-testid="chart-canvas"]') as Element
+        ).getBoundingClientRect();
+        return [
+          Math.round((label.x + label.width / 2 - box.x) * ratio),
+          Math.round((label.y - 12 - box.y) * ratio),
+        ];
+      }, size.ratio);
+  const points = [await inBar('shipped'), await inBar('completed')];
+  const [marked, faded] = await page.evaluate(
+    async ({ bytes, at }) => {
+      const bitmap = await createImageBitmap(
+        new Blob([new Uint8Array(bytes)], { type: 'image/png' }),
+      );
+      const drawing = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const context = drawing.getContext('2d') as OffscreenCanvasRenderingContext2D;
+      context.drawImage(bitmap, 0, 0);
+      // How dark each point is, and how opaque: the surface is painted in.
+      return at.map(([x, y]) => {
+        const [r = 0, g = 0, b = 0, a = 0] = context.getImageData(x ?? 0, y ?? 0, 1, 1).data;
+        return { light: r + g + b, a };
+      });
+    },
+    { bytes: [...png], at: points },
+  );
+  expect(marked?.a).toBe(255);
+  expect(faded?.a).toBe(255);
+  expect(marked?.light ?? 0).toBeLessThan(faded?.light ?? 0);
+
+  // The marked rows' CSV: the 80 shipped orders, as View marked rows has them.
+  menu = await exportMenu();
+  const rowsFile = await download(menu, 'Marked rows CSV');
+  expect(rowsFile.name).toBe('By status - marked rows.csv');
+  const read = await readFile(rowsFile.path, 'utf8');
+  // Past the byte-order mark a spreadsheet reads it as UTF-8 by.
+  const text = read.charCodeAt(0) === 0xfeff ? read.slice(1) : read;
+  const lines = text.trim().split('\r\n');
+  expect(lines).toHaveLength(81);
+  expect(lines.slice(1).every((line) => line.includes('shipped'))).toBe(true);
+  await expect(status.locator('.tile-export-note')).toContainText('Downloaded 80 rows');
+});
+
 test('a shape over more than 1,000 items marks 1,000 and says why, and Mark all is exempt', async ({
   page,
   request,

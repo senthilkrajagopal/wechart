@@ -96,9 +96,11 @@ test('a tile’s CSV has the rows and columns the tile shows, its filter applied
   };
 
   await tile.getByRole('button', { name: 'Actions for Orders by status' }).click();
+  // Export › CSV (T272, AC-244), where Download CSV was.
+  await tile.getByRole('menuitem', { name: 'Export' }).click();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    tile.getByRole('menuitem', { name: 'Download CSV' }).click(),
+    tile.getByRole('menuitem', { name: 'CSV', exact: true }).click(),
   ]);
   expect(download.suggestedFilename()).toBe('Orders by status.csv');
   const file = await readFile(await download.path(), 'utf8');
@@ -139,9 +141,10 @@ test('a tile’s CSV writes each measure formatted, and its raw number beside it
   await expect(tile.getByRole('table')).toContainText('shipped', { timeout: 15_000 });
 
   await tile.getByRole('button', { name: 'Actions for Orders by status' }).click();
+  await tile.getByRole('menuitem', { name: 'Export' }).click();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    tile.getByRole('menuitem', { name: 'Download CSV' }).click(),
+    tile.getByRole('menuitem', { name: 'CSV', exact: true }).click(),
   ]);
   const [head = [], ...rows] = records((await readFile(await download.path(), 'utf8')).slice(1));
 
@@ -191,9 +194,10 @@ test('a download says how many rows it holds, and whether Cube cut them short', 
     await expect(tile.getByRole('table')).not.toContainText('completed');
     const rows = await tile.locator('tbody tr').count();
     await tile.getByRole('button', { name: 'Actions for Orders by status' }).click();
+    await tile.getByRole('menuitem', { name: 'Export' }).click();
     await Promise.all([
       page.waitForEvent('download'),
-      tile.getByRole('menuitem', { name: 'Download CSV' }).click(),
+      tile.getByRole('menuitem', { name: 'CSV', exact: true }).click(),
     ]);
     return rows;
   };

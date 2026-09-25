@@ -14,6 +14,7 @@ import {
   applyToggleOrAdd,
   isItemMarked,
   matchesPredicate,
+  rowsCsvOf,
   EMPTY_PREDICATE,
   type CubeFilter,
   isEmptyPredicate,
@@ -109,7 +110,7 @@ import {
   markFilterOn,
   type MarkFilter,
 } from './markings/filterToMarked';
-import { MarkedRows } from './markings/MarkedRows';
+import { DOWNLOADED, MarkedRows } from './markings/MarkedRows';
 import { markingOf, withMarking, type MarkingState } from './markings/store';
 import { interactionsOf, type InteractionMode } from './settings/interactionMode';
 import { describeFilter } from '../filters/describe';
@@ -814,6 +815,19 @@ interface TileCharts {
    * items, or behind the whole of it.
    */
   readonly onViewRows?: ((chartId: string, tileId: string, marked: boolean) => void) | undefined;
+  /**
+   * The marked rows as CSV, for Export › Marked rows CSV (T272, AC-244): the
+   * rows View marked rows shows, read up to Cube's row limit and written as
+   * its download writes them.
+   */
+  readonly exportRowsOf?:
+    | ((
+        chartId: string,
+        tileId: string,
+      ) => (
+        signal: AbortSignal,
+      ) => Promise<{ text: string; written: number; total: number | undefined }>)
+    | undefined;
 }
 
 interface Affordances {
@@ -1141,6 +1155,9 @@ function Elements({
                                 charts.onViewRows?.(chartId, element.id, true);
                               },
                             }),
+                        ...(charts.exportRowsOf === undefined
+                          ? {}
+                          : { exportRows: charts.exportRowsOf(chartId, element.id) }),
                         ...(markItems === undefined
                           ? {}
                           : {
@@ -3029,6 +3046,27 @@ export function DashboardView({
       if (rowsQueryOf(chartId, tileId, marked, 1) !== undefined) {
         setRowsFor({ chartId, tileId, marked });
       }
+    },
+    exportRowsOf: (chartId: string, tileId: string) => async (signal: AbortSignal) => {
+      const query = rowsQueryOf(chartId, tileId, true, DOWNLOADED);
+      if (query === undefined) throw new Error('There is nothing marked to export.');
+      if (typeof query === 'string') throw new Error(query);
+      const result = (await loadTile({
+        query,
+        signal,
+        ...(preview === undefined ? {} : { context: preview }),
+      })) as { data?: unknown; total?: unknown };
+      const rows = Array.isArray(result.data) ? (result.data as Record<string, unknown>[]) : [];
+      const spec = drawn.specs[chartId];
+      return {
+        text: rowsCsvOf(rows, {
+          measures: spec?.measures ?? [],
+          formats: spec?.formats ?? {},
+          titles: spec?.titles ?? {},
+        }),
+        written: rows.length,
+        total: typeof result.total === 'number' ? result.total : undefined,
+      };
     },
     ...(marking
       ? {

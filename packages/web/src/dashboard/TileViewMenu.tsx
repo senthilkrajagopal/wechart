@@ -3,6 +3,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
 import { Menu, type MenuEntry } from '../shell/Menu';
 import { StateLine, StatusIcon, type StateKind } from '../shell/StatusIcon';
+import { chartSvg, drawnChartIn, imageFileName, surfaceOf, svgToPng } from '../tiles/chartImage';
 
 /** Whether this browser shows popovers (every one wechart supports does; jsdom does not). */
 const CAN_POP =
@@ -22,8 +23,8 @@ export function csvFileName(title: string): string {
 export const BYTE_ORDER_MARK = '﻿';
 
 /** Hands the browser a file to save: a Blob behind a link, clicked once. */
-export function saveFile(name: string, text: string, type = 'text/csv;charset=utf-8'): void {
-  const url = URL.createObjectURL(new Blob([text], { type }));
+export function saveFile(name: string, data: string | Blob, type = 'text/csv;charset=utf-8'): void {
+  const url = URL.createObjectURL(new Blob([data], { type }));
   const link = document.createElement('a');
   link.href = url;
   link.download = name;
@@ -78,7 +79,7 @@ export function TileViewMenu({
   countRows?:
     ((signal: AbortSignal) => Promise<{ returned: number; total: number } | undefined>) | undefined;
   /** How the file is handed over; the browser's download unless a test says. */
-  save?: (name: string, text: string) => void;
+  save?: (name: string, data: string | Blob, type?: string) => void;
   /** Whether the tile shows its table (AC-178), and switching it (AC-199). */
   tableView?: boolean;
   onTableView?: ((showing: boolean) => void) | undefined;
@@ -114,6 +115,15 @@ export function TileViewMenu({
         filterOut?: (() => void) | { readonly refused: string } | undefined;
         /** The rows behind the marked items (T120, AC-114). */
         onViewMarkedRows?: (() => void) | undefined;
+        /**
+         * Those rows as CSV, for Export › Marked rows CSV (T272, AC-244): as
+         * the rows dialog writes them, with how many and of how many.
+         */
+        exportRows?:
+          | ((
+              signal: AbortSignal,
+            ) => Promise<{ text: string; written: number; total: number | undefined }>)
+          | undefined;
         /** Invert marking and Mark all on this tile (AC-115), where it has items to name. */
         onInvert?: (() => void) | undefined;
         onMarkAll?: (() => void) | undefined;
@@ -174,6 +184,79 @@ export function TileViewMenu({
         setNote({ kind: said.truncated === false ? 'ok' : 'warn', text: said.text });
       });
   };
+  /**
+   * Export › Marked rows CSV (T272, AC-244): the rows behind the marked
+   * items, as the rows dialog downloads them (T120), and what the file holds.
+   */
+  const exportMarkedRows = (exportRows: NonNullable<NonNullable<typeof marked>['exportRows']>) => {
+    setNote({ kind: 'run', text: 'Reading the marked rows…' });
+    counting.current?.abort();
+    const mine = new AbortController();
+    counting.current = mine;
+    exportRows(mine.signal).then(
+      ({ text, written, total }) => {
+        if (mine.signal.aborted) return;
+        save(csvFileName(`${title} - marked rows`), `${BYTE_ORDER_MARK}${text}`);
+        const said = exportNoteOf({ written, returned: written, total });
+        setNote({ kind: said.truncated === false ? 'ok' : 'warn', text: said.text });
+      },
+      (error: unknown) => {
+        if (mine.signal.aborted) return;
+        setNote({
+          kind: 'err',
+          text: error instanceof Error ? error.message : 'The marked rows could not be read.',
+        });
+      },
+    );
+  };
+  /**
+   * Export › SVG image and PNG image (T272, AC-244): the chart as ECharts
+   * drew it, on the tile's surface — the SVG at its size, the PNG at the
+   * screen's pixel ratio, as it is drawn (research open question 2, decided
+   * so by T272).
+   */
+  const exportImage = (extension: 'svg' | 'png') => {
+    const tile = document.querySelector(`[data-tile="${CSS.escape(tileId)}"]`);
+    const chart = drawnChartIn(tile);
+    if (chart === undefined) {
+      setNote({ kind: 'err', text: 'The chart is not drawn yet, so there is no image of it.' });
+      return;
+    }
+    const surface = surfaceOf(tile?.querySelector('[data-testid="chart-canvas"]'));
+    const name = imageFileName(title, extension);
+    try {
+      if (extension === 'svg') {
+        save(name, chartSvg(chart, { surface }).svg, 'image/svg+xml');
+        setNote({ kind: 'ok', text: 'Downloaded the chart as an SVG image.' });
+        return;
+      }
+      setNote({ kind: 'run', text: 'Drawing the chart as a PNG image…' });
+      svgToPng(chartSvg(chart, { pixelRatio: window.devicePixelRatio, surface })).then(
+        (png) => {
+          save(name, png, 'image/png');
+          setNote({ kind: 'ok', text: 'Downloaded the chart as a PNG image.' });
+        },
+        (error: unknown) => {
+          setNote({
+            kind: 'err',
+            text: error instanceof Error ? error.message : 'The PNG could not be made.',
+          });
+        },
+      );
+    } catch (error) {
+      setNote({
+        kind: 'err',
+        text: error instanceof Error ? error.message : 'The image could not be made.',
+      });
+    }
+  };
+  /** Why a tile has no image to export: it is drawn as text, not by ECharts. */
+  const imageless =
+    tableView || ['kpi', 'table', 'pivot'].includes(spec.chartType)
+      ? tableView
+        ? 'Shown as a table: view it as a chart to export its image.'
+        : 'A KPI, table or pivot is drawn as text, not as a chart image.'
+      : undefined;
   const trigger = useRef<HTMLButtonElement>(null);
   const why = useId();
   const wrapper = useRef<HTMLDivElement>(null);
@@ -352,16 +435,49 @@ export function TileViewMenu({
     ...(onViewQuery === undefined
       ? []
       : [{ kind: 'item' as const, key: 'query', label: 'View query', onSelect: onViewQuery }]),
+    // Export (T272, AC-244; the mockup's): the tile's CSV, where Download CSV
+    // was, its marked rows' while it holds any, and the chart as drawn.
     {
-      kind: 'item',
-      key: 'csv',
-      label: 'Download CSV',
-      // The tile's table, as it writes it, with the mark that tells a
-      // spreadsheet it is UTF-8 — and then what it holds.
-      onSelect: download,
-      disabled: asking ? 'Its newest answer is still on its way.' : undefined,
-      // Said in words beside it, which it is described by (T182, AC-176).
-      describedBy: asking ? why : undefined,
+      kind: 'submenu',
+      key: 'export',
+      label: 'Export',
+      entries: [
+        {
+          kind: 'item',
+          key: 'csv',
+          label: 'CSV',
+          // The tile's table, as it writes it, with the mark that tells a
+          // spreadsheet it is UTF-8 — and then what it holds.
+          onSelect: download,
+          disabled: asking ? 'Its newest answer is still on its way.' : undefined,
+          // Said in words beside it, which it is described by (T182, AC-176).
+          describedBy: asking ? why : undefined,
+        },
+        ...(marked?.exportRows === undefined || marked.count === 0
+          ? []
+          : [
+              {
+                kind: 'item' as const,
+                key: 'marked-csv',
+                label: 'Marked rows CSV',
+                onSelect: () => {
+                  if (marked.exportRows !== undefined) exportMarkedRows(marked.exportRows);
+                },
+              },
+            ]),
+        ...(['svg', 'png'] as const).map((extension): MenuEntry => ({
+          kind: 'item',
+          key: extension,
+          label: `${extension.toUpperCase()} image`,
+          onSelect: () => {
+            exportImage(extension);
+          },
+          // The chart as drawn: none while an answer that replaces it is on
+          // its way, as the CSV; none of a tile drawn as text.
+          disabled: imageless ?? (asking ? 'Its newest answer is still on its way.' : undefined),
+          describedBy: imageless === undefined && asking ? why : undefined,
+        })),
+      ],
     },
     ...(onEditChart === undefined
       ? []

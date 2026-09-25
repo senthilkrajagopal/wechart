@@ -806,7 +806,7 @@ Traces to: the user, 2026-09-25; `[docs/design/reviews/2026-09-24/chart-context-
       Fails when: the clipboard holds no image, the image omits the marking's drawing, or a KPI, table or pivot tile offers it enabled.
 - [ ] AC-243 WHEN the user chooses Copy › To dashboard and picks a dashboard, THE SYSTEM SHALL add a dashboard-local copy of the tile's chart to that dashboard, and SHALL leave the source dashboard unchanged.
       Fails when: the chosen dashboard lacks the copy, the copy is the source's chart rather than its own, or the source dashboard's saved definition changes.
-- [ ] AC-244 THE SYSTEM SHALL offer under a chart tile's Export the tile's CSV, the marked rows' CSV while the marking holds items, and SVG and PNG images of a chart ECharts draws, each downloading the chart as drawn.
+- [x] AC-244 THE SYSTEM SHALL offer under a chart tile's Export the tile's CSV, the marked rows' CSV while the marking holds items, and SVG and PNG images of a chart ECharts draws, each downloading the chart as drawn.
       Fails when: one of those items is missing where it applies, or an image file is not the chart as drawn.
 - [ ] AC-245 WHEN the user opens the tile menu's Data as of submenu, THE SYSTEM SHALL show, for an answer a pre-aggregation served, its name, its last build, its refresh schedule in words and as written, and its next run with how late it may start, with Refresh now, Open in Jobs on that pre-aggregation and Edit schedule in Model; and, for an answer the database served, say so, with Refresh now and Why not accelerated.
       Fails when: one of those items is missing, Open in Jobs does not select that pre-aggregation, or a database answer is described as a pre-aggregation's.

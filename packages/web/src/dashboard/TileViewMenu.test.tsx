@@ -25,9 +25,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Export › CSV (T272, AC-244): the tile's table, where Download CSV was. */
+async function exportCsv() {
+  await userEvent.click(screen.getByRole('menuitem', { name: /^Export/ }));
+  await userEvent.click(screen.getByRole('menuitem', { name: 'CSV' }));
+}
+
 describe('a tile’s view-mode menu', () => {
   it('downloads the tile’s rows and columns as CSV, named by its chart', async () => {
-    const saved: { name: string; text: string }[] = [];
+    const saved: { name: string; text: string | Blob }[] = [];
     render(
       <TileViewMenu
         tileId="t1"
@@ -41,7 +47,7 @@ describe('a tile’s view-mode menu', () => {
 
     const trigger = screen.getByRole('button', { name: 'Actions for Orders by status' });
     await userEvent.click(trigger);
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Download CSV' }));
+    await exportCsv();
 
     expect(saved).toEqual([
       {
@@ -50,8 +56,8 @@ describe('a tile’s view-mode menu', () => {
         text: '﻿orders.status,orders.count\r\nshipped,3\r\ncompleted,5',
       },
     ]);
-    // Closed, and focus back where it was opened.
-    expect(screen.queryByRole('button', { name: 'Download CSV' })).toBeNull();
+    // Closed, submenu and all, and focus back where it was opened.
+    expect(screen.queryByRole('menu')).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
 
@@ -77,7 +83,7 @@ describe('a tile’s view-mode menu', () => {
       />,
     );
     await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Download CSV' }));
+    await exportCsv();
 
     const note = await screen.findByText(/^Downloaded 2 rows\. Truncated:/);
     expect(note.textContent).toBe(
@@ -99,7 +105,7 @@ describe('a tile’s view-mode menu', () => {
       />,
     );
     await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Download CSV' }));
+    await exportCsv();
 
     expect((await screen.findByText(/Nothing was cut short/)).textContent).toBe(
       'Downloaded 2 rows. Nothing was cut short: Cube returned all 2 rows of the query.',
@@ -112,7 +118,7 @@ describe('a tile’s view-mode menu', () => {
         <TileViewMenu tileId="t1" title="T" spec={SPEC} countRows={countRows} save={vi.fn()} />,
       );
       await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
-      await userEvent.click(screen.getByRole('menuitem', { name: 'Download CSV' }));
+      await exportCsv();
       expect((await screen.findByText(/Could not tell/)).textContent).toBe(
         'Downloaded 2 rows. Could not tell whether Cube cut the result short.',
       );
@@ -141,7 +147,7 @@ describe('a tile’s view-mode menu', () => {
     );
     for (let time = 0; time < 2; time += 1) {
       await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
-      await userEvent.click(screen.getByRole('menuitem', { name: 'Download CSV' }));
+      await exportCsv();
     }
     expect(counts[0]?.signal.aborted).toBe(true);
 
@@ -166,13 +172,13 @@ describe('a tile’s view-mode menu', () => {
     );
     const trigger = screen.getByRole('button', { name: 'Actions for T' });
     await userEvent.click(trigger);
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Download CSV' }));
+    await exportCsv();
     await screen.findByText(/Nothing was cut short/);
 
     // From the keyboard, where focus went back to.
     expect(document.activeElement).toBe(trigger);
     await userEvent.keyboard('{Enter}');
-    expect(screen.getByRole('menuitem', { name: 'Download CSV' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: /^Export/ })).toBeTruthy();
     expect(screen.queryByText(/Nothing was cut short/)).toBeNull();
   });
 
@@ -180,8 +186,9 @@ describe('a tile’s view-mode menu', () => {
     const save = vi.fn();
     render(<TileViewMenu tileId="t1" title="T" spec={SPEC} asking save={save} />);
     await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Export/ }));
 
-    const download = screen.getByRole('menuitem', { name: 'Download CSV' });
+    const download = screen.getByRole('menuitem', { name: 'CSV' });
     // A menu item says it is off as the APG menu has it, and stays focusable (T266).
     expect(download.getAttribute('aria-disabled')).toBe('true');
     await userEvent.click(download);
@@ -202,7 +209,84 @@ describe('a tile’s view-mode menu', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
     await userEvent.click(screen.getByRole('button', { name: 'Elsewhere' }));
-    expect(screen.queryByRole('button', { name: 'Download CSV' })).toBeNull();
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  /**
+   * T272 / AC-244: THE SYSTEM SHALL offer under a chart tile's Export the
+   * tile's CSV, the marked rows' CSV while the marking holds items, and SVG
+   * and PNG images of a chart ECharts draws, each downloading the chart as
+   * drawn.
+   * `Fails when: one of those items is missing where it applies, or an image
+   * file is not the chart as drawn.` The images themselves are the e2e's.
+   */
+  it('offers under Export the CSV, the marked rows’ CSV while something is marked, and the images', async () => {
+    const saved: { name: string; text: string | Blob }[] = [];
+    const marked = {
+      name: 'Marking',
+      count: 1,
+      onUnmark: vi.fn(),
+      exportRows: async () => ({ text: 'Status\r\nshipped', written: 1, total: 1 }),
+    };
+    const { rerender } = render(
+      <TileViewMenu
+        tileId="t1"
+        title="By status"
+        spec={SPEC}
+        marked={marked}
+        save={(name, text) => {
+          saved.push({ name, text });
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Export/ }));
+
+    const exported = screen.getByRole('menu', { name: /^Export/ });
+    expect(
+      [...exported.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent),
+    ).toEqual(['CSV', 'Marked rows CSV', 'SVG image', 'PNG image']);
+
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Marked rows CSV' }));
+    await vi.waitFor(() => {
+      expect(saved).toEqual([{ name: 'By status - marked rows.csv', text: '﻿Status\r\nshipped' }]);
+    });
+    expect((await screen.findByRole('status')).textContent).toContain('Downloaded 1 row');
+
+    // Nothing marked: no marked rows to export.
+    rerender(
+      <TileViewMenu
+        tileId="t1"
+        title="By status"
+        spec={SPEC}
+        marked={{ ...marked, count: 0 }}
+        save={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Export/ }));
+    expect(screen.queryByRole('menuitem', { name: 'Marked rows CSV' })).toBeNull();
+  });
+
+  it('offers no image of a tile drawn as text, and says why', async () => {
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="Total"
+        spec={{ ...SPEC, chartType: 'kpi' }}
+        save={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Total' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Export/ }));
+
+    for (const name of ['SVG image', 'PNG image']) {
+      const item = screen.getByRole('menuitem', { name });
+      expect(item.getAttribute('aria-disabled')).toBe('true');
+      expect(
+        document.getElementById(item.getAttribute('aria-describedby') ?? '')?.textContent,
+      ).toBe('A KPI, table or pivot is drawn as text, not as a chart image.');
+    }
   });
 
   /**
@@ -250,7 +334,7 @@ describe('a tile’s view-mode menu', () => {
     const trigger = screen.getByRole('button', { name: 'Actions for T' });
     await userEvent.click(trigger);
     await userEvent.keyboard('{Escape}');
-    expect(screen.queryByRole('button', { name: 'Download CSV' })).toBeNull();
+    expect(screen.queryByRole('menu')).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
 });

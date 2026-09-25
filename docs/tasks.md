@@ -4142,7 +4142,25 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
     - A KPI's Copy image is disabled with its reason.
     - Copy to dashboard adds a local copy there and leaves the source's saved definition unchanged.
   - Depends on: T266, `docs/research/clipboard-and-image-export.md`
-- [ ] T272 (AC-244, AC-199) Export › the tile's CSV, the marked rows' CSV, SVG and PNG
+- [x] T272 (AC-244, AC-199) Export › the tile's CSV, the marked rows' CSV, SVG and PNG
+  - Done 2026-09-25, all three browsers. AC-244 ticked on `e2e/markings.spec.ts` "Export offers the tile's CSV, its marked rows' CSV while marked, and SVG and PNG of the chart as drawn". `chartImage.test.ts` and `TileViewMenu.test.tsx`'s Export cases failed first; the e2e was written after the wiring. **AC-199 is not ticked here.** Its items are all in place, but T267's review found the heading's per-tile count disabling Unmark on some tiles, and it is ticked with that fix.
+    - **Export** is a submenu in the tile menu, where Download CSV was. It holds:
+      - **CSV**: the tile's table, as before, with its row-count note (AC-172). It is disabled while a newer answer is on its way.
+      - **Marked rows CSV**: shown only while the marking holds something. It holds the rows View marked rows shows, read up to Cube's 10,000-row limit and written as that dialog writes them. It gets the same note, "Downloaded n rows…", saying whether Cube cut them short.
+      - **SVG image** and **PNG image** (`tiles/chartImage.ts`, the research's recipe):
+        - The SVG is ECharts' own `renderToSVGString` of what it drew, so the marking's fade and outline are in it. It is made standalone: the chart's size, a `viewBox`, tabular figures, and the tile's surface behind it.
+        - The PNG is that SVG drawn onto a canvas from a `data:` URL at the screen's pixel ratio.
+        - Both are disabled on a KPI, table or pivot ("drawn as text, not as a chart image") and on a chart shown as a table, with the reason as the item's description. Both are also disabled while a newer answer is on its way.
+    - **Two of the research's open questions, decided here** (small, reversible):
+      - The images carry the tile's surface, so a light or dark chart's inks read wherever they are pasted.
+      - The PNG is at the device pixel ratio, as drawn.
+    - `saveFile` takes a Blob as well as text.
+    - **The e2e:**
+      - With nothing marked, the submenu is CSV, SVG and PNG; while marked, Marked rows CSV joins them.
+      - The SVG file's labels and faded paths equal the on-screen chart's.
+      - The PNG has the PNG signature and the chart's size × `devicePixelRatio`. Decoded in the page, the marked bar's pixel is opaque and darker than a faded bar's.
+      - The marked rows' CSV is 80 shipped rows.
+    - **The e2e tests that clicked Download CSV** now open Export and click CSV: `export.spec.ts`, `status-labels.spec.ts` and the menu lists in `markings.spec.ts`.
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/core/src/export/*`, `e2e/tile-menu.spec.ts`
   - Failing test: each item downloads its file. The SVG and PNG are the chart as drawn. The marked rows' CSV appears only while the marking holds items.
   - Depends on: T266, T120, `docs/research/clipboard-and-image-export.md`

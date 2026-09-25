@@ -139,9 +139,10 @@ test('every state of a download has an icon and words', async ({ page }) => {
   await page.waitForLoadState('networkidle');
   const tile = page.locator('[data-tile="tile-status"]');
   await tile.getByRole('button', { name: /^Actions for / }).click();
+  await tile.getByRole('menuitem', { name: 'Export' }).click();
   await Promise.all([
     page.waitForEvent('download'),
-    tile.getByRole('menuitem', { name: 'Download CSV' }).click(),
+    tile.getByRole('menuitem', { name: 'CSV', exact: true }).click(),
   ]);
 
   await expect(tile.locator('.tile-export-note')).toContainText('Downloaded');
