@@ -64,7 +64,14 @@ read through Context7 on 2026-09-24.)
 ## wechart's rule (a decision, not an ECharts behaviour; overturnable)
 
 `series/bar.ts` estimates each bar's laid-out width from the canvas the chart is
-drawn in. It uses the default grid's margins and barGrid's formula above.
+drawn in. It uses the grid's margins and barGrid's formula above.
+
+**Since T254 (2026-09-24), the grid is the prototype's, not ECharts' default.**
+Every chart on axes is laid out 8 px left, 28 px right, 12 px above and 8 px
+below, with "same" outer bounds holding the labels
+(`echarts-text-and-grid.md`, Q3). Bars and combos carry that grid themselves, so
+the estimate is `width − 36` along the width and `height − 20` down a
+horizontal chart.
 
 - The gap is kept only where the bar is at least three gaps wide, so the colour
   between its two borders is at least as wide as one border.

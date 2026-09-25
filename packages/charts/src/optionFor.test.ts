@@ -3,7 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { CHART_TYPES, type RenderSpec } from '@wechart/core';
 
 import { DRAWABLE_TYPES, isDrawable, optionFor } from './optionFor';
-import { cellsOf, marksOf, pointsOf, renderToSvg, sectorsOf } from './testing/renderToSvg';
+import {
+  cellsOf,
+  labelsOf,
+  marksOf,
+  pointsOf,
+  renderToSvg,
+  sectorsOf,
+} from './testing/renderToSvg';
 
 /**
  * AC-037: one entry point from a spec to a drawable option.
@@ -118,5 +125,36 @@ describe('a type ECharts does not draw', () => {
     for (const chartType of DRAWABLE_TYPES) {
       expect(isDrawable(chartType)).toBe(true);
     }
+  });
+});
+
+/**
+ * T254 / AC-187, recheck-dashboard F9: the prototype's grid,
+ * `{ left: 8, right: 28, top: 12, bottom: 8, containLabel: true }`, in
+ * ECharts 6's own terms — the rect's edges and "same" outer bounds holding
+ * the axes' labels and names (research/echarts-text-and-grid.md, Q3). ECharts'
+ * default left 80 px empty below the axis labels.
+ */
+describe('a chart on axes', () => {
+  for (const chartType of ['bar', 'line', 'scatter', 'heatmap'] as const)
+    it(`is laid out on the prototype’s grid (${chartType})`, () => {
+      const grid = optionFor(spec(chartType))['grid'] as Record<string, unknown>;
+      expect(grid).toMatchObject({
+        left: 8,
+        right: 28,
+        bottom: 8,
+        outerBoundsMode: 'same',
+        outerBoundsContain: 'all',
+      });
+      // 12 above with no legend at the top, as the prototype's topPad.
+      expect(typeof grid['top']).toBe('number');
+    });
+
+  it('draws its axis labels down to 8 px from the foot, not 80', () => {
+    const labels = labelsOf(renderToSvg(optionFor(spec('bar'))));
+    const category = labels.find((label) => label.text === 'paid');
+    // The headless canvas is 400 px high; ECharts' default grid put the
+    // category labels near 330.
+    expect(category?.y ?? 0).toBeGreaterThan(370);
   });
 });

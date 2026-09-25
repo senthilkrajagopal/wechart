@@ -199,6 +199,7 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       ref={node}
+      className="chart-canvas"
       data-testid="chart-canvas"
       data-chart-type={spec.chartType}
       // What it is highlighting, where a tile pair asks for one (AC-117).

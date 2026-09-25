@@ -16,6 +16,7 @@
 import { seriesOf, type RenderSpec } from '@wechart/core';
 
 import { colourFor } from '../colours';
+import { PROTOTYPE_GRID } from '../layout/grid';
 import { categoryAxisPx, DEFAULT_CANVAS, gapFor, laidBarWidth, type Canvas } from './bar';
 import { DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 
@@ -33,6 +34,8 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
 
   return {
     animation: false,
+    // The grid its bars' widths are estimated against (T254).
+    grid: { ...PROTOTYPE_GRID },
     xAxis: { type: 'category', data: categories },
     // Exactly one, shared by every series.
     yAxis: { type: 'value' },

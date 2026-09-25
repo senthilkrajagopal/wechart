@@ -238,11 +238,22 @@ async function clickBar(
 ) {
   const label = target.locator('svg text', { hasText: category }).first();
   await expect(label).toBeVisible();
-  let box: Awaited<ReturnType<Locator['boundingBox']>> = null;
+  let box: { x: number; y: number; width: number } | null = null;
+  // The label's own client rect, and where it has come to rest: the same box
+  // twice running. Playwright's boundingBox() puts a middle-anchored SVG text
+  // half its width to the right in WebKit, which put the click in the gap
+  // between two bars once the prototype's grid widened the plot (T254).
+  let last = '';
   await expect
     .poll(async () => {
-      box = await label.boundingBox();
-      return box !== null && box.width > 0;
+      box = await label.evaluate((text) => {
+        const rect = text.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width };
+      });
+      const now = JSON.stringify(box);
+      const settled = box.width > 0 && now === last;
+      last = now;
+      return settled;
     })
     .toBe(true);
   const at = box as unknown as { x: number; y: number; width: number };

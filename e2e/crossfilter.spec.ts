@@ -134,11 +134,16 @@ async function clickBar(page: Page, target: Locator, category: string) {
   await expect(label).toBeVisible();
   // Laid out, not merely present: a chart redrawn a moment ago — after a
   // save, say — has its labels in the DOM before WebKit has placed them.
-  let box: Awaited<ReturnType<Locator['boundingBox']>> = null;
+  // Its own client rect: Playwright's boundingBox() puts a middle-anchored
+  // SVG text half its width to the right in WebKit (found in T254's run).
+  let box: { x: number; y: number; width: number } | null = null;
   await expect
     .poll(async () => {
-      box = await label.boundingBox();
-      return box !== null && box.width > 0;
+      box = await label.evaluate((text) => {
+        const rect = text.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width };
+      });
+      return box.width > 0;
     })
     .toBe(true);
   const at = box as unknown as { x: number; y: number; width: number };

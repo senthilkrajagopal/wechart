@@ -26,6 +26,7 @@ import { lineOption, isLineType } from './series/line';
 import { pieOption, isPieType } from './series/pie';
 import { scatterOption, isScatterType } from './series/scatter';
 import { isTreemapType, treemapOption } from './series/treemap';
+import { PROTOTYPE_GRID } from './layout/grid';
 import type { EChartsOption } from './theme';
 
 /**
@@ -85,18 +86,32 @@ export function optionFor(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
       : { grid: { ...(option['grid'] as object), ...(base['grid'] as object) } }),
   });
 
-  if (isBarType(spec.chartType)) return drawn(barOption(spec, canvas));
-  if (isLineType(spec.chartType)) return drawn(lineOption(spec));
-  if (isScatterType(spec.chartType)) return drawn(scatterOption(spec));
+  /**
+   * The prototype's grid (T254, F9): its `{ left: 8, right: 28, top: 12,
+   * bottom: 8, containLabel: true }` in ECharts 6's own terms — "same" outer
+   * bounds that hold the axes' labels and names inside those edges
+   * (research/echarts-text-and-grid.md, Q3). ECharts' default grid, 15% and
+   * 10% at the sides and 65 and 80 px above and below, left an empty band
+   * under the axis. A renderer's own grid, the legend's room and the Customize
+   * tab's placement still win.
+   */
+  const onGrid = (option: EChartsOption): EChartsOption => ({
+    ...option,
+    grid: { ...PROTOTYPE_GRID, ...(option['grid'] as object | undefined) },
+  });
+
+  if (isBarType(spec.chartType)) return drawn(onGrid(barOption(spec, canvas)));
+  if (isLineType(spec.chartType)) return drawn(onGrid(lineOption(spec)));
+  if (isScatterType(spec.chartType)) return drawn(onGrid(scatterOption(spec)));
   if (isPieType(spec.chartType)) return drawn(pieOption(spec));
   if (isTreemapType(spec.chartType)) return drawn(treemapOption(spec));
-  if (isHeatmapType(spec.chartType)) return drawn(heatmapOption(spec));
+  if (isHeatmapType(spec.chartType)) return drawn(onGrid(heatmapOption(spec)));
   // Its own axes (an array, per panel, formatted by the layout), and no
   // legend — but a tooltip like every other chart (AC-046, T195).
   if (isTrellisType(spec.chartType)) {
     return { ...trellisOption(spec, canvas), ...tooltipFor(spec) };
   }
-  if (isComboType(spec.chartType)) return drawn(comboOption(spec, canvas));
+  if (isComboType(spec.chartType)) return drawn(onGrid(comboOption(spec, canvas)));
 
   // Reached only by the DOM-rendered types — KPI, table and pivot — which
   // `ChartTile` routes before this is called, and which ECharts genuinely

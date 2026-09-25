@@ -140,3 +140,33 @@ describe('a chart drawn in the light theme', () => {
     expect(light.xAxis.axisLabel.color).toBe(COLORS.light['text-secondary']);
   });
 });
+
+/**
+ * T254 / AC-187, recheck-dashboard N7: the prototype's chart text —
+ * textStyle.fontFamily "Inter, system-ui, sans-serif", the tooltip at 12 px —
+ * in either theme; and the tooltip's figures tabular, as the tile's are, where
+ * its own inline "font" shorthand would reset them
+ * (research/echarts-text-and-grid.md, Q1 and Q2).
+ */
+describe('a chart’s text', () => {
+  for (const theme of ['light', 'dark'] as const)
+    it(`is set in Inter, the tooltip at 12 px in tabular figures (${theme})`, () => {
+      const drawn = themed({ tooltip: { trigger: 'axis' }, series: [] }, theme) as unknown as {
+        textStyle: { fontFamily: string };
+        tooltip: { textStyle: { fontSize: number }; extraCssText: string };
+      };
+      expect(drawn.textStyle.fontFamily).toBe('Inter, system-ui, sans-serif');
+      expect(drawn.tooltip.textStyle.fontSize).toBe(12);
+      expect(drawn.tooltip.extraCssText).toContain('font-variant-numeric: tabular-nums;');
+    });
+
+  it('leaves a chart’s own family where it names one', () => {
+    const drawn = themed(
+      { textStyle: { fontFamily: 'serif' }, series: [] },
+      'light',
+    ) as unknown as {
+      textStyle: { fontFamily: string };
+    };
+    expect(drawn.textStyle.fontFamily).toBe('serif');
+  });
+});

@@ -2808,6 +2808,12 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
    pixel height the body is drawn with, and the chart follows its box. */
 .grid-tile:has(> .chart-tile),
 .grid-tile:has(> .tile-empty) { display: flex; flex-direction: column; }
+/* A chart's text in tabular numerals (direction rule 1; T254, N7). ECharts has
+   no option for it, and writes most text's font as longhands, which inherit
+   this; the few it writes as the "font" shorthand reset it inline, so the
+   rule on the text is !important (research/echarts-text-and-grid.md, Q2). */
+.chart-canvas { font-variant-numeric: tabular-nums; }
+.chart-canvas svg text { font-variant-numeric: tabular-nums !important; }
 .grid-tile > .chart-tile {
   display: flex;
   flex: 1 1 0;

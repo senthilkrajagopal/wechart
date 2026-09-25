@@ -3704,10 +3704,20 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - it drops the time, which AC-148 needs;
     - it moves Table view into the menu, which rule 5 opposes.
   - **Noted:** the unavailable state (AC-167) shares `.tile-empty`, so its message is now 12 px too.
-- [ ] T254 (AC-187) Draw a chart's text in Inter with tabular numerals, and its plot down to the tile's foot, as the prototype does
-  - Files: `packages/charts/src/*`, `packages/web/src/shell/styles.ts`, `docs/research/echarts-text-and-grid.md`, `e2e/design-conformance.spec.ts`
+- [x] T254 (AC-187) Draw a chart's text in Inter with tabular numerals, and its plot down to the tile's foot, as the prototype does
+  - Files: `packages/charts/src/{themed,optionFor}.ts` (+ tests), `packages/charts/src/layout/grid.ts`, `packages/charts/src/series/{bar,combo}.ts`, `packages/web/src/tiles/ChartCanvas.tsx`, `packages/web/src/shell/styles.ts`, `docs/research/echarts-text-and-grid.md`, `docs/research/echarts-bar-density.md`, `e2e/design-conformance.spec.ts`, `e2e/{markings,crossfilter}.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts` "T254: …": every SVG text is Inter, with tabular numerals; the lowest label is no more than 12 px above the chart's foot (the prototype's `grid: { bottom: 8, containLabel: true }`) (recheck-dashboard N7, F9; mismatches 12, 13).
   - Depends on: `docs/research/echarts-text-and-grid.md` (ECharts 6.1's global `textStyle`, how its SVG writes text, and v6's grid label bounds)
+  - Done 2026-09-24, all three browsers. The e2e failed first, and so did `themed.test.ts` "a chart's text" and `optionFor.test.ts` "a chart on axes".
+    - **The chart's text is Inter.** It is set through the option's root `textStyle`, which reaches every text wechart draws; ECharts writes the family inline, so page CSS can't. The tooltip is the prototype's 12 px.
+    - **Tabular numerals come from page CSS on the chart**, as ECharts has no option for them. Most of its text inherits them. The few written with the `font` shorthand get them through an `!important` rule, and the tooltip through its `extraCssText`.
+    - **One limit, recorded in the research:** zrender measures text with a canvas, which has no tabular figures. The labels are laid out by proportional digit widths and drawn tabular, and Inter's digits differ little.
+    - **The grid is the prototype's `{ left: 8, right: 28, top: 12, bottom: 8 }`**, in ECharts 6's supported terms: `outerBoundsMode: 'same'` with `outerBoundsContain: 'all'`. Axis titles stay inside the 8 px bottom too. `containLabel` is deprecated, and wechart's build doesn't register the legacy algorithm the prototype's full bundle ran. The legend's room and the Customize tab's placement still win.
+    - **Bars and combos carry the grid themselves**, so a bar's estimated width is measured against the grid it is drawn on: `width − 36` along it, `height − 20` down a horizontal chart. `echarts-bar-density.md` says so.
+    - **Found by the full run:**
+      - The markings and cross-filter e2e helpers clicked a bar at Playwright's `boundingBox()` of its axis label.
+      - In WebKit that box sits half the label's width to the right for middle-anchored SVG text. With the wider plot, the click fell in the gap between two bars.
+      - Both helpers now measure with the element's own client rect, and wait for it to settle.
 - [x] T253 (AC-187) Use the prototype's picker for tile menus, its inline grip, and its tinted edit grid
   - Files: `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: a tile's ⋯ menu is 250 px, `border-strong` with the pop shadow, 28 px items at 12 px, its heading 12/16 muted and Delete in `status-error`; the grip sits inline in the head at 14 px muted; the edit grid's columns are tinted bands (recheck-dashboard N4; mismatches 14, 19, 20).

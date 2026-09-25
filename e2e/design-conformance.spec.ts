@@ -1781,6 +1781,46 @@ const firstChart = (page: Page) =>
     .first();
 
 /**
+ * T254: a chart's own text and plot as charts.js draws them
+ * (recheck-dashboard N7, F9; mismatches 12, 13).
+ */
+test.describe('T254: a chart’s text and plot', () => {
+  test('the chart is drawn in Inter with tabular numerals, its plot down to the tile’s foot', async ({
+    page,
+  }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    const tile = firstChart(page);
+    const svg = tile.getByTestId('chart-canvas').locator('svg').first();
+    await expect(svg.locator('text').first()).toBeVisible();
+
+    // The prototype's textStyle.fontFamily "Inter, system-ui, sans-serif" (N7, mismatch 13).
+    const families = await svg
+      .locator('text')
+      .evaluateAll((texts) => [...new Set(texts.map((text) => getComputedStyle(text).fontFamily))]);
+    expect(families.length).toBeGreaterThan(0);
+    for (const family of families) expect(family).toMatch(/^"?Inter"?,/);
+    // Direction rule 1: axes in tabular numerals.
+    const numerals = await svg
+      .locator('text')
+      .evaluateAll((texts) => [
+        ...new Set(texts.map((text) => getComputedStyle(text).fontVariantNumeric)),
+      ]);
+    expect(numerals).toEqual(['tabular-nums']);
+
+    // grid: { bottom: 8, containLabel: true } — no band of empty grid under
+    // the axis labels (F9, mismatch 12: it was 59 px).
+    const gap = await svg.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const lowest = Math.max(
+        ...[...element.querySelectorAll('text')].map((text) => text.getBoundingClientRect().bottom),
+      );
+      return box.bottom - lowest;
+    });
+    expect(gap).toBeLessThanOrEqual(12);
+  });
+});
+
+/**
  * T252: a chart tile's badges, head and incomplete state as dashboard.js
  * draws them (recheck-dashboard F8, F13; mismatches 9, 10, 21).
  */

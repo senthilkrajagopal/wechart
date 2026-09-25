@@ -9,6 +9,7 @@
 import { seriesOf, type RenderSpec } from '@wechart/core';
 
 import { colourFor } from '../colours';
+import { PROTOTYPE_GRID } from '../layout/grid';
 import { DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 
 /**
@@ -99,6 +100,8 @@ export function barOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
 
   return {
     animation: false,
+    // The grid its bars' widths are estimated against (T254).
+    grid: { ...PROTOTYPE_GRID },
     xAxis: horizontal ? valueAxis : categoryAxis,
     yAxis: horizontal ? categoryAxis : valueAxis,
     series: series.map((one, index) => ({
@@ -139,14 +142,15 @@ export interface Canvas {
 export const DEFAULT_CANVAS: Canvas = { width: 640, height: 400 };
 
 /**
- * How long the category axis of a chart on this canvas is, by ECharts' default
- * grid (GridModel.js: 15% left and 10% right of the width; 65 px above and
- * 80 px below). Slightly over rather than under where a legend or long labels
- * move the grid, which only errs towards keeping a gap the colour still shows
- * beside (research/echarts-bar-density.md).
+ * How long the category axis of a chart on this canvas is, by the prototype's
+ * grid that `optionFor` lays every chart on axes out on (T254: 8 px left, 28
+ * right, 12 above and 8 below; research/echarts-text-and-grid.md, Q3). Its
+ * labels come out of that too, which this leaves in: slightly over rather
+ * than under, as a legend moves the grid as well, which only errs towards
+ * keeping a gap the colour still shows beside (research/echarts-bar-density.md).
  */
 export function categoryAxisPx(canvas: Canvas, horizontal: boolean): number {
-  return horizontal ? canvas.height - 145 : canvas.width * 0.75;
+  return horizontal ? canvas.height - 20 : canvas.width - 36;
 }
 
 /**

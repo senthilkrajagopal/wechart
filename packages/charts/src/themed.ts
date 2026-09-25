@@ -24,6 +24,9 @@ import { DEFAULT_SURFACE, SEQUENTIAL, type EChartsOption } from './theme';
  */
 export type ChartTheme = 'light' | 'dark';
 
+/** The prototype's chart face (charts.js:107), the UI's own Inter first. */
+export const CHART_FONT = 'Inter, system-ui, sans-serif';
+
 /**
  * direction.md §5's neutral for "Other" and null (`colorAssignment.ts`'s
  * OTHER_COLOUR), and its dark value.
@@ -124,6 +127,10 @@ export function themed(option: EChartsOption, theme: ChartTheme): EChartsOption 
 
   return {
     ...coloured,
+    // The prototype's chart text (T254, N7): its root textStyle reaches
+    // every text wechart draws (research/echarts-text-and-grid.md, Q1).
+    // Unquoted, since server-rendered SVG does not escape a quote in it.
+    textStyle: { fontFamily: CHART_FONT, ...asObject(coloured['textStyle']) },
     ...(coloured['xAxis'] === undefined
       ? {}
       : { xAxis: eachOf(coloured['xAxis'], (axis) => themedAxis(axis, theme)) }),
@@ -145,8 +152,14 @@ export function themed(option: EChartsOption, theme: ChartTheme): EChartsOption 
             backgroundColor: tokens['bg-raised'],
             borderColor: tokens['border-strong'],
             ...asObject(coloured['tooltip']),
+            // Its figures tabular like the tile's: its own inline "font"
+            // shorthand resets them, and extraCssText is written after it
+            // (research/echarts-text-and-grid.md, Q2).
+            extraCssText: `${String(asObject(coloured['tooltip'])['extraCssText'] ?? '')}font-variant-numeric: tabular-nums;`,
             textStyle: {
               color: tokens['text-primary'],
+              // The prototype's 12 px; ECharts' tooltip default is 14.
+              fontSize: 12,
               ...asObject(asObject(coloured['tooltip'])['textStyle']),
             },
           },
