@@ -1,6 +1,7 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import type { JoinGraph } from './joinGraph';
+import { BOX, drawJoin, layOut } from './joinLayout';
 
 /**
  * The join editor (T144, AC-138): the model's join graph, as the prototype
@@ -11,103 +12,35 @@ import type { JoinGraph } from './joinGraph';
  *
  * Drawn as SVG from the tokens: a picture whose every element a test can
  * find, and the joins are also listed in words, with links to the cubes'
- * files. Laid out on a circle sized so no two boxes meet, the cube being
- * edited at the top; each arrow bends to its own right, as the prototype's
- * curved edges do, so two cubes joining each other show two arrows; and the
+ * files. Laid out by `joinLayout.ts`, so no two boxes meet and the diagram
+ * fits its pane's width where it can, the cube being edited at the top; the
  * arrows are drawn over the boxes, haloed, so one crossing a box is never
  * hidden by it (T144's review).
  */
-const BOX = { width: 168, height: 52 };
-const MARGIN = 16;
-/** Room above the top box for a cube's loop to itself. */
-const LOOP_ROOM = 48;
 
 /** The three relationships the docs use (research Y.5). */
 const RELATIONSHIPS = ['many_to_one', 'one_to_many', 'one_to_one'] as const;
 
 const words = (relationship: string) => relationship.replace(/_/g, ' ');
-const round = (value: number) => Math.round(value * 10) / 10;
-
-interface Point {
-  readonly x: number;
-  readonly y: number;
-}
-
-interface Placed {
-  readonly name: string;
-  readonly path: string | undefined;
-  readonly holds: string;
-  readonly missing: boolean;
-  readonly x: number;
-  readonly y: number;
-}
-
-const centreOf = (box: Placed): Point => ({ x: box.x + BOX.width / 2, y: box.y + BOX.height / 2 });
-
-/** Where the line from a box's centre toward a point leaves the box. */
-function borderToward(box: Placed, toward: Point): Point {
-  const centre = centreOf(box);
-  const [dx, dy] = [toward.x - centre.x, toward.y - centre.y];
-  const scale = Math.min(
-    dx === 0 ? Infinity : BOX.width / 2 / Math.abs(dx),
-    dy === 0 ? Infinity : BOX.height / 2 / Math.abs(dy),
-  );
-  return { x: centre.x + dx * scale, y: centre.y + dy * scale };
-}
 
 /**
- * On a circle whose neighbours' centres are further apart than a box's
- * diagonal, so no two boxes meet whatever the count; the first at the top.
+ * The width a box shows its content in, as it changes; none where the
+ * browser can't say (the tests' DOM), and the diagram then takes a circle.
  */
-function layOut(boxes: readonly Omit<Placed, 'x' | 'y'>[]): Placed[] {
-  const count = boxes.length;
-  const apart = BOX.width + 24;
-  const radius = count < 2 ? 0 : Math.max(110, apart / (2 * Math.sin(Math.PI / count)));
-  const around = boxes.map((box, index) => {
-    const angle = -Math.PI / 2 + (index * 2 * Math.PI) / Math.max(count, 1);
-    return {
-      ...box,
-      x: Math.round(Math.cos(angle) * radius - BOX.width / 2),
-      y: Math.round(Math.sin(angle) * radius - BOX.height / 2),
+function useWidthOf(box: React.RefObject<HTMLElement | null>): number | undefined {
+  const [width, setWidth] = useState<number>();
+  useEffect(() => {
+    const element = box.current;
+    if (element === null || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry !== undefined) setWidth(Math.floor(entry.contentRect.width));
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
     };
-  });
-  const left = Math.min(...around.map((box) => box.x));
-  const top = Math.min(...around.map((box) => box.y));
-  return around.map((box) => ({
-    ...box,
-    x: box.x - left + MARGIN,
-    y: box.y - top + MARGIN + LOOP_ROOM,
-  }));
-}
-
-/** A join's path, and where its label goes: a curve bending to its right; a loop for a cube to itself. */
-function drawJoin(from: Placed, to: Placed): { d: string; label: Point } {
-  if (from === to) {
-    const [x, y] = [from.x + BOX.width, from.y];
-    const start = { x: x - 44, y };
-    const end = { x, y: y + 16 };
-    return {
-      d: `M ${String(round(start.x))} ${String(round(start.y))} C ${String(round(start.x))} ${String(round(y - 40))}, ${String(round(x + 40))} ${String(round(y - 40))}, ${String(round(end.x))} ${String(round(end.y))}`,
-      label: { x: round(x + 14), y: round(y - 30) },
-    };
-  }
-  const [a, b] = [centreOf(from), centreOf(to)];
-  const [dx, dy] = [b.x - a.x, b.y - a.y];
-  const length = Math.hypot(dx, dy) || 1;
-  // Its right-hand side: the way back bends the other way.
-  const normal = { x: -dy / length, y: dx / length };
-  const lift = Math.max(28, length * 0.16);
-  const bend = { x: (a.x + b.x) / 2 + normal.x * lift, y: (a.y + b.y) / 2 + normal.y * lift };
-  const start = borderToward(from, bend);
-  const end = borderToward(to, bend);
-  const middle = {
-    x: 0.25 * start.x + 0.5 * bend.x + 0.25 * end.x + normal.x * 12,
-    y: 0.25 * start.y + 0.5 * bend.y + 0.25 * end.y + normal.y * 12,
-  };
-  return {
-    d: `M ${String(round(start.x))} ${String(round(start.y))} Q ${String(round(bend.x))} ${String(round(bend.y))} ${String(round(end.x))} ${String(round(end.y))}`,
-    label: { x: round(middle.x), y: round(middle.y) },
-  };
+  }, [box]);
+  return width;
 }
 
 export function JoinEditor({
@@ -148,14 +81,18 @@ export function JoinEditor({
       missing: true,
     })),
   ];
-  // The cube being edited first, so at the top.
-  const placed = layOut([
-    ...boxes.filter((each) => each.name === current),
-    ...boxes.filter((each) => each.name !== current),
-  ]);
+  // The cube being edited first, so at the top; as wide as the pane shows.
+  const canvas = useRef<HTMLDivElement>(null);
+  const fit = useWidthOf(canvas);
+  const { placed, width, height } = layOut(
+    [
+      ...boxes.filter((each) => each.name === current),
+      ...boxes.filter((each) => each.name !== current),
+    ],
+    graph.joins,
+    fit,
+  );
   const at = new Map(placed.map((each) => [each.name, each]));
-  const width = Math.max(...placed.map((each) => each.x + BOX.width), BOX.width) + MARGIN * 2 + 40;
-  const height = Math.max(...placed.map((each) => each.y + BOX.height), BOX.height) + MARGIN;
   const pathOf = (name: string) => graph.cubes.find((each) => each.name === name)?.path;
 
   // At most one join per target cube (research Y.5).
@@ -182,7 +119,7 @@ export function JoinEditor({
 
   return (
     <div className="join-editor">
-      <div className="join-editor__canvas">
+      <div ref={canvas} className="join-editor__canvas">
         <svg
           role="img"
           aria-label={`Join diagram: ${String(placed.length)} cubes, ${String(graph.joins.length)} joins${current === undefined ? '' : `, ${current} marked`}`}

@@ -2419,6 +2419,17 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - There's no zoom or pan: the pane scrolls.
     - Leaving through a link doesn't warn of unpublished edits, as elsewhere. The user has ruled out hardening save edge cases.
     - Joins declared in JavaScript or Jinja files aren't drawn: those files are read-only and aren't read as YAML.
+  - **Fixed 2026-09-25, from the Superset parity run** ("The join diagram clips nodes at the right edge"):
+    - **The cause:** the diagram was sized for a circle of boxes plus a 72 px spare band, whatever its pane. At 1440 × 900 the pane shows 469 px, and four cubes took 528. The right-hand boxes lay past the pane's edge, behind a scrollbar the Mac hides.
+    - **Why not shrink it:** its text would fall under the 12 px floor (AC-004).
+    - **The fix:** the layout moved to `joinLayout.ts`.
+      - Where the pane can't hold the circle, the boxes lie on the widest ellipse that fits it, as tall as keeps them apart. Where no ellipse fits, they take two columns, taking turns down them.
+      - The drawing is as big as what it draws, including arrows, a loop and labels.
+      - `JoinEditor` reads its pane's width with a `ResizeObserver`. Where there is none (the tests' DOM), it keeps the circle.
+    - **Tests that failed first:**
+      - `joinLayout.test.ts`: fits 469 px for 3 to 14 cubes (four had taken 528); no box over another at any width; as big as it draws and no bigger (a band had been left); a circle where there's room.
+      - `e2e/model.spec.ts` "the join diagram fits its pane's width, every box in view": 528 against 469 with the old component. It passes in Chrome, Firefox and Safari.
+    - **Not looked at on screen:** the two-column layout. No local model has enough cubes.
 - [x] T275 (AC-250, AC-139) Run the user's Cube fork, and grant its `introspection` scope only to the tokens the API signs for it
   - Done 2026-09-25. **AC-250 is not ticked yet.** Its tokens are shown: Cube grants the scope to the introspection token alone, never to a query's, a store's or a draft's.
     - Its "never to the browser" has no surface until T145's proxy exists, so it is ticked there, on a test that the proxy's responses carry no token.

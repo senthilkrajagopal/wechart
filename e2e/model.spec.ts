@@ -660,6 +660,40 @@ test('Model is one workspace: a tree beside full-height form and code panes, Pro
 });
 
 /**
+ * AC-138's diagram in the pane it is drawn in, which the Superset parity run
+ * found clipped: "The join diagram clips nodes at the right edge". It was
+ * sized for a circle plus a spare band whatever the pane, so its right-hand
+ * boxes lay past the pane's edge, behind a scrollbar the Mac doesn't show.
+ */
+test('the join diagram fits its pane’s width, every box in view', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/model/files/cubes%2Forders.yml');
+  await page
+    .getByRole('group', { name: 'Right pane view' })
+    .getByRole('button', { name: 'Join diagram' })
+    .click();
+  const diagram = page.getByRole('img', { name: /^Join diagram/ });
+  await expect(diagram.locator('[data-cube="customers"]')).toBeVisible();
+
+  const canvas = page.locator('.join-editor__canvas');
+  await expect(async () => {
+    const [scroll, client] = await canvas.evaluate((element) => [
+      element.scrollWidth,
+      element.clientWidth,
+    ]);
+    expect(scroll).toBeLessThanOrEqual(client);
+  }).toPass({ timeout: 5_000 });
+  const shown = await canvas.boundingBox();
+  for (const box of await diagram.locator('[data-cube] rect').all()) {
+    const drawn = await box.boundingBox();
+    expect(drawn?.x).toBeGreaterThanOrEqual(shown?.x ?? Infinity);
+    expect((drawn?.x ?? Infinity) + (drawn?.width ?? 0)).toBeLessThanOrEqual(
+      (shown?.x ?? 0) + (shown?.width ?? 0),
+    );
+  }
+});
+
+/**
  * AC-222 from the overview, which the Superset parity run found lost: there
  * no file is open, and opening the new one leaves the overview's page for the
  * file's — so what New cube made must outlive the page that made it.
