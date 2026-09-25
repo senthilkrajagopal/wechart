@@ -8,7 +8,7 @@ import type { Config } from '../config';
 import type { ModelFile, ModelFileStore } from '../server';
 import { clashesOf, compiledIn } from './clashes';
 import { refreshKeyProblemsOf } from './refreshKeys';
-import { rollupOwnersOf } from './rollupJoins';
+import { refusedRollupsOf, rollupOwnersOf, type RollupOwner } from './rollupJoins';
 import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
 import { compileErrorsOf, type CompileError } from './validate';
 
@@ -92,6 +92,36 @@ function unknownInRollups(
         unknown: problem.unknown,
       },
     }));
+}
+
+/**
+ * Whether Cube builds a cube's rollups' joins, asked under a context (T265):
+ * nothing when it does, its reason when it refuses (a 400), and the error when
+ * it couldn't be asked.
+ */
+async function joinRefusalOf(
+  client: CubeClient,
+  probe: RollupOwner['probe'],
+  context: Record<string, unknown>,
+): Promise<string | Error | undefined> {
+  try {
+    await client.sqlUnder({ ...probe }, context);
+    return undefined;
+  } catch (error) {
+    if (error instanceof CubeError && error.status === 400) return error.message;
+    return error instanceof Error ? error : new Error(String(error));
+  }
+}
+
+/** Each item worked, a few at a time, its results in the items' order. */
+async function inTurn<T, R>(items: readonly T[], work: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = [];
+  let next = 0;
+  const worker = async () => {
+    for (let at = next++; at < items.length; at = next++) results[at] = await work(items[at] as T);
+  };
+  await Promise.all(Array.from({ length: Math.min(4, items.length) }, worker));
+  return results;
 }
 
 export function registerModelPublishing(
@@ -242,39 +272,47 @@ export function registerModelPublishing(
       /**
        * Rollups whose cubes Cube cannot join (T265, AC-235): compiled all the
        * same, then failing every query on their cube and the refresh worker's
-       * whole run. `/v1/sql` for one member of each changed cube with
-       * pre-aggregations, under the draft, has Cube build every one of its
-       * rollups' joins, running nothing (research/cube/rollup-join-paths.md, Q5).
-       * Cube's refusal names cubes, not the rollup: it is put on the cube's
-       * rollups that name another cube's members, or on all of them if none do.
+       * whole run. `/v1/sql` for one member of each cube with pre-aggregations,
+       * under the draft, has Cube build every one of its rollups' joins,
+       * running nothing (research/cube/rollup-join-paths.md, Q5). Every such
+       * cube in the draft is asked — a change to one file can break the join a
+       * rollup in another needs — and, as with unknown names above, one in a
+       * file the change leaves alone that the model Cube serves now refuses
+       * alike doesn't hold it up (gotcha 2).
        */
-      for (const owner of rollupOwnersOf(changed)) {
-        try {
-          await client.sqlUnder(owner.probe, {
-            wechartStore: config.cubeStoreUrl,
-            wechartDraft: id,
-          });
-        } catch (error) {
-          if (!(error instanceof CubeError) || error.status !== 400) {
-            app.log.warn({ err: error }, 'could not ask Cube to build the rollups’ joins');
-            return reply.status(502).send({
-              error: `Cube could not be asked to check the rollups of ${owner.cube}, so nothing was published.`,
-            });
-          }
-          const reason = error.message.replace(/\.$/, '');
-          const joining = owner.rollups.filter((rollup) => rollup.joins);
-          return reply.status(422).send({
-            errors: (joining.length > 0 ? joining : owner.rollups).map((rollup) => ({
-              path: owner.path,
-              ...(rollup.line === undefined ? {} : { line: rollup.line }),
-              message: /Can't find join path/.test(reason)
-                ? `Pre-aggregation ${rollup.name} can't be built: Cube cannot join its cubes. ${reason}.`
-                : `Pre-aggregation ${rollup.name} can't be built: ${reason}.`,
-              preAggregation: { cube: owner.cube, name: rollup.name },
-            })),
-          });
-        }
+      const asked = await inTurn(rollupOwnersOf(draft), async (owner) => {
+        const reason = await joinRefusalOf(client, owner.probe, {
+          wechartStore: config.cubeStoreUrl,
+          wechartDraft: id,
+        });
+        if (typeof reason !== 'string' || paths.has(owner.path)) return { owner, reason };
+        const before = await joinRefusalOf(client, owner.probe, {
+          wechartStore: config.cubeStoreUrl,
+        });
+        if (before instanceof Error) return { owner, reason: before };
+        return { owner, reason: before === reason ? undefined : reason };
+      });
+      const unasked = asked.find(({ reason }) => reason instanceof Error);
+      if (unasked !== undefined) {
+        app.log.warn({ err: unasked.reason }, 'could not ask Cube to build the rollups’ joins');
+        return reply.status(502).send({
+          error: `Cube could not be asked to check the rollups of ${unasked.owner.cube}, so nothing was published.`,
+        });
       }
+      const unjoinable = asked.flatMap(({ owner, reason }) => {
+        if (typeof reason !== 'string') return [];
+        const said = reason.replace(/\.$/, '');
+        // Cube's refusal names cubes, not the rollup: put on those naming them.
+        return refusedRollupsOf(owner, said).map((rollup) => ({
+          path: owner.path,
+          ...(rollup.line === undefined ? {} : { line: rollup.line }),
+          message: /Can't find join path/.test(said)
+            ? `Pre-aggregation ${rollup.name} can't be built: Cube cannot join its cubes. ${said}.`
+            : `Pre-aggregation ${rollup.name} can't be built: ${said}.`,
+          preAggregation: { cube: owner.cube, name: rollup.name },
+        }));
+      });
+      if (unjoinable.length > 0) return reply.status(422).send({ errors: unjoinable });
     } finally {
       drafts.delete(id);
     }

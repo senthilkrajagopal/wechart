@@ -230,6 +230,7 @@ test('a rollup naming a member the model doesn’t have is refused, and the name
  * publishes.
  */
 test('a rollup naming a cube its own can’t be joined to is refused, naming it, its file and Cube’s reason', async ({
+  page,
   request,
 }, testInfo) => {
   const cube = `e2e_unjoinable_${testInfo.project.name}`;
@@ -253,6 +254,20 @@ ${joins}
         measures: [count]
         dimensions: [products.category]
 `;
+  const joined = file(
+    'orders',
+    `    joins:
+      - name: products
+        sql: "{CUBE}.product_id = {products.id}"
+        relationship: many_to_one
+`,
+  );
+  // With the join, the rollup publishes: what the store holds from here, on a rerun too.
+  const published = await request.post('/api/model/publish', {
+    data: { files: [{ path, content: joined }] },
+  });
+  expect(published.status(), await published.text()).toBe(200);
+
   const refused = await request.post('/api/model/publish', {
     data: { files: [{ path, content: file('customers', '') }] },
   });
@@ -266,30 +281,31 @@ ${joins}
   expect(errors?.[0]?.message).toMatch(
     /^Pre-aggregation by_category can't be built: Cube cannot join its cubes\. Can't find join path to join .*'products'.*\.$/,
   );
-  const stored = (await (await request.get('/api/model/files')).json()) as {
-    files: { path: string }[];
-  };
-  expect(stored.files.map((each) => each.path)).not.toContain(path);
+  expect(await storedFile(page, path)).toBe(joined);
 
-  // With the join, the same rollup publishes.
-  const joined = await request.post('/api/model/publish', {
-    data: {
-      files: [
-        {
-          path,
-          content: file(
-            'orders',
-            `    joins:
-      - name: products
-        sql: "{CUBE}.product_id = {products.id}"
-        relationship: many_to_one
-`,
-          ),
-        },
-      ],
-    },
-  });
-  expect(joined.status(), await joined.text()).toBe(200);
+  // In the Model workspace: the rollup made to name a cube this one doesn't
+  // join, in the code, is refused as that, on its line.
+  await page.goto(`/model/files/${encodeURIComponent(path)}`);
+  await page.locator('.cm-line', { hasText: /^\s+dimensions: \[products\.category\]$/ }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Shift+Home');
+  await page.keyboard.type('dimensions: [customers.country]');
+  await expect(page.getByRole('textbox', { name: `${path}, as YAML` })).toContainText(
+    'customers.country',
+  );
+  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'A pre-aggregation’s cubes can’t be joined' }),
+  ).toBeVisible(PUBLISHED);
+  const problem = page
+    .getByRole('region', { name: 'Problems' })
+    .getByRole('listitem')
+    .filter({ hasText: "by_category can't be built: Cube cannot join its cubes" });
+  await expect(problem).toContainText(/Can't find join path to join .*'customers'/);
+  // `- name: by_category`, the nineteenth line of the file with its join.
+  await expect(problem.locator('.model-problems__where')).toHaveText(`${path}:19`);
+  expect(await storedFile(page, path)).toBe(joined);
 });
 
 /**

@@ -820,28 +820,48 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
       'cubes:\n  - name: user\n    sql_table: public.users\n    dimensions:\n      - name: city\n        sql: city\n        type: string\n',
   };
 
-  /** A Cube whose `/v1/sql` reads the draft it's asked under, and refuses a rollup with no join. */
-  function cubeProbing(holder: { app?: FastifyInstance }) {
+  type Seen = { fileName: string; content: string }[];
+  /** As the stub decides: the probed cube's rollups, over these files, joined — or Cube's refusal. */
+  type Refuses = (cube: string, files: Seen) => CubeError | undefined;
+  /** By default, a rollup naming user.city in a file that declares no join. */
+  const unjoined: Refuses = (cube, files) =>
+    files.some(
+      (file) =>
+        file.content.includes(`name: ${cube}\n`) &&
+        file.content.includes('user.city') &&
+        !file.content.includes('joins:'),
+    )
+      ? new CubeError(REASON, 400)
+      : undefined;
+
+  /**
+   * A Cube whose `/v1/sql` reads the model it's asked under — the draft, or
+   * the live model with no draft named — and answers for the probed cube.
+   */
+  function cubeProbing(holder: { app?: FastifyInstance }, refuses: Refuses = unjoined) {
     const probed: { query: unknown; context: unknown }[] = [];
     const { cube } = cubeReading(holder, () => ({ cubes: [] }));
     const probing = Object.create(cube, {
       sqlUnder: {
-        value: async (query: unknown, context?: Record<string, unknown>) => {
+        value: async (query: Record<string, unknown>, context?: Record<string, unknown>) => {
           probed.push({ query, context });
           const draft = context?.['wechartDraft'];
-          if (holder.app === undefined || typeof draft !== 'string') throw new Error('no draft');
+          if (holder.app === undefined) throw new Error('no server');
           const read = await holder.app.inject({
             method: 'GET',
-            url: `/api/cube-model/drafts/${draft}`,
+            url:
+              typeof draft === 'string'
+                ? `/api/cube-model/drafts/${draft}`
+                : '/api/cube-model/files',
             headers: { 'x-wechart-model-key': KEY },
           });
-          const files = (read.json() as { files?: { content: string }[] }).files ?? [];
-          if (
-            files.some(
-              (file) => file.content.includes('user.city') && !file.content.includes('joins:'),
-            )
-          )
-            throw new CubeError(REASON, 400);
+          const files = (read.json() as { files?: Seen }).files ?? [];
+          const member = [
+            ...((query['measures'] as string[] | undefined) ?? []),
+            ...((query['dimensions'] as string[] | undefined) ?? []),
+          ][0];
+          const refused = refuses((member ?? '').split('.')[0] ?? '', files);
+          if (refused !== undefined) throw refused;
           return { sql: {} };
         },
       },
@@ -908,6 +928,247 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
 
     expect(response.statusCode).toBe(200);
     expect(probed).toEqual([]);
+    await app.close();
+  });
+
+  /** A cube's file, from the lines beneath its name. */
+  const cubeFile = (path: string, name: string, lines: readonly string[]) => ({
+    path,
+    content: `${['cubes:', `  - name: ${name}`, ...lines].join('\n')}\n`,
+  });
+  const serving = (files: readonly ModelFile[], refuses?: Refuses) => {
+    const store = memory(files);
+    const holder: { app?: FastifyInstance } = {};
+    const { cube, probed } = cubeProbing(holder, refuses);
+    const app = buildServer({ config, modelFiles: store, cube });
+    holder.app = app;
+    return { app, store, probed };
+  };
+  const joinRefusal = (path: string, line: number, cube: string, name: string, reason: string) => ({
+    path,
+    line,
+    message: `Pre-aggregation ${name} can't be built: Cube cannot join its cubes. ${reason}.`,
+    preAggregation: { cube, name },
+  });
+
+  it('is refused on a rollup in a file the change leaves alone, when the change breaks its join', async () => {
+    const statuses = cubeFile('cubes/orders.yml', 'orders', [
+      '    sql_table: public.orders',
+      '    dimensions:',
+      '      - name: status',
+      '        sql: status',
+      '        type: string',
+    ]);
+    const user = (joined: boolean) =>
+      cubeFile('cubes/user.yml', 'user', [
+        '    sql_table: public.users',
+        ...(joined
+          ? [
+              '    joins:',
+              '      - name: orders',
+              '        sql: "{CUBE}.id = {orders.user_id}"',
+              '        relationship: one_to_many',
+            ]
+          : []),
+        '    dimensions:',
+        '      - name: city',
+        '        sql: city',
+        '        type: string',
+      ]);
+    // base reaches orders only through user's join.
+    const base = cubeFile('cubes/base.yml', 'base', [
+      '    sql_table: public.base',
+      '    joins:',
+      '      - name: user',
+      '        sql: "{CUBE}.user_id = {user}.id"',
+      '        relationship: many_to_one',
+      '    measures:',
+      '      - name: count',
+      '        type: count',
+      '    pre_aggregations:',
+      '      - name: by_status',
+      '        measures: [count]',
+      '        dimensions: [orders.status]',
+    ]);
+    const unreached = "Can't find join path to join 'base', 'orders'";
+    const { app, store } = serving([base, statuses, user(true)], (probed, files) =>
+      probed === 'base' &&
+      !(
+        files.find((file) => file.fileName === 'cubes/user.yml')?.content.includes('joins:') ?? true
+      )
+        ? new CubeError(unreached, 400)
+        : undefined,
+    );
+
+    const response = await publish(app, [user(false)]);
+
+    expect([response.statusCode, response.json()]).toEqual([
+      422,
+      // `- name: by_status`, the twelfth line of base's file.
+      { errors: [joinRefusal('cubes/base.yml', 12, 'base', 'by_status', unreached)] },
+    ]);
+    expect(store.files).toEqual([base, statuses, user(true)]);
+    await app.close();
+  });
+
+  it('lets a change through that leaves a rollup, in a file it doesn’t touch, as broken as it was', async () => {
+    const { app, store, probed } = serving([rollupOn(false), USER]);
+
+    const response = await publish(app, [ORDERS]);
+
+    expect(response.statusCode).toBe(200);
+    expect(store.files.map((file) => file.path)).toEqual([
+      'cubes/base.yml',
+      'cubes/orders.yml',
+      'cubes/user.yml',
+    ]);
+    // Asked under the draft, then of the model Cube serves now: broken there already.
+    expect(probed).toEqual([
+      {
+        query: { measures: ['base.count'] },
+        context: { wechartStore: STORE, wechartDraft: expect.any(String) },
+      },
+      { query: { measures: ['base.count'] }, context: { wechartStore: STORE } },
+    ]);
+    await app.close();
+  });
+
+  it('reads rollups written under `preAggregations`, as Cube does', async () => {
+    const written = rollupOn(false);
+    const camel = {
+      ...written,
+      content: written.content.replace('pre_aggregations:', 'preAggregations:'),
+    };
+    const { app, store } = serving([USER]);
+
+    const response = await publish(app, [camel]);
+
+    expect([response.statusCode, response.json()]).toEqual([
+      422,
+      { errors: [joinRefusal('cubes/base.yml', 8, 'base', 'by_city', REASON)] },
+    ]);
+    expect(store.files).toEqual([USER]);
+    await app.close();
+  });
+
+  it('asks of a cube with no members of its own through what its rollup names of it', async () => {
+    const plain = cubeFile('cubes/base.yml', 'base', [
+      '    sql_table: public.base',
+      '    measures:',
+      '      - name: count',
+      '        type: count',
+    ]);
+    const extending = cubeFile('cubes/ext.yml', 'ext', [
+      '    extends: base',
+      '    pre_aggregations:',
+      '      - name: by_city',
+      '        measures: [count]',
+      '        dimensions: [user.city]',
+    ]);
+    const { app, store, probed } = serving([plain, USER]);
+
+    const response = await publish(app, [extending]);
+
+    expect([response.statusCode, response.json()]).toEqual([
+      422,
+      { errors: [joinRefusal('cubes/ext.yml', 5, 'ext', 'by_city', REASON)] },
+    ]);
+    expect(probed.map((each) => each.query)).toEqual([{ measures: ['ext.count'] }]);
+    expect(store.files).toEqual([plain, USER]);
+    await app.close();
+  });
+
+  it('asks with a count of the cube’s own, not a member reaching into another cube', async () => {
+    const reaching = cubeFile('cubes/base.yml', 'base', [
+      '    sql_table: public.base',
+      '    measures:',
+      '      - name: user_cities',
+      '        type: count_distinct',
+      '        sql: "{user.city}"',
+      '      - name: count',
+      '        type: count',
+      '    pre_aggregations:',
+      '      - name: by_city',
+      '        measures: [count]',
+      '        dimensions: [user.city]',
+    ]);
+    const { app, probed } = serving([USER]);
+
+    await publish(app, [reaching]);
+
+    expect(probed.map((each) => each.query)).toEqual([{ measures: ['base.count'] }]);
+    await app.close();
+  });
+
+  it('puts Cube’s refusal on the rollups naming the cubes it names, however they name them', async () => {
+    const region = cubeFile('cubes/region.yml', 'region', [
+      '    sql_table: public.regions',
+      '    dimensions:',
+      '      - name: name',
+      '        sql: name',
+      '        type: string',
+    ]);
+    const user = cubeFile('cubes/user.yml', 'user', [
+      '    sql_table: public.users',
+      '    dimensions:',
+      '      - name: city',
+      '        sql: city',
+      '        type: string',
+      '      - name: signed_up',
+      '        sql: signed_up',
+      '        type: time',
+    ]);
+    // Joined to region, and not to user: by path, and by a time dimension's object.
+    const base = cubeFile('cubes/base.yml', 'base', [
+      '    sql_table: public.base',
+      '    joins:',
+      '      - name: region',
+      '        sql: "{CUBE}.region_id = {region}.id"',
+      '        relationship: many_to_one',
+      '    measures:',
+      '      - name: count',
+      '        type: count',
+      '    pre_aggregations:',
+      '      - name: by_region',
+      '        measures: [count]',
+      '        dimensions: [region.name]',
+      '      - name: by_city',
+      '        measures: [count]',
+      '        dimensions: [CUBE.user.city]',
+      '      - name: by_signup',
+      '        measures: [count]',
+      '        time_dimensions:',
+      '          - dimension: user.signed_up',
+      '            granularity: day',
+    ]);
+    const { app } = serving([region, user], (probed) =>
+      probed === 'base' ? new CubeError(REASON, 400) : undefined,
+    );
+
+    const response = await publish(app, [base]);
+
+    expect([response.statusCode, response.json()]).toEqual([
+      422,
+      {
+        errors: [
+          joinRefusal('cubes/base.yml', 15, 'base', 'by_city', REASON),
+          joinRefusal('cubes/base.yml', 18, 'base', 'by_signup', REASON),
+        ],
+      },
+    ]);
+    await app.close();
+  });
+
+  it('publishes nothing when Cube can’t be asked about the rollups', async () => {
+    const { app, store } = serving([USER], () => new CubeError('upstream timed out', 500));
+
+    const response = await publish(app, [rollupOn(true)]);
+
+    expect([response.statusCode, response.json()]).toEqual([
+      502,
+      { error: 'Cube could not be asked to check the rollups of base, so nothing was published.' },
+    ]);
+    expect(store.files).toEqual([USER]);
     await app.close();
   });
 });

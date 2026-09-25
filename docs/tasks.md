@@ -4309,7 +4309,22 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
       - "publishes the same rollup once its cube declares the join" and "asks nothing of a change with no rollup in it" pin the rest.
       - The shared stub Cube now answers `/v1/sql` as Cube does for a model it can join.
       - The e2e's first fixture had no primary key, which Cube's compile asks of a cube that joins. It has one now.
-    - **Left as it is:** only the cubes of changed files are asked. A change that takes away a join another file's rollup needs isn't caught here. Cube's worker would then fail as before, and the rollup's cube's queries with it.
+    - ~~**Left as it is:** only the cubes of changed files are asked.~~ Fixed in the review round below.
+  - **Review round (2026-09-25).** The cold spec-reviewer failed it. It found six problems:
+    - Only changed files' cubes were asked.
+    - `preAggregations` (camelCase, which Cube reads in YAML too) wasn't read.
+    - An extending cube with no members of its own was never asked.
+    - Cube's refusal was put on every joining rollup, and path references (`CUBE.user.city`) and `time_dimensions` objects weren't counted as joining.
+    - The probe member could be one whose `sql` reaches into another cube.
+    - The Model workspace headed a join refusal "names members the model doesn't have".
+  - Fixed:
+    - **Probing.** Every cube with rollups in the draft is asked, up to four at a time. A cube in a file the change leaves alone that Cube refuses is asked again of the live model (`{wechartStore}` alone). If Cube refuses it there with the same reason, it doesn't hold the publish up, as for unknown names (research gotcha 2).
+    - **Probe member.** A `count` of the cube's own with no `sql` reaching elsewhere, else a measure and then a dimension whose `sql` touches only the cube (research Q5), else an own member its rollups name.
+    - **Attribution.** `refusedRollupsOf` reads the cubes Cube's text names after "to join", and puts the refusal on the rollups naming them, along paths and through `time_dimensions`. Failing that, it goes on joining rollups, then on all of them.
+    - **Web.** `preAggregation.unknown` is optional on both sides, and a join refusal is headed "A pre-aggregation's cubes can't be joined".
+  - **Tests that failed first:** in `publish.test.ts`, a cross-file break (422 on the unchanged file's rollup), a pre-existing live failure letting an unrelated change through (probes: draft, then live), `preAggregations`, an extending cube probed as `ext.count`, a probe of `base.count` over a count-distinct of `{user.city}`, and attribution to `by_city` and `by_signup` and not `by_region`. "Publishes nothing when Cube can't be asked" (502) pins what held already.
+  - **e2e:** now publishes the joined file first and checks the stored content is unchanged, so it holds on a rerun. It then breaks the join in the Model workspace's code, and sees the headline and the Problems row at `:19`.
+  - **Runs:** 27/27 in all three browsers; model, generate-cubes and acceleration pass in Chrome; the API suite passes (308).
   - Files: `packages/api/src/model/publish.ts` and a check beside `rollupReferences.ts`, `packages/api/src/publish.test.ts`, `packages/web/src/workspaces/model/*` (the refusal as shown), `e2e/preaggregations.spec.ts`
   - Failing test: publishing a rollup on `base` that names `user.city` with no join between them is refused with 422, naming the rollup, its file and Cube's reason, and the store is unchanged. The same rollup with a join publishes.
   - Depends on: `docs/research/cube/rollup-join-paths.md`

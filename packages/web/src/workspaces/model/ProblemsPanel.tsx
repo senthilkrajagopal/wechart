@@ -29,13 +29,14 @@ export interface CubeProblem {
   readonly message: string;
   readonly line?: number;
   /**
-   * A rollup refused for naming what the model doesn't have (T207, AC-189):
-   * which, and the names, shown on its row in the Pre-aggregations tab.
+   * A rollup refused: which. With the names, shown on its row in the
+   * Pre-aggregations tab, when it names what the model doesn't have (T207,
+   * AC-189); without, when Cube can't join its cubes (T265, AC-235).
    */
   readonly preAggregation?: {
     readonly cube: string;
     readonly name: string;
-    readonly unknown: readonly { readonly list: string; readonly name: string }[];
+    readonly unknown?: readonly { readonly list: string; readonly name: string }[];
   };
 }
 
