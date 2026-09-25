@@ -4514,6 +4514,79 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
     - **Outside `deploy/`.** `@wechart/api` now lists `node-pg-migrate` under `dependencies`: `dist/main.js` imports it as it starts, and a production install left it out. It also names its `files` (`dist`, `src/db/migrations`) for `pnpm deploy`. The lockfile moves the same entry. `.prettierignore` and `eslint.config.js` skip the Helm templates and the chart's link to `infra/cube/cube.js`, and `.dockerignore` is new.
     - **Research.** `docs/research/helm.md`, `cube/kubernetes.md`, `nginx.md`, `postgres-image.md`, `node-docker-pnpm.md`. `cube/kubernetes.md` corrects `cube/configuration-deployment.md`: with `contextToAppId` set, Cube's `/readyz` tests nothing, so the data path is checked by the query.
 
+## The 2026-09-25 UI review: Superset-parity gaps, the re-critique, and AC-176's open parts
+
+Added 2026-09-25 by the UI review stream. Its sources:
+- the gaps found when Superset's "Northwind Sales Overview" was rebuilt in wechart (`docs/design/superset-parity.md`);
+- the T225 re-critique of every surface (`docs/design/critiques/2026-09-25-*.md`);
+- T182's cold review.
+
+Only gaps that break an accepted criterion or a numbered direction.md rule are tasks here. The rest are proposed spec changes for the user, not built.
+
+- [ ] T300 (AC-187) Draw the KPI tile as the prototype does
+  - Gap 1 of the parity rebuild. A KPI's value was body text: nothing styled `.kpi`, `.kpi__value` or `.kpi__label`. That breaks AC-187 (a tile's font size and weight), and direction.md rule 1 (KPIs in tabular numerals).
+  - The prototype's rules:
+    - `.kpi-val`: 32 px, 600, tabular numerals, −0.01 em tracking;
+    - `.dtile.kpi .kpi-val`: 36 px line height;
+    - `.dtile.kpi`: 12 16 px padding;
+    - `.dtile.kpi .tile-head`: 4 px under the head;
+    - `kpiHtml` (charts.js:914): the measure's name above its value, in `.xs.sec.strong` (12/16, 600, secondary).
+  - Files: `packages/web/src/tiles/Kpi.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: `e2e/design-conformance.spec.ts`: a KPI tile's value is 32 px at 600 in tabular numerals, with a 36 px line; its name above it is 12/16 at 600 in `text-secondary`; the tile is padded 12 16 (AC-187).
+  - Depends on: none
+- [ ] T301 (AC-039) Colour a pie's slices and a treemap's rectangles by the dashboard's assignment, and let only tiles that draw categorical colour claim a colour
+  - Gaps 5 and 3 of the parity rebuild.
+    - The dashboard assigned colours to each tile's *series*. A pie or treemap has one series, its measure, so its categories were coloured by position. The same member was one colour in a bar split by it and another in a pie of it, which fails AC-039.
+    - KPI, table and pivot tiles, and a heatmap's scale, draw no categorical colour, yet each claimed a slot for its measure. After a few KPIs, later tiles' real members fell to the neutral, which direction.md §5 keeps for "Other" and null.
+  - Files: `packages/web/src/dashboard/colours.ts`, its test, `e2e/colour-consistency.spec.ts` (or the spec that already asserts AC-039)
+  - Failing test:
+    - `colours.test.ts`: a member in a bar's split and the same member as a pie slice or treemap rectangle get one colour; KPI, table, pivot and heatmap tiles claim none.
+    - e2e: on a dashboard, a bar split by status and a donut of status draw each status in the same colour (AC-039).
+  - Depends on: none
+- [ ] T302 (AC-219) Offer "Stack series" on a horizontal bar with more than one series
+  - Gap 6 of the parity rebuild. AC-219 has Customize offer "whether series stack". A horizontal bar with two measures, or with its series split by colour, draws two series side by side, but the tab offered no stacking: `STACKABLE_TYPES` left `hbar` out.
+  - Files: `packages/charts/src/customize.ts`, its test, `packages/web/src/editor/CustomizeTab.test.tsx`, `e2e/customize.spec.ts`
+  - Failing test: a horizontal bar with two series stacks when "Stack series" is on, and Customize shows the checkbox for it (AC-219).
+  - Depends on: none
+- [ ] T303 (AC-044) Order a pivot's rows and columns by the chart's sort
+  - Gap 8 of the parity rebuild. The pivot kept the rows' arrival order whatever Sort said. AC-044's Fails-when is "the order is not applied".
+  - Files: `packages/core/src/pivot.ts`, its test, `packages/web/src/tiles/PivotTable.test.tsx`
+  - Failing test: a pivot sorted by value descending lists its row groups by their totals, largest first. Sorted by label, it lists them alphabetically (AC-044).
+  - Depends on: none
+- [ ] T304 (AC-187) Draw table and pivot tiles as the prototype's `.grid-table.comfy`
+  - Gap 9, second half, of the parity rebuild: the header row scrolled away with the rows. No rule styled `.data-table` or `.pivot-table`. Against the prototype's `.grid-table` (index.html:1089), a table tile had:
+    - no sticky 28 px header on `bg-subtle`;
+    - no 12 px tabular numerals (direction.md rule 1);
+    - no right-aligned measure columns;
+    - no 34 px rows (`.comfy`, which charts.js:939 and :968 draw tiles with).
+  - Files: `packages/web/src/tiles/DataTable.tsx`, `packages/web/src/tiles/PivotTable.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: a table tile's header cell is sticky, 28 px, 600, on `bg-subtle`; its cells are 12 px in tabular numerals and 34 px tall, a measure's right-aligned; the same holds for a pivot (AC-187).
+  - Depends on: none
+- [ ] T305 (AC-031) Hold a candidate that colours by a dimension to the 8-colour cap
+  - Gap 11 of the parity rebuild. The recommender offered bars coloured by 21 countries. Its bar, line and area candidates carried no colour field, although `defaultEncoding` colours them by the dimension the wells hold, so the colour cap was never applied to them.
+  - Files: `packages/recommender/src/recommend.ts`, its test
+  - Failing test: with a time dimension, a measure and a 21-member dimension, no bar, line or area candidate coloured by it is offered as top pick or runner-up. With 5 members, it is (AC-031).
+  - Depends on: none
+- [ ] T306 (AC-176, AC-100) Draw the item a tile's keyboard focus is on, distinct from the marking outline
+  - From T182's review. AC-100's arrows move a focused item, but `markFocus` is state only. A sighted keyboard user cannot see which item Space will mark.
+  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/charts/src/markings/*`, `e2e/keyboard-coverage.spec.ts`
+  - Failing test: after → in a focused chart tile, the focused item is drawn with an indicator that differs from the marked outline in colour or width, and it moves with the arrows (AC-176).
+  - Depends on: T182
+- [ ] T307 (AC-176) Reach the pointer-only chart actions from the keyboard
+  - From T182's review. These could only be done with the pointer:
+    - cross-filtering from a mark;
+    - marking a scatter's points;
+    - marking a legend category (AC-090) or a trellis panel (AC-091);
+    - marking a table tile's rows (AC-092).
+  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/DataTable.tsx`, `e2e/keyboard-coverage.spec.ts`, `e2e/crossfilter.spec.ts`
+  - Failing test: each of those actions is done from the keyboard alone (AC-176).
+  - Depends on: T306
+- [ ] T309 (AC-210) Keep a pie's or donut's ring clear of a legend placed at its side
+  - Gap 3 of the parity rebuild. With the legend at Right, the legend was drawn over the ring. The legend's room was made in the grid, which a pie does not use, so slices under it were not drawn visibly.
+  - Files: `packages/charts/src/customize.ts`, its test, `docs/research/echarts.md` (the pie's layout box)
+  - Failing test: a donut with its legend at the right or left draws its ring clear of the legend's side (AC-210).
+  - Depends on: none
+
 ---
 
 ## Coverage: acceptance criterion → task
