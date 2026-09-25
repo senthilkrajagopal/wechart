@@ -783,7 +783,7 @@ Traces to: `[R4]` ("self-hosted Kubernetes … running wechart, Cube and Cube St
 > test. Its data source is set in the chart's values, in Cube's environment, as data
 > sources are configured today while F18 is deferred.
 
-- [ ] AC-248 WHEN the wechart Helm chart is installed into a Kubernetes cluster, THE SYSTEM SHALL run the web app, the API, its metadata database, Cube's API, Cube's refresh worker and Cube Store there, with Cube's data source taken from the chart's values, and SHALL serve the web app at the address the values name.
+- [x] AC-248 WHEN the wechart Helm chart is installed into a Kubernetes cluster, THE SYSTEM SHALL run the web app, the API, its metadata database, Cube's API, Cube's refresh worker and Cube Store there, with Cube's data source taken from the chart's values, and SHALL serve the web app at the address the values name.
       Fails when: after the install a component is not Ready, the web app's address does not load, or a query from the web app does not reach the data source the values name.
 
 ---

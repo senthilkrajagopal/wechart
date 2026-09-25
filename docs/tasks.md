@@ -4689,6 +4689,12 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
   - Failing test: a script or e2e check against the installed release. Every Deployment and StatefulSet is Ready. The web app's address loads. `/api/health` reports Cube healthy. A query through wechart's API reaches northwind: a `/v1/sql` or `/v1/load` naming a northwind table's cube.
   - Depends on: none
   - Done 2026-09-25 on docker-desktop, namespace `wechart`, at http://localhost:8089. The test is `deploy/helm/verify.sh`. It failed first, before the chart existed, then passed in full three times: on the install, on an upgrade, and on a reinstall after `helm uninstall`.
+  - **AC-248 ticked at phase 1's close (2026-09-25).** The tick had been missed. `IMAGE_TAG=4b533a9 deploy/helm/verify.sh` upgraded the release to phase 1's final images (`wechart-api` and `wechart-web` at 4b533a9, Cube `v1.7.45-introspection-f6355de982`), and every check passed:
+    - lint and render;
+    - all six components Ready;
+    - the app served at the values' address, including deep links, with a missing asset a 404 and Cube's model routes unserved;
+    - `/api/health`, and Cube and its worker healthy;
+    - a published probe cube's `/api/load` counted 830 rows of `public.orders` in northwind on Superset's Postgres, and the probe was removed again.
     - **Chart** `deploy/helm/wechart`: web (nginx, unprivileged), API, the metadata Postgres (StatefulSet with a volume), Cube's API, its refresh worker, and Cube Store as one node (StatefulSet with a volume). Both wechart images build from one `deploy/Dockerfile`. `deploy/helm/values/docker-desktop.yaml` names northwind on Superset's Postgres. `docs/deploy.md` covers the build, the data source's Secret, install, verify, uninstall, and other data sources.
     - **The test's checks.** Every component is Ready, and the address serves the app on deep links. `/api/cube-health` says Cube and the worker are healthy. A cube published through `/api/model/publish` counts northwind's 830 `orders` through `/api/load` at the web app's address, and its file is then removed again, leaving the model empty.
     - **Role.** Cube reads northwind as `postgres`, the server's superuser. Superset's own role, `northwind`, has its password only inside Superset, and no read-only role exists. `docs/deploy.md` says how to switch.
