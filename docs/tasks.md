@@ -4991,7 +4991,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The cold review (FAIL) found the handlers falling back to the single Super-Admin when nobody was signed in with security on. They no longer do, and two tests with `oidc` hold that: `/api/me` answers 401, and a create makes nothing.
     - The review's sweep of every route with security off is added to T318's test.
     - AC-254 stays unticked: its workspace and proposal half is T359's.
-- [ ] T312 [P] (AC-260, AC-261, AC-255) Compute each folder's effective read-only and read-write groups
+- [x] T312 [P] (AC-260, AC-261, AC-255) Compute each folder's effective read-only and read-write groups
   - Files: `packages/core/src/access/effective.ts` (+ test), `packages/core/src/index.ts`
   - Failing test: `effective.test.ts`:
     - an unset setting takes the parent's effective groups, each setting on its own (AC-260);
@@ -4999,6 +4999,10 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - every inherited group names the folder it comes from (AC-260);
     - a user in 20 groups, granted only through the 20th, has access (AC-255).
   - Depends on: none
+  - **Done 2026-09-25.**
+    - `effectiveGroups` lists each level's groups nearest first, each once, with its source folder and whether it is set here. `folderAccess` gives the higher of a user's grants on the folder or above it.
+    - The cold review (PASS) added three tests: a descendant naming the same group read-only doesn't lower read-write; the reverse inheritance case; a cycle in bad data stops the walk.
+    - AC-255, AC-260 and AC-261 stay unticked until a real route uses the rule. AC-255 and AC-261 are now also traced to T325 and T408, which do.
 - [ ] T313 (AC-262, AC-263, AC-264, AC-265, AC-256) Decide what each user may see and change in each folder
   - Files: `packages/core/src/access/visibility.ts` (+ test)
   - Failing test: `visibility.test.ts`:
@@ -5060,7 +5064,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.2 Folder permissions and roles (F26)
 
-- [ ] T325 (AC-264, AC-194) List and count only what the user may see in the tree, listings and search
+- [ ] T325 (AC-264, AC-194, AC-261) List and count only what the user may see in the tree, listings and search
   - Files: `packages/api/src/repos/catalog.ts`, `packages/api/src/server.ts`, `packages/api/src/repos/catalog-access.test.ts`
   - Failing test: `catalog-access.test.ts`: `/api/folders`, `/api/folder-roots`, `/api/folders/:id/contents` and `/api/search` never name a folder or item the user may not see, and every count counts only visible items, subfolders included (AC-264, AC-194).
   - Depends on: T313, T314
@@ -5434,7 +5438,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.15 The whole-surface checks
 
-- [ ] T408 (AC-268) Ask every route as users in and out of each group, and get nothing outside their folders
+- [ ] T408 (AC-268, AC-255, AC-261) Ask every route as users in and out of each group, and get nothing outside their folders
   - Files: `packages/api/src/access/route-matrix.test.ts` (fixtures for /A, /A/B, /A/B/C, /C and a workspace; the users `super`, `writer`, `reader`, `many`, `nobody`)
   - Failing test: `route-matrix.test.ts`: for every route the server registers, each user gets only items in folders they may see and can change only what they may change; the test fails for a route it has no case for (AC-268).
   - Depends on: T340, T355, T364, T369, T371
@@ -5469,9 +5473,9 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
 | AC-234 | T378 | AC-246 | T404 | AC-249 | T336 |
 | AC-251 | T318, T321 | AC-252 | T316, T319 | AC-253 | T317 |
-| AC-254 | T311, T319, T351, T359 | AC-255 | T312 | AC-256 | T313, T323 |
+| AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
-| AC-260 | T312, T314, T330 | AC-261 | T312 | AC-262 | T313, T327 |
+| AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327 |
 | AC-263 | T313, T326 | AC-264 | T313, T325 | AC-265 | T313, T323, T330 |
 | AC-266 | T326 | AC-267 | T328 | AC-268 | T340, T408 |
 | AC-269 | T334, T335 | AC-270 | T336 | AC-271 | T336 |

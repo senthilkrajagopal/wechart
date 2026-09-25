@@ -180,3 +180,14 @@ export {
   rowsText,
   tableColumnsOf,
 } from './export/csv';
+
+export {
+  effectiveGroups,
+  folderAccess,
+  type AccessFolder,
+  type EffectiveGrant,
+  type EffectiveGroups,
+  type FolderAccessSetting,
+  type FolderLevel,
+  type GroupList,
+} from './access/effective';
