@@ -486,6 +486,14 @@ interface Drill {
     | { readonly kind: 'failed'; readonly error: unknown };
 }
 
+/** A tile's spec with the item its keyboard is on, where it is on one (T306). */
+function withKeyboardItem(
+  spec: RenderSpec | undefined,
+  item: string | undefined,
+): RenderSpec | undefined {
+  return spec === undefined || item === undefined ? spec : { ...spec, keyboardFocus: item };
+}
+
 function TileBody({
   tile,
   spec,
@@ -823,6 +831,8 @@ interface TileCharts {
     ((tileId: string, chartId: string) => ChartTileProps['rowMarking']) | undefined;
   /** Why a tile is not marked: its cube cannot reach the marking's members (AC-103). */
   readonly notLinked?: Readonly<Record<string, string>> | undefined;
+  /** The item a tile's keyboard is on, while the tile has the keyboard (T306, AC-176). */
+  readonly keyboardFocusOn?: ((tileId: string) => string | undefined) | undefined;
   /**
    * Why a marking-limited tile is showing something other than its chart
    * (AC-109, AC-111), by chart. A limited tile that has data to show is not
@@ -1391,7 +1401,12 @@ function Elements({
                 ].filter((note) => note !== null);
                 return said.length === 0 ? undefined : said;
               })()}
-              spec={drill === undefined ? charts.specs[chartId] : drill.spec}
+              // A drilled view marks nothing, so draws no keyboard item (T270, T306).
+              spec={
+                drill === undefined
+                  ? withKeyboardItem(charts.specs[chartId], charts.keyboardFocusOn?.(element.id))
+                  : drill.spec
+              }
               error={drill === undefined ? charts.errors[chartId] : drill.error}
               loading={drill === undefined ? charts.loading : drill.loading}
               // Asked again by a filter, or refreshed: either way, said (T183's review).
@@ -2104,6 +2119,29 @@ export function DashboardView({
   const [markFocus, setMarkFocus] = useState<
     Readonly<Record<string, { readonly focused: number; readonly anchor: number | null }>>
   >({});
+  /**
+   * The tile whose keyboard item is drawn (T306, AC-176): from its first
+   * marking key until focus leaves it or the pointer is used. Where the
+   * keyboard was is kept (`markFocus`); only the ring goes, since a ring left
+   * on a tile nobody is at would say the keyboard is still there.
+   */
+  const [keyShownOn, setKeyShownOn] = useState<string | null>(null);
+  useEffect(() => {
+    if (keyShownOn === null) return undefined;
+    const tile = [...window.document.querySelectorAll<HTMLElement>('[data-tile]')].find(
+      (each) => each.dataset['tile'] === keyShownOn,
+    );
+    const letGo = (event: Event) => {
+      if (event.type === 'focusin' && event.target === tile) return;
+      setKeyShownOn(null);
+    };
+    window.document.addEventListener('focusin', letGo);
+    window.document.addEventListener('pointerdown', letGo, true);
+    return () => {
+      window.document.removeEventListener('focusin', letGo);
+      window.document.removeEventListener('pointerdown', letGo, true);
+    };
+  }, [keyShownOn]);
   const [marksMode, setMarksMode] = useState(interactions.mode);
   if (marksMode !== interactions.mode) {
     setMarksMode(interactions.mode);
@@ -2851,6 +2889,8 @@ export function DashboardView({
       ...now,
       [tileId]: { focused: result.focused, anchor: result.anchor },
     }));
+    // Drawn from now until the keyboard leaves the tile (T306).
+    setKeyShownOn(tileId);
 
     const itemAt = (index: number) => [{ member, value: items[index] ?? '' }];
     switch (result.action) {
@@ -3599,6 +3639,11 @@ export function DashboardView({
               );
             };
           },
+          // The item its keyboard is on, while it has the keyboard (T306).
+          keyboardFocusOn: (tileId: string) =>
+            keyShownOn === tileId
+              ? markableItemsOf(tileId)[markFocus[tileId]?.focused ?? 0]
+              : undefined,
           markingOn: (tileId: string) => {
             const element = elementAt(live, tileId);
             if (element === null || !isTile(element)) return undefined;

@@ -25,7 +25,8 @@ function numberAt(row: Record<string, unknown>, member: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-function settingsOf(spec: RenderSpec): SortSettings | null {
+/** The chart's sort setting, or null where it has none (a pivot reads it too, T303). */
+export function sortSettingsOf(spec: RenderSpec): SortSettings | null {
   const sort = spec.options?.['sort'];
   if (typeof sort !== 'object' || sort === null) return null;
 
@@ -41,7 +42,7 @@ function settingsOf(spec: RenderSpec): SortSettings | null {
  * no setting here the chart keeps it rather than having another imposed.
  */
 export function applySort(spec: RenderSpec): RenderSpec {
-  const settings = settingsOf(spec);
+  const settings = sortSettingsOf(spec);
   const category = memberOn(spec.encoding, 'x');
   // A heatmap's measure is its colour; its y is a second grouping (T242).
   const measure =

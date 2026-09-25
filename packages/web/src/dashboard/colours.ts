@@ -1,5 +1,5 @@
-import { assignColours } from '@wechart/charts';
-import { seriesOf, type RenderSpec } from '@wechart/core';
+import { assignColours, colouredMembersOf } from '@wechart/charts';
+import type { RenderSpec } from '@wechart/core';
 import { useState } from 'react';
 
 import { isSection, isTabGroup, type DashboardDocument } from './model/document';
@@ -63,9 +63,10 @@ export function dashboardColours(
     const spec = specs[chartId];
     if (spec === undefined) continue;
 
+    // What the tile colours: a pie's slices by their categories, and nothing
+    // for a tile that colours no member (T301).
     const colours: Record<string, string> = {};
-    for (const series of seriesOf(spec).series)
-      colours[series.name] = assignment.colourFor(series.name);
+    for (const member of colouredMembersOf(spec)) colours[member] = assignment.colourFor(member);
     coloured[chartId] = { ...spec, colours };
   }
   return { specs: coloured, assigned: assignment.assigned() };

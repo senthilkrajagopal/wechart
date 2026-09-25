@@ -22,7 +22,12 @@ describe('the chart type gallery’s catalog (AC-217)', () => {
   it('says what each type needs, in the field list’s words', () => {
     expect(needsText('line')).toBe('Needs a measure and a time dimension');
     expect(needsText('stackedArea')).toBe('Needs a measure, a time dimension and a dimension');
-    expect(needsText('pivot')).toBe('Needs 2 dimensions');
+    // A time dimension counts as one of a pivot's groupings, as `compile`
+    // draws it (T305's review), and no sentence ends on a comma.
+    expect(needsText('pivot')).toBe('Needs 2 dimensions, or a time dimension and a dimension');
+    expect(needsText('trellis')).toBe(
+      'Needs a measure and 2 dimensions, or a time dimension and a dimension',
+    );
     expect(needsText('table')).toBe('Draws any fields');
   });
 

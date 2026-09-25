@@ -14,8 +14,10 @@ import { describe, expect, it } from 'vitest';
 
 import { formatterFor, type RenderSpec } from '@wechart/core';
 
+import { STACKABLE_TYPES } from './customize';
 import { optionFor } from './optionFor';
 import { labelsOf, marksOf, renderToSvg } from './testing/renderToSvg';
+import { MARK } from './theme';
 
 const PALETTE = ['#123456', '#abcdef', '#0f9d58'];
 const STATUS = 'orders.status';
@@ -145,16 +147,112 @@ describe('data labels, as each measure is written (AC-046)', () => {
   });
 });
 
+/**
+ * T309, AC-210 (every row drawn visibly, whatever the tile's width): a donut
+ * with its legend at the right drew the legend over its ring, in a tile five
+ * columns wide (the Superset-parity rebuild's gap 3). The room a side legend
+ * is given was made in `grid`, which a pie does not use
+ * (research/echarts.md, "A pie's layout box").
+ */
+describe('a legend beside a pie or donut (T309)', () => {
+  const TILE = { width: 400, height: 300 };
+  const donut = (options: Record<string, unknown>): RenderSpec => ({
+    chartType: 'donut',
+    encoding: { x: [STATUS], y: [COUNT] },
+    rows: [
+      { [STATUS]: 'Instruments and sensors', [COUNT]: 40 },
+      { [STATUS]: 'Components and cables', [COUNT]: 30 },
+      { [STATUS]: 'Services and support plans', [COUNT]: 20 },
+    ],
+    palette: PALETTE,
+    options,
+  });
+  /** The ring's extent, and the legend's swatches (25 × 14). */
+  const drawn = (options: Record<string, unknown>) => {
+    const marks = marksOf(renderToSvg(optionFor(donut(options)), TILE), PALETTE);
+    const swatch = (mark: (typeof marks)[number]) =>
+      Math.round(mark.right - mark.left) === 25 && Math.round(mark.bottom - mark.top) === 14;
+    const ring = marks.filter((mark) => !swatch(mark));
+    return {
+      left: Math.min(...ring.map((mark) => mark.left)),
+      right: Math.max(...ring.map((mark) => mark.right)),
+      swatches: marks.filter(swatch),
+    };
+  };
+
+  it('draws the ring clear of a legend at the right', () => {
+    const { right, swatches } = drawn({ legend: { position: 'right' } });
+    expect(swatches).toHaveLength(3);
+    expect(right).toBeLessThanOrEqual(Math.min(...swatches.map((mark) => mark.left)));
+  });
+
+  it('draws the ring clear of a legend at the left, and of its names', () => {
+    const { left, swatches } = drawn({ legend: { position: 'left' } });
+    expect(swatches).toHaveLength(3);
+    // The side room is 120 px, as a chart on axes is given.
+    expect(left).toBeGreaterThanOrEqual(120);
+  });
+
+  it('keeps a pie’s side legend’s names within its room, and a bar chart’s whole', () => {
+    type WithText = { legend?: { textStyle?: { width?: unknown; overflow?: unknown } } };
+    const legend = (optionFor(donut({ legend: { position: 'right' } })) as WithText).legend;
+    // 120 less the legend's 5 px padding each side, its 25 px icon and 5 px gap.
+    expect(legend?.textStyle).toMatchObject({ width: 80, overflow: 'truncate' });
+    const bars = (optionFor(twoSeries({ legend: { position: 'right' } })) as WithText).legend;
+    expect(bars?.textStyle?.overflow).toBeUndefined();
+  });
+});
+
 describe('stacking, only where the tab offers it', () => {
   const stacks = (spec: RenderSpec) =>
     ((optionFor(spec) as { series?: { stack?: unknown }[] }).series ?? []).map((one) => one.stack);
 
-  it('leaves a combo, a horizontal bar and a single series unstacked', () => {
+  it('leaves a combo and a single series unstacked', () => {
     expect(stacks({ ...twoSeries({ stacked: true }), chartType: 'combo' })).not.toContain('total');
-    expect(stacks({ ...twoSeries({ stacked: true }), chartType: 'hbar' })).not.toContain('total');
     expect(
       stacks({ ...twoSeries({ stacked: true }), encoding: { x: [STATUS], y: [COUNT] } }),
     ).not.toContain('total');
+  });
+
+  /**
+   * T302 (the Superset-parity rebuild's gap 6). T231 left a horizontal bar
+   * out, as a chart with one bar series; with two measures, or split by
+   * colour, it has two, drawn side by side, and AC-219 offers to stack them.
+   */
+  it('stacks a horizontal bar’s two series, each segment starting where the one before it ends', () => {
+    const hbar = { ...twoSeries({ stacked: true }), chartType: 'hbar' as const };
+    expect(stacks(hbar)).toEqual(['total', 'total']);
+    expect(STACKABLE_TYPES).toContain('hbar');
+
+    // Drawn: in each category the second series' bar begins at the first's
+    // end, past the surface gap between two touching marks (MARK.gapPx).
+    const svg = renderToSvg(optionFor(hbar));
+    // Taller than the legend's 14 px swatch: the bars alone.
+    const bars = (colour: string) =>
+      marksOf(svg, [colour])
+        .filter((mark) => mark.bottom - mark.top > 20)
+        .sort((a, b) => a.top - b.top);
+    const first = bars(PALETTE[0] ?? '');
+    const second = bars(PALETTE[1] ?? '');
+    expect(first).toHaveLength(2);
+    expect(second).toHaveLength(2);
+    for (const [index, mark] of first.entries()) {
+      const gap = (second[index]?.left ?? Number.NaN) - mark.right;
+      expect(gap).toBeGreaterThanOrEqual(0);
+      expect(gap).toBeLessThanOrEqual(MARK.gapPx);
+    }
+  });
+
+  it('writes a stacked horizontal bar’s labels inside its segments', () => {
+    const labels = (
+      (
+        optionFor({
+          ...twoSeries({ stacked: true, dataLabels: true }),
+          chartType: 'hbar',
+        }) as { series?: { label?: { position?: unknown } }[] }
+      ).series ?? []
+    ).map((one) => one.label?.position);
+    expect(labels).toEqual(['inside', 'inside']);
   });
 });
 

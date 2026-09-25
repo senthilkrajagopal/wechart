@@ -599,6 +599,38 @@ test('sorting a chart reorders its categories', async ({ page }) => {
   await expect(firstCell).toHaveText(lowest ?? '');
 });
 
+/**
+ * T303, AC-044 on a pivot: its categories are its row groups, and the Sort
+ * setting orders them (the Superset-parity rebuild's gap 8: it did not).
+ */
+test('sorting a pivot reorders its rows', async ({ page }) => {
+  // The seeded chart: products.category down the rows, orders.status across.
+  // Its orders.count ties (120 orders in each category), so the amount, which
+  // does not: Components 115,350 and Instruments 113,550 in the sample data.
+  await page.goto('/explore/charts/seed-chart-status/edit');
+  await expect(page.getByTestId('in-dimensions-products.category')).toBeVisible();
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await page
+    .getByTestId('in-measures-orders.count')
+    .getByRole('button', { name: /^Remove / })
+    .click();
+  await expect(page.getByTestId('in-measures-orders.count')).toBeHidden();
+  await chooseChartType(page, 'pivot');
+
+  const rows = page.getByTestId('pivot-row-header');
+  await expect(rows).toHaveCount(2);
+  const sort = page.getByLabel('Sort');
+
+  await sort.selectOption('value-desc');
+  await expect(rows).toHaveText(['Components', 'Instruments']);
+  await sort.selectOption('value-asc');
+  await expect(rows).toHaveText(['Instruments', 'Components']);
+  await sort.selectOption('label-asc');
+  await expect(rows).toHaveText(['Components', 'Instruments']);
+  await sort.selectOption('label-desc');
+  await expect(rows).toHaveText(['Instruments', 'Components']);
+});
+
 test('a time dimension goes to its own well and groups by day', async ({ page }) => {
   await openEditorOnOrders(page);
 
@@ -1002,6 +1034,38 @@ test('the Customize tab moves the legend, writes data labels and lets the axis l
   await expect(zero).not.toHaveCount(0);
   await page.getByRole('group', { name: 'Y axis' }).getByLabel('Include zero').uncheck();
   await expect(zero).toHaveCount(0);
+});
+
+/**
+ * T302, AC-219's "whether series stack" on a horizontal bar (the
+ * Superset-parity rebuild's gap 6): split by a second dimension it draws its
+ * series side by side, and Customize offered no way to stack them.
+ */
+test('a horizontal bar split by colour can stack its series', async ({ page }) => {
+  // The seeded chart: orders by products.category, split by orders.status.
+  await page.goto('/explore/charts/seed-chart-status/edit');
+  await expect(page.getByTestId('in-dimensions-orders.status')).toBeVisible();
+  await chooseChartType(page, 'hbar');
+  const canvas = page.getByTestId('chart-canvas');
+  await expect(canvas).toHaveAttribute('data-chart-type', 'hbar');
+
+  /** The rows the bars sit on: one per bar side by side, one per category stacked. */
+  const barRows = () =>
+    canvas.evaluate((node) => {
+      const tops = [...node.querySelectorAll('svg path[fill^="#"]')]
+        .map((path) => path.getBoundingClientRect())
+        // Wider and taller than a legend swatch (25 × 14): the bars. The
+        // legend's hit area is filled rgb(0,0,0), not a palette colour.
+        .filter((box) => box.width > 30 && box.height > 16)
+        .map((box) => Math.round(box.top));
+      return new Set(tops).size;
+    });
+  // Two categories, three statuses side by side.
+  await expect.poll(barRows).toBe(6);
+
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  await page.getByLabel('Stack the series').check();
+  await expect.poll(barRows).toBe(2);
 });
 
 /**

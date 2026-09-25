@@ -3321,7 +3321,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `e2e/perf/marking-update.spec.ts`, `packages/web/src/query/concurrency.ts`
   - Failing test: `e2e/perf/marking-update.spec.ts`: the p95 time to update every affected tile after a marking change is under 3 s (AC-175). The client-side concurrency bound is set here against Cube's queue concurrency.
   - Depends on: T110, T180
-- [x] T182 (AC-176) Make every action keyboard-reachable with a focus indicator distinct from the marking outline
+- [ ] T182 (AC-176) Make every action keyboard-reachable with a focus indicator distinct from the marking outline
   - Files: `packages/web/src/shell/styles.ts` (the ring), `packages/web/src/shell/useFocusTrap.ts`, the dashboard, filter, settings, security, search and Explore surfaces it names below, `e2e/keyboard-coverage.spec.ts`. The planned `packages/ui/src/focus.css.ts` and `YamlEditor.tsx` hint were not needed; see below.
   - Failing test: `e2e/keyboard-coverage.spec.ts`: navigation, authoring, marking, filtering and every dialog are reachable from the keyboard, focus is visible on every control and is visually distinct from the marking outline, and Tab leaves the code editor, which is no keyboard trap (AC-176).
   - Depends on: T063, T106, T139
@@ -3374,7 +3374,20 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **The gear is `aria-disabled` while a save answers**, not `disabled`, so it takes focus back as the settings page closes. `saveInFlight.test.tsx` reads the attribute. Its assertion that the gear opens nothing meanwhile is unchanged.
     - **Marking by the keyboard, under a distinct ring.** A tile focused in view mode marks with AC-100's keys (→, then Space), and the chip appears. The focus ring is 2 px, 2 px outside the tile, in the accent. The marked items' outline is 1.5 px, hugging each mark, in the marking's ink. They differ in width, offset and colour, and the test measures all three.
     - **Not built, and not needed for the criterion:** direction.md's ⌘Z, F6 and `/` shortcuts. Undo and Redo are buttons in every editor, reachable by Tab, so no action waits on a shortcut.
-  - AC-176 ticked on `e2e/keyboard-coverage.spec.ts` (both rounds), with AC-100's keyboard marking tests in `e2e/markings.spec.ts`, all three browsers.
+  - ~~AC-176 ticked on `e2e/keyboard-coverage.spec.ts` (both rounds), with AC-100's keyboard marking tests in `e2e/markings.spec.ts`, all three browsers.~~ **Withdrawn after the cold review (below).**
+  - **Cold review (one round), verdict FAIL: the tick was not earned.** T182 and AC-176 are unchecked again.
+    - **Fixed, each with a test that failed first:**
+      - **The undo toast could stay forever.** Undo or Dismiss by pointer took the toast from under the pointer with no leave, so the next toast with the same message ("Deleted Notes.") found itself held and never timed out. It is now let go of when it goes. The test deletes the same tile twice.
+      - **The page tabs' ring lost its bottom edge** in their strip, which scrolls sideways. It is drawn inside the tab, as in the other clipped strips. The page-tab test measures the ring, and exercises wrap-around, Home and End.
+      - The grip's older comment no longer says pressing it does nothing.
+    - **Still open, and why AC-176 stays unchecked.** Each fails AC-176's Fails-when, and none is new in this task:
+      - **Pointer-only actions:**
+        - cross-filtering (no key makes a cross-filter; `crossfilter.spec.ts` asserts Space does nothing there);
+        - marking a scatter's points;
+        - marking a series or legend category (AC-090) or a trellis panel (AC-091);
+        - marking a table tile's rows (AC-092: `<tr onClick>` only).
+      - **The keyboard's focused chart item is drawn nowhere.** `markFocus` is state only, so a sighted keyboard user cannot see which item Space will mark.
+      - These are planned as T306 and T307, in "The 2026-09-25 UI review" below.
 - [x] T183 (AC-177) Pair every status, validation and job state with an icon and a text label
   - Files: `packages/ui/src/StatusBadge.tsx`, `e2e/status-labels.spec.ts`
   - Failing test: `e2e/status-labels.spec.ts`: across every workspace, no status, validation or job state is conveyed by colour alone (AC-177).
@@ -4682,6 +4695,191 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
     - **Outside `deploy/`.** `@wechart/api` now lists `node-pg-migrate` under `dependencies`: `dist/main.js` imports it as it starts, and a production install left it out. It also names its `files` (`dist`, `src/db/migrations`) for `pnpm deploy`. The lockfile moves the same entry. `.prettierignore` and `eslint.config.js` skip the Helm templates and the chart's link to `infra/cube/cube.js`, and `.dockerignore` is new.
     - **Research.** `docs/research/helm.md`, `cube/kubernetes.md`, `nginx.md`, `postgres-image.md`, `node-docker-pnpm.md`. `cube/kubernetes.md` corrects `cube/configuration-deployment.md`: with `contextToAppId` set, Cube's `/readyz` tests nothing, so the data path is checked by the query.
 
+## The 2026-09-25 UI review: Superset-parity gaps, the re-critique, and AC-176's open parts
+
+Added 2026-09-25 by the UI review stream. Its sources:
+- the gaps found when Superset's "Northwind Sales Overview" was rebuilt in wechart (`docs/design/superset-parity.md`);
+- the T225 re-critique of every surface (`docs/design/critiques/2026-09-25-*.md`);
+- T182's cold review.
+
+Only gaps that break an accepted criterion or a numbered direction.md rule are tasks here. The rest are proposed spec changes for the user, not built.
+
+- [x] T300 (AC-187) Draw the KPI tile as the prototype does
+  - Gap 1 of the parity rebuild. A KPI's value was body text: nothing styled `.kpi`, `.kpi__value` or `.kpi__label`. That breaks AC-187 (a tile's font size and weight), and direction.md rule 1 (KPIs in tabular numerals).
+  - The prototype's rules:
+    - `.kpi-val`: 32 px, 600, tabular numerals, −0.01 em tracking;
+    - `.dtile.kpi .kpi-val`: 36 px line height;
+    - `.dtile.kpi`: 12 16 px padding;
+    - `.dtile.kpi .tile-head`: 4 px under the head;
+    - `kpiHtml` (charts.js:914): the measure's name above its value, in `.xs.sec.strong` (12/16, 600, secondary).
+  - Files: `packages/web/src/tiles/Kpi.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: `e2e/design-conformance.spec.ts`: a KPI tile's value is 32 px at 600 in tabular numerals, with a 36 px line; its name above it is 12/16 at 600 in `text-secondary`; the tile is padded 12 16 (AC-187).
+  - Depends on: none
+  - **Done 2026-09-25.**
+    - `Kpi.tsx` puts the measure's name above its value, as `kpiHtml` does.
+    - `styles.ts` draws both. `.kpi__value` is on a 40 px line on its own, and 36 px in a tile.
+  - **Test, red first:** `e2e/design-conformance.spec.ts` "T300 and T304: KPI, table and pivot tiles" › "a KPI tile draws its value at 32 px…". It builds its own dashboard of a KPI, a table and a pivot through the API. It first failed on the value's 14 px at 400. It passes in all three browsers.
+  - **Not done here:** the label still reads "<cube title> <measure title>" (gap 13), which AC-220 allows. It is a proposed spec change.
+- [x] T301 (AC-039) Colour a pie's slices and a treemap's rectangles by the dashboard's assignment, and let only tiles that draw categorical colour claim a colour
+  - Gaps 5 and 3 of the parity rebuild.
+    - The dashboard assigned colours to each tile's *series*. A pie or treemap has one series, its measure, so its categories were coloured by position. The same member was one colour in a bar split by it and another in a pie of it, which fails AC-039.
+    - KPI, table and pivot tiles, and a heatmap's scale, draw no categorical colour, yet each claimed a slot for its measure. After a few KPIs, later tiles' real members fell to the neutral, which direction.md §5 keeps for "Other" and null.
+  - Files: `packages/web/src/dashboard/colours.ts`, its test, `e2e/colour-consistency.spec.ts` (or the spec that already asserts AC-039)
+  - Failing test:
+    - `colours.test.ts`: a member in a bar's split and the same member as a pie slice or treemap rectangle get one colour; KPI, table, pivot and heatmap tiles claim none.
+    - e2e: on a dashboard, a bar split by status and a donut of status draw each status in the same colour (AC-039).
+  - Depends on: none
+  - **Done 2026-09-25.**
+    - **`colouredMembersOf(spec)`**, new in `@wechart/charts` (`colouredMembers.ts`), names what a chart colours:
+      - a pie's slices by `colourKeyOf` (now exported from `pie.ts` and used by its renderer);
+      - a treemap's rectangles by `treemapNodesOf` (extracted from `treemap.ts`);
+      - nothing for a KPI, table, pivot, heatmap or trellis (a trellis draws every panel in the palette's first colour);
+      - every other chart's series.
+    - **`dashboardColours`** claims exactly those names, in document order as before.
+    - The planned `e2e/colour-consistency.spec.ts` was not needed: the AC-039 test is in `e2e/dashboard.spec.ts`, and its legend reader moved to module level for the new test to share. Its assertions are unchanged.
+  - **Tests, red first:**
+    - `colours.test.ts` (9): pie, donut and treemap agree with a bar split by the same member; a donut first on the page gives each category its own colour; each of KPI, table, pivot, heatmap and trellis claims nothing. All failed first: a pie claimed only `orders.count`.
+    - `e2e/dashboard.spec.ts` "a member keeps one colour between a donut of it and a bar split by it, after a KPI". With the fix set aside it failed in Chrome (a slice `#2a78d6` against its series `#1baf7a`). It passes in all three browsers, with dashboard, markings and crossfilter (291 runs).
+  - **Cold review of T300–T305 and T309 (one round), 2026-09-25.** It judged AC-039 met, with one real bug, now fixed:
+    - **A pie's or treemap's "Other (n)" took a palette slot.** `colouredMembersOf` claimed it, and the dashboard's colour then came before `colourFor`'s neutral for it. Each new count ("Other (5)", "Other (6)") took another slot. It now claims nothing for Top N's tail, which is drawn in the neutral as direction.md §5 says.
+    - Test, red first: `colours.test.ts` "claims no colour for a donut's / treemap's "Other (n)"" (2).
+- [x] T302 (AC-219) Offer "Stack series" on a horizontal bar with more than one series
+  - Gap 6 of the parity rebuild. AC-219 has Customize offer "whether series stack". A horizontal bar with two measures, or with its series split by colour, draws two series side by side, but the tab offered no stacking: `STACKABLE_TYPES` left `hbar` out.
+  - Files: `packages/charts/src/customize.ts`, its test, `packages/web/src/editor/CustomizeTab.test.tsx`, `e2e/customize.spec.ts`
+  - Failing test: a horizontal bar with two series stacks when "Stack series" is on, and Customize shows the checkbox for it (AC-219).
+  - Depends on: none
+  - **Done 2026-09-25.**
+    - `STACKABLE_TYPES` includes `hbar`, so Customize offers "Stack the series" on a horizontal bar with two series or more, and `applyCustomize` stacks them.
+    - A stacked horizontal bar's data labels go inside their segments, as a stacked column's do, rather than past the bar's end.
+  - **A test was wrong, and the user is told.** `customize.test.ts` "leaves a combo, a horizontal bar and a single series unstacked" asserted T231's reasoning: that a horizontal bar has one bar series and nothing to stack. With two measures, or split by colour, it has two, and AC-219 offers to stack them.
+    - The horizontal bar's line is now its own test, which asserts that it stacks.
+    - The combo and single-series assertions are unchanged.
+  - **Tests, red first:**
+    - `charts/customize.test.ts` (2). The drawn check: in each category, the second series' bar starts at the first's end, within the 2 px surface gap. Labels sit inside. Both failed first: the series were unstacked, and the labels were at `right`.
+    - `e2e/chart-editor.spec.ts` "a horizontal bar split by colour can stack its series". It opens the seeded chart as a horizontal bar: 6 rows of bars, then 2 once stacked. With the fix set aside it failed in Chrome, with no "Stack the series" to check. It passes in all three browsers, with chart-editor and chart-save (231 runs).
+- [x] T303 (AC-044) Order a pivot's rows by the chart's sort
+  - Gap 8 of the parity rebuild. The pivot kept the rows' arrival order whatever Sort said. AC-044's Fails-when is "the order is not applied".
+  - Files: `packages/core/src/pivot.ts`, its test, `packages/web/src/tiles/PivotTable.test.tsx`
+  - Failing test: a pivot sorted by value descending lists its row groups by their totals, largest first. Sorted by label, it lists them alphabetically (AC-044).
+  - Depends on: none
+  - **Done 2026-09-25.** `pivot()` orders its row groups by `sortSettingsOf(spec)`, now exported from `sort.ts`. By value it uses the first measure's row total; by label, the row's names. It follows `applySort`'s rules: no measurement goes last, "Other" is pinned last, and ties keep arrival order. Cells and row totals move with their rows.
+    - Only the rows move, as the title now says. AC-044 orders "categories", and a pivot's categories are its row groups. Its columns keep Cube's order, and the planned `PivotTable.test.tsx` change was not needed.
+  - **Tests, red first:**
+    - `core/pivot.test.ts` (4): by value either way, with a row without a measurement last; by label either way; the columns and their totals unchanged. Three failed first, on the arrival order.
+    - `e2e/chart-editor.spec.ts` "sorting a pivot reorders its rows". It opens the seeded chart on `orders.total_amount` (its count ties at 120 a category), pivots it, and checks all four settings. With the fix set aside it failed in Chrome at "Value, low to high". It passes in all three browsers, with chart-editor and export (168 runs).
+- [x] T304 (AC-187) Draw table and pivot tiles as the prototype's `.grid-table.comfy`
+  - Gap 9, second half, of the parity rebuild: the header row scrolled away with the rows. No rule styled `.data-table` or `.pivot-table`. Against the prototype's `.grid-table` (index.html:1089), a table tile had:
+    - no sticky 28 px header on `bg-subtle`;
+    - no 12 px tabular numerals (direction.md rule 1);
+    - no right-aligned measure columns;
+    - no 34 px rows (`.comfy`, which charts.js:939 and :968 draw tiles with).
+  - Files: `packages/web/src/tiles/DataTable.tsx`, `packages/web/src/tiles/PivotTable.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: a table tile's header cell is sticky, 28 px, 600, on `bg-subtle`; its cells are 12 px in tabular numerals and 34 px tall, a measure's right-aligned; the same holds for a pivot (AC-187).
+  - Depends on: none
+  - **Done 2026-09-25.**
+    - **Table:** `DataTable.tsx` draws `grid-table comfy`. A measure's head and cells are `num`, taken from the chart's measures. The virtualised row is 34 px.
+    - **Pivot:** `PivotTable.tsx` draws the same table. Its figures, column heads and Total heads are `num`, and its totals are 600 (`grid-table__total`).
+      - Its row names stay `<th scope="row">` for their semantics, drawn as pivotHtml's `td.strong`: 600 on the row's ground.
+      - Its corner sticks with the heads. A second or third row of column heads sticks 28 px under the one above.
+    - **Styles:** `styles.ts` has the comfy rows (body and foot only, so the head stays 28 px), the corner, and the row names.
+  - **Tests, red first:** `e2e/design-conformance.spec.ts` "T300 and T304…", two tests, one for the table and one for the pivot. Both first failed on a static 14 px/700 head.
+    - My first expectation that a dimension's cell computes `left` was wrong: the prototype's `td` sets no alignment, so it computes `start`, and the test now says so.
+    - All three browsers pass. So do the specs that use tables: table-view, tiles, markings, keyboard-coverage, dashboard, crossfilter and filters (459 runs).
+  - **Not done here:** the table's columns follow the row's keys, not the Metrics well's order (gap 9, first half). The prototype's `tableHtml` puts the dimensions first and then the measures in their well's order, but no criterion asks for column order. It is a proposed spec change.
+- [x] T305 (AC-031) Hold a candidate that colours by a dimension to the 8-colour cap
+  - Gap 11 of the parity rebuild. The recommender offered bars coloured by 21 countries. Its bar, line and area candidates carried no colour field, although `defaultEncoding` colours them by the dimension the wells hold, so the colour cap was never applied to them.
+  - Files: `packages/recommender/src/recommend.ts`, its test
+  - Failing test: with a time dimension, a measure and a 21-member dimension, no bar, line or area candidate coloured by it is offered as top pick or runner-up. With 5 members, it is (AC-031).
+  - Depends on: none
+  - **Done 2026-09-25.** `enumerate` gives these candidates the colour field `defaultEncoding` draws them with, so `high_cardinality_color` judges them:
+    - the line or multi-line, area and bar over time get the first dimension;
+    - the bar and horizontal bar by category get the second.
+    - `warningsFor` already treated a chosen type's split this way (T230); the recommender's own candidates now agree with it.
+  - **Tests, red first:** `recommend.test.ts` (3).
+    - Over time by a 21-member dimension, no bar, line, multi-line or area is offered. It first offered line and area.
+    - By a 5-member one, the line offered carries it as its colour.
+    - By category with a 21-member second dimension, neither bar nor horizontal bar is offered.
+    - The editor and Explore e2e specs that involve a recommendation still pass (372 runs, all three browsers).
+  - **Consequence:** with no rows yet, a dimension's cardinality is unknown, and an unknown count fails a cap (legality.ts). So a chart over time split by a dimension is recommended as a table until its rows arrive. That is the recommender's existing rule for unknown counts, and it now covers these candidates too.
+  - **Cold review of T300–T305 and T309 (one round), 2026-09-25.** It judged AC-031 met, and found AC-028 regressed. Fixed:
+    - **The problem.** Over time by a dimension of more than 20 members, or of unknown size, every chart over time failed a cap: line, area and bar by colour, and trellis by panels. The table was left alone, with no runner-up, and AC-028 fails when no runner-up is shown.
+    - **The fix.** `enumerate` now also offers a pivot, time down its rows and the dimension across. It has neither colour nor panels to cap, and scores as the table does.
+    - **Its requirement.** `REQUIREMENTS.pivot` is `groupings(2)`: two dimensions, or a time dimension and a dimension, which is what `compile` draws a pivot from (as T242 made trellis's). It was `dimensions(2)`, which would have called the pivot just offered undrawable.
+    - **The gallery's "Needs" line** no longer ends on the comma of that phrase. Trellis read "…and a dimension," before this change too.
+    - **A test was wrong, and the user is told.** `chartTypeCatalog.test.ts` expected a pivot to need "2 dimensions", the old requirement. It now expects the new text, and asserts trellis's line as well.
+    - **Tests, red first:**
+      - `recommend.test.ts`: two AC-028 signatures, over time by a 21-member dimension and by one of unknown size. Both got no runner-up.
+      - `requirements.test.ts`: a pivot draws from a time dimension and a dimension, and not from one dimension alone.
+    - The editor and Explore e2e specs pass (378 runs).
+- [x] T306 (AC-176, AC-100) Draw the item a tile's keyboard focus is on, distinct from the marking outline
+  - From T182's review. AC-100's arrows move a focused item, but `markFocus` is state only. A sighted keyboard user cannot see which item Space will mark.
+  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/charts/src/markings/*`, `e2e/keyboard-coverage.spec.ts`
+  - Failing test: after → in a focused chart tile, the focused item is drawn with an indicator that differs from the marked outline in colour or width, and it moves with the arrows (AC-176).
+  - Depends on: T182
+  - **Done 2026-09-25.**
+    - **Core:** `RenderSpec.keyboardFocus` is the category the tile's keyboard is on.
+    - **Charts:** `marking/focus.ts`, applied after the marking.
+      - `withKeyboardFocus` rings that item, in every series of a split chart, with a dashed 2 px accent border. The marked outline is solid 1.5 px in the marking's ink, so they differ in dash, width and colour. It also finds a slice by its category, a treemap leaf by its name, and a heatmap cell by its column.
+      - A focused item that is marked keeps its outline: an item has one border, and the ring would hide the marking exactly where the keyboard is.
+      - `themed` turns the accent to the dark theme's.
+    - **Canvas:** `ChartCanvas` also shows the item's tooltip with ECharts' `showTip`, as the prototype's `dashboard.js` does, and hides it when the keyboard goes.
+      - Research: `research/echarts.md`, "`showTip` on a data item", read from the 6.1.0 source. It does nothing under SSR, so only the browser shows it.
+    - **Dashboard:** `DashboardView` draws it from the first marking key until focus leaves the tile or the pointer is used (`keyShownOn`). Where the keyboard was is kept.
+  - **Tests, red first:**
+    - `charts/marking/focus.test.ts` (8): only the focused item is ringed; nothing is ringed without focus; a marked item keeps its outline and an unmarked one beside it is ringed; the drawn SVG has one dashed accent path; the dark accent; a donut slice and a heatmap column; every series of a split chart; the item for its tooltip.
+    - `e2e/keyboard-coverage.spec.ts` "T306: the item the keyboard is on". On the seeded split bar, → rings the second category's three bars in the accent at 2 px, with its tooltip. ← moves the ring left. Space leaves the three 1.5 px outlines and the tooltip. → rings the unmarked category. Tab takes both away. It first failed with no ring drawn.
+    - A first version ringed marked items too, over their outline. It failed T182's own test "marking by the keyboard, under a focus ring unlike the marking's outline", which looks for the 1.5 px outline on the tile while it has focus. So marked items now keep their outline.
+    - Passes in all three browsers with keyboard-coverage, markings, crossfilter and dashboard (369 runs).
+  - AC-176 stays unchecked for T307.
+- [ ] T307 (AC-176) Reach the pointer-only chart actions from the keyboard
+  - From T182's review. These could only be done with the pointer:
+    - cross-filtering from a mark;
+    - marking a scatter's points;
+    - marking a legend category (AC-090) or a trellis panel (AC-091);
+    - marking a table tile's rows (AC-092).
+  - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/DataTable.tsx`, `e2e/keyboard-coverage.spec.ts`, `e2e/crossfilter.spec.ts`
+  - Failing test: each of those actions is done from the keyboard alone (AC-176).
+  - Depends on: T306
+- [x] T309 (AC-210) Keep a pie's or donut's ring clear of a legend placed at its side
+  - Gap 3 of the parity rebuild. With the legend at Right, the legend was drawn over the ring. The legend's room was made in the grid, which a pie does not use, so slices under it were not drawn visibly.
+  - Files: `packages/charts/src/customize.ts`, its test, `docs/research/echarts.md` (the pie's layout box)
+  - Failing test: a donut with its legend at the right or left draws its ring clear of the legend's side (AC-210).
+  - Depends on: none
+  - **Done 2026-09-25.**
+    - **Research, from the installed 6.1.0 source,** in `research/echarts.md` "A pie's layout box, and a legend's text width":
+      - a pie is laid out in its own `left`/`top`/`right`/`bottom` box, with its centre and radius relative to that box;
+      - a legend item's text honours `textStyle.width` and `overflow`.
+    - **`applyCustomize`:**
+      - A legend placed at the right, left or bottom gives a pie series the same room it gives the grid, so the ring shrinks and moves clear.
+      - A pie's side legend truncates its names to that room: 80 px of text in 120. A chart on axes keeps its names whole, as the AC-219 e2e test reads them.
+  - **Tests, red first:**
+    - `charts/customize.test.ts` (3), in SSR at 400 × 300: the ring's right edge is left of the legend swatches at the right; its left edge is past the 120 px room at the left; a pie's side names are 80 px wide and truncated, and a bar chart's are not.
+    - `e2e/dashboard.spec.ts` "a narrow donut with its legend at the right draws its ring clear of the legend": products by name in a 3-column tile. With the fix set aside it failed in all three browsers, the ring's right edge at 282 px against the legend at 236. It passes with dashboard and chart-editor (297 runs).
+    - A first version truncated every side legend. It broke the AC-219 e2e test, which reads the full name "Orders Average Amount" in a bar chart's right legend, so it was narrowed to pies.
+  - **Not done here:** slice data labels still truncate to "$…" in a narrow tile (gap 3, second half). No criterion covers how a label fits, so it is a proposed spec change.
+  - **Cold review of T300–T305 and T309 (one round), 2026-09-25.** It judged AC-210 met, and T309's research citations accurate against the 6.1.0 source.
+    - **Its one finding, fixed:** the e2e test could pass with no legend drawn. `Math.min` of no swatches is `Infinity`, which any ring is left of. It now first asserts the four products' swatches.
+    - The review also found the coverage table short of this section's tasks. They are now listed: AC-028 (T305), AC-031, AC-039, AC-044, AC-100 (T306), AC-176 (T306, T307), AC-187 (T300, T304), AC-210 and AC-219.
+    - It judged T300, T302, T303 and T304 met with no real bugs. Two T300 details it noted as not worth a round were left: the empty KPI's "No value" sits above its name, and kpiHtml's bottom alignment was not carried over.
+- [x] T310 (AC-187) Draw the chart editor's remaining controls as the prototype does
+  - From the T225 re-critique `docs/design/critiques/2026-09-25-chart-editor.md`, findings 1 and 3–7. Each is a button or input whose computed height, padding, border, radius, font size or colour token differed from the prototype's rule, which is AC-187's Fails-when.
+  - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/editor/WhyThisChart.tsx`, `e2e/design-conformance.spec.ts`
+  - Failing test: `e2e/design-conformance.spec.ts` "T310: the chart editor's remaining controls" (4).
+    - Customize's fields are 28 px at 12 px, and its toggles are the prototype's 32 × 18 `.switch`: `border-strong`, then accent when on.
+    - "Why this chart?" is a ghost `.btn.sm`.
+    - The type card is padded 8 with a 12/600 name.
+    - The title stays bare under the pointer.
+    - The inspector's and drawer's tabs take no ground on hover.
+    - The gallery has an `.input.sm` search, `.btn.sm` Close and Use Auto, `.file` shelves, and 13 px card names.
+  - Depends on: T257
+  - **Done 2026-09-25.**
+    - **CSS only**, except the "Why" button's `btn-ghost btn-sm` classes.
+    - **The toggles** stay checkboxes, drawn as switches (appearance none, a gradient knob), so their role and every test's `check()` are unchanged.
+    - **The gallery's buttons** kept their `.btn-sm` class, but the `.dialog button` rule outranked it. They are now named under `.type-gallery`.
+    - **The tab hover** was the global button hover on the edit sidebar's tabs. Removing it also changes the dashboard edit sidebar's tabs, whose prototype rule is the same `.tabs button`.
+  - **Tests, red first:** all four first failed on the measured values (32/14 fields, a 32 px bordered "Why", the #efeeea tab hover, a 32/14 gallery search). They pass in all three browsers. So do design-conformance, chart-editor, a11y-tokens, dashboard-edit and keyboard-coverage (603 runs).
+  - **Not done here** (the critique's other findings on this surface, class (d) or needing a decision): the header badges, the quick-pick icons and the recommendation block (F4, F7), the "Why" trace as `.check` lines (F16), the offline load that never errors (F19), mark clicks in the preview (2, rule 31), the tile while loading (8), Acceleration's internal names (9, AC-220), the empty editor's drawer (10), the ownership chip (11), Discard while typing (12), and a dashboard-local chart opened alone (13).
+
 ---
 
 ## Coverage: acceptance criterion → task
@@ -4697,7 +4895,7 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
 | AC-007 | T004, T024 | AC-052 | T058 | AC-097 | T103 | AC-142 | T148       |
 | AC-008 | T004       | AC-053 | T059, T023 | AC-098 | T104 | AC-143 | T149       |
 | AC-009 | T010       | AC-054 | T060, T023 | AC-099 | T105 | AC-144 | T150       |
-| AC-010 | T011       | AC-055 | T061 | AC-100 | T106 | AC-145 | T151       |
+| AC-010 | T011       | AC-055 | T061 | AC-100 | T106, T306 | AC-145 | T151       |
 | AC-011 | T012       | AC-056 | T062 | AC-101 | T107 | AC-146 | T152       |
 | AC-012 | T013       | AC-057 | T063 | AC-102 | T108 | AC-147 | T153       |
 | AC-013 | T014       | AC-058 | T064 | AC-103 | T109 | AC-148 | T154       |
@@ -4715,10 +4913,10 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
 | AC-025 | T024       | AC-070 | T076 | AC-115 | T121 | AC-160 | T166       |
 | AC-026 | T025       | AC-071 | T077 | AC-116 | T122 | AC-161 | T167       |
 | AC-027 | T026       | AC-072 | T078 | AC-117 | T123 | AC-162 | T168       |
-| AC-028 | T028       | AC-073 | T079 | AC-118 | T124 | AC-163 | T169       |
+| AC-028 | T028, T305 | AC-073 | T079 | AC-118 | T124 | AC-163 | T169       |
 | AC-029 | T029       | AC-074 | T080 | AC-119 | T125 | AC-164 | T170       |
 | AC-030 | T027, T028 | AC-075 | T081 | AC-120 | T126 | AC-165 | T171       |
-| AC-031 | T027, T028 | AC-076 | T082 | AC-121 | T127 | AC-166 | T172       |
+| AC-031 | T027, T028, T305 | AC-076 | T082 | AC-121 | T127 | AC-166 | T172       |
 | AC-032 | T030       | AC-077 | T083 | AC-122 | T128 | AC-167 | T173       |
 | AC-033 | T031       | AC-078 | T084 | AC-123 | T129 | AC-168 | T174       |
 | AC-034 | T032, T193 | AC-079 | T085 | AC-124 | T130 | AC-169 | T175       |
@@ -4726,23 +4924,23 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
 | AC-036 | T034       | AC-081 | T087 | AC-126 | T132 | AC-171 | T177       |
 | AC-037 | T035–T044, T186, T188, T242 | AC-082 | T088 | AC-127 | T133 | AC-172 | T178 |
 | AC-038 | T045       | AC-083 | T089 | AC-128 | T134 | AC-173 | T179       |
-| AC-039 | T046, T023 | AC-084 | T090 | AC-129 | T135 | AC-174 | T180       |
+| AC-039 | T046, T023, T301 | AC-084 | T090 | AC-129 | T135 | AC-174 | T180       |
 | AC-040 | T047       | AC-085 | T091 | AC-130 | T136 | AC-175 | T181       |
-| AC-041 | T048       | AC-086 | T092 | AC-131 | T137 | AC-176 | T182       |
+| AC-041 | T048       | AC-086 | T092 | AC-131 | T137 | AC-176 | T182, T306, T307 |
 | AC-042 | T049       | AC-087 | T093 | AC-132 | T138 | AC-177 | T183       |
 | AC-043 | T050       | AC-088 | T094 | AC-133 | T139 | AC-178 | T041       |
-| AC-044 | T051       | AC-089 | T095 | AC-134 | T140 | AC-179 | T184       |
+| AC-044 | T051, T303 | AC-089 | T095 | AC-134 | T140 | AC-179 | T184       |
 | AC-045 | T043       | AC-090 | T096 | AC-135 | T141 | AC-180 | T001, T185 |
 | AC-181 | T187       | AC-182 | T191 | AC-183 | T192 | AC-184 | T197       |
-| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225, T244–T254 | AC-188 | T206       |
+| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225, T244–T254, T300, T304, T310 | AC-188 | T206       |
 | AC-189 | T207       | AC-190 | T211 | AC-191 | T211 | AC-192 | T212       |
 | AC-193 | T213, T243 | AC-194 | T214 | AC-195 | T216 | AC-196 | T217       |
 | AC-197 | T215       | AC-198 | T218 | AC-199 | T219, T118–T121 | AC-200 | T220       |
 | AC-201 | T219       | AC-202 | T221 | AC-203 | T222 | AC-204 | T223       |
 | AC-205 | T223       | AC-206 | T223 | AC-207 | T217 | AC-208 | T221       |
-| AC-209 | T224       | AC-210 | T224 | AC-211 | T210 | AC-212 | T226       |
+| AC-209 | T224       | AC-210 | T224, T309 | AC-211 | T210 | AC-212 | T226       |
 | AC-213 | T227, T256 | AC-214 | T228, T255–T257 | AC-215 | T229 | AC-216 | T229       |
-| AC-217 | T230       | AC-218 | T230 | AC-219 | T231 | AC-220 | T232       |
+| AC-217 | T230       | AC-218 | T230 | AC-219 | T231, T302 | AC-220 | T232       |
 | AC-221 | T232       | AC-222 | T234 | AC-223 | T234 | AC-224 | T235       |
 | AC-225 | T236       | AC-226 | T237 | AC-227 | T237 | AC-228 | T239, T241 |
 | AC-229 | T239       | AC-230 | T240 | AC-231 | T238, T244, T249 | AC-232 | T241       |

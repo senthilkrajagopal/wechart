@@ -23,6 +23,7 @@ export {
   type SeriesSettings,
 } from './customize';
 export { assignColours, OTHER_COLOUR, type ColourAssignment } from './colorAssignment';
+export { colouredMembersOf } from './colouredMembers';
 export { legendFor, seriesCount } from './legend';
 export { echarts } from './echarts';
 export { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from './theme';
@@ -45,6 +46,7 @@ export {
   type KeyboardState,
 } from './interaction/keyboardMarking';
 export { markFromPanel, panelOfTitleClick } from './interaction/panelMark';
+export { FOCUS_RING_PX, focusedItemOf } from './marking/focus';
 export {
   MARKED_OUTLINE_PX,
   UNMARKED_OPACITY,

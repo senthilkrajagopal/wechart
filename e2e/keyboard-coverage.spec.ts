@@ -396,11 +396,23 @@ test.describe('T182: what the first round left open', () => {
     await page.keyboard.press('ArrowLeft');
     await expect(overview).toBeFocused();
     await expect(overview).toHaveAttribute('aria-selected', 'true');
+    // Wrapping, and Home and End (T182's review).
+    await page.keyboard.press('ArrowLeft');
+    await expect(appendix).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(overview).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(appendix).toBeFocused();
+    // Its ring whole, in a strip that scrolls sideways (T182's review).
+    expect(await ringShows(appendix)).toBe('whole');
   });
 
   test('a tab group’s tabs take the arrow keys too', async ({ page }) => {
     await page.goto(DASHBOARD);
-    await page.getByRole('tablist', { name: 'Pages' }).getByRole('tab', { name: 'Appendix' }).click();
+    await page
+      .getByRole('tablist', { name: 'Pages' })
+      .getByRole('tab', { name: 'Appendix' })
+      .click();
     const group = page.locator('[data-tab-group="group-terms"]').getByRole('tablist');
     const measures = group.getByRole('tab', { name: 'Measures' });
     const dimensions = group.getByRole('tab', { name: 'Dimensions' });
@@ -463,11 +475,23 @@ test.describe('T182: what the first round left open', () => {
     expect(await page.evaluate(() => document.activeElement?.closest('[data-tile]') !== null)).toBe(
       true,
     );
+
+    // The same delete again, the same message: a new toast, which times out
+    // as a fresh one does, not held over from the last (T182's review).
+    await page.locator('[data-tile="tile-notes"]').focus();
+    await page.keyboard.press('Delete');
+    await expect(toast).toBeVisible();
+    await page.mouse.move(0, 0);
+    await page.clock.runFor(9_000);
+    await expect(toast).toHaveCount(0);
   });
 
   test('deleting a tab by its × leaves focus on its group’s tab strip', async ({ page }) => {
     await editSeedDashboard(page);
-    await page.getByRole('tablist', { name: 'Pages' }).getByRole('tab', { name: 'Appendix' }).click();
+    await page
+      .getByRole('tablist', { name: 'Pages' })
+      .getByRole('tab', { name: 'Appendix' })
+      .click();
     await page.getByTestId('delete-tab-group-terms-dimensions').focus();
     await page.keyboard.press('Enter');
     const measures = page
@@ -561,6 +585,77 @@ test.describe('T182: what the first round left open', () => {
       }));
     expect(outlined.width).toBe('1.5px');
     expect(outlined.stroke).not.toBe(ring.colour);
+  });
+});
+
+/**
+ * T306 (AC-176, AC-100): the item a tile's keyboard is on is drawn. The
+ * arrows moved it with nothing on screen to show where, so a sighted keyboard
+ * user could not see what Space would mark (T182's review).
+ */
+test.describe('T306: the item the keyboard is on', () => {
+  test('is ringed dashed in the accent as the arrows move, unlike a marked outline, and not once Tab leaves', async ({
+    page,
+  }) => {
+    await page.goto(DASHBOARD);
+    // Categories across, split by status: a category is a bar in each series.
+    const tile = page.locator('[data-tile="tile-status"]');
+    await expect(tile.getByTestId('chart-canvas')).toBeVisible();
+    const accent = await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--wc-accent)';
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    });
+    const ringed = () =>
+      tile.locator('svg path[stroke-dasharray]').evaluateAll((paths) =>
+        paths.map((path) => ({
+          left: Math.round(path.getBoundingClientRect().left),
+          stroke: getComputedStyle(path).stroke,
+          width: getComputedStyle(path).strokeWidth,
+        })),
+      );
+
+    // ECharts' tooltip, a div of its own in the canvas.
+    const tip = tile.getByTestId('chart-canvas').locator('div[style*="z-index: 9999999"]');
+
+    await tile.focus();
+    expect(await ringed()).toHaveLength(0);
+
+    // Two categories, three statuses: the second category is three bars.
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(async () => (await ringed()).length).toBe(3);
+    // Its tooltip too, as the prototype shows it.
+    await expect(tip).toBeVisible();
+    const second = await ringed();
+    for (const { stroke, width } of second)
+      expect({ stroke, width }).toEqual({ stroke: accent, width: '2px' });
+
+    // Back to the first category: every ringed bar now left of the second's.
+    await page.keyboard.press('ArrowLeft');
+    await expect
+      .poll(async () => Math.max(...(await ringed()).map((one) => one.left)))
+      .toBeLessThan(Math.min(...second.map((one) => one.left)));
+
+    // Marked, it keeps its marking's 1.5 px outline, not the ring, and its
+    // tooltip still says where the keyboard is.
+    await page.keyboard.press('Space');
+    await expect(page.locator('.mark-chip')).toHaveCount(1);
+    await expect.poll(async () => (await ringed()).length).toBe(0);
+    await expect(
+      tile.locator('svg path[stroke-width="1.5"], svg path[style*="stroke-width: 1.5"]'),
+    ).toHaveCount(3);
+    await expect(tip).toBeVisible();
+    // On to the unmarked category: ringed again.
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(async () => (await ringed()).length).toBe(3);
+
+    // Tab away: neither the ring nor the tooltip stays.
+    await page.keyboard.press('Tab');
+    await expect.poll(async () => (await ringed()).length).toBe(0);
+    await expect(tip).toBeHidden();
   });
 });
 

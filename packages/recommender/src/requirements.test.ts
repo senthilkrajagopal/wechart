@@ -25,6 +25,13 @@ describe('what a chart needs (AC-033)', () => {
     expect(canDraw('bar', counts(1, 1))).toBe(true);
   });
 
+  // T305's review: `compile` draws a pivot's rows from a time dimension and
+  // its columns from a dimension, as a trellis's panels (T242).
+  it('draws a pivot from a time dimension and a dimension', () => {
+    expect(missingFor('pivot', counts(1, 1, 1))).toEqual([]);
+    expect(canDraw('pivot', counts(1, 1, 0))).toBe(false);
+  });
+
   it('names the well and the member type when something is missing', () => {
     const [missing] = missingFor('scatter', counts(1));
 

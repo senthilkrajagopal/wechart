@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /**
  * T023. The seeded dashboard, opened for real.
@@ -249,7 +249,9 @@ test('a tile with no fields yet, or a chart that is gone, has no failure menu (T
     },
   });
   await page.goto(`/explore/dashboards/${id}`);
-  await expect(page.locator('[data-tile="tile-empty"]').getByTestId('tile-empty-chart')).toBeVisible();
+  await expect(
+    page.locator('[data-tile="tile-empty"]').getByTestId('tile-empty-chart'),
+  ).toBeVisible();
   await expect(page.locator('[data-tile="tile-gone"]')).toContainText('no longer available');
   await expect(page.getByTestId('tile-view-menu-tile-empty')).toHaveCount(0);
   await expect(page.getByTestId('tile-view-menu-tile-gone')).toHaveCount(0);
@@ -1075,6 +1077,54 @@ test('a saved dashboard comes back the way it was left', async ({ page, request 
   expect(await tile.evaluate((node) => (node as HTMLElement).style.gridColumn)).toBe(widened);
 });
 
+/**
+ * Which colour each member was drawn in, read off a tile's legend, so a
+ * comparison is member-to-member. Comparing two lists of fills by position
+ * is precisely the bug AC-039 is about, and would pass whatever the colours
+ * meant.
+ *
+ * The marker is located by geometry rather than by structure: zrender emits
+ * a flat SVG with no group per legend entry, so there is no parent to ask.
+ * A legend marker is the nearest filled shape immediately left of its label
+ * on the same line.
+ */
+const legendColoursOf = (tileLocator: Locator) =>
+  tileLocator.evaluate((tile) => {
+    const marks = [...tile.querySelectorAll('svg path[fill]')]
+      .filter((path) => {
+        const fill = path.getAttribute('fill');
+        if (fill === null || fill === 'none' || fill === 'transparent') return false;
+        // Legend icons are small. This drops the bars themselves and the
+        // legend's full-width hit area, either of which could otherwise sit
+        // to the left of some label.
+        const box = path.getBoundingClientRect();
+        return box.height <= 24 && box.width <= 60;
+      })
+      .map((path) => ({
+        fill: path.getAttribute('fill') ?? '',
+        box: path.getBoundingClientRect(),
+      }));
+
+    const found: Record<string, string> = {};
+    for (const text of tile.querySelectorAll('svg text')) {
+      const name = (text.textContent ?? '').trim();
+      if (name === '') continue;
+
+      const label = text.getBoundingClientRect();
+      const middle = label.top + label.height / 2;
+      const marker = marks
+        .filter(
+          (mark) =>
+            mark.box.right <= label.left + 2 &&
+            Math.abs(mark.box.top + mark.box.height / 2 - middle) < 8,
+        )
+        .sort((a, b) => b.box.right - a.box.right)[0];
+
+      if (marker !== undefined && label.left - marker.box.right < 24) found[name] = marker.fill;
+    }
+    return found;
+  });
+
 test('a member keeps one colour across two tiles', async ({ page }) => {
   await open(page);
 
@@ -1089,53 +1139,7 @@ test('a member keeps one colour across two tiles', async ({ page }) => {
   await expect(byStatus.locator('svg')).toBeVisible();
   await expect(byCountry.locator('svg')).toBeVisible();
 
-  /**
-   * Which colour each member was drawn in, read off the legend, so the
-   * comparison is member-to-member. Comparing two lists of fills by position
-   * is precisely the bug the criterion is about, and would pass whatever the
-   * colours meant.
-   *
-   * The marker is located by geometry rather than by structure: zrender emits
-   * a flat SVG with no group per legend entry, so there is no parent to ask.
-   * A legend marker is the nearest filled shape immediately left of its label
-   * on the same line.
-   */
-  const legendOf = (tileLocator: typeof byStatus) =>
-    tileLocator.evaluate((tile) => {
-      const marks = [...tile.querySelectorAll('svg path[fill]')]
-        .filter((path) => {
-          const fill = path.getAttribute('fill');
-          if (fill === null || fill === 'none' || fill === 'transparent') return false;
-          // Legend icons are small. This drops the bars themselves and the
-          // legend's full-width hit area, either of which could otherwise sit
-          // to the left of some label.
-          const box = path.getBoundingClientRect();
-          return box.height <= 24 && box.width <= 60;
-        })
-        .map((path) => ({
-          fill: path.getAttribute('fill') ?? '',
-          box: path.getBoundingClientRect(),
-        }));
-
-      const found: Record<string, string> = {};
-      for (const text of tile.querySelectorAll('svg text')) {
-        const name = (text.textContent ?? '').trim();
-        if (name === '') continue;
-
-        const label = text.getBoundingClientRect();
-        const middle = label.top + label.height / 2;
-        const marker = marks
-          .filter(
-            (mark) =>
-              mark.box.right <= label.left + 2 &&
-              Math.abs(mark.box.top + mark.box.height / 2 - middle) < 8,
-          )
-          .sort((a, b) => b.box.right - a.box.right)[0];
-
-        if (marker !== undefined && label.left - marker.box.right < 24) found[name] = marker.fill;
-      }
-      return found;
-    });
+  const legendOf = legendColoursOf;
 
   // The legend is drawn after the SVG appears, so wait for it rather than
   // reading an empty one and concluding the two tiles agree about nothing.
@@ -1171,6 +1175,94 @@ test('a member keeps one colour across two tiles', async ({ page }) => {
   // And the shared members are not all one colour, which would make the
   // assertion above true and meaningless.
   expect(new Set(shared.map((member) => first[member])).size).toBe(shared.length);
+});
+
+/**
+ * T301 (AC-039): a donut's slices take the dashboard's colours too, and a KPI
+ * spends none. Before, a donut coloured its slices by position and a KPI
+ * claimed a slot for its measure, so a status was one colour in the bar
+ * split by it and another in the donut of it (the Superset-parity rebuild's
+ * gap 5).
+ */
+test('a member keeps one colour between a donut of it and a bar split by it, after a KPI', async ({
+  page,
+  request,
+}) => {
+  const api = 'http://localhost:4100/api';
+  const stamp = String(Date.now());
+  const title = `Colours ${stamp}`;
+  const { id } = (await (
+    await request.post(`${api}/documents`, {
+      data: { kind: 'dashboard', title, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  const chartOn = async (name: string, chartType: string, dimensions: string[]) => {
+    const chart = (await (
+      await request.post(`${api}/documents`, {
+        data: { kind: 'chart', title: name, folderId: 'root' },
+      })
+    ).json()) as { id: string };
+    await request.put(`${api}/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: name,
+          owner: 'admin',
+          localToDashboardId: id,
+          chart: {
+            source: { cube: 'orders' },
+            wells: { measures: ['orders.count'], dimensions, timeDimensions: [] },
+            chartType,
+          },
+        },
+      },
+    });
+    return chart.id;
+  };
+  const kpi = await chartOn(`Order count ${stamp}`, 'kpi', []);
+  const donut = await chartOn(`Orders by status donut ${stamp}`, 'donut', ['orders.status']);
+  const bars = await chartOn(`Orders by category, split ${stamp}`, 'bar', [
+    'products.category',
+    'orders.status',
+  ]);
+  await request.put(`${api}/documents/dashboard/${id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [
+              { id: 'tile-kpi', kind: 'chart', w: 3, h: 13, chartId: kpi },
+              { id: 'tile-donut', kind: 'chart', w: 4, h: 40, chartId: donut },
+              { id: 'tile-bars', kind: 'chart', w: 5, h: 40, chartId: bars },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+
+  const donutTile = page.locator('[data-tile="tile-donut"]');
+  const barTile = page.locator('[data-tile="tile-bars"]');
+  for (const tile of [donutTile, barTile]) {
+    await expect
+      .poll(async () => Object.keys(await legendColoursOf(tile)).length, { timeout: 15_000 })
+      .toBeGreaterThan(1);
+  }
+  const [slices, series] = [await legendColoursOf(donutTile), await legendColoursOf(barTile)];
+  const shared = Object.keys(slices).filter((member) => member in series);
+  expect(shared.length).toBeGreaterThan(1);
+  for (const member of shared) expect(slices[member]).toBe(series[member]);
+  expect(new Set(shared.map((member) => slices[member])).size).toBe(shared.length);
 });
 
 /**
@@ -1819,4 +1911,92 @@ test('a chart of many bars draws every bar, even narrowed by the edit sidebar', 
   // Some of each one's own colour showing: its path less the surface stroke
   // ECharts lays inside it, half past the path on each side.
   for (const bar of bars) expect(bar.width - bar.stroke).toBeGreaterThan(0);
+});
+
+/**
+ * T309, AC-210 for a donut: with its legend at the right, a donut five
+ * columns wide drew the legend over its ring (the Superset-parity rebuild's
+ * gap 3, with country names), hiding the slices under it. The sample's
+ * product names are shorter, so a narrower tile shows the same thing.
+ */
+test('a narrow donut with its legend at the right draws its ring clear of the legend', async ({
+  page,
+  request,
+}) => {
+  const api = 'http://localhost:4100/api';
+  const stamp = String(Date.now());
+  const title = `Donut legend ${stamp}`;
+  const { id } = (await (
+    await request.post(`${api}/documents`, {
+      data: { kind: 'dashboard', title, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  const chartTitle = `Orders by product, legend right ${stamp}`;
+  const chart = (await (
+    await request.post(`${api}/documents`, {
+      data: { kind: 'chart', title: chartTitle, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  await request.put(`${api}/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: chartTitle,
+        owner: 'admin',
+        localToDashboardId: id,
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.count'], dimensions: ['products.name'], timeDimensions: [] },
+          chartType: 'donut',
+          options: { legend: { position: 'right' } },
+        },
+      },
+    },
+  });
+  await request.put(`${api}/documents/dashboard/${id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [{ id: 'tile-donut', kind: 'chart', w: 3, h: 40, chartId: chart.id }],
+          },
+        ],
+      },
+    },
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/explore/dashboards/${id}`);
+  const canvas = page.locator('[data-tile="tile-donut"]').getByTestId('chart-canvas');
+  await expect(canvas.locator('svg')).toBeVisible({ timeout: 15_000 });
+
+  const drawn = () =>
+    canvas.evaluate((node) => {
+      const marks = [...node.querySelectorAll('svg path[fill^="#"]')].map((path) =>
+        path.getBoundingClientRect(),
+      );
+      const swatch = (box: DOMRect) =>
+        Math.round(box.width) === 25 && Math.round(box.height) === 14;
+      const ring = marks.filter((box) => !swatch(box) && box.width > 2);
+      return {
+        slices: ring.length,
+        swatches: marks.filter(swatch).length,
+        ringRight: Math.max(...ring.map((box) => box.right)),
+        legendLeft: Math.min(...marks.filter(swatch).map((box) => box.left)),
+      };
+    });
+  await expect.poll(async () => (await drawn()).slices).toBeGreaterThan(1);
+  const { swatches, ringRight, legendLeft } = await drawn();
+  // The legend is there to be clear of: a swatch for each of the four
+  // products (T309's review — with none, the comparison below meant nothing).
+  expect(swatches).toBe(4);
+  expect(ringRight).toBeLessThanOrEqual(legendLeft);
 });

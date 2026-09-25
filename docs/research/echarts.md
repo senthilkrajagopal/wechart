@@ -192,6 +192,31 @@ Guidance: canvas for large data (the stated benchmark is >1,000 elements) and fo
 - wechart's series turn animation off: `packages/charts/src/series/bar.ts`, `line.ts` and `pie.ts` set `animation: false`. So that first frame is the final one.
 - **Consequence for T180 (AC-174):** a tile's `chart-canvas` element, given its option in a layout effect (`packages/web/src/tiles/ChartCanvas.tsx`), is drawn by the time a separate task can observe it. The perf test counts a tile as drawn when that element is present, rather than waiting for the `finished` event named above as the stop-watch.
 
+### A pie's layout box, and a legend's text width (read from the 6.1.0 source, 2026-09-25, for T309)
+
+Paths are under `node_modules/.pnpm/echarts@6.1.0/node_modules/echarts/lib/`.
+
+- **A pie is laid out in a box of its own, not in `grid`.**
+  - `chart/pie/PieSeries.js`, `PieSeriesModel.defaultOption` (around lines 118–152), gives `center: ['50%', '50%']`, `radius: [0, '50%']`, and a box of `left: 0, top: 0, right: 0, bottom: 0`, with `width` and `height` null.
+  - `util/layout.js`, `getViewRectAndCenterForCircleLayout` (around lines 147–173), makes the view rect from those box options with `getLayoutRect`. It places the centre as a percentage of that rect, offset by the rect's `x` and `y`.
+  - `getCircleLayout` (around lines 174–195) takes the radius as a percentage of half the rect's smaller side.
+  - **Consequence:** room made for a legend in `grid` does nothing for a pie. Giving the pie series the same `left`/`right`/`top`/`bottom` shrinks its box, and moves the centre and scales the ring with it.
+- **A legend item's text takes `textStyle.width` and `overflow`.**
+  - `component/legend/LegendView.js` (around lines 294–335) draws each item's text with `createTextStyle(legendItemModel.getModel('textStyle'), …)`.
+  - `label/labelStyle.js` copies `width` into the text's style (`TEXT_PROPS_SELF`, around line 339). It copies `overflow` too (around lines 280–283).
+  - The item's text sits 5 px after its icon (`textX = itemWidth + 5`, around line 318).
+  - `component/legend/LegendModel.js` (around lines 256–259) defaults `padding: 5`, `itemWidth: 25` and `itemHeight: 14`.
+  - **Consequence:** `legend.textStyle: { width, overflow: 'truncate' }` keeps a legend's names within the room made for it. In a side room of R px that width is R − 2 × 5 − 25 − 5. wechart does this for a pie's side legend only (T309).
+
+### `showTip` on a data item (read from the 6.1.0 source, 2026-09-25, for T306)
+
+- `component/tooltip/install.js` (around lines 60–70) registers the `showTip` and `hideTip` actions.
+- `component/tooltip/TooltipView.js`, `manuallyShowTip` (around lines 162–255), shows the tooltip of a data item for `dispatchAction({ type: 'showTip', seriesIndex, dataIndex })`:
+  - where the tooltip's trigger is `'axis'`, through `_manuallyAxisShowTip` (around lines 266–296), which moves the axis pointer to that item;
+  - otherwise at the item's point, positioned `'bottom'` by default.
+- It returns early under `env.node`, or without a DOM (around line 179). So an SSR render shows no tooltip, and it is observable only in a browser.
+- `hideTip` hides it again (`manuallyHideTip`, around lines 256–265).
+
 ## Alternatives considered
 
 Not requested — ECharts is fixed by `CLAUDE.md`. No React wrapper is used; `echarts-for-react` was not evaluated.

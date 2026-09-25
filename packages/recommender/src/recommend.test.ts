@@ -37,6 +37,12 @@ const SIGNATURES: [string, Signature][] = [
   ['measure by two large categories', signature(measure(), dimension(30), dimension(30, 'b'))],
   ['two measures by category', signature(measure(), measure('m2'), dimension(9))],
   ['unknown cardinality', signature(measure(), { name: 'd', kind: 'dimension' })],
+  // T305's review: every chart over time coloured by these is over the cap.
+  ['measure over time by a large category', signature(measure(), time(), dimension(21))],
+  [
+    'measure over time by a category of unknown size',
+    signature(measure(), time(), { name: 'd', kind: 'dimension' }),
+  ],
 ];
 
 describe('a recommendation and a runner-up (AC-028)', () => {
@@ -135,6 +141,39 @@ describe('nothing offered breaks a hard rule (AC-030, AC-031)', () => {
     const types = [top!.candidate.chartType, ...runnersUp.map((r) => r.candidate.chartType)];
 
     expect(types).not.toContain('pie');
+  });
+
+  /**
+   * T305, the Superset-parity rebuild's gap 11: bars over time coloured by 21
+   * countries were offered. `compile` colours a chart over time by the first
+   * dimension, and one by category by the second, so the candidates drawn
+   * that way carry it as their colour, and its cap applies.
+   */
+  it('never offers a chart over time coloured by more than 8 members (AC-031)', () => {
+    const { top, runnersUp } = recommend(
+      signature(measure(), time(), dimension(21, 'customers.country')),
+    );
+    const offered = [top!, ...runnersUp].map((r) => r.candidate);
+
+    for (const type of ['bar', 'line', 'multiLine', 'area'])
+      expect(offered.map((candidate) => candidate.chartType)).not.toContain(type);
+  });
+
+  it('offers a line over time coloured by a small dimension, and says so', () => {
+    const { top, runnersUp } = recommend(signature(measure(), time(), dimension(5)));
+    const line = [top!, ...runnersUp].find((r) => r.candidate.chartType === 'line');
+
+    expect(line?.candidate.colorField?.name).toBe('orders.status');
+  });
+
+  it('never offers a bar by category coloured by more than 8 members of the second (AC-031)', () => {
+    const { top, runnersUp } = recommend(
+      signature(measure(), dimension(4), dimension(21, 'customers.country')),
+    );
+    const offered = [top!, ...runnersUp].map((r) => r.candidate.chartType);
+
+    expect(offered).not.toContain('bar');
+    expect(offered).not.toContain('hbar');
   });
 
   it('never offers a heatmap once there are too many cells (AC-031)', () => {

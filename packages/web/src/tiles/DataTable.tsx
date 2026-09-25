@@ -3,6 +3,7 @@ import {
   formatValue,
   markRowClick,
   matchesPredicate,
+  membersOn,
   rowsMarkable,
   tableColumnsOf,
   type MarkingPredicate,
@@ -50,8 +51,11 @@ export interface DataTableProps {
 }
 
 const DEFAULT_HEIGHT = 320;
-/** Fixed, so the native table layout survives virtualisation. */
-const ROW_HEIGHT = 28;
+/**
+ * Fixed, so the native table layout survives virtualisation: the prototype's
+ * `.grid-table.comfy` row, as its tiles draw tables (T304).
+ */
+const ROW_HEIGHT = 34;
 
 export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: DataTableProps) {
   const scroller = useRef<HTMLDivElement | null>(null);
@@ -123,6 +127,9 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
 
   // The columns its CSV heads too (T177): one definition for both.
   const columns = tableColumnsOf(rows);
+  // A measure's figures are set right, as the prototype's `td.num` (T304).
+  const measures = new Set(spec.measures ?? membersOn(spec.encoding, 'y'));
+  const align = (column: string) => (measures.has(column) ? 'num' : undefined);
   const drawn = virtualizer.getVirtualItems();
   const first = drawn.at(0);
   const last = drawn.at(-1);
@@ -145,12 +152,13 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
       aria-label={label === undefined ? 'Table' : `${label}, table`}
     >
       {/* The header counts as a row, so the body starts at 2. */}
-      <table aria-rowcount={rows.length}>
+      {/* The prototype's table in a tile, charts.js tableHtml (T304). */}
+      <table className="grid-table comfy" aria-rowcount={rows.length}>
         <thead>
           <tr aria-rowindex={1}>
             {columns.map((column) => (
               // By its title (AC-220), never "orders.count".
-              <th scope="col" key={column}>
+              <th scope="col" key={column} className={align(column)}>
                 {columnTitleOf(column, spec.titles)}
               </th>
             ))}
@@ -192,7 +200,7 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
                 }}
               >
                 {columns.map((column) => (
-                  <td key={column}>
+                  <td key={column} className={align(column)}>
                     {formatValue(row?.[column], column, spec.formats ?? {}, spec.granularities)}
                   </td>
                 ))}

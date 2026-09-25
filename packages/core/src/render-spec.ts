@@ -183,6 +183,12 @@ export interface RenderSpec {
    * rather than keeping a stale set of row indices.
    */
   readonly marking?: ChartMarking;
+  /**
+   * The category a tile's keyboard is on (AC-100, T306): drawn with a focus
+   * ring so a sighted keyboard user sees what Space will mark (AC-176). Only
+   * while the tile has the keyboard; absent otherwise.
+   */
+  readonly keyboardFocus?: string | undefined;
 }
 
 export interface ChartMarking {
