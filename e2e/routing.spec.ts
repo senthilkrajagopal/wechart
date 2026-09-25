@@ -22,13 +22,20 @@ const WORKSPACES = [
 test.describe('workspaces survive a reload', () => {
   for (const { path, label } of WORKSPACES) {
     test(`${label} at ${path}`, async ({ page }) => {
+      // Exact: a workspace's own rows can name it too ("Edit schedules_… in Model").
       await page.goto(path);
-      await expect(page.getByRole('link', { name: label })).toHaveAttribute('aria-current', 'page');
+      await expect(page.getByRole('link', { name: label, exact: true })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
 
       await page.reload();
 
       await expect(page).toHaveURL(new RegExp(`${path}$`));
-      await expect(page.getByRole('link', { name: label })).toHaveAttribute('aria-current', 'page');
+      await expect(page.getByRole('link', { name: label, exact: true })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
     });
   }
 });

@@ -2702,6 +2702,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **Writes and publishes** `refresh_key: { every, timezone }` through the model's own path. The YAML quotes the cron.
     - **The note** says how late a run can start: 300 s of staleness and the 30 s beat for hourly and longer, "about 5½ minutes", or 36 s for a minute. It adds "while the worker keeps up — longer while it is busy". That was measured: under the e2e suite's load the rebuild came 2–3 minutes after the turn-over, as the research's bound (plus the time a run takes to reach the partition) allows. The e2e holds the rebuild to follow the turn-over and come within the 5½-minute bound. It times the rebuild after the new key's first build: the default key's build can land minutes before the publish while the form is used, and the new key's first build comes when the worker next reads it, not at a minute's turn. Timed from the default build, a full run failed once in Firefox by 40 s.
     - **Found on the way, fixed:** `e2e/preaggregations.spec.ts` published a rollup naming another cube's member with no join between them. Cube compiles that, then aborts the refresh worker's whole run for the model at it, every tick, so no other rollup there was rebuilt. That is research gotcha 1, seen for real. The fixture now joins the cubes; the test is about the other file's member, not the join.
+    - **Review 2026-09-25 (cold, FAIL):** AC-153 is unticked until T264. Runs are shown for a rollup the worker never refreshes, and the Los Angeles tests depend on the date.
     - **Put to the user:** wechart's publish doesn't refuse a rollup that names a cube it can't join to. Cube accepts it at compile, then it starves every scheduled refresh in that model. The user, 2026-09-25: "if it is not possible to rollup.. then refuse providing reason why it cannot be done" (a new AC and task, once the research on Cube's join rule is in).
   - Re-scoped 2026-09-24 at the user's direction ("Cube-owned now"; the cron is edited in Model's pre-aggregation form). This task was a wechart scheduler on pg-boss; that is now AC-234 (T259), deferred.
   - Files: `packages/web/src/workspaces/model/form/*` (the pre-aggregation's refresh key), a next-runs function by Cube's own rule, `e2e/model*.spec.ts`
@@ -2732,6 +2733,31 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - its link opens the pre-aggregation in the model editor;
     - one with no refresh schedule says it is not scheduled.
   - Depends on: `docs/research/cube/refresh-key-schedule.md`
+  - Review 2026-09-25 (cold, FAIL): AC-154 is unticked until T264 fixes what it found. Rollups of `public: false` cubes are silently missing, and the empty state then says something false. Several keys are described wrongly. The link opens the cube rather than the pre-aggregation. The routing test's "Schedules" locator also matched this page's "Edit schedules_… in Model" links; it is now exact (committed with this record).
+- [ ] T264 (AC-153, AC-154) Fix what T258's, T159's and T160's reviews found, then tick AC-153 and AC-154 again
+  - Queued 2026-09-25 after the chart and dashboard work, at the user's direction ("focus on completing the chart and dashboards").
+  - **T159 (AC-153):**
+    - The form shows next runs for a rollup with `scheduled_refresh: false`, which the worker never refreshes. It should say it isn't scheduled.
+    - The Los Angeles "08:00" tests read the real clock, so they fail in the days before each US daylight-saving change. Fix the clock.
+    - A daylight-saving change within the five shown runs: decide with the user. Cube's offset is fixed when it compiles, and that is UNVERIFIED (research probe (b)).
+    - `0 minute` / `0 hour` are accepted.
+    - A huge interval throws while drawing.
+    - Clearing a key that has `incremental` leaves one with no `every`.
+    - The e2e's bound is the hourly check period, not the minute key's 36 s.
+    - The spec still says "about five minutes".
+  - **T258 (AC-153):**
+    - A tab or newline around a cron is trimmed, but Cube's regex refuses it. Normalise spaces only, as Cube does.
+    - The API check doesn't follow YAML aliases or merges, unlike Problems.
+    - Crons that Cube runs on a schedule other than the one they say are refused. The research marks that UNVERIFIED: run probe (a2) and record the decision beside AC-153.
+  - **T160 (AC-154):**
+    - Rollups of hidden cubes are missing: read the model files too.
+    - Descriptions to fix: cron with incremental, `original_sql` defaults, multi-cube default keys, `sql` + `every`, and the interval's epoch/UTC anchor.
+    - Link to the pre-aggregation itself (`preagg=`), opened and scrolled to.
+    - One description function shared with Jobs.
+    - Show Cube's error text.
+    - Add a "Next run" column from T159's `nextRefreshes`.
+  - Failing tests: each finding above gets a test that fails first. The component, API and e2e tests are named in the reviews (session of 2026-09-25).
+  - Depends on: T159, T160, T258
 - [ ] T161 (AC-155) Suspend a repeatedly failing schedule and offer Resume — **deferred with AC-155** (wechart's scheduler)
   - Files: `packages/api/src/scheduler/suspend.ts`, `packages/api/src/scheduler/suspend.test.ts`
   - Failing test: `suspend.test.ts`: after the configured number of consecutive failures the schedule stops running, says so, and a Resume action restarts it (AC-155).
@@ -3938,7 +3964,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-015 | T003, T198 | AC-060 | T066 | AC-105 | T111 | AC-150 | T263, T156, T261, T262 |
 | AC-016 | T015       | AC-061 | T067 | AC-106 | T112 | AC-151 | T157       |
 | AC-017 | T016       | AC-062 | T068 | AC-107 | T113 | AC-152 | T158       |
-| AC-018 | T023       | AC-063 | T069 | AC-108 | T114 | AC-153 | T258, T159 |
+| AC-018 | T023       | AC-063 | T069 | AC-108 | T114 | AC-153 | T258, T159, T264 |
 | AC-019 | T017       | AC-064 | T070 | AC-109 | T115 | AC-154 | T160       |
 | AC-020 | T018       | AC-065 | T071 | AC-110 | T116 | AC-155 | T161       |
 | AC-021 | T019       | AC-066 | T072, T032 | AC-111 | T117 | AC-156 | T162       |
