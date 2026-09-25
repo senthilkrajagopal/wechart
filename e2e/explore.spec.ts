@@ -24,7 +24,13 @@ test('shows the folder tree and the selected folder’s contents', async ({ page
 test('lists each item with its type, owner and last-updated time', async ({ page }) => {
   await page.goto('/explore');
 
-  const firstItem = page.getByTestId('explore-contents').getByRole('row').nth(1);
+  // A dashboard's row: AC-017 lists dashboards and charts with these, and a
+  // folder, listed first, has no date or owner, as the prototype's (T244).
+  const firstItem = page
+    .getByTestId('explore-contents')
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell', { name: 'Dashboard', exact: true }) })
+    .first();
   const cells = firstItem.getByRole('cell');
 
   await expect(cells.nth(0)).toContainText(/dashboard|chart|folder/i);
@@ -55,17 +61,23 @@ test('selecting a folder shows that folder’s contents', async ({ page }) => {
 test('switching theme keeps the scroll position (AC-003)', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 600 });
   await page.goto('/explore');
-  await expect(page.getByTestId('explore-contents').getByRole('table')).toBeVisible();
+  const table = page.getByTestId('explore-contents').getByRole('table');
+  await expect(table).toBeVisible();
 
-  await page.evaluate(() => window.scrollTo(0, 400));
-  const before = await page.evaluate(() => window.scrollY);
-  // The assertion is worthless unless the page really scrolled.
+  // The list scrolls, not the page, since T244 docked Explore as the
+  // prototype does: the scroll position kept is the list's.
+  const scroller = table.locator('..');
+  await scroller.evaluate((element) => {
+    element.scrollTop = 400;
+  });
+  const before = await scroller.evaluate((element) => element.scrollTop);
+  // The assertion is worthless unless the list really scrolled.
   expect(before).toBeGreaterThan(0);
 
   await page.getByRole('button', { name: /theme/i }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
-  expect(await page.evaluate(() => window.scrollY)).toBe(before);
+  expect(await scroller.evaluate((element) => element.scrollTop)).toBe(before);
 });
 
 /**
@@ -479,10 +491,14 @@ test('the tree is a full-height pane that stays put while the contents scroll', 
   const box = await aside.boundingBox();
   expect((box?.y ?? 0) + (box?.height ?? 0)).toBeGreaterThan(600 - 24);
 
+  // The list scrolls beside it (T244: the page itself no longer does).
   const before = (await aside.boundingBox())?.y ?? 0;
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  // Scrolled well past where the pane began, and the pane did not move with it.
-  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(before + 200);
+  const scroller = contentsOf(page).getByRole('table').locator('..');
+  await scroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  // Scrolled well down the list, and the pane did not move with it.
+  expect(await scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(200);
   expect((await aside.boundingBox())?.y).toBeCloseTo(before, 0);
   await expect(shared).toBeInViewport();
 });

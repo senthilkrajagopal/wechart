@@ -1,6 +1,6 @@
 import { useId } from 'react';
 
-import { ROOT_FOLDERS, type RootFolder } from './roots';
+import { MY_WORKSPACE, ROOT_FOLDERS, type RootFolder } from './roots';
 
 /**
  * The folder tree beside the contents (AC-017): the shared root and "My
@@ -55,7 +55,15 @@ export function FolderTree({
           onClick={() => onSelect(folder.id)}
           // The count is said as a description, so the name stays the name.
           aria-describedby={folder.itemCount === undefined ? undefined : countId}
+          // The prototype's tree() indent: 12 px, and 14 more for each level.
+          style={{ paddingLeft: 12 + (level - 1) * 14 }}
         >
+          {/* ◉ for the personal root, ▣ for any other folder (F7). */}
+          <span
+            className="itemicon ic-folder"
+            data-icon={folder.id === MY_WORKSPACE.id ? 'personal' : 'folder'}
+            aria-hidden="true"
+          />
           <span className="folder-tree__title">{folder.title}</span>
           {folder.itemCount === undefined ? null : (
             <span className="folder-tree__count" aria-hidden="true">

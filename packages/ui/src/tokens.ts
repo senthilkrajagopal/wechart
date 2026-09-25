@@ -185,6 +185,9 @@ export const FILLED_SURFACE_PAIRS = [
   { foreground: 'accent', background: 'bg-accent-soft' },
   // The info bar's sentence (AC-233): primary text on the accent tint.
   { foreground: 'text-primary', background: 'bg-accent-soft' },
+  // A selected folder's count and a focused row's second line (T244). Not
+  // text-muted, which is 4.28:1 on the dark tint.
+  { foreground: 'text-secondary', background: 'bg-accent-soft' },
   // A dashboard's icon chip and the preview banner: crossfilter on its tint.
   { foreground: 'crossfilter', background: 'bg-crossfilter-soft' },
 ] as const satisfies readonly {

@@ -67,6 +67,24 @@ const TYPE_LABEL: Record<CatalogItem['kind'], string> = {
   chart: 'Chart',
 };
 
+/** Each kind's chip, the prototype's .itemicon — the New menu's own (F20). */
+const CHIP: Record<CatalogItem['kind'], string> = {
+  folder: 'ic-folder',
+  dashboard: 'ic-dash',
+  chart: 'ic-chart',
+};
+
+/**
+ * The Built on column's ink, as browse() sets it (N2): a folder's count
+ * muted, a dashboard's tabs secondary, a chart's cube or view in the code
+ * face.
+ */
+const BUILT_ON_CLASS: Record<CatalogItem['kind'], string> = {
+  folder: 'folder-contents__built-on is-muted',
+  dashboard: 'folder-contents__built-on is-secondary',
+  chart: 'folder-contents__built-on is-code',
+};
+
 const plural = (count: number, one: string) => `${String(count)} ${one}${count === 1 ? '' : 's'}`;
 
 /** The Type column: a chart by its chart type, never only "Chart" (AC-193). */
@@ -223,10 +241,6 @@ export function FolderContents({
     }
   };
 
-  if (items.length === 0) {
-    return <p className="folder-contents__empty">{emptyText}</p>;
-  }
-
   return (
     <table className="folder-contents">
       <caption className="visually-hidden">Contents of this folder</caption>
@@ -243,6 +257,15 @@ export function FolderContents({
         </tr>
       </thead>
       <tbody>
+        {/* Empty, the header stays and a row says so, as the prototype's
+            (recheck-shell-explore F24, F25). */}
+        {items.length === 0 ? (
+          <tr className="folder-contents__empty-row">
+            <td colSpan={6} className="folder-contents__empty">
+              {emptyText}
+            </td>
+          </tr>
+        ) : null}
         {items.map((item, index) => {
           const targets = onMove ? targetsFor(item, folders) : [];
           return (
@@ -316,12 +339,16 @@ export function FolderContents({
                         glyph is the stylesheet's, so the name's text is the
                         name alone. */}
                     <span
-                      className="folder-contents__icon"
+                      className={`itemicon ${CHIP[item.kind]}`}
                       data-icon={item.kind}
                       aria-hidden="true"
                     />
                     <span>
-                      <button type="button" className="link-button" onClick={() => onOpen?.(item)}>
+                      <button
+                        type="button"
+                        className="folder-contents__open"
+                        onClick={() => onOpen?.(item)}
+                      >
                         {item.title}
                       </button>
                       {/* The prototype's second line: what the dashboard is for. */}
@@ -332,14 +359,27 @@ export function FolderContents({
                   </span>
                 )}
               </th>
-              <td>{typeText(item)}</td>
-              <td className="folder-contents__built-on">{builtOn(item)}</td>
-              <td>
-                <time dateTime={item.updatedAt} title={new Date(item.updatedAt).toLocaleString()}>
-                  {shortDate(item.updatedAt)}
-                </time>
-              </td>
-              <td>{item.owner ?? '—'}</td>
+              <td className="folder-contents__type">{typeText(item)}</td>
+              <td className={BUILT_ON_CLASS[item.kind]}>{builtOn(item)}</td>
+              {/* A folder has neither, as browse() leaves them (F20). */}
+              {item.kind === 'folder' ? (
+                <>
+                  <td />
+                  <td />
+                </>
+              ) : (
+                <>
+                  <td>
+                    <time
+                      dateTime={item.updatedAt}
+                      title={new Date(item.updatedAt).toLocaleString()}
+                    >
+                      {shortDate(item.updatedAt)}
+                    </time>
+                  </td>
+                  <td>{item.owner ?? '—'}</td>
+                </>
+              )}
               <td
                 className="folder-contents__actions"
                 ref={(element) => {

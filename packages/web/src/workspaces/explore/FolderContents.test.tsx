@@ -72,10 +72,19 @@ describe('folder contents (AC-017)', () => {
   });
 
   it('shows a placeholder rather than a blank cell for an item with no owner', () => {
+    render(<FolderContents items={[{ ...items[0]!, id: 'd2', owner: null }]} />);
+
+    const dashboard = within(screen.getByTestId('item-d2')).getAllByRole('cell');
+    expect(dashboard[3]?.textContent?.trim()).not.toBe('');
+    expect(dashboard[3]?.textContent).toBe('—');
+  });
+
+  it('leaves a folder’s Updated and Owner blank, as the prototype’s browse() does (recheck-shell-explore F20)', () => {
     render(<FolderContents items={items} />);
 
     const folder = within(screen.getByTestId('item-f1')).getAllByRole('cell');
-    expect(folder[3]?.textContent?.trim()).not.toBe('');
+    expect(folder[2]?.textContent).toBe('');
+    expect(folder[3]?.textContent).toBe('');
   });
 
   it('carries a machine-readable timestamp alongside the shown one', () => {
@@ -108,11 +117,15 @@ describe('folder contents (AC-017)', () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it('says the folder is empty rather than rendering a headers-only table', () => {
+  // Reversed by T244: the prototype keeps the header over one row that says
+  // so, where this said the table went (recheck-shell-explore F24).
+  it('says the folder is empty in one row under the header, not in a bare header', () => {
     render(<FolderContents items={[]} />);
 
-    expect(screen.queryByRole('table')).toBeNull();
-    expect(screen.getByText(/empty/i)).toBeTruthy();
+    expect(screen.getAllByRole('columnheader')).toHaveLength(6);
+    expect(screen.getAllByRole('row')).toHaveLength(2);
+    const said = screen.getByRole('cell', { name: 'This folder is empty.' });
+    expect(said.getAttribute('colspan')).toBe('6');
   });
 });
 
@@ -259,7 +272,7 @@ describe('keyboard navigation (AC-024)', () => {
   it('leaves the empty folder message alone', () => {
     render(<FolderContents items={[]} />);
 
-    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Actions for / })).toBeNull();
     expect(screen.getByText(/empty/i)).toBeTruthy();
   });
 });

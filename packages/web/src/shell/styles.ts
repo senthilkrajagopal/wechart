@@ -260,11 +260,24 @@ main { padding: var(--wc-surface-padding); }
   white-space: nowrap;
 }
 
+/* Explore as the prototype's browse() (T244): the Folders pane docked at the
+   window's edge, 260 px, the contents beside it; the page itself never
+   scrolls, only the list does, under its sticky header (recheck-shell-explore
+   F8, F23). */
+main:has(.explore) {
+  height: calc(100vh - var(--wc-app-bar-height));
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
 .explore {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: 240px 1fr;
-  gap: 16px;
-  align-items: start;
+  grid-template-columns: 260px minmax(0, 1fr);
+  /* Its row as tall as the window allows: left implicit, Firefox sized it to
+     the list, and the page scrolled again. */
+  grid-template-rows: minmax(0, 1fr);
 }
 
 /* Explore's header (AC-192), the prototype's .crumbs and browse() head row. */
@@ -283,21 +296,28 @@ main { padding: var(--wc-surface-padding); }
 .item-crumbs { flex-basis: 100%; color: var(--wc-text-secondary); }
 .item-crumbs a { color: inherit; padding: 2px 4px; border-radius: 4px; text-decoration: none; }
 .item-crumbs a:hover { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
+/* 24 px at 12/20 (N5): without a height of its own a crumb took the plain
+   button's 32 px minimum. */
 .crumbs button {
+  min-height: 0;
+  height: 24px;
   border: 0;
   background: none;
   color: inherit;
   padding: 2px 4px;
   border-radius: 4px;
   font: inherit;
+  line-height: 20px;
 }
 .crumbs button:hover:not(:disabled) { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
+/* A search's sentence keeps the crumbs' row, so the head row does not jump
+   when a search begins (F25). */
+.explore__contents > .crumbs { min-height: 24px; }
 .explore__head {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin: 4px 0 12px;
 }
 .explore__title,
 .explore__rename {
@@ -306,9 +326,19 @@ main { padding: var(--wc-surface-padding); }
   line-height: 26px;
   font-weight: var(--wc-text-lg-weight);
 }
-.explore__rename { height: 36px; max-width: 320px; }
 .explore__spacer { flex: 1; }
-.explore__search { max-width: 260px; height: 28px; font-size: var(--wc-text-xs-size); }
+/* The prototype's 36 px rename and its .input.sm search, 260 px (N3, N4) —
+   specific enough to outrank the inputs' 32 px, which they lost to. */
+.explore__head input.explore__rename:not([type='checkbox']):not([type='radio']):not([type='file']) {
+  height: 36px;
+  max-width: 320px;
+}
+.explore__head input.explore__search:not([type='checkbox']):not([type='radio']):not([type='file']) {
+  width: 260px;
+  max-width: 100%;
+  height: 28px;
+  font-size: var(--wc-text-xs-size);
+}
 
 /* The prototype's type chips: a dashboard's, a chart's and a folder's. */
 .itemicon {
@@ -939,8 +969,41 @@ fieldset.model-field > legend {
 .model-form__group:first-child .model-form__group-title { margin-top: 0; }
 
 /* The contents sit on the page, and their table is the card (AC-231), as the
-   prototype draws it: a card around the card read as a frame in a frame. */
-.explore__contents { display: grid; gap: 12px; min-width: 0; }
+   prototype draws it: a card around the card read as a frame in a frame.
+   The prototype's .admin-main: 16 px by 24, each part 12 px from the next. */
+.explore__contents {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 24px 0;
+}
+/* The list and its footnote scroll, below the crumbs and the head row, which
+   stay put (F23). The scroller runs to the window's foot, not the table's, so
+   a row's menu or Move to at the end of a short list has room to open rather
+   than being clipped by a scroller the table's height. Its scrollbar sits at
+   the window's edge, as the page's did. */
+.explore__scroll {
+  /* The containing block of what is positioned within — the visually hidden
+     counts and captions — which the window's would otherwise be, where
+     Firefox and Safari counted them into the page's height. */
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 -24px;
+  padding: 0 24px 16px;
+}
+.explore__note {
+  margin: 0;
+  color: var(--wc-text-muted);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+}
 
 /* A library chart's page (AC-212), the prototype's chartPage(): a head row
    with the title, its type and Edit chart; the chart; a 300 px details pane
@@ -1012,39 +1075,87 @@ fieldset.model-field > legend {
   .chart-page__body { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* The level's indent is the row's own padding (FolderTree), so a row, and its
+   selection, run the pane's full width. */
 .folder-tree,
-.folder-tree ul { margin: 0; padding-left: 12px; list-style: none; }
-.folder-tree { padding-left: 0; }
-/* A folder with its count at the end, the prototype's tree row. */
-.folder-tree__label { display: flex; width: 100%; align-items: center; gap: 8px; }
+.folder-tree ul { margin: 0; padding: 0; list-style: none; }
+/* A folder with its count at the end: the prototype's .file, 28 px at 12 px,
+   square and full width (F8, mismatches 10–11). */
+.folder-tree__label {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--wc-text-primary);
+  font: inherit;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  text-align: left;
+  cursor: pointer;
+}
+.folder-tree__label:hover:not(:disabled) { background: var(--wc-bg-hover); }
 .folder-tree__title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .folder-tree__count {
-  color: var(--wc-text-secondary);
+  color: var(--wc-text-muted);
   font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-weight);
   font-variant-numeric: tabular-nums;
 }
-/* The docked Folders pane (AC-194), the prototype's .pane.left: full height
-   below the app bar with a rule on its right, not a card. It stays put while
-   the contents scroll; its head stays put while a long tree scrolls. */
+/* .file[aria-current='true']: the accent on its tint (mismatch 12). */
+[role='treeitem'][aria-selected='true'] > .folder-tree__label,
+[role='treeitem'][aria-selected='true'] > .folder-tree__label:hover:not(:disabled) {
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
+/* Muted text on the tint is 4.28:1 in dark, below AA (direction rule 2): on
+   a selected folder, and a focused row below, it is raised to secondary. */
+[role='treeitem'][aria-selected='true'] > .folder-tree__label .folder-tree__count {
+  color: var(--wc-text-secondary);
+}
+/* A folder's chip, the menu's .itemicon.ic-folder at 18 px: ◉ for the
+   personal root, ▣ for any other (F7, mismatch 14). The glyph is the
+   stylesheet's, so it joins neither the row's name nor its text. */
+.folder-tree__label > .itemicon { width: 18px; height: 18px; }
+.itemicon[data-icon='folder']::before { content: '▣'; }
+.itemicon[data-icon='personal']::before { content: '◉'; }
+.itemicon[data-icon='dashboard']::before { content: '▦'; }
+.itemicon[data-icon='chart']::before { content: '◢'; }
+/* The docked Folders pane (AC-194), the prototype's .pane.left: from the app
+   bar to the window's foot, on the surface, with a rule on its right; its
+   head stays put while a long tree scrolls. */
 .explore__tree {
-  position: sticky;
-  top: calc(var(--wc-app-bar-height) + var(--wc-surface-padding));
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--wc-app-bar-height) - 2 * var(--wc-surface-padding));
-  padding-right: 8px;
+  min-height: 0;
+  background: var(--wc-bg-surface);
   border-right: 1px solid var(--wc-border-subtle);
 }
-.explore__pane-body { flex: 1; min-height: 0; overflow: auto; }
-.explore__pane-head { display: flex; align-items: center; gap: 8px; padding: 0 0 8px 6px; }
+/* Positioned for the same reason as .explore__scroll: each folder's hidden
+   count is placed within it, not down the window. */
+.explore__pane-body { position: relative; flex: 1; min-height: 0; overflow: auto; }
+/* .pane-head: 44 px, 8 by 12, over a rule (mismatch 9). */
+.explore__pane-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
 .explore__pane-head h2 {
   margin: 0;
   font-size: var(--wc-text-sm-size);
+  line-height: var(--wc-text-sm-line);
   font-weight: var(--wc-text-sm-strong-weight);
 }
 .explore__pane-head button { margin-left: auto; }
 
-.folder-tree__label,
 .link-button {
   padding: 4px 6px;
   border: 0;
@@ -1056,13 +1167,7 @@ fieldset.model-field > legend {
   cursor: pointer;
 }
 
-.folder-tree__label:hover,
 .link-button:hover { background: var(--wc-bg-subtle); text-decoration: underline; }
-
-[role='treeitem'][aria-selected='true'] > .folder-tree__label {
-  background: var(--wc-bg-subtle);
-  font-weight: var(--wc-text-sm-strong-weight);
-}
 
 /* A workspace's page title (AC-231): the prototype's .admin-main h1, direction
    §3's text-lg. It was the browser's default h1, 28 px at 700. */
@@ -1090,7 +1195,8 @@ fieldset.model-field > legend {
   font-variant-numeric: tabular-nums;
 }
 .folder-contents thead th,
-.query-log thead th { height: 28px; background: var(--wc-bg-subtle); }
+.query-log thead th { background: var(--wc-bg-subtle); }
+.query-log thead th { height: 28px; }
 .folder-contents thead tr:first-child > :first-child,
 .query-log thead tr:first-child > :first-child { border-top-left-radius: 5px; }
 .folder-contents thead tr:first-child > :last-child,
@@ -1102,7 +1208,9 @@ fieldset.model-field > legend {
 .folder-contents tbody td,
 .folder-contents tbody th,
 .query-log tbody td,
-.query-log tbody th { height: 34px; font-size: var(--wc-text-xs-size); }
+.query-log tbody th { font-size: var(--wc-text-xs-size); }
+.query-log tbody td,
+.query-log tbody th { height: 34px; }
 .folder-contents tbody tr:last-child > *,
 .query-log tbody tr:last-child > * { border-bottom: 0; }
 
@@ -1147,20 +1255,54 @@ fieldset.model-field > legend {
 
 .folder-contents__empty,
 .query-log__empty { color: var(--wc-text-secondary); }
-/* A row's name with its type's icon, as the prototype's browse() draws it;
-   its actions behind a ⋯ menu at the end (AC-193). */
-.folder-contents__name { display: inline-flex; gap: 8px; align-items: center; }
-.folder-contents__icon { color: var(--wc-text-secondary); }
-.folder-contents__icon[data-icon='folder']::before { content: '🗀'; }
-.folder-contents__icon[data-icon='dashboard']::before { content: '▤'; }
-.folder-contents__icon[data-icon='chart']::before { content: '▦'; }
+/* Explore's rows as browse()'s .grid-table.comfy (T244): 28 px for the header
+   and 34 for a row — a dashboard's description line included — their cells
+   0 by 8 (mismatches 15–16). The heights are the rows', not the cells': on a
+   cell, Chrome drew its rule beneath the height rather than within it. */
+.folder-contents thead tr { height: 28px; }
+.folder-contents tbody tr { height: 34px; }
+.folder-contents th,
+.folder-contents td { padding: 0 8px; }
+/* .grid-table th { position: sticky; top: 0 }: the header stays while the
+   list scrolls beneath it (F23). */
+.folder-contents thead th { position: sticky; top: 0; z-index: 1; }
+/* Empty, a centred 120 px row under the header (F24, F25). */
+.folder-contents tbody tr.folder-contents__empty-row { height: 120px; cursor: auto; }
+.folder-contents td.folder-contents__empty { text-align: center; }
+/* A row's name with its type's chip, as the prototype's browse() draws it;
+   its actions behind a ⋯ menu at the end (AC-193). At 16 px a line, so a
+   name over its description fits the 34 px row. */
+.folder-contents__name {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  line-height: var(--wc-text-xs-line);
+}
+/* The name: .strong, the row being what opens it (N11) — a button for the
+   keyboard, drawn as the prototype's text. */
+.folder-contents__open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: var(--wc-text-xs-strong-weight);
+  line-height: var(--wc-text-xs-line);
+  text-align: left;
+}
+.folder-contents__open:hover:not(:disabled):not([aria-disabled='true']) { background: none; }
+/* Type .sec; Built on .muted, .sec or .mono by kind (N2, mismatches 18–19). */
+.folder-contents td.folder-contents__type,
+.folder-contents td.is-secondary { color: var(--wc-text-secondary); }
+.folder-contents td.is-muted { color: var(--wc-text-muted); }
+.folder-contents td.is-code { font-family: var(--wc-font-code); }
 .folder-contents__actions { width: 1%; white-space: nowrap; text-align: right; }
 .folder-contents__rename { display: flex; gap: 4px; align-items: center; }
 /* A dashboard's description beneath its name (AC-197): the prototype's
    second line, 12 px muted. */
 .folder-contents__description {
   display: block;
-  padding: 0 6px;
+  padding: 0;
   font-size: var(--wc-text-xs-size);
   line-height: var(--wc-text-xs-line);
   font-weight: var(--wc-text-xs-weight);
@@ -1475,6 +1617,10 @@ svg[data-icon] { flex: none; }
 .folder-contents tbody tr { cursor: pointer; }
 .folder-contents tbody tr:hover > * { background: var(--wc-bg-hover); }
 .folder-contents tbody tr:focus-within > * { background: var(--wc-bg-accent-soft); }
+/* On the tint, muted text is raised to secondary: text-muted is 4.28:1 on
+   accent-soft in dark, below AA (T243's review, direction rule 2). */
+.folder-contents tbody tr:focus-within .folder-contents__description,
+.folder-contents tbody tr:focus-within > td.is-muted { color: var(--wc-text-secondary); }
 /* Move to, over the row beside its ⋯ rather than in its place (N14). */
 .folder-contents__actions { position: relative; }
 .folder-contents__move {

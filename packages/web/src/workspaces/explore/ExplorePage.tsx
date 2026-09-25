@@ -331,38 +331,45 @@ export function ExplorePage() {
           </StateLine>
         ) : null}
         {shown.isSuccess ? (
-          <FolderContents
-            items={searching ? shown.data.slice(0, SEARCH_SHOWN) : shown.data}
-            // Both roots are somewhere to move to as well (AC-193, AC-194).
-            folders={[
-              ...ROOT_FOLDERS.map((root) => ({ ...root, parentId: null })),
-              ...(folders.data ?? []),
-            ]}
-            sourceKinds={sourceKinds}
-            {...(searching
-              ? {
-                  folderNames: new Map([
-                    ...ROOT_FOLDERS.map((root) => [root.id, root.title] as const),
-                    ...(folders.data ?? []).map((folder) => [folder.id, folder.title] as const),
-                  ]),
-                }
-              : {})}
-            emptyText={
-              searching
-                ? 'Nothing matches.'
-                : 'This folder is empty. Use ＋ New to add a dashboard or chart.'
-            }
-            onOpen={(item) => {
-              // A folder has no page of its own: opening it means selecting it.
-              if (item.kind === 'folder') {
-                openFolder(item.id);
-                return;
+          <div className="explore__scroll">
+            <FolderContents
+              items={searching ? shown.data.slice(0, SEARCH_SHOWN) : shown.data}
+              // Both roots are somewhere to move to as well (AC-193, AC-194).
+              folders={[
+                ...ROOT_FOLDERS.map((root) => ({ ...root, parentId: null })),
+                ...(folders.data ?? []),
+              ]}
+              sourceKinds={sourceKinds}
+              {...(searching
+                ? {
+                    folderNames: new Map([
+                      ...ROOT_FOLDERS.map((root) => [root.id, root.title] as const),
+                      ...(folders.data ?? []).map((folder) => [folder.id, folder.title] as const),
+                    ]),
+                  }
+                : {})}
+              emptyText={
+                searching
+                  ? 'Nothing matches.'
+                  : 'This folder is empty. Use ＋ New to add a dashboard or chart.'
               }
-              globalThis.location.assign(`/explore/${item.kind}s/${encodeURIComponent(item.id)}`);
-            }}
-            onRename={(item, title) => relocate.mutate({ item, title })}
-            onMove={(item, target) => relocate.mutate({ item, folderId: target })}
-          />
+              onOpen={(item) => {
+                // A folder has no page of its own: opening it means selecting it.
+                if (item.kind === 'folder') {
+                  openFolder(item.id);
+                  return;
+                }
+                globalThis.location.assign(`/explore/${item.kind}s/${encodeURIComponent(item.id)}`);
+              }}
+              onRename={(item, title) => relocate.mutate({ item, title })}
+              onMove={(item, target) => relocate.mutate({ item, folderId: target })}
+            />
+            {/* The prototype's footnote under the list (F22). */}
+            <p className="explore__note">
+              Charts are shared: a chart used on several dashboards is edited once, and every
+              dashboard shows the change.
+            </p>
+          </div>
         ) : null}
       </section>
     </div>

@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 /**
  * AC-187: THE SYSTEM SHALL draw the app bar, workspace navigation, buttons and
@@ -768,5 +768,395 @@ test.describe('T205: the edit sidebar', () => {
       height: '28px',
       'font-size': '12px',
     });
+  });
+});
+
+/**
+ * T244: Explore as the prototype's browse() lays it out (recheck-shell-explore
+ * F6–F8, F14, F17, F20, F22–F25, N2–N5, N13; AC-187 mismatches 5–23; AC-231's
+ * 34 px rows). The rules cited are index.html's.
+ */
+test.describe('T244: Explore’s tree, header and table', () => {
+  const api = 'http://localhost:4100/api';
+  const make = async (
+    request: APIRequestContext,
+    kind: 'folder' | 'dashboard' | 'chart',
+    folderId: string,
+    title: string,
+    body: Record<string, unknown> = {},
+  ) => {
+    const { id } = (await (
+      await request.post(`${api}/documents`, { data: { kind, title, folderId } })
+    ).json()) as { id: string };
+    if (kind !== 'folder' && Object.keys(body).length > 0) {
+      const stored = (await (await request.get(`${api}/documents/${kind}/${id}`)).json()) as {
+        version: number;
+        body: Record<string, unknown>;
+      };
+      await request.put(`${api}/documents/${kind}/${id}`, {
+        data: { version: stored.version, body: { ...stored.body, ...body } },
+      });
+    }
+    return id;
+  };
+  const folders = (page: Page) => page.getByRole('complementary', { name: 'Folders' });
+  const contents = (page: Page) => page.getByTestId('explore-contents');
+
+  test('the Folders pane is docked: 260 px on the surface, under a 44 px head and its rule', async ({
+    page,
+  }) => {
+    await page.goto('/explore?folder=seed-folder-0');
+    const pane = folders(page);
+    const finance = pane.getByRole('button', { name: 'Finance', exact: true });
+    await expect(finance).toBeVisible();
+
+    // .browser { grid-template-columns: 260px … } at the window's edge, from
+    // the app bar to the window's foot.
+    const bar = await page.getByRole('banner').boundingBox();
+    const box = await pane.boundingBox();
+    const below = (bar?.y ?? 0) + (bar?.height ?? 0);
+    expect(box?.x).toBe(0);
+    expect(box?.y).toBeCloseTo(below, 0);
+    expect(box?.width).toBe(260);
+    expect((box?.y ?? 0) + (box?.height ?? 0)).toBeCloseTo(page.viewportSize()?.height ?? 0, 0);
+    // .pane { background: var(--bg-surface) } .pane.left { border-right: 1px solid var(--border-subtle) }
+    expect(
+      await style(pane, 'background-color', 'border-right-width', 'border-right-color'),
+    ).toEqual({
+      'background-color': await token(page, 'bg-surface', 'background-color'),
+      'border-right-width': '1px',
+      'border-right-color': await token(page, 'border-subtle'),
+    });
+    // .pane-head { min-height: 44px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle) }
+    const head = pane.getByRole('heading', { name: 'Folders' }).locator('..');
+    expect(
+      await style(
+        head,
+        'height',
+        'padding-top',
+        'padding-right',
+        'padding-bottom',
+        'padding-left',
+        'border-bottom-width',
+        'border-bottom-color',
+      ),
+    ).toEqual({
+      height: '44px',
+      'padding-top': '8px',
+      'padding-right': '12px',
+      'padding-bottom': '8px',
+      'padding-left': '12px',
+      'border-bottom-width': '1px',
+      'border-bottom-color': await token(page, 'border-subtle'),
+    });
+
+    // .file { height: 28px; padding: 0 12px 0 (12 + depth × 14)px; font-size: 12px },
+    // full width and square (F8, mismatches 10–11).
+    const shared = pane.getByRole('button', { name: 'Shared', exact: true });
+    expect(
+      await style(shared, 'height', 'font-size', 'padding-left', 'padding-right', 'border-radius'),
+    ).toEqual({
+      height: '28px',
+      'font-size': '12px',
+      'padding-left': '12px',
+      'padding-right': '12px',
+      'border-radius': '0px',
+    });
+    expect(await style(finance, 'padding-left')).toEqual({ 'padding-left': '26px' });
+    const [rowWidth, treeWidth] = await finance.evaluate((element) => [
+      element.getBoundingClientRect().width,
+      element.closest('[role="tree"]')?.clientWidth ?? 0,
+    ]);
+    expect(rowWidth).toBe(treeWidth);
+
+    // .file[aria-current='true'] { background: var(--accent-soft); color: var(--accent); font-weight: 600 }
+    expect(await style(finance, 'background-color', 'color', 'font-weight')).toEqual({
+      'background-color': await token(page, 'bg-accent-soft', 'background-color'),
+      color: await token(page, 'accent'),
+      'font-weight': '600',
+    });
+    // The count: .xs.muted (mismatch 13) — but secondary on the selection's
+    // tint, where muted is 4.28:1 in dark, below AA (direction rule 2).
+    const marketing = pane.getByRole('button', { name: 'Marketing', exact: true });
+    expect(await style(marketing.locator('.folder-tree__count'), 'color', 'font-size')).toEqual({
+      color: await token(page, 'text-muted'),
+      'font-size': '12px',
+    });
+    expect(await style(finance.locator('.folder-tree__count'), 'color')).toEqual({
+      color: await token(page, 'text-secondary'),
+    });
+    // Each row's chip: .itemicon.ic-folder at 18 px — ◉ for My workspace, ▣
+    // for a folder (F7, mismatch 14).
+    const chip = (row: Locator) => row.locator('.itemicon');
+    const chipStyle = {
+      width: '18px',
+      height: '18px',
+      'border-radius': '5px',
+      'background-color': await token(page, 'bg-subtle', 'background-color'),
+      color: await token(page, 'text-secondary'),
+    };
+    expect(
+      await style(chip(finance), 'width', 'height', 'border-radius', 'background-color', 'color'),
+    ).toEqual(chipStyle);
+    const glyph = (row: Locator) =>
+      chip(row).evaluate((element) => getComputedStyle(element, '::before').content);
+    expect(await glyph(finance)).toBe('"▣"');
+    expect(await glyph(pane.getByRole('button', { name: 'My workspace', exact: true }))).toBe(
+      '"◉"',
+    );
+
+    // .file:hover { background: var(--bg-hover) } — and nothing else (N13).
+    await marketing.hover();
+    expect(await style(marketing, 'background-color', 'text-decoration-line')).toEqual({
+      'background-color': await token(page, 'bg-hover', 'background-color'),
+      'text-decoration-line': 'none',
+    });
+  });
+
+  test('the header: 24 px crumbs, a 28 × 260 search and a 36 px rename, 12 px apart', async ({
+    page,
+  }) => {
+    await page.goto('/explore?folder=seed-folder-0');
+    const main = contents(page);
+    const nav = main.getByRole('navigation', { name: 'Breadcrumb' });
+    const crumb = nav.getByRole('button', { name: 'Finance' });
+    await expect(crumb).toBeVisible();
+    await expect(main.getByRole('table')).toBeVisible();
+
+    // .crumbs button { padding: 2px 4px; border-radius: 4px } at 12/20 (N5, mismatch 5).
+    expect(
+      await style(crumb, 'height', 'line-height', 'padding-top', 'padding-left', 'border-radius'),
+    ).toEqual({
+      height: '24px',
+      'line-height': '20px',
+      'padding-top': '2px',
+      'padding-left': '4px',
+      'border-radius': '4px',
+    });
+    // .input.sm with max-width: 260px (N3, mismatch 6).
+    const search = main.getByRole('searchbox', { name: 'Search dashboards and charts' });
+    expect(await style(search, 'height', 'width', 'font-size')).toEqual({
+      height: '28px',
+      width: '260px',
+      'font-size': '12px',
+    });
+
+    // .admin-main { padding: 16px 24px; gap: 12px }: the crumbs, the head row
+    // and the table 12 px apart (N5).
+    const heading = main.getByRole('heading', { level: 1 });
+    const crumbsBox = await nav.boundingBox();
+    const headBox = await heading.locator('..').boundingBox();
+    const tableBox = await main.getByRole('table').boundingBox();
+    const pane = await folders(page).boundingBox();
+    const bar = await page.getByRole('banner').boundingBox();
+    expect((crumbsBox?.x ?? 0) - ((pane?.x ?? 0) + (pane?.width ?? 0))).toBeCloseTo(24, 0);
+    expect((crumbsBox?.y ?? 0) - ((bar?.y ?? 0) + (bar?.height ?? 0))).toBeCloseTo(16, 0);
+    expect((headBox?.y ?? 0) - ((crumbsBox?.y ?? 0) + (crumbsBox?.height ?? 0))).toBeCloseTo(12, 0);
+    expect((tableBox?.y ?? 0) - ((headBox?.y ?? 0) + (headBox?.height ?? 0))).toBeCloseTo(12, 0);
+
+    // The folder's name, renamed in place: 36 px at 20/600 (N4, mismatch 7).
+    await main.getByRole('button', { name: 'Rename', exact: true }).click();
+    const rename = main.getByRole('textbox', { name: 'Folder name' });
+    expect(await style(rename, 'height', 'font-size', 'font-weight')).toEqual({
+      height: '36px',
+      'font-size': '20px',
+      'font-weight': '600',
+    });
+    await rename.press('Escape');
+    await expect(heading).toHaveText('Finance');
+
+    // Searching keeps the head row where it was: the crumbs row does not
+    // shrink when it becomes a sentence (F25).
+    const titleAt = (await heading.boundingBox())?.y;
+    await search.fill('dashboard 1');
+    await expect(heading).toHaveText('Search');
+    expect((await heading.boundingBox())?.y).toBeCloseTo(titleAt ?? 0, 0);
+  });
+
+  test('the table: 34 px rows under a 28 px header, 12/600 names beside a 22 px chip, and each column in the prototype’s ink', async ({
+    page,
+    request,
+  }) => {
+    const unique = String(Date.now());
+    const home = await make(request, 'folder', 'root', `Table ${unique}`);
+    const sub = await make(request, 'folder', home, `Sub ${unique}`);
+    const board = await make(request, 'dashboard', home, `Board ${unique}`, {
+      description: 'What the board is for',
+    });
+    const chart = await make(request, 'chart', home, `Chart ${unique}`, {
+      chart: {
+        source: { cube: 'orders' },
+        wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+        chartType: 'bar',
+      },
+    });
+    await page.goto(`/explore?folder=${home}`);
+    const table = contents(page).getByRole('table');
+    const row = (id: string) => table.getByTestId(`item-${id}`);
+    await expect(row(chart)).toBeVisible();
+
+    // .grid-table th { height: 28px; padding: 0 8px }; .comfy td { height: 34px }
+    // — a dashboard with its description line included (F17, mismatches 15–16).
+    expect((await table.getByRole('columnheader', { name: 'Name' }).boundingBox())?.height).toBe(
+      28,
+    );
+    for (const id of [sub, board, chart]) {
+      expect((await row(id).boundingBox())?.height).toBe(34);
+      expect(await style(row(id).getByRole('cell').first(), 'padding-top', 'padding-left')).toEqual(
+        {
+          'padding-top': '0px',
+          'padding-left': '8px',
+        },
+      );
+    }
+    // Nothing is painted at rest (N12, mismatch 21).
+    for (const id of [sub, board, chart])
+      expect(await style(row(id).getByRole('cell').first(), 'background-color')).toEqual({
+        'background-color': 'rgba(0, 0, 0, 0)',
+      });
+
+    // The name: .strong at 12 px (mismatch 17), beside its kind's 22 px chip —
+    // .itemicon.ic-folder, .ic-dash, .ic-chart (F20, mismatch 20).
+    const chips = {
+      [sub]: ['bg-subtle', 'text-secondary', '"▣"'],
+      [board]: ['bg-crossfilter-soft', 'crossfilter', '"▦"'],
+      [chart]: ['bg-accent-soft', 'accent', '"◢"'],
+    } as const;
+    for (const [id, [ground, ink, glyph]] of Object.entries(chips)) {
+      const name = row(id).getByRole('rowheader').getByRole('button').first();
+      expect(await style(name, 'font-size', 'font-weight')).toEqual({
+        'font-size': '12px',
+        'font-weight': '600',
+      });
+      const chip = row(id).locator('.itemicon');
+      expect(
+        await style(chip, 'width', 'height', 'border-radius', 'background-color', 'color'),
+      ).toEqual({
+        width: '22px',
+        height: '22px',
+        'border-radius': '5px',
+        'background-color': await token(page, ground, 'background-color'),
+        color: await token(page, ink),
+      });
+      expect(await chip.evaluate((element) => getComputedStyle(element, '::before').content)).toBe(
+        glyph,
+      );
+    }
+
+    // Type: .sec (mismatch 18). Built on: a chart's source in the code face,
+    // a dashboard's tabs .sec, a folder's items .muted (N2, mismatch 19).
+    const cells = (id: string) => row(id).getByRole('cell');
+    for (const id of [sub, board, chart])
+      expect(await style(cells(id).nth(0), 'color')).toEqual({
+        color: await token(page, 'text-secondary'),
+      });
+    expect((await style(cells(chart).nth(1), 'font-family'))['font-family']).toMatch(
+      /^"?IBM Plex Mono"?/,
+    );
+    expect(await style(cells(board).nth(1), 'color')).toEqual({
+      color: await token(page, 'text-secondary'),
+    });
+    expect(await style(cells(sub).nth(1), 'color')).toEqual({
+      color: await token(page, 'text-muted'),
+    });
+    // A folder row has no date and no owner (F20).
+    await expect(cells(sub).nth(2)).toHaveText('');
+    await expect(cells(sub).nth(3)).toHaveText('');
+
+    // .grid-table tbody tr:hover td { background: var(--bg-hover) } (mismatch 22).
+    await cells(board).nth(2).hover();
+    expect(await style(cells(board).nth(2), 'background-color')).toEqual({
+      'background-color': await token(page, 'bg-hover', 'background-color'),
+    });
+    // A focused row takes the selection's tint, and its muted text turns
+    // secondary on it: muted is 4.28:1 on the dark tint (T243's review).
+    await row(board).focus();
+    const description = row(board).getByText('What the board is for');
+    expect(await style(cells(board).nth(2), 'background-color')).toEqual({
+      'background-color': await token(page, 'bg-accent-soft', 'background-color'),
+    });
+    expect(await style(description, 'color')).toEqual({
+      color: await token(page, 'text-secondary'),
+    });
+    await row(sub).focus();
+    expect(await style(cells(sub).nth(1), 'color')).toEqual({
+      color: await token(page, 'text-secondary'),
+    });
+
+    // The footnote under the card: <p class="xs muted"> (F22, mismatch 23).
+    const note = contents(page).getByText(
+      'Charts are shared: a chart used on several dashboards is edited once, and every dashboard shows the change.',
+    );
+    expect(await style(note, 'font-size', 'line-height', 'color')).toEqual({
+      'font-size': '12px',
+      'line-height': '16px',
+      color: await token(page, 'text-muted'),
+    });
+  });
+
+  test('the list scrolls under a sticky header, and the page, the tree and the head row stay put', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 600 });
+    await page.goto('/explore');
+    const main = contents(page);
+    const rows = main.getByRole('row');
+    await expect(rows.nth(20)).toBeVisible();
+
+    // The prototype's document is the window's height (F23): only the list scrolls.
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(
+      600,
+    );
+    const header = main.getByRole('columnheader', { name: 'Name' });
+    const before = (await header.boundingBox())?.y;
+    await rows.last().scrollIntoViewIfNeeded();
+    await expect(rows.nth(1)).not.toBeInViewport();
+    // .grid-table th { position: sticky; top: 0 } — held where it began, less
+    // the table's 1 px top rule, which scrolls away above it.
+    const after = (await header.boundingBox())?.y ?? 0;
+    expect((before ?? 0) - after).toBeGreaterThanOrEqual(0);
+    expect((before ?? 0) - after).toBeLessThanOrEqual(1);
+    await expect(main.getByRole('heading', { level: 1 })).toBeInViewport();
+    await expect(
+      main.getByRole('searchbox', { name: 'Search dashboards and charts' }),
+    ).toBeInViewport();
+    await expect(
+      folders(page).getByRole('button', { name: 'Shared', exact: true }),
+    ).toBeInViewport();
+  });
+
+  test('an empty folder, and a search that finds nothing, keep the header over a centred 120 px row', async ({
+    page,
+    request,
+  }) => {
+    const unique = String(Date.now());
+    const empty = await make(request, 'folder', 'root', `Empty ${unique}`);
+    await page.goto(`/explore?folder=${empty}`);
+    const main = contents(page);
+
+    const said = async (text: string) => {
+      const table = main.getByRole('table');
+      await expect(table.getByRole('columnheader')).toHaveText([
+        'Name',
+        'Type',
+        'Built on',
+        'Updated',
+        'Owner',
+        'Actions',
+      ]);
+      // <tr><td colspan="5" style="height:120px;text-align:center" class="sec">
+      const cell = table.getByRole('cell', { name: text });
+      expect((await cell.boundingBox())?.height).toBeCloseTo(120, 0);
+      expect(await style(cell, 'text-align', 'font-size', 'color')).toEqual({
+        'text-align': 'center',
+        'font-size': '12px',
+        color: await token(page, 'text-secondary'),
+      });
+    };
+    await said('This folder is empty. Use ＋ New to add a dashboard or chart.');
+    await main
+      .getByRole('searchbox', { name: 'Search dashboards and charts' })
+      .fill(`nothing called ${unique}`);
+    await said('Nothing matches.');
   });
 });
