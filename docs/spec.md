@@ -815,6 +815,18 @@ Traces to: the user, 2026-09-25; `[docs/design/reviews/2026-09-24/chart-context-
 - [ ] AC-247 WHILE the tile's marking holds items, THE SYSTEM SHALL head the tile's menu with the marking's name, the marked values by their members' titles, and the count marked out of the tile's items.
       Fails when: the heading omits the values, or either count differs from the marked items or the tile's items.
 
+## F24. Deployment to Kubernetes
+
+Purpose: run wechart, Cube and Cube Store on Kubernetes as production will, and on docker-desktop for end-to-end tests.
+Traces to: `[R4]` ("self-hosted Kubernetes … running wechart, Cube and Cube Store as containers"); requirements.md, Deployment (docker-desktop, namespace `wechart`); the user, 2026-09-25 ("create the helm charts.. so that you are able to deploy wechart into docker-desktop k8s context. Use the same northwind database that superset uses").
+
+> **Status, 2026-09-25: added at the user's direction**, before the Superset-parity
+> test. Its data source is set in the chart's values, in Cube's environment, as data
+> sources are configured today while F18 is deferred.
+
+- [ ] AC-248 WHEN the wechart Helm chart is installed into a Kubernetes cluster, THE SYSTEM SHALL run the web app, the API, its metadata database, Cube's API, Cube's refresh worker and Cube Store there, with Cube's data source taken from the chart's values, and SHALL serve the web app at the address the values name.
+      Fails when: after the install a component is not Ready, the web app's address does not load, or a query from the web app does not reach the data source the values name.
+
 ---
 
 ## Non-goals (phase 1)
@@ -881,3 +893,4 @@ Copied from [requirements.md §7](./requirements.md):
 | Scope: following the prototype's structure, "My workspace", global search scope `[R7, R9]`   | AC-187, AC-190 … AC-233                                               |
 | Scope: a rollup Cube can't join is refused at publish (the user, 2026-09-25)                  | AC-235                                                                |
 | Scope: the chart tile's menu, DSH-08 (the user, 2026-09-25)                                   | AC-199, AC-236 … AC-247                                               |
+| Constraint: self-hosted Kubernetes; docker-desktop for e2e `[R4]`                             | AC-248                                                                |

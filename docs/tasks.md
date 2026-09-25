@@ -3993,6 +3993,14 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
     - A database-served tile says so, with Why not accelerated.
   - Depends on: T266, T264 (the schedule's words)
 
+## Spec F24. Deployment to Kubernetes
+
+- [ ] T274 (AC-248) A Helm chart that deploys wechart, Cube, its refresh worker and Cube Store to docker-desktop, with Superset's northwind database as Cube's data source
+  - Dispatched 2026-09-25 to an independent agent in its own worktree, at the user's request.
+  - Files: `deploy/helm/wechart/**`, Dockerfiles for `packages/web` and `packages/api`, `docs/research/` (Helm, Cube on Kubernetes), `docs/deploy.md`
+  - Failing test: a script or e2e check against the installed release. Every Deployment and StatefulSet is Ready. The web app's address loads. `/api/health` reports Cube healthy. A query through wechart's API reaches northwind: a `/v1/sql` or `/v1/load` naming a northwind table's cube.
+  - Depends on: none
+
 ---
 
 ## Coverage: acceptance criterion → task
@@ -4060,7 +4068,7 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
 | AC-233 | T238, T160 | AC-234 | T259 | AC-235 | T265 | AC-236 | T270       |
 | AC-237 | T270       | AC-238 | T270 | AC-239 | T268 | AC-240 | T269       |
 | AC-241 | T271       | AC-242 | T271 | AC-243 | T271 | AC-244 | T272       |
-| AC-245 | T273       | AC-246 | T266 | AC-247 | T267 |        |            |
+| AC-245 | T273       | AC-246 | T266 | AC-247 | T267 | AC-248 | T274       |
 
 AC-199 is also covered by T266 and T272 (its reworded Export item). AC-153 by T264, AC-154 by T160 and T264.
 
