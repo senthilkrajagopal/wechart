@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 
 import type { CubeClient } from '../cube/client';
+import { refreshKeySqlOf } from '../model/refreshKeys';
+import type { ModelFile } from '../server';
 
 /**
  * Every pre-aggregation's refresh schedule, for the Schedules workspace (T160,
@@ -29,6 +31,8 @@ export interface Schedule {
   /** Its key's `every` and `timezone`, as written, where it has them. */
   readonly every?: string;
   readonly timezone?: string;
+  /** Its key's SQL, from the model file: checked, not rebuilt, each `every`. */
+  readonly sql?: string;
 }
 
 /** Cube's interval test (research, "Syntax"): anything else is a cron. */
@@ -101,10 +105,16 @@ function scheduleOf(cube: Value, each: Value): Schedule | undefined {
   };
 }
 
-/** Every pre-aggregation of every cube the metadata lists, in model order. */
-export function schedulesFrom(meta: unknown): Schedule[] {
+/**
+ * Every pre-aggregation of every cube the metadata lists, in model order —
+ * and, from the model's files, the SQL of a key that has one (T273's review),
+ * which the metadata drops: such a key is checked on its interval and
+ * rebuilds only when the SQL's value changes, not every interval.
+ */
+export function schedulesFrom(meta: unknown, files: readonly ModelFile[] = []): Schedule[] {
   const cubes = asValue(meta)?.['cubes'];
   if (!Array.isArray(cubes)) return [];
+  const sqlOf = refreshKeySqlOf(files);
   return cubes.flatMap((cube: unknown) => {
     const value = asValue(cube);
     const all = value?.['preAggregations'];
@@ -112,11 +122,29 @@ export function schedulesFrom(meta: unknown): Schedule[] {
     return all.flatMap((each: unknown) => {
       const found = asValue(each);
       const schedule = found === undefined ? undefined : scheduleOf(value, found);
-      return schedule === undefined ? [] : [schedule];
+      if (schedule === undefined) return [];
+      const sql = sqlOf.get(schedule.id);
+      if (sql === undefined || !schedule.scheduled) return [schedule];
+      return [
+        {
+          ...schedule,
+          sql,
+          when:
+            schedule.every === undefined
+              ? 'When its SQL returns a new value, checked every 10 seconds'
+              : `When its SQL returns a new value, checked every ${schedule.every}`,
+        },
+      ];
     });
   });
 }
 
-export function registerSchedules(app: FastifyInstance, client: CubeClient): void {
-  app.get('/api/schedules', async () => schedulesFrom(await client.metaExtended()));
+export function registerSchedules(
+  app: FastifyInstance,
+  client: CubeClient,
+  modelFiles?: { list(): Promise<readonly ModelFile[]> },
+): void {
+  app.get('/api/schedules', async () =>
+    schedulesFrom(await client.metaExtended(), modelFiles ? await modelFiles.list() : []),
+  );
 }

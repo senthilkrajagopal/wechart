@@ -2245,15 +2245,21 @@ export function DashboardView({
   );
   // Fetched here, as the view's other reads are, rather than through the
   // query client, which a view rendered on its own does not have.
-  const [schedules, setSchedules] = useState<readonly ScheduleSaid[] | undefined>(undefined);
+  // Undefined while being read, `failed` once asked and not answered, which
+  // the submenu says as such (T273's review).
+  const [schedules, setSchedules] = useState<readonly ScheduleSaid[] | 'failed' | undefined>(
+    undefined,
+  );
   useEffect(() => {
     if (!anyRollup || schedules !== undefined) return undefined;
     const aborted = new AbortController();
     void fetch('/api/schedules', { signal: aborted.signal })
       .then(async (response) => {
-        if (response.ok) setSchedules((await response.json()) as ScheduleSaid[]);
+        setSchedules(response.ok ? ((await response.json()) as ScheduleSaid[]) : 'failed');
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!aborted.signal.aborted) setSchedules('failed');
+      });
     return () => {
       aborted.abort();
     };
@@ -3126,6 +3132,15 @@ export function DashboardView({
               : () => {
                   refreshTile(chartId);
                 },
+          // Off when the tile's ↻ is, for its reason (T273's review).
+          refreshBlocked:
+            refreshable === false ||
+            loading ||
+            refreshing?.has(chartId) === true ||
+            refreshingFiltered.has(chartId) ||
+            withFiltered.pending.has(chartId)
+              ? 'Its newest answer is still on its way.'
+              : undefined,
           onWhyNot: () => {
             if (queryOf(chartId) !== undefined) setWhyNotFor({ chartId, tileId });
           },

@@ -28,6 +28,11 @@ export interface ScheduleSaid {
   readonly when: string;
   readonly every?: string;
   readonly timezone?: string;
+  /**
+   * Its key's SQL, read from the model file (T273's review): such a key is
+   * checked on its interval and rebuilds only when the SQL's value changes.
+   */
+  readonly sql?: string;
 }
 
 export function dataAsOf(
@@ -35,13 +40,20 @@ export function dataAsOf(
     answered,
     schedules,
     onRefresh,
+    refreshBlocked,
     onWhyNot,
     onOpen,
   }: {
     answered: AnswerMeta | undefined;
-    /** Undefined while they cannot be read. */
-    schedules: readonly ScheduleSaid[] | undefined;
+    /** The model's schedules; `loading` until read, `failed` if they could not be. */
+    schedules: readonly ScheduleSaid[] | 'loading' | 'failed' | undefined;
     onRefresh: (() => void) | undefined;
+    /**
+     * Why Refresh now can't run just now — the tile's own ↻ is off then, and
+     * for the same reason (T273's review): an answer landing after it would
+     * undo it.
+     */
+    refreshBlocked?: string | undefined;
     onWhyNot: () => void;
     /** Goes to a page of the app, by its address. */
     onOpen: (href: string) => void;
@@ -59,7 +71,15 @@ export function dataAsOf(
   const refresh: MenuEntry[] =
     onRefresh === undefined
       ? []
-      : [{ kind: 'item', key: 'refresh', label: 'Refresh now', onSelect: onRefresh }];
+      : [
+          {
+            kind: 'item',
+            key: 'refresh',
+            label: 'Refresh now',
+            onSelect: onRefresh,
+            disabled: refreshBlocked,
+          },
+        ];
 
   if (used === undefined)
     return {
@@ -76,8 +96,9 @@ export function dataAsOf(
       ],
     };
 
-  const schedule = schedules?.find((each) => each.id === used.id);
-  const next = schedule?.every === undefined ? undefined : nextRun(schedule, now, timeOf);
+  const schedule = Array.isArray(schedules)
+    ? (schedules as readonly ScheduleSaid[]).find((each) => each.id === used.id)
+    : undefined;
   const edit =
     schedule?.fileName === undefined
       ? undefined
@@ -89,21 +110,17 @@ export function dataAsOf(
       text('name', `Pre-aggregation ${used.id}`),
       ...(used.builtAt === undefined ? [] : [text('built', `Last built ${timeOf(used.builtAt)}`)]),
       ...(schedule === undefined
-        ? [text('schedule', 'Its schedule could not be read.')]
-        : [
-            text('schedule', `Refreshed ${lowerFirst(schedule.when)}`),
-            ...(schedule.every === undefined
-              ? []
-              : [
-                  text(
-                    'written',
-                    `As written: every: "${schedule.every}"${
-                      schedule.timezone === undefined ? '' : `, timezone: "${schedule.timezone}"`
-                    }`,
-                  ),
-                ]),
-            ...(next === undefined ? [] : [text('next', next)]),
-          ]),
+        ? [
+            text(
+              'schedule',
+              schedules === 'loading' || schedules === undefined
+                ? 'Reading its schedule…'
+                : 'Its schedule could not be read.',
+            ),
+          ]
+        : scheduleWords(schedule, now, timeOf).map((words, at) =>
+            text(`schedule-${String(at)}`, words),
+          )),
       { kind: 'separator', key: 'actions' },
       ...refresh,
       {
@@ -130,7 +147,45 @@ export function dataAsOf(
   };
 }
 
-/** The pre-aggregation that served an answer, as Cube names it, and when it was built. */
+/**
+ * The schedule's lines: in words, as written, and its next run. "Refreshed"
+ * leads only a sentence of when it runs — "Not scheduled: …" and "As its
+ * cube's refresh key: …" are said as T160 says them (T273's review). A key
+ * with SQL rebuilds only when the SQL's value changes, so no run is foretold
+ * for it; an interval or a cron has its next turn-over and its lateness.
+ */
+function scheduleWords(
+  schedule: ScheduleSaid,
+  now: Date,
+  timeOf: (date: Date) => string,
+): string[] {
+  const when = /^(Every|At|When)\b/.test(schedule.when)
+    ? `Refreshed ${lowerFirst(schedule.when)}`
+    : schedule.when;
+  const written = [
+    ...(schedule.sql === undefined ? [] : [`sql: "${clipped(schedule.sql)}"`]),
+    ...(schedule.every === undefined ? [] : [`every: "${schedule.every}"`]),
+    ...(schedule.timezone === undefined ? [] : [`timezone: "${schedule.timezone}"`]),
+  ];
+  const next =
+    schedule.sql !== undefined
+      ? 'Next run: when its SQL returns a new value, so not foretold'
+      : nextRun(schedule, now, timeOf);
+  return [
+    when,
+    ...(written.length === 0 ? [] : [`As written: ${written.join(', ')}`]),
+    ...(next === undefined ? [] : [next]),
+  ];
+}
+
+/** A key's SQL, short enough for a line of the menu. */
+const clipped = (sql: string) => (sql.length > 60 ? `${sql.slice(0, 59)}…` : sql);
+
+/**
+ * The pre-aggregation that served an answer, as Cube names it, and when it was
+ * built: `lastUpdatedAt` as a number, or the ISO string the REST reference
+ * shows (research/cube/pre-aggregations.md: "Parse both").
+ */
 function usedOf(answered: AnswerMeta): { id: string; builtAt?: Date } | undefined {
   for (const value of Object.values(answered.usedPreAggregations ?? {})) {
     const { preAggregationId, lastUpdatedAt } = (value ?? {}) as {
@@ -138,9 +193,13 @@ function usedOf(answered: AnswerMeta): { id: string; builtAt?: Date } | undefine
       lastUpdatedAt?: unknown;
     };
     if (typeof preAggregationId !== 'string') continue;
+    const built =
+      typeof lastUpdatedAt === 'number' || typeof lastUpdatedAt === 'string'
+        ? new Date(lastUpdatedAt)
+        : undefined;
     return {
       id: preAggregationId,
-      ...(typeof lastUpdatedAt === 'number' ? { builtAt: new Date(lastUpdatedAt) } : {}),
+      ...(built === undefined || Number.isNaN(built.getTime()) ? {} : { builtAt: built }),
     };
   }
   return undefined;
@@ -170,12 +229,15 @@ export function clockTimeOf(date: Date, now: Date = new Date()): string {
     : `${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, ${clock}`;
 }
 
-/** Seconds as the menu says them: "40 s", "5 min", "5½ min". */
+/**
+ * Seconds as the menu says them: "40 s", "5 min", "5½ min" — an "up to", so
+ * rounded up to the half minute, never down (T273's review).
+ */
 export function lagWords(seconds: number): string {
   if (seconds < 60) return `${String(seconds)} s`;
-  const minutes = seconds / 60;
-  const whole = Math.floor(minutes);
-  return minutes - whole >= 0.5 ? `${String(whole)}½ min` : `${String(whole)} min`;
+  const halves = Math.ceil(seconds / 30);
+  const whole = Math.floor(halves / 2);
+  return halves % 2 === 1 ? `${String(whole)}½ min` : `${String(whole)} min`;
 }
 
 const lowerFirst = (words: string) => `${words.charAt(0).toLowerCase()}${words.slice(1)}`;

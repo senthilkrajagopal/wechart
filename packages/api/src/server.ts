@@ -228,7 +228,8 @@ export function buildServer({
 
   registerModelPublishing(app, { config, client, meta, modelFiles });
   registerBuilds(app, client);
-  registerSchedules(app, client);
+  // With the model's files: a key's SQL is read there (T273's review).
+  registerSchedules(app, client, modelFiles);
 
   /**
    * The charts and dashboards that use the members an edit changes, listed

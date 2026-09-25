@@ -4276,6 +4276,26 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
     - **`Menu` gains a `text` entry:** a line of information that runs nothing. It is an item that is off, so the arrows reach it and a screen reader reads it in turn.
     - **The schedules are fetched by the view itself**, once any tile's answer came from a pre-aggregation. They go through no query client, which a view rendered alone in its tests does not have.
     - The AC-199 menu test's list gained Data as of.
+  - **T273's review, 2026-09-25.** It passed AC-245. Fixed in one commit:
+    - **M1. A key with SQL was described as a plain interval.** `/v1/meta?extended` drops a key's `sql`, so `{sql, every: "1 hour"}` read as "Refreshed every 1 hour" with a clock-aligned next run.
+      - `/api/schedules` now reads each key's SQL from the model files wechart stores (`refreshKeySqlOf`), as the research says to: the pre-aggregation's own key, or its cube's.
+      - It says "When its SQL returns a new value, checked every 1 hour".
+      - The submenu shows the SQL as written, and says the next run is not foretold.
+      - Tests: `schedules.test.ts` and `dataAsOf.test.ts`, which failed first.
+    - **M2.** The submenu's Refresh now is off, with the ↻'s reason, whenever the tile's own ↻ is off: not refreshable, already refreshing, or an answer on its way.
+    - **M3.** The e2e's next-run pattern accepts the day that `clockTimeOf` adds when the next hour is tomorrow's. It failed between 23:00 and midnight.
+    - **Small fixes:**
+      - L1: "Reading its schedule…" while it is read, and "could not be read" only once a read failed.
+      - L2: "Refreshed" leads only a sentence of when it runs. "Not scheduled: …" and "As its cube's refresh key: …" are said as T160 says them.
+      - L4: `lastUpdatedAt` is read as a number or as an ISO string.
+      - L6: the lateness is rounded up to the half minute, as an "up to" is.
+      - L9: Refresh now is run in the unit test, and `clockTimeOf`'s other-day branch has one.
+    - **Not changed:**
+      - L3: an absent or cube-level key has no next run said, since the research gives no turn-over for the fallback.
+      - L5: only the first `usedPreAggregations` entry is described.
+      - L7: an information line is announced as unavailable.
+      - L8: preview mode asks acceleration and schedules as wechart.
+      - L10: an unknown `?preagg=` selects nothing.
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/web/src/workspaces/jobs/*` (`?preagg=`), `packages/web/src/router/routes.tsx`, `e2e/tile-menu.spec.ts`
   - Failing test:
     - A rollup-served tile's submenu names the pre-aggregation, its last build, "every hour" as written, and the next run with its lateness.

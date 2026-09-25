@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { dataAsOf, lagWords } from './dataAsOf';
+import { clockTimeOf, dataAsOf, lagWords } from './dataAsOf';
 
 /**
  * T273 / AC-245: WHEN the user opens the tile menu's Data as of submenu, THE
@@ -102,7 +102,8 @@ describe('what Data as of says', () => {
         answered: {
           usedPreAggregations: { t: { preAggregationId: 'a.b', lastUpdatedAt: NOW.getTime() } },
         },
-        schedules: undefined,
+        // Asked and not answered (T273's review: undefined is "still reading").
+        schedules: 'failed',
         onRefresh: vi.fn(),
         onWhyNot: vi.fn(),
         onOpen: vi.fn(),
@@ -137,9 +138,101 @@ describe('what Data as of says', () => {
 });
 
 describe('how late a run may start, in words', () => {
-  it('is seconds under a minute, and minutes with a half past it', () => {
+  it('is seconds under a minute, and minutes to the half above it, as an "up to" is', () => {
     expect(lagWords(40)).toBe('40 s');
     expect(lagWords(330)).toBe('5½ min');
     expect(lagWords(300)).toBe('5 min');
+    // T273's review: rounded down, "up to" undersold it.
+    expect(lagWords(72)).toBe('1½ min');
+    expect(lagWords(108)).toBe('2 min');
+  });
+});
+
+/** T273's review: what the submenu said wrongly, or not at all. */
+describe('what Data as of says, as reviewed', () => {
+  const answered = {
+    usedPreAggregations: {
+      t: { preAggregationId: 'a.b', lastUpdatedAt: '2026-09-25T09:15:00.000Z' },
+    },
+  };
+  const base = {
+    answered,
+    onRefresh: vi.fn(),
+    onWhyNot: vi.fn(),
+    onOpen: vi.fn(),
+  };
+  const time = (date: Date) => date.toISOString().slice(11, 16);
+
+  it('says a key with SQL is checked, not rebuilt, on its interval, and foretells no run', () => {
+    const said = dataAsOf(
+      {
+        ...base,
+        schedules: [
+          {
+            id: 'a.b',
+            cube: 'a',
+            every: '1 hour',
+            sql: 'SELECT MAX(updated_at) FROM orders',
+            when: 'When its SQL returns a new value, checked every 1 hour',
+          },
+        ],
+      },
+      NOW,
+      time,
+    );
+    expect(words(said?.entries ?? []).slice(1, 5)).toEqual([
+      // Built at, from a `lastUpdatedAt` given as an ISO string (pre-aggregations.md).
+      'Last built 09:15',
+      'Refreshed when its SQL returns a new value, checked every 1 hour',
+      'As written: sql: "SELECT MAX(updated_at) FROM orders", every: "1 hour"',
+      'Next run: when its SQL returns a new value, so not foretold',
+    ]);
+  });
+
+  it('says what is not scheduled without "Refreshed" in front of it', () => {
+    const said = dataAsOf(
+      {
+        ...base,
+        schedules: [
+          { id: 'a.b', cube: 'a', when: 'Not scheduled: built only when asked for, from Jobs' },
+        ],
+      },
+      NOW,
+      time,
+    );
+    expect(words(said?.entries ?? [])).toContain(
+      'Not scheduled: built only when asked for, from Jobs',
+    );
+  });
+
+  it('says it is reading the schedule while it is, rather than that it could not', () => {
+    const said = dataAsOf({ ...base, schedules: 'loading' }, NOW, time);
+    expect(words(said?.entries ?? [])).toContain('Reading its schedule…');
+  });
+
+  it('offers Refresh now off, with why, where the tile’s own ↻ is off, and runs it where it is not', () => {
+    const blocked = dataAsOf(
+      { ...base, schedules: [], refreshBlocked: 'Its newest answer is still on its way.' },
+      NOW,
+      time,
+    );
+    expect(blocked?.entries.find((each) => each.key === 'refresh')).toMatchObject({
+      kind: 'item',
+      disabled: 'Its newest answer is still on its way.',
+    });
+
+    const onRefresh = vi.fn();
+    const open = dataAsOf({ ...base, onRefresh, schedules: [] }, NOW, time);
+    const refresh = open?.entries.find((each) => each.key === 'refresh');
+    if (refresh?.kind === 'item') refresh.onSelect();
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a time as the menu says it', () => {
+  it('is the clock alone today, and the day beside it otherwise', () => {
+    const now = new Date(2026, 8, 25, 23, 30);
+    expect(clockTimeOf(new Date(2026, 8, 25, 9, 15), now)).toBe('09:15');
+    expect(clockTimeOf(new Date(2026, 8, 26, 0, 0), now)).toBe('26 Sept, 00:00');
   });
 });

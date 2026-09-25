@@ -91,4 +91,47 @@ describe('schedulesFrom', () => {
     expect(schedulesFrom(undefined)).toEqual([]);
     expect(schedulesFrom({ cubes: 'no' })).toEqual([]);
   });
+
+  /**
+   * T273's review: the metadata drops a key's `sql`, so `{sql, every}` reads
+   * as a plain `{every}` — "rebuilt hourly" where it is only checked hourly
+   * and rebuilt when the SQL's value changes. The research: read `sql` from
+   * the YAML wechart owns (refresh-key-schedule.md, "What /v1/meta?extended
+   * shows").
+   */
+  it('says a key with SQL is checked on its interval and rebuilt when the SQL changes, from the model file', () => {
+    const files = [
+      {
+        path: 'cubes/orders.yml',
+        content: [
+          'cubes:',
+          '  - name: orders',
+          '    sql_table: orders',
+          '    pre_aggregations:',
+          '      - name: checked',
+          '        refresh_key:',
+          '          sql: SELECT MAX(updated_at) FROM orders',
+          '          every: 1 hour',
+          '      - name: plain',
+          '        refresh_key:',
+          '          every: 1 hour',
+        ].join('\n'),
+      },
+    ];
+    const [checked, plain] = schedulesFrom(
+      meta([
+        { name: 'checked', refreshKey: { every: '1 hour' } },
+        { name: 'plain', refreshKey: { every: '1 hour' } },
+      ]),
+      files,
+    );
+
+    expect(checked).toMatchObject({
+      every: '1 hour',
+      sql: 'SELECT MAX(updated_at) FROM orders',
+      when: 'When its SQL returns a new value, checked every 1 hour',
+    });
+    expect(plain).toMatchObject({ every: '1 hour', when: 'Every 1 hour' });
+    expect(plain).not.toHaveProperty('sql');
+  });
 });

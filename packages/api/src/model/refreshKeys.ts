@@ -78,3 +78,39 @@ export function refreshKeyProblemsOf(files: readonly ModelFile[]): CompileError[
   }
   return problems;
 }
+
+/**
+ * Each pre-aggregation's refresh-key SQL, by `cube.name`: its own key's, or its
+ * cube's where it declares none (T273's review). `/v1/meta?extended` drops a
+ * key's `sql`, so `{sql, every}` reads there as `{every}`; the research says to
+ * read it from the YAML wechart owns (research/cube/refresh-key-schedule.md,
+ * "What /v1/meta?extended shows"). Only a plain string: SQL built by code is
+ * not read.
+ */
+export function refreshKeySqlOf(files: readonly ModelFile[]): Map<string, string> {
+  const found = new Map<string, string>();
+  const sqlOf = (key: Node | undefined) => {
+    const sql = get(key, ['sql']);
+    return isScalar(sql) && typeof sql.value === 'string' ? sql.value : undefined;
+  };
+  for (const file of files) {
+    if (!YAML_FILE.test(file.path) || JINJA.test(file.content)) continue;
+    const document = parseDocument(file.content, { merge: true });
+    if (document.errors.length > 0) continue;
+    const cubes = get(document.contents, ['cubes']);
+    if (!isSeq(cubes)) continue;
+    for (const cube of cubes.items) {
+      const cubeName = nameOf(cube);
+      const rollups = get(cube, KEYS.preAggregations);
+      if (cubeName === undefined || !isSeq(rollups)) continue;
+      const cubeKey = get(cube, KEYS.refreshKey);
+      for (const rollup of rollups.items) {
+        const name = nameOf(rollup);
+        const own = get(rollup, KEYS.refreshKey);
+        const sql = own === undefined ? sqlOf(cubeKey) : sqlOf(own);
+        if (name !== undefined && sql !== undefined) found.set(`${cubeName}.${name}`, sql);
+      }
+    }
+  }
+  return found;
+}
