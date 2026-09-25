@@ -88,6 +88,23 @@ describe('what a filter adds to a query', () => {
     });
   });
 
+  it('a filter made from a marking: sent as it is, beside the chart’s own (AC-113)', () => {
+    const kept = {
+      or: [
+        { member: 'orders.status', operator: 'equals', values: ['a'] },
+        { member: 'orders.status', operator: 'notSet' },
+      ],
+    };
+    expect(
+      withFilters(base, [
+        { filter: status, value: { kind: 'cube', filter: kept, words: 'Status is a' } },
+      ]),
+    ).toEqual({
+      ...base,
+      filters: [{ member: 'orders.region', operator: 'equals', values: ['EU'] }, kept],
+    });
+  });
+
   it('a numeric range: gte and lte, either end left open', () => {
     expect(
       withFilters({ measures: ['orders.count'] }, [

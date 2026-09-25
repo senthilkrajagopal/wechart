@@ -75,6 +75,18 @@ export type FilterValue =
       readonly kind: 'range';
       readonly min?: number | undefined;
       readonly max?: number | undefined;
+    }
+  /**
+   * A Cube filter as it is, made from a marking by "Filter to marked" or
+   * "Filter out marked" (AC-113): it goes to the tiles as a dashboard filter
+   * does, so one Cube cannot join to a tile is left off that tile and said so
+   * (AC-079) — and is never a widget's value, or in the URL.
+   */
+  | {
+      readonly kind: 'cube';
+      readonly filter: Readonly<Record<string, unknown>>;
+      /** What it keeps, in words, for a tile's empty state (AC-043). */
+      readonly words: string;
     };
 
 /** The values held, by `valueKeyOf` each filter. */

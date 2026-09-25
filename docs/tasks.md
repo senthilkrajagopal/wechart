@@ -1715,6 +1715,36 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
         - shipped marked: 80 of 80, every one shipped;
         - the export has 81 lines of shipped rows, with the view's columns and the raw numbers beside the measures;
         - View underlying rows is not offered while something is marked.
+  - **T119 and T120's review, 2026-09-25.** One cold review of both. Fixed in one commit, all three browsers:
+    - **A filter made from a marking is now a dashboard filter** (H1, M2, M3). Before, it went into each tile's query beside the marking limits, so:
+      - a tile whose cube could not reach a marked member was left as it was with no note;
+      - a tile Cube refused to join showed Cube's error, because the limit path never drops a filter;
+      - a view tile was asked by the cube's member names, which Cube refuses from a view.
+    - **Now** it is a `FilterValue` of a new kind, `cube`: a Cube filter as it is, with its words for the empty state. It goes through `reached`/`notCovered`, the path every dashboard filter and cross-filter takes:
+      - each tile is asked it by the names its cube or view gives the marked members (`markFilterOn`, through the dashboard's `reachOf`);
+      - a tile that cannot reach one is left unfiltered and says "Not filtered by ‹member›";
+      - where Cube refuses to join it, `filteredChart` drops it and reports it. It now checks every member the filter names (`membersOf`), since a marking can span cubes.
+    - **View marked rows after Mark all** (M1) showed nothing, because `markedFilter` refuses a marking of every row. The refusal now says `everything`, and the marked rows are then the tile's.
+    - **The rows of a view tile, or of a tile that cannot reach a marked member** (M3, L3): the marked rows are asked by the tile's own names. Where a member is out of reach, the dialog says so ("This tile cannot reach ‹member›…") rather than showing Cube's join error.
+    - **The e2e now has a filtered case** (M4): under a Filter to marked, View underlying rows shows the 80 filtered rows, not the 240.
+    - **Small ones:**
+      - L1: with no total from Cube, the count says "The total could not be read." instead of passing the page for the total.
+      - L2: a limited tile waiting for a marking no longer offers View underlying rows (as View as table).
+      - L4: removing a mark-filter chip moves focus to the next chip's × or to the filter bar.
+      - L9: Close stops a download still being read, and nothing is saved after it.
+    - **L5 and M5 (core):**
+      - `contains` and `notContains` now negate to each other with no `notSet` added. The research says `notContains` keeps NULLs (§1.5), so each is the other's exact complement, blanks included. The T119 note above, which counted `notContains` among the operators whose NULL behaviour is unresearched, was wrong.
+      - `asUtc` has a test of its own.
+    - **Not fixed** (latent, or the user's call):
+      - L6: `EVERYTHING` ignores NULL and "Other" rows.
+      - L7: custom granularities.
+      - L8: measure ranges, for AC-093.
+      - L10: mark filters are session state, which is for AC-121/AC-123 to carry.
+    - **Also:** `e2e/theme.spec.ts` "the bar and the page use different surfaces" read `.app-bar` before the first render and failed once in Safari under four workers. It now waits for the bar to be drawn.
+    - **Tests:**
+      - Failed first: `filterToMarked.test.ts` (web) for `markFilterOn`, `FilteredCharts.test.ts` for a marking filter beside a joinable one, `MarkedRows.test.tsx` for L1 and L9, and the core `everything` case.
+      - `apply.test.ts` covers a `cube` value passed as it is.
+      - `e2e/markings.spec.ts` has a new test, "a filter made from a marking leaves a tile that cannot reach it unfiltered, and says so". The rows, Filter to marked and limited-tile tests gained Mark all, the filtered case, the chip's focus, and the waiting menu.
   - Files: `packages/web/src/dashboard/markings/MarkedRows.tsx`, `packages/web/src/dashboard/markings/MarkedRows.test.tsx`, and its item in the tile's ⋯ marked-rows group
   - Failing test: `MarkedRows.test.tsx`: the rows match the marking, the total row count is stated, and an export is offered (AC-114); `e2e/markings.spec.ts`: "View marked rows" from the tile's ⋯ group opens them (AC-199).
   - Depends on: T113, T041, T219

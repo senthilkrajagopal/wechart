@@ -25,6 +25,8 @@ export function summaryOf(widget: FilterWidget, value: FilterValue | undefined):
         return `${String(value.min)} – ${String(value.max)}`;
       if (value.min !== undefined) return `≥ ${String(value.min)}`;
       return value.max !== undefined ? `≤ ${String(value.max)}` : 'All';
+    case 'cube':
+      return value.words;
   }
 }
 
@@ -55,5 +57,8 @@ export function describeFilter(title: string, value: FilterValue): string {
       return value.from !== ''
         ? `${title} on or after ${value.from}`
         : `${title} on or before ${value.to}`;
+    // A filter made from a marking says what it keeps itself (AC-113).
+    case 'cube':
+      return value.words;
   }
 }

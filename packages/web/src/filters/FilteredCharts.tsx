@@ -82,6 +82,24 @@ function refusedJoin(error: unknown): string[] | undefined {
 const cubeOf = (member: string | undefined) => (member ?? '').split('.')[0] ?? '';
 
 /**
+ * Every member a filter asks about: its field's, or — for one made from a
+ * marking (AC-113) — each its Cube filter names, through `and`s and `or`s,
+ * which can be on several cubes.
+ */
+function membersOf({ filter, value }: ActiveFilter): string[] {
+  if (value.kind !== 'cube') return [filter.member ?? ''];
+  const found: string[] = [];
+  const walk = (part: unknown) => {
+    if (typeof part !== 'object' || part === null) return;
+    const { member, and, or } = part as { member?: unknown; and?: unknown; or?: unknown };
+    if (typeof member === 'string') found.push(member);
+    for (const parts of [and, or]) if (Array.isArray(parts)) parts.forEach(walk);
+  };
+  walk(value.filter);
+  return found;
+}
+
+/**
  * One chart's filtered answer in the query cache. Shared with "Refresh now"
  * (T154), which asks it again under the same key, so the tile — drawing from
  * this entry — shows what the refresh brought back.
@@ -171,10 +189,12 @@ export async function filteredChart(
       return answered === undefined ? { chart, uncovered } : { chart, uncovered, answered };
     // The filters on a cube Cube named, other than the chart's own; if it
     // named none of them, every filter, since one of them has to be the cause.
-    const named = current.filter(({ filter }) => {
-      const cube = cubeOf(filter.member);
-      return cube !== source && refused.includes(cube);
-    });
+    const named = current.filter((each) =>
+      membersOf(each).some((member) => {
+        const cube = cubeOf(member);
+        return cube !== source && refused.includes(cube);
+      }),
+    );
     const dropped = named.length > 0 ? named : current;
     uncovered.push(...dropped.map(({ filter }) => filter.id));
     asked = current.filter((each) => !dropped.includes(each));

@@ -26,7 +26,6 @@ import {
   type MarkingSlot,
   toChartSpec,
   toUnderlyingQuery,
-  markedFilter,
   toCubeQuery,
   type ChartDocument,
   type ChartType,
@@ -103,7 +102,12 @@ import { clearTileMarking } from './markings/clear';
 import { announceMarking, MarkingAnnouncer } from './markings/LiveRegion';
 import { MarkBadge } from './markings/MarkBadge';
 import { MarkChip, summariseMarking } from './markings/MarkChip';
-import { markFilterFrom, markFilterLabel, type MarkFilter } from './markings/filterToMarked';
+import {
+  markFilterFrom,
+  markFilterLabel,
+  markFilterOn,
+  type MarkFilter,
+} from './markings/filterToMarked';
 import { MarkedRows } from './markings/MarkedRows';
 import { markingOf, withMarking, type MarkingState } from './markings/store';
 import { interactionsOf, type InteractionMode } from './settings/interactionMode';
@@ -1090,7 +1094,9 @@ function Elements({
                       }
                 }
                 onViewRows={
-                  charts.onViewRows === undefined
+                  // Not on a limited tile showing its waiting state, whose
+                  // rows are none of these (T120's review), as View as table.
+                  charts.onViewRows === undefined || charts.limitedStates?.[chartId] !== undefined
                     ? undefined
                     : () => {
                         charts.onViewRows?.(chartId, element.id, false);
@@ -2048,54 +2054,54 @@ export function DashboardView({
     return { asked, waiting };
   }, [interactions.mode, live, marks]);
 
-  /**
-   * What each chart is asked beyond its dashboard filters: the markings that
-   * limit it (AC-107), and every filter made from a marking whose members its
-   * cube can reach (AC-113) — ANDed, where Cube ANDs `filters`. A tile whose
-   * cube cannot reach a marked member is left as it is rather than sent a
-   * query Cube would refuse, as a dashboard filter leaves it (AC-079).
-   */
-  const asked = useMemo(() => {
-    const out: Record<string, CubeFilter> = { ...limitedTiles.asked };
-    if (markFilters.length === 0) return out;
-    for (const tile of chartTilesOf(live)) {
-      const chartId = tile.chartId;
-      if (chartId === undefined) continue;
-      const reaching = markFilters.filter((each) =>
-        each.members.every((member) => reachOf(member, chartId) !== false),
-      );
-      if (reaching.length === 0) continue;
-      const parts = [
-        ...(out[chartId] === undefined ? [] : [out[chartId]]),
-        ...reaching.map((each) => each.filter),
-      ];
-      out[chartId] = parts.length === 1 ? (parts[0] as CubeFilter) : { and: parts };
-    }
-    return out;
-  }, [limitedTiles.asked, markFilters, live, reachOf]);
-  /** The marking filters each chart is asked, in words, for its empty state (AC-043). */
-  const markFilterSaid = useMemo(() => {
-    const said: Record<string, string[]> = {};
-    for (const tile of chartTilesOf(live)) {
-      const chartId = tile.chartId;
-      if (chartId === undefined) continue;
-      const words = markFilters
-        .filter((each) => each.members.every((member) => reachOf(member, chartId) !== false))
-        .map((each) => `${each.negate ? 'not' : 'only'} ${each.summary}`);
-      if (words.length > 0) said[chartId] = words;
-    }
-    return said;
-  }, [markFilters, live, reachOf]);
+  /** What each chart is asked beyond its filters: the markings that limit it (AC-107). */
+  const asked = limitedTiles.asked;
 
-  const { reached, notCovered } = useMemo(
-    () =>
-      coverageOf(
-        live,
-        [...activeFilters(live.filters ?? [], filterValues), ...crossFilters],
-        reachOf,
-      ),
-    [live, filterValues, crossFilters, reachOf],
-  );
+  /**
+   * The charts a filter in effect reaches and those it cannot (AC-078,
+   * AC-079) — the dashboard's filters, its cross-filters, and every filter
+   * made from a marking (AC-113).
+   *
+   * A marking's filter is a dashboard filter holding a Cube filter as it is,
+   * so it takes the path every filter takes (T119's review): asked of each
+   * tile by the names its cube or view gives the marked members, left off a
+   * tile that cannot reach one — which then says "Not filtered by" it — and
+   * dropped, rather than failing the tile, where Cube refuses to join it.
+   */
+  const { reached, notCovered } = useMemo(() => {
+    const covered = coverageOf(
+      live,
+      [...activeFilters(live.filters ?? [], filterValues), ...crossFilters],
+      reachOf,
+    );
+    if (markFilters.length === 0) return covered;
+    const seen = new Set<string>();
+    for (const tile of chartTilesOf(live)) {
+      const chartId = tile.chartId;
+      if (chartId === undefined || seen.has(chartId)) continue;
+      seen.add(chartId);
+      for (const each of markFilters) {
+        const on = markFilterOn(each, (member) => reachOf(member, chartId));
+        const filter = {
+          id: `mark:${each.id}`,
+          widget: 'checkbox' as const,
+          member: 'unreached' in on ? on.unreached : (each.members[0] ?? ''),
+        };
+        const words = `${each.negate ? 'not' : 'only'} ${each.summary}`;
+        if ('unreached' in on)
+          (covered.notCovered[chartId] ??= []).push({
+            filter,
+            value: { kind: 'cube', filter: each.filter, words },
+          });
+        else
+          (covered.reached[chartId] ??= []).push({
+            filter,
+            value: { kind: 'cube', filter: on.filter, words },
+          });
+      }
+    }
+    return covered;
+  }, [live, filterValues, crossFilters, reachOf, markFilters]);
   const [filtered, setFiltered] = useState<FilteredResults>({});
   // A chart being asked again keeps its last answer, busy, meanwhile.
   const onFiltered = useCallback((results: FilteredResults) => {
@@ -2836,27 +2842,24 @@ export function DashboardView({
      */
     const marked = new Set(Object.keys(limitedTiles.asked));
     return Object.fromEntries(
-      [...new Set([...Object.keys(reached), ...marked, ...Object.keys(markFilterSaid)])].map(
-        (chartId) => {
-          const refused = filtered[chartId]?.uncovered ?? [];
-          return [
-            chartId,
-            [
-              ...(reached[chartId] ?? [])
-                .filter(({ filter }) => !refused.includes(filter.id))
-                .map(({ filter, value }) => {
-                  const field = setOn.get(filter.id) ?? filter.member ?? '';
-                  return describeFilter(memberTitle?.(field) ?? field, value);
-                }),
-              ...(marked.has(chartId) ? ['limited to what is marked'] : []),
-              // A filter made from a marking, named as the bar names it (AC-113).
-              ...(markFilterSaid[chartId] ?? []),
-            ],
-          ];
-        },
-      ),
+      [...new Set([...Object.keys(reached), ...marked])].map((chartId) => {
+        const refused = filtered[chartId]?.uncovered ?? [];
+        return [
+          chartId,
+          [
+            // A filter made from a marking says what it keeps itself (AC-113).
+            ...(reached[chartId] ?? [])
+              .filter(({ filter }) => !refused.includes(filter.id))
+              .map(({ filter, value }) => {
+                const field = setOn.get(filter.id) ?? filter.member ?? '';
+                return describeFilter(memberTitle?.(field) ?? field, value);
+              }),
+            ...(marked.has(chartId) ? ['limited to what is marked'] : []),
+          ],
+        ];
+      }),
     );
-  }, [reached, filtered, live.filters, memberTitle, limitedTiles.asked, markFilterSaid]);
+  }, [reached, filtered, live.filters, memberTitle, limitedTiles.asked]);
 
   /**
    * What a link tile passes on (AC-064): the filters in effect, and only
@@ -3200,15 +3203,19 @@ export function DashboardView({
    * The rows behind a tile (T120, AC-114; T268, AC-239): its chart's query
    * ungrouped, as the chart editor's drawer asks (AC-036), under every filter
    * and limit the tile is — and, for its marked rows, its marking's predicate
-   * as well (`markedFilter`, the one "Filter to marked" makes). With the
-   * query's full count, which Cube gives past its row limit.
+   * as well (`markedFilter`, the one "Filter to marked" makes), by the names
+   * the tile's cube or view gives its members. With the query's full count,
+   * which Cube gives past its row limit.
+   *
+   * A string is why there are no rows to ask for: a marked member this tile
+   * cannot reach (T120's review), said rather than sent for Cube to refuse.
    */
   function rowsQueryOf(
     chartId: string,
     tileId: string,
     marked: boolean,
     limit: number,
-  ): Record<string, unknown> | undefined {
+  ): Record<string, unknown> | string | undefined {
     const chart = drawn.documents?.[chartId];
     if (chart === undefined) return undefined;
     const refused = filtered[chartId]?.uncovered ?? [];
@@ -3222,9 +3229,18 @@ export function DashboardView({
       const element = elementAt(live, tileId);
       const markingId = element !== null && isTile(element) ? marksWithOf(element) : undefined;
       if (markingId === undefined) return undefined;
-      const made = markedFilter(markingOf(marks, markingId), false);
-      if ('refused' in made) return undefined;
-      return { ...withLimit(query, made.filter), total: true };
+      const made = markFilterFrom(markingOf(marks, markingId), false, {
+        id: '',
+        markingName: '',
+        summary: '',
+      });
+      // Every row marked (Mark all, AC-115): the marked rows are the tile's.
+      if ('refused' in made)
+        return made.everything === true ? { ...query, total: true } : undefined;
+      const on = markFilterOn(made, (member) => reachOf(member, chartId));
+      if ('unreached' in on)
+        return `This tile cannot reach ${memberTitle?.(on.unreached) ?? on.unreached}, so its marked rows cannot be shown.`;
+      return { ...withLimit(query, on.filter), total: true };
     } catch {
       return undefined;
     }
@@ -3464,6 +3480,7 @@ export function DashboardView({
           load={async (limit, signal) => {
             const query = rowsQueryOf(rowsFor.chartId, rowsFor.tileId, rowsFor.marked, limit);
             if (query === undefined) throw new Error('There is nothing marked to show rows for.');
+            if (typeof query === 'string') throw new Error(query);
             const result = (await loadTile({
               query,
               signal,
@@ -3917,6 +3934,17 @@ export function DashboardView({
                         onClick={() => {
                           setMarkFilters((now) => now.filter((one) => one.id !== each.id));
                           setMarkSaid(`Removed: ${markFilterLabel(each)}.`);
+                          // The × goes with its chip: on to the next one's, or
+                          // the filter bar, as a marking's chip does (T120's review).
+                          requestAnimationFrame(() => {
+                            const next = window.document.querySelector<HTMLElement>(
+                              '[data-testid="mark-filter-chip"] button',
+                            );
+                            (
+                              next ??
+                              window.document.querySelector<HTMLElement>('section.filter-bar')
+                            )?.focus();
+                          });
                         }}
                       >
                         <span aria-hidden="true">×</span>

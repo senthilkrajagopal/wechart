@@ -29,6 +29,8 @@ function filters(value: FilterValue): boolean {
       return value.values.length > 0;
     case 'range':
       return value.min !== undefined || value.max !== undefined;
+    case 'cube':
+      return true;
   }
 }
 
@@ -100,6 +102,11 @@ export function withFilters(query: CubeQuery, applied: readonly ActiveFilter[]):
   for (const { filter, value } of applied) {
     const member = filter.member ?? '';
     switch (value.kind) {
+      // Made from a marking (AC-113): as it is, its members already named as
+      // the chart's query names them.
+      case 'cube':
+        added.push({ ...value.filter });
+        break;
       case 'values':
         added.push({ member, operator: 'equals', values: [...value.values] });
         break;

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -88,6 +88,37 @@ describe('the rows behind a tile', () => {
 
     expect((await screen.findByText('Cube answered 400.')).textContent).toBe('Cube answered 400.');
     expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  it('says when the total could not be read, rather than pass the page for it (T120’s review)', async () => {
+    dialog(vi.fn<Load>(async () => ({ rows: ROWS, total: undefined })));
+    await screen.findByRole('table');
+
+    expect(screen.getByTestId('rows-count').textContent).toBe(
+      'Showing 2 rows. The total could not be read.',
+    );
+  });
+
+  it('stops a download still being read when it is closed, and saves nothing', async () => {
+    let asked: AbortSignal | undefined;
+    const load = vi.fn<Load>((limit, signal) => {
+      if (limit <= 100) return Promise.resolve({ rows: ROWS, total: 2 });
+      asked = signal;
+      return new Promise<RowsAnswer>((resolve) => {
+        signal.addEventListener('abort', () => {
+          resolve({ rows: ROWS, total: 2 });
+        });
+      });
+    });
+    const { saved } = dialog(load);
+    await screen.findByRole('table');
+    await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+
+    cleanup();
+
+    expect(asked?.aborted).toBe(true);
+    await Promise.resolve();
+    expect(saved).toHaveLength(0);
   });
 
   it('closes on Escape', async () => {

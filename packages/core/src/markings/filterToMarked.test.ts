@@ -130,12 +130,16 @@ describe('a marking as a filter', () => {
       wholes: [{ tileId: 't1', filters: [], count: 3 }],
     };
 
+    // Said to be every row, so the marked rows can be shown as the tile's
+    // own (T120's review).
     expect(markedFilter(everything, true)).toEqual({
       refused: 'Every row is marked, so filtering the marked rows out would leave nothing.',
+      everything: true,
     });
     // Filtering to it keeps every row: no filter at all, said so.
     expect(markedFilter(everything, false)).toEqual({
       refused: 'Every row is marked, so filtering to the marked rows would change nothing.',
+      everything: true,
     });
   });
 });
@@ -152,15 +156,17 @@ describe('negating a Cube filter', () => {
     ).toEqual({
       or: [
         { member: 'a.x', operator: 'notEquals', values: ['1'] },
-        // How `notContains` treats NULL is not researched: a blank row is
-        // kept by name, which is right whichever it does.
-        {
-          or: [
-            { member: 'a.y', operator: 'notContains', values: ['z'] },
-            { member: 'a.y', operator: 'notSet' },
-          ],
-        },
+        // `notContains` keeps NULL rows of its own accord (research §1.5).
+        { member: 'a.y', operator: 'notContains', values: ['z'] },
       ],
+    });
+  });
+
+  it('negates notContains to contains, which the research says kept NULLs', () => {
+    expect(negatedFilter({ member: 'a.y', operator: 'notContains', values: ['z'] })).toEqual({
+      member: 'a.y',
+      operator: 'contains',
+      values: ['z'],
     });
   });
 
@@ -168,7 +174,7 @@ describe('negating a Cube filter', () => {
     expect(negatedFilter({ member: 'a.x', operator: 'measureFilter' })).toBeUndefined();
     // Whether these keep NULL rows is not researched, so their complement is unknown.
     expect(
-      negatedFilter({ member: 'a.x', operator: 'notContains', values: ['z'] }),
+      negatedFilter({ member: 'a.x', operator: 'notStartsWith', values: ['z'] }),
     ).toBeUndefined();
   });
 });

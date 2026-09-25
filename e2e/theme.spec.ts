@@ -59,6 +59,9 @@ test('the bar and the page use different surfaces, so the switch is visible thro
   page,
 }) => {
   await page.goto('/explore');
+  // Drawn before it is read: `goto` settles on load, which can come before the
+  // app's first render (it failed so in Safari under four workers).
+  await expect(page.locator('.app-bar')).toBeVisible();
 
   const lightBar = await page.evaluate(background('.app-bar'));
   expect(lightBar).not.toBe(await page.evaluate(background('body')));

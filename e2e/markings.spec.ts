@@ -639,6 +639,12 @@ test('a limited tile shows only what is marked, and says so while nothing is', a
    */
   await expect(details.getByTestId('nothing-marked')).toContainText('By status');
   await expect(details.getByTestId('chart-canvas')).toHaveCount(0);
+  // Waiting, it has no rows of its own to show (T120's review).
+  await details.getByRole('button', { name: /^Actions for / }).click();
+  const waitingMenu = details.getByRole('menu', { name: /^Actions for / });
+  await expect(waitingMenu.getByRole('menuitem', { name: 'View query' })).toBeVisible();
+  await expect(waitingMenu.getByRole('menuitem', { name: 'View underlying rows' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
 
   // Every status the master draws — the value axis's own ticks dropped, so
   // this is the set the details tile is measured against.
@@ -1866,9 +1872,11 @@ test('Filter to marked and Filter out marked filter every tile they reach, clear
   ).toHaveAccessibleDescription('Nothing is marked.');
   await page.keyboard.press('Escape');
 
-  // Removed from its chip: every status again.
+  // Removed from its chip: every status again, and the keyboard is left on the
+  // filter bar rather than nowhere (T120's review).
   await chip.getByRole('button', { name: /^Remove: / }).click();
   await expect(chip).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Filters' })).toBeFocused();
   await expect.poll(() => labels(status)).toEqual(['completed', 'processing', 'shipped']);
 
   // Out of marked: every status but shipped.
@@ -1947,6 +1955,60 @@ test('View marked rows shows the marked rows and their total, exports them, and 
   await expect(dialog.getByRole('status')).toContainText('Downloaded 80 rows');
   await dialog.getByRole('button', { name: 'Close' }).click();
   await expect(dialog).toHaveCount(0);
+
+  const marked = async (name: string) => {
+    await (
+      await menu()
+    )
+      .getByRole('group', { name: /marked$/ })
+      .getByRole('menuitem', { name })
+      .click();
+  };
+  // Mark all marks every row, so its rows are the whole tile's (T120's review).
+  await marked('Mark all');
+  await marked('View marked rows');
+  await expect(dialog.getByTestId('rows-count')).toHaveText('Showing 100 of 240 rows');
+  await dialog.getByRole('button', { name: 'Close' }).click();
+
+  // Under a filter — here one made from a marking — the whole tile's rows are
+  // the filtered ones: its query ungrouped *with its filters* (AC-239).
+  await marked('Unmark');
+  await clickBar(page, status, 'shipped');
+  await marked('Filter to marked');
+  await expect(page.getByTestId('mark-filter-chip')).toContainText('shipped');
+  await (await menu()).getByRole('menuitem', { name: 'View underlying rows' }).click();
+  dialog = page.getByRole('dialog', { name: 'Underlying rows: By status' });
+  await expect(dialog.getByTestId('rows-count')).toHaveText('Showing 80 of 80 rows');
+});
+
+/**
+ * AC-113 with AC-079 (T119's review): a filter made from a marking is a
+ * dashboard filter, so a tile whose cube cannot reach the marked field is left
+ * unfiltered and says so — as it does for any filter — rather than being asked
+ * a query Cube would refuse, or passing for filtered.
+ */
+test('a filter made from a marking leaves a tile that cannot reach it unfiltered, and says so', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request, { apart: true });
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  const apart = tile(page, 'tile-apart');
+  await expect(apart.getByTestId('chart-canvas')).toBeVisible();
+
+  await clickBar(page, status, 'shipped');
+  await status.getByRole('button', { name: /^Actions for / }).click();
+  await status
+    .getByRole('menu', { name: /^Actions for / })
+    .getByRole('group', { name: /marked$/ })
+    .getByRole('menuitem', { name: 'Filter to marked' })
+    .click();
+  await expect(page.getByTestId('mark-filter-chip')).toContainText('shipped');
+
+  await expect(apart.getByTestId('not-covered')).toContainText('Not filtered by Orders Status');
+  await expect(apart.getByRole('alert')).toHaveCount(0);
+  await expect(status.getByTestId('not-covered')).toHaveCount(0);
 });
 
 /**

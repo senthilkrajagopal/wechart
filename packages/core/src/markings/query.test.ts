@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { EMPTY_PREDICATE, type MarkingPredicate } from './predicate';
-import { limitFilterFor } from './query';
+import { asUtc, limitFilterFor } from './query';
 
 /**
  * T113 / AC-107: WHEN a tile is limited by one or more markings, THE SYSTEM
@@ -164,6 +164,15 @@ describe('what a marking adds to a limited tile’s query', () => {
    * March limited tiles to 1 March 08:00 onwards in California (T119, found
    * while negating it).
    */
+  // The same, whatever zone the machine running the test is in (T119's
+  // review, M5): the test below passes on a UTC machine with or without it.
+  it('marks a time Cube wrote without a zone as UTC, and leaves one that names its zone', () => {
+    expect(asUtc('2026-03-01T00:00:00.000')).toBe('2026-03-01T00:00:00.000Z');
+    expect(asUtc('2026-03-01T00:00:00.000Z')).toBe('2026-03-01T00:00:00.000Z');
+    expect(asUtc('2026-03-01T00:00:00.000+05:30')).toBe('2026-03-01T00:00:00.000+05:30');
+    expect(asUtc('2026-03-01')).toBe('2026-03-01');
+  });
+
   it('reads a bucket value Cube writes without a zone as UTC, wherever the browser is', () => {
     const march: MarkingPredicate = {
       items: [

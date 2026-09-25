@@ -28,7 +28,7 @@ export function markFilterFrom(
   predicate: MarkingPredicate,
   negate: boolean,
   { id, markingName, summary }: { id: string; markingName: string; summary: string },
-): MarkFilter | { readonly refused: string } {
+): MarkFilter | { readonly refused: string; readonly everything?: true } {
   const made = markedFilter(predicate, negate);
   if ('refused' in made) return made;
   return {
@@ -39,6 +39,39 @@ export function markFilterFrom(
     filter: made.filter,
     members: markingMembers(predicate),
   };
+}
+
+/**
+ * A marking filter as one tile is asked it (AC-113, AC-079): every member
+ * named as that tile's cube or view takes it — a view by its own alias — or,
+ * where the tile cannot reach one, that member, so the tile is left as it is
+ * and says "Not filtered by" it. `reach` is the dashboard's, the same one its
+ * filters are asked through; a member it cannot say about is kept as it is,
+ * for Cube to answer.
+ */
+export function markFilterOn(
+  made: MarkFilter,
+  reach: (member: string) => string | false | undefined,
+): { readonly filter: CubeFilter } | { readonly unreached: string } {
+  const names = new Map<string, string>();
+  for (const member of made.members) {
+    const as = reach(member);
+    if (as === false) return { unreached: member };
+    if (as !== undefined && as !== member) names.set(member, as);
+  }
+  return { filter: names.size === 0 ? made.filter : renamed(made.filter, names) };
+}
+
+/** A Cube filter with its members renamed, through its `and`s and `or`s. */
+function renamed(filter: CubeFilter, names: ReadonlyMap<string, string>): CubeFilter {
+  const out: CubeFilter = { ...filter };
+  for (const key of ['and', 'or'] as const) {
+    const parts = filter[key];
+    if (Array.isArray(parts)) out[key] = parts.map((part) => renamed(part as CubeFilter, names));
+  }
+  const member = filter['member'];
+  if (typeof member === 'string') out['member'] = names.get(member) ?? member;
+  return out;
 }
 
 /** How a marking filter reads on the filter bar and its remove button. */

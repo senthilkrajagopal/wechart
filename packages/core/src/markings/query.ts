@@ -221,18 +221,20 @@ function predicateFilter(predicate: MarkingPredicate): Filter | typeof EVERYTHIN
  * The complement of each operator whose NULL behaviour is known
  * (`markings-query-support.md` §1.5, §1.7). A positive operator never keeps a
  * NULL row, and a NULL row is never marked, so its complement must keep them:
- * `notEquals` does so of its own accord; every other complement takes
- * `notSet` beside it, which is right whether or not the operator already
- * keeps NULLs. `notEquals` itself keeps NULLs, so its complement is plain
- * `equals`. The other negative operators' NULL behaviour is not researched,
- * so they are not negated at all.
+ * `notEquals` and `notContains` do so of their own accord (§1.5's table);
+ * every other complement takes `notSet` beside it, which is right whether or
+ * not the operator already keeps NULLs. `notEquals` and `notContains` keep
+ * NULLs, so their complements are plain `equals` and `contains`. The other
+ * negative operators' NULL behaviour is not researched — `notInDateRange`'s
+ * under Tesseract among them — so they are not negated at all.
  */
 const COMPLEMENT: Readonly<
   Record<string, { readonly operator: string; readonly blanks: boolean }>
 > = {
   equals: { operator: 'notEquals', blanks: false },
   notEquals: { operator: 'equals', blanks: false },
-  contains: { operator: 'notContains', blanks: true },
+  contains: { operator: 'notContains', blanks: false },
+  notContains: { operator: 'contains', blanks: false },
   startsWith: { operator: 'notStartsWith', blanks: true },
   endsWith: { operator: 'notEndsWith', blanks: true },
   gt: { operator: 'lte', blanks: true },
@@ -286,7 +288,10 @@ export function negatedFilter(filter: Filter): Filter | undefined {
 export function markedFilter(
   predicate: MarkingPredicate,
   negate: boolean,
-): { readonly filter: Filter } | { readonly refused: string } {
+):
+  | { readonly filter: Filter }
+  /** `everything` when every row is marked: its rows are all the tile's. */
+  | { readonly refused: string; readonly everything?: true } {
   const positive = predicateFilter(predicate);
   if (positive === undefined) return { refused: 'Nothing is marked.' };
   if (positive === EVERYTHING) {
@@ -294,6 +299,7 @@ export function markedFilter(
       refused: negate
         ? 'Every row is marked, so filtering the marked rows out would leave nothing.'
         : 'Every row is marked, so filtering to the marked rows would change nothing.',
+      everything: true,
     };
   }
   if (!negate) return { filter: positive };

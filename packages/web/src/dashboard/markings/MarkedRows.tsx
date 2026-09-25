@@ -112,11 +112,22 @@ export function MarkedRows({
     };
   }, []);
 
+  /** A download being read, stopped when the dialog closes (T120's review). */
+  const downloading = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      downloading.current?.abort();
+    },
+    [],
+  );
   const download = () => {
     setNote({ kind: 'run', text: 'Reading the rows…' });
+    downloading.current?.abort();
     const aborted = new AbortController();
+    downloading.current = aborted;
     load(DOWNLOADED, aborted.signal).then(
       ({ rows, total }) => {
+        if (aborted.signal.aborted) return;
         const csv = rowsCsvOf(rows, {
           measures,
           formats,
@@ -127,6 +138,7 @@ export function MarkedRows({
         setNote({ kind: said.truncated === true ? 'warn' : 'ok', text: said.text });
       },
       (error: unknown) => {
+        if (aborted.signal.aborted) return;
         setNote({
           kind: 'err',
           text: error instanceof Error ? error.message : 'The rows could not be read.',
@@ -158,7 +170,7 @@ export function MarkedRows({
           <>
             <p className="marked-rows__count" data-testid="rows-count">
               {total === undefined
-                ? `Showing ${rows.length.toLocaleString('en-GB')} rows`
+                ? `Showing ${rows.length.toLocaleString('en-GB')} rows. The total could not be read.`
                 : `Showing ${rows.length.toLocaleString('en-GB')} of ${total.toLocaleString('en-GB')} rows`}
             </p>
             <div className="marked-rows__table">
