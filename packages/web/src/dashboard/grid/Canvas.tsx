@@ -99,6 +99,9 @@ export interface CanvasProps {
 
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
+/** A name as a sentence: its own closing mark kept, a full stop added only where it has none. */
+const sentenceOf = (name: string) => (/[.!?…]$/.test(name) ? name : `${name}.`);
+
 /**
  * The document's numbers are snapped here rather than trusted. A width of 4.7
  * can reach the canvas from an older saved format, a hand-edited body or a
@@ -324,8 +327,10 @@ export function Canvas({
               onTileKeyDown === undefined
                 ? undefined
                 : [
-                    // Its name, never its id (AC-209).
-                    `${nameOf?.(tile.id) ?? drag?.nameOf?.(tile.id) ?? 'Tile'}.`,
+                    // Its name, never its id (AC-209), as one sentence: a
+                    // name that ends a sentence already takes no second full
+                    // stop (T247, recheck-dashboard N9).
+                    sentenceOf(nameOf?.(tile.id) ?? drag?.nameOf?.(tile.id) ?? 'Tile'),
                     describeItem?.(tile.id).keys ?? '',
                   ]
                     .filter((part) => part !== '')

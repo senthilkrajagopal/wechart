@@ -51,6 +51,19 @@ const KIND_ICON: Record<string, string> = {
   tabs: '⊟',
 };
 
+/**
+ * A Markdown tile's first line as it reads (T247, recheck-dashboard N9): with
+ * no heading, list, emphasis or code marks — "## Notes" is "Notes" — as
+ * `Markdown.tsx` draws it.
+ */
+function readingOf(text: string): string {
+  const line = text
+    .split(/\r\n?|\n/)
+    .map((each) => each.replace(/^\s*(#{1,6}\s+|[-*]\s+|\d+[.)]\s+)/, '').trim())
+    .find((each) => each !== '' && !/^#{1,6}$/.test(each));
+  return (line ?? '').replace(/\*{1,3}|`|(?<![\w_])_|_(?![\w_])/g, '');
+}
+
 /** How a row names an element: its kind, then what the reader knows it by. */
 export function outlineNameOf(
   element: Element_,
@@ -65,7 +78,9 @@ export function outlineNameOf(
         ? chartTitleOf(element.chartId)
         : element.kind === 'image'
           ? element.alt
-          : element.text;
+          : element.kind === 'markdown'
+            ? readingOf(element.text ?? '')
+            : element.text;
   const trimmed = own?.trim() ?? '';
   if (trimmed === '') return kind;
   // A long markdown paragraph is not a name; its opening words are enough.

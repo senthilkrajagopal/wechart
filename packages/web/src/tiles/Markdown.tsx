@@ -62,13 +62,20 @@ function blocksOf(text: string): ReactNode[] {
     if (heading !== null) {
       flushParagraph();
       flushList();
-      const level = (heading[1] ?? '#').length <= 2 ? 3 : 4;
+      const marks = (heading[1] ?? '#').length;
+      const level = marks <= 2 ? 3 : 4;
       const content = inline(heading[2] ?? '', 'h');
+      // Drawn at the size its own marks ask for (T247, the prototype's .md h2
+      // for "##"), whatever level it takes in the page's outline.
       blocks.push(
         level === 3 ? (
-          <h3 key={blocks.length}>{content}</h3>
+          <h3 key={blocks.length} data-level={marks}>
+            {content}
+          </h3>
         ) : (
-          <h4 key={blocks.length}>{content}</h4>
+          <h4 key={blocks.length} data-level={marks}>
+            {content}
+          </h4>
         ),
       );
       continue;

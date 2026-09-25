@@ -3648,9 +3648,30 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - AC-196's e2e now asserts that directly: the canvas begins where the band ends.
     - The band is inert during a save, as it was inside the body.
   - The Published badge and the Markings button (F3's other items) are not in this task's failing test, and stay with F3.
-- [ ] T247 (AC-187) Draw tab-group tabs, Header and Markdown elements, and chart text as the prototype does, and use its picker for tile menus
-  - Files: `packages/web/src/dashboard/*`, `packages/charts/src/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
-  - Failing test: a tab group's selected tab has the page tab's underline and the others do not; Header has no tile chrome and a `text-lg` 600 heading; `##` is a 20/26 h2; chart text is Inter with tabular numerals; no band under the axis labels; one freshness badge, hidden while marked; tile ⋯ menus are the 250 px picker with 28 px items and Delete in `status-error`; sections on the prototype's band; Markdown tiles named by their text (recheck-dashboard N1, N4–N7, N9, F8, F9, F13; mismatches 9–21).
+- [x] T247 (AC-187) Draw tab-group tabs, the Header element, Markdown and sections as the prototype does, and name Markdown tiles by their text
+  - Files: `packages/web/src/dashboard/*`, `packages/web/src/tiles/Markdown.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: a tab group's selected tab has the page tab's underline and the others do not, with no card nested in its section; Header has no tile chrome and a 600 heading on the type scale; `##` draws at the prototype's 20/26 (its level in the page's outline stays below the tile's, as `Markdown.tsx` keeps it) and the body 14/22 secondary; sections on the prototype's band with a 12/16 muted count and a 6 px toggle; Markdown tiles named by their rendered text (recheck-dashboard N1, N5, N6, N9; mismatches 15–18).
+  - Depends on: none
+  - Split 2026-09-24 into T247, T252 and T253, one behaviour group each, since the original bundled a dozen. The original line covered N1, N4–N7, N9, F8, F9 and F13, and mismatches 9–21.
+  - Done 2026-09-24, all three browsers. `e2e/design-conformance.spec.ts` "T247: …" has four tests on a dashboard of its own, and all four failed first. `outlineName.test.ts` covers the names.
+    - **A tab group's tabs** take the page tabs' rule: the selected one is underlined in the accent. The group sits in its section's band, not in a card of its own.
+    - **The Header and the Divider** are the prototype's `.dplain`, with no border, ground or padding. The Header is a `text-lg` 600 heading.
+    - **Markdown:**
+      - The body is 14/22 secondary, and headings and strong text are primary.
+      - A heading is drawn at the size of its own marks: `#` is xl, `##` is lg (20/26), deeper is md.
+      - Its level in the page's outline stays below the tile's title (h3 and h4), as `Markdown.tsx` keeps it. `data-level` carries the size, and `Markdown.test.tsx`'s exact markup now includes it.
+    - **A section's band** is the prototype's `color-mix` of the surface and the page, with a 12/16 muted count and a 6 px toggle.
+    - **Names:**
+      - A Markdown tile is named by its first line as it reads, with no heading, list, emphasis or code marks.
+      - A tile's accessible name no longer doubles the full stop after a name that ends one.
+    - The Divider isn't in the task's own line. It shares the Header's `.dplain` rule in the prototype, so it is drawn and tested with it.
+- [ ] T252 (AC-187) Draw a chart tile's text, plot and badges as the prototype does
+  - Files: `packages/charts/src/*`, `packages/web/src/dashboard/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: the chart's text is Inter with tabular numerals on the axes; no band under the axis labels (the grid's bottom 8 px); one freshness badge, hidden while the marking badge shows; the tile head no taller than 22 px; an incomplete chart keeps its head and says so at 12 px secondary, with no editing hint in view mode (recheck-dashboard N7, F8, F9, F13; mismatches 9, 10, 12, 13, 21).
+  - Depends on: none
+- [ ] T253 (AC-187) Use the prototype's picker for tile menus, its inline grip, and its tinted edit grid
+  - Files: `packages/web/src/dashboard/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: a tile's ⋯ menu is 250 px, `border-strong` with the pop shadow, 28 px items at 12 px, its heading 12/16 muted and Delete in `status-error`, `role=menu`; the grip sits inline in the head at 14 px muted; the edit grid's columns are tinted bands (recheck-dashboard N4; mismatches 14, 19, 20).
   - Depends on: none
 - [ ] T248 (AC-187) Put the edit sidebar under the filter band, and match its palette, add slots, Properties and Outline to the prototype
   - Files: `packages/web/src/dashboard/edit/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
@@ -3722,7 +3743,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 | AC-044 | T051       | AC-089 | T095 | AC-134 | T140 | AC-179 | T184       |
 | AC-045 | T043       | AC-090 | T096 | AC-135 | T141 | AC-180 | T001, T185 |
 | AC-181 | T187       | AC-182 | T191 | AC-183 | T192 | AC-184 | T197       |
-| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225, T244–T251 | AC-188 | T206       |
+| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225, T244–T253 | AC-188 | T206       |
 | AC-189 | T207       | AC-190 | T211 | AC-191 | T211 | AC-192 | T212       |
 | AC-193 | T213, T243 | AC-194 | T214 | AC-195 | T216 | AC-196 | T217       |
 | AC-197 | T215       | AC-198 | T218 | AC-199 | T219, T118–T121 | AC-200 | T220       |

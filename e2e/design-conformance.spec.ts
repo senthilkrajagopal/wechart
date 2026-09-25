@@ -1435,3 +1435,200 @@ test.describe('T246: the dashboard header and the filter band', () => {
     expect((await band(page).boundingBox())?.height).toBe(53);
   });
 });
+
+/**
+ * T247: a tab group, the Header and Divider, Markdown and the section band as
+ * dashboard.js draws them (recheck-dashboard N1, N5, N6, N9; mismatches
+ * 15–18).
+ */
+test.describe('T247: the tab group, the Header, Markdown and the section band', () => {
+  test.beforeEach(async ({ page, request }) => {
+    const api = 'http://localhost:4100/api';
+    const title = `Elements ${String(Date.now())}`;
+    const { id } = (await (
+      await request.post(`${api}/documents`, {
+        data: { kind: 'dashboard', title, folderId: 'root' },
+      })
+    ).json()) as { id: string };
+    await request.put(`${api}/documents/dashboard/${id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          folderId: 'root',
+          owner: 'admin',
+          settings: { width: 'fixed' },
+          pages: [
+            {
+              id: 'only',
+              title: 'Only',
+              items: [
+                { id: 'el-header', kind: 'header', w: 12, text: 'Definitions' },
+                { id: 'el-divider', kind: 'divider', w: 12 },
+                {
+                  id: 'el-notes',
+                  kind: 'markdown',
+                  w: 6,
+                  h: 20,
+                  text: '## Quarter notes\nOrders by status, this quarter.',
+                },
+                {
+                  id: 'el-terms',
+                  kind: 'section',
+                  title: 'Terms',
+                  items: [
+                    {
+                      id: 'el-group',
+                      kind: 'tabs',
+                      w: 12,
+                      tabs: [
+                        {
+                          id: 'measures',
+                          title: 'Measures',
+                          items: [
+                            {
+                              id: 'el-count',
+                              kind: 'markdown',
+                              w: 6,
+                              h: 16,
+                              text: 'Count is the number of orders.',
+                            },
+                          ],
+                        },
+                        { id: 'dimensions', title: 'Dimensions', items: [] },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    await page.goto(`/explore/dashboards/${id}`);
+    await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
+  });
+  const element = (page: Page, id: string) => page.locator(`[data-tile="${id}"]`);
+  const plain = {
+    'border-top-width': '0px',
+    'background-color': 'rgba(0, 0, 0, 0)',
+    'padding-top': '0px',
+  };
+
+  test('a tab group’s tabs are the page tabs’: the one showing underlined, and no card inside its section', async ({
+    page,
+  }) => {
+    const group = page.getByRole('tablist', { name: /Measures/ });
+    const showing = group.getByRole('tab', { name: 'Measures' });
+    const other = group.getByRole('tab', { name: 'Dimensions' });
+    // .dash-tabs button (dashboard.js:361 reuses it): 36 px, 13/600; selected
+    // text-primary over a 2 px accent rule (N1, mismatch 18).
+    expect(
+      await style(showing, 'height', 'font-size', 'font-weight', 'color', 'border-bottom-color'),
+    ).toEqual({
+      height: '36px',
+      'font-size': '13px',
+      'font-weight': '600',
+      color: await token(page, 'text-primary'),
+      'border-bottom-color': await token(page, 'accent'),
+    });
+    expect(await style(other, 'color', 'border-bottom-color')).toEqual({
+      color: await token(page, 'text-secondary'),
+      'border-bottom-color': 'rgba(0, 0, 0, 0)',
+    });
+    // In its section's band, not a white card within it (N1).
+    expect(
+      await style(element(page, 'el-group'), 'border-top-width', 'background-color', 'padding-top'),
+    ).toEqual(plain);
+  });
+
+  test('the Header and the Divider sit on the page, the Header a 600 heading on the type scale', async ({
+    page,
+  }) => {
+    // .dplain: no border, background or padding (N5, mismatch 17).
+    for (const id of ['el-header', 'el-divider'])
+      expect(
+        await style(element(page, id), 'border-top-width', 'background-color', 'padding-top'),
+      ).toEqual(plain);
+    // <h2 style="font-size:20px;line-height:1.3;font-weight:600"> — text-lg.
+    expect(
+      await style(
+        element(page, 'el-header').getByRole('heading', { name: 'Definitions' }),
+        'font-size',
+        'line-height',
+        'font-weight',
+      ),
+    ).toEqual({ 'font-size': '20px', 'line-height': '26px', 'font-weight': '600' });
+  });
+
+  test('Markdown: “##” at 20/26 over a 14/22 secondary body, and each tile named by its text', async ({
+    page,
+  }) => {
+    const notes = element(page, 'el-notes');
+    // .md h2 { 20px/26px 600, text-primary } and .md { 14px/22px, text-secondary } (N6, mismatch 16)
+    expect(
+      await style(
+        notes.getByRole('heading', { name: 'Quarter notes' }),
+        'font-size',
+        'line-height',
+        'font-weight',
+        'color',
+      ),
+    ).toEqual({
+      'font-size': '20px',
+      'line-height': '26px',
+      'font-weight': '600',
+      color: await token(page, 'text-primary'),
+    });
+    expect(
+      await style(
+        notes.getByText('Orders by status, this quarter.'),
+        'font-size',
+        'line-height',
+        'color',
+      ),
+    ).toEqual({
+      'font-size': '14px',
+      'line-height': '22px',
+      color: await token(page, 'text-secondary'),
+    });
+    // Named by what it says, not its markup, and one full stop (N9).
+    const name = (await notes.getAttribute('aria-label')) ?? '';
+    expect(name).toMatch(/^Markdown: Quarter notes/);
+    expect(name).not.toContain('#');
+    const count = (await element(page, 'el-count').getAttribute('aria-label')) ?? '';
+    expect(count).toMatch(/^Markdown: Count is the number of orders\./);
+    expect(count).not.toContain('..');
+  });
+
+  test('a section is the prototype’s band: its ground between surface and page, its count muted, its toggle 6 px', async ({
+    page,
+  }) => {
+    // .dsection { background: color-mix(in srgb, var(--bg-surface) 55%, var(--bg-page)) } (mismatch 15)
+    const band = await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.backgroundColor =
+        'color-mix(in srgb, var(--wc-bg-surface) 55%, var(--wc-bg-page))';
+      document.body.append(probe);
+      const value = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return value;
+    });
+    const terms = element(page, 'el-terms');
+    expect(await style(terms, 'background-color')).toEqual({ 'background-color': band });
+    // <span class="xs muted">1 item</span>
+    expect(
+      await style(terms.getByText('1 item', { exact: true }), 'color', 'font-size', 'line-height'),
+    ).toEqual({
+      color: await token(page, 'text-muted'),
+      'font-size': '12px',
+      'line-height': '16px',
+    });
+    // Its ▾, an .iconbtn at 24 px: radius 6.
+    expect(
+      await style(terms.getByRole('button', { name: 'Collapse Terms' }), 'border-radius'),
+    ).toEqual({ 'border-radius': '6px' });
+  });
+});

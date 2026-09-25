@@ -578,9 +578,9 @@ function TileBody({
       // Its subset of markdown, as elements — never as HTML (AC-208).
       return <Markdown text={tile.text ?? ''} />;
     case 'header':
-      return <h3>{tile.text}</h3>;
+      return <h3 className="dashboard-heading">{tile.text}</h3>;
     case 'divider':
-      return <hr />;
+      return <hr className="dashboard-divider" />;
     case 'image':
       return <ImageTile tile={tile} editing={editing} />;
     case 'link':
@@ -1204,8 +1204,13 @@ function TabGroupView({
 
   return (
     <div className="tab-group" data-tab-group={group.id}>
-      {/* Named as the Outline names it, by its tabs, never its id (AC-209). */}
-      <div role="tablist" aria-label={affordances.nameOf?.(group.id) ?? 'Tabs'}>
+      {/* Named as the Outline names it, by its tabs, never its id (AC-209).
+          The page tabs' rule, as dashboard.js reuses .dash-tabs (T247, N1). */}
+      <div
+        role="tablist"
+        className="page-tabs tab-group__tabs"
+        aria-label={affordances.nameOf?.(group.id) ?? 'Tabs'}
+      >
         {group.tabs.map((tab) => (
           <button
             key={tab.id}

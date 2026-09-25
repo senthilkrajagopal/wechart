@@ -12,10 +12,12 @@ import { Markdown } from './Markdown';
 const html = (text: string) => render(<Markdown text={text} />).container.innerHTML;
 
 describe('a markdown tile’s text (AC-208)', () => {
+  // Each carries its own marks' count for its size (T247): the level in the
+  // outline and the size drawn are separate.
   it('renders headings below the tile’s own, one level per marker up to two', () => {
-    expect(html('# Top')).toBe('<div class="markdown"><h3>Top</h3></div>');
-    expect(html('## Title')).toBe('<div class="markdown"><h3>Title</h3></div>');
-    expect(html('### Sub')).toBe('<div class="markdown"><h4>Sub</h4></div>');
+    expect(html('# Top')).toBe('<div class="markdown"><h3 data-level="1">Top</h3></div>');
+    expect(html('## Title')).toBe('<div class="markdown"><h3 data-level="2">Title</h3></div>');
+    expect(html('### Sub')).toBe('<div class="markdown"><h4 data-level="3">Sub</h4></div>');
   });
 
   it('renders emphasis, strong and code inside a line', () => {
@@ -75,6 +77,6 @@ describe('a markdown tile’s text (AC-208)', () => {
   });
 
   it('reads Windows line endings as lines', () => {
-    expect(html('## A\r\nb')).toBe('<div class="markdown"><h3>A</h3><p>b</p></div>');
+    expect(html('## A\r\nb')).toBe('<div class="markdown"><h3 data-level="2">A</h3><p>b</p></div>');
   });
 });

@@ -1737,13 +1737,49 @@ main:has(.dashboard) {
    has to change the page and not just an attribute. */
 /* The prototype's .dgrid padding, round the tiles. */
 .dashboard-page { width: 100%; padding: 16px 24px 40px; }
-/* A section is a band (AC-202), the prototype's .dsection: the subtle ground,
-   8/12/12 padding, and a 36 px head with its ▾, its title at 16/600/22 and its
-   count at 12 px muted — not a tile card with a 21 px heading. */
+/* A section is a band (AC-202), the prototype's .dsection: 8/12/12 padding,
+   and a 36 px head with its ▾, its title at 16/600/22 and its count at 12 px
+   muted — not a tile card with a 21 px heading. Its ground is the
+   prototype's, between the surface and the page (T247, mismatch 15):
+   bg-subtle was darker than the tiles in light and lighter in dark. */
 .grid-tile:has(> .dashboard-section) {
   padding: 8px 12px 12px;
-  background: var(--wc-bg-subtle);
+  background: color-mix(in srgb, var(--wc-bg-surface) 55%, var(--wc-bg-page));
   overflow: visible;
+}
+/* A tab group sits in its section's band, not in a card of its own there
+   (T247, N1): its tabs are the band's head. */
+.grid-tile:has(> .tab-group) {
+  padding: 0;
+  border: 0;
+  background: none;
+  overflow: visible;
+}
+.page-tabs.tab-group__tabs { padding: 0; border-bottom: 0; }
+/* The Header and the Divider are the prototype's .dplain: on the page, with
+   no border, ground or padding, a 32 px row at least (T247, N5). */
+.grid-tile:has(> .dashboard-heading),
+.grid-tile:has(> .dashboard-divider) {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+/* <h2 style="font-size:20px;line-height:1.3;font-weight:600">: text-lg. */
+.dashboard-heading {
+  flex: 1;
+  margin: 0;
+  font-size: var(--wc-text-lg-size);
+  line-height: var(--wc-text-lg-line);
+  font-weight: var(--wc-text-lg-weight);
+}
+.dashboard-divider {
+  flex: 1;
+  margin: 8px 0;
+  border: 0;
+  border-top: 1px solid var(--wc-border-strong);
 }
 .dashboard-section__head {
   display: flex;
@@ -1757,7 +1793,12 @@ main:has(.dashboard) {
   line-height: 22px;
   font-weight: 600;
 }
-.dashboard-section__count { color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
+/* <span class="xs muted"> (T247, mismatch 15). */
+.dashboard-section__count {
+  color: var(--wc-text-muted);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+}
 /* Its ⋯ at the end of the head row, not at a tile's corner offsets. */
 .dashboard-section__head .tile-menu { margin-left: auto; position: relative; inset: auto; }
 /* The prototype's .dsection > .dgrid: 8 px between the head and its tiles. */
@@ -1767,15 +1808,26 @@ main:has(.dashboard) {
   height: 24px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  /* An .iconbtn: radius 6 (T247, mismatch 15). */
+  border-radius: 6px;
   background: none;
   color: var(--wc-text-secondary);
   font: inherit;
   cursor: pointer;
 }
 .dashboard-section__toggle:hover { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
-/* A markdown tile's text (AC-208): headings on the type scale, lists indented. */
-.markdown { overflow-wrap: anywhere; }
+/* A markdown tile's text (AC-208): headings on the type scale, lists indented.
+   The prototype's .md: 14/22 in the secondary ink, its headings and strong
+   text primary (T247, N6). */
+.markdown {
+  overflow-wrap: anywhere;
+  font-size: var(--wc-text-sm-size);
+  line-height: 22px;
+  color: var(--wc-text-secondary);
+}
+.markdown h3,
+.markdown h4,
+.markdown strong { color: var(--wc-text-primary); }
 .markdown code {
   padding: 0 4px;
   border-radius: 3px;
@@ -1784,8 +1836,19 @@ main:has(.dashboard) {
 }
 .markdown > :first-child { margin-top: 0; }
 .markdown > :last-child { margin-bottom: 0; }
-.markdown h3 { margin: 0 0 6px; font-size: 16px; line-height: 22px; font-weight: 600; }
-.markdown h4 { margin: 0 0 4px; font-size: var(--wc-text-sm-size); font-weight: 600; }
+/* Sized by the markdown's own level: "#" text-xl, "##" the prototype's .md h2
+   at text-lg and deeper text-md, while the element stays below the tile's
+   title in the page's outline (Markdown.tsx). */
+.markdown h3,
+.markdown h4 { margin: 0 0 4px; font-size: 16px; line-height: 22px; font-weight: 600; }
+.markdown [data-level='1'] {
+  font-size: var(--wc-text-xl-size);
+  line-height: var(--wc-text-xl-line);
+}
+.markdown [data-level='2'] {
+  font-size: var(--wc-text-lg-size);
+  line-height: var(--wc-text-lg-line);
+}
 .markdown p { margin: 0 0 8px; }
 .markdown ul,
 .markdown ol { margin: 0 0 8px; padding-left: 20px; }
