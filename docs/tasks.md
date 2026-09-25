@@ -4383,7 +4383,32 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
   - Files: `packages/web/src/dashboard/*`, `e2e/markings.spec.ts`
   - Failing test: with the panel on, a new marking replaces its rows and total; the menu's checkbox and the panel's own control both turn it off.
   - Depends on: T120, T266
-- [ ] T270 (AC-236, AC-237, AC-238) Drill a tile's marked items by another dimension, in place, with a breadcrumb and Back
+- [x] T270 (AC-236, AC-237, AC-238) Drill a tile's marked items by another dimension, in place, with a breadcrumb and Back
+  - Done 2026-09-25. **AC-236, AC-237 and AC-238 are ticked** on `e2e/markings.spec.ts` "Drill by regroups a tile's marked items in place, with its own answer, and Back restores it", in Chrome, Firefox and Safari. On the marking dashboard, with shipped marked on By status:
+    - Drill by (the marked group's submenu) says "Drill Orders Status: shipped by".
+    - **AC-237:** it offers no Id (a primary key) and no Status (the marked member). Its groups are only time, the tile's own cube and the cubes of its join component, never the seed's views, which report no component. Every time group comes before any joined cube's.
+    - **AC-236:** Products · via join › Category redraws the tile in place:
+      - under the breadcrumb "By status › Orders Status: shipped › Category";
+      - its rows, in table view, equal `/api/load` of `orders.count` by `products.category` filtered to shipped;
+      - the Category tile's labels and the saved chart are unchanged;
+      - Back brings back the tile's own chart with its marking on it.
+    - **AC-238:** the tile's freshness says Accelerated or Live as Cube's answer to the drilled query does, not as the tile's own did.
+    - The e2e was written after the wiring. With the marking's filter dropped from the drilled query it fails, so it can.
+    - **Core** (`packages/core/src/drill.ts`):
+      - `drillOptions(meta, tile)` gives the order: a public hierarchy's next level; the time dimensions of the tile's own cube or view at year to day (only finer ones for the time it groups by); then the other dimensions of its cube and of its join component's cubes.
+      - It never offers a primary key, a hidden member, the marked members as the tile names them, or what the tile already groups by.
+      - A view reports no component, so it offers its own dimensions alone.
+      - The component rules a cube out but not in (research, `markings-query-support.md` Q4). A cube offered may still not join, and the drilled tile then shows Cube's reason.
+      - `drilledDocument` keeps the measures, filters and options, and lets go of the grouping, chart type and pinned channels, so the recommender draws the new grouping; a KPI can't show categories.
+      - `drill.test.ts` failed first against stubs.
+    - **The menu** (`TileViewMenu.tsx`): Drill by sits after View marked rows. It's a submenu headed "Drill ‹items› by", grouped as the mockup groups it (Hierarchy, "Time · ‹dimension›" with By year … By day, the tile's cube, "‹Cube› · via join"). With nothing marked it's disabled, saying why. Its options are asked only while the menu is open. `TileViewMenu.test.tsx`'s two Drill by cases failed first.
+    - **The dashboard** (`DashboardView.tsx`, `drill/DrillCrumb.tsx`):
+      - A drilled tile is drawn from its own `tileChartOf` answer. Its query is the tile's chart grouped by the choice, under every filter and limit the tile is, and its marking's predicate, as the marked rows are asked.
+      - Its own `answered` gives its own freshness.
+      - It marks nothing: no marking badge and no marking clicks.
+      - It isn't saved and isn't kept on reload (the spec's F23 note). An answer to a drill already replaced or gone back from is dropped.
+      - `DashboardPage` hands the model's meta down as `model`.
+    - **Its own unit test is missing:** nothing below the e2e tests the dashboard's drill wiring.
   - Files: `packages/core/src/drill.ts` (+test), `packages/web/src/dashboard/*`, `packages/web/src/tiles/ChartTile.tsx`, `e2e/drill.spec.ts`
   - Failing test:
     - The candidates are hierarchy level, finer grains, then the cube's and joined cubes' dimensions. No primary key, no marked member, and no other-component cube.

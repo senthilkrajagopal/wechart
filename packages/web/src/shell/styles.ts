@@ -1721,6 +1721,20 @@ fieldset.model-field > legend {
   left: 13px;
   background: var(--wc-bg-surface);
 }
+/* A drilled tile's breadcrumb and Back (T270, AC-236), the context-menu
+   mockup's state B: the way back, then where it came from, then what by. */
+.drill-crumb { display: grid; gap: 2px; margin-bottom: 4px; }
+.drill-crumb__path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--wc-text-xs-size);
+  white-space: nowrap;
+}
+.drill-crumb__from { overflow: hidden; text-overflow: ellipsis; color: var(--wc-text-secondary); }
+.drill-crumb__path b { font-weight: 600; color: var(--wc-text-primary); }
+.drill-crumb__note { margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
 /* The details panel (T269, AC-240): the rows pinned open under the tiles,
    which give it room rather than go under it; its own table scrolls. Of one
    height, rows or none, so the tiles don't move as each answer comes (T269's

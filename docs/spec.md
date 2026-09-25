@@ -795,11 +795,11 @@ Traces to: the user, 2026-09-25; `[docs/design/reviews/2026-09-24/chart-context-
 > - Excel export waits for a research doc and the user's approval of its package.
 > - PDF stays out, as a server renderer's.
 
-- [ ] AC-236 WHEN the user chooses Drill by and a dimension on a chart tile whose marking holds items, THE SYSTEM SHALL redraw that tile in place grouped by the chosen dimension and filtered to the marked items, with a breadcrumb naming the drilled items and a Back control, and SHALL leave the saved chart and every other tile unchanged.
+- [x] AC-236 WHEN the user chooses Drill by and a dimension on a chart tile whose marking holds items, THE SYSTEM SHALL redraw that tile in place grouped by the chosen dimension and filtered to the marked items, with a breadcrumb naming the drilled items and a Back control, and SHALL leave the saved chart and every other tile unchanged.
       Fails when: the drilled tile's rows differ from a Cube query of the chosen dimension filtered to the marked items, Back does not restore the previous view, or the saved chart changes.
-- [ ] AC-237 WHEN the user opens Drill by on a tile, THE SYSTEM SHALL offer the next level of the member's hierarchy first, then finer time granularities, then the dimensions of the tile's cube and of the cubes Cube reports joined to it, and SHALL offer neither a primary key nor the marked member itself.
+- [x] AC-237 WHEN the user opens Drill by on a tile, THE SYSTEM SHALL offer the next level of the member's hierarchy first, then finer time granularities, then the dimensions of the tile's cube and of the cubes Cube reports joined to it, and SHALL offer neither a primary key nor the marked member itself.
       Fails when: a primary key or the marked member is offered, or a dimension of a cube Cube reports in another join component is offered.
-- [ ] AC-238 WHILE a tile shows a drilled view, THE SYSTEM SHALL show the drilled answer's own freshness: the pre-aggregation that served it, or that the database did.
+- [x] AC-238 WHILE a tile shows a drilled view, THE SYSTEM SHALL show the drilled answer's own freshness: the pre-aggregation that served it, or that the database did.
       Fails when: a drilled view the database answered shows the parent view's pre-aggregation.
 - [x] AC-239 WHEN the user chooses View underlying rows on a chart tile with nothing marked, THE SYSTEM SHALL show the rows behind the whole tile, as its query ungrouped with its filters, and state the total number of rows.
       Fails when: the rows differ from the tile's query ungrouped, or the total is absent.

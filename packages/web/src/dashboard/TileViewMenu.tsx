@@ -1,4 +1,4 @@
-import { csvOf, exportNoteOf, rowsText, type RenderSpec } from '@wechart/core';
+import { csvOf, exportNoteOf, rowsText, type DrillOption, type RenderSpec } from '@wechart/core';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
 import { Menu, type MenuEntry } from '../shell/Menu';
@@ -50,6 +50,68 @@ function copiesImages(): boolean {
 const NO_CLIPBOARD = 'Copying needs a secure page: HTTPS, or localhost.';
 /** Why a failed tile's menu has nothing to copy or export (T251). */
 const FAILED = 'The chart could not be loaded, so nothing is drawn to copy or export.';
+
+/** A time grain as the Drill by submenu says it. */
+const BY_GRAIN: Readonly<Record<string, string>> = {
+  year: 'By year',
+  quarter: 'By quarter',
+  month: 'By month',
+  week: 'By week',
+  day: 'By day',
+};
+
+/**
+ * The Drill by submenu (T270, AC-237), as the context-menu mockup draws it:
+ * what's drilled, then the options in `drillOptions`' order, grouped — the
+ * hierarchy's next level, each time dimension's grains, then each cube's
+ * dimensions, "via join" for another cube's.
+ */
+function drillEntries(
+  items: string,
+  options: readonly DrillOption[],
+  onDrill: (option: DrillOption) => void,
+): MenuEntry[] {
+  const head: MenuEntry = { kind: 'text', key: 'drill-what', text: `Drill ${items} by` };
+  if (options.length === 0)
+    return [
+      head,
+      { kind: 'text', key: 'drill-none', text: 'The model offers nothing else to group these by.' },
+    ];
+  const groups = new Map<string, { label: string; options: DrillOption[] }>();
+  for (const option of options) {
+    const label =
+      option.kind === 'level'
+        ? 'Hierarchy'
+        : option.kind === 'time'
+          ? `Time · ${option.title}`
+          : option.from.joined
+            ? `${option.from.title} · via join`
+            : option.from.title;
+    const key = `${option.kind}:${option.kind === 'time' ? option.member : option.from.cube}`;
+    const group = groups.get(key) ?? { label, options: [] };
+    group.options.push(option);
+    groups.set(key, group);
+  }
+  return [
+    head,
+    ...[...groups.entries()].map(([key, group]): MenuEntry => ({
+      kind: 'group',
+      key: `drill-${key}`,
+      label: group.label,
+      entries: group.options.map((option) => ({
+        kind: 'item',
+        key: `${option.member}:${option.granularity ?? ''}`,
+        label:
+          option.granularity === undefined
+            ? option.title
+            : (BY_GRAIN[option.granularity] ?? option.granularity),
+        onSelect: () => {
+          onDrill(option);
+        },
+      })),
+    })),
+  ];
+}
 
 /** Hands the browser a file to save: a Blob behind a link, clicked once. */
 export function saveFile(name: string, data: string | Blob, type = 'text/csv;charset=utf-8'): void {
@@ -183,6 +245,18 @@ export function TileViewMenu({
          * (T269, AC-240): whether it's on for this tile, and its switch.
          */
         detailsPanel?: { readonly on: boolean; readonly onToggle: () => void } | undefined;
+        /**
+         * Drill by (T270, AC-236, AC-237): the marked items, as the submenu
+         * heads them, what they can be regrouped by — asked only while the
+         * menu is open — and the tile drilled.
+         */
+        drillBy?:
+          | {
+              readonly items: string;
+              readonly options: () => readonly DrillOption[];
+              readonly onDrill: (option: DrillOption) => void;
+            }
+          | undefined;
         /**
          * The marked items' values as tab-separated text, headed by the
          * members' titles, for Copy › Marked values (T271, AC-241).
@@ -405,15 +479,15 @@ export function TileViewMenu({
     spec === undefined
       ? FAILED
       : tableView
-    ? 'Shown as a table: view it as a chart to export its image.'
-    : ['kpi', 'table', 'pivot'].includes(spec.chartType)
-      ? 'A KPI, table or pivot is drawn as text, not as a chart image.'
-      : // Nothing drawn: a limited tile waiting, or an answer with no rows
-        // (T272's review: offered, then "not drawn yet" when chosen).
-        (undrawn ??
-        (spec.rows.length === 0
-          ? 'The tile has no rows drawn, so there is no image of it.'
-          : undefined));
+        ? 'Shown as a table: view it as a chart to export its image.'
+        : ['kpi', 'table', 'pivot'].includes(spec.chartType)
+          ? 'A KPI, table or pivot is drawn as text, not as a chart image.'
+          : // Nothing drawn: a limited tile waiting, or an answer with no rows
+            // (T272's review: offered, then "not drawn yet" when chosen).
+            (undrawn ??
+            (spec.rows.length === 0
+              ? 'The tile has no rows drawn, so there is no image of it.'
+              : undefined));
   const trigger = useRef<HTMLButtonElement>(null);
   const why = useId();
   const wrapper = useRef<HTMLDivElement>(null);
@@ -522,6 +596,28 @@ export function TileViewMenu({
                       label: 'View marked rows',
                       onSelect: marked.onViewMarkedRows,
                       disabled: marked.count === 0 ? 'Nothing is marked.' : undefined,
+                    },
+                  ]),
+              // Offered with nothing marked too, and said why it can't be used,
+              // so the menu keeps its shape (the mockup's state H).
+              ...(marked.drillBy === undefined
+                ? []
+                : [
+                    {
+                      kind: 'submenu' as const,
+                      key: 'drill',
+                      label: 'Drill by',
+                      disabled: marked.count === 0 ? 'Mark something to drill into.' : undefined,
+                      entries:
+                        open && marked.count > 0
+                          ? drillEntries(
+                              marked.drillBy.items,
+                              marked.drillBy.options(),
+                              (option) => {
+                                marked.drillBy?.onDrill(option);
+                              },
+                            )
+                          : [],
                     },
                   ]),
               // Offered with nothing marked too: the panel says so, and fills

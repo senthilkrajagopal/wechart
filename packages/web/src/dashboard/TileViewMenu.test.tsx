@@ -568,6 +568,107 @@ describe('a tile’s view-mode menu', () => {
     expect(onToggle).toHaveBeenCalledTimes(2);
   });
 
+  /**
+   * T270 / AC-237: WHEN the user opens Drill by on a tile, THE SYSTEM SHALL
+   * offer the next level of the member's hierarchy first, then finer time
+   * granularities, then the dimensions of the tile's cube and of the cubes
+   * Cube reports joined to it. The order is `drillOptions`' (core); the menu
+   * groups them as the context-menu mockup does, under what is drilled.
+   */
+  it('offers Drill by, grouped as the mockup groups it, while something is marked', async () => {
+    const onDrill = vi.fn();
+    const own = { cube: 'orders', title: 'Orders', joined: false };
+    const joined = { cube: 'products', title: 'Products', joined: true };
+    const options = [
+      {
+        member: 'customers.city',
+        title: 'City',
+        kind: 'level' as const,
+        from: { cube: 'customers', title: 'Customers', joined: true },
+      },
+      {
+        member: 'orders.ordered_at',
+        title: 'Ordered at',
+        granularity: 'month' as const,
+        kind: 'time' as const,
+        from: own,
+      },
+      {
+        member: 'orders.ordered_at',
+        title: 'Ordered at',
+        granularity: 'week' as const,
+        kind: 'time' as const,
+        from: own,
+      },
+      { member: 'orders.status', title: 'Status', kind: 'dimension' as const, from: own },
+      { member: 'products.category', title: 'Category', kind: 'dimension' as const, from: joined },
+    ];
+    const marked = {
+      name: 'Marking',
+      count: 2,
+      onUnmark: vi.fn(),
+      values: 'Country: Germany, United States',
+      drillBy: { items: 'Germany, United States', options: () => options, onDrill },
+    };
+    const { rerender } = render(
+      <TileViewMenu tileId="t1" title="By country" spec={SPEC} save={vi.fn()} marked={marked} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By country' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Drill by/ }));
+
+    const drill = screen.getByRole('menu', { name: /^Drill by/ });
+    expect(drill.textContent).toContain('Drill Germany, United States by');
+    const groups = [...drill.querySelectorAll('[role="group"]')].map((group) => [
+      group.getAttribute('aria-label'),
+      [...group.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent),
+    ]);
+    expect(groups).toEqual([
+      ['Hierarchy', ['City']],
+      ['Time · Ordered at', ['By month', 'By week']],
+      ['Orders', ['Status']],
+      ['Products · via join', ['Category']],
+    ]);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'By week' }));
+    expect(onDrill).toHaveBeenCalledWith(options[2]);
+
+    // Nothing marked: offered, and said why it can't be used.
+    rerender(
+      <TileViewMenu
+        tileId="t1"
+        title="By country"
+        spec={SPEC}
+        save={vi.fn()}
+        marked={{ ...marked, count: 0 }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By country' }));
+    expect(screen.getByRole('menuitem', { name: /^Drill by/ }).getAttribute('aria-disabled')).toBe(
+      'true',
+    );
+  });
+
+  it('says so when there is nothing to drill by', async () => {
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="By country"
+        spec={SPEC}
+        save={vi.fn()}
+        marked={{
+          name: 'Marking',
+          count: 1,
+          onUnmark: vi.fn(),
+          drillBy: { items: 'Germany', options: () => [], onDrill: vi.fn() },
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By country' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Drill by/ }));
+    expect(screen.getByRole('menu', { name: /^Drill by/ }).textContent).toContain(
+      'The model offers nothing else to group these by.',
+    );
+  });
+
   it('closes on Escape, giving focus back to its trigger', async () => {
     render(<TileViewMenu tileId="t1" title="T" spec={SPEC} save={vi.fn()} />);
     const trigger = screen.getByRole('button', { name: 'Actions for T' });

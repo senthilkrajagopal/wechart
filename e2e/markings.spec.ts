@@ -1020,11 +1020,13 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
   const marked = menu.getByRole('group', {
     name: 'Marking · Orders Status: shipped · 1 of 3 marked',
   });
-  // Filter to and out of marked first, as the prototype's group (T119, AC-113).
+  // Filter to and out of marked first, as the prototype's group (T119, AC-113);
+  // Drill by after View marked rows, as the context-menu mockup has it (T270).
   await expect(marked.getByRole('menuitem')).toHaveText([
     'Filter to marked',
     'Filter out marked',
     'View marked rows',
+    'Drill by ›',
     'Invert marking',
     'Mark all',
     'Unmark',
@@ -1033,7 +1035,7 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
   await expect(
     menu.getByRole('menuitem').filter({
       hasNotText:
-        /^(Filter to marked|Filter out marked|View marked rows|Invert marking|Mark all|Unmark|Create details tile)$/,
+        /^(Filter to marked|Filter out marked|View marked rows|Drill by ›|Invert marking|Mark all|Unmark|Create details tile)$/,
     }),
     // Export holds the CSV now, with the images (T272, AC-244).
   ).toHaveText([
@@ -2075,6 +2077,134 @@ test('the details panel follows the marking, and is turned off from the menu and
   await once.getByRole('switch', { name: 'Details panel: follow the marking' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(panel.getByTestId('rows-count')).toHaveText('Showing 80 of 80 rows');
+});
+
+/**
+ * T270 / AC-236: WHEN the user chooses Drill by and a dimension on a chart
+ * tile whose marking holds items, THE SYSTEM SHALL redraw that tile in place
+ * grouped by the chosen dimension and filtered to the marked items, with a
+ * breadcrumb naming the drilled items and a Back control, and SHALL leave the
+ * saved chart and every other tile unchanged. `Fails when: the drilled tile's
+ * rows differ from a Cube query of the chosen dimension filtered to the
+ * marked items, Back does not restore the previous view, or the saved chart
+ * changes.`
+ * AC-237 (the options, and what they leave out) and AC-238 (the drilled
+ * answer's own freshness): `Fails when: a primary key or the marked member is
+ * offered, or a dimension of a cube Cube reports in another join component is
+ * offered` and `a drilled view the database answered shows the parent view's
+ * pre-aggregation`.
+ */
+test('Drill by regroups a tile’s marked items in place, with its own answer, and Back restores it', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  const category = tile(page, 'tile-category');
+  // The tile's saved chart, as the store has it, to compare after.
+  const dashboard = JSON.stringify(
+    await (await request.get(`/api/documents/dashboard/${id}`)).json(),
+  );
+  const statusChart =
+    /"id":"tile-status"[^}]*?"chartId":"([^"]+)"/.exec(dashboard)?.[1] ??
+    /"chartId":"([^"]+)"[^}]*?"id":"tile-status"/.exec(dashboard)?.[1];
+  expect(statusChart).toBeDefined();
+  const savedChart = () =>
+    request.get(`/api/documents/chart/${statusChart ?? ''}`).then((r) => r.text());
+  const savedBefore = await savedChart();
+  const categoryBefore = await category.locator('svg text').allTextContents();
+  await clickBar(page, status, 'shipped');
+
+  await status.getByRole('button', { name: /^Actions for / }).click();
+  const menu = status.getByRole('menu', { name: /^Actions for / });
+  await menu
+    .getByRole('group', { name: /marked$/ })
+    .getByRole('menuitem', { name: /^Drill by/ })
+    .click();
+  const drillBy = page.getByRole('menu', { name: /^Drill by/ });
+  await expect(drillBy).toContainText('Drill Orders Status: shipped by');
+  // Never a primary key, nor the marked member itself (AC-237).
+  const offered = await drillBy.getByRole('menuitem').allTextContents();
+  expect(offered).not.toContain('Id');
+  expect(offered).not.toContain('Status');
+  // Time first, then the tile's own cube, then the cubes of its join
+  // component — none of the seed's views, which report none (AC-237).
+  const groups = await drillBy
+    .getByRole('group')
+    .evaluateAll((all) => all.map((group) => group.getAttribute('aria-label') ?? ''));
+  expect(groups.length).toBeGreaterThan(0);
+  expect(
+    groups.every((group) => /^(Time · .+|Orders|(Customers|Products) · via join)$/.test(group)),
+  ).toBe(true);
+  // The seed's orders offers nothing else of its own: its key, its time and
+  // the marked Status are all there is.
+  const firstJoined = groups.findIndex((group) => group.endsWith(' · via join'));
+  expect(groups).toContain('Products · via join');
+  expect(groups.findLastIndex((group) => group.startsWith('Time · '))).toBeLessThan(firstJoined);
+  await drillBy
+    .getByRole('group', { name: 'Products · via join' })
+    .getByRole('menuitem', { name: 'Category' })
+    .click();
+
+  // In place: the breadcrumb, and the drilled rows as a table, against Cube's own answer.
+  const crumb = status.getByTestId('drill-crumb');
+  await expect(crumb.getByRole('navigation', { name: 'Drilled from' })).toContainText(
+    'By status›Orders Status: shipped›Category',
+  );
+  const asked = (await (
+    await request.post('/api/load', {
+      data: {
+        query: {
+          measures: ['orders.count'],
+          dimensions: ['products.category'],
+          filters: [{ member: 'orders.status', operator: 'equals', values: ['shipped'] }],
+        },
+      },
+    })
+  ).json()) as { data: Record<string, string>[]; usedPreAggregations?: Record<string, unknown> };
+  const expected = asked.data
+    .map(
+      (row) =>
+        `${row['products.category'] ?? ''}|${Number(row['orders.count']).toLocaleString('en-US')}`,
+    )
+    .sort();
+  await status.getByRole('button', { name: /^Actions for / }).click();
+  await status
+    .getByRole('menu', { name: /^Actions for / })
+    .getByRole('menuitem', { name: 'View as table' })
+    .click();
+  await expect
+    .poll(async () =>
+      (
+        await status
+          .locator('tbody tr')
+          .evaluateAll((rows) =>
+            rows.map((row) =>
+              [...row.querySelectorAll('td')]
+                .map((cell) => cell.textContent?.trim() ?? '')
+                .join('|'),
+            ),
+          )
+      ).sort(),
+    )
+    .toEqual(expected);
+
+  // Its own freshness: Cube's word for the drilled question, not the tile's (AC-238).
+  const accelerated = Object.keys(asked.usedPreAggregations ?? {}).length > 0;
+  await expect(status.getByTestId('tile-freshness')).toHaveAttribute(
+    'title',
+    new RegExp(`^${accelerated ? 'Accelerated' : 'Live'}`),
+  );
+
+  // Every other tile as it was, and the saved chart untouched.
+  expect(await category.locator('svg text').allTextContents()).toEqual(categoryBefore);
+  expect(await savedChart()).toBe(savedBefore);
+
+  // Back: the tile's own chart again, its marking still on it.
+  await crumb.getByRole('button', { name: '← Back' }).click();
+  await expect(status.getByTestId('drill-crumb')).toHaveCount(0);
+  await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
 });
 
 /**

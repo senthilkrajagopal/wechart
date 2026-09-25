@@ -31,6 +31,10 @@ import {
   toCubeQuery,
   type ChartDocument,
   type ChartType,
+  type DrillOption,
+  drilledDocument,
+  drillOptions,
+  granularitiesOf,
   type MemberFormats,
   type RenderSpec,
 } from '@wechart/core';
@@ -45,7 +49,8 @@ import {
 } from 'react';
 
 import type { TileSize } from '../editor/PreviewFrame';
-import type { AnswerMeta } from '../query/answerMeta';
+import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
+import { DrillCrumb, type DrilledView } from './drill/DrillCrumb';
 import { loadTile } from '../query/loadTile';
 import { SecurityPreview } from '../query/securityPreview';
 import { ChartTile, type ChartTileProps } from '../tiles/ChartTile';
@@ -56,7 +61,7 @@ import { RollupRefreshNote } from '../tiles/RollupRefreshNote';
 import { TileSkeleton } from '../tiles/TileSkeleton';
 import { useDashboardColours } from './colours';
 import { AddPanel } from './edit/AddPanel';
-import { CHART_MISSING, CHART_UNTYPED, withFormats } from './chartSpec';
+import { CHART_MISSING, CHART_UNTYPED, tileChartOf, withFormats } from './chartSpec';
 import { ChartEditorOverlay } from './edit/ChartEditorOverlay';
 import {
   drawnWithDrafts,
@@ -293,6 +298,12 @@ export interface DashboardViewProps {
    */
   readonly reach?: Reach | undefined;
   /**
+   * The model as Cube describes it (`/v1/meta`): what a tile's marked items
+   * can be drilled by — hierarchies, time, dimensions and join components
+   * (T270, AC-237). Absent, Drill by offers nothing.
+   */
+  readonly model?: unknown;
+  /**
    * The dimension that identifies a cube's rows, from the model (AC-092).
    * Rows are markable only where there is one; absent, no table marks.
    */
@@ -447,6 +458,18 @@ function masterTileNames(
     if (name !== undefined) names.add(name);
   }
   return [...names];
+}
+
+/** A tile drilled (T270, AC-236): its chart, what by, and the drilled answer as it comes. */
+interface Drill {
+  readonly chartId: string;
+  readonly option: DrillOption;
+  readonly items: string;
+  readonly markingName: string;
+  readonly state:
+    | { readonly kind: 'loading' }
+    | { readonly kind: 'done'; readonly spec: RenderSpec; readonly answered?: AnswerMeta }
+    | { readonly kind: 'failed'; readonly error: unknown };
 }
 
 function TileBody({
@@ -854,6 +877,26 @@ interface TileCharts {
       ) => { readonly on: boolean; readonly onToggle: () => void } | undefined)
     | undefined;
   /**
+   * Drill by (T270, AC-236, AC-237): what a tile's marked items can be
+   * regrouped by, asked when its menu opens, and the tile drilled in place.
+   */
+  readonly drillByOf?:
+    | ((
+        chartId: string,
+        tileId: string,
+        items: string,
+        markingName: string,
+      ) =>
+        | {
+            readonly items: string;
+            readonly options: () => readonly DrillOption[];
+            readonly onDrill: (option: DrillOption) => void;
+          }
+        | undefined)
+    | undefined;
+  /** A tile drilled (AC-236), shown in place of its chart until Back. */
+  readonly drilledOf?: ((tileId: string) => DrilledView | undefined) | undefined;
+  /**
    * The marked rows as CSV, for Export › Marked rows CSV (T272, AC-244): the
    * rows View marked rows shows, read up to Cube's row limit and written as
    * its download writes them.
@@ -1033,6 +1076,8 @@ function Elements({
         }
 
         const chartId = element.chartId ?? '';
+        // Drilled (T270, AC-236): its marked items regrouped, in place of its chart.
+        const drill = charts.drilledOf?.(element.id);
         return (
           <>
             {/**
@@ -1219,6 +1264,12 @@ function Elements({
                               },
                             }),
                         detailsPanel: charts.detailsPanelOf?.(chartId, element.id),
+                        drillBy: charts.drillByOf?.(
+                          chartId,
+                          element.id,
+                          shown.values ?? '',
+                          shown.marking.name,
+                        ),
                         ...(charts.exportRowsOf === undefined
                           ? {}
                           : { exportRows: charts.exportRowsOf(chartId, element.id) }),
@@ -1286,6 +1337,7 @@ function Elements({
                */
               notes={(() => {
                 const said = [
+                  drill === undefined ? null : <DrillCrumb key="drill" view={drill} />,
                   charts.notCovered?.[chartId] === undefined ? null : (
                     <NotCovered
                       key="not-covered"
@@ -1322,9 +1374,9 @@ function Elements({
                 ].filter((note) => note !== null);
                 return said.length === 0 ? undefined : said;
               })()}
-              spec={charts.specs[chartId]}
-              error={charts.errors[chartId]}
-              loading={charts.loading}
+              spec={drill === undefined ? charts.specs[chartId] : drill.spec}
+              error={drill === undefined ? charts.errors[chartId] : drill.error}
+              loading={drill === undefined ? charts.loading : drill.loading}
               // Asked again by a filter, or refreshed: either way, said (T183's review).
               busy={
                 charts.pending?.has(chartId) === true || charts.refreshing?.has(chartId) === true
@@ -1334,8 +1386,9 @@ function Elements({
               carried={charts.carried}
               title={charts.titleOf?.(chartId)}
               memberTitle={charts.memberTitle}
-              answered={charts.answered?.[chartId]}
-              limited={charts.limitedStates?.[chartId]}
+              // A drilled view's own answer, so its own freshness (AC-238).
+              answered={drill === undefined ? charts.answered?.[chartId] : drill.answered}
+              limited={drill === undefined ? charts.limitedStates?.[chartId] : undefined}
               /**
                * Retry is the tile's "Refresh now" (AC-042): the same request,
                * past Cube's cache, into the same place — so a chart that
@@ -1365,7 +1418,8 @@ function Elements({
                * marks nothing, whatever the default marking holds.
                */
               badge={
-                element.kind !== 'chart'
+                // A drilled view marks nothing (the spec's F23 note).
+                element.kind !== 'chart' || drill !== undefined
                   ? undefined
                   : (() => {
                       const shown = charts.markingOn?.(element.id);
@@ -1384,14 +1438,14 @@ function Elements({
               onTableViewChange={(showing) => {
                 affordances.tableViews?.set(element.id, showing);
               }}
-              {...(charts.onItemClick === undefined
+              {...(charts.onItemClick === undefined || drill !== undefined
                 ? {}
                 : {
                     onItemClick: (item: ClickedItem) => {
                       charts.onItemClick?.(element.id, chartId, item);
                     },
                   })}
-              {...(charts.onMarkClick === undefined
+              {...(charts.onMarkClick === undefined || drill !== undefined
                 ? {}
                 : {
                     // The same click, read as a marking: the modifier is
@@ -1401,6 +1455,7 @@ function Elements({
                     },
                   })}
               {...(charts.onMarkShape === undefined ||
+              drill !== undefined ||
               charts.marksShapes?.(element.id, chartId) !== true
                 ? {}
                 : {
@@ -1416,7 +1471,8 @@ function Elements({
                     },
                   })}
               {...(() => {
-                const rows = charts.rowMarkingOn?.(element.id, chartId);
+                const rows =
+                  drill === undefined ? charts.rowMarkingOn?.(element.id, chartId) : undefined;
                 return rows === undefined ? {} : { rowMarking: rows };
               })()}
             />
@@ -1777,6 +1833,7 @@ export function DashboardView({
   onExitPreview,
   documents,
   reach,
+  model,
   primaryKey,
   memberTitle,
   formats,
@@ -2338,6 +2395,11 @@ export function DashboardView({
    * The tile the details panel follows (T269, AC-240): a slot of its own, so
    * a one-off view of rows opened meanwhile leaves it be (T269's review).
    */
+  /**
+   * Tiles drilled (T270, AC-236), by tile: what by, and the drilled answer.
+   * Not saved, and not kept on reload (the spec's F23 note).
+   */
+  const [drills, setDrills] = useState<Readonly<Record<string, Drill>>>({});
   const [panelFor, setPanelFor] = useState<{ chartId: string; tileId: string } | undefined>(
     undefined,
   );
@@ -3260,6 +3322,65 @@ export function DashboardView({
         },
       };
     },
+    drillByOf: (chartId: string, tileId: string, items: string, markingName: string) => {
+      const chart = drawn.documents?.[chartId];
+      if (chart === undefined) return undefined;
+      return {
+        items,
+        // Asked when the menu opens: the marking's members as this tile names them.
+        options: () => {
+          const spec = toChartSpec(chart);
+          const element = elementAt(live, tileId);
+          const markingId = element !== null && isTile(element) ? marksWithOf(element) : undefined;
+          const marked =
+            markingId === undefined
+              ? []
+              : markingMembers(markingOf(marks, markingId)).map((member) => {
+                  const as = reachOf(member, chartId);
+                  return typeof as === 'string' ? as : member;
+                });
+          return drillOptions(model, {
+            source: spec.cube,
+            dimensions: spec.dimensions,
+            timeDimensions: granularitiesOf(spec.timeDimensions, spec.granularities),
+            marked,
+          });
+        },
+        onDrill: (option: DrillOption) => {
+          drill({ chartId, tileId, option, items, markingName });
+        },
+      };
+    },
+    drilledOf: (tileId: string): DrilledView | undefined => {
+      const drilled = drills[tileId];
+      if (drilled === undefined) return undefined;
+      const { state, option } = drilled;
+      return {
+        crumb: {
+          title: chartTitleOf(drilled.chartId) ?? 'this chart',
+          items: drilled.items,
+          by:
+            option.granularity === undefined
+              ? option.title
+              : `${option.title} by ${option.granularity}`,
+        },
+        markingName: drilled.markingName,
+        loading: state.kind === 'loading',
+        ...(state.kind === 'done'
+          ? {
+              spec: state.spec,
+              ...(state.answered === undefined ? {} : { answered: state.answered }),
+            }
+          : {}),
+        ...(state.kind === 'failed' ? { error: state.error } : {}),
+        // Back to the tile's own chart, which was never changed.
+        onBack: () => {
+          setDrills((now) =>
+            Object.fromEntries(Object.entries(now).filter(([id]) => id !== tileId)),
+          );
+        },
+      };
+    },
     exportRowsOf: (chartId: string, tileId: string) => async (signal: AbortSignal) => {
       const query = rowsQueryOf(chartId, tileId, true, DOWNLOADED);
       if (query === undefined) throw new Error('There is nothing marked to export.');
@@ -3573,6 +3694,79 @@ export function DashboardView({
     const query = rowsQueryOf(panelFor.chartId, panelFor.tileId, true, 1);
     return query === undefined ? undefined : JSON.stringify(query);
   })();
+  /**
+   * A tile's marked items regrouped by what was chosen (T270, AC-236): its
+   * chart grouped by it (`drilledDocument`), asked under every filter and
+   * limit the tile is, and its marking's predicate — the filter "Filter to
+   * marked" makes, as the marked rows are asked. Its answer is its own, and
+   * so is its freshness (AC-238). An answer to a drill already replaced or
+   * gone back from is dropped.
+   */
+  function drill(to: {
+    chartId: string;
+    tileId: string;
+    option: DrillOption;
+    items: string;
+    markingName: string;
+  }) {
+    const chart = drawn.documents?.[to.chartId];
+    if (chart === undefined) return;
+    const drilled: Drill = { ...to, state: { kind: 'loading' } };
+    setDrills((now) => ({ ...now, [to.tileId]: drilled }));
+    const settle = (state: Drill['state']) => {
+      setDrills((now) =>
+        now[to.tileId] === drilled ? { ...now, [to.tileId]: { ...drilled, state } } : now,
+      );
+    };
+    const refused = filtered[to.chartId]?.uncovered ?? [];
+    const applied = (reached[to.chartId] ?? []).filter(
+      ({ filter }) => !refused.includes(filter.id),
+    );
+    const element = elementAt(live, to.tileId);
+    const markingId = element !== null && isTile(element) ? marksWithOf(element) : undefined;
+    const made =
+      markingId === undefined
+        ? undefined
+        : markFilterFrom(markingOf(marks, markingId), false, {
+            id: '',
+            markingName: '',
+            summary: '',
+          });
+    if (made === undefined || 'refused' in made) {
+      settle({ kind: 'failed', error: new Error('There is nothing marked to drill into.') });
+      return;
+    }
+    const on = markFilterOn(made, (member) => reachOf(member, to.chartId));
+    if ('unreached' in on) {
+      settle({
+        kind: 'failed',
+        error: new Error(
+          `This tile cannot reach ${memberTitle?.(on.unreached) ?? on.unreached}, so its marked items cannot be drilled into.`,
+        ),
+      });
+      return;
+    }
+    let answered: AnswerMeta | undefined;
+    void tileChartOf(drilledDocument(chart, to.option), async (query) => {
+      const result = (await loadTile({
+        query: withLimit(withLimit(withFilters(query, applied), asked[to.chartId]), on.filter),
+        ...(preview === undefined ? {} : { context: preview }),
+      })) as { data?: Record<string, unknown>[] };
+      answered = answerMetaOf(result);
+      return result.data ?? [];
+    }).then((result) => {
+      if ('error' in result) {
+        settle({ kind: 'failed', error: result.error });
+        return;
+      }
+      const formats = drawn.specs[to.chartId]?.formats;
+      settle({
+        kind: 'done',
+        spec: formats === undefined ? result.spec : { ...result.spec, formats },
+        ...(answered === undefined ? {} : { answered }),
+      });
+    });
+  }
   /** The panel turned off from itself: the focus back on its tile's ⋯, where there is one. */
   const closePanel = () => {
     const tile = panelFor?.tileId ?? '';

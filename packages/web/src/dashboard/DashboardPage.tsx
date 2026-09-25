@@ -513,6 +513,8 @@ function LoadedDashboard({
         specs={charts.data?.specs ?? {}}
         documents={charts.data?.documents}
         reach={reach}
+        // What a tile's marked items can be drilled by (T270, AC-237).
+        model={meta.data}
         primaryKey={primaryKey}
         memberTitle={memberTitle}
         titles={titles}
