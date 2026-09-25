@@ -117,7 +117,9 @@ export { limitFilterFor, type CubeFilter } from './markings/query';
 export {
   MARKING_ITEM_LIMIT,
   addItemsWithinLimit,
+  invertTileItems,
   markAll,
+  markAllTileItems,
   type LimitedMarking,
 } from './markings/limit';
 

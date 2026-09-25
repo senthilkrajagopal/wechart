@@ -77,7 +77,16 @@ export function TileViewMenu({
    * In Markings mode, the tile's marking: the marked-rows group, headed by
    * its name and count (AC-199). Absent in any other mode.
    */
-  marked?: { name: string; count: number; onUnmark: () => void } | undefined;
+  marked?:
+    | {
+        name: string;
+        count: number;
+        onUnmark: () => void;
+        /** Invert marking and Mark all on this tile (AC-115), where it has items to name. */
+        onInvert?: (() => void) | undefined;
+        onMarkAll?: (() => void) | undefined;
+      }
+    | undefined;
 }) {
   const [open, setOpen] = useState(false);
   /**
@@ -191,6 +200,30 @@ export function TileViewMenu({
                   <span aria-hidden="true">● </span>
                   {marked.name} · {marked.count} marked
                 </span>
+                {/* On this tile's items alone, other tiles' left as they
+                    are (AC-115); offered where the tile has items to name. */}
+                {marked.onInvert === undefined ? null : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      marked.onInvert?.();
+                      close();
+                    }}
+                  >
+                    Invert marking
+                  </button>
+                )}
+                {marked.onMarkAll === undefined ? null : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      marked.onMarkAll?.();
+                      close();
+                    }}
+                  >
+                    Mark all
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={marked.count === 0}

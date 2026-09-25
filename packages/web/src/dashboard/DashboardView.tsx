@@ -2,6 +2,8 @@ import { keyToMarking, markFromLegend, markFromPanel } from '@wechart/charts';
 import { COLORS } from '@wechart/ui';
 import {
   addItemsWithinLimit,
+  invertTileItems,
+  markAllTileItems,
   applyItemClick,
   EMPTY_PREDICATE,
   type CubeFilter,
@@ -645,6 +647,12 @@ interface TileCharts {
     | undefined;
   /** Unmark what a tile marks with — its ⋯ menu's marked-rows group (AC-199). */
   readonly onUnmark?: ((tileId: string) => void) | undefined;
+  /**
+   * Invert marking or Mark all on a tile's own items (AC-115), from the same
+   * group — for a tile with items to name, and absent for one without.
+   */
+  readonly markItemsOn?:
+    ((tileId: string) => ((how: 'invert' | 'all') => void) | undefined) | undefined;
   /** The query a tile's chart asks, and its SQL (AC-199's View query). */
   readonly onViewQuery?: ((chartId: string, tileId: string) => void) | undefined;
 }
@@ -933,6 +941,7 @@ function Elements({
                 }
                 marked={(() => {
                   const shown = charts.markingOn?.(element.id);
+                  const markItems = charts.markItemsOn?.(element.id);
                   return shown === undefined || charts.onUnmark === undefined
                     ? undefined
                     : {
@@ -941,6 +950,16 @@ function Elements({
                         onUnmark: () => {
                           charts.onUnmark?.(element.id);
                         },
+                        ...(markItems === undefined
+                          ? {}
+                          : {
+                              onInvert: () => {
+                                markItems('invert');
+                              },
+                              onMarkAll: () => {
+                                markItems('all');
+                              },
+                            }),
                       };
                 })()}
               />
@@ -2519,6 +2538,47 @@ export function DashboardView({
                 ...(from === undefined ? {} : { tileName: from }),
               }),
             );
+          },
+          /**
+           * Invert marking and Mark all (AC-115): on the items the tile draws —
+           * the categories a click or its keyboard marks — and on no other
+           * tile's. Inverting adds a list, so it keeps to the cap and says so
+           * (AC-102); Mark all is exempt.
+           */
+          markItemsOn: (tileId: string) => {
+            const element = elementAt(live, tileId);
+            if (element === null || !isTile(element) || element.chartId === undefined) {
+              return undefined;
+            }
+            const markingId = marksWithOf(element);
+            const spec = drawn.specs[element.chartId];
+            const member = spec === undefined ? undefined : memberOn(spec.encoding, 'x');
+            const items = markableItemsOf(tileId);
+            if (markingId === undefined || markingId === '' || member === undefined) {
+              return undefined;
+            }
+            if (items.length === 0) return undefined;
+            const chartId = element.chartId;
+            return (how: 'invert' | 'all') => {
+              const tileItems = items.map((value) => [{ member, value }]);
+              const before = markingOf(marks, markingId);
+              const after =
+                how === 'invert'
+                  ? invertTileItems(before, tileItems)
+                  : markAllTileItems(before, tileItems);
+              setMarks((now) => withMarking(now, markingId, after.predicate));
+              noteSource(markingId, tileId);
+              const named = markings.find((each) => each.id === markingId);
+              if (named === undefined) return;
+              const from = chartTitleOf(chartId);
+              setMarkSaid(
+                `${announceMarking({
+                  marking: named,
+                  markedCount: after.predicate.items.length + after.predicate.ranges.length,
+                  ...(from === undefined ? {} : { tileName: from }),
+                })}${after.message === undefined ? '' : ` ${after.message}`}`,
+              );
+            };
           },
           markingOn: (tileId: string) => {
             const element = elementAt(live, tileId);

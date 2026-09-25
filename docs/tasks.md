@@ -1676,10 +1676,12 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/dashboard/markings/MarkedRows.tsx`, `packages/web/src/dashboard/markings/MarkedRows.test.tsx`, and its item in the tile's ⋯ marked-rows group
   - Failing test: `MarkedRows.test.tsx`: the rows match the marking, the total row count is stated, and an export is offered (AC-114); `e2e/markings.spec.ts`: "View marked rows" from the tile's ⋯ group opens them (AC-199).
   - Depends on: T113, T041, T219
-- [ ] T121 (AC-115, AC-199) Invert a marking, or mark all, on one tile without disturbing other tiles' contributions
-  - Files: `packages/core/src/markings/apply.ts`, `packages/core/src/markings/invert.test.ts`, and their items in the tile's ⋯ marked-rows group
-  - Failing test: `invert.test.ts`: Invert marks exactly the tile's unmarked items, Mark all marks every visible item, and neither changes other tiles' contributions to that marking (AC-115); `e2e/markings.spec.ts`: both, from the tile's ⋯ group — the last of AC-199's marked-rows actions, which ticks it (AC-199).
+- [x] T121 (AC-115, AC-199) Invert a marking, or mark all, on one tile without disturbing other tiles' contributions
+  - Files: `packages/core/src/markings/{limit.ts,invert.test.ts}`, `packages/core/src/index.ts`, `packages/web/src/dashboard/{DashboardView.tsx,TileViewMenu.tsx}`, `e2e/markings.spec.ts`
+  - Failing test: `invert.test.ts`: Invert marks exactly the tile's unmarked items, Mark all marks every visible item, and neither changes other tiles' contributions to that marking (AC-115); `e2e/markings.spec.ts`: both, from the tile's ⋯ group (AC-199).
   - Depends on: T108, T219
+  - Done 2026-09-24. AC-115 ticked. **AC-199 stays open**: T118–T120's actions (details tile, Filter to/out marked, View marked rows) are not built yet, so T121 is not the last of the group after all; the last of those ticks it.
+  - A tile's items are the categories it draws (the ones a click or its keyboard marks), as the prototype's enumerates its rows (`dashboard.js`, `op === 'all'`). Invert keeps to the 1,000-item cap and says so (AC-102); Mark all is exempt, and so lists what it marks rather than storing the tile's filter — a tile's drawn categories are a bounded set. Offered only on a tile with an x-axis of categories; not on a table, scatter, pie or trellis tile yet.
 - [ ] T122 (AC-116) Render marking and measure tokens in text tiles
   - Files: `packages/web/src/dashboard/tiles/TextTokens.ts`, `packages/web/src/dashboard/tiles/TextTokens.test.ts`
   - Failing test: `TextTokens.test.ts`: a marking token renders the summary or count, and a measure token limited by a marking shows the measure over the marked rows, or over all data when nothing is marked (AC-116).

@@ -993,13 +993,10 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
   let menu = await openMenu();
   // The marked-rows group first, headed by the tile's marking and its count.
   const marked = menu.getByRole('group', { name: 'Marking · 1 marked' });
-  await expect(marked.getByRole('button', { name: 'Unmark' })).toBeVisible();
-  await expect(menu.getByRole('button').filter({ hasNotText: 'Unmark' })).toHaveText([
-    'View as table',
-    'View query',
-    'Download CSV',
-    'Edit chart',
-  ]);
+  await expect(marked.getByRole('button')).toHaveText(['Invert marking', 'Mark all', 'Unmark']);
+  await expect(
+    menu.getByRole('button').filter({ hasNotText: /^(Invert marking|Mark all|Unmark)$/ }),
+  ).toHaveText(['View as table', 'View query', 'Download CSV', 'Edit chart']);
 
   // View as table: the tile shows its rows.
   await menu.getByRole('button', { name: 'View as table' }).click();
@@ -1198,6 +1195,71 @@ test('switching the interaction mode and back leaves no mark behind', async ({ p
   await expect(status.getByTestId('mark-badge')).toHaveCount(0);
   await expect(page.getByTestId('mark-chip')).toHaveCount(0);
   expect((await opacities(status)).every((value) => value === 1)).toBe(true);
+});
+
+/**
+ * T121 / AC-115: WHEN the user chooses Invert marking or Mark all on a tile,
+ * THE SYSTEM SHALL mark exactly the tile's unmarked items, or all of its
+ * items, and leave other tiles' contributions to that marking unchanged.
+ * `Fails when: an inverted marking keeps a previously marked item, or Mark all
+ * misses a visible item.`
+ *
+ * Both from the tile's ⋯ marked-rows group, as the prototype's (AC-199).
+ */
+test('Invert marking and Mark all change one tile’s items, and keep another tile’s', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  const category = tile(page, 'tile-category');
+  // The status tile's shipped, and — added with Ctrl — the category tile's Instruments.
+  await clickBar(page, status, 'shipped');
+  await clickBar(page, category, 'Instruments', ['Control']);
+  await expect(status.getByTestId('mark-badge')).toContainText('2 marked');
+  /** How many of a tile's bars are faded — unmarked — and how many drawn. */
+  const faded = async (target: Locator) => {
+    const all = await opacities(target);
+    return `${String(all.filter((value) => value < 1).length)} of ${String(all.length)}`;
+  };
+  // Of three statuses, shipped marked; of two categories, Instruments.
+  await expect.poll(() => faded(status)).toBe('2 of 3');
+  await expect.poll(() => faded(category)).toBe('1 of 2');
+  /** The opacity of the bar over an axis label: the one a click on it marks. */
+  const opacityAt = async (label: string) => {
+    const at = await status.locator('svg text', { hasText: label }).first().boundingBox();
+    return status.locator('svg path[fill]').evaluateAll(
+      (nodes, x) =>
+        nodes
+          .map((node) => ({ box: (node as SVGGraphicsElement).getBoundingClientRect(), node }))
+          .filter(({ box }) => box.width > 2 && box.height > 2 && box.left <= x && x <= box.right)
+          .map(({ node }) => Number(node.getAttribute('fill-opacity') ?? 1))[0] ?? -1,
+      (at?.x ?? 0) + (at?.width ?? 0) / 2,
+    );
+  };
+  expect(await opacityAt('shipped')).toBe(1);
+
+  const act = async (name: string) => {
+    await status.getByRole('button', { name: /^Actions for / }).click();
+    const group = status
+      .getByRole('list', { name: /^Actions for / })
+      .getByRole('group', { name: /marked$/ });
+    await group.getByRole('button', { name }).click();
+  };
+
+  // Inverted: the tile's other two statuses, not shipped; Instruments kept.
+  await act('Invert marking');
+  await expect(status.getByTestId('mark-badge')).toContainText('3 marked');
+  await expect.poll(() => faded(status)).toBe('1 of 3');
+  await expect.poll(() => opacityAt('shipped')).toBeLessThan(1);
+  await expect.poll(() => faded(category)).toBe('1 of 2');
+
+  // Mark all: every status the tile draws; Instruments still kept.
+  await act('Mark all');
+  await expect(status.getByTestId('mark-badge')).toContainText('4 marked');
+  await expect.poll(() => faded(status)).toBe('0 of 3');
+  await expect.poll(() => faded(category)).toBe('1 of 2');
 });
 
 /**

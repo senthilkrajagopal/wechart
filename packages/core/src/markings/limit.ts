@@ -89,3 +89,50 @@ export function addItemsWithinLimit(
 export function markAll(tileFilter: MarkingPredicate): LimitedMarking {
   return { predicate: tileFilter, refused: 0 };
 }
+
+/**
+ * Invert marking on one tile (AC-115): of the items the tile shows, the
+ * marked come off and the unmarked go on — within the cap (AC-102), since
+ * this adds a list. Items another tile contributed are not the tile's, and
+ * stay as they are; so do ranges.
+ */
+export function invertTileItems(
+  predicate: MarkingPredicate,
+  tileItems: readonly MarkedItem[],
+): LimitedMarking {
+  const marked = tileItems.filter((item) => isItemMarked(predicate, item));
+  const kept: MarkingPredicate = {
+    ...predicate,
+    items: predicate.items.filter(
+      (item) => !marked.some((each) => isItemMarked({ ...predicate, items: [each] }, item)),
+    ),
+  };
+  return addItemsWithinLimit(
+    kept,
+    tileItems.filter((item) => !isItemMarked(predicate, item)),
+  );
+}
+
+/**
+ * Mark all on one tile (AC-115): every item it shows, each once, added to
+ * what the marking holds — other tiles' items kept. Exempt from the cap, as
+ * AC-102 makes "Mark all", and as the prototype's does
+ * (docs/design/prototype/dashboard.js, `op === 'all'`): the tile's items are
+ * its drawn categories, each already one of a bounded set on screen.
+ */
+export function markAllTileItems(
+  predicate: MarkingPredicate,
+  tileItems: readonly MarkedItem[],
+): LimitedMarking {
+  const added = tileItems.filter(
+    (item, index) =>
+      !isItemMarked(predicate, item) &&
+      tileItems.findIndex((other) => isItemMarked({ ...predicate, items: [other] }, item)) ===
+        index,
+  );
+  return {
+    predicate:
+      added.length === 0 ? predicate : { ...predicate, items: [...predicate.items, ...added] },
+    refused: 0,
+  };
+}
