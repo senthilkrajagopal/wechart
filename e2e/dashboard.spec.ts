@@ -1912,3 +1912,87 @@ test('a chart of many bars draws every bar, even narrowed by the edit sidebar', 
   // ECharts lays inside it, half past the path on each side.
   for (const bar of bars) expect(bar.width - bar.stroke).toBeGreaterThan(0);
 });
+
+/**
+ * T309, AC-210 for a donut: with its legend at the right, a donut five
+ * columns wide drew the legend over its ring (the Superset-parity rebuild's
+ * gap 3, with country names), hiding the slices under it. The sample's
+ * product names are shorter, so a narrower tile shows the same thing.
+ */
+test('a narrow donut with its legend at the right draws its ring clear of the legend', async ({
+  page,
+  request,
+}) => {
+  const api = 'http://localhost:4100/api';
+  const stamp = String(Date.now());
+  const title = `Donut legend ${stamp}`;
+  const { id } = (await (
+    await request.post(`${api}/documents`, {
+      data: { kind: 'dashboard', title, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  const chartTitle = `Orders by product, legend right ${stamp}`;
+  const chart = (await (
+    await request.post(`${api}/documents`, {
+      data: { kind: 'chart', title: chartTitle, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  await request.put(`${api}/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: chartTitle,
+        owner: 'admin',
+        localToDashboardId: id,
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.count'], dimensions: ['products.name'], timeDimensions: [] },
+          chartType: 'donut',
+          options: { legend: { position: 'right' } },
+        },
+      },
+    },
+  });
+  await request.put(`${api}/documents/dashboard/${id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [{ id: 'tile-donut', kind: 'chart', w: 3, h: 40, chartId: chart.id }],
+          },
+        ],
+      },
+    },
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/explore/dashboards/${id}`);
+  const canvas = page.locator('[data-tile="tile-donut"]').getByTestId('chart-canvas');
+  await expect(canvas.locator('svg')).toBeVisible({ timeout: 15_000 });
+
+  const drawn = () =>
+    canvas.evaluate((node) => {
+      const marks = [...node.querySelectorAll('svg path[fill^="#"]')].map((path) =>
+        path.getBoundingClientRect(),
+      );
+      const swatch = (box: DOMRect) =>
+        Math.round(box.width) === 25 && Math.round(box.height) === 14;
+      const ring = marks.filter((box) => !swatch(box) && box.width > 2);
+      return {
+        slices: ring.length,
+        ringRight: Math.max(...ring.map((box) => box.right)),
+        legendLeft: Math.min(...marks.filter(swatch).map((box) => box.left)),
+      };
+    });
+  await expect.poll(async () => (await drawn()).slices).toBeGreaterThan(1);
+  const { ringRight, legendLeft } = await drawn();
+  expect(ringRight).toBeLessThanOrEqual(legendLeft);
+});

@@ -147,6 +147,62 @@ describe('data labels, as each measure is written (AC-046)', () => {
   });
 });
 
+/**
+ * T309, AC-210 (every row drawn visibly, whatever the tile's width): a donut
+ * with its legend at the right drew the legend over its ring, in a tile five
+ * columns wide (the Superset-parity rebuild's gap 3). The room a side legend
+ * is given was made in `grid`, which a pie does not use
+ * (research/echarts.md, "A pie's layout box").
+ */
+describe('a legend beside a pie or donut (T309)', () => {
+  const TILE = { width: 400, height: 300 };
+  const donut = (options: Record<string, unknown>): RenderSpec => ({
+    chartType: 'donut',
+    encoding: { x: [STATUS], y: [COUNT] },
+    rows: [
+      { [STATUS]: 'Instruments and sensors', [COUNT]: 40 },
+      { [STATUS]: 'Components and cables', [COUNT]: 30 },
+      { [STATUS]: 'Services and support plans', [COUNT]: 20 },
+    ],
+    palette: PALETTE,
+    options,
+  });
+  /** The ring's extent, and the legend's swatches (25 × 14). */
+  const drawn = (options: Record<string, unknown>) => {
+    const marks = marksOf(renderToSvg(optionFor(donut(options)), TILE), PALETTE);
+    const swatch = (mark: (typeof marks)[number]) =>
+      Math.round(mark.right - mark.left) === 25 && Math.round(mark.bottom - mark.top) === 14;
+    const ring = marks.filter((mark) => !swatch(mark));
+    return {
+      left: Math.min(...ring.map((mark) => mark.left)),
+      right: Math.max(...ring.map((mark) => mark.right)),
+      swatches: marks.filter(swatch),
+    };
+  };
+
+  it('draws the ring clear of a legend at the right', () => {
+    const { right, swatches } = drawn({ legend: { position: 'right' } });
+    expect(swatches).toHaveLength(3);
+    expect(right).toBeLessThanOrEqual(Math.min(...swatches.map((mark) => mark.left)));
+  });
+
+  it('draws the ring clear of a legend at the left, and of its names', () => {
+    const { left, swatches } = drawn({ legend: { position: 'left' } });
+    expect(swatches).toHaveLength(3);
+    // The side room is 120 px, as a chart on axes is given.
+    expect(left).toBeGreaterThanOrEqual(120);
+  });
+
+  it('keeps a pie’s side legend’s names within its room, and a bar chart’s whole', () => {
+    type WithText = { legend?: { textStyle?: { width?: unknown; overflow?: unknown } } };
+    const legend = (optionFor(donut({ legend: { position: 'right' } })) as WithText).legend;
+    // 120 less the legend's 5 px padding each side, its 25 px icon and 5 px gap.
+    expect(legend?.textStyle).toMatchObject({ width: 80, overflow: 'truncate' });
+    const bars = (optionFor(twoSeries({ legend: { position: 'right' } })) as WithText).legend;
+    expect(bars?.textStyle?.overflow).toBeUndefined();
+  });
+});
+
 describe('stacking, only where the tab offers it', () => {
   const stacks = (spec: RenderSpec) =>
     ((optionFor(spec) as { series?: { stack?: unknown }[] }).series ?? []).map((one) => one.stack);

@@ -42,12 +42,33 @@ export function seriesSettingsOf(spec: RenderSpec): Readonly<Record<string, Seri
   return record(spec.options?.['series']) as Record<string, SeriesSettings>;
 }
 
+/** A side legend's room, as the plot leaves it. */
+const SIDE_ROOM_PX = 120;
+
+/**
+ * A pie's side legend's names, kept within its room (T309): the room less the
+ * legend's 5 px padding each side, its 25 px icon and the 5 px before the
+ * name (research/echarts.md, "A pie's layout box, and a legend's text
+ * width"). A longer name ends in "…" rather than running over the ring,
+ * which the legend is the only key to. A chart on axes keeps its names
+ * whole, as before.
+ */
+const PIE_SIDE_NAMES = {
+  textStyle: { width: SIDE_ROOM_PX - 2 * 5 - 25 - 5, overflow: 'truncate' },
+};
+
 /** Where a legend goes, and the room the plot leaves it. */
 const PLACED: Record<LegendPosition, { legend: object; grid: object }> = {
   top: { legend: { top: 0 }, grid: { top: 32 } },
-  right: { legend: { right: 0, top: 'middle', orient: 'vertical' }, grid: { right: 120 } },
+  right: {
+    legend: { right: 0, top: 'middle', orient: 'vertical' },
+    grid: { right: SIDE_ROOM_PX },
+  },
   bottom: { legend: { bottom: 0 }, grid: { bottom: 56 } },
-  left: { legend: { left: 0, top: 'middle', orient: 'vertical' }, grid: { left: 120 } },
+  left: {
+    legend: { left: 0, top: 'middle', orient: 'vertical' },
+    grid: { left: SIDE_ROOM_PX },
+  },
 };
 
 /**
@@ -113,6 +134,22 @@ export function applyCustomize(option: EChartsOption, spec: RenderSpec): ECharts
       };
     }
   }
+  /**
+   * A pie is laid out in a box of its own, not in the grid, so the room left
+   * for a legend at its side has to be left in its box too, or the legend is
+   * drawn over its ring (T309, AC-210; research/echarts.md, "A pie's layout
+   * box").
+   */
+  const pieRoom =
+    next['legend'] !== undefined && legend.position !== undefined && legend.position !== 'top'
+      ? PLACED[legend.position].grid
+      : undefined;
+  if (
+    pieRoom !== undefined &&
+    (legend.position === 'right' || legend.position === 'left') &&
+    drawnSeries?.some((one) => one.type === 'pie') === true
+  )
+    next = { ...next, legend: { ...record(next['legend']), ...PIE_SIDE_NAMES } };
 
   if (drawnSeries !== undefined) {
     // The cross-filter share drawn over a bar (AC-117) is not a series of the
@@ -133,6 +170,7 @@ export function applyCustomize(option: EChartsOption, spec: RenderSpec): ECharts
               ...(stacking && (one.type === 'bar' || one.type === 'line')
                 ? { stack: 'total' }
                 : {}),
+              ...(pieRoom !== undefined && one.type === 'pie' ? pieRoom : {}),
               ...(labelled
                 ? { label: { ...record(one['label']), ...labelFor(spec, one, inside) } }
                 : {}),

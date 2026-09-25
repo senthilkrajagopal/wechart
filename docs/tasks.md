@@ -4644,11 +4644,23 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
   - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/DataTable.tsx`, `e2e/keyboard-coverage.spec.ts`, `e2e/crossfilter.spec.ts`
   - Failing test: each of those actions is done from the keyboard alone (AC-176).
   - Depends on: T306
-- [ ] T309 (AC-210) Keep a pie's or donut's ring clear of a legend placed at its side
+- [x] T309 (AC-210) Keep a pie's or donut's ring clear of a legend placed at its side
   - Gap 3 of the parity rebuild. With the legend at Right, the legend was drawn over the ring. The legend's room was made in the grid, which a pie does not use, so slices under it were not drawn visibly.
   - Files: `packages/charts/src/customize.ts`, its test, `docs/research/echarts.md` (the pie's layout box)
   - Failing test: a donut with its legend at the right or left draws its ring clear of the legend's side (AC-210).
   - Depends on: none
+  - **Done 2026-09-25.**
+    - **Research, from the installed 6.1.0 source,** in `research/echarts.md` "A pie's layout box, and a legend's text width":
+      - a pie is laid out in its own `left`/`top`/`right`/`bottom` box, with its centre and radius relative to that box;
+      - a legend item's text honours `textStyle.width` and `overflow`.
+    - **`applyCustomize`:**
+      - A legend placed at the right, left or bottom gives a pie series the same room it gives the grid, so the ring shrinks and moves clear.
+      - A pie's side legend truncates its names to that room: 80 px of text in 120. A chart on axes keeps its names whole, as the AC-219 e2e test reads them.
+  - **Tests, red first:**
+    - `charts/customize.test.ts` (3), in SSR at 400 × 300: the ring's right edge is left of the legend swatches at the right; its left edge is past the 120 px room at the left; a pie's side names are 80 px wide and truncated, and a bar chart's are not.
+    - `e2e/dashboard.spec.ts` "a narrow donut with its legend at the right draws its ring clear of the legend": products by name in a 3-column tile. With the fix set aside it failed in all three browsers, the ring's right edge at 282 px against the legend at 236. It passes with dashboard and chart-editor (297 runs).
+    - A first version truncated every side legend. It broke the AC-219 e2e test, which reads the full name "Orders Average Amount" in a bar chart's right legend, so it was narrowed to pies.
+  - **Not done here:** slice data labels still truncate to "$…" in a narrow tile (gap 3, second half). No criterion covers how a label fits, so it is a proposed spec change.
 
 ---
 
