@@ -34,8 +34,8 @@ export interface PreviewFrameProps {
  * the chart inside gets the height the dashboard gives it. Anything else would
  * be a different chart at a similar size.
  *
- * Opened with no tile — from Explore — the preview is drawn as it always was:
- * there is no actual size to offer.
+ * Opened with no tile — from Explore — there is no actual size to offer: the
+ * preview is a tile filling the editor (T257).
  *
  * **Fit is the tile scaled to fill the editor's width**, keeping its
  * proportions. Its width comes from the layout; its height is *derived* from

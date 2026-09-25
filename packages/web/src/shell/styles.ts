@@ -3783,8 +3783,14 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   font-size: 12px;
 }
 .addbtn:hover { color: var(--wc-text-primary); }
-/* Its .picker is 240 px (index.html 961). */
+/* Its .picker is 240 px (index.html 961), placed against the well — left: 0
+   — not against the "+", which the pills push along: from there it ran past
+   the inspector's edge (T257's review). */
+.well > .menu-button { position: static; }
 .well .menu-button__menu { width: 240px; }
+/* On a legal well's accent tint, text-muted is 4.28:1 in dark; the audited
+   text-secondary holds (T257's review, AC-005). */
+.well[data-drop='legal'] .addbtn { color: var(--wc-text-secondary); }
 .well .menu-button__item .field-row__icon { flex: none; }
 .wells__options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: end; }
 
@@ -3862,6 +3868,8 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   overflow: hidden;
 }
 .preview-frame__sizes button {
+  /* Not the 32 px minimum a class-less button takes. */
+  min-height: 0;
   height: 28px;
   padding: 0 10px;
   border: 0;
@@ -4133,7 +4141,6 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   color: inherit;
   cursor: pointer;
 }
-.pill__remove:hover:not(:disabled) { background: rgba(127, 127, 127, 0.2); }
 
 /* Above the sticky app bar (z-index 10): a modal dialog leaves nothing behind
    it to click, the workspace tabs included (N9). */

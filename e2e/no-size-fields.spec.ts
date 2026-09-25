@@ -90,11 +90,13 @@ test('the chart editor offers no width or height field either', async ({ page })
 
   // The results drawer is part of the editor and is reached by a control, so
   // a sweep that never opens it has not swept it.
-  for (const view of ['rows', 'underlying', 'query']) {
+  // Every view, each asserted open: the drawer's tabs are always there now
+  // (T257), so no view can be skipped for want of its tab.
+  for (const view of ['result', 'underlying', 'query', 'acceleration']) {
     const tab = page.getByTestId(`drawer-tab-${view}`);
-    if ((await tab.count()) === 0) continue;
     await tab.click();
-    await expect(page.getByTestId('results-drawer')).toBeVisible();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('results-drawer').getByRole('tabpanel')).toBeVisible();
 
     expect(await sizeFields(page)).toEqual([]);
   }

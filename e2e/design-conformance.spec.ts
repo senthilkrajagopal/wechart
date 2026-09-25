@@ -2971,6 +2971,14 @@ test.describe('T257: the chart editor', () => {
       'border-radius': '6px',
       'background-color': await token(page, 'bg-raised', 'background-color'),
     });
+    // .picker { left: 0 } against its .well, so it stays inside the inspector
+    // however far the pills push the "+" (T257's review).
+    const [menuBox, wellBox, inspectorBox] = await Promise.all(
+      [picker, well, inspector].map((each) => each.boundingBox()),
+    );
+    // At the well's padding edge, inside its 1 px rule, as measured on the prototype.
+    expect(Math.abs(menuBox!.x - wellBox!.x)).toBeLessThanOrEqual(1);
+    expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(inspectorBox!.x + inspectorBox!.width);
     const total = picker.getByRole('menuitem', { name: 'Orders Total Amount' });
     await expect(total.locator('.field-row__icon')).toHaveText('Σ');
     // Only what the well does not already hold.
@@ -3102,6 +3110,70 @@ test.describe('T257: the chart editor', () => {
     await expect(tabs).toBeVisible();
     await tabs.getByRole('tab', { name: 'Cube query' }).click();
     await expect(drawer.getByTestId('drawer-query')).toBeVisible();
+  });
+
+  test('mid-drag in the dark theme, a legal well’s "+" keeps AA on the accent’s tint (T257’s review)', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => window.localStorage.setItem('wechart.theme', 'dark'));
+    await editorReady(page);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    const field = page.getByTestId('member-orders.total_amount');
+    const from = (await field.boundingBox())!;
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    const to = (await page.getByTestId('well-dimensions').boundingBox())!;
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+    const well = page.getByTestId('well-measures');
+    await expect(well).toHaveAttribute('data-drop', 'legal');
+    // text-secondary on bg-accent-soft is an audited pair; text-muted there is 4.28:1.
+    expect(await style(well.getByRole('button', { name: 'Add to Metrics' }), 'color')).toEqual({
+      color: await token(page, 'text-secondary'),
+    });
+    await page.mouse.up();
+  });
+
+  test('Actual size and Fit are the prototype’s segmented control, the chosen one on the accent’s tint', async ({
+    page,
+  }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.getByTestId('edit-chart-tile-status').click();
+    const sizes = page.getByRole('group', { name: 'Preview size' });
+    // .seg { border: 1px solid var(--border-strong); border-radius: 4px }
+    // .seg button { height: 28px; padding: 0 10px; font-size: 12px }
+    // [aria-pressed='true'] { background: var(--accent-soft); color: var(--accent); font-weight: 600 }
+    expect(await style(sizes, 'border-top-width', 'border-top-color', 'border-radius')).toEqual({
+      'border-top-width': '1px',
+      'border-top-color': await token(page, 'border-strong', 'background-color'),
+      'border-radius': '4px',
+    });
+    const actual = sizes.getByRole('button', { name: 'Actual size' });
+    await expect(actual).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      await style(
+        actual,
+        'height',
+        'padding-left',
+        'font-size',
+        'font-weight',
+        'color',
+        'background-color',
+      ),
+    ).toEqual({
+      height: '28px',
+      'padding-left': '10px',
+      'font-size': '12px',
+      'font-weight': '600',
+      color: await token(page, 'accent'),
+      'background-color': await token(page, 'bg-accent-soft', 'background-color'),
+    });
+    expect(
+      await style(sizes.getByRole('button', { name: 'Fit' }), 'font-weight', 'background-color'),
+    ).toEqual({
+      'font-weight': '400',
+      'background-color': await token(page, 'bg-surface', 'background-color'),
+    });
   });
 
   test('the empty state: two lines in the tile, 16/600 over 12 px secondary', async ({ page }) => {
