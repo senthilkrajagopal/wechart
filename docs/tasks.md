@@ -4552,7 +4552,7 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
     - `styles.ts` draws both. `.kpi__value` is on a 40 px line on its own, and 36 px in a tile.
   - **Test, red first:** `e2e/design-conformance.spec.ts` "T300 and T304: KPI, table and pivot tiles" › "a KPI tile draws its value at 32 px…". It builds its own dashboard of a KPI, a table and a pivot through the API. It first failed on the value's 14 px at 400. It passes in all three browsers.
   - **Not done here:** the label still reads "<cube title> <measure title>" (gap 13), which AC-220 allows. It is a proposed spec change.
-- [ ] T301 (AC-039) Colour a pie's slices and a treemap's rectangles by the dashboard's assignment, and let only tiles that draw categorical colour claim a colour
+- [x] T301 (AC-039) Colour a pie's slices and a treemap's rectangles by the dashboard's assignment, and let only tiles that draw categorical colour claim a colour
   - Gaps 5 and 3 of the parity rebuild.
     - The dashboard assigned colours to each tile's *series*. A pie or treemap has one series, its measure, so its categories were coloured by position. The same member was one colour in a bar split by it and another in a pie of it, which fails AC-039.
     - KPI, table and pivot tiles, and a heatmap's scale, draw no categorical colour, yet each claimed a slot for its measure. After a few KPIs, later tiles' real members fell to the neutral, which direction.md §5 keeps for "Other" and null.
@@ -4561,6 +4561,17 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
     - `colours.test.ts`: a member in a bar's split and the same member as a pie slice or treemap rectangle get one colour; KPI, table, pivot and heatmap tiles claim none.
     - e2e: on a dashboard, a bar split by status and a donut of status draw each status in the same colour (AC-039).
   - Depends on: none
+  - **Done 2026-09-25.**
+    - **`colouredMembersOf(spec)`**, new in `@wechart/charts` (`colouredMembers.ts`), names what a chart colours:
+      - a pie's slices by `colourKeyOf` (now exported from `pie.ts` and used by its renderer);
+      - a treemap's rectangles by `treemapNodesOf` (extracted from `treemap.ts`);
+      - nothing for a KPI, table, pivot, heatmap or trellis (a trellis draws every panel in the palette's first colour);
+      - every other chart's series.
+    - **`dashboardColours`** claims exactly those names, in document order as before.
+    - The planned `e2e/colour-consistency.spec.ts` was not needed: the AC-039 test is in `e2e/dashboard.spec.ts`, and its legend reader moved to module level for the new test to share. Its assertions are unchanged.
+  - **Tests, red first:**
+    - `colours.test.ts` (9): pie, donut and treemap agree with a bar split by the same member; a donut first on the page gives each category its own colour; each of KPI, table, pivot, heatmap and trellis claims nothing. All failed first: a pie claimed only `orders.count`.
+    - `e2e/dashboard.spec.ts` "a member keeps one colour between a donut of it and a bar split by it, after a KPI". With the fix set aside it failed in Chrome (a slice `#2a78d6` against its series `#1baf7a`). It passes in all three browsers, with dashboard, markings and crossfilter (291 runs).
 - [ ] T302 (AC-219) Offer "Stack series" on a horizontal bar with more than one series
   - Gap 6 of the parity rebuild. AC-219 has Customize offer "whether series stack". A horizontal bar with two measures, or with its series split by colour, draws two series side by side, but the tab offered no stacking: `STACKABLE_TYPES` left `hbar` out.
   - Files: `packages/charts/src/customize.ts`, its test, `packages/web/src/editor/CustomizeTab.test.tsx`, `e2e/customize.spec.ts`

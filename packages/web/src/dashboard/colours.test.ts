@@ -189,3 +189,80 @@ describe('keeping a colour while a filter hides its member (AC-039)', () => {
     expect(coloured['c1']?.colours?.['shipped']).not.toBe('#123456');
   });
 });
+
+/**
+ * T301: what a tile colours is what it claims (the Superset-parity rebuild's
+ * gaps 3 and 5). A pie's and a treemap's colours are their categories, not
+ * their one series; a KPI, a table, a pivot, a heatmap's scale and a trellis's
+ * one colour are no member's, and a claim for them spent a slot that a later
+ * tile's real member then went without, falling to the neutral direction.md
+ * §5 keeps for "Other" and null.
+ */
+describe('what each kind of tile claims (T301)', () => {
+  const statuses = [
+    { [STATUS]: 'shipped', [COUNT]: 5 },
+    { [STATUS]: 'paid', [COUNT]: 4 },
+    { [STATUS]: 'refunded', [COUNT]: 1 },
+  ];
+  const byStatus = (chartType: RenderSpec['chartType']): RenderSpec => ({
+    chartType,
+    encoding: { x: [STATUS], y: [COUNT] },
+    rows: statuses,
+  });
+  const doc = (charts: readonly string[]): DashboardDocument => ({
+    ...DOC,
+    pages: [
+      {
+        id: 'p1',
+        title: 'Overview',
+        items: charts.map((chartId, index) => ({
+          id: `t${String(index)}`,
+          kind: 'chart' as const,
+          w: 6,
+          h: 40,
+          chartId,
+        })),
+      },
+    ],
+  });
+
+  it.each(['pie', 'donut', 'treemap'] as const)(
+    'colours a %s by its categories, as a bar split by them is',
+    (chartType) => {
+      const { specs: coloured } = dashboardColours(doc(['c1', 'slices']), {
+        c1: FIRST,
+        slices: byStatus(chartType),
+      });
+
+      for (const member of ['paid', 'shipped', 'refunded'])
+        expect(coloured['slices']?.colours?.[member]).toBe(coloured['c1']?.colours?.[member]);
+    },
+  );
+
+  it('gives a pie first on the page each category its own colour', () => {
+    const { specs: coloured } = dashboardColours(doc(['slices']), {
+      slices: byStatus('donut'),
+    });
+
+    expect(new Set(Object.values(coloured['slices']?.colours ?? {})).size).toBe(3);
+  });
+
+  it.each([
+    ['kpi', { y: [COUNT] }],
+    ['table', { x: [REGION], y: [COUNT] }],
+    ['pivot', { row: [REGION], column: [STATUS], y: [COUNT] }],
+    ['heatmap', { x: [REGION], y: [STATUS], color: [COUNT] }],
+    ['trellis', { x: [REGION], y: [COUNT], facet: [STATUS] }],
+  ] as const)('lets a %s claim no colour', (chartType, encoding) => {
+    const drawsNone: RenderSpec = { chartType, encoding, rows: FIRST.rows };
+    const { specs: coloured, assigned } = dashboardColours(doc(['none', 'c1']), {
+      none: drawsNone,
+      c1: FIRST,
+    });
+
+    expect(Object.keys(assigned).sort()).toEqual(['paid', 'refunded', 'shipped']);
+    // The bar after it starts at the palette's first slot, as it would alone.
+    const alone = dashboardColours(doc(['c1']), { c1: FIRST });
+    expect(coloured['c1']?.colours).toEqual(alone.specs['c1']?.colours);
+  });
+});

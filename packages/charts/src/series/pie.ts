@@ -114,6 +114,16 @@ export function slicesOf(spec: RenderSpec): Slice[] {
   );
 }
 
+/**
+ * The member a slice is coloured as (AC-039): its category's own value, the
+ * same name a bar split by that category colours a series by; a slice of a
+ * split pie, or of a blank category, by its written name. The dashboard's
+ * assignment claims these (T301), so the two must be one definition.
+ */
+export function colourKeyOf(slice: Slice): string {
+  return slice.split === undefined && slice.category !== '' ? slice.category : slice.name;
+}
+
 export function pieOption(spec: RenderSpec): EChartsOption {
   if (!isPieType(spec.chartType)) {
     throw new Error(`${spec.chartType} is not a pie chart`);
@@ -134,11 +144,7 @@ export function pieOption(spec: RenderSpec): EChartsOption {
           itemStyle: {
             // By the slice's own value, so a category keeps its colour in
             // every tile of a dashboard (AC-039).
-            color: colourFor(
-              spec,
-              slice.split === undefined && slice.category !== '' ? slice.category : slice.name,
-              index,
-            ),
+            color: colourFor(spec, colourKeyOf(slice), index),
             // The same surface-coloured gap the bar family uses, so slices of
             // a pie and segments of a stacked bar read the same way.
             borderColor: surface,
