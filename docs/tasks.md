@@ -5021,10 +5021,16 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.1 Sign-in (F25)
 
-- [ ] T315 [P] (AC-257) Run Dex 2.45.1 beside wechart in docker-compose, with the test users and their groups
+- [x] T315 [P] (AC-257) Run Dex 2.45.1 beside wechart in docker-compose, with the test users and their groups
   - Files: `docker-compose.yml` (service `dex`, image pinned by digest, profile `security`), `infra/dex/config.yaml` (static users: `super` in `wechart-super-admins`; `writer` in `sales-rw`; `reader` in `sales-ro`; `many` in `g01`…`g20`; `nobody` in none; one client `wechart`), `packages/api/vitest.globalSetup.ts` (starts `dex` with `wechart-meta`), `packages/api/src/auth/dex.test.ts`
   - Failing test: `dex.test.ts`: Dex's discovery answers at the configured issuer, and a password-grant ID token for `many` carries all 20 groups in `groups` (research `dex.md` §6) (AC-257, compose half).
   - Depends on: none
+  - **Done 2026-09-25.**
+    - `dexidp/dex:v2.45.1` is pinned by its multi-platform index digest, since ghcr refused an anonymous pull. It runs under the compose profile `security`, so phase 1's `docker compose up` doesn't start it; the api tests' global setup does.
+    - Issuer `http://localhost:5556/dex`, the same for the browser and the API on the host. Six test users: `super`, `writer`, `reader`, `many` (20 groups), `nobody` (none) and `manager` (for T322's `managers` policy). Their test passwords are in `infra/dex/test-users.json`.
+    - Every user's token carries exactly their groups; `nobody`'s carries no `groups` claim; a wrong password is refused as `access_denied`.
+    - The review's healthcheck finding: BusyBox `wget` works, confirming research §2.
+    - AC-257 stays open until sign-in through wechart works in compose (T320) and in Helm (T324).
 - [ ] T316 (AC-252) Sign users in with openid-client, keeping identity and groups in a server-side session
   - Files: `packages/api/package.json` (openid-client 6.8.8, @fastify/cookie 11.1.2, @fastify/session 11.1.3), `packages/api/vite.build.config.ts` (externals), a migration `…_sessions.cjs`, `packages/api/src/auth/{oidc,session-store,routes}.ts` (+ tests), `packages/api/src/config.ts` (`WECHART_OIDC_ISSUER`, `_CLIENT_ID`, `_CLIENT_SECRET`, `_GROUPS_CLAIM`, `_BACKCHANNEL_ORIGIN`, `WECHART_PUBLIC_URL`, `WECHART_SESSION_SECRET`)
   - Failing test: `routes.test.ts`, against Dex: `/api/auth/login` redirects to Dex; completing Dex's form for `writer` and following the callback gives a session whose `/api/me` names the user and lists exactly the token's groups; with `WECHART_OIDC_GROUPS_CLAIM` set to another claim, groups come from that claim (AC-252).

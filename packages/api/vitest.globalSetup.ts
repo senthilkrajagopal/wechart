@@ -66,11 +66,17 @@ async function createTestDatabase(): Promise<void> {
 
 async function startDatabase(): Promise<void> {
   try {
-    await run('docker', ['compose', 'up', '-d', '--wait', SERVICE], { cwd: REPO_ROOT });
+    // Dex too (T315): the sign-in tests ask the development provider itself.
+    await run(
+      'docker',
+      ['compose', '--profile', 'security', 'up', '-d', '--wait', SERVICE, 'dex'],
+      { cwd: REPO_ROOT },
+    );
   } catch (cause) {
     throw new Error(
-      `Could not start the "${SERVICE}" service from docker-compose.yml.\n` +
-        'The api tests run against a real Postgres, so Docker has to be running.\n' +
+      `Could not start the "${SERVICE}" and "dex" services from docker-compose.yml.\n` +
+        'The api tests run against a real Postgres and the development OIDC provider (Dex, on ' +
+        'port 5556), so Docker has to be running and the ports free.\n' +
         'Start Docker Desktop and run `pnpm test` again, or point WECHART_DB_URL at ' +
         'your own Postgres.\n' +
         `Underlying error: ${cause instanceof Error ? cause.message : String(cause)}`,

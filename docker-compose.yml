@@ -141,6 +141,31 @@ services:
       - '127.0.0.1:54001:4000'
     volumes: *cube-volumes
 
+  # The development and test OIDC provider (T315, AC-257; research/dex.md, the
+  # user's R20): Dex 2.45.1 with static users and their groups
+  # (infra/dex/config.yaml). Only for sign-in with security on, so it runs under
+  # the `security` profile; the api tests start it themselves. Pinned by
+  # digest: `latest` is Dex's master (research Gotcha 2).
+  dex:
+    image: dexidp/dex:v2.45.1@sha256:8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462
+    container_name: wechart-dex
+    profiles: [security]
+    command: ['dex', 'serve', '/etc/dex/config.yaml']
+    environment:
+      # A test value for this application's development client only.
+      WECHART_OIDC_CLIENT_SECRET: ${WECHART_OIDC_CLIENT_SECRET:-dev-oidc-secret}
+    ports:
+      # The browser and the API on the host both reach the issuer here.
+      - '127.0.0.1:5556:5556'
+    volumes:
+      - ./infra/dex/config.yaml:/etc/dex/config.yaml:ro
+    healthcheck:
+      # The alpine image's BusyBox wget, on the telemetry port (research §2).
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:5558/healthz/ready']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
 volumes:
   wechart-meta-data:
   wechart-sample-data:

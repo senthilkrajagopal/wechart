@@ -1,0 +1,109 @@
+# Dex 2.45.1, wechart's development and test OIDC provider (T315, AC-257;
+# docs/research/dex.md, the user's R20). Development only: static users, the
+# password grant for API tests, and memory storage, so every restart starts
+# clean with new signing keys.
+#
+# The users' passwords are test values, listed in test-users.json beside this
+# file; `hash` is each one's bcrypt (htpasswd -BinC 10). Change both together,
+# then `docker compose restart dex`: Dex reads this file only when it starts.
+#
+# The image's entrypoint runs gomplate over this file (research Gotcha 5):
+# no literal double braces here.
+
+# The browser and wechart's API (on the host in development) both reach Dex
+# at this address, so the issuer is the same string for both (research §4).
+issuer: http://localhost:5556/dex
+
+storage:
+  type: memory
+
+web:
+  http: 0.0.0.0:5556
+
+telemetry:
+  http: 0.0.0.0:5558
+
+oauth2:
+  skipApprovalScreen: true
+  # Lets API tests get tokens without a browser (research §6). Test use only.
+  passwordConnector: local
+
+enablePasswordDB: true
+
+staticClients:
+  - id: wechart
+    name: wechart
+    secretEnv: WECHART_OIDC_CLIENT_SECRET
+    # Exact matches (research §1): the callback wherever wechart's web app is
+    # served — the dev server, the phase-1 and security e2e previews, and the
+    # Helm release on docker-desktop.
+    redirectURIs:
+      - http://localhost:5173/api/auth/callback
+      - http://localhost:5273/api/auth/callback
+      - http://localhost:5373/api/auth/callback
+      - http://localhost:8089/api/auth/callback
+
+staticPasswords:
+  - email: super@wechart.test
+    hash: $2y$10$WBFpdV2uNTmG1qxi0fuzqOYcMRusouVHY.GVJE09uD33.hjhvCoXG
+    username: super
+    name: Super Admin
+    preferredUsername: super
+    userID: 00000000-0000-4000-8000-000000000001
+    groups: [wechart-super-admins]
+  - email: writer@wechart.test
+    hash: $2y$10$Jvh6viJIyHfU5I6Pw4B/KOFMeCgd.7ZazaaEHhUgacUkwRRaF3ikS
+    username: writer
+    name: Wren Writer
+    preferredUsername: writer
+    userID: 00000000-0000-4000-8000-000000000002
+    groups: [sales-rw]
+  - email: reader@wechart.test
+    hash: $2y$10$CBFKR0GnOfk1U7zGG/a9DuKHCZf0tVy2pILipUvpQpblLPUVgHiua
+    username: reader
+    name: Rae Reader
+    preferredUsername: reader
+    userID: 00000000-0000-4000-8000-000000000003
+    groups: [sales-ro]
+  - email: many@wechart.test
+    hash: $2y$10$fFgleP5Ob/5BmJ7.zCSmp.w/SUBVthWeOIFwz1nQDq8d3huh9QPqa
+    username: many
+    name: Twenty Groups
+    preferredUsername: many
+    userID: 00000000-0000-4000-8000-000000000004
+    groups:
+      [
+        g01,
+        g02,
+        g03,
+        g04,
+        g05,
+        g06,
+        g07,
+        g08,
+        g09,
+        g10,
+        g11,
+        g12,
+        g13,
+        g14,
+        g15,
+        g16,
+        g17,
+        g18,
+        g19,
+        g20,
+      ]
+  - email: nobody@wechart.test
+    hash: $2y$10$5VT1.q5FAx6xCnnMU2g8O.fSoY0KPwx2g4PkVULPqz1dq6ktMyoDK
+    username: nobody
+    name: No Groups
+    preferredUsername: nobody
+    userID: 00000000-0000-4000-8000-000000000005
+  - email: manager@wechart.test
+    hash: $2y$10$8L1fhXMRnCPdQhIfN/fF0eFbe4IkADNYjpmxSoGzeA7HWSVK8wWTC
+    username: manager
+    name: Mo Manager
+    preferredUsername: manager
+    userID: 00000000-0000-4000-8000-000000000006
+    groups: [managers]
