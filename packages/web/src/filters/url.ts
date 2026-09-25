@@ -81,8 +81,8 @@ const dateOrOpen = (raw: unknown): raw is string =>
 const numberOrOpen = (raw: unknown): raw is number | undefined =>
   raw === undefined || (typeof raw === 'number' && Number.isFinite(raw));
 
-/** A filter value, if that is what this is. */
-function valueFrom(raw: unknown): FilterValue | undefined {
+/** A filter value, if that is what this is: from the URL, or a bookmark (T128). */
+export function valueFrom(raw: unknown): FilterValue | undefined {
   if (!isRecord(raw)) return undefined;
   switch (raw['kind']) {
     case 'preset': {

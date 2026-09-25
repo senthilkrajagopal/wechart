@@ -3,21 +3,101 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 import { StateLine } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
-import type { ViewState } from './viewState';
+import { viewStateFrom, type ViewState } from './viewState';
+
+interface Saved {
+  readonly id: string;
+  readonly name: string;
+  readonly state: unknown;
+}
+
+type Listed =
+  | { readonly kind: 'reading' }
+  | { readonly kind: 'read'; readonly bookmarks: readonly Saved[] }
+  | { readonly kind: 'failed'; readonly why: string };
 
 /**
- * The dashboard header's Bookmarks (T127, AC-121): Save bookmark… keeps what
- * the dashboard shows now — the page tab, the filters' values and the marks —
- * under a name the reader gives, beside the dashboard and never in it
- * (AC-122). The prototype has no bookmarks; the control sits in the header
- * with the dashboard's other reading controls, before its settings gear.
+ * The dashboard header's Bookmarks (T127, AC-121; T128, AC-122): Save
+ * bookmark… keeps what the dashboard shows now — the page tab, the filters'
+ * values and the marks — under a name the reader gives, beside the dashboard
+ * and never in it; each bookmark listed, by name, restores what it kept
+ * (`onApply`), writing nothing. The prototype has no bookmarks; the control
+ * sits in the header with the dashboard's other reading controls, before its
+ * settings gear.
  */
-export function Bookmarks({ dashboardId, current }: { dashboardId: string; current: ViewState }) {
+export function Bookmarks({
+  dashboardId,
+  current,
+  onApply,
+}: {
+  dashboardId: string;
+  current: ViewState;
+  /** Restore what a bookmark kept, read back as a view (`viewStateFrom`). */
+  onApply: (state: ViewState, name: string) => void;
+}) {
   const [saving, setSaving] = useState<ViewState | undefined>(undefined);
   const [said, setSaid] = useState('');
   const trigger = useRef<HTMLSpanElement>(null);
+  /** Read again after each save, so the one just saved is listed. */
+  const [reads, setReads] = useState(0);
+  const [listed, setListed] = useState<Listed>({ kind: 'reading' });
 
+  useEffect(() => {
+    const aborted = new AbortController();
+    void fetch(`/api/dashboards/${encodeURIComponent(dashboardId)}/bookmarks`, {
+      signal: aborted.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          setListed({ kind: 'failed', why: `The server answered ${String(response.status)}.` });
+          return;
+        }
+        const body = (await response.json()) as { bookmarks?: unknown };
+        const bookmarks = Array.isArray(body.bookmarks) ? (body.bookmarks as Saved[]) : [];
+        setListed({
+          kind: 'read',
+          bookmarks: bookmarks.filter(
+            (each) => typeof each.id === 'string' && typeof each.name === 'string',
+          ),
+        });
+      })
+      .catch(() => {
+        if (!aborted.signal.aborted)
+          setListed({ kind: 'failed', why: 'The server did not answer.' });
+      });
+    return () => {
+      aborted.abort();
+    };
+  }, [dashboardId, reads]);
+
+  const stated = (key: string, label: string, title?: string): MenuItem => ({
+    key,
+    label,
+    disabled: true,
+    onSelect: () => undefined,
+    ...(title === undefined ? {} : { title }),
+  });
   const items: MenuItem[] = [
+    ...(listed.kind === 'reading'
+      ? [stated('reading', 'Reading bookmarks…')]
+      : listed.kind === 'failed'
+        ? [stated('failed', 'Bookmarks could not be read', listed.why)]
+        : listed.bookmarks.length === 0
+          ? [stated('none', 'No bookmarks yet')]
+          : listed.bookmarks.map((bookmark): MenuItem => ({
+              key: `bookmark ${bookmark.id}`,
+              label: bookmark.name,
+              onSelect: () => {
+                // Whatever it holds is read as a view: what isn't one is dropped.
+                const state = viewStateFrom(bookmark.state);
+                if (state === undefined) {
+                  setSaid(`The bookmark “${bookmark.name}” holds nothing to restore.`);
+                  return;
+                }
+                onApply(state, bookmark.name);
+                setSaid(`Applied the bookmark “${bookmark.name}”.`);
+              },
+            }))),
     {
       key: 'save',
       label: 'Save bookmark…',
@@ -47,6 +127,7 @@ export function Bookmarks({ dashboardId, current }: { dashboardId: string; curre
           state={saving}
           onSaved={(name) => {
             setSaid(`Saved the bookmark “${name}”.`);
+            setReads((was) => was + 1);
             close();
           }}
           onClose={close}

@@ -392,9 +392,9 @@ Traces to: `[docs/inputs §12]`, direction.md §7, rules 13, 32.
 Purpose: return to a state, and send it to someone.
 Traces to: `[R7]`, direction.md §7a.
 
-- [ ] AC-121 WHEN the user saves a bookmark, THE SYSTEM SHALL store the page tab, the filter values and the current marks under a name the user gives.
+- [x] AC-121 WHEN the user saves a bookmark, THE SYSTEM SHALL store the page tab, the filter values and the current marks under a name the user gives.
       Fails when: applying the bookmark restores a different tab, filter value or mark set.
-- [ ] AC-122 WHEN the user applies a bookmark, THE SYSTEM SHALL restore that state without changing the dashboard's saved definition.
+- [x] AC-122 WHEN the user applies a bookmark, THE SYSTEM SHALL restore that state without changing the dashboard's saved definition.
       Fails when: applying a bookmark modifies the dashboard for other users.
 - [ ] AC-123 WHEN the user copies a link with marks, THE SYSTEM SHALL produce a URL that reproduces the current filters and marks when opened.
       Fails when: opening the link produces different marks or filters.

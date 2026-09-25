@@ -283,3 +283,77 @@ export function predicateProblems(predicate: MarkingPredicate): readonly string[
 
   return problems;
 }
+
+/**
+ * A predicate read from outside — a bookmark, a link (T128, T129) — if that is
+ * what it is, and one that holds (`predicateProblems`); otherwise nothing.
+ * JSON anyone can have written, so every part is checked, never trusted.
+ */
+export function predicateFrom(raw: unknown): MarkingPredicate | undefined {
+  const record = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+  const named = (value: unknown): value is string => typeof value === 'string' && value !== '';
+  const bound = (value: unknown): value is string | number =>
+    typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value));
+  const granularityOf = (value: Record<string, unknown>) =>
+    value['granularity'] === undefined
+      ? {}
+      : named(value['granularity'])
+        ? { granularity: value['granularity'] }
+        : undefined;
+  /** Each of a list read as one thing, or nothing if any isn't. */
+  const each = <T>(value: unknown, read: (item: unknown) => T | undefined): T[] | undefined => {
+    if (!Array.isArray(value)) return undefined;
+    const out: T[] = [];
+    for (const item of value) {
+      const got = read(item);
+      if (got === undefined) return undefined;
+      out.push(got);
+    }
+    return out;
+  };
+
+  if (!record(raw)) return undefined;
+  const items = each(raw['items'], (item) =>
+    each(item, (part): MemberValue | undefined => {
+      if (!record(part) || !named(part['member'])) return undefined;
+      const value = part['value'];
+      const granularity = granularityOf(part);
+      if (granularity === undefined) return undefined;
+      if (value !== null && !['string', 'number', 'boolean'].includes(typeof value))
+        return undefined;
+      return { member: part['member'], ...granularity, value: value as MemberValue['value'] };
+    }),
+  );
+  const ranges = each(raw['ranges'], (range): BoundedRange | undefined => {
+    if (!record(range) || !named(range['member'])) return undefined;
+    const granularity = granularityOf(range);
+    const { from, to } = range;
+    if (granularity === undefined || !bound(from) || !bound(to)) return undefined;
+    return { member: range['member'], ...granularity, from, to };
+  });
+  const wholes =
+    raw['wholes'] === undefined
+      ? []
+      : each(raw['wholes'], (whole): WholeTile | undefined => {
+          if (!record(whole) || !named(whole['tileId'])) return undefined;
+          const filters = each(whole['filters'], (filter) => (record(filter) ? filter : undefined));
+          const { count, member } = whole;
+          if (filters === undefined || typeof count !== 'number' || !Number.isFinite(count))
+            return undefined;
+          if (member !== undefined && !named(member)) return undefined;
+          return {
+            tileId: whole['tileId'],
+            ...(member === undefined ? {} : { member }),
+            filters,
+            count,
+          };
+        });
+  if (items === undefined || ranges === undefined || wholes === undefined) return undefined;
+  const predicate: MarkingPredicate = {
+    items,
+    ranges,
+    ...(raw['wholes'] === undefined ? {} : { wholes }),
+  };
+  return predicateProblems(predicate).length === 0 ? predicate : undefined;
+}

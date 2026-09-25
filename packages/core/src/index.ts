@@ -145,6 +145,7 @@ export {
   markedCount,
   markingMembers,
   matchesPredicate,
+  predicateFrom,
   predicateProblems,
   withItem,
   withRange,

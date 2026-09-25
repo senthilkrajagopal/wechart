@@ -233,7 +233,9 @@ import { useNarrowWindow } from './useNarrowWindow';
 import { onTabKey } from '../shell/tabKeys';
 import { duplicateChartTile, duplicatePlainTile } from './model/duplicate';
 import { withLocalCharts } from './model/localCharts';
+import { viewFor } from './bookmarks/applyBookmark';
 import { Bookmarks } from './bookmarks/Bookmarks';
+import type { ViewState } from './bookmarks/viewState';
 
 /**
  * A saved dashboard, open for reading (AC-018).
@@ -4078,6 +4080,30 @@ export function DashboardView({
     const page = document.pages.find((each) => each.id === pageId);
     return page !== undefined && holds(page.items);
   };
+  /**
+   * A bookmark applied (T128, AC-122): its page tab, filters' values and
+   * marks, fitted to the dashboard as it is now (`viewFor`). All of it the
+   * reader's view state, so the dashboard's saved definition is never
+   * touched. What else the reader had made of the dashboard goes with it:
+   * cross-filter selections, drills, the keyboard's place in a tile.
+   */
+  const applyView = (state: ViewState) => {
+    const view = viewFor(live, state);
+    setOpenPage(view.page);
+    setFilterValues(view.filters);
+    setMarks(view.marks);
+    setMarkFilters(view.markFilters);
+    setMarkSources(view.from);
+    setMarkFocus({});
+    setMarkSaid('');
+    setCrossSelections([]);
+    setDrills({});
+    // A "Filter to marked" made after this is numbered past those restored.
+    for (const filter of view.markFilters) {
+      const made = Number(/^mark-filter-(\d+)$/.exec(filter.id)?.[1] ?? 0);
+      if (made > markFilterSeq.current) markFilterSeq.current = made;
+    }
+  };
   /** What the last delete took, for the undo toast (AC-060). */
   const [deleted, setDeleted] = useState('');
   const where = {
@@ -4211,8 +4237,9 @@ export function DashboardView({
         headerActions={(session) => (
           <>
             {/* A reader's: what the dashboard shows now, under a name (T127,
-                AC-121). Not while editing, where nothing is marked. */}
-            {session.editing ? null : (
+                AC-121). Not while editing, nor in a security context's
+                preview, where nothing is marked and nothing is the reader's. */}
+            {session.editing || preview !== undefined ? null : (
               <Bookmarks
                 dashboardId={dashboardId}
                 current={{
@@ -4222,6 +4249,7 @@ export function DashboardView({
                   markFilters,
                   from: markSources,
                 }}
+                onApply={applyView}
               />
             )}
             {

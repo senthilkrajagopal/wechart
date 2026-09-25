@@ -23,7 +23,7 @@ const STATE: ViewState = {
   from: { 'marking-1': 'tile-status' },
 };
 
-function api(answer: (body: unknown) => Response) {
+function api(answer: (body: unknown) => Response, listed: () => unknown[] = () => []) {
   const asked: { url: string; method: string; body?: unknown }[] = [];
   vi.stubGlobal(
     'fetch',
@@ -35,7 +35,7 @@ function api(answer: (body: unknown) => Response) {
         ...(body === undefined ? {} : { body }),
       });
       if (init?.method === 'POST') return answer(body);
-      return new Response(JSON.stringify({ bookmarks: [] }));
+      return new Response(JSON.stringify({ bookmarks: listed() }));
     }),
   );
   return asked;
@@ -63,7 +63,7 @@ describe('Save bookmark…', () => {
           status: 201,
         }),
     );
-    render(<Bookmarks dashboardId="d1" current={STATE} />);
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
 
     await saveAs('Shipped');
 
@@ -78,7 +78,7 @@ describe('Save bookmark…', () => {
 
   it('says why a bookmark was not saved, and keeps the dialog open', async () => {
     api(() => new Response(JSON.stringify({ error: 'No such dashboard.' }), { status: 404 }));
-    render(<Bookmarks dashboardId="d1" current={STATE} />);
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
 
     const dialog = await saveAs('Shipped');
 
@@ -91,7 +91,7 @@ describe('Save bookmark…', () => {
   it('asks for a name before saving', async () => {
     const asked = api(() => new Response('{}', { status: 201 }));
     const user = userEvent.setup();
-    render(<Bookmarks dashboardId="d1" current={STATE} />);
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
 
     await user.click(screen.getByRole('button', { name: 'Bookmarks' }));
     await user.click(screen.getByRole('menuitem', { name: 'Save bookmark…' }));
@@ -99,5 +99,82 @@ describe('Save bookmark…', () => {
 
     expect(within(dialog).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
     expect(asked.filter((each) => each.method === 'POST')).toEqual([]);
+  });
+});
+
+/**
+ * T128 / AC-122: WHEN the user applies a bookmark, THE SYSTEM SHALL restore
+ * that state without changing the dashboard's saved definition.
+ * Fails when: applying a bookmark modifies the dashboard for other users.
+ *
+ * The menu lists the dashboard's bookmarks; choosing one hands its state, as
+ * read back (`viewStateFrom`), to the dashboard to restore. It writes nothing.
+ */
+describe('a bookmark in the menu', () => {
+  it('is listed by name, and choosing it hands its state on, writing nothing', async () => {
+    const asked = api(
+      () => new Response('{}', { status: 201 }),
+      () => [
+        { id: 'b1', dashboardId: 'd1', name: 'Shipped', state: STATE },
+        // Read back as a view: its marks dropped, being no predicate.
+        { id: 'b2', dashboardId: 'd1', name: 'Odd', state: { ...STATE, marks: { m: 'x' } } },
+      ],
+    );
+    const applied: [string, unknown][] = [];
+    const user = userEvent.setup();
+    render(
+      <Bookmarks
+        dashboardId="d1"
+        current={STATE}
+        onApply={(state, name) => applied.push([name, state])}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Bookmarks' }));
+    const menu = screen.getByRole('menu', { name: 'Bookmarks' });
+    expect((await within(menu).findAllByRole('menuitem')).map((item) => item.textContent)).toEqual([
+      'Shipped',
+      'Odd',
+      'Save bookmark…',
+    ]);
+    await user.click(within(menu).getByRole('menuitem', { name: 'Odd' }));
+
+    expect(applied).toEqual([['Odd', { ...STATE, marks: {} }]]);
+    expect((await screen.findByRole('status')).textContent).toBe('Applied the bookmark “Odd”.');
+    expect(asked.filter((each) => each.method !== 'GET')).toEqual([]);
+  });
+
+  it('lists one just saved', async () => {
+    const saved: unknown[] = [];
+    api(
+      (body) => {
+        saved.push({ id: 'b1', dashboardId: 'd1', ...(body as object) });
+        return new Response(JSON.stringify(saved[0]), { status: 201 });
+      },
+      () => saved,
+    );
+    const user = userEvent.setup();
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+
+    await saveAs('Shipped');
+    await screen.findByText('Saved the bookmark “Shipped”.');
+    await user.click(screen.getByRole('button', { name: 'Bookmarks' }));
+
+    expect(
+      await within(screen.getByRole('menu', { name: 'Bookmarks' })).findByRole('menuitem', {
+        name: 'Shipped',
+      }),
+    ).toBeTruthy();
+  });
+
+  it('says so when there are none', async () => {
+    api(() => new Response('{}', { status: 201 }));
+    const user = userEvent.setup();
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+
+    await user.click(screen.getByRole('button', { name: 'Bookmarks' }));
+
+    const none = await screen.findByRole('menuitem', { name: 'No bookmarks yet' });
+    expect(none.getAttribute('aria-disabled')).toBe('true');
   });
 });

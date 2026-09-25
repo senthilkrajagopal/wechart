@@ -978,6 +978,82 @@ test('a dashboard saved with marks on keeps its marking definitions, never its m
   ).toBeChecked();
 });
 
+/**
+ * T127 / AC-121: WHEN the user saves a bookmark, THE SYSTEM SHALL store the
+ * page tab, the filter values and the current marks under a name the user
+ * gives.
+ * `Fails when: applying the bookmark restores a different tab, filter value or
+ * mark set.`
+ *
+ * T128 / AC-122: WHEN the user applies a bookmark, THE SYSTEM SHALL restore
+ * that state without changing the dashboard's saved definition.
+ * `Fails when: applying a bookmark modifies the dashboard for other users.`
+ *
+ * Saved on the second page tab, with a filter set and a bar marked; applied to
+ * the dashboard opened afresh — first tab, no filter, nothing marked — which
+ * the stored dashboard reads the same before and after.
+ */
+test('a bookmark keeps the page tab, the filters’ values and the marks, and restores them, leaving the dashboard as it was', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request, { twoPages: true, limited: true });
+  const stored = async () =>
+    (await (await request.get(`${API}/documents/dashboard/${id}`)).json()) as unknown;
+  const before = await stored();
+  const filters = [
+    {
+      id: 'f-status',
+      member: 'orders.status',
+      value: { kind: 'values', values: ['shipped', 'completed'] },
+    },
+  ];
+  const inUrl = () => {
+    const raw = new URL(page.url()).searchParams.get('filters');
+    return raw === null ? null : (JSON.parse(raw) as unknown);
+  };
+
+  await page.goto(
+    `/explore/dashboards/${id}?filters=${encodeURIComponent(JSON.stringify(filters))}`,
+  );
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+  await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toContainText('1 marked');
+  await page.getByRole('tab', { name: 'Second' }).click();
+  await expect(tile(page, 'tile-elsewhere').getByTestId('mark-badge')).toContainText('1 marked');
+
+  await page.getByRole('button', { name: 'Bookmarks' }).click();
+  await page.getByRole('menuitem', { name: 'Save bookmark…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Save a bookmark' });
+  await dialog.getByRole('textbox', { name: 'Name' }).fill('Shipped, on Second');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: 'Saved the bookmark' })).toHaveText(
+    'Saved the bookmark “Shipped, on Second”.',
+  );
+
+  // Afresh: the first page tab, no filter, nothing marked (AC-124).
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('tab', { name: 'Only', selected: true })).toBeVisible();
+  await expect(tile(page, 'tile-status').getByTestId('chart-canvas')).toBeVisible();
+  await expect(page.getByTestId('mark-chip')).toHaveCount(0);
+  expect(inUrl()).toEqual(null);
+
+  await page.getByRole('button', { name: 'Bookmarks' }).click();
+  await page.getByRole('menuitem', { name: 'Shipped, on Second' }).click();
+
+  // Its page tab, its marks there and on the other tab, its filter's values.
+  await expect(page.getByRole('tab', { name: 'Second', selected: true })).toBeVisible();
+  await expect(tile(page, 'tile-elsewhere').getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(page.getByTestId('mark-chip')).toContainText('shipped');
+  await expect.poll(inUrl).toEqual(filters);
+  await page.getByRole('tab', { name: 'Only' }).click();
+  await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toContainText('1 marked');
+
+  // The dashboard, as every other reader has it, is as it was.
+  expect(await stored()).toEqual(before);
+});
+
 test('Settings › Markings adds, renames, recolours, deletes and defaults markings, and sets each tile’s', async ({
   page,
   request,

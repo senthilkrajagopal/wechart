@@ -4,6 +4,7 @@ import {
   EMPTY_PREDICATE,
   isEmptyPredicate,
   matchesPredicate,
+  predicateFrom,
   predicateProblems,
   withItem,
   withRange,
@@ -195,5 +196,44 @@ describe('what a marking stores', () => {
       expect(predicateProblems(withItem(EMPTY_PREDICATE, paid))).toEqual([]);
       expect(predicateProblems(EMPTY_PREDICATE)).toEqual([]);
     });
+  });
+});
+
+/**
+ * T128 / AC-122, T129 / AC-123: a predicate read back from a bookmark or a
+ * link — JSON anyone can have written — is taken only when it is one, and one
+ * that holds (`predicateProblems`): a tuple of nothing would mark every row.
+ */
+describe('a predicate read from outside', () => {
+  const held = {
+    items: [
+      [{ member: 'orders.status', value: 'shipped' }],
+      [
+        { member: 'orders.ordered_at', granularity: 'month', value: '2024-01-01T00:00:00.000' },
+        { member: 'orders.count', value: 3 },
+      ],
+    ],
+    ranges: [{ member: 'orders.amount', from: 10, to: 20 }],
+    wholes: [{ tileId: 'tile-1', member: 'orders.status', filters: [], count: 4 }],
+  };
+
+  it('is taken as it was written when it is a predicate', () => {
+    expect(predicateFrom(JSON.parse(JSON.stringify(held)))).toEqual(held);
+    expect(predicateFrom({ items: [], ranges: [] })).toEqual(EMPTY_PREDICATE);
+  });
+
+  it('is refused when any of it isn’t, or it doesn’t hold', () => {
+    for (const bad of [
+      null,
+      [],
+      { items: [] },
+      { items: [[]], ranges: [] },
+      { items: [[{ member: '', value: 'x' }]], ranges: [] },
+      { items: [[{ member: 'a.b', value: {} }]], ranges: [] },
+      { items: [], ranges: [{ member: 'a.b', from: 5, to: 1 }] },
+      { items: [], ranges: [{ member: 'a.b', from: 1 }] },
+      { items: [], ranges: [], wholes: [{ tileId: 't', filters: 'x', count: 1 }] },
+    ])
+      expect(predicateFrom(bad)).toBeUndefined();
   });
 });

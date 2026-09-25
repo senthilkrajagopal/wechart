@@ -1832,7 +1832,32 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/api/src/repos/bookmarks.ts`, `packages/web/src/dashboard/bookmarks/SaveBookmark.tsx`, `packages/api/src/repos/bookmarks.test.ts`
   - Failing test: `bookmarks.test.ts`: the stored bookmark carries the tab, every filter value and the mark set, under the given name (AC-121).
   - Depends on: T087, T101
-- [ ] T128 (AC-122) Apply a bookmark without changing the dashboard's saved definition
+- [x] T128 (AC-122) Apply a bookmark without changing the dashboard's saved definition
+  - Done 2026-09-25. **AC-121 and AC-122 are ticked** on `e2e/markings.spec.ts` "a bookmark keeps the page tab, the filters' values and the marks, and restores them, leaving the dashboard as it was", in Chrome, Firefox and Safari.
+    - The test saves a bookmark on the second page tab, with the status filter holding shipped and completed and "shipped" marked. It opens the dashboard afresh: first tab, no filter, no chip. Applying the bookmark brings back the Second tab, its tile marked "1 marked", the chip naming shipped, the filter's values in the URL (AC-081), and the mark on the first tab too. The stored dashboard reads back equal to how it was before.
+    - **Reading back.**
+      - `viewStateFrom` (`bookmarks/viewState.ts`) takes each part only if it is one:
+        - filter values through the URL's `valueFrom`, now exported;
+        - marks through core's new `predicateFrom`, which also refuses a predicate that doesn't hold;
+        - "Filter to marked" filters only whole.
+      - Anything else is dropped, as with a URL.
+    - **Applying.**
+      - `viewFor` (`bookmarks/applyBookmark.ts`) fits the state to the dashboard as it is now:
+        - the page tab, or the first page if that one is gone;
+        - the values taken onto the dashboard's filters, as a link's are (AC-064);
+        - marks only on markings that still exist, and only in Markings mode.
+      - `DashboardView`'s `applyView` then:
+        - sets the page, filters, marks, marking filters and sources;
+        - drops cross-filter selections, drills and the keyboard's place;
+        - numbers later "Filter to marked" filters past the ones restored.
+      - Nothing is written.
+    - **The menu.** It lists the dashboard's bookmarks by name, then "Save bookmark…". It shows "No bookmarks yet" or "Bookmarks could not be read" as a disabled item, reads the list again after each save, and says "Applied the bookmark “‹name›”." in its status line. It is hidden in a security context's preview, which marks nothing and is not the reader's own view; that also keeps `previewOptions.test.tsx`'s every-request-is-a-query check true.
+    - **Tests that failed first:**
+      - core `predicate.test.ts` "a predicate read from outside";
+      - `viewState.test.ts`;
+      - `applyBookmark.test.ts` (restores, fits to a changed dashboard, no marks outside Markings mode);
+      - `Bookmarks.test.tsx` (listed by name and applied, writing nothing; one just saved is listed; "No bookmarks yet").
+      - The e2e was written after the code; its assertions each depend on the apply.
   - Files: `packages/web/src/dashboard/bookmarks/applyBookmark.ts`, `packages/web/src/dashboard/bookmarks/applyBookmark.test.ts`
   - Failing test: `applyBookmark.test.ts`: applying restores the state and leaves the stored dashboard definition byte-identical (AC-122).
   - Depends on: T127
