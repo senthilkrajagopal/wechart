@@ -2859,7 +2859,11 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* The tabs, then the rest of the row carrying the same rule, where "+ Page
    tab" sits beside the last tab while editing, as the prototype's does. */
 .page-tabs__row { display: flex; }
-.page-tabs__row > .page-tabs { flex: 0 1 auto; padding-right: 0; }
+/* More tabs than the width scroll within the strip, not the page: out of the
+   canvas since T246, the strip carried the header and the canvas sideways
+   with it (T246's review). */
+.page-tabs__row > .page-tabs { flex: 0 1 auto; min-width: 0; padding-right: 0; overflow-x: auto; }
+.page-tabs__row > .page-tabs [role='tab'] { flex: none; white-space: nowrap; }
 .page-tabs__rest {
   flex: 1;
   display: flex;

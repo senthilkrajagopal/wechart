@@ -1206,6 +1206,9 @@ test('the chip and the badge are the prototype’s: their padding, inks and ring
 
   const chip = page.getByRole('region', { name: 'Filters' }).getByTestId('mark-chip');
   await expect(chip).toBeVisible();
+  // The band keeps its 53 px with a chip in it, as with a hint or a pill (N8;
+  // T246's review: it was 45 px here).
+  expect((await page.getByRole('region', { name: 'Filters' }).boundingBox())?.height).toBe(53);
   expect(await computed(chip, 'padding-left', 'padding-right')).toEqual({
     'padding-left': '8px',
     'padding-right': '2px',

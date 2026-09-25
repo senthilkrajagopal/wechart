@@ -3647,7 +3647,10 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - The canvas no longer needs a scroll padding the band's height, since nothing scrolls under the band.
     - AC-196's e2e now asserts that directly: the canvas begins where the band ends.
     - The band is inert during a save, as it was inside the body.
-  - The Published badge and the Markings button (F3's other items) are not in this task's failing test, and stay with F3.
+  - The Published badge and the Markings button (F3's other items) are not in this task's failing test. **No task or AC tracks them, so they are put to the user** (T246's review). The critique says the Preview as and Schedule controls beside them are still undecided.
+  - **The cold review passed it.** Fixed from its findings:
+    - More page tabs than the width now scroll within their strip. Out of the canvas, the strip had carried the whole page sideways.
+    - The band's 53 px is asserted with a marking chip in it, not only with the hint.
 - [x] T247 (AC-187) Draw tab-group tabs, the Header element, Markdown and sections as the prototype does, and name Markdown tiles by their text
   - Files: `packages/web/src/dashboard/*`, `packages/web/src/tiles/Markdown.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: a tab group's selected tab has the page tab's underline and the others do not, with no card nested in its section; Header has no tile chrome and a 600 heading on the type scale; `##` draws at the prototype's 20/26 (its level in the page's outline stays below the tile's, as `Markdown.tsx` keeps it) and the body 14/22 secondary; sections on the prototype's band with a 12/16 muted count and a 6 px toggle; Markdown tiles named by their rendered text (recheck-dashboard N1, N5, N6, N9; mismatches 15–18).

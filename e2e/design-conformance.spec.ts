@@ -1434,6 +1434,53 @@ test.describe('T246: the dashboard header and the filter band', () => {
     );
     expect((await band(page).boundingBox())?.height).toBe(53);
   });
+
+  test('many page tabs scroll within their strip, never the page (T246’s review)', async ({
+    page,
+    request,
+  }) => {
+    // Out of the canvas since T246, a strip wider than the window would carry
+    // the whole page sideways with it, the header and the canvas too.
+    const api = 'http://localhost:4100/api';
+    const name = `Tabs ${String(Date.now())}`;
+    const { id } = (await (
+      await request.post(`${api}/documents`, {
+        data: { kind: 'dashboard', title: name, folderId: 'root' },
+      })
+    ).json()) as { id: string };
+    await request.put(`${api}/documents/dashboard/${id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: name,
+          folderId: 'root',
+          owner: 'admin',
+          settings: { width: 'fixed' },
+          pages: Array.from({ length: 16 }, (_, index) => ({
+            id: `p${String(index)}`,
+            title: `Quarterly page ${String(index + 1)}`,
+            items: [],
+          })),
+        },
+      },
+    });
+    await page.setViewportSize({ width: 900, height: 700 });
+    await page.goto(`/explore/dashboards/${id}`);
+    const tabs = page.getByRole('tablist', { name: 'Pages' });
+    await expect(tabs.getByRole('tab')).toHaveCount(16);
+
+    const [pageWide, windowWide] = await page.evaluate(() => [
+      document.documentElement.scrollWidth,
+      window.innerWidth,
+    ]);
+    expect(pageWide).toBeLessThanOrEqual(windowWide ?? 0);
+    const [strip, shown] = await tabs.evaluate((list) => [list.scrollWidth, list.clientWidth]);
+    expect(strip).toBeGreaterThan(shown ?? 0);
+    // The last tab is still reachable: it scrolls into its strip.
+    await tabs.getByRole('tab').last().click();
+    await expect(tabs.getByRole('tab').last()).toBeInViewport();
+  });
 });
 
 /**
