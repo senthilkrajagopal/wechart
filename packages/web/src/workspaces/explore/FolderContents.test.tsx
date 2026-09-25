@@ -433,4 +433,18 @@ describe("the contents' columns and row menu (AC-193)", () => {
       within(rowFor('board')).getByRole('button', { name: 'Actions for Board' }),
     );
   });
+
+  // T243's review: left open, it sat over the next row's ⋯ until a choice or
+  // Escape. Leaving it puts it away, and moves nothing.
+  it('puts the Move list away when the focus leaves it, moving nothing', async () => {
+    const onMove = vi.fn();
+    render(<FolderContents items={listed} folders={folders} onMove={onMove} />);
+
+    await chooseFromMenu(rowFor('board'), 'Board', 'Move to…');
+    expect(within(rowFor('board')).getByRole('combobox')).toBe(document.activeElement);
+    await userEvent.tab();
+
+    expect(within(rowFor('board')).queryByRole('combobox')).toBeNull();
+    expect(onMove).not.toHaveBeenCalled();
+  });
 });

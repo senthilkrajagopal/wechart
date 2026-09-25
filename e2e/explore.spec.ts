@@ -330,6 +330,8 @@ test("rename and move are in each row's menu, and a move never offers where the 
   request,
 }) => {
   const made = await listed(request);
+  // Sub's sibling: a folder may move into one (recheck-shell-explore N17).
+  await folderIn(request, made.home, `Sibling ${made.unique}`);
   await openListed(page, `Listed ${made.unique}`);
 
   const chartRow = page.getByTestId(`item-${made.typed}`);
@@ -337,6 +339,8 @@ test("rename and move are in each row's menu, and a move never offers where the 
   // Nothing to rename or move with until the row's menu is opened.
   await expect(chartRow.getByRole('button', { name: 'Rename', exact: true })).toHaveCount(0);
   await expect(chartRow.getByRole('combobox')).toHaveCount(0);
+  const typeColumn = contentsOf(page).getByRole('columnheader', { name: 'Type' });
+  const before = [(await chartRow.boundingBox())?.height, (await typeColumn.boundingBox())?.x];
 
   await chartRow.getByRole('button', { name: `Actions for A typed ${made.unique}` }).click();
   const menu = page.getByRole('menu', { name: `Actions for A typed ${made.unique}` });
@@ -352,8 +356,12 @@ test("rename and move are in each row's menu, and a move never offers where the 
   await expect(
     chartTargets.getByRole('option', exactly(`${listedPath} / Sub ${made.unique}`)),
   ).toHaveCount(1);
-  // Over the row, not in its place: the row keeps its height (N14).
+  // Over the row, not in its place: the row keeps its height and the columns
+  // stay where they were (N14).
   await expect(chartRow.getByRole('button', { name: /^Actions for / })).toBeVisible();
+  expect([(await chartRow.boundingBox())?.height, (await typeColumn.boundingBox())?.x]).toEqual(
+    before,
+  );
 
   // A folder: never itself, nor a folder inside it.
   const folderRow = page.getByTestId(`item-${made.sub}`);
@@ -369,7 +377,11 @@ test("rename and move are in each row's menu, and a move never offers where the 
     `${listedPath} / Sub ${made.unique} / Inner ${made.unique}`,
   ])
     await expect(folderTargets.getByRole('option', exactly(excluded))).toHaveCount(0);
-  // The top is somewhere a folder can go.
+  // Its sibling is somewhere it can go — the old rule left every sibling out
+  // (N17) — and so is the top.
+  await expect(
+    folderTargets.getByRole('option', exactly(`${listedPath} / Sibling ${made.unique}`)),
+  ).toHaveCount(1);
   await expect(folderTargets.getByRole('option', { name: 'Shared', exact: true })).toHaveCount(1);
   await expect(folderTargets.getByRole('option', exactly('My workspace'))).toHaveCount(1);
 

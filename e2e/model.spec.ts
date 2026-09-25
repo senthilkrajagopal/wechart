@@ -744,3 +744,28 @@ test('code is drawn in IBM Plex Mono, served with the app as IBM ships it', asyn
     'uiBEl/FrbTNM7p0eljqDG3PjpW4dYwCoSJ0Y33IUs1A=',
   );
 });
+
+/**
+ * The face's notice and licence travel with it (OFL condition 2;
+ * ibm-plex-mono.md, Licensing): the stylesheet names the licence, and the
+ * app serves IBM's text as a file of its own — not inlined into the comment,
+ * where it would be no file at all (T243's review).
+ */
+test('the code face’s licence is served with it, and its notice names it', async ({ page }) => {
+  await page.goto('/model/files/cubes%2Forders.yml');
+  await expect(page.locator('.cm-content')).toBeVisible();
+
+  const named = await page.evaluate(() => {
+    const sheet = [...document.querySelectorAll('style')]
+      .map((style) => style.textContent ?? '')
+      .find((text) => text.includes('SIL Open Font License'));
+    return /Version 1\.1: (\S+) \*\//.exec(sheet ?? '')?.[1] ?? '';
+  });
+  expect(named).toMatch(/^\/.*LICENSE[^/]*\.txt$/);
+
+  const licence = await page.request.get(named);
+  expect(licence.status()).toBe(200);
+  const text = await licence.text();
+  expect(text.startsWith('Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"')).toBe(true);
+  expect(text).toContain('SIL OPEN FONT LICENSE Version 1.1');
+});

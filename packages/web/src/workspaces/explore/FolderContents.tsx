@@ -428,6 +428,9 @@ export function FolderContents({
                         setMoving(null);
                         backToMenu(item.id);
                       }}
+                      // Left, it is put away, not left over the next row's ⋯
+                      // (T243's review); the focus stays where it went.
+                      onBlur={() => setMoving((current) => (current === item.id ? null : current))}
                     >
                       <option value="">Move to…</option>
                       {targets.map((folder) => (

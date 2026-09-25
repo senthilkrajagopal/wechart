@@ -1,7 +1,10 @@
-import plexMonoItalic from '@ibm/plex-mono/fonts/complete/woff2/IBMPlexMono-Italic.woff2?url';
-import plexMono400 from '@ibm/plex-mono/fonts/complete/woff2/IBMPlexMono-Regular.woff2?url';
-import plexMono600 from '@ibm/plex-mono/fonts/complete/woff2/IBMPlexMono-SemiBold.woff2?url';
-import plexMonoLicense from '@ibm/plex-mono/LICENSE.txt?url';
+import plexMonoItalic from '@ibm/plex-mono/fonts/complete/woff2/IBMPlexMono-Italic.woff2?url&no-inline';
+import plexMono400 from '@ibm/plex-mono/fonts/complete/woff2/IBMPlexMono-Regular.woff2?url&no-inline';
+import plexMono600 from '@ibm/plex-mono/fonts/complete/woff2/IBMPlexMono-SemiBold.woff2?url&no-inline';
+// `no-inline` (ibm-plex-mono.md, "No inlining"): at 4,456 bytes the licence
+// is close enough to Vite's 4,096-byte inlining limit that raising the limit
+// would turn it into a data: URI inside a comment, and ship no file at all.
+import plexMonoLicense from '@ibm/plex-mono/LICENSE.txt?url&no-inline';
 
 /**
  * The code face, served with the app (T234, AC-223; direction.md §3 "IBM

@@ -219,7 +219,9 @@ describe("the contents' columns (AC-193)", () => {
       body: {
         title: 'Typed',
         folderId: here,
-        chart: { source: { cube: 'orders' }, wells, chartType: 'bar' },
+        // A stale drawnAs left beside a chosen type: the type is what is
+        // listed, and the stale value is not (T243's review).
+        chart: { source: { cube: 'orders' }, wells, chartType: 'bar', drawnAs: 'kpi' },
       },
     });
     const byId = new Map((await cat().contents(here)).map((item) => [item.id, item]));

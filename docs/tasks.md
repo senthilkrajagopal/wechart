@@ -3444,7 +3444,15 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - New cube and New view making unpublished files.
 
     `FileTree.test.tsx` covers marks on files not open.
-  - **AC-223 stays open.** The panes, their header rows and scrolling, the page not scrolling, and Problems counting warnings are all demonstrated. The code face is `--wc-font-code`, IBM Plex Mono first, but the font is named and not shipped. Wherever it isn't installed, code is drawn in the fallback, which is AC-223's Fails-when. Shipping it is a licensing call for the user (the research: IBM reserves the font name "Plex").
+  - At first AC-223 stayed open: the font was named and not shipped, so wherever it wasn't installed code was drawn in the fallback, which is AC-223's Fails-when. The note above records how the user's choice closed it.
+  - **The three choices the research left open were made under the standing instruction, as small decisions, and are to be put to the user:**
+    - `font-display: swap`, so code reads in the fallback while the face arrives rather than not at all;
+    - the italic ships, for the YAML comments, rather than a synthesised slant;
+    - the notice is a CSS comment, and IBM's licence ships as a file of its own beside the fonts. There is no in-app third-party-notices view.
+  - **The follow-up's own review:**
+    - The licence now imports with `?url&no-inline`. At 4,456 bytes it sits just above Vite's 4,096-byte inlining limit, and raising that limit would have left no file at all.
+    - `e2e/model.spec.ts` "the code face's licence is served with it, and its notice names it" checks the file is served and starts with IBM's notice.
+    - Files added by the follow-up: `packages/web/src/shell/fonts.ts`, `docs/research/ibm-plex-mono.md`, `pnpm-workspace.yaml` (`allowBuilds`), `packages/web/package.json`.
   - The workspace is one page for `/model` and `/model/files/<path>`: the tree, then the file's editor or the per-file overview (AC-131).
   - New cube and New view make the prototype's skeleton as an unpublished file, kept for the tab, publishable with Save.
   - **The cold review failed the first cut, fixed:**
@@ -3547,6 +3555,21 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Done 2026-09-24. A chart following the recommendation records what it was drawn as when saved (`drawnAs`, kept beside the chart like any field the editor does not edit), and Explore reads "Bar · auto" from it; one saved before reads "Automatic" until it is saved again. Move to excludes only the folder, what is beneath it and where the item is, names each folder by its path, and opens over the row. The selection is the focused row, with no `aria-selected` on a plain table (AC-024's e2e now reads focus and the roving tabindex). `e2e/dashboard.spec.ts`'s settings test now finds Name exactly: the Folder select's name took in a folder another test had renamed.
   - Failing test: `e2e/explore.spec.ts`: an automatic chart's row reads its drawn type, not "Automatic"; a folder's Move to offers its sibling folders, named by path, without reflowing the table; a row opens from any cell, with a hover; no row is selected at rest (recheck-shell-explore N1, N17, F16, N14, N11, N12, F27, F19).
   - Depends on: T225's re-critique
+  - Also touches AC-024: the selection became the focused row (above), and AC-024's e2e reads focus.
+  - **The cold review failed it on AC-005, fixed:**
+    - **The AC-005 failure:** a focused dashboard row's description was `text-muted` on `accent-soft`, 4.28:1 in dark, below AA. The fix landed with T244, which reworked those rows: muted text on the tint is raised to `text-secondary`, and that pair is audited.
+    - **Also fixed:**
+      - **`drawnAs` on the dashboard path had no test.** `e2e/chart-save.spec.ts` "a chart handed back to the recommender is saved with the type it was drawn as" now covers both paths, the editor's Save dashboard and Make a local copy. Writing it also showed the editor's card has no rows to go on before the preview's first answer, so the test waits for the preview.
+      - **Move to stayed open over the next row's ⋯.** It now closes when focus leaves it (`FolderContents.test.tsx`).
+      - **The API's guard against a stale `drawnAs` beside a chosen type was never exercised.** `catalog.test.ts` now saves such a chart.
+      - **This entry's Failing test line claimed e2e coverage that wasn't there.** It now is:
+        - `e2e/explore.spec.ts` gives Sub a sibling folder and asserts the sibling is offered.
+        - The same test measures the row's height and the Type column's position before and after Move to opens.
+        - Hover and "nothing painted at rest" are T244's `e2e/design-conformance.spec.ts`.
+    - **Left as they are, low:**
+      - `drawnAs` is recorded when the chart is saved, so a chart whose data or model changes since reads its old pick until saved again.
+      - Save chart waits on the tile's query before it writes.
+      - Explore names a Move-to folder by its full path, root included ("Shared / Operations"), where Settings leaves the root out. In Explore both roots are destinations, so the root is what tells two same-named folders apart.
 - [x] T244 (AC-187, AC-231) Dock Explore's folder tree, and set its table, header and states to the prototype's measures
   - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/workspaces/explore/{ExplorePage,FolderTree,FolderContents}.tsx` (+ `FolderContents.test.tsx`), `packages/ui/src/tokens.ts`, `e2e/design-conformance.spec.ts`, `e2e/explore.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts`: the tree pane is 260 px on `bg-surface` with a 44 px head and 12 px rows, the selection `accent-soft`; table rows are 34 px with 12/600 names and a 22 px icon chip; crumbs 24 px, search 28×260, rename 36 px; the table scrolls in its card with sticky headers; empty and no-result states keep the header (recheck-shell-explore F6–F8, F14, F17, F20, F22–F25, N2–N5, N13; AC-187 mismatches 5–23).

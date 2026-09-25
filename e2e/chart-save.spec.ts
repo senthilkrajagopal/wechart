@@ -745,6 +745,73 @@ test('a local copy of a shared chart takes the tile and the edits so far, and le
 });
 
 /**
+ * T243 (AC-193; its review): a chart handed back to the recommender in a
+ * dashboard's editor is saved with the type it was drawn as — by Save
+ * dashboard and by Make a local copy, as by the chart editor's Save chart —
+ * so Explore names it by that type rather than "Automatic".
+ */
+test.describe('a chart handed back to the recommender is saved with the type it was drawn as', () => {
+  const chartOf = async (request: APIRequestContext, chartId: string) => {
+    const chart = (await stored(request, chartId)).body['chart'] as {
+      chartType?: string | null;
+      drawnAs?: string | null;
+    };
+    return [chart.chartType ?? null, chart.drawnAs ?? null];
+  };
+  const handBack = async (page: Page) => {
+    await expect(canvas(page)).toHaveAttribute('data-chart-type', 'bar');
+    await page.getByTestId('edit-chart-tile-save').click();
+    await expect(editor(page)).toBeVisible();
+    // The preview drawn first: before its rows arrive the recommender has no
+    // cardinalities to go on, and its pick is not the one the rows give.
+    const preview = editor(page).getByTestId('chart-canvas');
+    await expect(preview).toHaveAttribute('data-chart-type', 'bar');
+    await editor(page).getByTestId('back-to-recommended').click();
+    await expect(editor(page).getByTestId('back-to-recommended')).toHaveCount(0);
+    // What the editor now draws, the card and the preview agreeing.
+    let drawn = '';
+    await expect
+      .poll(async () => {
+        const card = await editor(page).getByTestId('chart-type').getAttribute('data-chart-type');
+        drawn = card === (await preview.getAttribute('data-chart-type')) ? (card ?? '') : '';
+        return drawn;
+      })
+      .toMatch(/^[a-zA-Z]+$/);
+    return drawn;
+  };
+
+  test('by the editor’s Save dashboard', async ({ page, request }) => {
+    const { dashboardId, chartId } = await makeDashboard(request);
+    await page.goto(`/explore/dashboards/${dashboardId}`);
+    const drawn = await handBack(page);
+
+    await saveDashboard(page).click();
+    await expect.poll(() => chartOf(request, chartId)).toEqual([null, drawn]);
+  });
+
+  test('by Make a local copy', async ({ page, request }) => {
+    const { dashboardId, chartId } = await makeDashboard(request, true);
+    await alsoOn(request, chartId);
+    await page.goto(`/explore/dashboards/${dashboardId}`);
+    const drawn = await handBack(page);
+    await editor(page)
+      .locator('.shared-chart-notice')
+      .getByRole('button', { name: 'Make a local copy' })
+      .click();
+    await expect(editor(page).getByTestId('local-copy-made')).toBeVisible();
+
+    await saveDashboard(page).click();
+    await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+    const saved = (await (
+      await request.get(`${API}/documents/dashboard/${dashboardId}`)
+    ).json()) as { body: { pages: { items: { chartId?: string }[] }[] } };
+    const copyId = saved.body.pages[0]?.items[0]?.chartId ?? '';
+    expect(copyId).not.toBe(chartId);
+    expect(await chartOf(request, copyId)).toEqual([null, drawn]);
+  });
+});
+
+/**
  * T223 / AC-205: a shared chart tile's edit menu offers "Make a local copy",
  * between Duplicate and Move to — the editor's path, from the menu: the tile
  * repointed to a copy with the edits so far, drawn as edited, and the shared
