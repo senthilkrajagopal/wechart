@@ -775,6 +775,7 @@ button.model-problems__row { cursor: pointer; }
 }
 .model-form__fields > .model-field:has(.model-field__sql),
 .model-form__fields > .model-field:has(.model-field__yaml),
+.model-form__fields > .model-field:has(.model-picker),
 .model-form__fields > .model-field--object,
 .model-form__fields > .model-field--list,
 .model-form__legacy { grid-column: 1 / -1; }
@@ -895,6 +896,35 @@ fieldset.model-field > legend {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A reference field's picker (T235, AC-224), the prototype's toggle chips:
+   each member a chip in the code face, picked ones in the accent's soft
+   tint, numbered where the order is the meaning. */
+.model-picker { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.model-picker__chip {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  max-width: 100%;
+  min-height: 24px;
+  overflow-wrap: anywhere;
+  text-align: left;
+  padding: 0 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font: 12px/16px var(--wc-font-code);
+  cursor: pointer;
+}
+.model-picker__chip[aria-pressed='true'] {
+  border-color: var(--wc-accent);
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+}
+.model-picker__chip:disabled { cursor: default; opacity: 0.6; }
+.model-picker__order { font-weight: 600; }
+.model-picker__none { color: var(--wc-text-muted); font-size: 12px; }
+.model-picker__select { font-family: var(--wc-font-code); }
 /* An expanded member's fields, in the prototype's named groups. */
 .model-form__group { grid-column: 1 / -1; display: grid; gap: 6px; }
 .model-form__group-title {

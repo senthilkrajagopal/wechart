@@ -20,6 +20,7 @@ import { ReadOnlyFile } from './ReadOnlyFile';
 import { ReferencesWarning, type MemberReferences } from './ReferencesWarning';
 import { publishModel, referencesTo } from './publish';
 import { modelOf, withObject } from './sync';
+import { memberIndexOf, PickerScopeContext } from './form/scopes';
 import { validationProblems } from './validate';
 import { YamlEditor } from './YamlEditor';
 
@@ -271,6 +272,21 @@ function FileEditor({
       missing: [...new Set(joins.map((join) => join.to))].filter((to) => !defined.has(to)),
     };
   }, [others, path, read]);
+  /**
+   * What the form's pickers may name (AC-224): the other files' cubes, each
+   * read once, and this file's as the form has it now.
+   */
+  const othersIndex = useMemo(
+    () => memberIndexOf((allFiles.data ?? []).filter((file) => file.path !== path)),
+    [allFiles.data, path],
+  );
+  const pickers = useMemo(
+    () => ({
+      index: new Map([...othersIndex, ...memberIndexOf([{ path, content: read }])]),
+      cube: undefined,
+    }),
+    [othersIndex, path, read],
+  );
   /** This file's cubes, any of which a join can be added to. */
   const cubeNames = cubes
     .map(({ value }) => value['name'])
@@ -601,34 +617,37 @@ function FileEditor({
               </span>
             </p>
           )}
-          {cubes.map(({ at, value }) => (
-            <CubeForm
-              // The cube's place in the file: its name is a field it edits.
-              key={`cube ${String(at)}`}
-              kind="cube"
-              value={value}
-              readOnly={readOnly}
-              // Its rollups a publish was refused for, on their rows (T207, AC-189).
-              rollupProblems={refusedRollups.filter(
-                (problem) =>
-                  problem.path === path && problem.preAggregation?.cube === value['name'],
-              )}
-              onChange={(next) => {
-                edit('cubes', at, next);
-              }}
-            />
-          ))}
-          {views.map(({ at, value }) => (
-            <CubeForm
-              key={`view ${String(at)}`}
-              kind="view"
-              value={value}
-              readOnly={readOnly}
-              onChange={(next) => {
-                edit('views', at, next);
-              }}
-            />
-          ))}
+          {/* Its pickers list what the model has (AC-224). */}
+          <PickerScopeContext.Provider value={pickers}>
+            {cubes.map(({ at, value }) => (
+              <CubeForm
+                // The cube's place in the file: its name is a field it edits.
+                key={`cube ${String(at)}`}
+                kind="cube"
+                value={value}
+                readOnly={readOnly}
+                // Its rollups a publish was refused for, on their rows (T207, AC-189).
+                rollupProblems={refusedRollups.filter(
+                  (problem) =>
+                    problem.path === path && problem.preAggregation?.cube === value['name'],
+                )}
+                onChange={(next) => {
+                  edit('cubes', at, next);
+                }}
+              />
+            ))}
+            {views.map(({ at, value }) => (
+              <CubeForm
+                key={`view ${String(at)}`}
+                kind="view"
+                value={value}
+                readOnly={readOnly}
+                onChange={(next) => {
+                  edit('views', at, next);
+                }}
+              />
+            ))}
+          </PickerScopeContext.Provider>
         </div>
       </section>
       <section className="model-editor__pane model-editor__yaml" aria-label="YAML and join diagram">

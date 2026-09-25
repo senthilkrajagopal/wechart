@@ -1,10 +1,12 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useContext, useId, useState, type ReactNode } from 'react';
 import { parse, stringify } from 'yaml';
 
 import { StatusIcon } from '../../../shell/StatusIcon';
 import { CUBE_PARSE } from '../objects';
 import { IndexColumns } from '../preagg/IndexEditor';
+import { MemberChips, MemberSelect } from './MemberPicker';
 import { SCHEMA, type Field, type ObjectSchema } from './schema';
+import { canonicalOf, optionsFor, PickerScopeContext } from './scopes';
 
 /**
  * The model editor's form (T138, AC-132; direction.md §7b), generated from
@@ -148,6 +150,7 @@ function Control({
   owner,
   onChange,
   id,
+  labelId,
 }: {
   field: Field;
   value: unknown;
@@ -155,10 +158,45 @@ function Control({
   owner: Value;
   onChange: (next: unknown) => void;
   id: string;
+  /** The field's label: it names a picker's group, which a `for` can't. */
+  labelId: string;
 }) {
+  const scope = useContext(PickerScopeContext);
   const text = (next: string) => {
     onChange(next === '' ? undefined : next);
   };
+  // A reference picked from what the model has, never typed (AC-224).
+  if (field.scope !== undefined && field.kind === 'reference')
+    return (
+      <MemberSelect
+        id={id}
+        value={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
+        options={optionsFor(field.scope, scope, owner)}
+        onChange={onChange}
+      />
+    );
+  if (field.scope !== undefined && field.kind === 'references')
+    return (
+      <MemberChips
+        labelId={labelId}
+        value={
+          value === '*' && field.star === true
+            ? '*'
+            : Array.isArray(value)
+              ? (value as string[])
+              : typeof value === 'string'
+                ? [value]
+                : undefined
+        }
+        options={optionsFor(field.scope, scope, owner)}
+        ordered={field.ordered === true}
+        star={field.star === true}
+        canonical={(name) => canonicalOf(name, scope)}
+        onChange={(next) => {
+          onChange(typeof next === 'string' || next === undefined ? next : [...next]);
+        }}
+      />
+    );
   switch (field.kind) {
     case 'sql':
       return (
@@ -409,9 +447,18 @@ function FieldRow({
 
   return (
     <div className="field model-field" data-key={field.key}>
-      <label htmlFor={id}>{field.label}</label>
+      <label id={`${id}-label`} htmlFor={id}>
+        {field.label}
+      </label>
       {shaped ? (
-        <Control field={field} value={own} owner={value} onChange={change} id={id} />
+        <Control
+          field={field}
+          value={own}
+          owner={value}
+          onChange={change}
+          id={id}
+          labelId={`${id}-label`}
+        />
       ) : (
         <YamlControl id={id} value={own} onChange={change} />
       )}

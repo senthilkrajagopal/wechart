@@ -504,7 +504,10 @@ test('a model file opens on a form for its cube, its enumerations the validatorâ
 
   await form.getByRole('tab', { name: /^Measures/ }).click();
   await form.locator('.model-member__name', { hasText: /^total_amount$/ }).click();
-  const measure = form.getByRole('listitem').filter({ hasText: 'total_amount' });
+  // Its own row: another's drill-member picker names total_amount too (AC-224).
+  const measure = form
+    .getByRole('listitem')
+    .filter({ has: page.locator('.model-member__name', { hasText: /^total_amount$/ }) });
   const type = measure.locator('[data-key="type"]').first().getByLabel('Type', { exact: true });
   await expect(type).toHaveValue('sum');
   expect(

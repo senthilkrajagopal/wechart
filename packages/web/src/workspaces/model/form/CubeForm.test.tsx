@@ -140,7 +140,7 @@ describe('a cube’s form', () => {
     };
     render(<CubeForm kind="cube" value={legacy} onChange={vi.fn()} />);
     await userEvent.click(screen.getByRole('tab', { name: /^Joins/ }));
-    await userEvent.click(screen.getByText('customers'));
+    await userEvent.click(screen.getByText('customers', { selector: '.model-member__name' }));
 
     const relationship = screen.getByLabelText('Relationship', {
       exact: true,
@@ -270,19 +270,24 @@ function Held({
 }
 
 describe('editing a cube’s members', () => {
-  it('takes several references typed with commas', async () => {
+  it('takes several references typed with commas, where no picker scopes them', async () => {
+    // Drill members are picked (AC-224, MemberPicker.test.tsx); a multi-stage
+    // measure's `add_group_by` is still typed.
+    const staged = { ...ORDERS, measures: [{ name: 'count', type: 'count', multi_stage: true }] };
     const onChange = vi.fn();
-    render(<Held initial={ORDERS} onChange={onChange} />);
+    render(<Held initial={staged} onChange={onChange} />);
     await userEvent.click(screen.getByRole('tab', { name: /^Measures/ }));
     await userEvent.click(screen.getByText('count', { selector: '.model-member__name' }));
 
-    const drill = screen.getByLabelText('Drill members', { exact: true }) as HTMLInputElement;
-    await userEvent.type(drill, 'status, id');
+    const added = screen.getByLabelText('Add group by', { exact: true }) as HTMLInputElement;
+    await userEvent.type(added, 'status, id');
 
-    expect(drill.value).toBe('status, id');
+    expect(added.value).toBe('status, id');
     expect(onChange).toHaveBeenLastCalledWith({
       ...ORDERS,
-      measures: [{ name: 'count', type: 'count', drill_members: ['status', 'id'] }],
+      measures: [
+        { name: 'count', type: 'count', multi_stage: true, add_group_by: ['status', 'id'] },
+      ],
     });
   });
 

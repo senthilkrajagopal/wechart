@@ -183,12 +183,19 @@ test('a rollup naming a member the model doesn’t have is refused, and the name
   await page.goto(`/model/files/${encodeURIComponent(path)}`);
   const { rollup, own } = await openRollup(page, cube);
 
-  await own('dimensions')
-    .getByLabel('Dimensions', { exact: true })
-    .fill('status, CUBE.no_such_member');
+  // Written in the code: the form's picker names only what the model has
+  // (AC-224). The rollup's `- status`, line 26, made a name it doesn't have.
+  await page.locator('.cm-line', { hasText: /^\s+- status$/ }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Shift+Home');
+  await page.keyboard.type('- CUBE.no_such_member');
   await expect(page.getByRole('textbox', { name: `${path}, as YAML` })).toContainText(
     'CUBE.no_such_member',
   );
+  // The form reads it, and keeps the name picked, until it is taken away.
+  await expect(
+    own('dimensions').getByRole('button', { name: 'CUBE.no_such_member', pressed: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Save & reload Cube' }).click();
 
   await expect(

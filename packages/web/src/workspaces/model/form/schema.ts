@@ -8,6 +8,7 @@
  * `schema.test.ts` reads those tables back, so a key the research lists and
  * this lacks — or an enumeration that differs — fails the test.
  */
+import type { MemberScope } from './scopes';
 
 /** How a key's value is edited. */
 export type FieldKind =
@@ -61,6 +62,15 @@ export interface Field {
   readonly fields?: readonly Field[];
   /** Accepted by the validator but undocumented or legacy (research: "legacy"). */
   readonly legacy?: boolean;
+  /**
+   * For a reference: what it may name, picked from the model rather than
+   * typed (AC-224). A reference without one is still typed.
+   */
+  readonly scope?: MemberScope;
+  /** References whose order is meaning — a hierarchy's levels — numbered as picked. */
+  readonly ordered?: boolean;
+  /** References that may be `"*"`, every member: a view's includes (Y.10a). */
+  readonly star?: boolean;
   /**
    * The named group an expanded member shows it in (AC-225), as the
    * prototype's rows group theirs (docs/design/prototype/schema.js).
@@ -248,7 +258,8 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
   'Y.5': {
     title: 'Join',
     fields: [
-      f('name', 'reference'),
+      // The cube it joins, from the model's cubes (AC-224), as the prototype's "Target cube".
+      f('name', 'reference', { label: 'Target cube', scope: 'cubes' }),
       // The validator also takes the legacy `belongs_to`, `has_many`,
       // `has_one` and camelCase spellings; the form offers the three the
       // docs use, and never one Cube rejects.
@@ -379,7 +390,7 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       f('currency', 'text', { group: 'Formatting', applies: numericMeasure }),
       f('mask', 'yaml', { group: 'Formatting' }),
       f('filters', 'yaml', { group: 'Filters and drill' }),
-      f('drill_members', 'references', { group: 'Filters and drill' }),
+      f('drill_members', 'references', { group: 'Filters and drill', scope: 'members' }),
       // On any type: Y.7 ties a rolling window to none.
       f('rolling_window', 'object', { of: 'Y.7a', group: 'Rolling window' }),
       f('multi_stage', 'boolean', { group: 'Multi-stage' }),
@@ -455,7 +466,8 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
     title: 'Hierarchy',
     fields: [
       f('name', 'identifier'),
-      f('levels', 'references'),
+      // Dimensions, joined cubes' too, coarse to fine (Y.9).
+      f('levels', 'references', { scope: 'dimensions', ordered: true }),
       f('title', 'text'),
       f('public', 'flag'),
     ],
@@ -495,8 +507,10 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
     plural: 'Cubes in the view',
     fields: [
       f('join_path', 'text'),
-      f('includes', 'yaml'),
-      f('excludes', 'references'),
+      // `"*"` or the path cube's members; a list with member objects (Y.10b)
+      // is not names, and is edited as YAML.
+      f('includes', 'references', { scope: 'path', star: true }),
+      f('excludes', 'references', { scope: 'path' }),
       f('prefix', 'flag'),
       f('alias', 'text'),
       f('split', 'boolean'),
@@ -543,16 +557,16 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       f('type', 'enum', {
         options: ['rollup', 'original_sql', 'rollup_join', 'rollup_lambda', 'auto_rollup'],
       }),
-      f('measures', 'references'),
-      f('dimensions', 'references'),
-      f('segments', 'references'),
-      f('time_dimension', 'reference'),
+      f('measures', 'references', { scope: 'measures' }),
+      f('dimensions', 'references', { scope: 'dimensions' }),
+      f('segments', 'references', { scope: 'segments' }),
+      f('time_dimension', 'reference', { scope: 'time' }),
       f('granularity', 'text'),
       // "list of `{dimension (reference), granularity}`".
       f('time_dimensions', 'list', {
-        fields: [f('dimension', 'reference'), f('granularity', 'text')],
+        fields: [f('dimension', 'reference', { scope: 'time' }), f('granularity', 'text')],
       }),
-      f('rollups', 'references'),
+      f('rollups', 'references', { scope: 'pre-aggregations' }),
       f('partition_granularity', 'enum', {
         options: ['hour', 'day', 'week', 'month', 'quarter', 'year'],
       }),
@@ -585,11 +599,12 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       }),
       f('sql_alias', 'text'),
       f('max_pre_aggregations', 'number'),
-      legacy('time_dimension_reference', 'reference'),
-      legacy('measure_references', 'references'),
-      legacy('dimension_references', 'references'),
-      legacy('segment_references', 'references'),
-      legacy('rollup_references', 'references'),
+      // The same fields by their legacy names: picked as they are (AC-224).
+      f('time_dimension_reference', 'reference', { legacy: true, scope: 'time' }),
+      f('measure_references', 'references', { legacy: true, scope: 'measures' }),
+      f('dimension_references', 'references', { legacy: true, scope: 'dimensions' }),
+      f('segment_references', 'references', { legacy: true, scope: 'segments' }),
+      f('rollup_references', 'references', { legacy: true, scope: 'pre-aggregations' }),
     ],
   },
   'Y.14': {

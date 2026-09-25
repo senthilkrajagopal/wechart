@@ -703,7 +703,7 @@ Model workspace:
       Fails when: moving to another file requires leaving the editor, New cube or New view is missing, or a file with an error carries no mark in the tree.
 - [ ] AC-223 THE SYSTEM SHALL lay the model editor out as full-height panes, each with its own header row and scrolling — the form, and the code with its Problems panel docked beneath it counting errors and warnings — with code and file paths in direction.md's code face.
       Fails when: the page itself scrolls at 1,440 × 900, Problems gives no count of warnings, or code is set in a face other than IBM Plex Mono.
-- [ ] AC-224 THE SYSTEM SHALL edit every field that refers to model members — pre-aggregation measures, dimensions, segments, rollups and time dimension, drill members, hierarchy levels, a view's includes and excludes — with a picker of the members it may refer to, and a join's target with a list of cubes (direction.md §7b).
+- [x] AC-224 THE SYSTEM SHALL edit every field that refers to model members — pre-aggregation measures, dimensions, segments, rollups and time dimension, drill members, hierarchy levels, a view's includes and excludes — with a picker of the members it may refer to, and a join's target with a list of cubes (direction.md §7b).
       Fails when: any of those fields accepts free text.
 - [x] AC-225 THE SYSTEM SHALL show each member in a row with its name, its type, a preview of its SQL and badges for primary key, public and format, and when expanded, only the fields that apply to its type and to how it is defined, in named groups.
       Fails when: a collapsed row omits its type or SQL, a primary key carries no badge, or an expanded number dimension offers fields for a CASE, a switch or a geographic point.

@@ -1,9 +1,10 @@
-import { useId, useRef, useState } from 'react';
+import { useContext, useId, useMemo, useRef, useState } from 'react';
 
 import type { CubeProblem } from '../ProblemsPanel';
 import { RollupFacts, stillUnknown } from '../preagg/RollupList';
 import { MemberList, ObjectForm, schemaOf } from './ObjectForm';
 import { SCHEMA, type Field, type SectionId } from './schema';
+import { PickerScopeContext } from './scopes';
 
 /**
  * A cube's or a view's form (T138, AC-132): General — every key that is not
@@ -66,6 +67,14 @@ export function CubeForm({
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const base = useId();
   const name = typeof value['name'] === 'string' ? value['name'] : kind;
+  const { index } = useContext(PickerScopeContext);
+  const pickers = useMemo(
+    () => ({
+      index,
+      cube: kind === 'cube' && typeof value['name'] === 'string' ? value['name'] : undefined,
+    }),
+    [index, kind, value],
+  );
 
   const fieldOf = (key: string): Field | undefined =>
     SCHEMA[section].fields.find((field) => field.key === key);
@@ -128,44 +137,47 @@ export function CubeForm({
         aria-labelledby={`${base}-${open}`}
         className="model-form__panel"
       >
-        {/* Every control is native, so one disabled fieldset locks them all;
+        {/* Its pickers name its own members bare, and another cube's by that cube (AC-224). */}
+        <PickerScopeContext.Provider value={pickers}>
+          {/* Every control is native, so one disabled fieldset locks them all;
             the members' summaries are not controls and still open. */}
-        <fieldset className="model-form__lock" disabled={readOnly}>
-          {open === 'general' ? (
-            <ObjectForm
-              schema={SCHEMA[section]}
-              value={value}
-              onChange={onChange}
-              only={(field) => !listed.has(field.key)}
-            />
-          ) : (
-            <MemberList
-              schema={schemaOf(
-                fieldOf(open) ?? { key: open, label: open, kind: 'list', of: 'Y.6' },
-              )}
-              items={Array.isArray(value[open]) ? (value[open] as Value[]) : []}
-              // Each rollup listed with what it declares (T148, AC-142).
-              describe={
-                open === 'pre_aggregations'
-                  ? (rollup: Value) => {
-                      const unknown = unknownIn(rollup);
-                      return unknown === undefined ? (
-                        <RollupFacts rollup={rollup} />
-                      ) : (
-                        <RollupFacts rollup={rollup} unknown={unknown} />
-                      );
-                    }
-                  : undefined
-              }
-              onChange={(items) => {
-                const next = { ...value };
-                if (items === undefined || items.length === 0) delete next[open];
-                else next[open] = items;
-                onChange(next);
-              }}
-            />
-          )}
-        </fieldset>
+          <fieldset className="model-form__lock" disabled={readOnly}>
+            {open === 'general' ? (
+              <ObjectForm
+                schema={SCHEMA[section]}
+                value={value}
+                onChange={onChange}
+                only={(field) => !listed.has(field.key)}
+              />
+            ) : (
+              <MemberList
+                schema={schemaOf(
+                  fieldOf(open) ?? { key: open, label: open, kind: 'list', of: 'Y.6' },
+                )}
+                items={Array.isArray(value[open]) ? (value[open] as Value[]) : []}
+                // Each rollup listed with what it declares (T148, AC-142).
+                describe={
+                  open === 'pre_aggregations'
+                    ? (rollup: Value) => {
+                        const unknown = unknownIn(rollup);
+                        return unknown === undefined ? (
+                          <RollupFacts rollup={rollup} />
+                        ) : (
+                          <RollupFacts rollup={rollup} unknown={unknown} />
+                        );
+                      }
+                    : undefined
+                }
+                onChange={(items) => {
+                  const next = { ...value };
+                  if (items === undefined || items.length === 0) delete next[open];
+                  else next[open] = items;
+                  onChange(next);
+                }}
+              />
+            )}
+          </fieldset>
+        </PickerScopeContext.Provider>
       </div>
     </section>
   );

@@ -3450,9 +3450,10 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - The tree re-parsed every file on every render.
     - The Problems-docked check could not fail.
   - **Known flake:** `keyboard-coverage.spec.ts` "a tile’s table can be reached and scrolled from the keyboard" fails under full load in Safari and passes alone.
-- [ ] T235 (AC-224) Edit member references with pickers, and a join's target with a list of cubes
-  - Files: `packages/web/src/workspaces/model/form/MemberPicker.tsx`, `packages/web/src/workspaces/model/form/`, `e2e/model.spec.ts`
-  - Failing test: `e2e/model.spec.ts`: a pre-aggregation's measures are chosen from a picker listing the cube's measures, and a join's target from its cubes; neither accepts typed text (AC-224).
+- [x] T235 (AC-224) Edit member references with pickers, and a join's target with a list of cubes
+  - Files: `packages/web/src/workspaces/model/form/{MemberPicker.tsx,MemberPicker.test.tsx,scopes.ts,scopes.test.ts,schema.ts,ObjectForm.tsx,CubeForm.tsx,CubeForm.test.tsx}`, `packages/web/src/workspaces/model/ModelFilePage.tsx`, `packages/web/src/shell/styles.ts`, `e2e/model-pickers.spec.ts`, `e2e/preaggregations.spec.ts`, `e2e/model.spec.ts`
+  - Failing test: `e2e/model-pickers.spec.ts`: a pre-aggregation's measures are chosen from a picker listing the cube's measures, and a join's target from its cubes; neither accepts typed text (AC-224).
+  - Left typed, as AC-224 does not list them: index columns (T152's ordered editor), multi-stage `add_group_by`/`group_by`/`reduce_by`/`grain`/`filter` references, access-policy member lists, default-filter and row-level filter members, `extends`. Every chip list renders in full, so a very large model makes long lists; a search over them is not built.
   - Depends on: T234
 - [x] T236 (AC-225) Give member rows their type, SQL preview and badges, and show only the fields that apply when expanded
   - Files: `packages/web/src/workspaces/model/form/{ObjectForm.tsx,schema.ts,memberRows.test.tsx,CubeForm.test.tsx}`, `packages/web/src/shell/styles.ts`, `e2e/model.spec.ts`, `e2e/publish-model.spec.ts`
