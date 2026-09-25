@@ -205,6 +205,46 @@ describe('a tile’s view-mode menu', () => {
     expect(screen.queryByRole('button', { name: 'Download CSV' })).toBeNull();
   });
 
+  /**
+   * T267 / AC-247: WHILE the tile's marking holds items, THE SYSTEM SHALL
+   * head the tile's menu with the marking's name, the marked values by their
+   * members' titles, and the count marked out of the tile's items.
+   * `Fails when: the heading omits the values, or either count differs from
+   * the marked items or the tile's items.`
+   */
+  it('heads its marked group with the marking, its values by title, and how many of the tile’s items', async () => {
+    const marked = { name: 'Marking', count: 2, onUnmark: vi.fn() };
+    const { rerender } = render(
+      <TileViewMenu
+        tileId="t1"
+        title="By country"
+        spec={SPEC}
+        save={vi.fn()}
+        marked={{ ...marked, values: 'Country: Norway, Spain', of: 6 }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By country' }));
+
+    expect(
+      screen.getByRole('group', { name: 'Marking · Country: Norway, Spain · 2 of 6 marked' }),
+    ).toBeTruthy();
+
+    // A tile whose items cannot be counted — a table marks rows — says how
+    // many are marked, and no "of".
+    rerender(
+      <TileViewMenu
+        tileId="t1"
+        title="By country"
+        spec={SPEC}
+        save={vi.fn()}
+        marked={{ ...marked, values: 'Country: Norway, Spain' }}
+      />,
+    );
+    expect(
+      screen.getByRole('group', { name: 'Marking · Country: Norway, Spain · 2 marked' }),
+    ).toBeTruthy();
+  });
+
   it('closes on Escape, giving focus back to its trigger', async () => {
     render(<TileViewMenu tileId="t1" title="T" spec={SPEC} save={vi.fn()} />);
     const trigger = screen.getByRole('button', { name: 'Actions for T' });

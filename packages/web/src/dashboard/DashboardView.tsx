@@ -13,6 +13,7 @@ import {
   applyItemClick,
   applyToggleOrAdd,
   isItemMarked,
+  matchesPredicate,
   EMPTY_PREDICATE,
   type CubeFilter,
   isEmptyPredicate,
@@ -779,7 +780,17 @@ interface TileCharts {
   readonly limitedStates?: Readonly<Record<string, LimitedState>> | undefined;
   /** The marking a tile shows, its colour and how many items it holds (AC-098). */
   readonly markingOn?:
-    | ((tileId: string) => { marking: Marking; colour: string; markedCount: number } | undefined)
+    | ((tileId: string) =>
+        | {
+            marking: Marking;
+            colour: string;
+            markedCount: number;
+            /** What it holds, by the members' titles, for the menu's heading (AC-247). */
+            values?: string;
+            /** How many of the tile's own items it marks, of how many (AC-247). */
+            onTile?: { readonly marked: number; readonly of: number };
+          }
+        | undefined)
     | undefined;
   /** Unmark what a tile marks with — its ⋯ menu's marked-rows group (AC-199). */
   readonly onUnmark?: ((tileId: string) => void) | undefined;
@@ -1114,7 +1125,10 @@ function Elements({
                     ? undefined
                     : {
                         name: shown.marking.name,
-                        count: shown.markedCount,
+                        // Of the tile's items where they can be counted (AC-247).
+                        count: shown.onTile?.marked ?? shown.markedCount,
+                        of: shown.onTile?.of,
+                        values: shown.values,
                         onUnmark: () => {
                           charts.onUnmark?.(element.id);
                         },
@@ -3128,10 +3142,35 @@ export function DashboardView({
             const found = markings.find((each) => each.id === id);
             if (found === undefined) return undefined;
             const predicate = markingOf(marks, found.id);
+            /**
+             * The tile's own items and how many of them are marked (AC-247):
+             * those Invert and Mark all name, each read as the row it stands
+             * for — a whole tile marked from here marks all of them. None for
+             * a tile whose click marks rows or series, where "of N" would
+             * count something else.
+             */
+            const items = tileItemsOf(tileId);
+            const whole = (predicate.wholes ?? []).some((each) => each.tileId === tileId);
+            const onTile =
+              items === undefined
+                ? undefined
+                : {
+                    marked: whole
+                      ? items.length
+                      : items.filter((item) =>
+                          matchesPredicate(
+                            predicate,
+                            Object.fromEntries(item.map((part) => [part.member, part.value])),
+                          ),
+                        ).length,
+                    of: items.length,
+                  };
             return {
               marking: found,
               colour: markingColour(found.slot, theme),
               markedCount: markedCount(predicate),
+              values: summariseMarking(predicate, memberTitle, 5, (id) => chartTitleOfTile(id)),
+              ...(onTile === undefined ? {} : { onTile }),
             };
           },
         }

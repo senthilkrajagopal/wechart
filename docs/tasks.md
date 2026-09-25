@@ -4106,7 +4106,14 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/web/src/tiles/ChartCanvas.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/shell/styles.ts`, `e2e/markings.spec.ts` or `e2e/tile-menu.spec.ts`
   - Failing test: a right-click on a bar opens the menu at the pointer, prevents the browser's menu, and changes no marking; Shift+F10 on a focused tile opens it at the tile; the submenus open with Right arrow and close with Left or Escape.
   - Depends on: `docs/research/context-menu-and-submenus.md`
-- [ ] T267 (AC-247) Head the tile menu with the marking, its values by title, and "n of N"
+- [x] T267 (AC-247) Head the tile menu with the marking, its values by title, and "n of N"
+  - Done 2026-09-25, all three browsers. AC-247 ticked on `e2e/markings.spec.ts` "the tile menu is headed by its marking, the marked values by title, and how many of the tile's items". `TileViewMenu.test.tsx`'s heading test failed first; the e2e was written after the wiring.
+    - **The heading** reads, for example, "● Marking · Orders Status: shipped, completed · 2 of 3 marked", as the mockup's "Region = West, East · 2 of 6". It names the marked-rows group, as before.
+    - **The values** are the chip's summary (`summariseMarking`) by the members' titles, up to five named before "+n". A marking over two members still reads as a count, as on the chip, which says why.
+    - **"n of N"** counts the tile's own items: the ones Invert and Mark all name (`tileItemsOf`), each read as the row it stands for (`matchesPredicate`), so ranges and whole tiles count too. A tile marked whole from itself is all of them.
+      - A tile whose click marks rows or series (a table, say) has no items to count, so it keeps "n marked", the marking's count.
+      - A tile marking with the same marking as another, whose items are that tile's members, reads "0 of N": none of its own items is marked, which is what it draws.
+    - The menu e2e's exact heading was updated to the new words.
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `e2e/markings.spec.ts`
   - Failing test: with two of six countries marked, the heading reads the marking's name, both countries under the member's title, and "2 of 6".
   - Depends on: T266

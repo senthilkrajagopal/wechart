@@ -812,7 +812,7 @@ Traces to: the user, 2026-09-25; `[docs/design/reviews/2026-09-24/chart-context-
       Fails when: one of those items is missing, Open in Jobs does not select that pre-aggregation, or a database answer is described as a pre-aggregation's.
 - [x] AC-246 WHEN the user right-clicks a chart tile's plot, or presses Shift+F10 or the Menu key on a focused chart tile, THE SYSTEM SHALL open the tile's menu at the pointer or at the tile, and the browser's own menu SHALL not open there.
       Fails when: the browser's context menu opens instead, the keys do nothing, or a right-click changes a marking.
-- [ ] AC-247 WHILE the tile's marking holds items, THE SYSTEM SHALL head the tile's menu with the marking's name, the marked values by their members' titles, and the count marked out of the tile's items.
+- [x] AC-247 WHILE the tile's marking holds items, THE SYSTEM SHALL head the tile's menu with the marking's name, the marked values by their members' titles, and the count marked out of the tile's items.
       Fails when: the heading omits the values, or either count differs from the marked items or the tile's items.
 
 ## F24. Deployment to Kubernetes

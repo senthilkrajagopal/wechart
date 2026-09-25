@@ -1015,8 +1015,11 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
     return status.getByRole('menu', { name: 'Actions for By status' });
   };
   let menu = await openMenu();
-  // The marked-rows group first, headed by the tile's marking and its count.
-  const marked = menu.getByRole('group', { name: 'Marking · 1 marked' });
+  // The marked-rows group first, headed by the tile's marking, what it holds
+  // and how many of the tile's items (AC-247).
+  const marked = menu.getByRole('group', {
+    name: 'Marking · Orders Status: shipped · 1 of 3 marked',
+  });
   // Filter to and out of marked first, as the prototype's group (T119, AC-113).
   await expect(marked.getByRole('menuitem')).toHaveText([
     'Filter to marked',
@@ -1160,6 +1163,44 @@ test('a right-click on the chart, Shift+F10 or the Menu key opens the tile’s m
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
   await expect(badge).toContainText('1 marked');
+});
+
+/**
+ * T267 / AC-247: WHILE the tile's marking holds items, THE SYSTEM SHALL head
+ * the tile's menu with the marking's name, the marked values by their
+ * members' titles, and the count marked out of the tile's items.
+ * `Fails when: the heading omits the values, or either count differs from the
+ * marked items or the tile's items.`
+ *
+ * The status tile draws three statuses (infra/sample-db/init.sql): two marked
+ * are "2 of 3", named by the member's title; Mark all makes it "3 of 3".
+ */
+test('the tile menu is headed by its marking, the marked values by title, and how many of the tile’s items', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  await clickBar(page, status, 'shipped');
+  await clickBar(page, status, 'completed', ['ControlOrMeta']);
+  await expect(status.getByTestId('mark-badge')).toContainText('2 marked');
+
+  const trigger = status.getByRole('button', { name: 'Actions for By status' });
+  await trigger.click();
+  const menu = status.getByRole('menu', { name: 'Actions for By status' });
+  const heading = status.locator('.tile-menu__heading');
+  await expect(heading).toHaveText('● Marking · Orders Status: shipped, completed · 2 of 3 marked');
+  // It names the group it heads.
+  await expect(
+    menu.getByRole('group', {
+      name: 'Marking · Orders Status: shipped, completed · 2 of 3 marked',
+    }),
+  ).toBeVisible();
+
+  await menu.getByRole('menuitem', { name: 'Mark all' }).click();
+  await trigger.click();
+  await expect(heading).toContainText('3 of 3 marked');
 });
 
 test('outside Markings mode, a chart tile’s menu has no marked-rows actions', async ({

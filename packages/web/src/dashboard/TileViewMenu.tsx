@@ -99,7 +99,12 @@ export function TileViewMenu({
   marked?:
     | {
         name: string;
+        /** How many are marked: of the tile's items where `of` is given. */
         count: number;
+        /** What it holds, by the members' titles (AC-247): "Country: Norway, Spain". */
+        values?: string | undefined;
+        /** How many items the tile has, where they can be counted (AC-247). */
+        of?: number | undefined;
         onUnmark: () => void;
         /**
          * Filter to marked and Filter out marked (AC-113): the action, or
@@ -420,7 +425,16 @@ export function TileViewMenu({
           {marked === undefined ? null : (
             <div id={`${why}-marked`} className="tile-menu__heading">
               <span aria-hidden="true">● </span>
-              {marked.name} · {marked.count.toLocaleString('en-GB')} marked
+              {/* The marking, what it holds by the members' titles, and how
+                  many of the tile's items (AC-247; the mockup's "Region =
+                  West, East · 2 of 6"). */}
+              {[
+                marked.name,
+                ...(marked.values === undefined || marked.values === '' ? [] : [marked.values]),
+                `${marked.count.toLocaleString('en-GB')}${
+                  marked.of === undefined ? '' : ` of ${marked.of.toLocaleString('en-GB')}`
+                } marked`,
+              ].join(' · ')}
             </div>
           )}
           <Menu
