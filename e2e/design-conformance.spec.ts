@@ -3785,3 +3785,158 @@ test.describe('T300 and T304: KPI, table and pivot tiles', () => {
     });
   });
 });
+
+/**
+ * T310: the chart editor's buttons and inputs the 2026-09-25 re-critique
+ * measured off the prototype (critiques/2026-09-25-chart-editor.md, findings
+ * 1 and 3–7): the Customize tab's controls, the type gallery's, "Why this
+ * chart?", the type card, the title field's hover, and the tabs' hover.
+ * The rules cited are index.html's and editor.js's.
+ */
+test.describe('T310: the chart editor’s remaining controls', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/explore/charts/seed-chart-axes/edit');
+    await expect(page.getByTestId('chart-canvas')).toBeVisible();
+  });
+
+  test('Customize: 28 px fields at 12 px, and its toggles as the prototype’s switch', async ({
+    page,
+  }) => {
+    await page.getByRole('tab', { name: 'Customize' }).click();
+    const x = page.getByRole('group', { name: 'X axis' });
+    // .input.sm and .select.sm { height: 28px; font-size: 12px }
+    for (const control of [x.getByLabel('Title'), x.getByLabel('Label rotation')])
+      expect(await style(control, 'height', 'font-size')).toEqual({
+        height: '28px',
+        'font-size': '12px',
+      });
+    // .switch { width: 32px; height: 18px; border-radius: 999px;
+    //   background: var(--border-strong) } [aria-checked='true'] { background: var(--accent) }
+    const log = x.getByLabel('Logarithmic scale');
+    expect(await style(log, 'width', 'height', 'border-top-left-radius')).toEqual({
+      width: '32px',
+      height: '18px',
+      'border-top-left-radius': '999px',
+    });
+    expect(await style(log, 'background-color')).toEqual({
+      'background-color': await token(page, 'border-strong', 'background-color'),
+    });
+    await log.check();
+    expect(await style(log, 'background-color')).toEqual({
+      'background-color': await token(page, 'accent', 'background-color'),
+    });
+    // Its label on the 12 px scale (§3 has no 13 px here).
+    expect(await style(page.locator('.customize-tab__check').first(), 'font-size')).toEqual({
+      'font-size': '12px',
+    });
+  });
+
+  test('“Why this chart?” is a ghost .btn.sm, the type card a .reco-row, the title bare when pointed at', async ({
+    page,
+  }) => {
+    // .btn.ghost.sm { height: 24px; padding: 0 8px; border-color: transparent;
+    //   font-size: 12px; background: none }
+    const why = page.getByRole('button', { name: 'Why this chart?' });
+    expect(
+      await style(
+        why,
+        'height',
+        'padding-left',
+        'border-top-color',
+        'font-size',
+        'background-color',
+      ),
+    ).toEqual({
+      height: '24px',
+      'padding-left': '8px',
+      'border-top-color': 'rgba(0, 0, 0, 0)',
+      'font-size': '12px',
+      'background-color': 'rgba(0, 0, 0, 0)',
+    });
+    // .reco-row { padding: 8px } .reco-name { font-size: 12px; font-weight: 600 }
+    const card = page.getByTestId('chart-type-change');
+    expect(await style(card, 'padding-top', 'padding-left')).toEqual({
+      'padding-top': '8px',
+      'padding-left': '8px',
+    });
+    expect(await style(card.locator('.type-card-field__name'), 'font-size', 'font-weight')).toEqual(
+      {
+        'font-size': '12px',
+        'font-weight': '600',
+      },
+    );
+    // [data-title] keeps a transparent border and ground under the pointer.
+    const title = page.getByLabel('Chart title');
+    await title.hover();
+    expect(await style(title, 'border-top-color', 'background-color')).toEqual({
+      'border-top-color': 'rgba(0, 0, 0, 0)',
+      'background-color': 'rgba(0, 0, 0, 0)',
+    });
+  });
+
+  test('the inspector’s and the drawer’s tabs take no ground under the pointer', async ({
+    page,
+  }) => {
+    // .tabs button { background: none } in every state.
+    const customize = page.getByRole('tab', { name: 'Customize' });
+    await customize.hover();
+    expect(await style(customize, 'background-color')).toEqual({
+      'background-color': 'rgba(0, 0, 0, 0)',
+    });
+    const underlying = page.getByRole('tab', { name: 'Underlying rows' });
+    await underlying.hover();
+    expect(await style(underlying, 'background-color')).toEqual({
+      'background-color': 'rgba(0, 0, 0, 0)',
+    });
+  });
+
+  test('the type gallery: an .input.sm search, .btn.sm Close and Use Auto, .file shelves, 13 px card names', async ({
+    page,
+  }) => {
+    await page.getByTestId('chart-type-change').click();
+    const gallery = page.getByRole('dialog', { name: 'Choose chart type' });
+    expect(await style(gallery.getByLabel('Search chart types'), 'height', 'font-size')).toEqual({
+      height: '28px',
+      'font-size': '12px',
+    });
+    // .btn.sm { height: 24px; padding: 0 8px; border-radius: 6px }
+    for (const name of ['Close', 'Use Auto'])
+      expect(
+        await style(
+          gallery.getByRole('button', { name, exact: true }),
+          'height',
+          'padding-left',
+          'border-top-left-radius',
+        ),
+      ).toEqual({ height: '24px', 'padding-left': '8px', 'border-top-left-radius': '6px' });
+    // .file { height: 28px; padding: 0 12px 0 24px; font-size: 12px; border-radius: 0 }
+    const shelf = gallery
+      .getByRole('navigation', { name: 'Chart purposes' })
+      .getByRole('button')
+      .first();
+    expect(
+      await style(
+        shelf,
+        'height',
+        'padding-left',
+        'padding-right',
+        'font-size',
+        'border-top-left-radius',
+      ),
+    ).toEqual({
+      height: '28px',
+      'padding-left': '24px',
+      'padding-right': '12px',
+      'font-size': '12px',
+      'border-top-left-radius': '0px',
+    });
+    // A card's name: <span class="strong" style="font-size:13px">.
+    expect(
+      await style(
+        gallery.getByTestId('type-card-bar').locator('.type-card__name'),
+        'font-size',
+        'font-weight',
+      ),
+    ).toEqual({ 'font-size': '13px', 'font-weight': '600' });
+  });
+});

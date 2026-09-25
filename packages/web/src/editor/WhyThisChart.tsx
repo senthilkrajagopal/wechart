@@ -21,7 +21,13 @@ export function WhyThisChart({ explanation, titles = {} }: WhyThisChartProps) {
 
   return (
     <section className="why-chart">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((shown) => !shown)}>
+      {/* The prototype's .btn.ghost.sm "Why this recommendation?" (T310). */}
+      <button
+        type="button"
+        className="btn-ghost btn-sm"
+        aria-expanded={open}
+        onClick={() => setOpen((shown) => !shown)}
+      >
         Why this chart?
       </button>
 

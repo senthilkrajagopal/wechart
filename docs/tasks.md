@@ -4693,6 +4693,24 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
     - **Its one finding, fixed:** the e2e test could pass with no legend drawn. `Math.min` of no swatches is `Infinity`, which any ring is left of. It now first asserts the four products' swatches.
     - The review also found the coverage table short of this section's tasks. They are now listed: AC-028 (T305), AC-031, AC-039, AC-044, AC-100 (T306), AC-176 (T306, T307), AC-187 (T300, T304), AC-210 and AC-219.
     - It judged T300, T302, T303 and T304 met with no real bugs. Two T300 details it noted as not worth a round were left: the empty KPI's "No value" sits above its name, and kpiHtml's bottom alignment was not carried over.
+- [x] T310 (AC-187) Draw the chart editor's remaining controls as the prototype does
+  - From the T225 re-critique `docs/design/critiques/2026-09-25-chart-editor.md`, findings 1 and 3–7. Each is a button or input whose computed height, padding, border, radius, font size or colour token differed from the prototype's rule, which is AC-187's Fails-when.
+  - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/editor/WhyThisChart.tsx`, `e2e/design-conformance.spec.ts`
+  - Failing test: `e2e/design-conformance.spec.ts` "T310: the chart editor's remaining controls" (4).
+    - Customize's fields are 28 px at 12 px, and its toggles are the prototype's 32 × 18 `.switch`: `border-strong`, then accent when on.
+    - "Why this chart?" is a ghost `.btn.sm`.
+    - The type card is padded 8 with a 12/600 name.
+    - The title stays bare under the pointer.
+    - The inspector's and drawer's tabs take no ground on hover.
+    - The gallery has an `.input.sm` search, `.btn.sm` Close and Use Auto, `.file` shelves, and 13 px card names.
+  - Depends on: T257
+  - **Done 2026-09-25.**
+    - **CSS only**, except the "Why" button's `btn-ghost btn-sm` classes.
+    - **The toggles** stay checkboxes, drawn as switches (appearance none, a gradient knob), so their role and every test's `check()` are unchanged.
+    - **The gallery's buttons** kept their `.btn-sm` class, but the `.dialog button` rule outranked it. They are now named under `.type-gallery`.
+    - **The tab hover** was the global button hover on the edit sidebar's tabs. Removing it also changes the dashboard edit sidebar's tabs, whose prototype rule is the same `.tabs button`.
+  - **Tests, red first:** all four first failed on the measured values (32/14 fields, a 32 px bordered "Why", the #efeeea tab hover, a 32/14 gallery search). They pass in all three browsers. So do design-conformance, chart-editor, a11y-tokens, dashboard-edit and keyboard-coverage (603 runs).
+  - **Not done here** (the critique's other findings on this surface, class (d) or needing a decision): the header badges, the quick-pick icons and the recommendation block (F4, F7), the "Why" trace as `.check` lines (F16), the offline load that never errors (F19), mark clicks in the preview (2, rule 31), the tile while loading (8), Acceleration's internal names (9, AC-220), the empty editor's drawer (10), the ownership chip (11), Discard while typing (12), and a dashboard-local chart opened alone (13).
 
 ---
 
@@ -4746,7 +4764,7 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
 | AC-044 | T051, T303 | AC-089 | T095 | AC-134 | T140 | AC-179 | T184       |
 | AC-045 | T043       | AC-090 | T096 | AC-135 | T141 | AC-180 | T001, T185 |
 | AC-181 | T187       | AC-182 | T191 | AC-183 | T192 | AC-184 | T197       |
-| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225, T244–T254, T300, T304 | AC-188 | T206       |
+| AC-185 | T199       | AC-186 | T200 | AC-187 | T202, T203, T204, T205, T222, T225, T244–T254, T300, T304, T310 | AC-188 | T206       |
 | AC-189 | T207       | AC-190 | T211 | AC-191 | T211 | AC-192 | T212       |
 | AC-193 | T213, T243 | AC-194 | T214 | AC-195 | T216 | AC-196 | T217       |
 | AC-197 | T215       | AC-198 | T218 | AC-199 | T219, T118–T121 | AC-200 | T220       |

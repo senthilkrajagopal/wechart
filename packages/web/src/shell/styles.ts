@@ -1490,7 +1490,8 @@ fieldset.model-field > legend {
 .type-card-field__change {
   display: grid;
   gap: 2px;
-  padding: 8px 10px;
+  /* The prototype's .reco-row: padded 8, its name in .reco-name 12/600 (T310). */
+  padding: 8px;
   border: 1px solid var(--wc-border-subtle);
   border-radius: 6px;
   background: var(--wc-bg-surface);
@@ -1500,7 +1501,7 @@ fieldset.model-field > legend {
   cursor: pointer;
 }
 .type-card-field__change:hover { border-color: var(--wc-accent); }
-.type-card-field__name { font-weight: var(--wc-text-sm-strong-weight); }
+.type-card-field__name { font-size: 12px; font-weight: var(--wc-text-sm-strong-weight); }
 .type-card-field__why { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .type-card-field > .btn-sm { justify-self: start; }
 .type-card-field__warning {
@@ -1525,10 +1526,30 @@ fieldset.model-field > legend {
 }
 .type-gallery__head { grid-column: 1 / -1; display: flex; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--wc-border-subtle); }
 .type-gallery__head h2 { font-size: var(--wc-text-lg-size); }
-.type-gallery__head input { flex: 1; max-width: 280px; }
+/* Its search is the prototype's .input.sm, and Close and Use Auto its
+   .btn.sm, over the .dialog button rule (T310). */
+.type-gallery__head input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']) {
+  flex: 1;
+  max-width: 280px;
+  height: 28px;
+  font-size: 12px;
+}
 .type-gallery__head .btn-sm { margin-left: auto; }
+.type-gallery .btn-sm { height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px; }
 .type-gallery__shelves { display: grid; align-content: start; gap: 2px; padding: 8px; overflow: auto; border-right: 1px solid var(--wc-border-subtle); }
-.dialog .type-gallery__shelves button { height: auto; min-height: 28px; padding: 4px 8px; border: 0; text-align: left; }
+/* The prototype's .file, in the UI face as its gallery sets it. */
+.dialog .type-gallery__shelves button {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 12px 0 24px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-size: 12px;
+  text-align: left;
+}
 .dialog .type-gallery__shelves button[aria-pressed='true'] { background: var(--wc-bg-accent-soft); color: var(--wc-accent); font-weight: var(--wc-text-sm-strong-weight); }
 .type-gallery__cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; align-content: start; padding: 12px; overflow: auto; }
 .dialog .type-card { display: grid; gap: 6px; align-content: start; height: auto; padding: 12px; border-color: var(--wc-border-subtle); border-radius: 6px; text-align: left; }
@@ -1538,7 +1559,8 @@ fieldset.model-field > legend {
 .dialog .type-card[data-drawable='false'] { background: var(--wc-bg-subtle); }
 .dialog .type-card[data-drawable='false'] .type-card__name { color: var(--wc-text-secondary); }
 .type-card__top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
-.type-card__name { font-weight: var(--wc-text-sm-strong-weight); }
+/* <span class="strong" style="font-size:13px"> (editor.js, galleryHtml). */
+.type-card__name { font-size: 13px; font-weight: var(--wc-text-sm-strong-weight); }
 .type-card__badge { padding: 0 6px; border-radius: 999px; background: var(--wc-bg-accent-soft); color: var(--wc-accent); font-size: 12px; line-height: 18px; }
 .type-card__about { display: grid; gap: 4px; }
 .type-card__description, .type-card__needs, .type-card__missing { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
@@ -2575,6 +2597,13 @@ main:has(.dashboard) {
   color: var(--wc-accent);
   border-bottom-color: var(--wc-accent);
 }
+/* .tabs button takes no ground in any state, hover included; the global
+   button hover would give it bg-hover (T310). */
+.edit-sidebar__tabs button:hover:not(:disabled):not([aria-disabled='true']) {
+  background: none;
+  color: var(--wc-text-primary);
+}
+.edit-sidebar__tabs button[aria-selected='true']:hover:not(:disabled) { color: var(--wc-accent); }
 .edit-sidebar__panel { flex: 1; min-height: 0; overflow: auto; }
 
 /* A panel's sections (the prototype's .section), each headed in small
@@ -3862,10 +3891,12 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   font-size: 15px;
   font-weight: 600;
 }
+/* Pointed at or typed in, it stays bare, as the prototype's [data-title]:
+   focus shows as the focus ring alone (T310). */
 input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):hover,
 input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):focus {
-  border-color: var(--wc-border-strong);
-  background: var(--wc-bg-surface);
+  border-color: transparent;
+  background: transparent;
 }
 .chart-editor__meta { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); white-space: nowrap; }
 .chart-editor__spacer { flex: 1; }
@@ -4267,13 +4298,48 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.customize-tab__check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.customize-tab__check { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+/* The Customize tab's fields as the prototype's .input.sm and .select.sm,
+   28 px at 12 px, named with the global input rule's own :not()s (T310). */
+.customize-tab input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']),
+.customize-tab select {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.customize-tab select { padding: 0 4px 0 8px; }
+.customize-tab input[type='color']:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']) {
+  width: 40px;
+  padding: 2px;
+}
+/* Its toggles as the prototype's .switch: 32 × 18, a pill in border-strong
+   with its knob at the left, in the accent with the knob at the right once
+   on. Still a checkbox to assistive technology and to a test's check(). */
+.customize-tab input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 32px;
+  height: 18px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: radial-gradient(circle at 9px 50%, var(--wc-bg-surface) 7px, transparent 7.5px),
+    var(--wc-border-strong);
+  cursor: pointer;
+}
+.customize-tab input[type='checkbox']:checked {
+  background: radial-gradient(circle at 23px 50%, var(--wc-bg-surface) 7px, transparent 7.5px),
+    var(--wc-accent);
+}
 .customize-tab__series { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .customize-tab__series li { display: flex; align-items: center; gap: 8px; }
 .customize-tab__series input[type='color'] { width: 28px; height: 20px; padding: 0; border: 1px solid var(--wc-border-subtle); border-radius: 4px; background: none; }
 .axis-panel { display: grid; gap: 4px; margin: 0 0 8px; padding: 8px; border: 1px solid var(--wc-border-subtle); border-radius: 6px; }
 .axis-panel > legend { padding: 0 4px; font-size: 12px; font-weight: 600; color: var(--wc-text-secondary); }
 .axis-panel > label { font-size: 12px; color: var(--wc-text-secondary); }
+/* A switch beside its words, as the prototype's .inline rows (T310). */
+.axis-panel > label:has(> input[type='checkbox']) { display: flex; align-items: center; gap: 6px; }
 /* The chart editor's field list (AC-215): the prototype's field pane (T257) —
    the source and the search each padded 8 12, then each cube's .tgroup. */
 .field-list { display: grid; align-content: start; }
