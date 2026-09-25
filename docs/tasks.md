@@ -4283,7 +4283,22 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
 
 Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/chart-context-menu.md`. Every task names the renderer and an e2e spec (T190's lesson). The user's order: finish charts and dashboards, then the Superset-parity test. These go after the marking and bookmark tasks they build on (T119, T120, T190).
 
-- [ ] T265 (AC-235) Refuse at publish a rollup naming cubes Cube cannot join, with the rollup, its file and Cube's reason
+- [x] T265 (AC-235) Refuse at publish a rollup naming cubes Cube cannot join, with the rollup, its file and Cube's reason
+  - Done 2026-09-25. **AC-235 is ticked** on `e2e/preaggregations.spec.ts` "a rollup naming a cube its own can't be joined to is refused, naming it, its file and Cube's reason", against the compose Cube, in Chrome, Firefox and Safari.
+    - A cube on the customers table with a rollup naming `products.category` gets 422, one error at the rollup's line, saying: "Pre-aggregation by_category can't be built: Cube cannot join its cubes. Can't find join path to join … 'products' …". It isn't in the store.
+    - The same rollup on the orders table, with its join to products, publishes.
+    - **Observed:** Cube answers `/v1/sql` under the draft with a 400 carrying "Can't find join path…". That confirms the research's derived wire form (rollup-join-paths.md Q3, probe P2).
+    - **The gate,** the research's recommendation (Q5): after the draft compiles, and after wechart's own checks (unknown names, crons), `/v1/sql` for one member of each changed cube with pre-aggregations, under `{wechartStore, wechartDraft}`. Cube builds every one of that cube's rollups' joins as its refresh worker does, and runs nothing. The draft is now held until those answers are in.
+    - **The refusal:**
+      - A 400 is Cube's refusal. It goes on that cube's rollups that name another cube's members, or on all of them if none do, since Cube names cubes, not the rollup.
+      - Each error has its file, line, `preAggregation`, and Cube's reason. The Model workspace shows such errors as it shows any refusal (T142).
+      - Any other failure answers 502, and nothing is published.
+    - **New code:** `CubeClient.sqlUnder(query, context)`, which is `/v1/sql` with wechart's claims (`sql()` takes a previewed context, which the client strips of them), and `model/rollupJoins.ts` `rollupOwnersOf`.
+    - **Tests that failed first:** `publish.test.ts` "is refused on the rollup, in its file, with Cube's reason, and nothing is published", with a stub Cube reading the draft back.
+      - "publishes the same rollup once its cube declares the join" and "asks nothing of a change with no rollup in it" pin the rest.
+      - The shared stub Cube now answers `/v1/sql` as Cube does for a model it can join.
+      - The e2e's first fixture had no primary key, which Cube's compile asks of a cube that joins. It has one now.
+    - **Left as it is:** only the cubes of changed files are asked. A change that takes away a join another file's rollup needs isn't caught here. Cube's worker would then fail as before, and the rollup's cube's queries with it.
   - Files: `packages/api/src/model/publish.ts` and a check beside `rollupReferences.ts`, `packages/api/src/publish.test.ts`, `packages/web/src/workspaces/model/*` (the refusal as shown), `e2e/preaggregations.spec.ts`
   - Failing test: publishing a rollup on `base` that names `user.city` with no join between them is refused with 422, naming the rollup, its file and Cube's reason, and the store is unchanged. The same rollup with a join publishes.
   - Depends on: `docs/research/cube/rollup-join-paths.md`

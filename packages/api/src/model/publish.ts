@@ -8,6 +8,7 @@ import type { Config } from '../config';
 import type { ModelFile, ModelFileStore } from '../server';
 import { clashesOf, compiledIn } from './clashes';
 import { refreshKeyProblemsOf } from './refreshKeys';
+import { rollupOwnersOf } from './rollupJoins';
 import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
 import { compileErrorsOf, type CompileError } from './validate';
 
@@ -202,41 +203,81 @@ export function registerModelPublishing(
         error:
           'Cube answered without reading the change, so it was not checked and nothing was published. Is Cube told to read this store (WECHART_MODEL_STORES)?',
       });
+    // Held until every question about it is answered: its compile, and its rollups' joins (T265).
     try {
-      await client.meta({ wechartStore: config.cubeStoreUrl, wechartDraft: id });
-    } catch (error) {
-      // Cube's compiler refuses with a 500 and its errors — having read the
-      // draft. A 500 without reading it is Cube failing, not the file.
-      if (error instanceof CubeError && error.status === 500 && held.read)
-        return reply.status(422).send({ errors: compileErrorsOf(error.message, changed) });
+      try {
+        await client.meta({ wechartStore: config.cubeStoreUrl, wechartDraft: id });
+      } catch (error) {
+        // Cube's compiler refuses with a 500 and its errors — having read the
+        // draft. A 500 without reading it is Cube failing, not the file.
+        if (error instanceof CubeError && error.status === 500 && held.read)
+          return reply.status(422).send({ errors: compileErrorsOf(error.message, changed) });
+        /**
+         * Cube asserts the `meta` scope before it compiles anything, so a draft
+         * token refused it was never read: said as that, not as a store Cube
+         * was not told of (T176's review; research/cube/api-scope-probes.md).
+         */
+        if (
+          error instanceof CubeError &&
+          error.status === 403 &&
+          /API scope is missing/.test(error.message)
+        )
+          return reply.status(502).send({
+            error: `Cube refused to check the change — ${error.message} for the context wechart checks drafts as — so nothing was published.`,
+          });
+        app.log.warn({ err: error }, 'could not ask Cube to compile the model');
+        if (!held.read && error instanceof CubeError) return unread();
+        return reply
+          .status(502)
+          .send({ error: 'Cube could not be asked to check the model, so nothing was published.' });
+      }
+      if (!held.read) return unread();
+
+      const rollups = unknownInRollups(live, draft, paths);
+      if (rollups.length > 0) return reply.status(422).send({ errors: rollups });
+      // Crons Cube's refresh worker can't run, in the files being changed (T258, AC-153).
+      const schedules = refreshKeyProblemsOf(changed);
+      if (schedules.length > 0) return reply.status(422).send({ errors: schedules });
+
       /**
-       * Cube asserts the `meta` scope before it compiles anything, so a draft
-       * token refused it was never read: said as that, not as a store Cube
-       * was not told of (T176's review; research/cube/api-scope-probes.md).
+       * Rollups whose cubes Cube cannot join (T265, AC-235): compiled all the
+       * same, then failing every query on their cube and the refresh worker's
+       * whole run. `/v1/sql` for one member of each changed cube with
+       * pre-aggregations, under the draft, has Cube build every one of its
+       * rollups' joins, running nothing (research/cube/rollup-join-paths.md, Q5).
+       * Cube's refusal names cubes, not the rollup: it is put on the cube's
+       * rollups that name another cube's members, or on all of them if none do.
        */
-      if (
-        error instanceof CubeError &&
-        error.status === 403 &&
-        /API scope is missing/.test(error.message)
-      )
-        return reply.status(502).send({
-          error: `Cube refused to check the change — ${error.message} for the context wechart checks drafts as — so nothing was published.`,
-        });
-      app.log.warn({ err: error }, 'could not ask Cube to compile the model');
-      if (!held.read && error instanceof CubeError) return unread();
-      return reply
-        .status(502)
-        .send({ error: 'Cube could not be asked to check the model, so nothing was published.' });
+      for (const owner of rollupOwnersOf(changed)) {
+        try {
+          await client.sqlUnder(owner.probe, {
+            wechartStore: config.cubeStoreUrl,
+            wechartDraft: id,
+          });
+        } catch (error) {
+          if (!(error instanceof CubeError) || error.status !== 400) {
+            app.log.warn({ err: error }, 'could not ask Cube to build the rollups’ joins');
+            return reply.status(502).send({
+              error: `Cube could not be asked to check the rollups of ${owner.cube}, so nothing was published.`,
+            });
+          }
+          const reason = error.message.replace(/\.$/, '');
+          const joining = owner.rollups.filter((rollup) => rollup.joins);
+          return reply.status(422).send({
+            errors: (joining.length > 0 ? joining : owner.rollups).map((rollup) => ({
+              path: owner.path,
+              ...(rollup.line === undefined ? {} : { line: rollup.line }),
+              message: /Can't find join path/.test(reason)
+                ? `Pre-aggregation ${rollup.name} can't be built: Cube cannot join its cubes. ${reason}.`
+                : `Pre-aggregation ${rollup.name} can't be built: ${reason}.`,
+              preAggregation: { cube: owner.cube, name: rollup.name },
+            })),
+          });
+        }
+      }
     } finally {
       drafts.delete(id);
     }
-    if (!held.read) return unread();
-
-    const rollups = unknownInRollups(live, draft, paths);
-    if (rollups.length > 0) return reply.status(422).send({ errors: rollups });
-    // Crons Cube's refresh worker can't run, in the files being changed (T258, AC-153).
-    const schedules = refreshKeyProblemsOf(changed);
-    if (schedules.length > 0) return reply.status(422).send({ errors: schedules });
 
     await modelFiles.write(changed);
     // A model the user just published must not look stale to them (AC-137).

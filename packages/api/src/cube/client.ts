@@ -109,6 +109,22 @@ export class CubeClient {
     );
   }
 
+  /**
+   * `/v1/sql` with claims of wechart's own for this one request — a draft to
+   * compile it under (T265): Cube builds every pre-aggregation's join of the
+   * query's cube, and runs nothing (research/cube/rollup-join-paths.md, Q5).
+   */
+  async sqlUnder(
+    query: Record<string, unknown>,
+    context: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.#request(
+      `/v1/sql?query=${encodeURIComponent(JSON.stringify(query))}`,
+      { method: 'GET' },
+      context,
+    );
+  }
+
   /** `/v1/dry-run`: the query as Cube's matcher sees it (its transformed query). */
   async dryRun(query: Record<string, unknown>): Promise<unknown> {
     return this.#request(`/v1/dry-run?query=${encodeURIComponent(JSON.stringify(query))}`, {

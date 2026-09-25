@@ -217,6 +217,82 @@ test('a rollup naming a member the model doesn’t have is refused, and the name
 });
 
 /**
+ * T265 / AC-235: WHEN the user publishes a model change in which a rollup
+ * names members of cubes Cube cannot join, THE SYSTEM SHALL refuse the
+ * publish, name the rollup and its file, and give Cube's reason.
+ * `Fails when: such a change is published, or the refusal names no rollup or
+ * gives no reason.`
+ *
+ * The seed's `products` joins nothing, and nothing but `orders` joins it: a
+ * cube on the customers table naming `products.category` in a rollup can't
+ * be joined. The real Cube, under the draft, says why (research/cube/
+ * rollup-join-paths.md, Q5); the same rollup on a cube that joins products
+ * publishes.
+ */
+test('a rollup naming a cube its own can’t be joined to is refused, naming it, its file and Cube’s reason', async ({
+  request,
+}, testInfo) => {
+  const cube = `e2e_unjoinable_${testInfo.project.name}`;
+  const path = `cubes/${cube}.yml`;
+  // A key, which Cube asks of a cube that joins (its compile says so).
+  const file = (table: string, joins: string) => `cubes:
+  - name: ${cube}
+    sql_table: public.${table}
+${joins}
+    dimensions:
+      - name: id
+        sql: id
+        type: number
+        primary_key: true
+    measures:
+      - name: count
+        type: count
+
+    pre_aggregations:
+      - name: by_category
+        measures: [count]
+        dimensions: [products.category]
+`;
+  const refused = await request.post('/api/model/publish', {
+    data: { files: [{ path, content: file('customers', '') }] },
+  });
+  const { errors } = (await refused.json()) as {
+    errors?: { path: string; line?: number; message: string }[];
+  };
+  expect(refused.status()).toBe(422);
+  expect(errors).toHaveLength(1);
+  // `- name: by_category`, the fifteenth line of the file.
+  expect(errors?.[0]).toMatchObject({ path, line: 15 });
+  expect(errors?.[0]?.message).toMatch(
+    /^Pre-aggregation by_category can't be built: Cube cannot join its cubes\. Can't find join path to join .*'products'.*\.$/,
+  );
+  const stored = (await (await request.get('/api/model/files')).json()) as {
+    files: { path: string }[];
+  };
+  expect(stored.files.map((each) => each.path)).not.toContain(path);
+
+  // With the join, the same rollup publishes.
+  const joined = await request.post('/api/model/publish', {
+    data: {
+      files: [
+        {
+          path,
+          content: file(
+            'orders',
+            `    joins:
+      - name: products
+        sql: "{CUBE}.product_id = {products.id}"
+        relationship: many_to_one
+`,
+          ),
+        },
+      ],
+    },
+  });
+  expect(joined.status(), await joined.text()).toBe(200);
+});
+
+/**
  * T207's review: a change to one file that leaves another file's rollup
  * naming what the model no longer has is refused too — and that rollup's own
  * row says so, when its file is opened from the refusal.
