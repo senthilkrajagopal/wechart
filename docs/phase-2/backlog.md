@@ -95,6 +95,60 @@ The acceptance suite runs in Chrome, Firefox and Safari. Edge was deferred at th
 
 Task: T185.
 
+### F21 and F22–F23. Keyboard, design conformance, and three shipped criteria a late critique failed
+
+The UI design review stream ended with re-critiques of every surface on 2026-09-25:
+- `docs/design/critiques/2026-09-25-shell-explore.md`
+- `docs/design/critiques/2026-09-25-chart-editor.md`
+- `docs/design/critiques/2026-09-25-dashboard.md`
+- `docs/design/critiques/2026-09-25-model-admin.md`
+
+AC-176 was un-ticked by T182's review. AC-187 was never met. AC-201, AC-220 and AC-246 shipped with passing tests, but the critique measured one case of each that fails its SHALL. They moved rather than stay ticked on tests that miss that case.
+
+- AC-176 THE SYSTEM SHALL make every action reachable from the keyboard: navigation, authoring, marking, filtering and every dialog, with a visible focus indicator distinct from the marking outline (direction.md rules 39, 52).
+  Fails when: an action can be performed only with a pointer, or focus is invisible on any control.
+  - Still pointer-only: cross-filtering, and marking on scatter points, legends, trellis panels and table rows (T307). T306 drew the keyboard's item apart from the marking outline.
+- AC-187 THE SYSTEM SHALL draw the app bar, workspace navigation, buttons and inputs, the dashboard header and page tabs, the filter bar, tiles, and the edit sidebar with the component styles of the design prototype the user approved (`docs/design/prototype/index.html`, published as "wechart Workbench"; the user, 2026-09-21: "align with the ui styles in" it), in the tokens of direction.md §3–5.
+  Fails when: one of those components' computed height, padding, border width or radius, font size or weight, or colour token differs from the prototype's rule for the same component.
+  - Measured differences still open:
+    - **Dashboards:**
+      - the KPI head;
+      - link and image tiles carrying tile chrome, and link buttons at radius 4 and weight 400;
+      - chart legends and bars at ECharts defaults, with rounded ends only on a grouped bar's last series (direction.md §6);
+      - `.seg`'s pressed state;
+      - the tile ⋯ menu's max height;
+      - the add slot and template rows;
+      - the filter-pill value control;
+      - three border differences.
+    - **Model workspace:**
+      - 32 px inputs;
+      - the `.seg` tint;
+      - picker chips;
+      - the Generate dialog's buttons.
+    - **Admin:**
+      - the Jobs pane's buttons;
+      - query-log selects at 24 px;
+      - the Security textarea's line height.
+    - **Chart editor:** the preview tile vanishes while loading.
+    - **Shell:**
+      - R12 is forced by AC-005 and needs a §7d record.
+      - R1: Inter is never shipped, so the platform font paints. That is for the user to decide (§3).
+- AC-201 THE SYSTEM SHALL show the marked-items badge in a chart tile's header row, beside its title, and only on chart tiles whose marking holds something.
+  Fails when: the badge pushes the title down, or appears on a tile that does not mark or whose marking is empty.
+  - Dashboard critique N1:
+    - A marked KPI tile's title box measures 0 px at 1440×900, and at 1280×800 while editing.
+    - The badge reads "Marking: 1 marked" where the prototype's reads "1 marked", with the name in its tooltip.
+    - KPIs carry a freshness badge and a table-view button the prototype's don't.
+    - The head reserves 90 px for its buttons, against the prototype's 54.
+- AC-220 THE SYSTEM SHALL name every member by its title from the model wherever a person reads it — legends, tooltips, table headers, well pills, marking chips and the "Why this chart?" trace — and never by its internal name.
+  Fails when: a legend, table header, pill, chip or trace shows a name such as "orders.count".
+  - Chart-editor critique #9: the Acceleration tab reads "Stopped by orders.count: orders has no pre-aggregations". The member comes from `/api/acceleration`, and the API writes the reason with cube names. `AccelerationPanel.test.tsx` and `e2e/preaggregations.spec.ts` pin the internal name today.
+- AC-246 WHEN the user right-clicks a chart tile's plot, or presses Shift+F10 or the Menu key on a focused chart tile, THE SYSTEM SHALL open the tile's menu at the pointer or at the tile, and the browser's own menu SHALL not open there.
+  Fails when: the browser's context menu opens instead, the keys do nothing, or a right-click changes a marking.
+  - Dashboard critique N8: a chart tile with no fields yet is announced "Shift and F10 open its menu", and Shift+F10 opens nothing.
+
+Tasks: T182, T307 (AC-176), T225 (AC-187), and new ones for the fixes above.
+
 ## 2. Follow-ups found in phase 1's reviews
 
 These are not criteria. Each needs either a spec decision or research before it can become one.
@@ -143,4 +197,37 @@ Each is recorded where it arose.
 
 ## 5. The UI design review at phase 1's close
 
-(Filled in when the UI agent reports: its branch, what merged, AC-187's standing, and its open findings.)
+It was merged into main as 7140626: T182's review round, T300–T306, T309, T310, and T225's four re-critiques. AC-176 and AC-187's standing, and the three shipped criteria a critique failed, are in §1.
+
+**Open findings that no criterion covers yet:**
+- Clicking a mark in the chart editor's preview offers no drill or filter (direction.md rule 31).
+- Admin error states have no Retry or Details (rule 18).
+- Below 1,024 px, the dashboard's filter bar isn't a sheet (direction.md §2).
+- At 390 px the shell overflows (N16, §3).
+- The empty KPI tile's "No value" sits above its name, and the prototype's bottom alignment isn't carried over (T300).
+- `search-palette.spec` has known flaky tests.
+
+**Two tests the review stream found wrong, and changed to the criteria:**
+- `customize.test.ts` asserted that a horizontal bar never stacks. AC-219 says its series can.
+- `chartTypeCatalog.test.ts` expected a pivot to need "2 dimensions". A pivot also draws from a time dimension and a dimension.
+
+**Spec changes it proposes, for the user.** Each gives the criterion, then its Fails-when:
+- **Value-axis labels:** "WHEN a chart's value-axis labels would overlap at the tile's width, THE SYSTEM SHALL thin or abbreviate them so no two overlap." Fails when: two value-axis labels overlap in a drawn tile.
+- **Series order:** "WHEN the user orders a chart's series in Customize, THE SYSTEM SHALL draw, stack and list them in that order, and keep it after a refresh." Fails when: series stack alphabetically after another order was set, or the order changes on refresh.
+- **Table columns:** "THE SYSTEM SHALL order a table's columns as the wells order its fields: time and dimensions, then measures in the Metrics well's order." Fails when: a table's columns differ from the wells' order.
+- **AC-041, amended:** "WHEN the user sets Top N, THE SYSTEM SHALL offer to fold the rest into "Other (n)" or drop it, and SHALL offer a row limit that drops rows past it." Fails when: the remainder cannot be dropped, or no row limit can be set.
+- **Markdown tiles:** "WHEN the user selects a markdown tile in edit mode, THE SYSTEM SHALL let them edit its text and render the change." Fails when: a markdown tile's text cannot be changed in the UI.
+- **AC-220, amended** (with T257's N5): name a member "by its short title where its cube or view is evident (a pill, a legend or a KPI label of a one-source chart), and its full title elsewhere." Fails when: a one-source chart's legend or KPI label repeats the source's title.
+- **Pie labels:** "WHEN data labels are on for a pie or donut, THE SYSTEM SHALL draw each label whole, moving or hiding labels that do not fit." Fails when: a slice label shows a truncated value such as "$…".
+- **Narrow shell:** "WHILE the window is narrower than 1,024 px, THE SYSTEM SHALL fit the app bar within it, folding navigation and search into a menu." Fails when: a page scrolls sideways at 390 px.
+
+**Decisions it asks for:**
+- Whether to ship Inter (R1), which needs a research doc and a task.
+- Recording R12 in direction.md §7d.
+- ACs for maps and the box plot, beside AC-037. The spec's non-goals still list maps.
+- Still pending from earlier rounds:
+  - T245's palette wording;
+  - AC-017's folder rows;
+  - T246's header items;
+  - AC-231's settings-page ruling;
+  - the filter bar as a sheet in direction.md.

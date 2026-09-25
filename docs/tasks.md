@@ -3321,7 +3321,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `e2e/perf/marking-update.spec.ts`, `packages/web/src/query/concurrency.ts`
   - Failing test: `e2e/perf/marking-update.spec.ts`: the p95 time to update every affected tile after a marking change is under 3 s (AC-175). The client-side concurrency bound is set here against Cube's queue concurrency.
   - Depends on: T110, T180
-- [ ] T182 (AC-176) Make every action keyboard-reachable with a focus indicator distinct from the marking outline
+- [moved to phase 2] T182 (AC-176) Make every action keyboard-reachable with a focus indicator distinct from the marking outline
   - Files: `packages/web/src/shell/styles.ts` (the ring), `packages/web/src/shell/useFocusTrap.ts`, the dashboard, filter, settings, security, search and Explore surfaces it names below, `e2e/keyboard-coverage.spec.ts`. The planned `packages/ui/src/focus.css.ts` and `YamlEditor.tsx` hint were not needed; see below.
   - Failing test: `e2e/keyboard-coverage.spec.ts`: navigation, authoring, marking, filtering and every dialog are reachable from the keyboard, focus is visible on every control and is visually distinct from the marking outline, and Tab leaves the code editor, which is no keyboard trap (AC-176).
   - Depends on: T063, T106, T139
@@ -4000,7 +4000,7 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - The keyboard offered a scatter's measure values as items.
     - The e2e didn't prove marks.
   - **Recorded, not changed:** Top N stays offered for a scatter and a heatmap, where it now does nothing.
-- [ ] T225 (AC-187) Re-run the design critique on every surface, and tick AC-187 only on measured conformance
+- [moved to phase 2] T225 (AC-187) Re-run the design critique on every surface, and tick AC-187 only on measured conformance
   - Files: `docs/design/critiques/`
   - Failing test: the `design-critic` report finds no `STRUCTURE` or AC-187 finding on the surfaces above (AC-187).
   - Depends on: T208–T241, and T243–T251 (the re-critique's fixes)
@@ -4831,7 +4831,7 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
     - A first version ringed marked items too, over their outline. It failed T182's own test "marking by the keyboard, under a focus ring unlike the marking's outline", which looks for the 1.5 px outline on the tile while it has focus. So marked items now keep their outline.
     - Passes in all three browsers with keyboard-coverage, markings, crossfilter and dashboard (369 runs).
   - AC-176 stays unchecked for T307.
-- [ ] T307 (AC-176) Reach the pointer-only chart actions from the keyboard
+- [moved to phase 2] T307 (AC-176) Reach the pointer-only chart actions from the keyboard
   - From T182's review. These could only be done with the pointer:
     - cross-filtering from a mark;
     - marking a scatter's points;

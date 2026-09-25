@@ -609,8 +609,7 @@ Traces to: `[R3]`, `[R7]`, direction.md rules 1–5, 39, 52.
       Fails when: the p95 across a repeated run exceeds 3 seconds.
 - [x] AC-175 WHEN a marking changes on a dashboard of 10 charts, THE SYSTEM SHALL update every affected tile within 3 seconds at the 95th percentile.
       Fails when: the p95 update time exceeds 3 seconds.
-- [ ] AC-176 THE SYSTEM SHALL make every action reachable from the keyboard: navigation, authoring, marking, filtering and every dialog, with a visible focus indicator distinct from the marking outline (direction.md rules 39, 52).
-      Fails when: an action can be performed only with a pointer, or focus is invisible on any control.
+> **Moved to phase 2** (2026-09-25): AC-176, in `docs/phase-2/backlog.md` §1.
 - [x] AC-177 THE SYSTEM SHALL pair every status, validation and job state with an icon and a text label (direction.md rule 3).
       Fails when: any state is conveyed by colour alone.
 - [x] AC-178 THE SYSTEM SHALL provide a table view of every chart's data, reachable from the tile (direction.md rule 5).
@@ -622,8 +621,7 @@ Traces to: `[R3]`, `[R7]`, direction.md rules 1–5, 39, 52.
 > `msedge` channel (its install asks for the machine's password) or a CI run.
 - [x] AC-188 THE SYSTEM SHALL write a time dimension's values by their granularity — a year as "2026", a quarter as "Q1 2026", a month as "Jan 2026", a week as "Week of Jan 5, 2026", a day as "Jan 2, 2026", and an hour or finer with the time — in axes, labels, tooltips and tables, unless the member's model format says otherwise.
       Fails when: a time value shows as a raw timestamp such as "2026-01-02T00:00:00.000".
-- [ ] AC-187 THE SYSTEM SHALL draw the app bar, workspace navigation, buttons and inputs, the dashboard header and page tabs, the filter bar, tiles, and the edit sidebar with the component styles of the design prototype the user approved (`docs/design/prototype/index.html`, published as "wechart Workbench"; the user, 2026-09-21: "align with the ui styles in" it), in the tokens of direction.md §3–5.
-      Fails when: one of those components' computed height, padding, border width or radius, font size or weight, or colour token differs from the prototype's rule for the same component.
+> **Moved to phase 2** (2026-09-25): AC-187, in `docs/phase-2/backlog.md` §1, with the 2026-09-25 re-critiques' measured differences.
 
 ## F22. Following the design prototype's structure
 
@@ -661,8 +659,7 @@ Dashboards:
       Fails when: one of those items is missing, or the marked-rows actions appear outside Markings mode.
 - [x] AC-200 THE SYSTEM SHALL show each non-empty marking in the filter bar as a chip bordered in the marking's colour, naming the marking, summarising its values by the members' titles, naming the tile it came from, and offering a menu and a control that unmarks it.
       Fails when: a chip shows a member's internal name, omits the source tile, or cannot unmark from the chip.
-- [x] AC-201 THE SYSTEM SHALL show the marked-items badge in a chart tile's header row, beside its title, and only on chart tiles whose marking holds something.
-      Fails when: the badge pushes the title down, or appears on a tile that does not mark or whose marking is empty.
+> **Moved to phase 2** (2026-09-25): AC-201, in `docs/phase-2/backlog.md` §1. It shipped; the 2026-09-25 re-critique measured a marked KPI tile whose title is squeezed to nothing.
 - [x] AC-202 THE SYSTEM SHALL draw a section as a band with a header holding a collapse control, its title and its number of items, and SHALL collapse and expand it in view and edit mode.
       Fails when: a section has no collapse control, or cannot be collapsed in view mode.
 - [x] AC-203 WHEN the user selects a tile in edit mode, THE SYSTEM SHALL open Properties, showing for a chart tile its title, chart type and source, an Edit chart action, its ownership, its Marking settings and its layout.
@@ -702,8 +699,7 @@ Library charts and the chart editor:
       Fails when: a combo, or a pie drawn with more than 6 slices, shows no warning.
 - [x] AC-219 THE SYSTEM SHALL offer in the chart editor's Customize tab the axis settings — title, label rotation, include zero, logarithmic scale, gridlines, minimum and maximum — the legend's visibility and position, each series' colour and visibility and whether series stack, data labels, and the number format.
       Fails when: the legend's position, data labels or "include zero" cannot be set.
-- [x] AC-220 THE SYSTEM SHALL name every member by its title from the model wherever a person reads it — legends, tooltips, table headers, well pills, marking chips and the "Why this chart?" trace — and never by its internal name.
-      Fails when: a legend, table header, pill, chip or trace shows a name such as "orders.count".
+> **Moved to phase 2** (2026-09-25): AC-220, in `docs/phase-2/backlog.md` §1. It shipped; the 2026-09-25 re-critique found the Acceleration tab naming `orders.count`.
 - [x] AC-221 WHEN a pie or donut is drawn, THE SYSTEM SHALL list every slice in its legend.
       Fails when: a slice has no legend entry.
 
@@ -774,8 +770,7 @@ Traces to: the user, 2026-09-25; `[docs/design/reviews/2026-09-24/chart-context-
       Fails when: one of those items is missing where it applies, or an image file is not the chart as drawn.
 - [x] AC-245 WHEN the user opens the tile menu's Data as of submenu, THE SYSTEM SHALL show, for an answer a pre-aggregation served, its name, its last build, its refresh schedule in words and as written, and its next run with how late it may start, with Refresh now, Open in Jobs on that pre-aggregation and Edit schedule in Model; and, for an answer the database served, say so, with Refresh now and Why not accelerated.
       Fails when: one of those items is missing, Open in Jobs does not select that pre-aggregation, or a database answer is described as a pre-aggregation's.
-- [x] AC-246 WHEN the user right-clicks a chart tile's plot, or presses Shift+F10 or the Menu key on a focused chart tile, THE SYSTEM SHALL open the tile's menu at the pointer or at the tile, and the browser's own menu SHALL not open there.
-      Fails when: the browser's context menu opens instead, the keys do nothing, or a right-click changes a marking.
+> **Moved to phase 2** (2026-09-25): AC-246, in `docs/phase-2/backlog.md` §1. It shipped; the 2026-09-25 re-critique found Shift+F10 doing nothing on a chart tile with no fields yet.
 - [x] AC-247 WHILE the tile's marking holds items, THE SYSTEM SHALL head the tile's menu with the marking's name, the marked values by their members' titles, and the count marked out of the tile's items.
       Fails when: the heading omits the values, or either count differs from the marked items or the tile's items.
 
@@ -818,7 +813,7 @@ Copied from [requirements.md §7](./requirements.md):
 
 ## Traceability
 
-The table still names the criteria moved to phase 2 on 2026-09-25, since those requirements trace to them: AC-047 … AC-052, AC-093, AC-097, AC-104, AC-116, AC-145, AC-150, AC-151, AC-153 … AC-155, AC-157 … AC-161, AC-163, AC-164, AC-180 and AC-234. Their text is in `docs/phase-2/backlog.md` §1.
+The table still names the criteria moved to phase 2 on 2026-09-25, since those requirements trace to them: AC-047 … AC-052, AC-093, AC-097, AC-104, AC-116, AC-145, AC-150, AC-151, AC-153 … AC-155, AC-157 … AC-161, AC-163, AC-164, AC-176, AC-180, AC-187, AC-201, AC-220, AC-234 and AC-246. Their text is in `docs/phase-2/backlog.md` §1.
 
 | Requirement                                                                                   | Acceptance criteria                                                   |
 | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
