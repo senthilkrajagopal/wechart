@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from '../render-spec';
-import { columnTitleOf, csvOf, tableColumnsOf } from './csv';
+import { columnTitleOf, csvOf, rowsCsvOf, tableColumnsOf } from './csv';
 
 /**
  * T177 / AC-171: WHEN the user exports a chart or a marked-rows view, THE
@@ -222,5 +222,33 @@ describe('a measure in a chart’s CSV', () => {
 
   it('adds no raw column for a dimension', () => {
     expect(lines(csvOf(spec))[0]).not.toContain('orders.ordered_at.month (raw)');
+  });
+});
+
+/**
+ * T120 / AC-114, AC-171: the rows behind a tile — ungrouped, as Cube returns
+ * them — written as a chart's table is: headed by the members' titles, each
+ * value formatted, a measure's raw number beside it.
+ */
+describe('a view of rows as CSV', () => {
+  it('heads, formats and writes plain rows as a chart’s table would', () => {
+    const csv = rowsCsvOf(
+      [
+        { 'orders.status': 'shipped', 'orders.amount': '57.5' },
+        { 'orders.status': '=cmd', 'orders.amount': '65' },
+      ],
+      {
+        measures: ['orders.amount'],
+        formats: { 'orders.amount': 'currency' },
+        titles: { 'orders.status': 'Status', 'orders.amount': 'Amount' },
+      },
+    );
+
+    expect(lines(csv)).toEqual([
+      'Status,Amount,Amount (raw)',
+      'shipped,$57.5,57.5',
+      // A value a spreadsheet would run is written as text.
+      "'=cmd,$65,65",
+    ]);
   });
 });

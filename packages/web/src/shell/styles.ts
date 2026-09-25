@@ -1593,6 +1593,33 @@ fieldset.model-field > legend {
   grid-template-columns: minmax(0, 1fr);
 }
 .dialog.view-query h3 { margin: 8px 0 0; font-size: var(--wc-text-sm-size); font-weight: 600; }
+/* The rows behind a tile (T120, AC-114): the table scrolls within the dialog,
+   its header in view, so Download and Close never leave the screen. */
+.dialog.marked-rows {
+  width: min(960px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100vh - 64px);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+}
+.marked-rows__table {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+}
+.marked-rows__table table { width: 100%; border-collapse: collapse; font-size: var(--wc-text-xs-size); font-variant-numeric: tabular-nums; }
+.marked-rows__table th {
+  position: sticky;
+  top: 0;
+  padding: 6px 8px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.marked-rows__table td { padding: 4px 8px; border-top: 1px solid var(--wc-border-subtle); white-space: nowrap; }
 .view-query__code {
   max-height: 280px;
   margin: 0;

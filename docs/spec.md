@@ -366,7 +366,7 @@ Traces to: `[docs/inputs §11]`, direction.md §7a, rules 33, 53, 55.
       Fails when: the new tile is not limited by the marking, or has no message.
 - [x] AC-113 WHEN the user chooses "Filter to marked" or "Filter out marked", THE SYSTEM SHALL create a removable dashboard filter equivalent to the marking's predicate, or its negation, and then clear the marking (direction.md rule 53).
       Fails when: the filter is not removable, the marking survives, or the rows kept differ from the marked rows.
-- [ ] AC-114 WHEN the user chooses "View marked rows", THE SYSTEM SHALL show the underlying rows behind the marked items, state the total number of rows, and offer an export of them (direction.md rule 53).
+- [x] AC-114 WHEN the user chooses "View marked rows", THE SYSTEM SHALL show the underlying rows behind the marked items, state the total number of rows, and offer an export of them (direction.md rule 53).
       Fails when: the rows shown do not match the marking, or the total is absent.
 - [x] AC-115 WHEN the user chooses Invert marking or Mark all on a tile, THE SYSTEM SHALL mark exactly the tile's unmarked items, or all of its items, and leave other tiles' contributions to that marking unchanged.
       Fails when: an inverted marking keeps a previously marked item, or Mark all misses a visible item.
@@ -624,7 +624,7 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rule 21; `[research/c
 Purpose: get data out, without a server renderer.
 Traces to: `[R6]`, direction.md §7c.
 
-- [ ] AC-171 WHEN the user exports a chart or a marked-rows view, THE SYSTEM SHALL produce a CSV whose rows and columns match what the tile shows, including the applied filters and marking limits.
+- [x] AC-171 WHEN the user exports a chart or a marked-rows view, THE SYSTEM SHALL produce a CSV whose rows and columns match what the tile shows, including the applied filters and marking limits.
       Fails when: the CSV contains rows the tile excluded, or omits a displayed column.
 - [x] AC-172 WHEN an export exceeds the row limit Cube returns, THE SYSTEM SHALL say how many rows were exported and that the result was truncated.
       Fails when: a truncated export claims to be complete.
@@ -796,7 +796,7 @@ Traces to: the user, 2026-09-25; `[docs/design/reviews/2026-09-24/chart-context-
       Fails when: a primary key or the marked member is offered, or a dimension of a cube Cube reports in another join component is offered.
 - [ ] AC-238 WHILE a tile shows a drilled view, THE SYSTEM SHALL show the drilled answer's own freshness: the pre-aggregation that served it, or that the database did.
       Fails when: a drilled view the database answered shows the parent view's pre-aggregation.
-- [ ] AC-239 WHEN the user chooses View underlying rows on a chart tile with nothing marked, THE SYSTEM SHALL show the rows behind the whole tile, as its query ungrouped with its filters, and state the total number of rows.
+- [x] AC-239 WHEN the user chooses View underlying rows on a chart tile with nothing marked, THE SYSTEM SHALL show the rows behind the whole tile, as its query ungrouped with its filters, and state the total number of rows.
       Fails when: the rows differ from the tile's query ungrouped, or the total is absent.
 - [ ] AC-240 WHILE the details panel is on, WHEN the marking changes, THE SYSTEM SHALL show the rows behind the newly marked items and their total, and the panel SHALL be turned on and off both from the tile's menu and from the panel itself.
       Fails when: the panel shows rows of a previous marking after the change, or either control does not toggle it.

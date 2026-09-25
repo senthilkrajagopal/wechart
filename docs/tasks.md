@@ -1695,7 +1695,26 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `packages/web/src/dashboard/markings/filterToMarked.ts`, `packages/web/src/dashboard/markings/filterToMarked.test.ts`, and their items in the tile's ⋯ marked-rows group
   - Failing test: `filterToMarked.test.ts`: "Filter to marked" creates a removable dashboard filter whose rows equal the marked rows, "Filter out marked" its negation, and both clear the marking (AC-113); `e2e/markings.spec.ts`: both, from the tile's ⋯ group (AC-199).
   - Depends on: T086, T113, T219
-- [ ] T120 (AC-114, AC-199) Show the rows behind the marked items, with a total and an export
+- [x] T120 (AC-114, AC-199) Show the rows behind the marked items, with a total and an export
+  - Done 2026-09-25, all three browsers, together with T268. AC-114, AC-239 and AC-171 ticked on `e2e/markings.spec.ts` "View marked rows shows the marked rows and their total, exports them, and with nothing marked the whole tile's". Its `MarkedRows.test.tsx` and `csv.test.ts` cases failed first.
+    - **The rows** (`dashboard/markings/MarkedRows.tsx`):
+      - A dialog, "Marked rows: ‹tile›" or "Underlying rows: ‹tile›". It shows the tile's chart query ungrouped, as the editor's drawer asks (AC-036), under every filter and limit the tile is (`asked`).
+      - For marked rows, the marking's predicate is added as well: the same filter "Filter to marked" makes (`markedFilter`).
+      - It shows the first 100 rows, as the drawer caps them, and "Showing n of N rows" from the total Cube counts past its row limit (`total: true`).
+      - Columns are headed by the members' titles, and values written as the table writes them.
+    - **The export:** Download CSV asks for the rows up to Cube's default row limit (10,000) and writes them as a chart's table is written. A new `rowsCsvOf` holds what `csvOf` did for a chart's rows. The dialog then says how many rows were written and whether they are all of them (`exportNoteOf`).
+    - **The menu:**
+      - View marked rows sits in the marked group, after the two filters, as the prototype orders it.
+      - View underlying rows is at the top level while nothing is marked (T268, AC-239); the marked group's item takes its place when something is.
+    - **Found on the way, fixed:** 100 rows pushed Close and Download below the screen. The table now scrolls inside the dialog, which is bounded to the viewport, with its header kept in view.
+    - **Tests:**
+      - `MarkedRows.test.tsx`: the rows headed by title, "Showing 2 of 80 rows", the first page asked for; the CSV and its note; an error said in place of an empty table; Escape.
+      - `csv.test.ts` `rowsCsvOf`.
+      - The e2e:
+        - nothing marked: 100 of 240 rows;
+        - shipped marked: 80 of 80, every one shipped;
+        - the export has 81 lines of shipped rows, with the view's columns and the raw numbers beside the measures;
+        - View underlying rows is not offered while something is marked.
   - Files: `packages/web/src/dashboard/markings/MarkedRows.tsx`, `packages/web/src/dashboard/markings/MarkedRows.test.tsx`, and its item in the tile's ⋯ marked-rows group
   - Failing test: `MarkedRows.test.tsx`: the rows match the marking, the total row count is stated, and an export is offered (AC-114); `e2e/markings.spec.ts`: "View marked rows" from the tile's ⋯ group opens them (AC-199).
   - Depends on: T113, T041, T219
@@ -4029,7 +4048,8 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `e2e/markings.spec.ts`
   - Failing test: with two of six countries marked, the heading reads the marking's name, both countries under the member's title, and "2 of 6".
   - Depends on: T266
-- [ ] T268 (AC-239) View underlying rows for the whole tile when nothing is marked
+- [x] T268 (AC-239) View underlying rows for the whole tile when nothing is marked
+  - Done 2026-09-25 with T120 (see its record): the same dialog, the tile's query ungrouped with its filters. AC-239 is ticked on the same e2e test.
   - Files: `packages/web/src/dashboard/*` (the rows view T120 builds), `e2e/markings.spec.ts`
   - Failing test: with nothing marked, View underlying rows shows the tile's query ungrouped with its filters, and states the total.
   - Depends on: T120

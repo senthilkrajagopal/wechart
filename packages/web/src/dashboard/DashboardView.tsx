@@ -25,6 +25,8 @@ import {
   type MarkingPredicate,
   type MarkingSlot,
   toChartSpec,
+  toUnderlyingQuery,
+  markedFilter,
   toCubeQuery,
   type ChartDocument,
   type ChartType,
@@ -102,6 +104,7 @@ import { announceMarking, MarkingAnnouncer } from './markings/LiveRegion';
 import { MarkBadge } from './markings/MarkBadge';
 import { MarkChip, summariseMarking } from './markings/MarkChip';
 import { markFilterFrom, markFilterLabel, type MarkFilter } from './markings/filterToMarked';
+import { MarkedRows } from './markings/MarkedRows';
 import { markingOf, withMarking, type MarkingState } from './markings/store';
 import { interactionsOf, type InteractionMode } from './settings/interactionMode';
 import { describeFilter } from '../filters/describe';
@@ -779,6 +782,11 @@ interface TileCharts {
     | undefined;
   /** The query a tile's chart asks, and its SQL (AC-199's View query). */
   readonly onViewQuery?: ((chartId: string, tileId: string) => void) | undefined;
+  /**
+   * The rows behind a tile (T120, AC-114; T268, AC-239): behind its marked
+   * items, or behind the whole of it.
+   */
+  readonly onViewRows?: ((chartId: string, tileId: string, marked: boolean) => void) | undefined;
 }
 
 interface Affordances {
@@ -1069,6 +1077,13 @@ function Elements({
                         affordances.onEditChart?.(element.id, chartId);
                       }
                 }
+                onViewRows={
+                  charts.onViewRows === undefined
+                    ? undefined
+                    : () => {
+                        charts.onViewRows?.(chartId, element.id, false);
+                      }
+                }
                 marked={(() => {
                   const shown = charts.markingOn?.(element.id);
                   const markItems = charts.markItemsOn?.(element.id);
@@ -1082,6 +1097,13 @@ function Elements({
                         },
                         filterTo: charts.filterMarkedOn?.(element.id, false),
                         filterOut: charts.filterMarkedOn?.(element.id, true),
+                        ...(charts.onViewRows === undefined
+                          ? {}
+                          : {
+                              onViewMarkedRows: () => {
+                                charts.onViewRows?.(chartId, element.id, true);
+                              },
+                            }),
                         ...(markItems === undefined
                           ? {}
                           : {
@@ -2113,6 +2135,10 @@ export function DashboardView({
   const [queryFor, setQueryFor] = useState<{ chartId: string; tileId: string } | undefined>(
     undefined,
   );
+  /** The tile whose rows are open (T120, AC-114; T268, AC-239), and which of them. */
+  const [rowsFor, setRowsFor] = useState<
+    { chartId: string; tileId: string; marked: boolean } | undefined
+  >(undefined);
   /**
    * The charts a refresh was asked for (T154, AC-148): once its answer is in,
    * one a pre-aggregation served says so — Cube read it from the rollup as
@@ -2930,6 +2956,11 @@ export function DashboardView({
     onViewQuery: (chartId: string, tileId: string) => {
       if (queryOf(chartId) !== undefined) setQueryFor({ chartId, tileId });
     },
+    onViewRows: (chartId: string, tileId: string, marked: boolean) => {
+      if (rowsQueryOf(chartId, tileId, marked, 1) !== undefined) {
+        setRowsFor({ chartId, tileId, marked });
+      }
+    },
     ...(marking
       ? {
           /** Unmark what the tile marks with, as Escape on it does (AC-199). */
@@ -3117,6 +3148,49 @@ export function DashboardView({
       return undefined;
     }
   }
+  /**
+   * The rows behind a tile (T120, AC-114; T268, AC-239): its chart's query
+   * ungrouped, as the chart editor's drawer asks (AC-036), under every filter
+   * and limit the tile is — and, for its marked rows, its marking's predicate
+   * as well (`markedFilter`, the one "Filter to marked" makes). With the
+   * query's full count, which Cube gives past its row limit.
+   */
+  function rowsQueryOf(
+    chartId: string,
+    tileId: string,
+    marked: boolean,
+    limit: number,
+  ): Record<string, unknown> | undefined {
+    const chart = drawn.documents?.[chartId];
+    if (chart === undefined) return undefined;
+    const refused = filtered[chartId]?.uncovered ?? [];
+    const applied = (reached[chartId] ?? []).filter(({ filter }) => !refused.includes(filter.id));
+    try {
+      const query = withLimit(
+        withFilters(toUnderlyingQuery(toChartSpec(chart), limit), applied),
+        asked[chartId],
+      );
+      if (!marked) return { ...query, total: true };
+      const element = elementAt(live, tileId);
+      const markingId = element !== null && isTile(element) ? marksWithOf(element) : undefined;
+      if (markingId === undefined) return undefined;
+      const made = markedFilter(markingOf(marks, markingId), false);
+      if ('refused' in made) return undefined;
+      return { ...withLimit(query, made.filter), total: true };
+    } catch {
+      return undefined;
+    }
+  }
+  const closeRows = () => {
+    const opener = rowsFor?.tileId ?? '';
+    setRowsFor(undefined);
+    // Back to the ⋯ menu it was opened from.
+    requestAnimationFrame(() => {
+      window.document
+        .querySelector<HTMLElement>(`[data-view-menu="${CSS.escape(opener)}"]`)
+        ?.focus();
+    });
+  };
   const sqlQuery = sqlFor === undefined ? undefined : queryOf(sqlFor.chartId);
   const viewedQuery = queryFor === undefined ? undefined : queryOf(queryFor.chartId);
   const closeQuery = () => {
@@ -3333,6 +3407,29 @@ export function DashboardView({
           query={viewedQuery}
           context={preview}
           onClose={closeQuery}
+        />
+      )}
+      {rowsFor === undefined ? null : (
+        <MarkedRows
+          title={chartTitleOf(rowsFor.chartId) ?? 'this chart'}
+          heading={rowsFor.marked ? 'Marked rows' : 'Underlying rows'}
+          load={async (limit, signal) => {
+            const query = rowsQueryOf(rowsFor.chartId, rowsFor.tileId, rowsFor.marked, limit);
+            if (query === undefined) throw new Error('There is nothing marked to show rows for.');
+            const result = (await loadTile({
+              query,
+              signal,
+              ...(preview === undefined ? {} : { context: preview }),
+            })) as { data?: unknown; total?: unknown };
+            return {
+              rows: Array.isArray(result.data) ? (result.data as Record<string, unknown>[]) : [],
+              total: typeof result.total === 'number' ? result.total : undefined,
+            };
+          }}
+          measures={drawn.specs[rowsFor.chartId]?.measures ?? []}
+          formats={drawn.specs[rowsFor.chartId]?.formats ?? {}}
+          titles={drawn.specs[rowsFor.chartId]?.titles ?? {}}
+          onClose={closeRows}
         />
       )}
       {preview === undefined || sqlFor === undefined || sqlQuery === undefined ? null : (

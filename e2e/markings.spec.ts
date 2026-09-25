@@ -1015,6 +1015,7 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
   await expect(marked.getByRole('button')).toHaveText([
     'Filter to marked',
     'Filter out marked',
+    'View marked rows',
     'Invert marking',
     'Mark all',
     'Unmark',
@@ -1023,7 +1024,7 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
   await expect(
     menu.getByRole('button').filter({
       hasNotText:
-        /^(Filter to marked|Filter out marked|Invert marking|Mark all|Unmark|Create details tile)$/,
+        /^(Filter to marked|Filter out marked|View marked rows|Invert marking|Mark all|Unmark|Create details tile)$/,
     }),
   ).toHaveText(['View as table', 'View query', 'Download CSV', 'Edit chart']);
 
@@ -1811,6 +1812,76 @@ test('Filter to marked and Filter out marked filter every tile they reach, clear
   await expect(chip).toContainText('Filtered out Marking');
   await expect.poll(() => labels(status)).toEqual(['completed', 'processing']);
   await expect(status.getByTestId('mark-badge')).toHaveCount(0);
+});
+
+/**
+ * AC-114: WHEN the user chooses "View marked rows", THE SYSTEM SHALL show the
+ * underlying rows behind the marked items, state the total number of rows,
+ * and offer an export of them (direction.md rule 53).
+ * `Fails when: the rows shown do not match the marking, or the total is absent.`
+ * AC-239: WHEN the user chooses View underlying rows on a chart tile with
+ * nothing marked, THE SYSTEM SHALL show the rows behind the whole tile, as its
+ * query ungrouped with its filters, and state the total number of rows.
+ * `Fails when: the rows differ from the tile's query ungrouped, or the total
+ * is absent.`
+ *
+ * 240 orders, 80 of each status (infra/sample-db/init.sql): shipped marked,
+ * the rows are all shipped and there are 80 of them; nothing marked, all 240.
+ */
+test('View marked rows shows the marked rows and their total, exports them, and with nothing marked the whole tile’s', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  const menu = async () => {
+    await status.getByRole('button', { name: /^Actions for / }).click();
+    return status.getByRole('list', { name: /^Actions for / });
+  };
+
+  // Nothing marked: the whole tile's rows.
+  await (await menu()).getByRole('button', { name: 'View underlying rows' }).click();
+  let dialog = page.getByRole('dialog', { name: 'Underlying rows: By status' });
+  await expect(dialog.getByTestId('rows-count')).toHaveText('Showing 100 of 240 rows');
+  await dialog.getByRole('button', { name: 'Close' }).click();
+
+  // Shipped marked: only shipped rows, and 80 of them.
+  await clickBar(page, status, 'shipped');
+  const listed = await menu();
+  // Offered in place of View underlying rows while something is marked.
+  await expect(listed.getByRole('button', { name: 'View underlying rows' })).toHaveCount(0);
+  await listed
+    .getByRole('group', { name: /marked$/ })
+    .getByRole('button', { name: 'View marked rows' })
+    .click();
+  dialog = page.getByRole('dialog', { name: 'Marked rows: By status' });
+  await expect(dialog.getByTestId('rows-count')).toHaveText('Showing 80 of 80 rows');
+  const statuses = await dialog
+    .locator('tbody tr')
+    .evaluateAll((rows) => rows.map((row) => row.textContent ?? ''));
+  expect(statuses).toHaveLength(80);
+  expect(statuses.every((text) => text.includes('shipped'))).toBe(true);
+
+  // The export: every marked row, headed as the table is.
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    dialog.getByRole('button', { name: 'Download CSV' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe('By status - marked rows.csv');
+  const { readFile } = await import('node:fs/promises');
+  const read = await readFile(await download.path(), 'utf8');
+  // Past the byte-order mark a spreadsheet reads it as UTF-8 by.
+  const text = read.charCodeAt(0) === 0xfeff ? read.slice(1) : read;
+  const lines = text.trim().split('\r\n');
+  expect(lines).toHaveLength(81);
+  expect(lines.slice(1).every((line) => line.includes('shipped'))).toBe(true);
+  // Every column the view shows, and a measure's raw number beside it (AC-171, AC-173).
+  const shown = await dialog.locator('th').allTextContents();
+  expect((lines[0] ?? '').split(',').filter((head) => !head.endsWith(' (raw)'))).toEqual(shown);
+  await expect(dialog.getByRole('status')).toContainText('Downloaded 80 rows');
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toHaveCount(0);
 });
 
 /**

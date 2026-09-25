@@ -170,4 +170,11 @@ export {
   type MarkingSlot,
 } from './markings/model';
 
-export { columnTitleOf, csvOf, exportNoteOf, rowsText, tableColumnsOf } from './export/csv';
+export {
+  columnTitleOf,
+  csvOf,
+  exportNoteOf,
+  rowsCsvOf,
+  rowsText,
+  tableColumnsOf,
+} from './export/csv';

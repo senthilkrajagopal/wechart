@@ -61,17 +61,42 @@ function guarded(raw: unknown, written: string): string {
  * break, its quotes doubled.
  */
 export function csvOf(spec: RenderSpec): string {
-  const columns = tableColumnsOf(spec.rows);
-  const measures = new Set(spec.measures ?? []);
-  const write = columns.map((member) =>
-    formatterFor(member, spec.formats ?? {}, spec.granularities ?? {}),
-  );
+  return rowsCsvOf(spec.rows, {
+    ...(spec.measures === undefined ? {} : { measures: spec.measures }),
+    ...(spec.formats === undefined ? {} : { formats: spec.formats }),
+    ...(spec.granularities === undefined ? {} : { granularities: spec.granularities }),
+    ...(spec.titles === undefined ? {} : { titles: spec.titles }),
+  });
+}
+
+/**
+ * Rows as CSV, written as a chart's table writes them (`csvOf`): the rows
+ * behind a tile — its marked rows, or all of them, ungrouped (T120, AC-114,
+ * AC-171) — as well as a chart's own.
+ */
+export function rowsCsvOf(
+  rows: readonly Record<string, unknown>[],
+  {
+    measures: measured = [],
+    formats = {},
+    granularities = {},
+    titles,
+  }: {
+    measures?: readonly string[];
+    formats?: RenderSpec['formats'];
+    granularities?: RenderSpec['granularities'];
+    titles?: RenderSpec['titles'];
+  },
+): string {
+  const columns = tableColumnsOf(rows);
+  const measures = new Set(measured);
+  const write = columns.map((member) => formatterFor(member, formats ?? {}, granularities ?? {}));
   // A measure's raw number beside its formatted value (T179, AC-173).
   const heads = columns.flatMap((member) => {
-    const title = columnTitleOf(member, spec.titles);
+    const title = columnTitleOf(member, titles);
     return measures.has(member) ? [title, `${title} (raw)`] : [title];
   });
-  const records = spec.rows.map((row) =>
+  const records = rows.map((row) =>
     columns.flatMap((member, index) => {
       const raw = row[member];
       const written = guarded(raw, write[index]?.(raw) ?? '');

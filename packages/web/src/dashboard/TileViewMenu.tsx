@@ -47,6 +47,7 @@ export function TileViewMenu({
   onTableView,
   onViewQuery,
   onEditChart,
+  onViewRows,
   marked,
 }: {
   tileId: string;
@@ -75,6 +76,12 @@ export function TileViewMenu({
   /** The chart editor, on this tile's chart (AC-199). */
   onEditChart?: (() => void) | undefined;
   /**
+   * View underlying rows (T268, AC-239): the rows behind the whole tile,
+   * offered where nothing on it is marked — the marked group's View marked
+   * rows takes its place when something is.
+   */
+  onViewRows?: (() => void) | undefined;
+  /**
    * In Markings mode, the tile's marking: the marked-rows group, headed by
    * its name and count (AC-199). Absent in any other mode.
    */
@@ -89,6 +96,8 @@ export function TileViewMenu({
          */
         filterTo?: (() => void) | { readonly refused: string } | undefined;
         filterOut?: (() => void) | { readonly refused: string } | undefined;
+        /** The rows behind the marked items (T120, AC-114). */
+        onViewMarkedRows?: (() => void) | undefined;
         /** Invert marking and Mark all on this tile (AC-115), where it has items to name. */
         onInvert?: (() => void) | undefined;
         onMarkAll?: (() => void) | undefined;
@@ -236,6 +245,18 @@ export function TileViewMenu({
                     </button>
                   ),
                 )}
+                {marked.onViewMarkedRows === undefined ? null : (
+                  <button
+                    type="button"
+                    disabled={marked.count === 0}
+                    onClick={() => {
+                      close();
+                      marked.onViewMarkedRows?.();
+                    }}
+                  >
+                    View marked rows
+                  </button>
+                )}
                 {/* On this tile's items alone, other tiles' left as they
                     are (AC-115); offered where the tile has items to name. */}
                 {marked.onInvert === undefined ? null : (
@@ -294,6 +315,19 @@ export function TileViewMenu({
                 }}
               >
                 {tableView ? 'View as chart' : 'View as table'}
+              </button>
+            </li>
+          )}
+          {onViewRows === undefined || (marked !== undefined && marked.count > 0) ? null : (
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  onViewRows();
+                }}
+              >
+                View underlying rows
               </button>
             </li>
           )}
