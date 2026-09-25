@@ -1648,6 +1648,108 @@ test.describe('marking with a shape', () => {
 });
 
 /**
+ * AC-113: WHEN the user chooses "Filter to marked" or "Filter out marked", THE
+ * SYSTEM SHALL create a removable dashboard filter equivalent to the
+ * marking's predicate, or its negation, and then clear the marking
+ * (direction.md rule 53).
+ * `Fails when: the filter is not removable, the marking survives, or the rows
+ * kept differ from the marked rows.`
+ *
+ * From the tile's ⋯ marked-rows group (AC-199): the status tile keeps exactly
+ * the marked status, or exactly the others; the category tile, joined to it,
+ * is filtered too; the chip removes it; and with nothing marked the actions
+ * say why they are unavailable.
+ */
+test('Filter to marked and Filter out marked filter every tile they reach, clear the marking, and come off', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  const category = tile(page, 'tile-category');
+  const labels = (target: Locator) =>
+    target.locator('svg text').evaluateAll((nodes) =>
+      nodes
+        .map((node) => node.textContent ?? '')
+        .filter((text) => ['completed', 'shipped', 'processing'].includes(text))
+        .sort(),
+    );
+  const act = async (name: string) => {
+    await status.getByRole('button', { name: /^Actions for / }).click();
+    await status
+      .getByRole('list', { name: /^Actions for / })
+      .getByRole('group', { name: /marked$/ })
+      .getByRole('button', { name })
+      .click();
+  };
+  /** The statuses the data holds, so "every status" below means these. */
+  const countsByStatus = () =>
+    request
+      .post(`${API}/load`, {
+        data: { query: { measures: ['orders.count'], dimensions: ['orders.status'] } },
+      })
+      .then(async (response) => {
+        const rows = ((await response.json()) as { data: Record<string, unknown>[] }).data;
+        return rows;
+      });
+  const byStatus = Object.fromEntries(
+    (await countsByStatus()).map((row) => [
+      String(row['orders.status']),
+      Number(row['orders.count']),
+    ]),
+  );
+  expect(Object.keys(byStatus).sort()).toEqual(['completed', 'processing', 'shipped']);
+
+  // To marked: only shipped is left, on both tiles, and the marking is gone.
+  await clickBar(page, status, 'shipped');
+  await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
+  await act('Filter to marked');
+  const chip = page.getByTestId('mark-filter-chip');
+  await expect(chip).toContainText('Filtered to Marking');
+  await expect(chip).toContainText('shipped');
+  await expect.poll(() => labels(status)).toEqual(['shipped']);
+  await expect(status.getByTestId('mark-badge')).toHaveCount(0);
+  await expect(page.getByTestId('mark-chip')).toHaveCount(0);
+  // The joined tile is asked for shipped orders only: its table view's total.
+  await category.getByRole('button', { name: /^Actions for / }).click();
+  await category
+    .getByRole('list', { name: /^Actions for / })
+    .getByRole('button', { name: 'View query' })
+    .click();
+  await expect(page.getByRole('dialog')).toContainText('"equals"');
+  await expect(page.getByRole('dialog')).toContainText('"shipped"');
+  await page.keyboard.press('Escape');
+
+  // With nothing marked, both actions say why they cannot run.
+  await status.getByRole('button', { name: /^Actions for / }).click();
+  const group = status
+    .getByRole('list', { name: /^Actions for / })
+    .getByRole('group', { name: /marked$/ });
+  await expect(group.getByRole('button', { name: 'Filter to marked' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  await expect(group.getByRole('button', { name: 'Filter out marked' })).toHaveAttribute(
+    'title',
+    'Nothing is marked.',
+  );
+  await page.keyboard.press('Escape');
+
+  // Removed from its chip: every status again.
+  await chip.getByRole('button', { name: /^Remove: / }).click();
+  await expect(chip).toHaveCount(0);
+  await expect.poll(() => labels(status)).toEqual(['completed', 'processing', 'shipped']);
+
+  // Out of marked: every status but shipped.
+  await clickBar(page, status, 'shipped');
+  await act('Filter out marked');
+  await expect(chip).toContainText('Filtered out Marking');
+  await expect.poll(() => labels(status)).toEqual(['completed', 'processing']);
+  await expect(status.getByTestId('mark-badge')).toHaveCount(0);
+});
+
+/**
  * AC-102: IF a marking would exceed 1,000 items, THEN THE SYSTEM SHALL refuse
  * the additional items and explain the limit; "Mark all" SHALL be exempt
  * because it stores the tile's filter rather than a list.

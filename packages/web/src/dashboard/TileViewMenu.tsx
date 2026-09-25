@@ -83,6 +83,12 @@ export function TileViewMenu({
         name: string;
         count: number;
         onUnmark: () => void;
+        /**
+         * Filter to marked and Filter out marked (AC-113): the action, or
+         * why the marking cannot be one (nothing marked, every row marked).
+         */
+        filterTo?: (() => void) | { readonly refused: string } | undefined;
+        filterOut?: (() => void) | { readonly refused: string } | undefined;
         /** Invert marking and Mark all on this tile (AC-115), where it has items to name. */
         onInvert?: (() => void) | undefined;
         onMarkAll?: (() => void) | undefined;
@@ -204,8 +210,32 @@ export function TileViewMenu({
               <div role="group" aria-labelledby={`${why}-marked`} className="tile-menu__group">
                 <span id={`${why}-marked`} className="tile-menu__heading">
                   <span aria-hidden="true">● </span>
-                  {marked.name} · {marked.count} marked
+                  {marked.name} · {marked.count.toLocaleString('en-GB')} marked
                 </span>
+                {/* The marking as a dashboard filter, or its negation, which
+                    then clears it (AC-113, direction.md rule 53). */}
+                {(
+                  [
+                    ['Filter to marked', marked.filterTo],
+                    ['Filter out marked', marked.filterOut],
+                  ] as const
+                ).map(([label, action]) =>
+                  action === undefined ? null : (
+                    <button
+                      key={label}
+                      type="button"
+                      aria-disabled={typeof action === 'function' ? undefined : true}
+                      title={typeof action === 'function' ? undefined : action.refused}
+                      onClick={() => {
+                        if (typeof action !== 'function') return;
+                        action();
+                        close();
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ),
+                )}
                 {/* On this tile's items alone, other tiles' left as they
                     are (AC-115); offered where the tile has items to name. */}
                 {marked.onInvert === undefined ? null : (

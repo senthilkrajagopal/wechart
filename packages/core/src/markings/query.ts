@@ -39,6 +39,16 @@ const GRAIN_END: Readonly<Record<string, (start: Date) => Date>> = {
   year: (at) => new Date(Date.UTC(at.getUTCFullYear() + 1, 0, 1) - 1),
 };
 
+/**
+ * A time Cube wrote, read as UTC. Cube writes a bucket's value wall-clock in
+ * the query's time zone with no zone of its own ("2026-03-01T00:00:00.000"),
+ * and wechart asks in UTC; `new Date` would read that as the browser's local
+ * time and slide the span by the machine's offset. A value that names its
+ * zone, and a bare date (which JavaScript already reads as UTC), are left.
+ */
+export const asUtc = (text: string): string =>
+  text.includes('T') && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text) ? `${text}Z` : text;
+
 /** `YYYY-MM-DDTHH:mm:ss.SSS`, the form Cube's own `drillDown` emits. */
 const stamp = (at: Date): string => at.toISOString().replace('Z', '');
 
@@ -60,7 +70,7 @@ const stamp = (at: Date): string => at.toISOString().replace('Z', '');
 function bucketFilter(member: string, granularity: string, value: unknown): Filter | undefined {
   const end = GRAIN_END[granularity];
   if (end === undefined) return undefined;
-  const start = new Date(String(value));
+  const start = new Date(asUtc(String(value)));
   if (Number.isNaN(start.getTime())) return undefined;
   return { member, operator: 'inDateRange', values: [stamp(start), stamp(end(start))] };
 }
@@ -205,6 +215,95 @@ function predicateFilter(predicate: MarkingPredicate): Filter | typeof EVERYTHIN
   ]);
   if (parts.length === 0) return undefined;
   return parts.length === 1 ? (parts[0] as Filter) : { or: parts };
+}
+
+/**
+ * The complement of each operator whose NULL behaviour is known
+ * (`markings-query-support.md` §1.5, §1.7). A positive operator never keeps a
+ * NULL row, and a NULL row is never marked, so its complement must keep them:
+ * `notEquals` does so of its own accord; every other complement takes
+ * `notSet` beside it, which is right whether or not the operator already
+ * keeps NULLs. `notEquals` itself keeps NULLs, so its complement is plain
+ * `equals`. The other negative operators' NULL behaviour is not researched,
+ * so they are not negated at all.
+ */
+const COMPLEMENT: Readonly<
+  Record<string, { readonly operator: string; readonly blanks: boolean }>
+> = {
+  equals: { operator: 'notEquals', blanks: false },
+  notEquals: { operator: 'equals', blanks: false },
+  contains: { operator: 'notContains', blanks: true },
+  startsWith: { operator: 'notStartsWith', blanks: true },
+  endsWith: { operator: 'notEndsWith', blanks: true },
+  gt: { operator: 'lte', blanks: true },
+  gte: { operator: 'lt', blanks: true },
+  lt: { operator: 'gte', blanks: true },
+  lte: { operator: 'gt', blanks: true },
+  inDateRange: { operator: 'notInDateRange', blanks: true },
+  beforeDate: { operator: 'afterOrOnDate', blanks: true },
+  beforeOrOnDate: { operator: 'afterDate', blanks: true },
+  afterDate: { operator: 'beforeOrOnDate', blanks: true },
+  afterOrOnDate: { operator: 'beforeDate', blanks: true },
+};
+
+/**
+ * A Cube filter's negation (AC-113's "Filter out marked"). Cube has no `not`,
+ * so it is De Morgan over the tree: an `and` becomes an `or` of the negated
+ * parts and the other way round, and each leaf its complement. Undefined when
+ * any leaf's complement is not known, so the action is refused rather than
+ * answered wrongly.
+ */
+export function negatedFilter(filter: Filter): Filter | undefined {
+  for (const [group, flipped] of [
+    ['and', 'or'],
+    ['or', 'and'],
+  ] as const) {
+    const parts = filter[group];
+    if (Array.isArray(parts)) {
+      const negated = (parts as Filter[]).map(negatedFilter);
+      return negated.every((part): part is Filter => part !== undefined)
+        ? { [flipped]: negated }
+        : undefined;
+    }
+  }
+  const { member, operator } = filter;
+  if (operator === 'set') return { member, operator: 'notSet' };
+  if (operator === 'notSet') return { member, operator: 'set' };
+  const complement = typeof operator === 'string' ? COMPLEMENT[operator] : undefined;
+  if (complement === undefined) return undefined;
+  const flipped: Filter = { ...filter, operator: complement.operator };
+  return complement.blanks ? { or: [flipped, { member, operator: 'notSet' }] } : flipped;
+}
+
+/**
+ * A marking as one dashboard filter, or its negation (AC-113, direction.md
+ * rule 53): "Filter to marked" keeps exactly the marked rows, "Filter out
+ * marked" every other row, blanks included. Refused, with the reason, when
+ * nothing is marked, when every row is (there is nothing to filter to, or
+ * nothing would be left), or when the marking holds a filter whose negation
+ * is not known.
+ */
+export function markedFilter(
+  predicate: MarkingPredicate,
+  negate: boolean,
+): { readonly filter: Filter } | { readonly refused: string } {
+  const positive = predicateFilter(predicate);
+  if (positive === undefined) return { refused: 'Nothing is marked.' };
+  if (positive === EVERYTHING) {
+    return {
+      refused: negate
+        ? 'Every row is marked, so filtering the marked rows out would leave nothing.'
+        : 'Every row is marked, so filtering to the marked rows would change nothing.',
+    };
+  }
+  if (!negate) return { filter: positive };
+  const negated = negatedFilter(positive);
+  return negated === undefined
+    ? {
+        refused:
+          'This marking holds a filter that cannot be reversed, so it cannot be filtered out.',
+      }
+    : { filter: negated };
 }
 
 /**

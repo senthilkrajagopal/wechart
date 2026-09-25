@@ -364,7 +364,7 @@ Traces to: `[docs/inputs §11]`, direction.md §7a, rules 33, 53, 55.
       Fails when: the tile shows its nothing-marked state in that situation.
 - [x] AC-112 WHEN the user chooses "Create details tile" on a tile, THE SYSTEM SHALL add a tile limited by that tile's marking, with its nothing-marked message pre-filled.
       Fails when: the new tile is not limited by the marking, or has no message.
-- [ ] AC-113 WHEN the user chooses "Filter to marked" or "Filter out marked", THE SYSTEM SHALL create a removable dashboard filter equivalent to the marking's predicate, or its negation, and then clear the marking (direction.md rule 53).
+- [x] AC-113 WHEN the user chooses "Filter to marked" or "Filter out marked", THE SYSTEM SHALL create a removable dashboard filter equivalent to the marking's predicate, or its negation, and then clear the marking (direction.md rule 53).
       Fails when: the filter is not removable, the marking survives, or the rows kept differ from the marked rows.
 - [ ] AC-114 WHEN the user chooses "View marked rows", THE SYSTEM SHALL show the underlying rows behind the marked items, state the total number of rows, and offer an export of them (direction.md rule 53).
       Fails when: the rows shown do not match the marking, or the total is absent.

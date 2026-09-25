@@ -2784,6 +2784,36 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   cursor: pointer;
 }
 .mark-chip__button:hover { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
+/* A filter made from a marking (AC-113): a filter-bar chip of the same size as
+   a marking's, bordered as a filter rather than in a marking's colour, since
+   the marking it came from is cleared. */
+.mark-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  max-width: 520px;
+  padding: 0 2px 0 8px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 999px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-primary);
+  font-size: var(--wc-text-xs-size);
+  white-space: nowrap;
+}
+.mark-filter-chip__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mark-filter-chip__remove {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--wc-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.mark-filter-chip__remove:hover { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
 
 /* AC-059's explanation. Marked out, because it reports something the user did
    not ask for rather than describing what they are about to do. */

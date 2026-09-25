@@ -100,7 +100,8 @@ import { useThemeName } from '../shell/ThemeProvider';
 import { clearTileMarking } from './markings/clear';
 import { announceMarking, MarkingAnnouncer } from './markings/LiveRegion';
 import { MarkBadge } from './markings/MarkBadge';
-import { MarkChip } from './markings/MarkChip';
+import { MarkChip, summariseMarking } from './markings/MarkChip';
+import { markFilterFrom, markFilterLabel, type MarkFilter } from './markings/filterToMarked';
 import { markingOf, withMarking, type MarkingState } from './markings/store';
 import { interactionsOf, type InteractionMode } from './settings/interactionMode';
 import { describeFilter } from '../filters/describe';
@@ -762,6 +763,13 @@ interface TileCharts {
    */
   readonly markItemsOn?:
     ((tileId: string) => ((how: 'invert' | 'all') => void) | undefined) | undefined;
+  /**
+   * Filter to marked, or out (AC-113), from the same group: the action, or
+   * why the tile's marking cannot become a filter.
+   */
+  readonly filterMarkedOn?:
+    | ((tileId: string, negate: boolean) => (() => void) | { readonly refused: string } | undefined)
+    | undefined;
   /** The query a tile's chart asks, and its SQL (AC-199's View query). */
   readonly onViewQuery?: ((chartId: string, tileId: string) => void) | undefined;
 }
@@ -1065,6 +1073,8 @@ function Elements({
                         onUnmark: () => {
                           charts.onUnmark?.(element.id);
                         },
+                        filterTo: charts.filterMarkedOn?.(element.id, false),
+                        filterOut: charts.filterMarkedOn?.(element.id, true),
                         ...(markItems === undefined
                           ? {}
                           : {
@@ -1755,6 +1765,15 @@ export function DashboardView({
   const markings = markingsFrom(live.markings);
   const [marks, setMarks] = useState<MarkingState>({});
   /**
+   * The filters "Filter to marked" and "Filter out marked" made (AC-113,
+   * direction.md rule 53): each a marking's predicate, or its negation, as one
+   * Cube filter, shown in the filter bar until removed. View state, as the
+   * marks they came from are: a saved dashboard holds neither (rule 54).
+   */
+  const [markFilters, setMarkFilters] = useState<readonly MarkFilter[]>([]);
+  /** Numbers each marking filter, so two made alike stay two (AC-113). */
+  const markFilterSeq = useRef(0);
+  /**
    * The tile each marking was last marked from, which its chip names (AC-200,
    * the prototype's "from ‹tile›"). View state, like the marks themselves.
    */
@@ -1979,6 +1998,45 @@ export function DashboardView({
     return { asked, waiting };
   }, [interactions.mode, live, marks]);
 
+  /**
+   * What each chart is asked beyond its dashboard filters: the markings that
+   * limit it (AC-107), and every filter made from a marking whose members its
+   * cube can reach (AC-113) — ANDed, where Cube ANDs `filters`. A tile whose
+   * cube cannot reach a marked member is left as it is rather than sent a
+   * query Cube would refuse, as a dashboard filter leaves it (AC-079).
+   */
+  const asked = useMemo(() => {
+    const out: Record<string, CubeFilter> = { ...limitedTiles.asked };
+    if (markFilters.length === 0) return out;
+    for (const tile of chartTilesOf(live)) {
+      const chartId = tile.chartId;
+      if (chartId === undefined) continue;
+      const reaching = markFilters.filter((each) =>
+        each.members.every((member) => reachOf(member, chartId) !== false),
+      );
+      if (reaching.length === 0) continue;
+      const parts = [
+        ...(out[chartId] === undefined ? [] : [out[chartId]]),
+        ...reaching.map((each) => each.filter),
+      ];
+      out[chartId] = parts.length === 1 ? (parts[0] as CubeFilter) : { and: parts };
+    }
+    return out;
+  }, [limitedTiles.asked, markFilters, live, reachOf]);
+  /** The marking filters each chart is asked, in words, for its empty state (AC-043). */
+  const markFilterSaid = useMemo(() => {
+    const said: Record<string, string[]> = {};
+    for (const tile of chartTilesOf(live)) {
+      const chartId = tile.chartId;
+      if (chartId === undefined) continue;
+      const words = markFilters
+        .filter((each) => each.members.every((member) => reachOf(member, chartId) !== false))
+        .map((each) => `${each.negate ? 'not' : 'only'} ${each.summary}`);
+      if (words.length > 0) said[chartId] = words;
+    }
+    return said;
+  }, [markFilters, live, reachOf]);
+
   const { reached, notCovered } = useMemo(
     () =>
       coverageOf(
@@ -1994,9 +2052,9 @@ export function DashboardView({
     setFiltered((before) => keepLastAnswers(before, results));
   }, []);
   const withFiltered = useMemo(() => {
-    // A tile limited by a marking draws a filtered answer too, even with no
-    // filter reaching it: the limit is what it was asked.
-    const ids = [...new Set([...Object.keys(reached), ...Object.keys(limitedTiles.asked)])].filter(
+    // A tile limited by a marking, or reached by a filter made from one,
+    // draws a filtered answer too, even with no dashboard filter reaching it.
+    const ids = [...new Set([...Object.keys(reached), ...Object.keys(asked)])].filter(
       (id) => drawn.documents?.[id] !== undefined,
     );
     if (ids.length === 0) return { ...drawn, pending: new Set<string>() };
@@ -2032,7 +2090,7 @@ export function DashboardView({
       else said[id] = result.answered;
     }
     return { specs: shown, errors: failed, answered: said, pending };
-  }, [drawn, reached, filtered, limitedTiles.asked]);
+  }, [drawn, reached, filtered, asked]);
 
   /**
    * "Refresh now" on a tile (T154, AC-148) asks again what the tile draws: a
@@ -2710,23 +2768,27 @@ export function DashboardView({
      */
     const marked = new Set(Object.keys(limitedTiles.asked));
     return Object.fromEntries(
-      [...new Set([...Object.keys(reached), ...marked])].map((chartId) => {
-        const refused = filtered[chartId]?.uncovered ?? [];
-        return [
-          chartId,
-          [
-            ...(reached[chartId] ?? [])
-              .filter(({ filter }) => !refused.includes(filter.id))
-              .map(({ filter, value }) => {
-                const field = setOn.get(filter.id) ?? filter.member ?? '';
-                return describeFilter(memberTitle?.(field) ?? field, value);
-              }),
-            ...(marked.has(chartId) ? ['limited to what is marked'] : []),
-          ],
-        ];
-      }),
+      [...new Set([...Object.keys(reached), ...marked, ...Object.keys(markFilterSaid)])].map(
+        (chartId) => {
+          const refused = filtered[chartId]?.uncovered ?? [];
+          return [
+            chartId,
+            [
+              ...(reached[chartId] ?? [])
+                .filter(({ filter }) => !refused.includes(filter.id))
+                .map(({ filter, value }) => {
+                  const field = setOn.get(filter.id) ?? filter.member ?? '';
+                  return describeFilter(memberTitle?.(field) ?? field, value);
+                }),
+              ...(marked.has(chartId) ? ['limited to what is marked'] : []),
+              // A filter made from a marking, named as the bar names it (AC-113).
+              ...(markFilterSaid[chartId] ?? []),
+            ],
+          ];
+        },
+      ),
     );
-  }, [reached, filtered, live.filters, memberTitle, limitedTiles.asked]);
+  }, [reached, filtered, live.filters, memberTitle, limitedTiles.asked, markFilterSaid]);
 
   /**
    * What a link tile passes on (AC-064): the filters in effect, and only
@@ -2867,6 +2929,36 @@ export function DashboardView({
             );
           },
           /**
+           * Filter to marked and Filter out marked (AC-113, direction.md rule
+           * 53): the marking the tile marks with, as one dashboard filter or
+           * its negation, on the filter bar until removed — and the marking
+           * cleared, so what is left is the filter, not two things saying one.
+           */
+          filterMarkedOn: (tileId: string, negate: boolean) => {
+            const element = elementAt(live, tileId);
+            if (element === null || !isTile(element)) return undefined;
+            const markingId = marksWithOf(element);
+            const named = markings.find((each) => each.id === markingId);
+            if (markingId === undefined || named === undefined) return undefined;
+            const predicate = markingOf(marks, markingId);
+            const made = markFilterFrom(predicate, negate, {
+              id: `mark-filter-${String((markFilterSeq.current += 1))}`,
+              markingName: named.name,
+              summary: summariseMarking(predicate, memberTitle, 3, (id) => {
+                const tile = elementAt(live, id);
+                return tile !== null && isTile(tile) && tile.chartId !== undefined
+                  ? chartTitleOf(tile.chartId)
+                  : undefined;
+              }),
+            });
+            if ('refused' in made) return made;
+            return () => {
+              setMarkFilters((now) => [...now, made]);
+              setMarks((now) => withMarking(now, markingId, EMPTY_PREDICATE));
+              setMarkSaid(`${markFilterLabel(made)}. ${named.name} cleared.`);
+            };
+          },
+          /**
            * Invert marking and Mark all (AC-115): on the items the tile draws —
            * the categories a click or its keyboard marks — and on no other
            * tile's. Inverting adds a list, so it keeps to the cap and says so
@@ -2993,10 +3085,7 @@ export function DashboardView({
       // And the markings that limit it, as `FilteredCharts` adds them (AC-107):
       // without, a details tile's query was shown, and counted, without the
       // predicate it runs (T219's review).
-      return withLimit(
-        withFilters(toCubeQuery(toChartSpec(chart)), applied),
-        limitedTiles.asked[chartId],
-      );
+      return withLimit(withFilters(toCubeQuery(toChartSpec(chart)), applied), asked[chartId]);
     } catch {
       return undefined;
     }
@@ -3227,13 +3316,13 @@ export function DashboardView({
           onClose={closeSql}
         />
       )}
-      {Object.keys(reached).length === 0 && Object.keys(limitedTiles.asked).length === 0 ? null : (
+      {Object.keys(reached).length === 0 && Object.keys(asked).length === 0 ? null : (
         <FilteredCharts
           ref={filteredCharts}
           reached={reached}
           // What each limited tile's markings add to its query (AC-107): a
           // tile listed here is asked even when no filter reaches it.
-          limits={limitedTiles.asked}
+          limits={asked}
           documents={drawn.documents}
           onResults={onFiltered}
           context={preview}
@@ -3644,44 +3733,63 @@ export function DashboardView({
                * there and says something.
                */
               chips={
-                crossFiltering && crossSelections.length > 0 ? (
-                  <CrossFilterChips
-                    selections={crossSelections}
-                    onClear={clearCrossFilter}
-                    memberTitle={memberTitle}
-                    tileName={chartTitleOfTile}
-                  />
-                ) : marking && markings.some((each) => markedCountOf(each.id) > 0) ? (
-                  <>
-                    {markings.map((each) => (
-                      <MarkChip
-                        key={each.id}
-                        marking={each}
-                        colour={markingColour(each.slot, theme)}
-                        predicate={markingOf(marks, each.id)}
-                        // By the members' titles, from its tile (AC-200).
-                        titleOf={memberTitle}
-                        from={markSourceTitle(each.id)}
-                        // A tile marked whole, by its title (AC-115).
-                        tileTitleOf={(tileId) => {
-                          const element = elementAt(live, tileId);
-                          return element !== null &&
-                            isTile(element) &&
-                            element.chartId !== undefined
-                            ? chartTitleOf(element.chartId)
-                            : undefined;
+                <>
+                  {/* Filters made from a marking (AC-113), each removable. */}
+                  {markFilters.map((each) => (
+                    <span key={each.id} className="mark-filter-chip" data-testid="mark-filter-chip">
+                      <span className="mark-filter-chip__label">{markFilterLabel(each)}</span>
+                      <button
+                        type="button"
+                        className="mark-filter-chip__remove"
+                        aria-label={`Remove: ${markFilterLabel(each)}`}
+                        onClick={() => {
+                          setMarkFilters((now) => now.filter((one) => one.id !== each.id));
+                          setMarkSaid(`Removed: ${markFilterLabel(each)}.`);
                         }}
-                        onUnmark={() => {
-                          unmarkAll(each);
-                        }}
-                      />
-                    ))}
-                  </>
-                ) : (
-                  <span className="filter-bar__hint">
-                    {interactionHint(interactions.mode, session.editing, preview !== undefined)}
-                  </span>
-                )
+                      >
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    </span>
+                  ))}
+                  {crossFiltering && crossSelections.length > 0 ? (
+                    <CrossFilterChips
+                      selections={crossSelections}
+                      onClear={clearCrossFilter}
+                      memberTitle={memberTitle}
+                      tileName={chartTitleOfTile}
+                    />
+                  ) : marking && markings.some((each) => markedCountOf(each.id) > 0) ? (
+                    <>
+                      {markings.map((each) => (
+                        <MarkChip
+                          key={each.id}
+                          marking={each}
+                          colour={markingColour(each.slot, theme)}
+                          predicate={markingOf(marks, each.id)}
+                          // By the members' titles, from its tile (AC-200).
+                          titleOf={memberTitle}
+                          from={markSourceTitle(each.id)}
+                          // A tile marked whole, by its title (AC-115).
+                          tileTitleOf={(tileId) => {
+                            const element = elementAt(live, tileId);
+                            return element !== null &&
+                              isTile(element) &&
+                              element.chartId !== undefined
+                              ? chartTitleOf(element.chartId)
+                              : undefined;
+                          }}
+                          onUnmark={() => {
+                            unmarkAll(each);
+                          }}
+                        />
+                      ))}
+                    </>
+                  ) : markFilters.length > 0 ? null : (
+                    <span className="filter-bar__hint">
+                      {interactionHint(interactions.mode, session.editing, preview !== undefined)}
+                    </span>
+                  )}
+                </>
               }
               filters={session.document.filters ?? []}
               dashboard={session.document}

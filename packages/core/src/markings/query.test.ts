@@ -157,6 +157,28 @@ describe('what a marking adds to a limited tile’s query', () => {
     });
   });
 
+  /**
+   * Cube writes a bucket's value with no zone ("2026-03-01T00:00:00.000"),
+   * wall-clock in the query's time zone — UTC, as wechart asks. Read as the
+   * browser's local time, the span slid by the machine's offset, and a marked
+   * March limited tiles to 1 March 08:00 onwards in California (T119, found
+   * while negating it).
+   */
+  it('reads a bucket value Cube writes without a zone as UTC, wherever the browser is', () => {
+    const march: MarkingPredicate = {
+      items: [
+        [{ member: 'orders.ordered_at', granularity: 'month', value: '2026-03-01T00:00:00.000' }],
+      ],
+      ranges: [],
+    };
+
+    expect(limitFilterFor([march], 'all')).toEqual({
+      member: 'orders.ordered_at',
+      operator: 'inDateRange',
+      values: ['2026-03-01T00:00:00.000', '2026-03-31T23:59:59.999'],
+    });
+  });
+
   it('keeps a bucket beside the other members of the same marked item', () => {
     const cell: MarkingPredicate = {
       items: [

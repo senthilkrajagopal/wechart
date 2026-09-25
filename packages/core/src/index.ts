@@ -118,7 +118,7 @@ export { markingApplicability, type Applicability } from './markings/applicabili
 
 export { limitRowsBy, limitingMarkings, type LimitCombination } from './markings/limit-by';
 
-export { limitFilterFor, type CubeFilter } from './markings/query';
+export { limitFilterFor, markedFilter, negatedFilter, type CubeFilter } from './markings/query';
 
 export {
   MARKING_ITEM_LIMIT,

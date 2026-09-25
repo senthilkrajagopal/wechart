@@ -1669,7 +1669,29 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Failing test: `createDetails.test.ts`: the new tile is limited by that marking and carries a pre-filled nothing-marked message (AC-112); `e2e/markings.spec.ts`: "Create details tile" from the tile's ⋯ group adds it (AC-199).
   - Depends on: T116, T219
   - Done 2026-09-24. AC-112 ticked. As the prototype's: the dashboard goes into edit mode and the new tile sits beside the source, chosen. Its chart is a copy of the source's (as Duplicate makes it), titled "Details: …", so it can be changed to whatever the details should be; the prototype's pick of a table with other dimensions depends on its sample model. AC-199 stays open for T119 and T120.
-- [ ] T119 (AC-113, AC-199) Turn a marking into a removable filter, or its negation, and clear the marking
+- [x] T119 (AC-113, AC-199) Turn a marking into a removable filter, or its negation, and clear the marking
+  - Done 2026-09-25, all three browsers. AC-113 ticked on `e2e/markings.spec.ts` "Filter to marked and Filter out marked filter every tile they reach, clear the marking, and come off". It was written after the wiring; the unit tests below failed first. AC-199 waits for T120, T266 and T272.
+    - **The filter** (`core` `markedFilter`, `negatedFilter`, in `markings/query.ts`):
+      - "Filter to" is the marking's own predicate as one Cube filter, the same one a limited tile is asked.
+      - "Filter out" is its negation by De Morgan (`markings-query-support.md` §1.7), since Cube has no `not`.
+      - Every complement keeps the rows that were not marked, blanks included. `notEquals` keeps NULLs of its own accord (§1.5). Every other complement ORs in `notSet`: `notInDateRange`, a numeric or date bound, `notContains` and the like. That is right whichever way the operator treats NULL. A negative operator whose NULL behaviour is not researched is not negated, and the action says why.
+      - Refused with its reason when nothing is marked, or when every row is (filtering to it changes nothing, and filtering it out leaves nothing).
+    - **On the dashboard:**
+      - The filter goes on the filter bar as a chip, "Filtered to Marking: Status: shipped" or "Filtered out …", with × to remove it. The marking is cleared, and both steps are said in the live region.
+      - It is ANDed into every tile whose cube can reach all its members. A tile that can't is left as it is, as a dashboard filter leaves it (AC-079).
+      - It goes through the same `asked` map as marking limits, so View query and the empty state's "filtered by" show it too.
+      - View state, like the marks it came from (rule 54).
+    - **Menu:** the tile's ⋯ marked-rows group has Filter to marked and Filter out marked. With nothing marked they are `aria-disabled` and carry their reason. The heading's count is grouped as the badge's is.
+    - **Found on the way, fixed:** a marked time bucket's value, which Cube writes with no zone, was read as the browser's local time. So a marked month limited tiles to a span shifted by the machine's offset: from 1 March 08:00 in California. `asUtc` reads it as UTC, and a regression test in `query.test.ts` failed first. The earlier tests passed bare dates, which JavaScript already reads as UTC.
+    - **Tests:**
+      - `core/src/markings/filterToMarked.test.ts`: one member, its negation, a two-member item by De Morgan, a bucket keeping NULL-dated rows, a marked NULL, a numeric range, and the refusals.
+      - `web/src/dashboard/markings/filterToMarked.test.ts`: the chip's record and words.
+      - The e2e:
+        - to marked leaves only shipped, and the joined tile's query carries it;
+        - the marking is cleared;
+        - the disabled actions give their reason;
+        - × removes the filter;
+        - out of marked leaves the other two statuses.
   - Files: `packages/web/src/dashboard/markings/filterToMarked.ts`, `packages/web/src/dashboard/markings/filterToMarked.test.ts`, and their items in the tile's ⋯ marked-rows group
   - Failing test: `filterToMarked.test.ts`: "Filter to marked" creates a removable dashboard filter whose rows equal the marked rows, "Filter out marked" its negation, and both clear the marking (AC-113); `e2e/markings.spec.ts`: both, from the tile's ⋯ group (AC-199).
   - Depends on: T086, T113, T219
