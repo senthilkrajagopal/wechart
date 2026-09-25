@@ -1,5 +1,7 @@
 # Phase 2 backlog: carried over from phase 1
 
+> **Absorbed into the spec, 2026-09-25.** The user took every backlog group into phase 2 (requirements.md, R16). Everything in §1 is back in `docs/spec.md` under its own ID, and the UI review's proposed changes and the R8 chart types are there as AC-041, AC-220 and AC-299 … AC-306. This file stays as the record of why each moved; `docs/spec.md` and `docs/requirements.md` Part 2 govern.
+
 **Decision (the user, 2026-09-25):** end phase 1 at a logical point and move everything pending to phase 2. Phase 2 starts with this backlog and the new requirements together, through the workflow from the top: project-interview, then write-spec, component-research, ui-design, plan-tasks and implement. What's here goes into that interview as input, and is prioritised there alongside the new requirements. It doesn't set phase 2's order.
 
 Phase 1 closed with every other acceptance criterion in `docs/spec.md` checked on a passing test. The criteria below were taken out of `docs/spec.md`, and each feature section there points here. Their IDs stay theirs: IDs are global and never reused, so phase 2's spec can take a criterion back under its own ID. The tasks that were planned for them are still in `docs/tasks.md`, with their notes and research, marked `[moved to phase 2]`.

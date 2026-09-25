@@ -393,6 +393,7 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 **How far a grant reaches** `[P2 input, R12]`:
 - **Down:** a grant on a folder reaches every descendant, read and write alike, even where a descendant sets its own groups. A descendant's own groups are added alongside, never in place.
 - **Up:** members of a group granted anywhere see everything in every ancestor folder up to the root (dashboards, charts, models and data sources), view-only.
+- **Read-only users see dashboards only**, and the charts on them. That holds in their folder, its descendants and its ancestors. Models, data sources and library charts are hidden from them, while the dashboards they open still resolve cubes through the folder's path `[P2 input, R19]`. The "everything in ancestors" above therefore applies to read-write members.
 
 **Roles** `[P2 input, R12]`:
 
@@ -414,7 +415,7 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 |---|---|---|
 | S1 | **Zero access leaks** `[R13]` | An automated suite asks every API route and page as users in and out of each group. Nothing outside their permitted folders is ever returned or shown. |
 | S2 | **Speed holds with security on** `[R13]` | A signed-in user's 10-chart dashboard, in a folder with its own models, renders in under 3 s at p95 (phase 1's M3), from wechart's own query timings. |
-| S3 | **Phase 1 intact with security off** `[R13]` | The full phase-1 end-to-end suite passes in single-user mode. **Checked once, at the end of phase 2, not on every task**: phase-2 testing focuses on security `[R13]`. |
+| S3 | **Phase 1 intact with security off** `[R13, R19]` | The full phase-1 end-to-end suite passes in single-user mode. Its editing steps go through the workspace and a self-approved proposal, because security off uses phase 2's flows `[R19]`. **Checked once, at the end of phase 2, not on every task**: phase-2 testing focuses on security `[R13]`. |
 
 - Phase 1's M1–M4 carry over unchanged `[R13]`.
 - Folder listing has no budget of its own `[R13]`.
@@ -425,7 +426,7 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 - **Any OIDC provider**, configured by issuer, client and the claim that carries groups `[R14]`.
 - **Development and tests use one provider**, the lightest self-hosted one research finds, whether Keycloak or something smaller `[R14, R15]`.
 - **Production is Microsoft Entra ID, or on-prem AD through an OIDC broker.** That is checked once, at the end of phase 2. Development doesn't test several providers `[R14, R15]`.
-- **Group counts:** a user can be in hundreds of groups, nested ones included. Research must show how the chosen sign-in handles that for each provider `[R12]`.
+- **Group counts:** a user can be in hundreds of groups, nested ones included. Research must show how the chosen sign-in handles that for each provider `[R12]`. The development test uses a user in 20 groups `[R19]`.
 
 **Security off.** wechart runs in single-user mode, as in phase 1 `[P2 input]`. Workspaces and approval work as they do with security on, and the one user approves their own copies `[R17]`.
 
@@ -472,11 +473,13 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 **C. Folders hold everything** `[P2 input]`
 - Dashboards, charts, models and data sources are all folder items.
 - The Model tab goes. Models open from the folder view.
+- The Data sources tab stays, listing every data source the user can see across folders, each with its folder `[R19]`.
 
 **D. Names and resolution** `[P2 input, R17]`
 - Cube, model, dashboard and data-source names are unique within a folder.
 - A dashboard's cubes resolve bottom-up, from its folder to the root, and the nearest definition wins. Children's cubes aren't used.
 - Models can use any data source in their folder's path and in all its children `[P2 input]`.
+- **A data-source name resolves bottom-up from the model's own folder:** first the model's folder, then each ancestor up to the root. A descendant's data source is used only when no folder on that path has the name `[R19]`.
 
 **E. Workspaces, copying and approval** `[P2 input, R12, R17]`
 
@@ -513,7 +516,7 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 - Quick calculations (F6).
 - Scheduling and build history (F17).
 - The markings refinements and keyboard gaps (AC-093, AC-097, AC-104, AC-116, AC-176).
-- The country map and box plot (R8), and the UI review's eight proposed spec changes.
+- The country map and box plot (R8), and the UI review's eight proposed spec changes. The box plot's whisker rule is a chart option. It defaults to Tukey's 1.5 × IQR, with values beyond drawn as dots, and the other choice is the minimum and maximum `[R19]`.
 - The UI fixes: AC-187's style mismatches, the failing cases of AC-201, AC-220 and AC-246, and Edge (AC-180).
 
 ## P2.7 Non-goals for phase 2
@@ -606,3 +609,13 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: What does rejecting a proposal do? A: "Back with a reason"
 - Q: How long are audit records kept? A: "Configurable" (the option read: "A deployment setting, default 1 year")
 - Q: With security on, may the author approve their own proposal? A: "Yes, always"
+
+**R19 — asked while writing the spec** (conflicts and gaps that would otherwise have been invented)
+- Q (conflict: R17 "same flows" against R13's "phase 1 intact"): Security off, which holds? A: "Phase 2 flows, self-approve"
+- Q: Model goes from the top bar; what about the rest? A: "Data sources stay as a list"
+- Q: In a folder where a user has read-only access, what can they see? A: "Dashboards only"
+- Q: 'warehouse' in /A and in /A/B/C, and a model in /A/B names it. Which is used? A: "Resolution bottom up.. not top down"
+- Q (follow-up, the example): Which is used? A: "/A's — up from the model"
+- Q: Box plot whiskers? A: "Make it a configurable option while building the chart"
+- Q (follow-up): The default? A: "1.5 × IQR, dots beyond"
+- Q: What count should the test use to prove 'hundreds of groups'? A: "maybe 20 groups"

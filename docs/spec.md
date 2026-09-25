@@ -1,8 +1,16 @@
-# wechart specification (phase 1)
+# wechart specification (phases 1 and 2)
 
 ## Overview
 
 wechart is a browser BI tool on the Cube semantic layer, built to replace Spotfire for one organisation: analysts build charts and dashboards, mark data and drill into details without writing SQL, while semantic-layer engineers and platform operators run the Cube model, its pre-aggregations, jobs and connections from the same application. This spec covers phase 1 and traces to [docs/requirements.md](./requirements.md); design rules it cites by number live in [docs/design/direction.md](./design/direction.md).
+
+**Phase 2** adds four things:
+- sign-in through OIDC, switchable to phase 1's single-user mode;
+- folder access by AD group, with Super-Admin, Admin and User roles;
+- models and data sources as folder items, resolved per folder;
+- private workspaces, whose work reaches shared folders only through approved proposals.
+
+It also brings back everything phase 1 moved to its backlog. Its features are F25–F36, after F24. The phase-1 criteria it changes are rewritten in place, marked "phase 2", and unchecked until tests show them again. It traces to [docs/requirements.md](./requirements.md) Part 2.
 
 Acceptance criteria are global and sequential. A criterion is checked only when a passing test demonstrates it.
 
@@ -27,6 +35,16 @@ Acceptance criteria are global and sequential. A criterion is checked only when 
 | **Library chart**            | A chart saved to a folder and reusable across dashboards. A **local chart** belongs to one dashboard.                                                                              |
 | **Bookmark**                 | A saved state: page tab, filters and marks.                                                                                                                                        |
 | **Accelerated**              | A result Cube served from a pre-aggregation rather than the source database.                                                                                                       |
+| **Security mode** (phase 2)  | Whether sign-in is enabled. Enabled: every user signs in through the configured OIDC provider. Disabled: **single-user mode**, one user holding every permission.                 |
+| **AD group**                 | A directory group, delivered in the user's token by the identity provider. wechart grants folder access to groups only, never to individual users.                              |
+| **Read-only / read-write groups** | A folder's two optional permission settings. Each one left unset is inherited from the parent folder.                                                                        |
+| **Super-Admin / Admin / User** | The roles. A **Super-Admin** is a member of the group the deployment names, with read-write everywhere and every admin surface. An **Admin** is a read-write member of a folder. A **User** is a read-only member, who sees dashboards only. |
+| **Shared folder**            | A folder in the shared tree, as opposed to a workspace.                                                                                                                           |
+| **Workspace**                | A user's private area, "My workspace", where all creating and editing happens.                                                                                                    |
+| **Target folder**            | The shared folder a workspace item is meant for. Its path resolves the item's cubes after the workspace's own.                                                                    |
+| **Proposal**                 | A request to put a workspace item into its target folder. It lands only when approved by its author, a read-write member of the folder, or a Super-Admin.                      |
+| **Resolution**               | Finding what a name means in a folder: cubes from the folder up to the root, nearest first; data sources the same way, then in the folder's descendants.                          |
+| **Audit trail**              | wechart's record of sign-ins, permission changes, proposals, approvals, rejections, restores and data-source changes. Super-Admins can browse it.                                |
 
 ---
 
@@ -35,8 +53,8 @@ Acceptance criteria are global and sequential. A criterion is checked only when 
 Purpose: one workbench for authoring and administration, addressable by URL.
 Traces to: `[R2]`, `[docs/inputs §8]`, direction.md §2.
 
-- [x] AC-001 WHEN the application loads, THE SYSTEM SHALL show a top bar whose workspace switcher lists exactly Explore, Model, Data sources, Jobs, Schedules and Security.
-      Fails when: the switcher shows a "Dashboards" entry, or any of the six entries is absent.
+- [ ] AC-001 WHEN the application loads, THE SYSTEM SHALL show a top bar whose workspace switcher lists Explore and Data sources to every user, Jobs and Schedules to Super-Admins and read-write members, and Security to Super-Admins. It SHALL list no Model workspace (phase 2: `[P2 input, R18, R19]`).
+      Fails when: the switcher shows a "Dashboards" or "Model" entry, omits an entry the user's role may use, or shows one it may not.
 - [x] AC-002 WHEN the user opens a workspace, a dashboard, a chart or a model file, THE SYSTEM SHALL change the URL so that reloading it restores the same surface and the same selected object.
       Fails when: after reload the application shows a different workspace, dashboard, chart or file than the URL names.
 - [x] AC-003 WHEN the user switches the theme, THE SYSTEM SHALL re-render the current surface in the other theme without changing the route or losing scroll position.
@@ -55,8 +73,8 @@ Traces to: `[R5]`, `[R4]`, `[research/cube/data-apis.md]`, `[research/cube/acces
 
 - [x] AC-007 WHEN the browser needs data or metadata, THE SYSTEM SHALL obtain it through the wechart API, and the browser SHALL make no request to the Cube API host.
       Fails when: a network request from the browser targets the Cube API host, or any response to the browser contains the Cube API secret.
-- [x] AC-008 WHEN wechart queries Cube, THE SYSTEM SHALL attach the configured phase-1 security context to every request.
-      Fails when: a request reaches Cube without the configured security context.
+- [ ] AC-008 WHEN wechart queries Cube, THE SYSTEM SHALL attach the configured security context to every request. WHILE security is enabled, it SHALL also attach the signed-in user's AD groups, so the model's access policies apply by group (phase 2: `[R14]`).
+      Fails when: a request reaches Cube without the configured context; with security enabled, a request carries no groups or groups other than the user's; or a group's access policy doesn't apply to its members' queries.
 - [x] AC-009 WHEN Cube reports a new `schemaVersion`, THE SYSTEM SHALL serve metadata from the new model within 60 seconds without a restart.
       Fails when: 60 seconds after the change, a metadata request still returns members from the previous model.
 - [x] AC-010 WHILE Cube replies "Continue wait" for a query, THE SYSTEM SHALL keep the request open, show the tile in a loading state, and deliver the result when it arrives.
@@ -145,8 +163,8 @@ Traces to: `[docs/inputs §2]`, direction.md §6, rules 4–7, 18–19.
       Fails when: a member's colour changes between tiles or after filtering.
 - [x] AC-040 WHEN the user edits an axis, THE SYSTEM SHALL apply minimum, maximum, logarithmic scale, gridlines, tick rotation, number format and axis title to the rendered chart.
       Fails when: any of those settings has no effect on the rendered axis.
-- [x] AC-041 WHEN a categorical chart exceeds its top-N setting, THE SYSTEM SHALL aggregate the remainder into a single "Other (n)" item and label it with the number of members it covers.
-      Fails when: the chart renders more categories than the setting, or the remainder is unlabelled.
+- [ ] AC-041 WHEN a categorical chart exceeds its top-N setting, THE SYSTEM SHALL offer either to fold the remainder into a single "Other (n)" item, labelled with the number of members it covers, or to drop it. It SHALL also offer a row limit that drops rows past it (phase 2: the UI review's gap 10, `[R16]`).
+      Fails when: the chart renders more categories than the setting, the remainder is unlabelled when folded or still drawn when dropped, or no row limit can be set.
 - [x] AC-042 WHEN a chart is loading, THE SYSTEM SHALL show a skeleton in the shape of the chart, and WHEN it fails, an error state offering Retry and the error details (direction.md rule 18).
       Fails when: loading shows an empty tile, or the error state offers no Retry or no details.
 - [x] AC-043 WHEN a query returns no rows, THE SYSTEM SHALL show an empty state naming the filters that are in effect.
@@ -177,7 +195,22 @@ Traces to: `[R7]`, `[R2]`, `[research/cube/data-modeling.md]`.
 > it as it is.. any pending work.. defer". None of F6 had been built beyond the
 > spike, so the whole of F6 waits.
 
-> **Moved to phase 2** (the user's decision, 2026-09-25): AC-047, AC-048, AC-049, AC-050, AC-051 and AC-052, word for word in `docs/phase-2/backlog.md` §1.
+> **Phase 2** (`[R16]`): these six return from the backlog. AC-050, AC-051 and
+> AC-052 now name the folder and the workspace, since the Model workspace is
+> gone (`[P2 input]`).
+
+- [ ] AC-047 WHEN the user opens the menu on a measure in the chart editor, THE SYSTEM SHALL offer % of total, difference from previous period, % difference from previous period, running total, rank and moving average.
+      Fails when: any of the six is missing from the menu.
+- [ ] AC-048 WHEN a quick calculation is applied, THE SYSTEM SHALL compute it in Cube as a multi-stage measure rather than in the browser, and the tile SHALL label the measure with the calculation applied.
+      Fails when: the value is computed from the already-fetched rows, or the label does not name the calculation.
+- [ ] AC-049 WHEN a quick calculation needs a time dimension and the chart has none, THE SYSTEM SHALL disable it and say which field is missing.
+      Fails when: the calculation is offered and produces an error, or gives no reason when disabled.
+- [ ] AC-050 WHEN the user requests a calculation the menu cannot express, THE SYSTEM SHALL record a request carrying the chart, the fields in use and the user's description, and show it to the read-write members of the folder whose model defines the chart's cube.
+      Fails when: the request is stored without the chart reference, or is not shown to that folder's read-write members.
+- [ ] AC-051 WHEN a read-write member of that folder opens a calculation request, THE SYSTEM SHALL open the target cube's model in the model editor, in their workspace, with the request visible beside it.
+      Fails when: the editor opens without the request, or on a different cube than the request names.
+- [ ] AC-052 WHEN a requested measure is added to the model and its proposal is approved into the folder, THE SYSTEM SHALL mark the request as resolved and name the member that resolves it.
+      Fails when: the request stays open after the member exists in the folder, or names no member.
 
 ## F7. Dashboard authoring
 
@@ -307,14 +340,16 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: the click marks a single item, or nothing.
 - [x] AC-092 WHEN the user clicks a row in a table tile, THE SYSTEM SHALL mark it; Shift-click SHALL mark the range from the anchor row; and rows SHALL be markable only when the cube's primary key is available (direction.md rule 10 of §7a).
       Fails when: Shift-click marks a single row, or rows are markable without a primary key.
-> **Moved to phase 2** (2026-09-25): AC-093, in `docs/phase-2/backlog.md` §1.
+- [ ] AC-093 WHILE a marking is in range mode, THE SYSTEM SHALL let the user drag along an axis to mark a continuous range, show it as a coloured stripe on that axis, and keep its bounds when filters change (direction.md rule 30 of §7a; `[R7]`; phase 2, `[R16]`).
+      Fails when: the stripe does not appear, or the bounds move when a filter changes.
 - [x] AC-094 WHEN the user clicks an empty plot area, or presses Escape on a focused tile, THE SYSTEM SHALL unmark that tile's marking and leave other markings unchanged.
       Fails when: another marking is cleared, or the marking survives.
 - [x] AC-095 WHEN a marking changes, THE SYSTEM SHALL update every tile that uses it or is limited by it, on every page tab of the dashboard (direction.md rule 48).
       Fails when: a tile on another page tab still shows the previous marking state when opened.
 - [x] AC-096 WHEN a tile shows a marking, THE SYSTEM SHALL draw marked items in their own colour with an outline in the marking's colour and fade unmarked items (direction.md rule 49).
       Fails when: unmarked items render at full strength, or marked items carry no outline.
-> **Moved to phase 2** (2026-09-25): AC-097, in `docs/phase-2/backlog.md` §1.
+- [ ] AC-097 WHEN an item is partly marked and its measure is additive, THE SYSTEM SHALL draw the marked share from the baseline at full strength and fade the remainder; WHEN the measure is not additive, THE SYSTEM SHALL draw the whole item with a pattern and show the marked and total values in its tooltip (direction.md rule 49; `[docs/inputs §11]`; phase 2, `[R16]`).
+      Fails when: a partial average or distinct count is drawn as a sub-length, or a partly marked sum shows no marked share.
 - [x] AC-098 THE SYSTEM SHALL convey marking state by more than colour: every tile using a non-empty marking shows a badge naming the marking and the number of marked items, and every non-empty marking has a chip naming it and summarising its values (direction.md rule 50).
       Fails when: a tile or chip conveys the marking only through colour.
 - [x] AC-099 THE SYSTEM SHALL keep every marking colour at least ΔE 15 from every categorical series colour under normal vision, and at least ΔE 8 under protan and deutan simulation, in both themes (direction.md rule 51).
@@ -327,7 +362,8 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: a marking exceeds 1,000 stored items, or "Mark all" is refused.
 - [x] AC-103 WHEN a tile's cube or view cannot resolve every member of a marking's predicate, THE SYSTEM SHALL leave that tile unmarked and label it as not linked to that marking (direction.md rule 18 of §7a).
       Fails when: the tile shows a query error, or is silently left unbrushed with no label.
-> **Moved to phase 2** (2026-09-25): AC-104, in `docs/phase-2/backlog.md` §1.
+- [ ] AC-104 WHEN a tile needs the marked share and the marking's members are not among its own groupings, THE SYSTEM SHALL obtain it with one additional query per tile and keep the unmarked result cached across marking changes (phase 2, `[R16]`).
+      Fails when: more than one extra query per tile is issued for a marking change, or the base result is re-fetched when only the marking changed.
 - [x] AC-105 WHEN the same set of items is marked again, THE SYSTEM SHALL produce an identical Cube query to the previous time, so the result can be served from cache.
       Fails when: two identical markings produce different query JSON.
 - [x] AC-106 WHILE a dashboard is in edit mode, THE SYSTEM SHALL select the tile on click and change no marking.
@@ -356,7 +392,8 @@ Traces to: `[docs/inputs §11]`, direction.md §7a, rules 33, 53, 55.
       Fails when: the rows shown do not match the marking, or the total is absent.
 - [x] AC-115 WHEN the user chooses Invert marking or Mark all on a tile, THE SYSTEM SHALL mark exactly the tile's unmarked items, or all of its items, and leave other tiles' contributions to that marking unchanged.
       Fails when: an inverted marking keeps a previously marked item, or Mark all misses a visible item.
-> **Moved to phase 2** (2026-09-25): AC-116, in `docs/phase-2/backlog.md` §1.
+- [ ] AC-116 WHEN a text tile contains a marking token, THE SYSTEM SHALL render the marking's summary or count, and a measure token limited by a marking SHALL show the measure over the marked rows, or over all data when nothing is marked (phase 2, `[R16]`).
+      Fails when: a token renders as literal text, or a limited measure ignores the marking.
 
 ## F12. Cross-filtering and cross-highlighting
 
@@ -409,7 +446,7 @@ Traces to: `[docs/inputs §9]`, direction.md §2, rule 41.
 Purpose: author the semantic model in a form and in code, with the same file underneath.
 Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[research/cube/data-modeling.md]`.
 
-- [x] AC-131 WHEN the user opens the Model workspace, THE SYSTEM SHALL list the model files and show the cubes, views, measures, dimensions, segments, hierarchies, joins and pre-aggregations each file defines.
+- [ ] AC-131 WHEN the user opens a model in a folder, THE SYSTEM SHALL show the cubes, views, measures, dimensions, segments, hierarchies, joins and pre-aggregations each of its files defines (phase 2: models live in folders, `[P2 input]`).
       Fails when: a file's object is missing from the listing.
 - [x] AC-132 THE SYSTEM SHALL offer a form for every key Cube's validator accepts on a cube or a view, with enumerations offering exactly the validator's allowed values (direction.md rule 26).
       Fails when: a key the validator accepts has no form field, or an enumeration offers a value the validator rejects.
@@ -429,8 +466,8 @@ Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[researc
       Fails when: a selected table produces no cube, or a column is dropped without saying so.
       > Deferred 2026-09-21 with F18, at the user's direction ("for requirements that dont work with cube defer"). Browsing a connection's tables is Cube's drivers called from wechart's server, not a Cube API (`research/cube-capabilities.md` §6).
       > **Un-deferred 2026-09-25 `[R10]`.** Browsing and generating go through the data-source introspection API in the user's Cube fork (`research/cube/introspection-api.md`). The generated YAML is shown with the columns Cube left unmapped and each one's reason, saved to wechart's model store, and published as any model change is (AC-136, AC-137).
-- [x] AC-249 IF a cube generated from a data source has the name or file name of a cube or file already in the model store, THEN THE SYSTEM SHALL refuse to save it, name the existing cube or file, and leave the existing one unchanged (`[R10]`).
-      Fails when: an existing model file changes, or a clashing cube is saved, or the refusal does not name what it clashes with.
+- [ ] AC-249 IF a cube generated from a data source has the name or file name of a cube or file already in the target folder, THEN THE SYSTEM SHALL refuse to save it, name the existing cube or file, and leave the existing one unchanged (`[R10]`; phase 2: names are unique per folder, `[P2 input]`).
+      Fails when: an existing model file changes; a clashing cube is saved into the same folder; a cube is refused for a name used only in another folder; or the refusal does not name what it clashes with.
 - [x] AC-250 THE SYSTEM SHALL grant Cube's `introspection` scope only to the short-lived tokens its API signs to browse a data source and generate cubes, never to a draft's token or to any other request's token, and never to the browser (`[R10]`).
       Fails when: a token signed for a query, a publish or a draft is granted `introspection`, or a response to the browser carries a token that has it.
 - [x] AC-140 WHEN a model file uses Jinja, Python or JavaScript generation, THE SYSTEM SHALL open it read-only in the code view and say why it cannot be edited as a form.
@@ -477,7 +514,8 @@ Traces to: `[R4]`, `[docs/inputs §1]`, direction.md §7c; `[research/cube/pre-a
       > Added 2026-09-22 at the user's decision ("Yes, refuse to publish"): Cube compiles a rollup that names members the model doesn't have, and every query on that cube then fails (research/cube/pre-aggregations.md, "Observed locally").
 - [x] AC-144 WHEN the user opens a chart's acceleration panel, THE SYSTEM SHALL say whether the chart's query matches a pre-aggregation, and when it does not, name the member that prevents the match.
       Fails when: the panel reports a match that Cube does not use, or names no reason for a miss.
-> **Moved to phase 2** (2026-09-25): AC-145, in `docs/phase-2/backlog.md` §1.
+- [ ] AC-145 WHEN the user opens a partitioned rollup in Jobs, THE SYSTEM SHALL list every partition Cube derives from its build range in the time zones wechart builds in, each with its period, its build state (built, not built, building or failed) and the time Cube last built it, and SHALL rebuild the partitions the user selects through Cube's jobs API (phase 2, `[R16]`).
+      Fails when: a partition Cube lists for the rollup is missing, or shows a last build time other than Cube's newest version of it; or a rebuild starts a job whose table names a partition the user did not select, or starts none for one they did.
 - [x] AC-146 WHEN the user defines an index on a rollup, THE SYSTEM SHALL let the columns be ordered and mark aggregate indexes as such.
       Fails when: the column order cannot be changed, or an aggregate index is written as a regular one.
 - [x] AC-147 IF a query would fail under rollup-only mode, THEN THE SYSTEM SHALL warn on the chart that it depends on the source database.
@@ -531,6 +569,11 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
 > `research/cube/job-records.md`, `research/cube/logger-build-events.md` and
 > `research/cube/upgrade-1.7.43.md`.
 >
+> **Phase 2, 2026-09-25.** Every criterion here is in scope, the deferred ones
+> included (`[R16]`). Jobs and Schedules are for Super-Admins, and for each
+> folder's read-write members over that folder's own pre-aggregations (AC-297,
+> `[R18]`).
+>
 > **AC-151 deferred too, 2026-09-21, at the user's direction.** Cube's
 > documented jobs API starts builds and reports on tokens, but it can't list the
 > queue or cancel an entry. Only the undocumented `/cubejs-system/*` routes and
@@ -539,11 +582,21 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
 
 - [x] AC-149 WHEN the user starts a build for a pre-aggregation, THE SYSTEM SHALL submit it to Cube, show the job token, and poll until the job reports done, missing partition, failure or not found.
       Fails when: the job's terminal state is never shown, or the token is absent.
-> **Moved to phase 2** (2026-09-25): AC-150 and AC-151, in `docs/phase-2/backlog.md` §1.
+- [ ] AC-150 WHEN a pre-aggregation build finishes, whether wechart started it through Cube's jobs API or Cube's refresh worker started it on its refresh key, THE SYSTEM SHALL record it in wechart's own history with its pre-aggregation, partition, what started it, its duration, its outcome with Cube's error when it failed, and a log of what Cube reported for it. It SHALL also list the record in the Jobs workspace's Run history after Cube's own record of the job has expired, and keep the latest 100 records of each pre-aggregation (phase 2, `[R16]`).
+      Fails when: a build that finished more than 24 hours ago is missing from Run history, or lacks any of those fields; a rebuild of a rollup with a `* * * * *` refresh key is not in Run history within one of Cube's check periods of finishing; a build started from Jobs that finishes while no browser has Jobs open is not recorded; a recorded outcome differs from what Cube reported; or a pre-aggregation has more than 100 records.
+- [ ] AC-151 THE SYSTEM SHALL show the build queue with each entry's pre-aggregation, partition, state and token, and allow cancelling a queued entry (phase 2, `[R16]`).
+      Fails when: a queued build is missing, or cancelling leaves it queued.
 
 - [x] AC-152 THE SYSTEM SHALL show every job and schedule with an icon and a text label for its state, never colour alone (direction.md rule 22).
       Fails when: a state is conveyed only by colour.
-> **Moved to phase 2** (2026-09-25): AC-153, AC-154, AC-155 and AC-234, in `docs/phase-2/backlog.md` §1.
+- [ ] AC-153 WHEN the user sets a pre-aggregation's refresh schedule in the model editor as a cron expression and time zone, THE SYSTEM SHALL accept only expressions Cube's refresh worker can run, show the next runs Cube's refresh key implies with a note that a run can start up to about five minutes after its time, and write the schedule into the model as that pre-aggregation's `refresh_key`, validated and published as any model change (phase 2, `[R16]`).
+      Fails when: a shown run differs from when Cube's refresh key turns over, an expression Cube cannot run is published, or the pre-aggregation is not rebuilt within one of Cube's check periods of a shown run.
+- [ ] AC-154 THE SYSTEM SHALL list every pre-aggregation's refresh schedule in Schedules, label each with its owner, Cube's refresh worker or wechart's scheduler, show Cube-owned schedules read-only there with a link opening the pre-aggregation in the model editor, and say when one is not scheduled (direction.md rule 34; phase 2, `[R16]`).
+      Fails when: a `refresh_key` schedule is editable on the Schedules page, is unlabelled, or its link does not open the model editor.
+- [ ] AC-155 IF a scheduled build fails repeatedly, THEN THE SYSTEM SHALL suspend the schedule after the configured number of consecutive failures, say so on the schedule, and offer Resume (phase 2, `[R16]`).
+      Fails when: the schedule keeps running after the limit, or offers no Resume.
+- [ ] AC-234 WHEN the user creates a schedule for a pre-aggregation build or a cache warm-up that a refresh key cannot express, THE SYSTEM SHALL accept a cron expression and time zone, show the next runs it implies, and start each run at its time through Cube's jobs API (phase 2, `[R16]`).
+      Fails when: the next runs shown do not match the expression, or a due run does not start.
 
 - [x] AC-156 THE SYSTEM SHALL show the refresh worker's state and the Cube deployment's health, and mark the deployment as down when Cube's health endpoint does not report healthy.
       Fails when: the indicator stays healthy while Cube reports otherwise.
@@ -564,8 +617,30 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
 > AC-157 to AC-161, AC-163 and AC-164 wait. AC-162 stays: it writes
 > `data_source` into a cube's model file, and belongs with the Model workspace
 > (F15). Data sources are configured as they are today, in Cube's environment.
+>
+> **Phase 2, 2026-09-25: all of F18 is in scope, per folder** (`[R16]`).
+> - Data sources are folder items, under the folders' access rules. They are
+>   created and changed in a workspace and land through approval (F27–F30).
+> - The Data sources workspace lists every source the user may see (`[R19]`).
+> - Credentials are encrypted in wechart's metadata database (AC-298, `[R14]`).
+> - How Cube takes connections from wechart, rather than from its own
+>   environment, is research's to find, with fork changes allowed (`[R15]`).
+>   AC-161 is reworded so it doesn't assume a restart.
 
-> **Moved to phase 2** (2026-09-25): AC-157, AC-158, AC-159, AC-160, AC-161, AC-163 and AC-164, in `docs/phase-2/backlog.md` §1.
+- [ ] AC-157 THE SYSTEM SHALL list, in the Data sources workspace, every data source the user may see, each with its folder, its driver type, its health from the last test, and the cubes whose models use it (phase 2: `[R16, R19]`).
+      Fails when: a data source the user may see is missing, one they may not see is listed, or a cube list disagrees with the models.
+- [ ] AC-158 WHEN the user adds a data source in their workspace, THE SYSTEM SHALL take its name, the driver type, the connection fields for that driver and a Test step, and SHALL refuse to create it until the test passes or the user explicitly overrides (direction.md rules 23, 35; phase 2: `[P2 input]`).
+      Fails when: a source is created with a failing test and no override.
+- [ ] AC-159 WHEN the user runs a connection test, THE SYSTEM SHALL run it from the wechart service, show each check's result, and show the driver's error text when a check fails.
+      Fails when: the test runs in the browser, or a failure shows no error text.
+- [ ] AC-160 THE SYSTEM SHALL offer PostgreSQL, Snowflake, Databricks, BigQuery, SQL Server and Oracle as driver types, with each driver's own authentication fields (`[R4]`).
+      Fails when: a listed driver is absent, or its form omits an authentication method the driver requires.
+- [ ] AC-161 WHEN an approved change to a data source's settings lands in its folder, THE SYSTEM SHALL say whether Cube needs a restart before it takes effect, and show whether the running Cube uses the new settings (phase 2: `[R15]`).
+      Fails when: the UI claims the change is live while Cube still uses the previous settings.
+- [ ] AC-163 THE SYSTEM SHALL record the result of each connection test over time and show that history per source.
+      Fails when: a test result is missing from the history.
+- [ ] AC-164 THE SYSTEM SHALL never show a stored credential in plain text after it is saved, and SHALL never send it to the browser.
+      Fails when: a saved secret is readable in the UI or in a response to the browser.
 
 - [x] AC-162 WHEN the user assigns a cube to a data source, THE SYSTEM SHALL write `data_source` into that cube's model file.
       Fails when: the assignment is stored only in wechart and not in the model.
@@ -609,19 +684,24 @@ Traces to: `[R3]`, `[R7]`, direction.md rules 1–5, 39, 52.
       Fails when: the p95 across a repeated run exceeds 3 seconds.
 - [x] AC-175 WHEN a marking changes on a dashboard of 10 charts, THE SYSTEM SHALL update every affected tile within 3 seconds at the 95th percentile.
       Fails when: the p95 update time exceeds 3 seconds.
-> **Moved to phase 2** (2026-09-25): AC-176, in `docs/phase-2/backlog.md` §1.
+- [ ] AC-176 THE SYSTEM SHALL make every action reachable from the keyboard: navigation, authoring, marking, filtering and every dialog, with a visible focus indicator distinct from the marking outline (direction.md rules 39, 52; phase 2, `[R16]`).
+      Fails when: an action can be performed only with a pointer, or focus is invisible on any control.
 - [x] AC-177 THE SYSTEM SHALL pair every status, validation and job state with an icon and a text label (direction.md rule 3).
       Fails when: any state is conveyed by colour alone.
 - [x] AC-178 THE SYSTEM SHALL provide a table view of every chart's data, reachable from the tile (direction.md rule 5).
       Fails when: a chart type offers no table view.
 - [x] AC-179 THE SYSTEM SHALL render dashboards, the chart editor and the model editor without horizontal scrolling at a viewport width of 1,280 pixels.
       Fails when: any of those surfaces scrolls horizontally at that width.
-> **Moved to phase 2** (2026-09-25): AC-180, in `docs/phase-2/backlog.md` §1, with
-> its 2026-09-22 status: deferred at the user's direction, as Edge needs the
-> `msedge` channel (its install asks for the machine's password) or a CI run.
+- [ ] AC-180 THE SYSTEM SHALL work in current Chrome, Edge, Firefox and Safari on desktop (`[R7]`; phase 2, `[R16]`).
+      Fails when: any acceptance test in this spec fails in one of those browsers.
+      > Edge needs the `msedge` channel, whose install asks for the machine's
+      > password, or a CI run, which needs a push (the 2026-09-22 status). The
+      > Playwright and CI configuration for all four is in place (T001). This
+      > criterion is ticked by a four-browser run, not by the local three.
 - [x] AC-188 THE SYSTEM SHALL write a time dimension's values by their granularity — a year as "2026", a quarter as "Q1 2026", a month as "Jan 2026", a week as "Week of Jan 5, 2026", a day as "Jan 2, 2026", and an hour or finer with the time — in axes, labels, tooltips and tables, unless the member's model format says otherwise.
       Fails when: a time value shows as a raw timestamp such as "2026-01-02T00:00:00.000".
-> **Moved to phase 2** (2026-09-25): AC-187, in `docs/phase-2/backlog.md` §1, with the 2026-09-25 re-critiques' measured differences.
+- [ ] AC-187 THE SYSTEM SHALL draw the app bar, workspace navigation, buttons and inputs, the dashboard header and page tabs, the filter bar, tiles, and the edit sidebar with the component styles of the design prototype the user approved (`docs/design/prototype/index.html`, published as "wechart Workbench"; the user, 2026-09-21: "align with the ui styles in" it), in the tokens of direction.md §3–5 (phase 2, `[R16]`; the open differences are in `docs/phase-2/backlog.md` §1 and the 2026-09-25 critiques).
+      Fails when: one of those components' computed height, padding, border width or radius, font size or weight, or colour token differs from the prototype's rule for the same component.
 
 ## F22. Following the design prototype's structure
 
@@ -637,12 +717,12 @@ Application shell and search:
 
 Explore:
 
-- [x] AC-192 WHEN the user opens a folder in Explore, THE SYSTEM SHALL show a breadcrumb of its ancestors, the folder's name as the page heading with Rename beside it, the Explore search box, and a single "New" menu offering Dashboard, Chart and Folder.
-      Fails when: the folder's name is not the page heading, a breadcrumb ancestor does not open that folder, or creating is offered other than through the New menu.
+- [ ] AC-192 WHEN the user opens a folder in Explore, THE SYSTEM SHALL show a breadcrumb of its ancestors, the folder's name as the page heading (with Rename beside it for those who may rename it), the Explore search box, and a single "New" menu. In a shared folder the menu offers Folder to the folder's read-write members; in the user's workspace it offers Dashboard, Chart, Model, Data source and Folder (phase 2: `[P2 input, R17]`).
+      Fails when: the folder's name is not the page heading, a breadcrumb ancestor does not open that folder, creating is offered other than through the New menu, or a shared folder's New menu offers anything but Folder.
 - [x] AC-193 THE SYSTEM SHALL list a folder's contents under the columns Name, Type, Built on, Updated and Owner — subfolders first, then dashboards, then charts — showing a dashboard's description beneath its name and its number of page tabs, a chart's chart type and the cube or view it is built on, and a subfolder's item count, and SHALL offer rename and move through a menu on each row.
       Fails when: a column is missing, a chart's type reads only "Chart", a row shows a rename or move control before its menu is opened, or a move offers the item's own folder or, for a folder, itself or a folder inside it.
-- [x] AC-194 THE SYSTEM SHALL show the folder tree as a full-height pane headed "Folders" with a "+ Folder" action, holding a shared root and a personal "My workspace" root, each folder showing the number of items it holds including those in its subfolders (`[R9]`).
-      Fails when: "My workspace" is missing, a count leaves out items in subfolders, or the tree scrolls away with the contents.
+- [ ] AC-194 THE SYSTEM SHALL show the folder tree as a full-height pane headed "Folders", with a "+ Folder" action for those who may create one. It holds the shared root, showing only the folders the user may see, and "My workspace" for users who have a workspace. Each folder shows how many items it and its subfolders hold, counting only items the user may see (`[R9]`; phase 2: `[P2 input, R12]`).
+      Fails when: a folder the user may not see appears; "My workspace" is missing for a user who has a workspace, or shown to one who doesn't; a count includes items the user may not see, or leaves out items in subfolders; or the tree scrolls away with the contents.
 - [x] AC-195 WHEN the user opens a dashboard or a library chart from Explore, THE SYSTEM SHALL show a breadcrumb back to its folder, and returning by it, or reloading Explore, SHALL show that folder.
       Fails when: the breadcrumb is missing, or returning or reloading lands on a folder other than the item's.
 
@@ -659,7 +739,8 @@ Dashboards:
       Fails when: one of those items is missing, or the marked-rows actions appear outside Markings mode.
 - [x] AC-200 THE SYSTEM SHALL show each non-empty marking in the filter bar as a chip bordered in the marking's colour, naming the marking, summarising its values by the members' titles, naming the tile it came from, and offering a menu and a control that unmarks it.
       Fails when: a chip shows a member's internal name, omits the source tile, or cannot unmark from the chip.
-> **Moved to phase 2** (2026-09-25): AC-201, in `docs/phase-2/backlog.md` §1. It shipped; the 2026-09-25 re-critique measured a marked KPI tile whose title is squeezed to nothing.
+- [ ] AC-201 THE SYSTEM SHALL show the marked-items badge in a chart tile's header row, beside its title, and only on chart tiles whose marking holds something (phase 2, `[R16]`: the 2026-09-25 re-critique measured a marked KPI tile whose title is squeezed to nothing).
+      Fails when: the badge pushes the title down or squeezes it out of view, or appears on a tile that does not mark or whose marking is empty.
 - [x] AC-202 THE SYSTEM SHALL draw a section as a band with a header holding a collapse control, its title and its number of items, and SHALL collapse and expand it in view and edit mode.
       Fails when: a section has no collapse control, or cannot be collapsed in view mode.
 - [x] AC-203 WHEN the user selects a tile in edit mode, THE SYSTEM SHALL open Properties, showing for a chart tile its title, chart type and source, an Edit chart action, its ownership, its Marking settings and its layout.
@@ -699,14 +780,15 @@ Library charts and the chart editor:
       Fails when: a combo, or a pie drawn with more than 6 slices, shows no warning.
 - [x] AC-219 THE SYSTEM SHALL offer in the chart editor's Customize tab the axis settings — title, label rotation, include zero, logarithmic scale, gridlines, minimum and maximum — the legend's visibility and position, each series' colour and visibility and whether series stack, data labels, and the number format.
       Fails when: the legend's position, data labels or "include zero" cannot be set.
-> **Moved to phase 2** (2026-09-25): AC-220, in `docs/phase-2/backlog.md` §1. It shipped; the 2026-09-25 re-critique found the Acceleration tab naming `orders.count`.
+- [ ] AC-220 THE SYSTEM SHALL name every member by its title from the model wherever a person reads it, and never by its internal name. That covers legends, tooltips, table headers, well pills, marking chips, the "Why this chart?" trace and the Acceleration tab. Where the member's cube or view is evident (a pill, a legend or a KPI label of a one-source chart), it SHALL use the member's short title, and its full title elsewhere (phase 2, `[R16]`: the UI review's gap 13, and the re-critique's Acceleration finding).
+      Fails when: any of those shows a name such as "orders.count", or a one-source chart's legend or KPI label repeats the source's title.
 - [x] AC-221 WHEN a pie or donut is drawn, THE SYSTEM SHALL list every slice in its legend.
       Fails when: a slice has no legend entry.
 
 Model workspace:
 
-- [x] AC-222 WHILE the Model workspace is open, THE SYSTEM SHALL show a tree of the model's files beside the editor, open the chosen file in place with its path in the URL, offer New cube and New view from the tree, and mark each file that has problems.
-      Fails when: moving to another file requires leaving the editor, New cube or New view is missing, or a file with an error carries no mark in the tree.
+- [ ] AC-222 WHILE a model is open, THE SYSTEM SHALL show its folder's model files beside the editor, open the chosen file in place with its folder and name in the URL, offer New cube and New view in the user's workspace, and mark each file that has problems (phase 2: `[P2 input]`).
+      Fails when: moving to another of the folder's files requires leaving the editor; New cube or New view is missing in the workspace, or offered in a shared folder; or a file with an error carries no mark.
 - [x] AC-223 THE SYSTEM SHALL lay the model editor out as full-height panes, each with its own header row and scrolling — the form, and the code with its Problems panel docked beneath it counting errors and warnings — with code and file paths in direction.md's code face.
       Fails when: the page itself scrolls at 1,440 × 900, Problems gives no count of warnings, or code is set in a face other than IBM Plex Mono.
 - [x] AC-224 THE SYSTEM SHALL edit every field that refers to model members — pre-aggregation measures, dimensions, segments, rollups and time dimension, drill members, hierarchy levels, a view's includes and excludes — with a picker of the members it may refer to, and a join's target with a list of cubes (direction.md §7b).
@@ -730,8 +812,8 @@ Jobs, Security, Schedules and Data sources:
       Fails when: a workspace page title is not 20 px at weight 600, or a workspace table's numbers are not tabular.
 - [x] AC-232 WHEN the user opens Security, THE SYSTEM SHALL offer a preset context for each group the policies name, list every cube and view with the access the current context gives it and why, start a dashboard preview from a bounded list of dashboards that says when nothing matches, link each policy to its file in Model, and keep the edited context for the session.
       Fails when: effective access is missing, a search with no match shows nothing, a policy's source does not open Model, or the context is reset after a preview.
-- [x] AC-233 WHEN the user opens Schedules or Data sources, THE SYSTEM SHALL show the page's title and a note saying what the page is for, on Data sources that managing connections is not part of this phase, and SHALL treat "/sources" as Data sources.
-      Fails when: either page renders nothing, or "/sources" shows Not found.
+- [ ] AC-233 WHEN the user opens Schedules or Data sources, THE SYSTEM SHALL show the page's title and a note saying what the page is for, and SHALL treat "/sources" as Data sources (phase 2: data sources are managed in folders, `[R16, R19]`).
+      Fails when: either page renders nothing, "/sources" shows Not found, or Data sources says managing connections is not part of this phase.
 
 ## F23. The chart tile's menu (DSH-08)
 
@@ -770,7 +852,8 @@ Traces to: the user, 2026-09-25; `[docs/design/reviews/2026-09-24/chart-context-
       Fails when: one of those items is missing where it applies, or an image file is not the chart as drawn.
 - [x] AC-245 WHEN the user opens the tile menu's Data as of submenu, THE SYSTEM SHALL show, for an answer a pre-aggregation served, its name, its last build, its refresh schedule in words and as written, and its next run with how late it may start, with Refresh now, Open in Jobs on that pre-aggregation and Edit schedule in Model; and, for an answer the database served, say so, with Refresh now and Why not accelerated.
       Fails when: one of those items is missing, Open in Jobs does not select that pre-aggregation, or a database answer is described as a pre-aggregation's.
-> **Moved to phase 2** (2026-09-25): AC-246, in `docs/phase-2/backlog.md` §1. It shipped; the 2026-09-25 re-critique found Shift+F10 doing nothing on a chart tile with no fields yet.
+- [ ] AC-246 WHEN the user right-clicks a chart tile's plot, or presses Shift+F10 or the Menu key on a focused chart tile, THE SYSTEM SHALL open the tile's menu at the pointer or at the tile, and the browser's own menu SHALL not open there (phase 2, `[R16]`: the re-critique found Shift+F10 doing nothing on a chart tile with no fields yet).
+      Fails when: the browser's context menu opens instead, the keys do nothing on any chart tile (one with no fields yet included), or a right-click changes a marking.
 - [x] AC-247 WHILE the tile's marking holds items, THE SYSTEM SHALL head the tile's menu with the marking's name, the marked values by their members' titles, and the count marked out of the tile's items.
       Fails when: the heading omits the values, or either count differs from the marked items or the tile's items.
 
@@ -787,6 +870,198 @@ Traces to: `[R4]` ("self-hosted Kubernetes … running wechart, Cube and Cube St
       Fails when: after the install a component is not Ready, the web app's address does not load, or a query from the web app does not reach the data source the values name.
 
 ---
+
+# Phase 2
+
+Phase 2's criteria start at AC-251. Its requirements are in [docs/requirements.md](./requirements.md), Part 2, and cited there as §P2.n, rounds R11–R19, and `[P2 input]`. Phase 1's criteria above still hold, except for the ones rewritten and marked "phase 2". Authoring criteria such as F7's apply as they did, but now in the user's workspace, because shared content is no longer edited in place (AC-278).
+
+## F25. Sign-in and the security mode
+
+Purpose: nobody reaches wechart without signing in when security is on, and one user has everything when it's off.
+Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R14, R15, R18, R19]`.
+
+- [ ] AC-251 WHERE security is enabled, WHEN a request without a signed-in session reaches a wechart page or API route, THE SYSTEM SHALL send a page request to the configured OIDC provider's sign-in, and answer an API request with 401, returning no wechart content either way. Health routes are exempt.
+      Fails when: any page renders wechart content, or any API route other than health returns data, without a signed-in session.
+- [ ] AC-252 WHERE security is enabled, WHEN a user signs in, THE SYSTEM SHALL take their identity and AD groups from the provider's token, as the configuration names them (issuer, client, groups claim), and show the user's name and a Sign out control in the top bar.
+      Fails when: the groups wechart grants access by differ from the token's, or the top bar shows no name or no Sign out.
+- [ ] AC-253 WHEN the user signs out, THE SYSTEM SHALL end the wechart session, so that the next request needs a new sign-in.
+      Fails when: after signing out, a page or API route still answers as that user.
+- [ ] AC-254 WHILE security is disabled, THE SYSTEM SHALL run in single-user mode: no sign-in, and one user holding every permission, as a Super-Admin does. Workspaces and proposals SHALL work as with security on, and that user approves their own proposals (`[P2 input, R19]`).
+      Fails when: a sign-in is asked for, or any permission is refused, while security is disabled.
+- [ ] AC-255 WHILE security is enabled, WHEN a user belongs to 20 AD groups, THE SYSTEM SHALL grant them access through every one of them (`[R12, R19]`).
+      Fails when: a folder granted only to the last of a 20-group user's groups is refused to them.
+- [ ] AC-256 THE SYSTEM SHALL take the Super-Admin group's name from the deployment's configuration, and treat that group's members as Super-Admins (`[R18]`).
+      Fails when: a member of the configured group lacks a Super-Admin permission, or someone outside it has one.
+- [ ] AC-257 WHERE security is enabled, THE SYSTEM SHALL sign users in through the development OIDC provider in docker-compose and in the Helm release on docker-desktop, with the provider running beside wechart (`[R14, R15]`).
+      Fails when: signing in fails in either environment, or either environment needs a provider outside it.
+- [ ] AC-258 WHEN wechart is configured against Microsoft Entra ID, or against on-prem AD through an OIDC broker, THE SYSTEM SHALL sign users in and resolve their AD groups as it does with the development provider. Checked once, at the end of phase 2 (`[R14, R15]`).
+      Fails when: signing in fails, or the groups wechart resolves differ from the directory's.
+
+## F26. Folder permissions and roles
+
+Purpose: AD groups decide who sees and changes each folder, through inheritance down the tree and visibility up it.
+Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R17, R18, R19]`.
+
+- [ ] AC-259 WHEN a Super-Admin, or a read-write member of a folder, creates a subfolder or edits a folder's permissions, THE SYSTEM SHALL let them set any number of AD groups with read-only access and any number with read-write access, each setting optional, and never an individual user (`[R11, R12]`).
+      Fails when: a permission can name an individual user, or someone who isn't a Super-Admin or read-write member there can change it.
+- [ ] AC-260 WHILE a folder leaves its read-only or its read-write setting unset, THE SYSTEM SHALL use the parent's effective setting for it, each setting inherited on its own, and show the inherited groups with the folder they come from (`[R11]`).
+      Fails when: an unset setting grants groups other than the parent's, or the inherited groups are shown without their source folder.
+- [ ] AC-261 WHEN an AD group has access to a folder, set or inherited, THE SYSTEM SHALL give its members the same access to every descendant folder, whatever groups the descendant sets (`[P2 input, R12]`).
+      Fails when: a member of a group granted on /A is refused in /A/B/C, or given less access there, where /A/B sets a different group.
+- [ ] AC-262 WHEN a group has read-write access to a folder, THE SYSTEM SHALL let its members see, view-only, every dashboard, chart, model and data source in each ancestor folder up to the root (`[R12, R19]`).
+      Fails when: an item in an ancestor is hidden from them, or they can change it without a proposal.
+- [ ] AC-263 WHILE a user has only read-only access, THE SYSTEM SHALL show them the dashboards, and the charts on those dashboards, in the folders they may see (the folder, its descendants and its ancestors), and no models, data sources or library charts. Their dashboards still resolve cubes through the folder's path (`[P2 input, R19]`).
+      Fails when: a read-only user sees or opens a model, a data source or a library chart, or a dashboard they may see fails because a model is hidden from them.
+- [ ] AC-264 IF a user belongs to no group with access to a folder (set, inherited, or reaching up from a grant on a descendant), THEN THE SYSTEM SHALL neither list nor open that folder, nor anything in it.
+      Fails when: the folder's name or any of its items appears to that user anywhere: the tree, a listing, search, a link or the API.
+- [ ] AC-265 THE SYSTEM SHALL give Super-Admins read-write access to every folder, and every admin surface (Jobs, Schedules, Security, folder permissions and the audit trail) (`[P2 input, R12]`).
+      Fails when: a Super-Admin is refused any folder or admin surface.
+- [ ] AC-266 WHILE a user has only read-only access to a folder, THE SYSTEM SHALL let them read its dashboards (filter, mark, drill, export, bookmark) and change nothing in it.
+      Fails when: a read-only user can create, change, move, delete or propose anything in the folder, or set its permissions.
+- [ ] AC-267 WHEN security is first enabled on a deployment holding phase-1 content, THE SYSTEM SHALL keep that content as the shared tree with no groups set, visible only to Super-Admins until groups are assigned (`[R17]`).
+      Fails when: anyone but a Super-Admin sees phase-1 content before a group is assigned to it.
+- [ ] AC-268 THE SYSTEM SHALL enforce folder access on every API route, not only in the UI. An automated suite SHALL ask every route as users in and out of each group, and nothing outside their permitted folders SHALL come back (S1, `[R13]`).
+      Fails when: any route returns, lists, counts or finds by search an item the asking user may not see, or accepts a change they may not make.
+
+## F27. Folders hold models and data sources
+
+Purpose: models and data sources become folder items like dashboards and charts, and the Model tab goes.
+Traces to: §P2.6 C, `[P2 input]`, `[R19]`. Rewritten phase-1 criteria: AC-001, AC-131, AC-192, AC-194, AC-222, AC-233.
+
+- [ ] AC-269 THE SYSTEM SHALL list a folder's models and data sources in Explore beside its dashboards and charts, each labelled with its kind, and SHALL open a model in the model editor, and a data source in its settings, from the folder.
+      Fails when: a model or data source in a folder the user may see (as AC-263 allows) isn't listed there, or can't be opened from it.
+
+## F28. Names and resolution per folder
+
+Purpose: the same name can mean different things in different folders; within a folder it means one thing, found from the nearest folder up.
+Traces to: §P2.6 D, `[P2 input]`, `[R17, R19]`. Rewritten phase-1 criterion: AC-249.
+
+- [ ] AC-270 IF an item would take the name of an item of the same kind in the same folder (a cube, by cube name across the folder's models; a model file; a dashboard; or a data source), THEN THE SYSTEM SHALL refuse it and name the existing item (`[P2 input]`).
+      Fails when: two items of one kind share a name in one folder, or the refusal doesn't name the existing item.
+- [ ] AC-271 THE SYSTEM SHALL let a cube, model, dashboard or data source share its name with one in another folder (`[P2 input]`).
+      Fails when: a name is refused because a different folder uses it.
+- [ ] AC-272 WHEN a dashboard or chart in a folder names a cube, THE SYSTEM SHALL resolve the name from that folder up through its ancestors to the root, and use the nearest definition. A cube defined only in a descendant or a sibling folder is not available to it (`[P2 input, R17]`).
+      Fails when: a chart in /A/B uses /A's `sales` while /A/B defines its own, or uses a cube defined only in /A/B/C or a sibling.
+- [ ] AC-273 WHEN a model names a data source, THE SYSTEM SHALL resolve the name bottom-up from the model's own folder: that folder first, then each ancestor to the root. Only if none on that path has the name SHALL it use one in the model's descendants. It SHALL refuse a name found in two descendants and none on the path, naming both (`[P2 input, R19]`).
+      Fails when: a model in /A/B uses /A/B/C's `warehouse` while /A has one; or it uses a data source from a sibling branch; or an ambiguous name is used rather than refused.
+- [ ] AC-274 WHEN two folders' paths define different cubes of the same name, and each is asked the same query, THE SYSTEM SHALL answer each from its own cube and keep their pre-aggregations apart (`[P2 input]`).
+      Fails when: one folder's answer, or pre-aggregation, comes from the other folder's cube.
+- [ ] AC-275 WHEN an approved change to a model lands in a folder, THE SYSTEM SHALL use it for that folder and its descendants (unless one defines the name nearer), and for no other folder.
+      Fails when: a dashboard outside that subtree changes, or one inside it that doesn't define the name nearer keeps the old definition.
+
+## F29. Workspaces
+
+Purpose: every author works privately, starting from copies of shared content.
+Traces to: §P2.2, §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
+
+- [ ] AC-276 THE SYSTEM SHALL give every Super-Admin and every member of any read-write group a private workspace, shown as "My workspace" in the folder tree. No other user, Super-Admins included, SHALL be able to list, open, search or reach it through the API (`[P2 input, R12]`).
+      Fails when: anyone but its owner sees or opens anything in a workspace.
+- [ ] AC-277 WHILE a user has only read-only access everywhere, THE SYSTEM SHALL give them no workspace and no action that creates or edits content (`[R12]`).
+      Fails when: "My workspace", or any create or edit action, appears to them.
+- [ ] AC-278 WHILE an item is in a shared folder, THE SYSTEM SHALL offer no editing of it in place. "Edit in my workspace" SHALL copy the item into the user's workspace, or open their copy already there, for editing (`[P2 input]`).
+      Fails when: a shared dashboard, chart, model or data source can be changed without a proposal.
+- [ ] AC-279 WHEN the user copies a dashboard into their workspace, THE SYSTEM SHALL copy it with its local charts and the library charts it uses, and no models or data sources unless the user also chooses them (`[P2 input, R18]`).
+      Fails when: the copy lacks a chart it shows, or brings a model or data source the user didn't choose.
+- [ ] AC-280 WHEN the user copies a data source into their workspace, THE SYSTEM SHALL copy its connection settings and its credentials, the credentials still encrypted and never shown (`[R17]`).
+      Fails when: the copy can't connect without the credentials being entered again, or a credential is shown or returned.
+- [ ] AC-281 WHEN an item in a workspace names a cube, THE SYSTEM SHALL resolve it in the workspace first. It then resolves along the path of the folder the item was copied from, or, for an item created in the workspace, the path of its target folder (`[R17]`).
+      Fails when: a workspace dashboard uses a folder's cube while the workspace defines that name, or resolves along another folder's path.
+- [ ] AC-282 WHEN the user creates a dashboard, chart, model or data source in their workspace, THE SYSTEM SHALL ask for its target folder, among the folders where they have read-write access (`[R17]`).
+      Fails when: an item is created without a target folder, or with one the user can't write to.
+- [ ] AC-283 WHILE the user works in their workspace, THE SYSTEM SHALL let them use the models, data sources, dashboards and charts of every folder they may see (`[P2 input]`).
+      Fails when: an item they may see can't be used there, or one they may not see can.
+
+## F30. Proposals, approval and history
+
+Purpose: work reaches a shared folder only through a proposal someone approves, and the folder keeps its recent history.
+Traces to: §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
+
+- [ ] AC-284 WHEN the user proposes a workspace item into its target folder, THE SYSTEM SHALL record a proposal holding the item, the folder, the author, the time, and an optional description of at most 1,000 characters. The folder SHALL keep showing its current version (`[R12]`).
+      Fails when: the folder changes before approval, or a description over 1,000 characters is accepted.
+- [ ] AC-285 IF a proposed dashboard's cubes resolve only through models in the author's workspace, THEN THE SYSTEM SHALL put those models in the same proposal, approved or rejected together with the dashboard (`[R18]`).
+      Fails when: the dashboard lands without those models, or the models land without the dashboard.
+- [ ] AC-286 THE SYSTEM SHALL let a proposal be approved or rejected only by its author, a read-write member of the target folder or a Super-Admin, and SHALL never let one land without an approval (`[R12, R17, R18]`).
+      Fails when: a read-only member, or someone without access, can approve; or a proposal lands unapproved.
+- [ ] AC-287 THE SYSTEM SHALL show each user, in the app, the proposals they may approve, each with its item, folder, author and description, and their number in the top bar. There are no notices outside the app (`[R12]`).
+      Fails when: a proposal the user may approve is missing, the number differs from the list, or a proposal is shown to someone who may not approve it.
+- [ ] AC-288 WHEN a proposal is approved, THE SYSTEM SHALL put its item into the folder, replacing any item of the same kind and name, and keep the replaced version in the item's history (`[R17]`).
+      Fails when: the folder shows the old version after approval, or the replaced version is missing from history.
+- [ ] AC-289 THE SYSTEM SHALL keep an item's last 10 versions, each with its author, approver, time and description, and SHALL let a read-write member restore one through a proposal (`[R17]`).
+      Fails when: an item that has had more than 10 versions keeps other than its last 10, or a restore lands without an approval.
+- [ ] AC-290 WHEN a proposal is rejected, THE SYSTEM SHALL return it unchanged to the author's workspace, with the approver's reason of at most 1,000 characters, and leave the folder as it was (`[R18]`).
+      Fails when: the folder changes, the author's workspace loses the work, or the author isn't shown the reason.
+- [ ] AC-291 WHEN a read-write member creates a subfolder, sets permissions, or renames, moves or deletes an item in a folder they may write, THE SYSTEM SHALL apply it at once, without a proposal. A move SHALL need read-write access to both folders (`[R17]`).
+      Fails when: one of these waits for an approval, or is allowed without read-write access to the folders involved.
+
+## F31. Personal bookmarks
+
+Purpose: bookmarks belong to the person who saved them, until they share one.
+Traces to: §P2.6 F, `[R12]`.
+
+- [ ] AC-292 WHEN a user saves a bookmark, THE SYSTEM SHALL keep it theirs, listed on the dashboard for them alone.
+      Fails when: another user sees a bookmark its owner hasn't shared.
+- [ ] AC-293 WHEN a user shares a bookmark, THE SYSTEM SHALL list it for everyone who may see the dashboard, labelled with who shared it. Only its owner SHALL be able to change or unshare it.
+      Fails when: someone who may see the dashboard doesn't see a shared bookmark, or someone other than its owner can change or unshare it.
+
+## F32. Audit trail
+
+Purpose: Super-Admins can see who did what, where and when.
+Traces to: §P2.4, `[R14, R18]`.
+
+- [ ] AC-294 THE SYSTEM SHALL record every sign-in, permission change, proposal, approval, rejection, restore and data-source change, each with who, what, which folder and when.
+      Fails when: an event of one of those kinds is missing from the record.
+- [ ] AC-295 WHEN a Super-Admin opens the audit trail, THE SYSTEM SHALL list its records newest first, filterable by user, event and folder, and SHALL show it to no one else.
+      Fails when: a user who isn't a Super-Admin can open it, or a filter returns a record that doesn't match it.
+- [ ] AC-296 THE SYSTEM SHALL remove audit records older than the retention the deployment configures, and one year when none is configured (`[R18]`).
+      Fails when: a record older than the retention remains, or a younger one is removed.
+
+## F33. Jobs and Schedules by folder
+
+Purpose: read-write members run and schedule their own folders' rollups.
+Traces to: `[R18]`; F17.
+
+- [ ] AC-297 WHILE a user is a read-write member of some folders and not a Super-Admin, THE SYSTEM SHALL show them in Jobs and Schedules only the pre-aggregations, query records, builds and schedules of the models in those folders, and let them build and schedule those.
+      Fails when: they see, or act on, another folder's rollups, builds, schedules or query records.
+
+## F34. Credentials
+
+Purpose: data-source credentials are unreadable without the deployment's key.
+Traces to: §P2.4, `[R14, R15]`; F18's AC-164.
+
+- [ ] AC-298 THE SYSTEM SHALL store data-source credentials in the metadata database encrypted with a key from the deployment's Secret, so the database alone can't reveal them.
+      Fails when: a credential can be read from a dump of the metadata database without the key.
+
+## F35. Charts from the UI review and R8
+
+Purpose: the UI review's accepted chart gaps, and the two chart types from the Superset parity exercise.
+Traces to: §P2.6 H, `[R8, R16, R19]`, `[backlog]` §5. Rewritten phase-1 criteria: AC-041, AC-220.
+
+- [ ] AC-299 WHEN a chart's value-axis labels would overlap at the tile's width, THE SYSTEM SHALL thin or abbreviate them so no two overlap (the UI review's gap 4).
+      Fails when: two value-axis labels overlap in a drawn tile.
+- [ ] AC-300 WHEN the user orders a chart's series in Customize, THE SYSTEM SHALL draw, stack and list the series in that order, and keep it after a refresh (gap 7).
+      Fails when: series stack alphabetically after another order was set, or the order changes on refresh.
+- [ ] AC-301 THE SYSTEM SHALL order a table's columns as the wells order its fields: time and dimensions first, then measures in the Metrics well's order (gap 9).
+      Fails when: a table's columns differ from the wells' order.
+- [ ] AC-302 WHEN the user selects a markdown tile in edit mode, THE SYSTEM SHALL let them edit its text, and render the change (gap 12).
+      Fails when: a markdown tile's text can't be changed in the UI.
+- [ ] AC-303 WHEN data labels are on for a pie or donut, THE SYSTEM SHALL draw each label whole, moving or hiding the labels that don't fit (gap 3).
+      Fails when: a slice's label shows a truncated value such as "$…".
+- [ ] AC-304 WHILE the window is narrower than 1,024 pixels, THE SYSTEM SHALL fit the app bar within it, folding navigation and search into a menu (the UI review's narrow-shell change).
+      Fails when: a page scrolls sideways at 390 pixels wide.
+- [ ] AC-305 WHEN a chart has one measure and a dimension holding ISO-3 country codes, THE SYSTEM SHALL offer a country map that colours each country by the measure on a sequential scale with a legend, and names any codes it can't place (`[R8]`).
+      Fails when: a country code in the data isn't coloured, the map has no legend, or an unplaced code isn't named.
+- [ ] AC-306 WHEN the user draws a box plot of a numeric value by a category, THE SYSTEM SHALL draw one box per category with its median and quartiles. Its whiskers follow a chart option: by default Tukey's 1.5 × IQR, with values beyond drawn as dots, or else the minimum and maximum (`[R8, R19]`).
+      Fails when: a box's median or quartiles differ from those computed from the rows, or the whiskers don't follow the chosen option.
+
+## F36. Phase 2's performance and regression
+
+Purpose: security costs no speed, and phase 1 still works with security off.
+Traces to: §P2.3, `[R13, R19]`.
+
+- [ ] AC-307 WHILE security is enabled, WHEN a signed-in user opens a 10-chart dashboard in a folder with its own models, THE SYSTEM SHALL render every tile within 3 seconds at the 95th percentile (S2).
+      Fails when: the p95 exceeds 3 seconds.
+- [ ] AC-308 WHILE security is disabled, THE SYSTEM SHALL pass the phase-1 end-to-end suite, its editing steps going through the workspace and a self-approved proposal. Checked once, at the end of phase 2 (S3).
+      Fails when: a phase-1 end-to-end test fails.
 
 ## Non-goals (phase 1)
 
@@ -811,9 +1086,24 @@ Copied from [requirements.md §7](./requirements.md):
 - Real-time subscriptions and auto-refreshing tiles.
 - Selling, distributing or open-sourcing wechart.
 
+## Non-goals (phase 2)
+
+Copied from [requirements.md §P2.7](./requirements.md):
+
+- Individual users on folders: folders take AD groups only.
+- User attributes in Cube's security context: groups only, for now.
+- Notices outside the app, such as email or chat.
+- Testing more than one identity provider during development. Entra ID and brokers are checked once, at the end of phase 2 (AC-258).
+
+Phase 1's non-goals still stand, except these, which phase 2 brings in:
+- users, groups, roles and SSO (F25–F26);
+- maps, as the country map (AC-305).
+
+Per-folder models (F28) aren't multi-tenancy in phase 1's sense: they're one organisation's folders, not per-tenant deployments. That non-goal stands.
+
 ## Traceability
 
-The table still names the criteria moved to phase 2 on 2026-09-25, since those requirements trace to them: AC-047 … AC-052, AC-093, AC-097, AC-104, AC-116, AC-145, AC-150, AC-151, AC-153 … AC-155, AC-157 … AC-161, AC-163, AC-164, AC-176, AC-180, AC-187, AC-201, AC-220, AC-234 and AC-246. Their text is in `docs/phase-2/backlog.md` §1.
+The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec under their own IDs (`[R16]`): AC-047 … AC-052, AC-093, AC-097, AC-104, AC-116, AC-145, AC-150, AC-151, AC-153 … AC-155, AC-157 … AC-161, AC-163, AC-164, AC-176, AC-180, AC-187, AC-201, AC-220, AC-234 and AC-246. Phase 2's own requirements are traced in the second table.
 
 | Requirement                                                                                   | Acceptance criteria                                                   |
 | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -855,3 +1145,39 @@ The table still names the criteria moved to phase 2 on 2026-09-25, since those r
 | Scope: a rollup Cube can't join is refused at publish (the user, 2026-09-25)                  | AC-235                                                                |
 | Scope: the chart tile's menu, DSH-08 (the user, 2026-09-25)                                   | AC-199, AC-236 … AC-247                                               |
 | Constraint: self-hosted Kubernetes; docker-desktop for e2e `[R4]`                             | AC-248                                                                |
+
+**Phase 2** ([requirements.md](./requirements.md) Part 2)
+
+| Requirement | Acceptance criteria |
+|---|---|
+| §P2.2 Sign-in for everyone when security is on `[R11]` | AC-251, AC-252, AC-253 |
+| §P2.4 Security off is single-user mode, with phase 2's flows `[P2 input, R19]` | AC-254 |
+| §P2.2 Users in hundreds of groups; the test uses 20 `[R12, R19]` | AC-255 |
+| §P2.2 The Super-Admin group, named in the deployment's configuration `[R18]` | AC-256, AC-265 |
+| §P2.4 Any OIDC provider; the development provider; Entra ID or a broker at phase end `[R14, R15]` | AC-252, AC-257, AC-258 |
+| §P2.2 Read-only and read-write groups per folder, inherited when unset, groups only `[P2 input, R11]` | AC-259, AC-260 |
+| §P2.2 A grant reaches down to every descendant `[P2 input, R12]` | AC-261 |
+| §P2.2 Visibility up the path; read-only users see dashboards only `[R12, R19]` | AC-262, AC-263 |
+| §P2.2 No access means nothing shown `[P2 input]` | AC-264 |
+| §P2.2 Roles: Super-Admin, Admin, User `[P2 input, R12]` | AC-001, AC-259, AC-265, AC-266, AC-277 |
+| §P2.4 Phase 1's content, when security is first turned on `[R17]` | AC-267 |
+| §P2.3 S1 Zero access leaks `[R13]` | AC-268, AC-264, AC-276 |
+| §P2.6 C Folders hold models and data sources; no Model tab; a Data sources list `[P2 input, R19]` | AC-001, AC-131, AC-157, AC-192, AC-194, AC-222, AC-233, AC-269 |
+| §P2.6 D Names unique per folder `[P2 input]` | AC-249, AC-270, AC-271 |
+| §P2.6 D Cube and data-source resolution `[P2 input, R17, R19]` | AC-272, AC-273, AC-274, AC-275 |
+| §P2.6 E Workspaces: private, copy in, resolution, target folders `[P2 input, R12, R17, R18]` | AC-276 … AC-283 |
+| §P2.6 E Proposals, approval, rejection, history, direct actions `[R12, R17, R18]` | AC-284 … AC-291 |
+| §P2.6 F Personal bookmarks, shareable `[R12]` | AC-292, AC-293 |
+| §P2.4 Groups in Cube's security context `[R14]` | AC-008 |
+| §P2.4 Audit trail and its retention `[R14, R18]` | AC-294, AC-295, AC-296 |
+| §P2.2 Jobs and Schedules for a folder's read-write members `[R18]` | AC-297 |
+| §P2.4 Credentials encrypted in the metadata database `[R14, R15]` | AC-298, AC-164, AC-280 |
+| §P2.6 G Data sources: all of F18, per folder `[R16]` | AC-157 … AC-161, AC-163, AC-164 |
+| §P2.6 H Quick calculations (F6) `[R16]` | AC-047 … AC-052 |
+| §P2.6 H Scheduling and build history (F17) `[R16]` | AC-145, AC-150, AC-151, AC-153 … AC-155, AC-234 |
+| §P2.6 H Markings refinements and keyboard gaps `[R16]` | AC-093, AC-097, AC-104, AC-116, AC-176 |
+| §P2.6 H Country map and box plot `[R8, R19]` | AC-305, AC-306 |
+| §P2.6 H The UI review's eight spec changes `[R16]` | AC-041, AC-220, AC-299 … AC-304 |
+| §P2.6 H UI fixes: style conformance, AC-201/220/246, Edge `[R16]` | AC-187, AC-201, AC-220, AC-246, AC-180 |
+| §P2.3 S2 Speed holds with security on `[R13]` | AC-307 |
+| §P2.3 S3 Phase 1 intact with security off, at phase end `[R13, R19]` | AC-308 |
