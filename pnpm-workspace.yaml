@@ -1,3 +1,9 @@
 packages:
   - 'packages/*'
   - 'e2e'
+
+# Dependencies' install scripts, reviewed (pnpm's strictDepBuilds):
+# @ibm/plex-mono's postinstall only sends IBM telemetry; the fonts ship
+# prebuilt, so it never runs (docs/research/ibm-plex-mono.md, Install).
+allowBuilds:
+  '@ibm/plex-mono': false

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { expect, test } from '@playwright/test';
 
 import { ownCubeFile, PUBLISHED } from './model-files';
@@ -700,4 +702,45 @@ test('a member’s row shows its type, SQL and badges, and opens on the fields t
   await expect(id.getByLabel('Latitude', { exact: true })).toHaveCount(0);
   await expect(id.getByLabel('Values', { exact: true })).toHaveCount(0);
   await expect(id.getByRole('group', { name: 'Case' })).toHaveCount(0);
+});
+
+/**
+ * T234 / AC-223, its code face: `Fails when: … code is set in a face other
+ * than IBM Plex Mono.` Named in the CSS is not drawn in it: a machine without
+ * the face installed drew the fallback. So the face is served with the app —
+ * IBM's own file, unmodified, as the user chose (2026-09-24;
+ * docs/research/ibm-plex-mono.md) — and this checks that it loaded, that the
+ * app served it, and that its bytes are IBM's.
+ */
+test('code is drawn in IBM Plex Mono, served with the app as IBM ships it', async ({ page }) => {
+  const served: string[] = [];
+  page.on('response', (response) => {
+    if (/IBMPlexMono-Regular-[^/]*\.woff2$/.test(response.url()) && response.ok())
+      served.push(response.url());
+  });
+  await page.goto('/model/files/cubes%2Forders.yml');
+  const code = page.locator('.cm-content');
+  await expect(code).toBeVisible();
+  expect(await code.evaluate((node) => getComputedStyle(node).fontFamily)).toMatch(
+    /^"?IBM Plex Mono"?,/,
+  );
+
+  // Loaded — the face the CSS names, from the file the app serves (no
+  // local(), so an installed copy cannot stand in for it).
+  const loaded = await page.evaluate(async () => {
+    await document.fonts.ready;
+    return [...document.fonts]
+      .filter((face) => face.family.replace(/["']/g, '') === 'IBM Plex Mono')
+      .filter((face) => face.status === 'loaded')
+      .map((face) => `${face.weight === 'normal' ? '400' : face.weight} ${face.style}`);
+  });
+  expect(loaded).toContain('400 normal');
+  expect(served.length).toBeGreaterThan(0);
+  expect(new URL(served[0] ?? '').origin).toBe(new URL(page.url()).origin);
+
+  // Unmodified: IBM's own bytes (the research's hash of the package's file).
+  const bytes = await (await page.request.get(served[0] ?? '')).body();
+  expect(createHash('sha256').update(bytes).digest('base64')).toBe(
+    'uiBEl/FrbTNM7p0eljqDG3PjpW4dYwCoSJ0Y33IUs1A=',
+  );
 });

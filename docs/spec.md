@@ -701,7 +701,7 @@ Model workspace:
 
 - [x] AC-222 WHILE the Model workspace is open, THE SYSTEM SHALL show a tree of the model's files beside the editor, open the chosen file in place with its path in the URL, offer New cube and New view from the tree, and mark each file that has problems.
       Fails when: moving to another file requires leaving the editor, New cube or New view is missing, or a file with an error carries no mark in the tree.
-- [ ] AC-223 THE SYSTEM SHALL lay the model editor out as full-height panes, each with its own header row and scrolling — the form, and the code with its Problems panel docked beneath it counting errors and warnings — with code and file paths in direction.md's code face.
+- [x] AC-223 THE SYSTEM SHALL lay the model editor out as full-height panes, each with its own header row and scrolling — the form, and the code with its Problems panel docked beneath it counting errors and warnings — with code and file paths in direction.md's code face.
       Fails when: the page itself scrolls at 1,440 × 900, Problems gives no count of warnings, or code is set in a face other than IBM Plex Mono.
 - [x] AC-224 THE SYSTEM SHALL edit every field that refers to model members — pre-aggregation measures, dimensions, segments, rollups and time dimension, drill members, hierarchy levels, a view's includes and excludes — with a picker of the members it may refer to, and a join's target with a list of cubes (direction.md §7b).
       Fails when: any of those fields accepts free text.
