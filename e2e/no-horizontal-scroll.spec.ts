@@ -212,6 +212,10 @@ test('a three-column chart tile keeps its title beside its badges at 1,440 px (T
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = 'http://localhost:4100/api';
   const name = `Narrow tiles ${String(Date.now())}`;
+  // A title of its own, as long as a seeded chart's: sharing the seed's
+  // "Orders by category and status" gave model.spec.ts's list of the charts
+  // using orders.count two items of that name.
+  const chartTitle = `Narrow tile chart ${String(Date.now())}`;
   const { id } = (await (
     await request.post(`${api}/documents`, {
       data: { kind: 'dashboard', title: name, folderId: 'root' },
@@ -219,7 +223,7 @@ test('a three-column chart tile keeps its title beside its badges at 1,440 px (T
   ).json()) as { id: string };
   const chart = (await (
     await request.post(`${api}/documents`, {
-      data: { kind: 'chart', title: 'Orders by category and status', folderId: 'root' },
+      data: { kind: 'chart', title: chartTitle, folderId: 'root' },
     })
   ).json()) as { id: string };
   await request.put(`${api}/documents/chart/${chart.id}`, {
@@ -227,7 +231,7 @@ test('a three-column chart tile keeps its title beside its badges at 1,440 px (T
       version: 1,
       body: {
         schemaVersion: 1,
-        title: 'Orders by category and status',
+        title: chartTitle,
         owner: 'admin',
         localToDashboardId: id,
         chart: {
