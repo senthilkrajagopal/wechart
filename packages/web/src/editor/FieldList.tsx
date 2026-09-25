@@ -28,6 +28,43 @@ const MEMBER_ICON: Record<string, string> = {
   segment: '⊂',
 };
 
+/**
+ * A dimension's type icon, as direction.md §5 has it ("always shown with a
+ * type icon: Aa, #, clock, ⊙ (geo), ◐ (boolean)") and the prototype's
+ * `UI.ficon` draws it (T257).
+ */
+const DIMENSION_TYPE_ICON: Record<string, string> = {
+  number: '#',
+  boolean: '◐',
+  geo: '⊙',
+  time: '◷',
+};
+
+/** The glyph on a field's role chip: Σ for a measure, its type's for a dimension. */
+export function fieldIconOf(member: Pick<Member, 'kind' | 'type'>): string {
+  if (member.kind === 'dimension') return DIMENSION_TYPE_ICON[member.type] ?? 'Aa';
+  return MEMBER_ICON[member.kind] ?? 'Aa';
+}
+
+/**
+ * A field's role chip (the prototype's `.ficon`): its glyph on its role's
+ * tint — orange for a measure, blue for the rest (T257, AC-187). Decorative:
+ * the field's kind is said by its group heading and its meta, never by the
+ * chip alone (direction.md rule 3).
+ */
+export function FieldIcon({ member }: { member: Pick<Member, 'kind' | 'type'> }) {
+  return (
+    <span
+      className="field-row__icon"
+      data-icon={member.kind}
+      data-role={member.kind === 'measure' ? 'measure' : 'dimension'}
+      aria-hidden="true"
+    >
+      {fieldIconOf(member)}
+    </span>
+  );
+}
+
 export interface FieldListProps {
   /** Lifted so the editor can build a query from the chosen cube's members. */
   readonly cubeName?: string;
@@ -95,35 +132,41 @@ export function FieldList({
 
   return (
     <div className="field-list">
-      <label htmlFor="cube-picker">Cube or view</label>
-      <select
-        id="cube-picker"
-        className="select-sm"
-        value={cubeName}
-        onChange={(event) => setCubeName(event.target.value)}
-      >
-        <option value="">Choose a cube or view…</option>
-        {cubes.map((cube) => (
-          <option key={cube.name} value={cube.name}>
-            {cube.title}
-            {cube.isView ? ' (view)' : ''}
-          </option>
-        ))}
-      </select>
+      <div className="field-list__source">
+        <label htmlFor="cube-picker">Cube or view</label>
+        <select
+          id="cube-picker"
+          className="select-sm"
+          value={cubeName}
+          onChange={(event) => setCubeName(event.target.value)}
+        >
+          <option value="">Choose a cube or view…</option>
+          {cubes.map((cube) => (
+            <option key={cube.name} value={cube.name}>
+              {cube.title}
+              {cube.isView ? ' (view)' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {cubeName === '' ? (
-        <p data-testid="no-cube-chosen">Choose a cube or view to see its fields.</p>
+        <p className="field-list__none" data-testid="no-cube-chosen">
+          Choose a cube or view to see its fields.
+        </p>
       ) : (
         <>
-          {/* Narrowed as it is typed (AC-215). */}
-          <input
-            type="search"
-            className="input-sm field-list__search"
-            aria-label="Search fields"
-            placeholder="Search fields"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
+          {/* Narrowed as it is typed (AC-215); the prototype's .tree-search. */}
+          <div className="field-list__search-box">
+            <input
+              type="search"
+              className="input-sm field-list__search"
+              aria-label="Search fields"
+              placeholder="Search fields"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
           {found.length === 0 ? (
             <p className="field-list__none">
               {search.trim() === ''
@@ -191,17 +234,18 @@ function FieldRow({
     <>
       {/* Type shown as an icon and a group heading, never colour alone
           (direction.md rule 3). */}
-      <span data-icon={member.kind} aria-hidden="true">
-        {MEMBER_ICON[member.kind]}
+      <FieldIcon member={member} />
+      <span className="field-row__name">
+        {member.shortTitle}
+        {/* The prototype's 6 px accent dot after the name (.frow.used), said
+            in words to assistive technology (T257). */}
+        {used ? (
+          <span className="field-row__used" title="In the chart">
+            <span className="visually-hidden">, in the chart</span>
+          </span>
+        ) : null}
       </span>
-      <span className="field-row__name">{member.shortTitle}</span>
       <span className="field-row__meta">{fieldMetaOf(member)}</span>
-      {used ? (
-        <span className="field-row__used" title="In the chart">
-          <span aria-hidden="true">✓</span>
-          <span className="visually-hidden">, in the chart</span>
-        </span>
-      ) : null}
     </>
   );
   const drag = {

@@ -3479,11 +3479,12 @@ main:has(.chart-editor) {
   flex-direction: column;
   padding: 0;
 }
+/* The prototype's .editor-page: 280 | the preview | 360 (T257). */
 .chart-editor {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  grid-template-columns: 280px minmax(0, 1fr) 360px;
   grid-template-rows: auto minmax(0, 1fr);
 }
 .chart-editor__head {
@@ -3511,8 +3512,10 @@ main:has(.chart-editor) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The title reads as a heading until it is pointed at or typed in. */
-.chart-editor__title {
+/* The title reads as a heading until it is pointed at or typed in. Named with
+   the global input rule's own :not()s, which otherwise outrank a class and
+   drew it as a bordered field at rest (T257). */
+input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']) {
   flex: 0 1 420px;
   min-width: 120px;
   height: 32px;
@@ -3525,13 +3528,23 @@ main:has(.chart-editor) {
   font-size: 15px;
   font-weight: 600;
 }
-.chart-editor__title:hover,
-.chart-editor__title:focus { border-color: var(--wc-border-strong); background: var(--wc-bg-surface); }
+input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):hover,
+input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):focus {
+  border-color: var(--wc-border-strong);
+  background: var(--wc-bg-surface);
+}
 .chart-editor__meta { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); white-space: nowrap; }
 .chart-editor__spacer { flex: 1; }
+/* Undo and Redo are .icon-button (the prototype's .iconbtn); with nothing to
+   step through, at the prototype's opacity .4 (editor.js 408, T257). */
+.chart-editor__head .icon-button:disabled { opacity: 0.4; }
 .chart-editor__fields,
 .chart-editor__inspector { min-height: 0; overflow: auto; background: var(--wc-bg-surface); }
-.chart-editor__fields { padding: 12px; border-right: 1px solid var(--wc-border-subtle); }
+.chart-editor__fields { padding: 0 0 12px; border-right: 1px solid var(--wc-border-subtle); }
+/* The inspector's small controls are the prototype's .input.sm and .select.sm:
+   28 px at 12 px (T257). */
+.chart-editor input.input-sm:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']),
+.chart-editor .select-sm { height: 28px; font-size: 12px; }
 .chart-editor__inspector { display: flex; flex-direction: column; border-left: 1px solid var(--wc-border-subtle); }
 .chart-editor__inspector-body {
   flex: 1;
@@ -3557,25 +3570,119 @@ main:has(.chart-editor) {
   flex-direction: column;
   gap: 8px;
 }
-.chart-editor__empty { margin: auto; color: var(--wc-text-secondary); }
+/* Opened on its own, the preview is a tile filling the canvas, as the
+   prototype's (editor.js 414: height 100%, min-height 240px; T257). */
+.chart-editor__canvas > .preview-frame__tile[data-size='fill'] { flex: 1 1 auto; min-height: 240px; }
+/* The empty editor: the prototype's two lines, centred in the preview's tile
+   (editor.js 481, T257). */
+.chart-editor__canvas > .chart-editor__empty-tile { display: grid; place-items: center; }
+.chart-editor__empty { text-align: center; }
+.chart-editor__empty-head {
+  margin: 0;
+  font-size: var(--wc-text-md-size);
+  line-height: var(--wc-text-md-line);
+  font-weight: 600;
+  color: var(--wc-text-primary);
+}
+.chart-editor__empty-line {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-secondary);
+}
 .chart-editor__missing { margin: auto; max-width: 480px; }
-/* The drawer at the foot of the preview (AC-214): the only place result rows
-   are printed, its height its own so the preview keeps the rest. */
+/* The drawer at the foot of the preview (AC-214), the prototype's .drawer
+   (T257): its tab strip always there, and open, 220 px with the strip — the
+   only place result rows are printed. */
 .chart-editor__center .results-drawer {
   flex: none;
-  max-height: 40%;
-  overflow: auto;
-  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
   border-top: 1px solid var(--wc-border-subtle);
   background: var(--wc-bg-surface);
 }
+.chart-editor__center .results-drawer[data-open='true'] { height: 220px; }
+.results-drawer__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.results-drawer__tabs { display: flex; flex: 1; gap: 2px; min-width: 0; overflow-x: auto; }
+/* The prototype's .tabs button. */
+.results-drawer__tabs [role='tab'] {
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.results-drawer__tabs [role='tab']:hover:not([aria-selected='true']) { background: none; color: var(--wc-text-primary); }
+.results-drawer__tabs [role='tab'][aria-selected='true'] {
+  color: var(--wc-accent);
+  border-bottom-color: var(--wc-accent);
+}
+/* Drawn inside the strip, which clips (T182's rule). */
+.results-drawer__tabs [role='tab']:focus-visible { outline-offset: -2px; }
+.results-drawer__toggle { width: 28px; height: 28px; flex: none; }
+.results-drawer__body { flex: 1; min-height: 0; overflow: auto; }
+.results-drawer__body > .state-line { margin: 8px 12px; }
+.results-drawer__body:focus-visible { outline-offset: -2px; }
+.results-drawer__query {
+  margin: 0;
+  padding: 12px;
+  font-family: var(--wc-font-code);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+}
+/* A measure's figures are set right, as the prototype's td.num (T257). */
+.grid-table th.num,
+.grid-table td.num { text-align: right; }
 
+/* A well (the prototype's .field + .well, T257): a 12/600 label over a dashed
+   box holding the pills and the "+" that adds to it. */
+.well-field { display: grid; gap: 4px; }
+.well-field__label {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+}
 .well {
-  padding: 8px;
-  border: 1px solid var(--wc-border-subtle);
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 6px;
+  border: 1px dashed var(--wc-border-strong);
   border-radius: 6px;
   background: var(--wc-bg-surface);
 }
+/* The prototype's .addbtn: borderless, muted, until pointed at. */
+.addbtn {
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--wc-text-muted);
+  font-size: 12px;
+}
+.addbtn:hover { color: var(--wc-text-primary); }
+/* Its .picker is 240 px (index.html 961). */
+.well .menu-button__menu { width: 240px; }
+.well .menu-button__item .field-row__icon { flex: none; }
+.wells__options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: end; }
 
 /* The chart editor opened over the dashboard from a tile (T032). Laid out
    as the settings page is: its own bar in place of the dashboard's, and the
@@ -3641,20 +3748,32 @@ main:has(.chart-editor) {
 /* Actual size or Fit (T032, direction.md section 2). The frame is the tile's
    own chrome, grid-tile, so actual size is the tile and not a likeness. */
 .preview-frame { display: flex; flex-direction: column; gap: 8px; }
-.preview-frame__sizes { display: flex; gap: 4px; }
-.preview-frame__sizes button {
-  height: 28px;
-  padding: 0 12px;
+/* The prototype's .seg (editor.js 414, index.html 609; T257): a segmented
+   control, not two primary buttons — the pressed one on the accent's tint. */
+.preview-frame__sizes {
+  display: inline-flex;
+  align-self: flex-start;
   border: 1px solid var(--wc-border-strong);
   border-radius: 4px;
+  overflow: hidden;
+}
+.preview-frame__sizes button {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-left: 1px solid var(--wc-border-subtle);
+  border-radius: 0;
   background: var(--wc-bg-surface);
   color: var(--wc-text-primary);
+  font-size: 12px;
   cursor: pointer;
 }
-.preview-frame__sizes button[aria-pressed='true'] {
-  border-color: var(--wc-accent);
-  background: var(--wc-accent);
-  color: var(--wc-text-on-accent);
+.preview-frame__sizes button:first-child { border-left: 0; }
+.preview-frame__sizes button[aria-pressed='true'],
+.preview-frame__sizes button[aria-pressed='true']:hover {
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-weight: 600;
 }
 .preview-frame__tile { flex: none; }
 
@@ -3751,8 +3870,13 @@ main:has(.chart-editor) {
 .wells ul { margin: 0; padding: 0; list-style: none; }
 
 /* Legality is an outline plus a written reason, never colour alone
-   (direction.md rule 3, AC-027). */
-.well[data-drop='legal'] { outline: 2px solid var(--wc-accent); }
+   (direction.md rule 3, AC-027); a legal well also takes the prototype's
+   .well.legal tint. */
+.well[data-drop='legal'] {
+  outline: 2px solid var(--wc-accent);
+  border-color: var(--wc-accent);
+  background: var(--wc-bg-accent-soft);
+}
 .well[data-drop='illegal'] { outline: 2px dashed var(--wc-border-strong); }
 
 .well__reason {
@@ -3784,67 +3908,128 @@ main:has(.chart-editor) {
 .axis-panel { display: grid; gap: 4px; margin: 0 0 8px; padding: 8px; border: 1px solid var(--wc-border-subtle); border-radius: 6px; }
 .axis-panel > legend { padding: 0 4px; font-size: 12px; font-weight: 600; color: var(--wc-text-secondary); }
 .axis-panel > label { font-size: 12px; color: var(--wc-text-secondary); }
-.field-list { display: grid; gap: 8px; align-content: start; }
-.field-list > label { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--wc-text-secondary); }
+/* The chart editor's field list (AC-215): the prototype's field pane (T257) —
+   the source and the search each padded 8 12, then each cube's .tgroup. */
+.field-list { display: grid; align-content: start; }
+.field-list__source { display: grid; gap: 4px; padding: 8px 12px 0; }
+.field-list__source > label { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--wc-text-secondary); }
+.field-list__search-box { padding: 8px 12px; }
+.field-list__search { width: 100%; }
 .field-list ul { margin: 0; padding: 0; list-style: none; }
+/* By type within a cube (AC-025), which the prototype's list does not say. */
 .field-list h4 {
-  margin: 6px 0 2px;
+  margin: 4px 0 0;
+  padding: 0 12px;
   font-size: 12px;
   line-height: 16px;
   font-weight: 600;
-  color: var(--wc-text-secondary);
+  color: var(--wc-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.field-list__none { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+.field-list__none { margin: 0; padding: 8px 12px; font-size: 12px; color: var(--wc-text-secondary); }
 /* A cube's fields under its name and count (AC-215, the prototype's .tgroup). */
-.field-list__cube { display: grid; }
+.field-list__cube { display: grid; padding: 4px 0; }
 .field-list__cube-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 4px 0 0;
+  height: 28px;
+  margin: 0;
+  padding: 0 12px;
   font-size: 12px;
   line-height: 20px;
   font-weight: 600;
-  color: var(--wc-text-primary);
+  color: var(--wc-text-secondary);
 }
-.field-list__count { margin-left: auto; font-weight: 400; color: var(--wc-text-secondary); font-variant-numeric: tabular-nums; }
-/* One field (the prototype's .frow): icon, title, what it is, in the chart. */
+.field-list__count { margin-left: auto; font-weight: 400; color: var(--wc-text-muted); font-variant-numeric: tabular-nums; }
+/* One field (the prototype's .frow): chip, title with its "used" dot, what it is. */
 .field-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 0 6px;
+  gap: 8px;
+  height: 28px;
+  margin: 0 4px;
+  padding: 0 12px 0 22px;
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 12px;
   cursor: grab;
+  user-select: none;
 }
-.field-row[role='button']:hover { background: var(--wc-bg-subtle); }
-.field-row[data-used='true'] .field-row__name { font-weight: 600; }
+.field-row[role='button']:hover { background: var(--wc-bg-hover); }
 .field-row__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.field-row__meta { font-size: 12px; color: var(--wc-text-secondary); }
-.field-row__used { color: var(--wc-accent); }
+.field-row__meta { font-size: 12px; color: var(--wc-text-muted); }
+/* The prototype's .ficon: an 18 px chip in the role's colours. */
+.field-row__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-family: var(--wc-font-code);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--wc-role-dimension);
+  background: var(--wc-bg-role-dimension-soft);
+}
+.field-row__icon[data-role='measure'] { color: var(--wc-role-measure); background: var(--wc-bg-role-measure-soft); }
+/* The prototype's .frow.used .fname::after: a 6 px accent dot after the name. */
+.field-row__used {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--wc-accent);
+  vertical-align: middle;
+}
 /* A field in a well (AC-216, the prototype's .pill): its title, its tag or
-   grain, and ×. */
-.well__pills { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+   grain, and ×, in its role's colours (T257). */
+.well__pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.well__pills:empty { display: none; }
 .pill {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   max-width: 100%;
-  min-height: 24px;
-  padding: 0 4px 0 8px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 12px;
-  background: var(--wc-bg-subtle);
+  height: 24px;
+  padding: 0 4px 0 6px;
+  border: 0;
+  border-radius: 4px;
   font-size: 12px;
+  font-weight: 600;
+  color: var(--wc-role-dimension);
+  background: var(--wc-bg-role-dimension-soft);
 }
+.pill--measure { color: var(--wc-role-measure); background: var(--wc-bg-role-measure-soft); }
 .pill__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pill__tag { font-size: 12px; color: var(--wc-text-secondary); }
-.pill__grain { height: 20px; border: 0; background: none; color: var(--wc-text-secondary); font-size: 12px; }
-.pill__remove { border: 0; background: none; color: var(--wc-text-secondary); cursor: pointer; padding: 0 4px; }
+/* The prototype's .agg is 400 at opacity .85; at full strength here, since
+   .85 takes the measure's ink under AA on its tint (rule 2). */
+.pill__tag { font-size: 12px; font-weight: 400; color: inherit; }
+.pill__grain {
+  height: 20px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 400;
+}
+.pill__remove {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.pill__remove:hover:not(:disabled) { background: rgba(127, 127, 127, 0.2); }
 
 /* Above the sticky app bar (z-index 10): a modal dialog leaves nothing behind
    it to click, the workspace tabs included (N9). */

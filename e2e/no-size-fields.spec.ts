@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { wellPicker } from './wells';
+
 /**
  * T061 / AC-055, second half: THE SYSTEM SHALL offer no numeric width or
  * height field anywhere in the editor (direction.md rule 36).
@@ -79,9 +81,9 @@ test('the chart editor offers no width or height field either', async ({ page })
   // would be a sweep of nothing. Filling the wells brings out the chart-type
   // chooser, the axis editor and the tile itself — the panels where a size
   // field would actually be reached for.
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
-  await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
   await expect(page.getByTestId('result-row-count')).toBeVisible();
 
   expect(await sizeFields(page)).toEqual([]);

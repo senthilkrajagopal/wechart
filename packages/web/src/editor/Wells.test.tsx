@@ -96,6 +96,47 @@ describe('marking wells during a drag (AC-027)', () => {
   });
 });
 
+/**
+ * AC-026 and rule 11: every well can be filled from a keyboard-reachable "+"
+ * picker — since T257 the prototype's inline "+ metric" button and its menu.
+ */
+describe('each well’s "+" picker (AC-026)', () => {
+  it('offers what the well takes and does not hold, and adds the one chosen', async () => {
+    const onAdd = vi.fn();
+    const total: Member = { ...measure, name: 'orders.total', title: 'Orders Total' };
+    render(
+      <Wells
+        spec={{ ...emptySpec('orders'), measures: ['orders.count'] }}
+        available={[measure, total, timeDimension]}
+        onAdd={onAdd}
+        onRemove={vi.fn()}
+      />,
+    );
+    const add = screen.getByRole('button', { name: 'Add to Metrics' });
+    expect(add.textContent).toBe('+ metric');
+
+    await userEvent.click(add);
+    const items = screen.getAllByRole('menuitem').map((item) => item.textContent);
+    expect(items).toEqual(['ΣOrders Total']);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Orders Total' }));
+    expect(onAdd).toHaveBeenCalledWith('measures', 'orders.total');
+  });
+
+  it('says so when the well can take nothing more', async () => {
+    render(
+      <Wells
+        spec={{ ...emptySpec('orders'), measures: ['orders.count'] }}
+        available={[measure]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Add to Metrics' }));
+    const none = screen.getByRole('menuitem', { name: 'Nothing more to add from this cube' });
+    expect(none.getAttribute('aria-disabled')).toBe('true');
+  });
+});
+
 describe('rejectionReason', () => {
   const measuresWell = WELLS.find((well) => well.name === 'measures')!;
 
@@ -207,7 +248,9 @@ describe('the wells’ pills, Filters and Top N (AC-216)', () => {
       </QueryClientProvider>,
     );
     expect(screen.getByTestId('well-filters')).toBeTruthy();
-    await userEvent.selectOptions(screen.getByTestId('add-filters'), 'orders.status');
+    // The well's "+ filter", the prototype's inline picker (T257).
+    await userEvent.click(screen.getByRole('button', { name: 'Add a filter' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Orders Status' }));
     expect(onFilters).toHaveBeenLastCalledWith([
       { member: 'orders.status', operator: 'equals', values: [] },
     ]);

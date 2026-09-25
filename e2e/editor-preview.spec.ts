@@ -513,7 +513,7 @@ test('the editor’s results drawer writes a value in its member’s format (AC-
   await page.getByTestId('edit-chart-tile-revenue').click();
   await expect(overlay(page)).toBeVisible();
 
-  await overlay(page).getByRole('button', { name: 'Results' }).click();
+  await overlay(page).getByRole('tab', { name: 'Results', exact: true }).click();
 
   const cells = overlay(page).getByTestId('drawer-result-rows').locator('td');
   await expect(cells.filter({ hasText: /^\$[\d,]+(\.\d?[1-9])?$/ }).first()).toBeVisible();

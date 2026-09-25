@@ -2655,3 +2655,477 @@ test.describe('T248: the edit sidebar', () => {
     });
   });
 });
+
+/**
+ * T257 (AC-187, AC-214): the chart editor as the prototype draws it — its
+ * header's icon buttons and heading-like title, the field list's role chips
+ * and "used" dot, dashed wells with an inline "+" picker and role-tinted
+ * pills, the preview in a tile, the drawer's tab strip and data grid, and the
+ * empty state in the tile (recheck-chart-editor F4–F7, F18, N3, N4).
+ *
+ * Every value was measured on the prototype's editor (editor.js 404–481,
+ * index.html 504–1124) at 1,440 × 900 on 2026-09-25; the rule each one comes
+ * from is quoted beside the check that uses it.
+ */
+test.describe('T257: the chart editor', () => {
+  const EDITOR = '/explore/charts/seed-chart-axes/edit';
+  const editorReady = async (page: Page) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(EDITOR);
+    await expect(page.getByTestId('result-row-count')).toBeVisible();
+    // At rest: nothing focused, nothing hovered.
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.mouse.move(0, 899);
+  };
+
+  test('the header: Undo and Redo are 32 px icon buttons, the title reads as a heading', async ({
+    page,
+  }) => {
+    await editorReady(page);
+    const head = page.getByTestId('editor-bar');
+    // .iconbtn { width: 32px; height: 32px; border: 1px solid transparent; border-radius: 6px;
+    //            background: none; color: var(--text-secondary) }, "↶" and "↷" (editor.js 408)
+    for (const [name, glyph] of [
+      ['Undo', '↶'],
+      ['Redo', '↷'],
+    ] as const) {
+      const button = head.getByRole('button', { name, exact: true });
+      await expect(button).toHaveText(glyph);
+      expect(
+        await style(
+          button,
+          'width',
+          'height',
+          'border-top-width',
+          'border-top-color',
+          'border-radius',
+          'background-color',
+          'color',
+          'font-size',
+        ),
+      ).toEqual({
+        width: '32px',
+        height: '32px',
+        'border-top-width': '1px',
+        'border-top-color': 'rgba(0, 0, 0, 0)',
+        'border-radius': '6px',
+        'background-color': 'rgba(0, 0, 0, 0)',
+        color: await token(page, 'text-secondary'),
+        'font-size': '14px',
+      });
+      // disabled … style="opacity:.4" (editor.js 408)
+      expect(await style(button, 'opacity')).toEqual({ opacity: '0.4' });
+    }
+    // <input class="input" style="font-weight:600;font-size:15px;border-color:transparent;background:transparent">
+    const title = head.getByRole('textbox', { name: 'Chart title' });
+    expect(
+      await style(
+        title,
+        'height',
+        'font-size',
+        'font-weight',
+        'border-top-color',
+        'background-color',
+      ),
+    ).toEqual({
+      height: '32px',
+      'font-size': '15px',
+      'font-weight': '600',
+      'border-top-color': 'rgba(0, 0, 0, 0)',
+      'background-color': 'rgba(0, 0, 0, 0)',
+    });
+    // .editor-page { grid-template-columns: 280px minmax(0, 1fr) 360px }
+    const inspector = page.getByRole('complementary', { name: 'Chart settings' });
+    expect((await inspector.boundingBox())?.width).toBe(360);
+  });
+
+  test('the field list: 18 px role chips, a 6 px "used" dot, 12 px rows under 28 px cube heads', async ({
+    page,
+  }) => {
+    await editorReady(page);
+    const fields = page.getByRole('complementary', { name: 'Fields' });
+
+    // .tree-search input.input.sm { height: 28px; font-size: 12px }
+    expect(await style(fields.getByLabel('Search fields'), 'height', 'font-size')).toEqual({
+      height: '28px',
+      'font-size': '12px',
+    });
+    // .tgroup-head { height: 28px; font-size: 12px; font-weight: 600; color: var(--text-secondary) }
+    // .tgroup-head .count { font-weight: 400; color: var(--text-muted) }
+    const cube = fields.locator('.field-list__cube-head').first();
+    expect(await style(cube, 'height', 'font-size', 'font-weight', 'color')).toEqual({
+      height: '28px',
+      'font-size': '12px',
+      'font-weight': '600',
+      color: await token(page, 'text-secondary'),
+    });
+    expect(await style(cube.locator('.field-list__count'), 'font-weight', 'color')).toEqual({
+      'font-weight': '400',
+      color: await token(page, 'text-muted'),
+    });
+
+    // .frow { height: 28px; padding: 0 12px 0 22px; font-size: 12px; gap: 8px; border-radius: 4px }
+    const count = fields.getByTestId('member-orders.count').locator('.field-row');
+    expect(
+      await style(
+        count,
+        'height',
+        'padding-left',
+        'padding-right',
+        'font-size',
+        'column-gap',
+        'border-radius',
+      ),
+    ).toEqual({
+      height: '28px',
+      'padding-left': '22px',
+      'padding-right': '12px',
+      'font-size': '12px',
+      'column-gap': '8px',
+      'border-radius': '4px',
+    });
+    // .ficon { width: 18px; height: 18px; border-radius: 4px; font-size: 12px; font-weight: 600 }
+    // .ficon.measure { color: var(--role-measure); background: var(--role-measure-soft) }
+    // .ficon.dim { color: var(--role-dim); background: var(--role-dim-soft) }
+    const chip = (member: string) =>
+      fields.getByTestId(`member-${member}`).locator('.field-row__icon');
+    const chipStyle = (member: string) =>
+      style(
+        chip(member),
+        'width',
+        'height',
+        'border-radius',
+        'font-size',
+        'font-weight',
+        'color',
+        'background-color',
+      );
+    expect(await chipStyle('orders.count')).toEqual({
+      width: '18px',
+      height: '18px',
+      'border-radius': '4px',
+      'font-size': '12px',
+      'font-weight': '600',
+      color: await token(page, 'role-measure'),
+      'background-color': await token(page, 'bg-role-measure-soft', 'background-color'),
+    });
+    expect(await chipStyle('orders.status')).toEqual({
+      width: '18px',
+      height: '18px',
+      'border-radius': '4px',
+      'font-size': '12px',
+      'font-weight': '600',
+      color: await token(page, 'role-dimension'),
+      'background-color': await token(page, 'bg-role-dimension-soft', 'background-color'),
+    });
+    // A dimension's chip names its type, as direction.md §5 has it: Aa, #, ◷.
+    await expect(chip('orders.status')).toHaveText('Aa');
+    await expect(chip('orders.id')).toHaveText('#');
+    await expect(chip('orders.ordered_at')).toHaveText('◷');
+
+    // .frow.used .fname::after { width: 6px; height: 6px; border-radius: 50%; background: var(--accent) }
+    const dot = count.locator('.field-row__used');
+    expect(await style(dot, 'width', 'height', 'border-radius', 'background-color')).toEqual({
+      width: '6px',
+      height: '6px',
+      'border-radius': '50%',
+      'background-color': await token(page, 'accent', 'background-color'),
+    });
+    await expect(count).toContainText('in the chart');
+    await expect(count).not.toContainText('✓');
+    // .fname is 400 whether used or not; .fmeta is muted.
+    expect(await style(count.locator('.field-row__name'), 'font-weight')).toEqual({
+      'font-weight': '400',
+    });
+    expect(await style(count.locator('.field-row__meta'), 'color')).toEqual({
+      color: await token(page, 'text-muted'),
+    });
+  });
+
+  test('the wells: a 12/600 label over a dashed well, role-tinted pills and an inline "+" picker', async ({
+    page,
+  }) => {
+    await editorReady(page);
+    const inspector = page.getByRole('complementary', { name: 'Chart settings' });
+
+    // .field > .lbl { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary) }
+    const label = inspector.getByRole('heading', { name: 'Metrics', exact: true });
+    expect(await style(label, 'font-size', 'line-height', 'font-weight', 'color')).toEqual({
+      'font-size': '12px',
+      'line-height': '16px',
+      'font-weight': '600',
+      color: await token(page, 'text-secondary'),
+    });
+    // .well { border: 1px dashed var(--border-strong); border-radius: 6px; padding: 6px;
+    //         background: var(--bg-surface) } with min-height:36px (editor.js 222)
+    const well = page.getByTestId('well-measures');
+    expect(
+      await style(
+        well,
+        'border-top-width',
+        'border-top-style',
+        'border-top-color',
+        'border-radius',
+        'padding-top',
+        'padding-left',
+        'background-color',
+      ),
+    ).toEqual({
+      'border-top-width': '1px',
+      'border-top-style': 'dashed',
+      'border-top-color': await token(page, 'border-strong', 'background-color'),
+      'border-radius': '6px',
+      'padding-top': '6px',
+      'padding-left': '6px',
+      'background-color': await token(page, 'bg-surface', 'background-color'),
+    });
+    expect((await well.boundingBox())?.height).toBeGreaterThanOrEqual(36);
+    // The label sits above its well, not inside it.
+    expect((await label.boundingBox())!.y).toBeLessThan((await well.boundingBox())!.y);
+
+    // .pill { height: 24px; padding: 0 4px 0 6px; border-radius: 4px; font-size: 12px; font-weight: 600 }
+    // .pill.measure { background: var(--role-measure-soft); color: var(--role-measure) }
+    const pill = page.getByTestId('in-measures-orders.count');
+    const pillStyle = (locator: Locator) =>
+      style(
+        locator,
+        'height',
+        'padding-left',
+        'padding-right',
+        'border-radius',
+        'border-top-width',
+        'font-size',
+        'font-weight',
+        'color',
+        'background-color',
+      );
+    expect(await pillStyle(pill)).toEqual({
+      height: '24px',
+      'padding-left': '6px',
+      'padding-right': '4px',
+      'border-radius': '4px',
+      'border-top-width': '0px',
+      'font-size': '12px',
+      'font-weight': '600',
+      color: await token(page, 'role-measure'),
+      'background-color': await token(page, 'bg-role-measure-soft', 'background-color'),
+    });
+    // .pill.dim { background: var(--role-dim-soft); color: var(--role-dim) }
+    expect(await pillStyle(page.getByTestId('in-dimensions-orders.status'))).toEqual({
+      height: '24px',
+      'padding-left': '6px',
+      'padding-right': '4px',
+      'border-radius': '4px',
+      'border-top-width': '0px',
+      'font-size': '12px',
+      'font-weight': '600',
+      color: await token(page, 'role-dimension'),
+      'background-color': await token(page, 'bg-role-dimension-soft', 'background-color'),
+    });
+    // .pill .agg { font-weight: 400 } — at full strength: the prototype's
+    // opacity .85 takes the measure's ink under AA on its tint (rule 2).
+    expect(await style(pill.locator('.pill__tag'), 'font-weight', 'opacity')).toEqual({
+      'font-weight': '400',
+      opacity: '1',
+    });
+    // .pill button { width: 18px; height: 18px; border-radius: 3px; color: inherit }
+    expect(
+      await style(pill.getByRole('button'), 'width', 'height', 'border-radius', 'color'),
+    ).toEqual({
+      width: '18px',
+      height: '18px',
+      'border-radius': '3px',
+      color: await token(page, 'role-measure'),
+    });
+
+    // .addbtn { height: 24px; padding: 0 6px; border: 0; border-radius: 4px; font-size: 12px;
+    //           color: var(--text-muted); background: none }, "+ metric" inside the well
+    const add = well.getByRole('button', { name: 'Add to Metrics' });
+    await expect(add).toHaveText('+ metric');
+    expect(
+      await style(
+        add,
+        'height',
+        'padding-left',
+        'border-top-width',
+        'border-radius',
+        'font-size',
+        'color',
+        'background-color',
+      ),
+    ).toEqual({
+      height: '24px',
+      'padding-left': '6px',
+      'border-top-width': '0px',
+      'border-radius': '4px',
+      'font-size': '12px',
+      color: await token(page, 'text-muted'),
+      'background-color': 'rgba(0, 0, 0, 0)',
+    });
+    // The .picker it opens: a menu of what the well takes, each with its chip.
+    await add.click();
+    const picker = page.getByRole('menu', { name: 'Add to Metrics' });
+    await expect(picker).toBeVisible();
+    expect(await style(picker, 'width', 'border-radius', 'background-color')).toEqual({
+      width: '240px',
+      'border-radius': '6px',
+      'background-color': await token(page, 'bg-raised', 'background-color'),
+    });
+    const total = picker.getByRole('menuitem', { name: 'Orders Total Amount' });
+    await expect(total.locator('.field-row__icon')).toHaveText('Σ');
+    // Only what the well does not already hold.
+    await expect(picker.getByRole('menuitem', { name: 'Orders Count' })).toHaveCount(0);
+    await total.click();
+    await expect(page.getByTestId('in-measures-orders.total_amount')).toBeVisible();
+    await expect(add).toBeFocused();
+
+    // The other wells' buttons say what they add (editor.js 275–297).
+    await expect(page.getByTestId('well-dimensions').getByRole('button', { name: 'Add to Dimensions' })).toHaveText('+ dimension');
+    await expect(page.getByTestId('well-timeDimensions').getByRole('button', { name: 'Add to Time' })).toHaveText('+ time');
+    await expect(page.getByTestId('well-filters').getByRole('button', { name: 'Add a filter' })).toHaveText('+ filter');
+
+    // Sort by and Top N side by side under the wells, as .input.sm / .select.sm (editor.js 298–307).
+    const sort = inspector.getByLabel('Sort');
+    const top = inspector.getByLabel('Top N (+ Other)');
+    expect(await style(sort, 'height', 'font-size')).toEqual({ height: '28px', 'font-size': '12px' });
+    expect(await style(top, 'height', 'font-size')).toEqual({ height: '28px', 'font-size': '12px' });
+    expect((await sort.boundingBox())!.y).toBe((await top.boundingBox())!.y);
+  });
+
+  test('the preview sits in a tile, over a drawer whose tabs always show, its rows a data grid', async ({
+    page,
+  }) => {
+    await editorReady(page);
+    // .tile { border: 1px solid var(--border-subtle); border-radius: 6px; padding: 16px;
+    //         background: var(--bg-surface) } around #ed-chart (editor.js 414)
+    const frame = page.getByTestId('preview-frame');
+    await expect(frame.getByTestId('chart-canvas')).toBeVisible();
+    expect(
+      await style(
+        frame,
+        'border-top-width',
+        'border-top-color',
+        'border-radius',
+        'padding-top',
+        'background-color',
+      ),
+    ).toEqual({
+      'border-top-width': '1px',
+      'border-top-color': await token(page, 'border-subtle', 'background-color'),
+      'border-radius': '6px',
+      'padding-top': '16px',
+      'background-color': await token(page, 'bg-surface', 'background-color'),
+    });
+
+    // .drawer { height: 220px; border-top: 1px solid var(--border-subtle); background: var(--bg-surface) },
+    // open by default on Results (editor.js 183, 416).
+    const drawer = page.getByTestId('results-drawer');
+    await expect(drawer).toBeVisible();
+    expect(await style(drawer, 'height', 'border-top-width', 'background-color')).toEqual({
+      height: '220px',
+      'border-top-width': '1px',
+      'background-color': await token(page, 'bg-surface', 'background-color'),
+    });
+    // .tabs button { height: 36px; padding: 0 10px; font-size: 12px; font-weight: 600;
+    //                color: var(--text-secondary); border-bottom: 2px solid transparent }
+    // [aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent) }
+    const tabs = drawer.getByRole('tablist', { name: 'Results' });
+    await expect(tabs.getByRole('tab')).toHaveText([
+      'Results',
+      'Underlying rows',
+      'Cube query',
+      'Acceleration',
+    ]);
+    const selected = tabs.getByRole('tab', { name: 'Results' });
+    await expect(selected).toHaveAttribute('aria-selected', 'true');
+    expect(
+      await style(
+        selected,
+        'height',
+        'padding-left',
+        'font-size',
+        'font-weight',
+        'color',
+        'border-bottom-width',
+        'border-bottom-color',
+      ),
+    ).toEqual({
+      height: '36px',
+      'padding-left': '10px',
+      'font-size': '12px',
+      'font-weight': '600',
+      color: await token(page, 'accent'),
+      'border-bottom-width': '2px',
+      'border-bottom-color': await token(page, 'accent', 'background-color'),
+    });
+    expect(
+      await style(tabs.getByRole('tab', { name: 'Cube query' }), 'color', 'border-bottom-color'),
+    ).toEqual({
+      color: await token(page, 'text-secondary'),
+      'border-bottom-color': 'rgba(0, 0, 0, 0)',
+    });
+
+    // .grid-table { font-size: 12px; font-variant-numeric: tabular-nums }
+    // th { position: sticky; height: 28px; background: var(--bg-subtle); text-align: left; font-weight: 600 }
+    // td { height: 24px; padding: 0 8px } td.num { text-align: right }
+    const table = drawer.getByTestId('drawer-result-rows');
+    expect(await style(table, 'font-size', 'font-variant-numeric')).toEqual({
+      'font-size': '12px',
+      'font-variant-numeric': 'tabular-nums',
+    });
+    const header = table.getByRole('columnheader', { name: 'Orders Status' });
+    expect(
+      await style(header, 'height', 'position', 'background-color', 'text-align', 'font-weight'),
+    ).toEqual({
+      height: '28px',
+      position: 'sticky',
+      'background-color': await token(page, 'bg-subtle', 'background-color'),
+      'text-align': 'left',
+      'font-weight': '600',
+    });
+    const cells = table.locator('tbody tr').first().getByRole('cell');
+    // A dimension's cell keeps the start alignment, as measured on the prototype.
+    expect(await style(cells.first(), 'height', 'padding-left', 'text-align')).toEqual({
+      height: '24px',
+      'padding-left': '8px',
+      'text-align': 'start',
+    });
+    // The count, a measure, is a number and lines up on the right.
+    expect(await style(cells.last(), 'text-align')).toEqual({ 'text-align': 'right' });
+    expect(
+      await style(table.getByRole('columnheader', { name: 'Orders Count' }), 'text-align'),
+    ).toEqual({ 'text-align': 'right' });
+
+    // Collapsed, the strip stays, so the drawer can always be found (UX-058).
+    await drawer.getByRole('button', { name: 'Hide the results' }).click();
+    await expect(table).toHaveCount(0);
+    await expect(tabs).toBeVisible();
+    await tabs.getByRole('tab', { name: 'Cube query' }).click();
+    await expect(drawer.getByTestId('drawer-query')).toBeVisible();
+  });
+
+  test('the empty state: two lines in the tile, 16/600 over 12 px secondary', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/explore/charts/seed-chart-empty/edit');
+    const empty = page.getByTestId('result-empty');
+    await expect(empty).toBeVisible();
+    // It is drawn in the preview's tile.
+    await expect(page.getByTestId('preview-frame').getByTestId('result-empty')).toBeVisible();
+    // <div class="strong" style="font-size:16px;color:var(--text-primary)"> over
+    // <p class="xs">Click fields on the left, or use the + buttons under Metrics and Dimensions.</p>
+    const headline = empty.getByText('Add at least one metric or dimension', { exact: true });
+    expect(await style(headline, 'font-size', 'font-weight', 'color')).toEqual({
+      'font-size': '16px',
+      'font-weight': '600',
+      color: await token(page, 'text-primary'),
+    });
+    const line = empty.getByText(
+      'Click fields on the left, or use the + buttons under Metrics and Dimensions.',
+      { exact: true },
+    );
+    expect(await style(line, 'font-size', 'color')).toEqual({
+      'font-size': '12px',
+      color: await token(page, 'text-secondary'),
+    });
+  });
+});

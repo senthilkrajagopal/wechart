@@ -312,8 +312,10 @@ export function ChartEditor({
    * drawer unmounts whenever the chart has no fields; state held there would
    * be lost every time the user emptied a well or switched cube.
    */
+  // Open on the result rows at first, as the prototype's editor opens
+  // (editor.js 183; recheck-chart-editor N4, T257).
   const [drawer, setDrawer] = useState<{ open: boolean; view: DrawerView }>({
-    open: false,
+    open: true,
     view: 'result',
   });
 
@@ -492,24 +494,29 @@ export function ChartEditor({
         {head?.badges}
         <span className="chart-editor__spacer" />
         {/* Not while a change is being applied: an edit then would be lost
-            with the draft already taken (T032, T228's review). */}
+            with the draft already taken (T032, T228's review). The
+            prototype's ↶ and ↷ icon buttons, named by aria-label (T257). */}
         <button
           type="button"
-          className="btn-sm"
+          className="icon-button"
           data-testid="undo"
+          aria-label="Undo"
+          title="Undo"
           disabled={busy || !canUndo(history)}
           onClick={() => setHistory(undo)}
         >
-          Undo
+          ↶
         </button>
         <button
           type="button"
-          className="btn-sm"
+          className="icon-button"
           data-testid="redo"
+          aria-label="Redo"
+          title="Redo"
           disabled={busy || !canRedo(history)}
           onClick={() => setHistory(redo)}
         >
-          Redo
+          ↷
         </button>
         <button
           type="button"
@@ -556,9 +563,21 @@ export function ChartEditor({
       >
         <div className="chart-editor__canvas">
           {isEmpty(spec) ? (
-            <p className="chart-editor__empty" data-testid="result-empty">
-              Add a field to see data.
-            </p>
+            // In the preview's tile, as the prototype's empty editor draws it
+            // (editor.js 481; recheck-chart-editor F18, T257): what to do, then
+            // where to do it.
+            <div
+              className="grid-tile preview-frame__tile chart-editor__empty-tile"
+              data-testid="preview-frame"
+              data-size="fill"
+            >
+              <div className="chart-editor__empty" data-testid="result-empty">
+                <p className="chart-editor__empty-head">Add at least one metric or dimension</p>
+                <p className="chart-editor__empty-line">
+                  Click fields on the left, or use the + buttons under Metrics and Dimensions.
+                </p>
+              </div>
+            </div>
           ) : result.isPending ? (
             // A skeleton in the shape of the chart, not a spinner (AC-042): a
             // spinner says something is happening, a skeleton says something
@@ -742,6 +761,32 @@ export function ChartEditor({
                     return { ...current, options: next };
                   })
                 }
+                sort={
+                  /*
+                    Sorting (AC-044), beside Top N as the prototype has it
+                    (T257). "Cube's order" is the default and is not the same
+                    as any of the others: Cube was asked for an ordering and
+                    returned one, and leaving it alone is a real choice rather
+                    than the absence of one.
+                  */
+                  <div className="field">
+                    <label htmlFor="chart-sort">Sort by</label>
+                    <select
+                      id="chart-sort"
+                      className="select-sm"
+                      value={sortValue}
+                      onChange={(event) => {
+                        setSort(event.target.value);
+                      }}
+                    >
+                      {SORT_CHOICES.map((choice) => (
+                        <option key={choice.value} value={choice.value}>
+                          {choice.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                }
               />
               {recommendation.top ? (
                 <div className="chart-editor__type" data-testid="recommendation">
@@ -764,27 +809,6 @@ export function ChartEditor({
                   </ul>
 
                   <WhyThisChart explanation={explanation} titles={titles} />
-
-                  {/*
-                    Sorting (AC-044). "Cube's order" is the default and is not
-                    the same as any of the others: Cube was asked for an
-                    ordering and returned one, and leaving it alone is a real
-                    choice rather than the absence of one.
-                  */}
-                  <label htmlFor="chart-sort">Sort</label>
-                  <select
-                    id="chart-sort"
-                    value={sortValue}
-                    onChange={(event) => {
-                      setSort(event.target.value);
-                    }}
-                  >
-                    {SORT_CHOICES.map((choice) => (
-                      <option key={choice.value} value={choice.value}>
-                        {choice.label}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               ) : null}
             </>

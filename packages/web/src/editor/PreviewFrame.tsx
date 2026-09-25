@@ -75,7 +75,15 @@ export function PreviewFrame({ tile, children }: PreviewFrameProps) {
     };
   }, [size]);
 
-  if (tile === undefined) return <>{children(undefined)}</>;
+  // Opened on its own, the chart is still drawn in a tile, as the prototype's
+  // editor draws it (editor.js 414; recheck-chart-editor N3, T257): the
+  // tile's chrome around it, its size the editor's.
+  if (tile === undefined)
+    return (
+      <div className="grid-tile preview-frame__tile" data-testid="preview-frame" data-size="fill">
+        {children(undefined)}
+      </div>
+    );
 
   const actual = size === 'actual';
   // How much larger than the tile the fitted frame is: the same factor for

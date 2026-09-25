@@ -2,6 +2,7 @@ import { CHART_TYPES } from '@wechart/core';
 import { expect, test, type Page } from '@playwright/test';
 
 import { chooseChartType } from './chartType';
+import { wellPicker } from './wells';
 
 /**
  * AC-178: THE SYSTEM SHALL provide a table view of every chart's data,
@@ -23,11 +24,11 @@ async function openEditorWithEveryWellFilled(page: Page, chartType: string) {
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
 
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-measures').selectOption('orders.total_amount');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
-  await page.getByTestId('add-dimensions').selectOption('orders.id');
-  await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await wellPicker(page, 'dimensions').selectOption('orders.id');
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
   await expect(page.getByTestId('result-row-count')).toBeVisible();
 
   await chooseChartType(page, chartType);

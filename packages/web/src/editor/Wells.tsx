@@ -1,10 +1,12 @@
 import type { ChartFilter, ChartSpec, TimeGranularity, WellName } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
 import { QUERY_GRANULARITY } from '@wechart/core';
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 
 import { loadTile } from '../query/loadTile';
+import { MenuButton, type MenuItem } from '../shell/MenuButton';
 import { StateLine, StatusIcon } from '../shell/StatusIcon';
+import { FieldIcon } from './FieldList';
 import type { Member } from './fields';
 
 /**
@@ -23,11 +25,45 @@ const VALUE_LIMIT = 500;
  * and a "+" picker for everyone. The picker is not a fallback — it is the only
  * route a keyboard or screen reader has, and drag-only would fail AC-176.
  */
-export const WELLS: { name: WellName; label: string; accepts: Member['kind'] }[] = [
-  { name: 'measures', label: 'Metrics', accepts: 'measure' },
-  { name: 'dimensions', label: 'Dimensions', accepts: 'dimension' },
-  { name: 'timeDimensions', label: 'Time', accepts: 'timeDimension' },
+export const WELLS: { name: WellName; label: string; accepts: Member['kind']; adds: string }[] = [
+  { name: 'measures', label: 'Metrics', accepts: 'measure', adds: 'metric' },
+  { name: 'dimensions', label: 'Dimensions', accepts: 'dimension', adds: 'dimension' },
+  { name: 'timeDimensions', label: 'Time', accepts: 'timeDimension', adds: 'time' },
 ];
+
+/**
+ * A well's "+" (the prototype's `.addbtn` opening its `.picker`, T257): the
+ * fields it can still take, each with its role chip, or a line saying there
+ * are none — an empty menu would read as a broken one.
+ */
+function pickerItems(
+  candidates: readonly Member[],
+  onPick: (member: Member) => void,
+): readonly MenuItem[] {
+  if (candidates.length === 0)
+    return [
+      {
+        key: 'none',
+        label: 'Nothing more to add from this cube',
+        disabled: true,
+        onSelect: () => undefined,
+      },
+    ];
+  return candidates.map((member) => ({
+    key: member.name,
+    testId: `pick-${member.name}`,
+    label: (
+      <>
+        <FieldIcon member={member} />
+        {member.title}
+      </>
+    ),
+    onSelect: () => onPick(member),
+  }));
+}
+
+/** A pill's role tint: a measure's orange, or a dimension's blue (the prototype's .pill.measure / .pill.dim). */
+const pillClass = (well: WellName) => (well === 'measures' ? 'pill pill--measure' : 'pill pill--dimension');
 
 /**
  * The grains a time field's pill offers (AC-216), coarsest last: Cube's own
@@ -92,6 +128,11 @@ export interface WellsProps {
   readonly onTopN?: (n: number | undefined) => void;
   /** Every member's title, of every cube (AC-220): a pill of another cube's member. */
   readonly titles?: Readonly<Record<string, string>>;
+  /**
+   * The chart's sort, drawn beside Top N under the wells, as the prototype's
+   * Data tab has "Sort by" and "Top N (+ Other)" side by side (T257).
+   */
+  readonly sort?: ReactNode;
 }
 
 export function Wells({
@@ -105,6 +146,7 @@ export function Wells({
   topN,
   onTopN,
   titles = {},
+  sort,
 }: WellsProps) {
   const ids = useId();
   /**
@@ -127,25 +169,88 @@ export function Wells({
         const legal = dragging !== null && refusal === null;
 
         return (
-          <section
-            key={well.name}
-            className="well"
-            data-testid={`well-${well.name}`}
-            data-drop={dragging === null ? undefined : legal ? 'legal' : 'illegal'}
-            aria-describedby={refusal ? `well-${well.name}-reason` : undefined}
-            onDragOver={(event) => {
-              // Preventing default is what marks this a valid drop target, so
-              // not preventing it is what refuses the drop (AC-027).
-              if (legal) event.preventDefault();
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              if (!legal) return;
-              const dropped = event.dataTransfer.getData('text/plain');
-              if (dropped) onAdd(well.name, dropped);
-            }}
-          >
-            <h3 id={`well-${well.name}-label`}>{well.label}</h3>
+          // The prototype's .field: a 12/600 label over its dashed .well
+          // (T257, editor.js 222).
+          <section key={well.name} className="well-field">
+            <h3 id={`well-${well.name}-label`} className="well-field__label">
+              {well.label}
+            </h3>
+            <div
+              className="well"
+              data-testid={`well-${well.name}`}
+              data-drop={dragging === null ? undefined : legal ? 'legal' : 'illegal'}
+              aria-describedby={refusal ? `well-${well.name}-reason` : undefined}
+              onDragOver={(event) => {
+                // Preventing default is what marks this a valid drop target, so
+                // not preventing it is what refuses the drop (AC-027).
+                if (legal) event.preventDefault();
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (!legal) return;
+                const dropped = event.dataTransfer.getData('text/plain');
+                if (dropped) onAdd(well.name, dropped);
+              }}
+            >
+              <ul aria-labelledby={`well-${well.name}-label`} className="well__pills">
+                {held.map((member) => {
+                  const known = available.find((each) => each.name === member);
+                  const title = titleOf(member);
+                  const grain = spec.granularities?.[member] ?? QUERY_GRANULARITY;
+                  // A grain saved finer than the pill offers is still shown as it is.
+                  const grains = PILL_GRAINS.includes(grain) ? PILL_GRAINS : [grain, ...PILL_GRAINS];
+                  return (
+                    <li
+                      key={member}
+                      className={pillClass(well.name)}
+                      data-testid={`in-${well.name}-${member}`}
+                    >
+                      <span className="pill__title">{title}</span>
+                      {well.name === 'timeDimensions' ? (
+                        // Its grain, changed right here (AC-216).
+                        <select
+                          className="pill__grain"
+                          aria-label={`Grain of ${title}`}
+                          value={grain}
+                          onChange={(event) =>
+                            onGranularity?.(member, event.target.value as TimeGranularity)
+                          }
+                        >
+                          {grains.map((each) => (
+                            <option key={each} value={each}>
+                              {GRAIN_LABEL[each]}
+                            </option>
+                          ))}
+                        </select>
+                      ) : known?.aggType === undefined ? null : (
+                        <span className="pill__tag">{known.aggType}</span>
+                      )}
+                      <button
+                        type="button"
+                        className="pill__remove"
+                        onClick={() => onRemove(well.name, member)}
+                        aria-label={`Remove ${title} from ${well.label}`}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {/* The "+" picker (AC-026, rule 11): the keyboard's route in. */}
+              <MenuButton
+                label={`Add to ${well.label}`}
+                className="addbtn"
+                align="start"
+                testId={`add-${well.name}`}
+                items={pickerItems(
+                  candidates.filter((member) => !held.includes(member.name)),
+                  (member) => onAdd(well.name, member.name),
+                )}
+              >
+                + {well.adds}
+              </MenuButton>
+            </div>
 
             {refusal ? (
               <p
@@ -158,117 +263,51 @@ export function Wells({
                 {refusal}
               </p>
             ) : null}
-
-            <ul aria-labelledby={`well-${well.name}-label`} className="well__pills">
-              {held.map((member) => {
-                const known = available.find((each) => each.name === member);
-                const title = titleOf(member);
-                const grain = spec.granularities?.[member] ?? QUERY_GRANULARITY;
-                // A grain saved finer than the pill offers is still shown as it is.
-                const grains = PILL_GRAINS.includes(grain) ? PILL_GRAINS : [grain, ...PILL_GRAINS];
-                return (
-                  <li key={member} className="pill" data-testid={`in-${well.name}-${member}`}>
-                    <span className="pill__title">{title}</span>
-                    {well.name === 'timeDimensions' ? (
-                      // Its grain, changed right here (AC-216).
-                      <select
-                        className="pill__grain"
-                        aria-label={`Grain of ${title}`}
-                        value={grain}
-                        onChange={(event) =>
-                          onGranularity?.(member, event.target.value as TimeGranularity)
-                        }
-                      >
-                        {grains.map((each) => (
-                          <option key={each} value={each}>
-                            {GRAIN_LABEL[each]}
-                          </option>
-                        ))}
-                      </select>
-                    ) : known?.aggType === undefined ? null : (
-                      <span className="pill__tag">{known.aggType}</span>
-                    )}
-                    <button
-                      type="button"
-                      className="pill__remove"
-                      onClick={() => onRemove(well.name, member)}
-                      aria-label={`Remove ${title} from ${well.label}`}
-                    >
-                      ×
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-
-            <label htmlFor={`add-${well.name}`} className="visually-hidden">
-              Add to {well.label}
-            </label>
-            <select
-              id={`add-${well.name}`}
-              data-testid={`add-${well.name}`}
-              className="select-sm"
-              value=""
-              onChange={(event) => {
-                if (event.target.value) onAdd(well.name, event.target.value);
-              }}
-            >
-              <option value="">+ Add to {well.label}…</option>
-              {candidates
-                .filter((member) => !held.includes(member.name))
-                .map((member) => (
-                  <option key={member.name} value={member.name}>
-                    {member.title}
-                  </option>
-                ))}
-            </select>
           </section>
         );
       })}
 
       {/* The chart's own filters (AC-216), the prototype's Filters well. */}
-      <section className="well" data-testid="well-filters" aria-labelledby={`${ids}-filters`}>
-        <h3 id={`${ids}-filters`}>Filters</h3>
-        <ul aria-labelledby={`${ids}-filters`} className="well__pills">
-          {filters.map((filter, index) => (
-            <FilterPill
-              key={filter.member}
-              filter={filter}
-              title={titleOf(filter.member)}
-              onChange={(next) =>
-                onFilters?.(filters.map((each, at) => (at === index ? next : each)))
-              }
-              onRemove={() => onFilters?.(filters.filter((_, at) => at !== index))}
-            />
-          ))}
-        </ul>
-        <label htmlFor={`${ids}-add-filter`} className="visually-hidden">
-          Add a filter
-        </label>
-        <select
-          id={`${ids}-add-filter`}
-          data-testid="add-filters"
-          className="select-sm"
-          value=""
-          onChange={(event) => {
-            const member = event.target.value;
-            if (member !== '')
-              onFilters?.([...filters, { member, operator: 'equals', values: [] }]);
-          }}
-        >
-          <option value="">+ Add a filter…</option>
-          {filterable
-            .filter((member) => !filters.some((each) => each.member === member.name))
-            .map((member) => (
-              <option key={member.name} value={member.name}>
-                {member.title}
-              </option>
+      <section className="well-field">
+        <h3 id={`${ids}-filters`} className="well-field__label">
+          Filters
+        </h3>
+        <div className="well" data-testid="well-filters">
+          <ul aria-labelledby={`${ids}-filters`} className="well__pills">
+            {filters.map((filter, index) => (
+              <FilterPill
+                key={filter.member}
+                filter={filter}
+                title={titleOf(filter.member)}
+                onChange={(next) =>
+                  onFilters?.(filters.map((each, at) => (at === index ? next : each)))
+                }
+                onRemove={() => onFilters?.(filters.filter((_, at) => at !== index))}
+              />
             ))}
-        </select>
+          </ul>
+          <MenuButton
+            label="Add a filter"
+            className="addbtn"
+            align="start"
+            testId="add-filters"
+            items={pickerItems(
+              filterable.filter((member) => !filters.some((each) => each.member === member.name)),
+              (member) =>
+                onFilters?.([...filters, { member: member.name, operator: 'equals', values: [] }]),
+            )}
+          >
+            + filter
+          </MenuButton>
+        </div>
       </section>
 
-      {/* Top N (+ Other) (AC-216): the rest folded into one Other (AC-041). */}
-      <TopN id={`${ids}-top`} topN={topN} onTopN={onTopN} />
+      {/* Sort by beside Top N (+ Other) (AC-216, AC-044): the rest folded
+          into one Other (AC-041). */}
+      <div className="wells__options">
+        {sort}
+        <TopN id={`${ids}-top`} topN={topN} onTopN={onTopN} />
+      </div>
     </div>
   );
 }
@@ -362,7 +401,7 @@ function FilterPill({
   ];
 
   return (
-    <li className="pill" data-testid={`in-filters-${filter.member}`}>
+    <li className="pill pill--dimension" data-testid={`in-filters-${filter.member}`}>
       <span className="pill__title">{title}</span>
       <select
         className="pill__grain"

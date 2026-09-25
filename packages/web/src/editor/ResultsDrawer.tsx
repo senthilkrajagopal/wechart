@@ -7,6 +7,7 @@ import {
   type MemberGranularities,
 } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
+import { useId, useMemo, useRef } from 'react';
 
 import { loadTile } from '../query/loadTile';
 import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
@@ -77,12 +78,21 @@ function ungrouped(granularities: MemberGranularities): MemberGranularities {
   return Object.fromEntries(Object.keys(granularities).map((member) => [member, 'second']));
 }
 
+/** The measures a query names: the columns that are numbers, set right (T257). */
+function measuresOf(query: Record<string, unknown>): string[] {
+  const measures = query['measures'];
+  return Array.isArray(measures)
+    ? measures.filter((member): member is string => typeof member === 'string')
+    : [];
+}
+
 function RowTable({
   rows,
   testId,
   formats,
   granularities,
   titles,
+  numeric,
   capped = false,
 }: {
   rows: readonly Record<string, unknown>[];
@@ -91,6 +101,8 @@ function RowTable({
   granularities: MemberGranularities;
   /** Each member's title from the model, for the headers (AC-220). */
   titles: Readonly<Record<string, string>>;
+  /** The measure columns, aligned right as figures are (the prototype's td.num). */
+  numeric: ReadonlySet<string>;
   /**
    * True when the rows came back from a capped query, so a full page is
    * evidence of more rows rather than of the total.
@@ -120,12 +132,14 @@ function RowTable({
           {note}
         </StateLine>
       )}
-      <table data-testid={testId}>
+      {/* The prototype's .grid-table (T257): 12 px, tabular figures, a sticky
+          28 px head, 24 px rows, the measures set right. */}
+      <table className="grid-table" data-testid={testId}>
         <thead>
           <tr>
             {columns.map((column) => (
               // By its title (AC-220), never "orders.count".
-              <th scope="col" key={column}>
+              <th scope="col" key={column} className={numeric.has(column) ? 'num' : undefined}>
                 {columnTitleOf(column, titles)}
               </th>
             ))}
@@ -135,7 +149,9 @@ function RowTable({
           {shown.map((row, index) => (
             <tr key={index}>
               {columns.map((column) => (
-                <td key={column}>{cellText(row[column], column, formats, granularities)}</td>
+                <td key={column} className={numeric.has(column) ? 'num' : undefined}>
+                  {cellText(row[column], column, formats, granularities)}
+                </td>
               ))}
             </tr>
           ))}
@@ -168,51 +184,88 @@ export function ResultsDrawer({
   const underlyingRows = ((underlying.data as { data?: unknown[] } | undefined)?.data ??
     []) as Record<string, unknown>[];
 
+  const ids = useId();
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const numeric = useMemo(
+    () => new Set([...measuresOf(query), ...measuresOf(underlyingQuery)]),
+    [query, underlyingQuery],
+  );
+  /** A tab chosen: its view, and the drawer open on it if it was not. */
+  const choose = (id: DrawerView) => {
+    onViewChange(id);
+    if (!open) onOpenChange(true);
+  };
+
   return (
-    <section className="results-drawer">
-      <button type="button" aria-expanded={open} onClick={() => onOpenChange(!open)}>
-        Results
-      </button>
+    // The prototype's .drawer (T257, editor.js 416): its tab strip always
+    // shown, so the drawer is found even collapsed; open, 220 px under it.
+    <section className="results-drawer" data-testid="results-drawer" data-open={open}>
+      <div className="results-drawer__bar">
+        <div role="tablist" aria-label="Results" className="results-drawer__tabs">
+          {DRAWER_TABS.map(([id, label], index) => (
+            <button
+              key={id}
+              ref={(node) => {
+                tabRefs.current[index] = node;
+              }}
+              type="button"
+              role="tab"
+              id={`${ids}-${id}`}
+              aria-selected={open && view === id}
+              aria-controls={open && view === id ? `${ids}-panel` : undefined}
+              tabIndex={view === id ? 0 : -1}
+              data-testid={`drawer-tab-${id}`}
+              onClick={() => choose(id)}
+              onKeyDown={(event) => {
+                // The APG tabs pattern: the arrows move along the strip.
+                const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+                if (step === 0) return;
+                event.preventDefault();
+                const next = (index + step + DRAWER_TABS.length) % DRAWER_TABS.length;
+                const tab = DRAWER_TABS[next];
+                if (tab === undefined) return;
+                choose(tab[0]);
+                tabRefs.current[next]?.focus();
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="icon-button results-drawer__toggle"
+          aria-expanded={open}
+          aria-label={open ? 'Hide the results' : 'Show the results'}
+          title={open ? 'Hide the results' : 'Show the results'}
+          onClick={() => onOpenChange(!open)}
+        >
+          <span aria-hidden="true">{open ? '▾' : '▴'}</span>
+        </button>
+      </div>
 
       {open ? (
-        <div data-testid="results-drawer">
-          <div role="tablist" aria-label="Results">
-            {(
-              [
-                ['result', 'Result rows'],
-                ['underlying', 'Underlying rows'],
-                ['query', 'Query'],
-                // Whether a pre-aggregation serves the chart (T150, AC-144).
-                ['acceleration', 'Acceleration'],
-              ] as [DrawerView, string][]
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={view === id}
-                data-testid={`drawer-tab-${id}`}
-                onClick={() => onViewChange(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
+        <div
+          className="results-drawer__body"
+          role="tabpanel"
+          id={`${ids}-panel`}
+          aria-labelledby={`${ids}-${view}`}
+          // Reachable by Tab even when it holds no control (APG tabs).
+          tabIndex={0}
+        >
           {view === 'result' ? (
-            <div role="tabpanel" aria-label="Result rows">
-              <RowTable
-                rows={rows}
-                testId="drawer-result-rows"
-                formats={formats}
-                granularities={granularities}
-                titles={titles}
-              />
-            </div>
+            <RowTable
+              rows={rows}
+              testId="drawer-result-rows"
+              formats={formats}
+              granularities={granularities}
+              titles={titles}
+              numeric={numeric}
+            />
           ) : null}
 
           {view === 'underlying' ? (
-            <div role="tabpanel" aria-label="Underlying rows">
+            <>
               {underlying.isPending ? (
                 <StateLine kind="run">Loading…</StateLine>
               ) : underlying.isError ? (
@@ -232,26 +285,32 @@ export function ResultsDrawer({
                   formats={formats}
                   granularities={ungrouped(granularities)}
                   titles={titles}
+                  numeric={numeric}
                   capped
                 />
               )}
-            </div>
+            </>
           ) : null}
 
           {view === 'query' ? (
-            <div role="tabpanel" aria-label="Query">
-              <pre data-testid="drawer-query">{JSON.stringify(query, null, 2)}</pre>
-            </div>
+            <pre className="results-drawer__query" data-testid="drawer-query">
+              {JSON.stringify(query, null, 2)}
+            </pre>
           ) : null}
 
           {/* Asked only while shown, as the underlying rows are. */}
-          {view === 'acceleration' ? (
-            <div role="tabpanel" aria-label="Acceleration">
-              <AccelerationPanel query={query} />
-            </div>
-          ) : null}
+          {view === 'acceleration' ? <AccelerationPanel query={query} /> : null}
         </div>
       ) : null}
     </section>
   );
 }
+
+/** The drawer's views, named as the prototype's tabs are (editor.js 416). */
+const DRAWER_TABS: readonly (readonly [DrawerView, string])[] = [
+  ['result', 'Results'],
+  ['underlying', 'Underlying rows'],
+  ['query', 'Cube query'],
+  // Whether a pre-aggregation serves the chart (T150, AC-144).
+  ['acceleration', 'Acceleration'],
+];

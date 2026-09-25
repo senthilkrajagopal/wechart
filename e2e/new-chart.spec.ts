@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { wellPicker } from './wells';
+
 /**
  * T227 / AC-213: WHEN the user chooses New › Chart in Explore, THE SYSTEM SHALL
  * open the chart editor on a new library chart titled "Untitled chart" in the
@@ -31,7 +33,7 @@ test('New › Chart opens the editor on an untitled chart, and saving it opens i
 
   // A field, and Save.
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
-  await page.getByTestId('add-measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.count');
   await page.getByRole('button', { name: 'Save chart' }).click();
 
   // Its page, and it is in Finance.
@@ -69,7 +71,7 @@ test('a title typed and saved at once, without leaving the field, is the one sav
   await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
 
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
-  await page.getByTestId('add-measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.count');
   const field = page.getByLabel('Chart title');
   await field.fill(title);
   await expect(field).toBeFocused();

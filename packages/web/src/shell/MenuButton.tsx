@@ -23,6 +23,8 @@ export interface MenuItem {
   readonly title?: string;
   /** A destructive action, drawn as the prototype draws Delete. */
   readonly danger?: boolean;
+  /** For a test to find the item by what it stands for, not its words. */
+  readonly testId?: string;
 }
 
 export interface MenuButtonProps {
@@ -34,6 +36,8 @@ export interface MenuButtonProps {
   readonly className?: string;
   /** Which edge of the button the menu lines up with. */
   readonly align?: 'start' | 'end';
+  /** For a test to find the button. */
+  readonly testId?: string;
 }
 
 export function MenuButton({
@@ -42,6 +46,7 @@ export function MenuButton({
   children,
   className = 'btn-primary',
   align = 'end',
+  testId,
 }: MenuButtonProps) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -119,6 +124,7 @@ export function MenuButton({
         ref={trigger}
         type="button"
         className={className}
+        data-testid={testId}
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -154,6 +160,7 @@ export function MenuButton({
               // The menu owns focus; Tab leaves it rather than walking items.
               tabIndex={-1}
               className={item.danger === true ? 'menu-button__item is-danger' : 'menu-button__item'}
+              data-testid={item.testId}
               /**
                * `aria-disabled`, not `disabled`: a natively disabled button
                * cannot take focus, so a menu whose first item is disabled

@@ -2,6 +2,7 @@ import { CHART_TYPES } from '@wechart/core';
 import { expect, test } from '@playwright/test';
 
 import { chooseChartType, expectChartType } from './chartType';
+import { wellPicker } from './wells';
 
 /**
  * AC-026: WHEN the user drags a field onto a well, or adds it with the well's
@@ -23,12 +24,12 @@ test('adds a field with the well picker and runs the query', async ({ page }) =>
   await openEditorOnOrders(page);
   await expect(page.getByTestId('result-empty')).toBeVisible();
 
-  await page.getByTestId('add-measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.count');
 
   await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
   await expect(page.getByTestId('result-row-count')).toHaveText('1 rows');
   // 240 seeded orders, in the drawer â€” the only place rows are printed (AC-214).
-  await page.getByRole('button', { name: 'Results' }).click();
+  await page.getByRole('tab', { name: 'Results', exact: true }).click();
   await expect(page.getByTestId('drawer-result-rows')).toContainText('240');
 });
 
@@ -44,11 +45,11 @@ test('adds a field by dragging it onto a well', async ({ page }) => {
 test('re-runs the query when another field is added, showing a new result', async ({ page }) => {
   await openEditorOnOrders(page);
 
-  await page.getByTestId('add-measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.count');
   await expect(page.getByTestId('result-row-count')).toHaveText('1 rows');
 
   // Grouping by status turns one row into one row per status.
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
 
   await expect(page.getByTestId('in-dimensions-orders.status')).toBeVisible();
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
@@ -56,8 +57,8 @@ test('re-runs the query when another field is added, showing a new result', asyn
 
 test('removing a field re-runs the query too', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
 
   // Named by its title (AC-216).
@@ -111,8 +112,8 @@ test('an illegal well refuses the drop', async ({ page }) => {
  */
 test('recommends a chart with a runner-up, and explains why', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
 
   // Three statuses is a small category: a bar.
@@ -135,10 +136,10 @@ test('recommends a chart with a runner-up, and explains why', async ({ page }) =
 
 test('the trace names the rule that rejected a candidate (AC-029)', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.count');
   // 240 distinct ids: far past the 6-slice cap, so a pie is enumerated and
   // then rejected, which is what the trace must account for.
-  await page.getByTestId('add-dimensions').selectOption('orders.id');
+  await wellPicker(page, 'dimensions').selectOption('orders.id');
   await expect(page.getByTestId('result-row-count')).toHaveText('240 rows');
 
   await page.getByRole('button', { name: 'Why this chart?' }).click();
@@ -156,8 +157,8 @@ test('the trace names the rule that rejected a candidate (AC-029)', async ({ pag
  */
 test('a manually chosen chart type survives field changes', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
   await expectChartType(page, 'bar');
 
   // Pick something the recommender did not choose.
@@ -165,15 +166,15 @@ test('a manually chosen chart type survives field changes', async ({ page }) => 
   await expectChartType(page, 'pie');
 
   // A field change moves the recommendation on; the chart must not follow.
-  await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
   await expect(page.getByTestId('recommended-type')).not.toHaveAttribute('data-chart-type', 'pie');
   await expectChartType(page, 'pie');
 });
 
 test('"Back to recommended" hands the choice back', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
 
   await chooseChartType(page, 'pie');
   await expectChartType(page, 'pie');
@@ -182,15 +183,15 @@ test('"Back to recommended" hands the choice back', async ({ page }) => {
 
   await expectChartType(page, 'bar');
   // And it follows the recommendation again from here on.
-  await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
   const recommended = await page.getByTestId('recommended-type').getAttribute('data-chart-type');
   await expectChartType(page, recommended!);
 });
 
 test('the option to go back appears only after a manual choice', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
 
   await expect(page.getByTestId('back-to-recommended')).toBeHidden();
 
@@ -207,8 +208,8 @@ test('the option to go back appears only after a manual choice', async ({ page }
  */
 test('says what is missing, naming the well and the member type', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
 
   // A scatter needs two measures and there is one.
   await chooseChartType(page, 'scatter');
@@ -223,18 +224,18 @@ test('says what is missing, naming the well and the member type', async ({ page 
 
 test('the message goes away once the field is added', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.count');
   await chooseChartType(page, 'scatter');
   await expect(page.getByTestId('missing-fields')).toBeVisible();
 
-  await page.getByTestId('add-measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
 
   await expect(page.getByTestId('missing-fields')).toBeHidden();
 });
 
 test('names every missing requirement, not only the first', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.count');
 
   // A heatmap wants a measure and two dimensions; there are no dimensions.
   await chooseChartType(page, 'heatmap');
@@ -250,7 +251,7 @@ test('names every missing requirement, not only the first', async ({ page }) => 
  */
 test('undoes and redoes a field change', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.count');
   await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
 
   await page.getByTestId('undo').click();
@@ -262,8 +263,8 @@ test('undoes and redoes a field change', async ({ page }) => {
 
 test('undoes every kind of change, including the chart type and the cube', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
   await chooseChartType(page, 'pie');
   await expectChartType(page, 'pie');
 
@@ -284,8 +285,8 @@ test('undoes every kind of change, including the chart type and the cube', async
 
 test('discard restores the chart as it opened', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
   await chooseChartType(page, 'pie');
 
   await page.getByTestId('discard').click();
@@ -314,11 +315,11 @@ test('nothing to undo or discard when the editor opens', async ({ page }) => {
  */
 test('the drawer shows result rows, underlying rows and the query', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
 
-  await page.getByRole('button', { name: 'Results', exact: true }).click();
+  await page.getByRole('tab', { name: 'Results', exact: true }).click();
 
   // The result rows: the three the chart rendered, not some other query's.
   await expect(page.getByTestId('drawer-result-rows')).toBeVisible();
@@ -370,8 +371,8 @@ test('the underlying rows work on a cube that publishes no primary key', async (
   await page.goto('/explore/charts/seed-chart-empty/edit');
   await page.getByLabel('Cube or view').selectOption({ label: 'Customers' });
   await expect(page.getByTestId('member-customers.count')).toBeVisible();
-  await page.getByTestId('add-measures').selectOption('customers.count');
-  await page.getByTestId('add-dimensions').selectOption('customers.country');
+  await wellPicker(page, 'measures').selectOption('customers.count');
+  await wellPicker(page, 'dimensions').selectOption('customers.country');
 
   // Wait for the query to settle before opening the drawer, as the sibling
   // test above does. Without it the click can interleave with the re-render
@@ -379,7 +380,7 @@ test('the underlying rows work on a cube that publishes no primary key', async (
   // a timeout on the tab, under load only.
   await expect(page.getByTestId('result-row-count')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Results', exact: true }).click();
+  await page.getByRole('tab', { name: 'Results', exact: true }).click();
   await page.getByTestId('drawer-tab-underlying').click();
 
   const underlying = page.getByTestId('drawer-underlying-rows');
@@ -393,11 +394,11 @@ test('the underlying rows work on a cube that publishes no primary key', async (
 
 test('the drawer agrees with the chart after the query changes', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByRole('button', { name: 'Results', exact: true }).click();
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await page.getByRole('tab', { name: 'Results', exact: true }).click();
   await expect(page.getByTestId('drawer-result-rows').locator('tbody tr')).toHaveCount(1);
 
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
 
   // Both the chart and the drawer move together, because they are the same data.
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
@@ -413,8 +414,8 @@ test('the drawer agrees with the chart after the query changes', async ({ page }
  */
 test('the editor draws a chart, and redraws it when the fields change', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
 
   const canvas = page.getByTestId('chart-canvas');
@@ -428,7 +429,7 @@ test('the editor draws a chart, and redraws it when the fields change', async ({
 
   // A second measure makes it a grouped bar: same three categories, twice the
   // marks. The drawing has to follow the query rather than being drawn once.
-  await page.getByTestId('add-measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
   await expect(page.getByTestId('in-measures-orders.total_amount')).toBeVisible();
   await expect(async () => {
     expect(await bars.count()).toBeGreaterThan(drawnForThree);
@@ -437,11 +438,11 @@ test('the editor draws a chart, and redraws it when the fields change', async ({
 
 test('no chart type is left undrawn', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-measures').selectOption('orders.total_amount');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
-  await page.getByTestId('add-dimensions').selectOption('orders.id');
-  await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await wellPicker(page, 'dimensions').selectOption('orders.id');
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
   await expect(page.getByTestId('result-row-count')).toBeVisible();
 
   // Replaces a test that asserted the opposite: that the editor said so for a
@@ -468,9 +469,9 @@ test('a scatter, a heatmap, small multiples and a pivot draw from the wells', as
 
   // Small multiples: a panel per status over time, each with its bars.
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
-  await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
   await chooseChartType(page, 'trellis');
   await expect.poll(texts).toEqual(expect.arrayContaining(['shipped', 'completed', 'processing']));
   await expect.poll(painted).toBeGreaterThan(3);
@@ -481,7 +482,7 @@ test('a scatter, a heatmap, small multiples and a pivot draw from the wells', as
   );
 
   // A scatter: count against amount on its axes, a series per status.
-  await page.getByTestId('add-measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
   await chooseChartType(page, 'scatter');
   await expect
     .poll(texts)
@@ -499,9 +500,9 @@ test('a scatter, a heatmap, small multiples and a pivot draw from the wells', as
 
   // A heatmap: products' categories across, their names down, a cell each.
   await page.getByLabel('Cube or view').selectOption({ label: 'Products' });
-  await page.getByTestId('add-measures').selectOption('products.count');
-  await page.getByTestId('add-dimensions').selectOption('products.category');
-  await page.getByTestId('add-dimensions').selectOption('products.name');
+  await wellPicker(page, 'measures').selectOption('products.count');
+  await wellPicker(page, 'dimensions').selectOption('products.category');
+  await wellPicker(page, 'dimensions').selectOption('products.name');
   await chooseChartType(page, 'heatmap');
   await expect
     .poll(texts)
@@ -527,8 +528,8 @@ test('a scatter, a heatmap, small multiples and a pivot draw from the wells', as
  */
 test('editing an axis changes the drawn chart', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
 
   const canvas = page.getByTestId('chart-canvas');
@@ -549,8 +550,8 @@ test('editing an axis changes the drawn chart', async ({ page }) => {
 
 test('an axis edit is undoable like any other change', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
 
   const canvas = page.getByTestId('chart-canvas');
   await page.getByRole('tab', { name: 'Customize' }).click();
@@ -575,8 +576,8 @@ test('sorting a chart reorders its categories', async ({ page }) => {
   // Not orders.count: the sample data has exactly 80 orders in each status,
   // so every category ties and ascending and descending are the same order.
   // A sort test needs a measure that actually varies.
-  await page.getByTestId('add-measures').selectOption('orders.total_amount');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
 
   await page.getByTestId('toggle-table-view').click();
@@ -593,7 +594,7 @@ test('sorting a chart reorders its categories', async ({ page }) => {
   expect(highest).not.toBe(lowest);
 
   // And the order survives a re-query: adding a field re-runs the query.
-  await page.getByTestId('add-measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.count');
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
   await expect(firstCell).toHaveText(lowest ?? '');
 });
@@ -601,8 +602,8 @@ test('sorting a chart reorders its categories', async ({ page }) => {
 test('a time dimension goes to its own well and groups by day', async ({ page }) => {
   await openEditorOnOrders(page);
 
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-timeDimensions').selectOption('orders.ordered_at');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
 
   await expect(page.getByTestId('in-timeDimensions-orders.ordered_at')).toBeVisible();
   // 240 orders, one per day.
@@ -690,7 +691,7 @@ test.describe('opening a saved chart (AC-182)', () => {
     await page.goto(SAVED);
     await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
 
-    await page.getByTestId('add-dimensions').selectOption('orders.id');
+    await wellPicker(page, 'dimensions').selectOption('orders.id');
     await expect(page.getByTestId('in-dimensions-orders.id')).toBeVisible();
     await expect(page.getByTestId('discard')).toBeEnabled();
     await page.getByTestId('discard').click();
@@ -747,8 +748,8 @@ test('the editor is three panes under one header row, its preview in view at 144
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
 
   // One header row: title, source and rows, ownership, Undo, Redo, Discard, Save.
   const head = page.getByTestId('editor-bar');
@@ -811,7 +812,7 @@ test('the editor is three panes under one header row, its preview in view at 144
   // The drawer below it, and no result rows printed anywhere else: with the
   // drawer open, the page's text outside it and the drawing names no row's
   // member the way a printed row does.
-  const drawer = preview.getByRole('button', { name: 'Results' });
+  const drawer = preview.getByRole('tab', { name: 'Results', exact: true });
   await expect(drawer).toBeVisible();
   expect(((await drawer.boundingBox())?.y ?? 0) > ((await canvas.boundingBox())?.y ?? 0)).toBe(
     true,
@@ -916,12 +917,12 @@ test('fields by cube, searched and added by click or key; pills by title with a 
 
   // The time pill's grain is the query's grain.
   await page.getByLabel('Grain of Orders Ordered at').selectOption('month');
-  await page.getByRole('button', { name: 'Results' }).click();
+  await page.getByRole('tab', { name: 'Results', exact: true }).click();
   await page.getByTestId('drawer-tab-query').click();
   await expect(page.getByTestId('drawer-query')).toContainText('"granularity": "month"');
 
   // The Filters well holds the chart to a value the member has.
-  await page.getByTestId('add-filters').selectOption('orders.status');
+  await wellPicker(page, 'filters').selectOption('orders.status');
   await page.getByLabel('Value of Orders Status').selectOption('shipped');
   await expect(page.getByTestId('drawer-query')).toContainText('"operator": "equals"');
   await expect(page.getByTestId('drawer-query')).toContainText('"shipped"');
@@ -933,8 +934,8 @@ test('fields by cube, searched and added by click or key; pills by title with a 
 /** AC-216's Top N reaches the drawing: the rest fold into one Other (AC-041). */
 test('Top N keeps that many categories and folds the rest into Other', async ({ page }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
   const canvas = page.getByTestId('chart-canvas');
   await expect(canvas).toBeVisible();
   await expect(canvas.getByText(/^Other \(/)).toHaveCount(0);
@@ -964,9 +965,9 @@ test('the Customize tab moves the legend, writes data labels and lets the axis l
 }) => {
   await openEditorOnOrders(page);
   // Two measures by status: two series, so a legend.
-  await page.getByTestId('add-measures').selectOption('orders.total_amount');
-  await page.getByTestId('add-measures').selectOption('orders.average_amount');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'measures').selectOption('orders.average_amount');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
   const canvas = page.getByTestId('chart-canvas');
   await expect(canvas).toBeVisible();
   await page.getByRole('tab', { name: 'Customize' }).click();
@@ -1018,9 +1019,9 @@ test('a two-measure legend, the results headers and the trace read the membersâ€
   page,
 }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-measures').selectOption('orders.total_amount');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
   const canvas = page.getByTestId('chart-canvas');
   await expect(canvas).toBeVisible();
 
@@ -1031,7 +1032,7 @@ test('a two-measure legend, the results headers and the trace read the membersâ€
   await expect(written.filter({ hasText: /orders\.(count|total_amount)/ })).toHaveCount(0);
 
   // The results' headers.
-  await page.getByRole('button', { name: 'Results' }).click();
+  await page.getByRole('tab', { name: 'Results', exact: true }).click();
   const headers = page.getByTestId('drawer-result-rows').getByRole('columnheader');
   await expect(headers).toHaveText(['Orders Status', 'Orders Count', 'Orders Total Amount']);
 
@@ -1055,9 +1056,9 @@ test('a two-measure legend, the results headers and the trace read the membersâ€
 test('a pie over two dimensions has a legend entry per slice', async ({ page }) => {
   await page.goto('/explore/charts/seed-chart-empty/edit');
   await page.getByLabel('Cube or view').selectOption({ label: 'Products' });
-  await page.getByTestId('add-measures').selectOption('products.count');
-  await page.getByTestId('add-dimensions').selectOption('products.category');
-  await page.getByTestId('add-dimensions').selectOption('products.name');
+  await wellPicker(page, 'measures').selectOption('products.count');
+  await wellPicker(page, 'dimensions').selectOption('products.category');
+  await wellPicker(page, 'dimensions').selectOption('products.name');
   await chooseChartType(page, 'pie');
   const canvas = page.getByTestId('chart-canvas');
   await expect(canvas).toBeVisible();
@@ -1089,8 +1090,8 @@ test('the type reads by name; Change opens a gallery that greys what these field
   page,
 }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
 
   await expect(page.getByTestId('chart-type')).toHaveText('Auto Â· Bar');
   await expect(page.getByTestId('chart-type-change')).toContainText('Picked by the recommender');
@@ -1144,9 +1145,9 @@ test('a manual combo, or a pie of too many slices, warns why and offers the reco
   page,
 }) => {
   await openEditorOnOrders(page);
-  await page.getByTestId('add-measures').selectOption('orders.count');
-  await page.getByTestId('add-measures').selectOption('orders.total_amount');
-  await page.getByTestId('add-dimensions').selectOption('orders.status');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
   await expect(page.getByTestId('type-warning')).toHaveCount(0);
 
   await chooseChartType(page, 'combo');
@@ -1162,7 +1163,7 @@ test('a manual combo, or a pie of too many slices, warns why and offers the reco
   // 240 orders, one slice each.
   await page.getByRole('button', { name: /Remove Orders Total Amount/ }).click();
   await page.getByRole('button', { name: /Remove Orders Status/ }).click();
-  await page.getByTestId('add-dimensions').selectOption('orders.id');
+  await wellPicker(page, 'dimensions').selectOption('orders.id');
   await expect(page.getByTestId('result-row-count')).toHaveText('240 rows');
   await chooseChartType(page, 'pie');
   await expect(page.getByTestId('type-warning')).toContainText(
