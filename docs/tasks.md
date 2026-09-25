@@ -3694,6 +3694,16 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
       - At first it was cut to 22 px, which broke T203's test of its 24 px `.btn.ghost.sm` and went below a pointer target's 24 px minimum.
       - Found in T253's run and corrected there: it is 24 px again, overhanging the row by 1 px each way, so the head stays 22.
     - **An incomplete chart** keeps its head with its chart's title, and says what it needs at 12 px secondary. "Its ✎, or E when the tile is selected" shows only while editing.
+  - **The cold review failed it, on T203's 24 px test (fixed in T253, above).** Also fixed from its findings:
+    - **View mode says how to finish an incomplete chart again, as the prototype does:** "…its ✎." Only "or E when the tile is selected" is editing's.
+    - **A message taller than its room fills down from under the head**, not up over it, and scrolls. This was a KPI-sized tile in edit mode.
+    - **The badge's padding, radius and the no-pill parts are asserted.**
+    - **No dangling separator** when the time can't be read.
+  - **Put to the user (F8):** once marked, a title in a narrow tile can still be cut off. The merged badge saves only about 12 px. The prototype's other ways to make room are each declined for a reason:
+    - it hides the badge while marked, which AC-013 forbids;
+    - it drops the time, which AC-148 needs;
+    - it moves Table view into the menu, which rule 5 opposes.
+  - **Noted:** the unavailable state (AC-167) shares `.tile-empty`, so its message is now 12 px too.
 - [ ] T254 (AC-187) Draw a chart's text in Inter with tabular numerals, and its plot down to the tile's foot, as the prototype does
   - Files: `packages/charts/src/*`, `packages/web/src/shell/styles.ts`, `docs/research/echarts-text-and-grid.md`, `e2e/design-conformance.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts` "T254: …": every SVG text is Inter, with tabular numerals; the lowest label is no more than 12 px above the chart's foot (the prototype's `grid: { bottom: 8, containLabel: true }`) (recheck-dashboard N7, F9; mismatches 12, 13).

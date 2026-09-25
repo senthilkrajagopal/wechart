@@ -2614,16 +2614,22 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* At 12 px under the tile's head, as the prototype says what a chart still
    needs (T252, F13); the tile's own padding is its edge. */
 .tile-empty {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
-  place-content: center;
   flex: 1;
   min-height: 0;
+  overflow: auto;
   color: var(--wc-text-secondary);
   font-size: var(--wc-text-xs-size);
   line-height: var(--wc-text-xs-line);
   text-align: center;
 }
+/* Centred where there is room; from the top where there is not, rather than
+   spilling up over the head (T252's review): auto margins give way, where
+   centring would overflow both ways. */
+.tile-empty > :first-child { margin-top: auto; }
+.tile-empty > :last-child { margin-bottom: auto; }
 .tile-empty p { margin: 0; }
 
 /* The marking badge and chip (AC-098, rule 50). These are what make the

@@ -183,7 +183,13 @@ export function ChartTile({
       {served === undefined && asOf === undefined ? null : (
         <span className="tile-freshness" data-testid="tile-freshness">
           {served === undefined ? null : <AccelerationBadge result={served} />}
-          {served === undefined || asOf === undefined ? null : <span aria-hidden="true">·</span>}
+          {/* Only between two parts: DataAsOf draws nothing for a time it
+              cannot read (T252's review). */}
+          {served === undefined ||
+          asOf === undefined ||
+          Number.isNaN(new Date(asOf).getTime()) ? null : (
+            <span aria-hidden="true">·</span>
+          )}
           {asOf === undefined ? null : <DataAsOf at={asOf} />}
         </span>
       )}

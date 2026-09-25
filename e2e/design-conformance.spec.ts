@@ -1799,12 +1799,30 @@ test.describe('T252: a chart tile’s badges, head and incomplete state', () => 
     await expect(badges).toHaveCount(1);
     await expect(badges.getByTestId('acceleration')).toHaveCount(1);
     await expect(badges.getByTestId('data-as-of')).toHaveCount(1);
-    expect(await style(badges, 'height', 'background-color', 'color', 'font-size')).toEqual({
+    expect(
+      await style(
+        badges,
+        'height',
+        'background-color',
+        'color',
+        'font-size',
+        'padding-left',
+        'border-radius',
+      ),
+    ).toEqual({
       height: '22px',
       'background-color': await token(page, 'bg-subtle', 'background-color'),
       color: await token(page, 'text-secondary'),
       'font-size': '12px',
+      'padding-left': '8px',
+      'border-radius': '999px',
     });
+    // Its parts are its text, with no pill of their own inside it (T252's review).
+    for (const part of ['acceleration', 'data-as-of'])
+      expect(await style(badges.getByTestId(part), 'padding-left', 'background-color')).toEqual({
+        'padding-left': '0px',
+        'background-color': 'rgba(0, 0, 0, 0)',
+      });
     // The prototype's head is 20–22 px; "Table view" made it 24 (mismatch 9).
     expect((await head.boundingBox())?.height).toBeLessThanOrEqual(22);
   });
@@ -1871,10 +1889,18 @@ test.describe('T252: a chart tile’s badges, head and incomplete state', () => 
       'font-size': '12px',
       color: await token(page, 'text-secondary'),
     });
-    // "Its ✎, or E when the tile is selected" is for editing.
-    await expect(empty).not.toContainText('✎');
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    // Its ✎ finishes it in either mode, as the prototype says "Use ✎ to finish
+    // it"; E on a selected tile is editing's alone (T252's review).
     await expect(empty).toContainText('✎');
+    await expect(empty).not.toContainText('E when the tile is selected');
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(empty).toContainText('E when the tile is selected');
+    // The message stays under the head in a KPI-sized tile, not over it — a
+    // centred message taller than its room spilt upward (T252's review).
+    const headBottom = await tile
+      .locator('.tile-head')
+      .evaluate((head) => head.getBoundingClientRect().bottom);
+    expect((await empty.locator('p').first().boundingBox())?.y).toBeGreaterThanOrEqual(headBottom);
   });
 });
 

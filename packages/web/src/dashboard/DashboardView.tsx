@@ -510,9 +510,15 @@ function TileBody({
               {needsOf(chartType).map((sentence) => (
                 <p key={sentence}>{sentence}</p>
               ))}
-              {/* The pencil and E are edit mode's (F13). */}
-              {tile.chartId === undefined || !canEditChart || editing !== true ? null : (
-                <p>Add its fields in the chart editor: its ✎, or E when the tile is selected.</p>
+              {/* Its ✎ finishes it in either mode, as the prototype's "Use ✎
+                  to finish it"; E on a selected tile is editing's (F13, T252's
+                  review). */}
+              {tile.chartId === undefined || !canEditChart ? null : (
+                <p>
+                  {editing === true
+                    ? 'Add its fields in the chart editor: its ✎, or E when the tile is selected.'
+                    : 'Add its fields in the chart editor: its ✎.'}
+                </p>
               )}
             </div>
           </>

@@ -116,6 +116,8 @@ the task note rather than re-asking.
 - **AC-018 says a dashboard opened from Explore opens in view mode.** A new dashboard now opens in edit mode, as in the prototype (T245). Proposal: clarify AC-018 to existing dashboards.
 - **F3's Published badge and Markings button.** No task or AC tracks them, and Preview as and Schedule are undecided.
 - **N16:** what Explore and the top bar do below 1,024 px. The prototype has no narrow layout, and T250 covers only dashboards.
+- **F8, a chart title truncated once marked.** It survives T252's merged badge. Room would come only from what AC-013, AC-148 or rule 5 keep in the head (see T252's entry).
+- **Tile menus keep the disclosure pattern, not `role=menu` (T253).** The role would promise arrow-key menu behaviour.
 
 ## 3. What just landed, and what it changed structurally
 
