@@ -396,6 +396,15 @@ test.describe('T182: what the first round left open', () => {
     await page.keyboard.press('ArrowLeft');
     await expect(overview).toBeFocused();
     await expect(overview).toHaveAttribute('aria-selected', 'true');
+    // Wrapping, and Home and End (T182's review).
+    await page.keyboard.press('ArrowLeft');
+    await expect(appendix).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(overview).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(appendix).toBeFocused();
+    // Its ring whole, in a strip that scrolls sideways (T182's review).
+    expect(await ringShows(appendix)).toBe('whole');
   });
 
   test('a tab group’s tabs take the arrow keys too', async ({ page }) => {
@@ -463,6 +472,15 @@ test.describe('T182: what the first round left open', () => {
     expect(await page.evaluate(() => document.activeElement?.closest('[data-tile]') !== null)).toBe(
       true,
     );
+
+    // The same delete again, the same message: a new toast, which times out
+    // as a fresh one does, not held over from the last (T182's review).
+    await page.locator('[data-tile="tile-notes"]').focus();
+    await page.keyboard.press('Delete');
+    await expect(toast).toBeVisible();
+    await page.mouse.move(0, 0);
+    await page.clock.runFor(9_000);
+    await expect(toast).toHaveCount(0);
   });
 
   test('deleting a tab by its × leaves focus on its group’s tab strip', async ({ page }) => {

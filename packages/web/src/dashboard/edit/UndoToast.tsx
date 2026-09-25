@@ -54,7 +54,16 @@ export function UndoToast({ message, onUndo, onDismiss, afterMs = TOAST_MS }: Un
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message, afterMs, held]);
 
-  if (message === '') return null;
+  /**
+   * Gone, it is let go of (T182's review): Undo or Dismiss by pointer takes
+   * the toast from under the pointer with no leave, and the same message
+   * ("Deleted Notes.") coming again would otherwise find itself held and
+   * never time out. Adjusted during render, as a value derived from props.
+   */
+  if (message === '') {
+    if (heldFor !== null) setHeldFor(null);
+    return null;
+  }
 
   /**
    * Undo or Dismiss take the toast away with focus in it; focus goes back to

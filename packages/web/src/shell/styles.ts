@@ -4448,7 +4448,8 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 .settings-page__nav button:focus-visible,
 .tile-menu__list button:focus-visible,
 .model-problems :focus-visible,
-.filter-widget__options :focus-visible {
+.filter-widget__options :focus-visible,
+.page-tabs [role='tab']:focus-visible {
   outline-offset: -2px;
 }
 /* On the toast's inverted ground the accent falls short of 3:1 (WCAG 1.4.11);

@@ -3251,7 +3251,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `e2e/perf/marking-update.spec.ts`, `packages/web/src/query/concurrency.ts`
   - Failing test: `e2e/perf/marking-update.spec.ts`: the p95 time to update every affected tile after a marking change is under 3 s (AC-175). The client-side concurrency bound is set here against Cube's queue concurrency.
   - Depends on: T110, T180
-- [x] T182 (AC-176) Make every action keyboard-reachable with a focus indicator distinct from the marking outline
+- [ ] T182 (AC-176) Make every action keyboard-reachable with a focus indicator distinct from the marking outline
   - Files: `packages/web/src/shell/styles.ts` (the ring), `packages/web/src/shell/useFocusTrap.ts`, the dashboard, filter, settings, security, search and Explore surfaces it names below, `e2e/keyboard-coverage.spec.ts`. The planned `packages/ui/src/focus.css.ts` and `YamlEditor.tsx` hint were not needed; see below.
   - Failing test: `e2e/keyboard-coverage.spec.ts`: navigation, authoring, marking, filtering and every dialog are reachable from the keyboard, focus is visible on every control and is visually distinct from the marking outline, and Tab leaves the code editor, which is no keyboard trap (AC-176).
   - Depends on: T063, T106, T139
@@ -3304,7 +3304,20 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **The gear is `aria-disabled` while a save answers**, not `disabled`, so it takes focus back as the settings page closes. `saveInFlight.test.tsx` reads the attribute. Its assertion that the gear opens nothing meanwhile is unchanged.
     - **Marking by the keyboard, under a distinct ring.** A tile focused in view mode marks with AC-100's keys (→, then Space), and the chip appears. The focus ring is 2 px, 2 px outside the tile, in the accent. The marked items' outline is 1.5 px, hugging each mark, in the marking's ink. They differ in width, offset and colour, and the test measures all three.
     - **Not built, and not needed for the criterion:** direction.md's ⌘Z, F6 and `/` shortcuts. Undo and Redo are buttons in every editor, reachable by Tab, so no action waits on a shortcut.
-  - AC-176 ticked on `e2e/keyboard-coverage.spec.ts` (both rounds), with AC-100's keyboard marking tests in `e2e/markings.spec.ts`, all three browsers.
+  - ~~AC-176 ticked on `e2e/keyboard-coverage.spec.ts` (both rounds), with AC-100's keyboard marking tests in `e2e/markings.spec.ts`, all three browsers.~~ **Withdrawn after the cold review (below).**
+  - **Cold review (one round), verdict FAIL: the tick was not earned.** T182 and AC-176 are unchecked again.
+    - **Fixed, each with a test that failed first:**
+      - **The undo toast could stay forever.** Undo or Dismiss by pointer took the toast from under the pointer with no leave, so the next toast with the same message ("Deleted Notes.") found itself held and never timed out. It is now let go of when it goes. The test deletes the same tile twice.
+      - **The page tabs' ring lost its bottom edge** in their strip, which scrolls sideways. It is drawn inside the tab, as in the other clipped strips. The page-tab test measures the ring, and exercises wrap-around, Home and End.
+      - The grip's older comment no longer says pressing it does nothing.
+    - **Still open, and why AC-176 stays unchecked.** Each fails AC-176's Fails-when, and none is new in this task:
+      - **Pointer-only actions:**
+        - cross-filtering (no key makes a cross-filter; `crossfilter.spec.ts` asserts Space does nothing there);
+        - marking a scatter's points;
+        - marking a series or legend category (AC-090) or a trellis panel (AC-091);
+        - marking a table tile's rows (AC-092: `<tr onClick>` only).
+      - **The keyboard's focused chart item is drawn nowhere.** `markFocus` is state only, so a sighted keyboard user cannot see which item Space will mark.
+      - These are planned as T306 and T307, in "The 2026-09-25 UI review" below.
 - [x] T183 (AC-177) Pair every status, validation and job state with an icon and a text label
   - Files: `packages/ui/src/StatusBadge.tsx`, `e2e/status-labels.spec.ts`
   - Failing test: `e2e/status-labels.spec.ts`: across every workspace, no status, validation or job state is conveyed by colour alone (AC-177).

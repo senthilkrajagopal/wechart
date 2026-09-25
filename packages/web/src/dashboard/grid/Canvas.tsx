@@ -410,8 +410,9 @@ export function Canvas({
                 /**
                  * A real button with a name, not a bare handle: it is what a
                  * screen reader announces as the thing that moves this tile,
-                 * and where T063's keyboard move will hang. Pressing it does
-                 * nothing on its own — the ⋯ menu is the non-drag route.
+                 * and where T063's keyboard move will hang. Pressed, it hands
+                 * focus to its tile (above), whose arrow keys move it; the ⋯
+                 * menu's Move to is the other non-drag route.
                  *
                  * The role description and the instructions are the baseline
                  * `docs/research/dashboard-grid.md` makes a condition of
