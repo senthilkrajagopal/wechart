@@ -3,6 +3,7 @@ import closeWithGrace from 'close-with-grace';
 import { loadConfig } from './config';
 import { closeDb, getDb } from './db/client';
 import { migrateToLatest } from './db/migrate';
+import { bookmarkStore } from './repos/bookmarks';
 import { catalog } from './repos/catalog';
 import { documents } from './repos/documents';
 import { readModelDir } from './model/read-dir';
@@ -38,6 +39,7 @@ async function main(): Promise<void> {
     catalog: catalog(db),
     documents: documents(db),
     images: imageStore(db),
+    bookmarks: bookmarkStore(db),
     modelFiles,
     logger: true,
   });

@@ -233,6 +233,7 @@ import { useNarrowWindow } from './useNarrowWindow';
 import { onTabKey } from '../shell/tabKeys';
 import { duplicateChartTile, duplicatePlainTile } from './model/duplicate';
 import { withLocalCharts } from './model/localCharts';
+import { Bookmarks } from './bookmarks/Bookmarks';
 
 /**
  * A saved dashboard, open for reading (AC-018).
@@ -4207,56 +4208,74 @@ export function DashboardView({
         readOnly={preview !== undefined || narrow}
         onStart={onEditStart}
         onDiscard={onDiscard}
-        headerActions={(session) =>
-          // Not below 1,024 px, where the dashboard is for reading: the
-          // settings' Save writes it (T250's review). An edit session already
-          // open keeps it, as it keeps its bar.
-          narrow && !session.editing ? null : (
-            <button
-              ref={gear}
-              type="button"
-              className="dashboard__gear icon-button"
-              aria-label="Dashboard settings"
-              title="Dashboard settings"
-              /**
-               * Not while a save is under way (AC-184, T197). The header is
-               * outside the body a save makes inert, and a settings save made now
-               * goes to a session that takes no change — the page would close
-               * with the settings lost and nothing said.
-               */
-              // aria-disabled, not disabled: focus is given back to the gear as
-              // the settings page closes, and a natively disabled gear, while a
-              // view-mode save was answering, took none (T182's second round).
-              aria-disabled={session.saving ? 'true' : undefined}
-              onClick={() => {
-                if (session.saving) return;
-                // In view mode the settings page is an edit of its own, begun now
-                // with the dashboard as it stands: its save is checked against
-                // this moment's version (T198, AC-015). While editing, it is part
-                // of the session, which began earlier.
-                if (!session.editing) onEditStart?.();
-                setSettingsSection('General');
-                setSettingsOpen(true);
-              }}
-            >
-              {/* The prototype's gear (AC-187). */}
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            </button>
-          )
-        }
+        headerActions={(session) => (
+          <>
+            {/* A reader's: what the dashboard shows now, under a name (T127,
+                AC-121). Not while editing, where nothing is marked. */}
+            {session.editing ? null : (
+              <Bookmarks
+                dashboardId={dashboardId}
+                current={{
+                  page: pageId,
+                  filters: filterValues,
+                  marks,
+                  markFilters,
+                  from: markSources,
+                }}
+              />
+            )}
+            {
+              // Not below 1,024 px, where the dashboard is for reading: the
+              // settings' Save writes it (T250's review). An edit session already
+              // open keeps it, as it keeps its bar.
+              narrow && !session.editing ? null : (
+                <button
+                  ref={gear}
+                  type="button"
+                  className="dashboard__gear icon-button"
+                  aria-label="Dashboard settings"
+                  title="Dashboard settings"
+                  /**
+                   * Not while a save is under way (AC-184, T197). The header is
+                   * outside the body a save makes inert, and a settings save made now
+                   * goes to a session that takes no change — the page would close
+                   * with the settings lost and nothing said.
+                   */
+                  // aria-disabled, not disabled: focus is given back to the gear as
+                  // the settings page closes, and a natively disabled gear, while a
+                  // view-mode save was answering, took none (T182's second round).
+                  aria-disabled={session.saving ? 'true' : undefined}
+                  onClick={() => {
+                    if (session.saving) return;
+                    // In view mode the settings page is an edit of its own, begun now
+                    // with the dashboard as it stands: its save is checked against
+                    // this moment's version (T198, AC-015). While editing, it is part
+                    // of the session, which began earlier.
+                    if (!session.editing) onEditStart?.();
+                    setSettingsSection('General');
+                    setSettingsOpen(true);
+                  }}
+                >
+                  {/* The prototype's gear (AC-187). */}
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                </button>
+              )
+            }
+          </>
+        )}
         /**
          * The settings page, opened over the dashboard rather than navigated to,
          * so the edit session survives it (AC-069, and AC-074 later).

@@ -1823,7 +1823,12 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 ## F13. Bookmarks and shareable links
 
-- [ ] T127 (AC-121) Save a bookmark holding the page tab, filter values and current marks
+- [x] T127 (AC-121) Save a bookmark holding the page tab, filter values and current marks
+  - Done 2026-09-25. **AC-121 waits for T128's e2e**, which applies what is saved (its Fails-when is about applying).
+    - **Store.** `repos/bookmarks.ts` keeps each bookmark as a `bookmark` document (a kind AC-014 names), with body `{dashboardId, title, state}`. It sits beside the dashboard, never inside it. `list` goes by name. Saving under a name already used on that dashboard replaces the earlier bookmark (a small decision; the dialog says so).
+    - **Routes.** `GET`/`POST /api/dashboards/:id/bookmarks`. The name is trimmed and required. The state must be an object holding `filters` and `marks` objects; the browser checks the rest when applying, as it does a URL. An unknown dashboard gets 404.
+    - **Web.** The header's **Bookmarks ▾** is a menu button placed before the gear and hidden while editing; the prototype has no bookmarks, so the placement is a small decision. It has one item, **Save bookmark…**, which opens a modal named "Save a bookmark" with a Name field, a note on what it keeps, Save (disabled until a name is given) and Cancel. On success a status line says "Saved the bookmark “‹name›”."; a refusal is shown inside the dialog. `ViewState` (`bookmarks/viewState.ts`) holds the page, the filters' values, the marks, the filters that "Filter to marked" made, and each marking's source tile.
+    - **Tests that failed first:** `repos/bookmarks.test.ts` (against the real metadata DB: kept whole under its name, listed by name for its dashboard only, a same-name save replaces), `bookmarks.test.ts` (routes: 201 with the trimmed name, 400 for no name or no page/filters/marks, 404 for no such dashboard), and `Bookmarks.test.tsx` (the POST carries the name and the state; a refusal is said in the dialog; no name, no save).
   - Files: `packages/api/src/repos/bookmarks.ts`, `packages/web/src/dashboard/bookmarks/SaveBookmark.tsx`, `packages/api/src/repos/bookmarks.test.ts`
   - Failing test: `bookmarks.test.ts`: the stored bookmark carries the tab, every filter value and the mark set, under the given name (AC-121).
   - Depends on: T087, T101

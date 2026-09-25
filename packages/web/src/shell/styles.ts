@@ -2131,6 +2131,13 @@ main:has(.dashboard) {
    sits between the title and whatever the mode puts on the right. */
 /* The settings gear: the prototype's icon button, last in the header. */
 .dashboard__gear { flex: none; }
+/* Bookmarks (T127): a reader's control, before the gear. */
+.dashboard__bookmarks { flex: none; }
+.dashboard__bookmarks-button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; }
+.dialog.save-bookmark { width: min(420px, calc(100vw - 32px)); }
+.save-bookmark form { display: grid; gap: 12px; }
+.save-bookmark__name { display: grid; gap: 4px; }
+.save-bookmark__keeps { margin: 0; color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); }
 
 /* The settings page (AC-069). Full-viewport like the chart editor: it takes
    the place of the dashboard rather than floating over it, so there is one bar

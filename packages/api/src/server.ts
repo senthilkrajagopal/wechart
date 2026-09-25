@@ -26,6 +26,7 @@ import { registerIntrospection } from './model/introspection';
 import type { Config } from './config';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, type ReferenceDocument } from './model/references';
+import type { BookmarkStore } from './repos/bookmarks';
 import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
 
 /**
@@ -42,6 +43,8 @@ export interface BuildOptions {
   readonly documents?: DocumentWriter;
   /** Images added to dashboards' image tiles (AC-063). */
   readonly images?: ImageStore;
+  /** Dashboards' bookmarks (T127, AC-121). */
+  readonly bookmarks?: BookmarkStore;
   /** The Cube model's files (T137, AC-131). */
   readonly modelFiles?: ModelFileStore;
   /**
@@ -156,6 +159,7 @@ export function buildServer({
   catalog: cat,
   documents: docs,
   images,
+  bookmarks,
   modelFiles,
   healthFetch,
   logger = false,
@@ -839,6 +843,38 @@ export function buildServer({
       .header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox")
       .header('cache-control', 'private, max-age=31536000, immutable')
       .send(image.bytes);
+  });
+
+  /**
+   * A dashboard's bookmarks (T127, AC-121): the page tab, the filters' values
+   * and the marks, under a name. Beside the dashboard, never in it (AC-122).
+   * The state is the browser's to check as it applies it, as a URL is; here
+   * only that it is one.
+   */
+  app.get('/api/dashboards/:dashboardId/bookmarks', async (request, reply) => {
+    const { dashboardId } = request.params as { dashboardId: string };
+    if (bookmarks === undefined)
+      return reply.code(503).send({ error: 'Bookmarks cannot be kept here.' });
+    return { bookmarks: await bookmarks.list(dashboardId) };
+  });
+
+  app.post('/api/dashboards/:dashboardId/bookmarks', async (request, reply) => {
+    const { dashboardId } = request.params as { dashboardId: string };
+    const body = request.body as { name?: unknown; state?: unknown } | undefined;
+    if (bookmarks === undefined)
+      return reply.code(503).send({ error: 'Bookmarks cannot be kept here.' });
+    const name = typeof body?.name === 'string' ? body.name.trim() : '';
+    if (name === '') return reply.code(400).send({ error: 'A bookmark needs a name.' });
+    const state = body?.state;
+    const record = (value: unknown): value is Record<string, unknown> =>
+      typeof value === 'object' && value !== null && !Array.isArray(value);
+    if (!record(state) || !record(state['filters']) || !record(state['marks']))
+      return reply
+        .code(400)
+        .send({ error: 'A bookmark holds a page tab, filter values and marks.' });
+    if (docs?.get !== undefined && (await docs.get('dashboard', dashboardId)) === null)
+      return reply.code(404).send({ error: 'No such dashboard.' });
+    return reply.code(201).send(await bookmarks.save({ dashboardId, name, state }));
   });
 
   app.get('/api/search', async (request) => {
