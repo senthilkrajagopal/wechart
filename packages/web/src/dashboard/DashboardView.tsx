@@ -451,6 +451,7 @@ function TileBody({
   canEditChart = false,
   onItemClick,
   onShapeMark,
+  onContextMenuAt,
   rowMarking,
   limited,
   onRetry,
@@ -482,6 +483,8 @@ function TileBody({
   onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
   /** A shape dragged over its chart, while it marks (AC-088, AC-089). */
   onShapeMark?: ChartTileProps['onShapeMark'];
+  /** A right-click on its chart: its menu, at the pointer (T266, AC-246). */
+  onContextMenuAt?: ChartTileProps['onContextMenuAt'];
   /** Marking its rows, where it draws a table (AC-092). */
   rowMarking?: ChartTileProps['rowMarking'];
   spec: RenderSpec | undefined;
@@ -647,6 +650,7 @@ function TileBody({
           {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
           {...(onItemClick === undefined ? {} : { onItemClick })}
           {...(onShapeMark === undefined ? {} : { onShapeMark })}
+          {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
         />
       );
@@ -747,6 +751,14 @@ interface TileCharts {
    * nothing (T190 stage 7's review, `dragOverlay.ts`'s own failing state).
    */
   readonly marksShapes?: ((tileId: string, chartId: string) => boolean) | undefined;
+  /**
+   * Open a tile's menu (T266, AC-246): at the pointer of a right-click on
+   * its chart, or — from Shift+F10 or the Menu key — at the tile.
+   */
+  readonly onTileMenu?: ((tileId: string, at?: { x: number; y: number }) => void) | undefined;
+  /** The latest request to open this tile's menu, for its menu to answer. */
+  readonly menuRequestOn?:
+    ((tileId: string) => { seq: number; at?: { x: number; y: number } } | undefined) | undefined;
   /**
    * Marking a table tile's rows (AC-092): the marking it shows, the key that
    * identifies its rows, and where a row click goes.
@@ -1084,6 +1096,7 @@ function Elements({
                         charts.onViewRows?.(chartId, element.id, false);
                       }
                 }
+                openAt={charts.menuRequestOn?.(element.id)}
                 marked={(() => {
                   const shown = charts.markingOn?.(element.id);
                   const markItems = charts.markItemsOn?.(element.id);
@@ -1287,6 +1300,13 @@ function Elements({
                 : {
                     onShapeMark: (items: readonly ClickedItem[], toggle: boolean) => {
                       charts.onMarkShape?.(element.id, chartId, items, toggle);
+                    },
+                  })}
+              {...(charts.onTileMenu === undefined
+                ? {}
+                : {
+                    onContextMenuAt: (x: number, y: number) => {
+                      charts.onTileMenu?.(element.id, { x, y });
                     },
                   })}
               {...(() => {
@@ -2136,6 +2156,14 @@ export function DashboardView({
     undefined,
   );
   /** The tile whose rows are open (T120, AC-114; T268, AC-239), and which of them. */
+  /**
+   * The latest request to open a tile's menu other than by its ⋯ (T266,
+   * AC-246): which tile, where, and a number, so a second right-click on the
+   * same tile opens it again.
+   */
+  const [menuRequest, setMenuRequest] = useState<
+    { tileId: string; seq: number; at?: { x: number; y: number } } | undefined
+  >(undefined);
   const [rowsFor, setRowsFor] = useState<
     { chartId: string; tileId: string; marked: boolean } | undefined
   >(undefined);
@@ -2956,6 +2984,26 @@ export function DashboardView({
     onViewQuery: (chartId: string, tileId: string) => {
       if (queryOf(chartId) !== undefined) setQueryFor({ chartId, tileId });
     },
+    // Its menu, from a right-click on its chart or its keys, in view mode only:
+    // while editing, the tile's own menu is the arranging one.
+    ...(sessionEditing
+      ? {}
+      : {
+          onTileMenu: (tileId: string, at?: { x: number; y: number }) => {
+            setMenuRequest((was) => ({
+              tileId,
+              seq: (was?.seq ?? 0) + 1,
+              ...(at === undefined ? {} : { at }),
+            }));
+          },
+          menuRequestOn: (tileId: string) =>
+            menuRequest?.tileId === tileId
+              ? {
+                  seq: menuRequest.seq,
+                  ...(menuRequest.at === undefined ? {} : { at: menuRequest.at }),
+                }
+              : undefined,
+        }),
     onViewRows: (chartId: string, tileId: string, marked: boolean) => {
       if (rowsQueryOf(chartId, tileId, marked, 1) !== undefined) {
         setRowsFor({ chartId, tileId, marked });
@@ -4450,15 +4498,31 @@ function DashboardPages({
                 ),
           );
         }
-      : markKeys === undefined
+      : markKeys === undefined && charts.onTileMenu === undefined
         ? undefined
         : /**
            * In view mode a focused tile answers the marking's keys instead
            * (AC-100): the same tab stop, a different vocabulary, because
-           * arranging and reading are different things to be doing.
+           * arranging and reading are different things to be doing. And a
+           * chart tile opens its menu on Shift+F10 or the Menu key, in any
+           * interaction mode (T266, AC-246): handled here, with the default
+           * prevented, since Chromium on a Mac never makes those keys a
+           * `contextmenu` itself, and elsewhere makes one only if the key
+           * was not handled (research/context-menu-and-submenus.md §4).
            */
           (event, tile) => {
-            markKeys.onKey(event, tile.id);
+            const opensMenu =
+              !event.ctrlKey &&
+              !event.altKey &&
+              !event.metaKey &&
+              ((event.key === 'F10' && event.shiftKey) ||
+                (event.key === 'ContextMenu' && !event.shiftKey));
+            if (opensMenu && chartIdOf(document, tile.id) !== undefined) {
+              event.preventDefault();
+              charts.onTileMenu?.(tile.id);
+              return;
+            }
+            markKeys?.onKey(event, tile.id);
           },
     onDelete: editing
       ? (id) => {
@@ -4652,16 +4716,25 @@ function DashboardPages({
             keys: `Arrow keys move. Shift and arrow keys resize.${editable} Enter opens its properties. Delete removes.`,
           };
         }
-      : markKeys !== undefined
+      : markKeys !== undefined || charts.onTileMenu !== undefined
         ? (id) => {
             // In view mode the keys are the marking's (AC-100), and only a
-            // tile that marks with something answers them.
-            if (!isTileId(document, id) || markKeys.itemsOn(id).length === 0) {
-              return { role: 'dashboard tile', keys: '' };
+            // tile that marks with something answers them; a chart tile's
+            // menu opens on Shift+F10 (T266, AC-246).
+            const menu =
+              charts.onTileMenu !== undefined && chartIdOf(document, id) !== undefined
+                ? ' Shift and F10 open its menu.'
+                : '';
+            if (
+              !isTileId(document, id) ||
+              markKeys === undefined ||
+              markKeys.itemsOn(id).length === 0
+            ) {
+              return { role: 'dashboard tile', keys: menu.trim() };
             }
             return {
               role: 'dashboard tile',
-              keys: 'Arrow keys move between its items. Space marks. Ctrl and Space toggle. Shift and arrow keys extend. Escape unmarks.',
+              keys: `Arrow keys move between its items. Space marks. Ctrl and Space toggle. Shift and arrow keys extend. Escape unmarks.${menu}`,
             };
           }
         : undefined,

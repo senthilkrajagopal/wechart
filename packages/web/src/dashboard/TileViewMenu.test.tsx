@@ -41,7 +41,7 @@ describe('a tile’s view-mode menu', () => {
 
     const trigger = screen.getByRole('button', { name: 'Actions for Orders by status' });
     await userEvent.click(trigger);
-    await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Download CSV' }));
 
     expect(saved).toEqual([
       {
@@ -77,7 +77,7 @@ describe('a tile’s view-mode menu', () => {
       />,
     );
     await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Download CSV' }));
 
     const note = await screen.findByText(/^Downloaded 2 rows\. Truncated:/);
     expect(note.textContent).toBe(
@@ -99,7 +99,7 @@ describe('a tile’s view-mode menu', () => {
       />,
     );
     await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Download CSV' }));
 
     expect((await screen.findByText(/Nothing was cut short/)).textContent).toBe(
       'Downloaded 2 rows. Nothing was cut short: Cube returned all 2 rows of the query.',
@@ -112,7 +112,7 @@ describe('a tile’s view-mode menu', () => {
         <TileViewMenu tileId="t1" title="T" spec={SPEC} countRows={countRows} save={vi.fn()} />,
       );
       await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
-      await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Download CSV' }));
       expect((await screen.findByText(/Could not tell/)).textContent).toBe(
         'Downloaded 2 rows. Could not tell whether Cube cut the result short.',
       );
@@ -141,7 +141,7 @@ describe('a tile’s view-mode menu', () => {
     );
     for (let time = 0; time < 2; time += 1) {
       await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
-      await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Download CSV' }));
     }
     expect(counts[0]?.signal.aborted).toBe(true);
 
@@ -166,13 +166,13 @@ describe('a tile’s view-mode menu', () => {
     );
     const trigger = screen.getByRole('button', { name: 'Actions for T' });
     await userEvent.click(trigger);
-    await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Download CSV' }));
     await screen.findByText(/Nothing was cut short/);
 
     // From the keyboard, where focus went back to.
     expect(document.activeElement).toBe(trigger);
     await userEvent.keyboard('{Enter}');
-    expect(screen.getByRole('button', { name: 'Download CSV' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Download CSV' })).toBeTruthy();
     expect(screen.queryByText(/Nothing was cut short/)).toBeNull();
   });
 
@@ -181,8 +181,9 @@ describe('a tile’s view-mode menu', () => {
     render(<TileViewMenu tileId="t1" title="T" spec={SPEC} asking save={save} />);
     await userEvent.click(screen.getByRole('button', { name: 'Actions for T' }));
 
-    const download = screen.getByRole('button', { name: 'Download CSV' });
-    expect((download as HTMLButtonElement).disabled).toBe(true);
+    const download = screen.getByRole('menuitem', { name: 'Download CSV' });
+    // A menu item says it is off as the APG menu has it, and stays focusable (T266).
+    expect(download.getAttribute('aria-disabled')).toBe('true');
     await userEvent.click(download);
     expect(save).not.toHaveBeenCalled();
     // Why, in words beside it (T182, AC-176): a disabled button takes no

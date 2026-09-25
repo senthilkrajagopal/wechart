@@ -37,6 +37,8 @@ export interface ChartTileProps {
   readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
   /** A shape dragged over the chart, where the tile marks (AC-088, AC-089). */
   readonly onShapeMark?: ChartCanvasProps['onShapeMark'];
+  /** A right-click on the chart: its menu, at the pointer (T266, AC-246). */
+  readonly onContextMenuAt?: ChartCanvasProps['onContextMenuAt'];
   /** Marking this tile's rows, where it draws a table (AC-092). */
   readonly rowMarking?: DataTableProps['marking'];
   /**
@@ -98,6 +100,7 @@ interface ChartBodyProps {
   readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
   /** A shape dragged over it, while the tile marks (AC-088). */
   readonly onShapeMark?: ChartCanvasProps['onShapeMark'];
+  readonly onContextMenuAt?: ChartCanvasProps['onContextMenuAt'];
   /**
    * Marking this tile's rows, where it draws a table and the cube has a
    * primary key to identify them by (AC-092).
@@ -112,7 +115,14 @@ const DOM_TYPES: Partial<Record<ChartType, (props: ChartBodyProps) => React.Reac
   pivot: PivotTable,
 };
 
-function ChartBody({ spec, height, onItemClick, onShapeMark, rowMarking }: ChartBodyProps) {
+function ChartBody({
+  spec,
+  height,
+  onItemClick,
+  onShapeMark,
+  onContextMenuAt,
+  rowMarking,
+}: ChartBodyProps) {
   const DomChart = DOM_TYPES[spec.chartType];
   if (DomChart !== undefined) {
     return (
@@ -141,6 +151,7 @@ function ChartBody({ spec, height, onItemClick, onShapeMark, rowMarking }: Chart
       {...(height === undefined ? {} : { height })}
       {...(onItemClick === undefined ? {} : { onItemClick })}
       {...(onShapeMark === undefined ? {} : { onShapeMark })}
+      {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
     />
   );
 }
@@ -157,6 +168,7 @@ export function ChartTile({
   served,
   onItemClick,
   onShapeMark,
+  onContextMenuAt,
   rowMarking,
   badge,
   notes,
@@ -270,6 +282,7 @@ export function ChartTile({
           {...(height === undefined ? {} : { height })}
           {...(onItemClick === undefined ? {} : { onItemClick })}
           {...(onShapeMark === undefined ? {} : { onShapeMark })}
+          {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
         />
       )}

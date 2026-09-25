@@ -42,6 +42,11 @@ export interface ChartCanvasProps {
    * nothing.
    */
   readonly onShapeMark?: ((items: readonly ClickedItem[], toggle: boolean) => void) | undefined;
+  /**
+   * A right-click on the chart (T266, AC-246): the tile's menu opens at the
+   * pointer, and the browser's own menu does not. Absent, the browser's does.
+   */
+  readonly onContextMenuAt?: ((x: number, y: number) => void) | undefined;
 }
 
 const DEFAULT_HEIGHT = 320;
@@ -52,6 +57,7 @@ export function ChartCanvas({
   height = DEFAULT_HEIGHT,
   onItemClick,
   onShapeMark,
+  onContextMenuAt,
 }: ChartCanvasProps) {
   /** The page's theme, which the chart is drawn in (AC-211). */
   const theme = useThemeName();
@@ -417,6 +423,16 @@ export function ChartCanvas({
        * rather than here.
        */
 
+      onContextMenu={
+        onContextMenuAt === undefined
+          ? undefined
+          : (event) => {
+              // The tile's menu in place of the browser's (research §3): a
+              // press it began is cancelled below, so it marks nothing.
+              event.preventDefault();
+              onContextMenuAt(event.clientX, event.clientY);
+            }
+      }
       onMouseDown={(event) => {
         if (event.button !== 0) return;
         onItem.current = false;

@@ -98,7 +98,7 @@ test('a tile’s CSV has the rows and columns the tile shows, its filter applied
   await tile.getByRole('button', { name: 'Actions for Orders by status' }).click();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    tile.getByRole('button', { name: 'Download CSV' }).click(),
+    tile.getByRole('menuitem', { name: 'Download CSV' }).click(),
   ]);
   expect(download.suggestedFilename()).toBe('Orders by status.csv');
   const file = await readFile(await download.path(), 'utf8');
@@ -141,7 +141,7 @@ test('a tile’s CSV writes each measure formatted, and its raw number beside it
   await tile.getByRole('button', { name: 'Actions for Orders by status' }).click();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    tile.getByRole('button', { name: 'Download CSV' }).click(),
+    tile.getByRole('menuitem', { name: 'Download CSV' }).click(),
   ]);
   const [head = [], ...rows] = records((await readFile(await download.path(), 'utf8')).slice(1));
 
@@ -193,7 +193,7 @@ test('a download says how many rows it holds, and whether Cube cut them short', 
     await tile.getByRole('button', { name: 'Actions for Orders by status' }).click();
     await Promise.all([
       page.waitForEvent('download'),
-      tile.getByRole('button', { name: 'Download CSV' }).click(),
+      tile.getByRole('menuitem', { name: 'Download CSV' }).click(),
     ]);
     return rows;
   };

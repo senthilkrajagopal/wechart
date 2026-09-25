@@ -1006,13 +1006,13 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
 
   const openMenu = async () => {
     await status.getByRole('button', { name: 'Actions for By status' }).click();
-    return status.getByRole('list', { name: 'Actions for By status' });
+    return status.getByRole('menu', { name: 'Actions for By status' });
   };
   let menu = await openMenu();
   // The marked-rows group first, headed by the tile's marking and its count.
   const marked = menu.getByRole('group', { name: 'Marking · 1 marked' });
   // Filter to and out of marked first, as the prototype's group (T119, AC-113).
-  await expect(marked.getByRole('button')).toHaveText([
+  await expect(marked.getByRole('menuitem')).toHaveText([
     'Filter to marked',
     'Filter out marked',
     'View marked rows',
@@ -1022,19 +1022,19 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
     'Create details tile',
   ]);
   await expect(
-    menu.getByRole('button').filter({
+    menu.getByRole('menuitem').filter({
       hasNotText:
         /^(Filter to marked|Filter out marked|View marked rows|Invert marking|Mark all|Unmark|Create details tile)$/,
     }),
   ).toHaveText(['View as table', 'View query', 'Download CSV', 'Edit chart']);
 
   // View as table: the tile shows its rows.
-  await menu.getByRole('button', { name: 'View as table' }).click();
+  await menu.getByRole('menuitem', { name: 'View as table' }).click();
   await expect(status.getByRole('table')).toBeVisible();
 
   // View query: the Cube query, and the SQL it runs.
   menu = await openMenu();
-  await menu.getByRole('button', { name: 'View query' }).click();
+  await menu.getByRole('menuitem', { name: 'View query' }).click();
   const dialog = page.getByRole('dialog', { name: /By status/ });
   await expect(dialog).toContainText('"orders.count"');
   await expect(dialog.getByTestId('generated-sql')).toContainText(/select/i);
@@ -1052,14 +1052,75 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
 
   // Unmark, from the marking's own group — and said, as every change is (AC-101).
   menu = await openMenu();
-  await menu.getByRole('button', { name: 'Unmark' }).click();
+  await menu.getByRole('menuitem', { name: 'Unmark' }).click();
   await expect(status.getByTestId('mark-badge')).toHaveCount(0);
   await expect(page.getByTestId('marking-announcer')).toContainText('Marking cleared');
 
   // Edit chart opens the editor on it.
   menu = await openMenu();
-  await menu.getByRole('button', { name: 'Edit chart' }).click();
+  await menu.getByRole('menuitem', { name: 'Edit chart' }).click();
   await expect(page.getByRole('heading', { name: 'Chart editor' })).toBeVisible();
+});
+
+/**
+ * T266 / AC-246: WHEN the user right-clicks a chart tile's plot, or presses
+ * Shift+F10 or the Menu key on a focused chart tile, THE SYSTEM SHALL open
+ * the tile's menu at the pointer or at the tile, and the browser's own menu
+ * SHALL not open there.
+ * `Fails when: the browser's context menu opens instead, the keys do
+ * nothing, or a right-click changes a marking.`
+ *
+ * A headless browser draws no native menu, so its suppression is read as
+ * the event's `defaultPrevented` (research/context-menu-and-submenus.md §7).
+ */
+test('a right-click on the chart, Shift+F10 or the Menu key opens the tile’s menu, and marks nothing', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  await clickBar(page, status, 'shipped');
+  const badge = status.getByTestId('mark-badge');
+  await expect(badge).toContainText('1 marked');
+  await page.evaluate(() => {
+    const seen: boolean[] = [];
+    (window as unknown as { __menus: boolean[] }).__menus = seen;
+    document.addEventListener('contextmenu', (event) => seen.push(event.defaultPrevented));
+  });
+
+  // A right-click on another bar: the menu at the pointer, the marking as it was.
+  const label = await status.locator('svg text', { hasText: 'completed' }).first().boundingBox();
+  if (label === null) throw new Error('no label');
+  const at = { x: label.x + label.width / 2, y: label.y - 10 };
+  await page.mouse.click(at.x, at.y, { button: 'right' });
+  const menu = status.getByRole('menu', { name: 'Actions for By status' });
+  await expect(menu).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __menus: boolean[] }).__menus))
+    .toEqual([true]);
+  const box = await menu.locator('xpath=..').boundingBox();
+  if (box === null) throw new Error('no menu');
+  // At the pointer: its corner there, or turned back from the window's edge.
+  expect(Math.min(Math.abs(box.x - at.x), Math.abs(box.x + box.width - at.x))).toBeLessThan(40);
+  expect(Math.min(Math.abs(box.y - at.y), Math.abs(box.y + box.height - at.y))).toBeLessThan(40);
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  await expect(badge).toContainText('1 marked');
+  await expect(page.getByTestId('mark-chip')).not.toContainText('completed');
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+
+  // From the focused tile: Shift+F10, then the Menu key; Escape comes back to it.
+  for (const key of ['Shift+F10', 'ContextMenu']) {
+    await status.focus();
+    await page.keyboard.press(key);
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('menuitem').first()).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+    await expect(status).toBeFocused();
+  }
+  await expect(badge).toContainText('1 marked');
 });
 
 test('outside Markings mode, a chart tile’s menu has no marked-rows actions', async ({
@@ -1084,10 +1145,10 @@ test('outside Markings mode, a chart tile’s menu has no marked-rows actions', 
   await open(page, id, title);
   const status = tile(page, 'tile-status');
   await status.getByRole('button', { name: 'Actions for By status' }).click();
-  const menu = status.getByRole('list', { name: 'Actions for By status' });
-  await expect(menu.getByRole('button', { name: 'Download CSV' })).toBeVisible();
+  const menu = status.getByRole('menu', { name: 'Actions for By status' });
+  await expect(menu.getByRole('menuitem', { name: 'Download CSV' })).toBeVisible();
   await expect(menu.getByRole('group')).toHaveCount(0);
-  await expect(menu.getByRole('button', { name: 'Unmark' })).toHaveCount(0);
+  await expect(menu.getByRole('menuitem', { name: 'Unmark' })).toHaveCount(0);
 });
 
 /**
@@ -1372,9 +1433,9 @@ test('Invert marking and Mark all change one tile’s items, and keep another ti
   const act = async (name: string) => {
     await status.getByRole('button', { name: /^Actions for / }).click();
     const group = status
-      .getByRole('list', { name: /^Actions for / })
+      .getByRole('menu', { name: /^Actions for / })
       .getByRole('group', { name: /marked$/ });
-    await group.getByRole('button', { name }).click();
+    await group.getByRole('menuitem', { name }).click();
   };
 
   // Inverted: the tile's other two statuses, not shipped; Instruments kept.
@@ -1426,11 +1487,15 @@ test('Mark all limits a details tile by what the tile shows, and is offered only
   const group = async (target: Locator) => {
     await target.getByRole('button', { name: /^Actions for / }).click();
     return target
-      .getByRole('list', { name: /^Actions for / })
+      .getByRole('menu', { name: /^Actions for / })
       .getByRole('group', { name: /marked$/ });
   };
   // By status, unfiltered, marked whole: the details tile shows every status.
-  await (await group(tile(page, 'tile-status'))).getByRole('button', { name: 'Mark all' }).click();
+  await (
+    await group(tile(page, 'tile-status'))
+  )
+    .getByRole('menuitem', { name: 'Mark all' })
+    .click();
   await expect(details.getByTestId('chart-canvas')).toBeVisible();
   await expect
     .poll(async () => (await axisLabels(details)).filter((text) => statuses.includes(text)))
@@ -1438,9 +1503,9 @@ test('Mark all limits a details tile by what the tile shows, and is offered only
 
   // A stacked bar's click marks its series, not its categories: not offered there.
   const split = await group(tile(page, 'tile-split'));
-  await expect(split.getByRole('button', { name: 'Unmark' })).toBeVisible();
-  await expect(split.getByRole('button', { name: 'Mark all' })).toHaveCount(0);
-  await expect(split.getByRole('button', { name: 'Invert marking' })).toHaveCount(0);
+  await expect(split.getByRole('menuitem', { name: 'Unmark' })).toBeVisible();
+  await expect(split.getByRole('menuitem', { name: 'Mark all' })).toHaveCount(0);
+  await expect(split.getByRole('menuitem', { name: 'Invert marking' })).toHaveCount(0);
 });
 
 /**
@@ -1465,9 +1530,9 @@ test('Create details tile adds a tile limited by the tile’s marking, its messa
 
   await status.getByRole('button', { name: /^Actions for / }).click();
   await status
-    .getByRole('list', { name: /^Actions for / })
+    .getByRole('menu', { name: /^Actions for / })
     .getByRole('group', { name: /marked$/ })
-    .getByRole('button', { name: 'Create details tile' })
+    .getByRole('menuitem', { name: 'Create details tile' })
     .click();
 
   // Beside it, in edit mode, chosen.
@@ -1743,9 +1808,9 @@ test('Filter to marked and Filter out marked filter every tile they reach, clear
   const act = async (name: string) => {
     await status.getByRole('button', { name: /^Actions for / }).click();
     await status
-      .getByRole('list', { name: /^Actions for / })
+      .getByRole('menu', { name: /^Actions for / })
       .getByRole('group', { name: /marked$/ })
-      .getByRole('button', { name })
+      .getByRole('menuitem', { name })
       .click();
   };
   /** The statuses the data holds, so "every status" below means these. */
@@ -1779,8 +1844,8 @@ test('Filter to marked and Filter out marked filter every tile they reach, clear
   // The joined tile is asked for shipped orders only: its table view's total.
   await category.getByRole('button', { name: /^Actions for / }).click();
   await category
-    .getByRole('list', { name: /^Actions for / })
-    .getByRole('button', { name: 'View query' })
+    .getByRole('menu', { name: /^Actions for / })
+    .getByRole('menuitem', { name: 'View query' })
     .click();
   await expect(page.getByRole('dialog')).toContainText('"equals"');
   await expect(page.getByRole('dialog')).toContainText('"shipped"');
@@ -1789,16 +1854,16 @@ test('Filter to marked and Filter out marked filter every tile they reach, clear
   // With nothing marked, both actions say why they cannot run.
   await status.getByRole('button', { name: /^Actions for / }).click();
   const group = status
-    .getByRole('list', { name: /^Actions for / })
+    .getByRole('menu', { name: /^Actions for / })
     .getByRole('group', { name: /marked$/ });
-  await expect(group.getByRole('button', { name: 'Filter to marked' })).toHaveAttribute(
+  await expect(group.getByRole('menuitem', { name: 'Filter to marked' })).toHaveAttribute(
     'aria-disabled',
     'true',
   );
-  await expect(group.getByRole('button', { name: 'Filter out marked' })).toHaveAttribute(
-    'title',
-    'Nothing is marked.',
-  );
+  // Its reason as its description, which a keyboard reaches (T266, T182).
+  await expect(
+    group.getByRole('menuitem', { name: 'Filter out marked' }),
+  ).toHaveAccessibleDescription('Nothing is marked.');
   await page.keyboard.press('Escape');
 
   // Removed from its chip: every status again.
@@ -1837,11 +1902,11 @@ test('View marked rows shows the marked rows and their total, exports them, and 
   const status = tile(page, 'tile-status');
   const menu = async () => {
     await status.getByRole('button', { name: /^Actions for / }).click();
-    return status.getByRole('list', { name: /^Actions for / });
+    return status.getByRole('menu', { name: /^Actions for / });
   };
 
   // Nothing marked: the whole tile's rows.
-  await (await menu()).getByRole('button', { name: 'View underlying rows' }).click();
+  await (await menu()).getByRole('menuitem', { name: 'View underlying rows' }).click();
   let dialog = page.getByRole('dialog', { name: 'Underlying rows: By status' });
   await expect(dialog.getByTestId('rows-count')).toHaveText('Showing 100 of 240 rows');
   await dialog.getByRole('button', { name: 'Close' }).click();
@@ -1850,10 +1915,10 @@ test('View marked rows shows the marked rows and their total, exports them, and 
   await clickBar(page, status, 'shipped');
   const listed = await menu();
   // Offered in place of View underlying rows while something is marked.
-  await expect(listed.getByRole('button', { name: 'View underlying rows' })).toHaveCount(0);
+  await expect(listed.getByRole('menuitem', { name: 'View underlying rows' })).toHaveCount(0);
   await listed
     .getByRole('group', { name: /marked$/ })
-    .getByRole('button', { name: 'View marked rows' })
+    .getByRole('menuitem', { name: 'View marked rows' })
     .click();
   dialog = page.getByRole('dialog', { name: 'Marked rows: By status' });
   await expect(dialog.getByTestId('rows-count')).toHaveText('Showing 80 of 80 rows');
@@ -1999,9 +2064,9 @@ test('a shape over more than 1,000 items marks 1,000 and says why, and Mark all 
   // Mark all stores the tile's filter, so the cap does not apply to it.
   await many.getByRole('button', { name: /^Actions for / }).click();
   await many
-    .getByRole('list', { name: /^Actions for / })
+    .getByRole('menu', { name: /^Actions for / })
     .getByRole('group', { name: /marked$/ })
-    .getByRole('button', { name: 'Mark all' })
+    .getByRole('menuitem', { name: 'Mark all' })
     .click();
   await expect(badge).toContainText('1,500 marked');
 });

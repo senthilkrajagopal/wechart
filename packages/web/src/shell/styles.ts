@@ -3187,6 +3187,61 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   cursor: pointer;
 }
 .tile-menu__list button:hover { background: var(--wc-bg-hover); }
+/* The view-mode tile menu (T266, AC-246): the same picker, in the top layer,
+   so a right-click can open it at the pointer, clear of the tile's box and of
+   any transform above it. Its own position, set as it opens. */
+.tile-view-menu {
+  position: fixed;
+  inset: auto;
+  z-index: 20;
+  width: 250px;
+  max-height: min(480px, calc(100vh - 16px));
+  margin: 0;
+  padding: 4px;
+  overflow: auto;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  background: var(--wc-bg-raised);
+  color: var(--wc-text-primary);
+  box-shadow: var(--wc-shadow-pop);
+}
+/* A menu (shell/Menu.tsx): its items the picker's 28 px at 12 px. */
+.menu { display: grid; }
+.menu__group { display: grid; }
+.menu__item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 4px;
+  color: var(--wc-text-primary);
+  font-size: var(--wc-text-xs-size);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.menu__item:hover { background: var(--wc-bg-hover); }
+/* The current item always shows, from a pointer or the keyboard alike, and
+   unlike the marking outline (AC-176; research gotcha 9). */
+.menu__item:focus { outline: 2px solid var(--wc-accent); outline-offset: -2px; background: var(--wc-bg-hover); }
+.menu__item[aria-disabled='true'] { color: var(--wc-text-muted); cursor: not-allowed; }
+.menu__check { width: 12px; flex: 0 0 auto; color: var(--wc-accent); }
+.menu__chevron { margin-left: auto; color: var(--wc-text-muted); }
+.menu__separator { height: 1px; margin: 4px 0; background: var(--wc-border-subtle); }
+.menu__sub { position: relative; }
+.menu--sub {
+  position: absolute;
+  top: -5px;
+  left: calc(100% + 4px);
+  z-index: 1;
+  width: 220px;
+  padding: 4px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  background: var(--wc-bg-raised);
+  box-shadow: var(--wc-shadow-pop);
+}
+.menu--sub.menu--flip { left: auto; right: calc(100% + 4px); }
 /* Delete in the error ink, as the prototype's is (mismatch 14). */
 .tile-menu__delete button { color: var(--wc-status-error); }
 .tile-menu__list button:disabled { color: var(--wc-text-muted); cursor: not-allowed; }

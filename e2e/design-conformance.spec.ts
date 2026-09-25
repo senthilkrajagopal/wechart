@@ -1774,6 +1774,10 @@ test.describe('T247: the tab group, the Header, Markdown and the section band', 
   });
 });
 
+/** The view-mode tile menu's popup: the picker the APG menu sits in (T266). */
+const viewMenuOf = (tile: Locator) =>
+  tile.getByRole('menu', { name: /^Actions for / }).locator('xpath=..');
+
 const firstChart = (page: Page) =>
   page
     .locator('[data-tile]')
@@ -1973,7 +1977,8 @@ test.describe('T253: tile menus, the grip and the edit grid', () => {
     // .picker button { height: 28px; padding: 0 6px; border-radius: 4px; font-size: 12px }
     expect(
       await style(
-        menu.getByRole('button').first(),
+        // A button in the edit menu; in the view menu, an APG menu item (T266).
+        menu.locator('button, [role^="menuitem"]').first(),
         'height',
         'padding-left',
         'border-top-left-radius',
@@ -1991,7 +1996,8 @@ test.describe('T253: tile menus, the grip and the edit grid', () => {
     const tile = firstChart(page);
     await tile.hover();
     await tile.getByRole('button', { name: /^Actions for / }).click();
-    await pickerOf(page, tile.getByRole('list', { name: /^Actions for / }));
+    // The picker is the popup the menu sits in, with its heading (T266).
+    await pickerOf(page, viewMenuOf(tile));
   });
 
   test('the edit menu is the picker too, its heading muted and Delete in the error ink', async ({
@@ -2188,7 +2194,7 @@ test.describe('T253’s review: menus, the grip and the bands', () => {
     const tile = page.locator('[data-tile="tile-narrow"]');
     await tile.hover();
     await tile.getByRole('button', { name: /^Actions for / }).click();
-    const viewing = await withinCanvas(tile.getByRole('list', { name: /^Actions for / }));
+    const viewing = await withinCanvas(viewMenuOf(tile));
     expect(viewing.left).toBeGreaterThanOrEqual(0);
     expect(viewing.right).toBeGreaterThanOrEqual(0);
     await page.keyboard.press('Escape');
@@ -2388,9 +2394,9 @@ test.describe('T253’s review: menus, the grip and the bands', () => {
     const tile = page.locator('[data-tile="tile-narrow"]');
     await tile.hover();
     await tile.getByRole('button', { name: /^Actions for / }).click();
-    expect(
-      await style(tile.getByRole('list', { name: /^Actions for / }), 'background-color'),
-    ).toEqual({ 'background-color': raised });
+    expect(await style(viewMenuOf(tile), 'background-color')).toEqual({
+      'background-color': raised,
+    });
   });
 
   test('a menu with nowhere to move to says so at the picker’s 12 px', async ({ page }) => {

@@ -141,7 +141,7 @@ test('every state of a download has an icon and words', async ({ page }) => {
   await tile.getByRole('button', { name: /^Actions for / }).click();
   await Promise.all([
     page.waitForEvent('download'),
-    tile.getByRole('button', { name: 'Download CSV' }).click(),
+    tile.getByRole('menuitem', { name: 'Download CSV' }).click(),
   ]);
 
   await expect(tile.locator('.tile-export-note')).toContainText('Downloaded');

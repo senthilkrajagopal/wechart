@@ -446,10 +446,10 @@ test('a cross-filtering dashboard shows no marking control, chip or badge', asyn
 
   // Nor in a tile's menu: no marking group, no Unmark.
   await status.getByRole('button', { name: /^Actions for / }).click();
-  const menu = status.getByRole('list', { name: /^Actions for / });
+  const menu = status.getByRole('menu', { name: /^Actions for / });
   await expect(menu).toBeVisible();
   await expect(menu).not.toContainText('marked');
-  await expect(menu.getByRole('button', { name: 'Unmark' })).toHaveCount(0);
+  await expect(menu.getByRole('menuitem', { name: 'Unmark' })).toHaveCount(0);
   await page.keyboard.press('Escape');
 
   // Nor in edit mode's Properties: where the clicks are set, instead.

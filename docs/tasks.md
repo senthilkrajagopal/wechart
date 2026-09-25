@@ -4040,7 +4040,27 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
   - Files: `packages/api/src/model/publish.ts` and a check beside `rollupReferences.ts`, `packages/api/src/publish.test.ts`, `packages/web/src/workspaces/model/*` (the refusal as shown), `e2e/preaggregations.spec.ts`
   - Failing test: publishing a rollup on `base` that names `user.city` with no join between them is refused with 422, naming the rollup, its file and Cube's reason, and the store is unchanged. The same rollup with a join publishes.
   - Depends on: `docs/research/cube/rollup-join-paths.md`
-- [ ] T266 (AC-199, AC-246) Make the tile menu a menu with submenus, opened by ⋯, a right-click on the plot, Shift+F10 and the Menu key
+- [x] T266 (AC-199, AC-246) Make the tile menu a menu with submenus, opened by ⋯, a right-click on the plot, Shift+F10 and the Menu key
+  - Done 2026-09-25, all three browsers. AC-246 ticked on `e2e/markings.spec.ts` "a right-click on the chart, Shift+F10 or the Menu key opens the tile's menu, and marks nothing". It failed first, as did `shell/Menu.test.tsx`. AC-199 waits for T272's Export.
+    - **`shell/Menu`** is the WAI-ARIA APG Menu pattern (research/context-menu-and-submenus.md), one implementation for every opener:
+      - items, checkbox items, submenus, named groups and separators;
+      - ↓ ↑ wrap, Home and End;
+      - Enter runs an item and closes, and so does Space except on a checkbox item, which it toggles while the menu stays open;
+      - → Enter or Space opens a submenu on its first item, and ← or Escape closes only that submenu;
+      - Escape at the top closes the menu, and Tab from anywhere closes all of it.
+      - Items are elements with roles, not buttons, so Space and Enter can differ on a checkbox item (the research's gotcha 10).
+      - A disabled item stays focusable, and its reason is its description (`aria-describedby`), which a keyboard reaches where a tooltip did not (T182).
+    - **The view-mode tile menu** is that menu:
+      - Its marked group's heading sits outside the menu, which holds items only, and names the group.
+      - It opens in the top layer (`popover="manual"`), so a right-click puts it at the pointer, clear of the tile's box. It is turned back from the window's edges, and when opened from ⋯ it is kept inside the dashboard canvas, as T253's review asked.
+    - **The openers:**
+      - ⋯, as before.
+      - A right-click on the chart opens the menu at the pointer, the browser's menu is prevented, and the press it began marks nothing (T190's cancel on `contextmenu`).
+      - Shift+F10 or the Menu key on a focused chart tile opens it at the tile, in every view mode. Chart tiles are now tab stops in cross-filter mode too, and their spoken keys say "Shift and F10 open its menu". Escape then gives focus back to the tile.
+    - **Tests updated one for one:** the tile menu's `list` and `button` roles became `menu` and `menuitem`, and a disabled item's `.disabled` became `aria-disabled`.
+      - `TileViewMenu.test.tsx`: the test-integrity hook flags this as "replaces a strict matcher with a weaker one". It is a false positive: the renamed line was `toBeTruthy` before too, and `toBe(true)` on `.disabled` became `toBe('true')` on `aria-disabled`. Reported to the user.
+      - The design checks measure the popup the menu sits in (`viewMenuOf`).
+      - T119's disabled-reason check reads the accessible description instead of `title`.
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/web/src/tiles/ChartCanvas.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/shell/styles.ts`, `e2e/markings.spec.ts` or `e2e/tile-menu.spec.ts`
   - Failing test: a right-click on a bar opens the menu at the pointer, prevents the browser's menu, and changes no marking; Shift+F10 on a focused tile opens it at the tile; the submenus open with Right arrow and close with Left or Escape.
   - Depends on: `docs/research/context-menu-and-submenus.md`

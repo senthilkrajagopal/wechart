@@ -1,8 +1,12 @@
 import { csvOf, exportNoteOf, rowsText, type RenderSpec } from '@wechart/core';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
+import { Menu, type MenuEntry } from '../shell/Menu';
 import { StateLine, StatusIcon, type StateKind } from '../shell/StatusIcon';
-import { useKeepInside } from './keepInside';
+
+/** Whether this browser shows popovers (every one wechart supports does; jsdom does not). */
+const CAN_POP =
+  typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.showPopover === 'function';
 
 /** A file name from a chart's title: the characters file systems refuse replaced. */
 export function csvFileName(title: string): string {
@@ -49,7 +53,14 @@ export function TileViewMenu({
   onEditChart,
   onViewRows,
   marked,
+  openAt,
 }: {
+  /**
+   * A request to open, from a right-click on the chart (`at` the pointer) or
+   * Shift+F10 or the Menu key on the focused tile (under ⋯) — T266, AC-246.
+   * A new `seq` is a new request.
+   */
+  openAt?: { readonly seq: number; readonly at?: { x: number; y: number } } | undefined;
   tileId: string;
   title: string;
   spec: RenderSpec;
@@ -161,39 +172,205 @@ export function TileViewMenu({
   const trigger = useRef<HTMLButtonElement>(null);
   const why = useId();
   const wrapper = useRef<HTMLDivElement>(null);
-  const list = useRef<HTMLUListElement>(null);
-  useKeepInside(list, open);
-  /** Put away, and back to ⋯. */
-  const close = () => {
-    setOpen(false);
-    trigger.current?.focus();
-  };
+  const popup = useRef<HTMLDivElement>(null);
+  /** Where it opens: at the pointer of a right-click, or under ⋯ (or the tile, by keyboard). */
+  const [point, setPoint] = useState<{ x: number; y: number } | undefined>(undefined);
 
+  /**
+   * Opened from elsewhere (T266, AC-246): a right-click on the chart, at the
+   * pointer, or Shift+F10 or the Menu key on the focused tile, at the tile.
+   * Each request once, by its number.
+   */
+  const answered = useRef(openAt?.seq);
+  /** Opened from the focused tile by its keys: focus goes back to it (APG). */
+  const fromTile = useRef(false);
+  useEffect(() => {
+    if (openAt === undefined || openAt.seq === answered.current) return;
+    answered.current = openAt.seq;
+    fromTile.current = openAt.at === undefined;
+    setNote(undefined);
+    setPoint(openAt.at);
+    setOpen(true);
+  }, [openAt]);
+
+  /**
+   * Shown in the top layer and placed in the window: at the pointer, or
+   * under ⋯ at its right edge, turned back from any edge it would cross.
+   */
+  useLayoutEffect(() => {
+    const box = popup.current;
+    if (!open || box === null) return;
+    if (typeof box.showPopover === 'function' && !box.matches(':popover-open')) box.showPopover();
+    const size = box.getBoundingClientRect();
+    const anchor = trigger.current?.getBoundingClientRect();
+    // Within the dashboard's canvas where it has one, as the picker always
+    // opened (T253's review, finding 1), and within the window in any case.
+    const canvas = wrapper.current?.closest('.dashboard__canvas')?.getBoundingClientRect();
+    const [lowest, highest] = [
+      Math.max(8, canvas?.left ?? 0),
+      Math.min(window.innerWidth - 8, canvas?.right ?? window.innerWidth),
+    ];
+    let left = point?.x ?? (anchor === undefined ? 0 : anchor.right - size.width);
+    let top = point?.y ?? (anchor === undefined ? 0 : anchor.bottom + 4);
+    if (point !== undefined && left + size.width > highest) left -= size.width;
+    left = Math.min(Math.max(left, lowest), highest - size.width);
+    if (top + size.height > window.innerHeight - 8) {
+      top = Math.max(8, (point?.y ?? anchor?.top ?? top) - size.height - 4);
+    }
+    box.style.left = `${String(Math.max(8, left))}px`;
+    box.style.top = `${String(Math.max(8, top))}px`;
+  }, [open, point]);
+
+  // A press anywhere else puts it away.
   useEffect(() => {
     if (!open) return undefined;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setOpen(false);
-      trigger.current?.focus();
-    };
     const onPointerDown = (event: PointerEvent) => {
       if (wrapper.current?.contains(event.target as Node) === true) return;
       setOpen(false);
     };
-    document.addEventListener('keydown', onKeyDown);
     document.addEventListener('pointerdown', onPointerDown);
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('pointerdown', onPointerDown);
     };
   }, [open]);
+
+  /** Runs one of its actions; the menu closes itself after (`Menu`). */
+  const entries: MenuEntry[] = [
+    // The marked-rows group first, as the prototype's: under the heading
+    // naming the tile's marking and how much it holds (AC-199). Shown with
+    // nothing marked too: Unmark is then unavailable, while Invert, Mark all
+    // and Create details tile still have something to do.
+    ...(marked === undefined
+      ? []
+      : [
+          {
+            kind: 'group' as const,
+            key: 'marked',
+            labelledBy: `${why}-marked`,
+            entries: [
+              // The marking as a dashboard filter, or its negation, which then
+              // clears it (AC-113, direction.md rule 53).
+              ...(
+                [
+                  ['to', 'Filter to marked', marked.filterTo],
+                  ['out', 'Filter out marked', marked.filterOut],
+                ] as const
+              ).flatMap(([key, label, action]): MenuEntry[] =>
+                action === undefined
+                  ? []
+                  : [
+                      {
+                        kind: 'item',
+                        key,
+                        label,
+                        onSelect: typeof action === 'function' ? action : () => undefined,
+                        disabled: typeof action === 'function' ? undefined : action.refused,
+                      },
+                    ],
+              ),
+              ...(marked.onViewMarkedRows === undefined
+                ? []
+                : [
+                    {
+                      kind: 'item' as const,
+                      key: 'rows',
+                      label: 'View marked rows',
+                      onSelect: marked.onViewMarkedRows,
+                      disabled: marked.count === 0 ? 'Nothing is marked.' : undefined,
+                    },
+                  ]),
+              // On this tile's items alone, other tiles' left as they are
+              // (AC-115); offered where the tile has items to name.
+              ...(marked.onInvert === undefined
+                ? []
+                : [
+                    {
+                      kind: 'item' as const,
+                      key: 'invert',
+                      label: 'Invert marking',
+                      onSelect: marked.onInvert,
+                    },
+                  ]),
+              ...(marked.onMarkAll === undefined
+                ? []
+                : [
+                    {
+                      kind: 'item' as const,
+                      key: 'all',
+                      label: 'Mark all',
+                      onSelect: marked.onMarkAll,
+                    },
+                  ]),
+              {
+                kind: 'item' as const,
+                key: 'unmark',
+                label: 'Unmark',
+                onSelect: marked.onUnmark,
+                disabled: marked.count === 0 ? 'Nothing is marked.' : undefined,
+              },
+              ...(marked.onCreateDetails === undefined
+                ? []
+                : [
+                    {
+                      kind: 'item' as const,
+                      key: 'details',
+                      label: 'Create details tile',
+                      onSelect: marked.onCreateDetails,
+                    },
+                  ]),
+            ],
+          },
+          { kind: 'separator' as const, key: 'after-marked' },
+        ]),
+    ...(onTableView === undefined
+      ? []
+      : [
+          {
+            kind: 'item' as const,
+            key: 'table',
+            label: tableView ? 'View as chart' : 'View as table',
+            onSelect: () => {
+              onTableView(!tableView);
+            },
+          },
+        ]),
+    ...(onViewRows === undefined || (marked !== undefined && marked.count > 0)
+      ? []
+      : [
+          {
+            kind: 'item' as const,
+            key: 'underlying',
+            label: 'View underlying rows',
+            onSelect: onViewRows,
+          },
+        ]),
+    ...(onViewQuery === undefined
+      ? []
+      : [{ kind: 'item' as const, key: 'query', label: 'View query', onSelect: onViewQuery }]),
+    {
+      kind: 'item',
+      key: 'csv',
+      label: 'Download CSV',
+      // The tile's table, as it writes it, with the mark that tells a
+      // spreadsheet it is UTF-8 — and then what it holds.
+      onSelect: download,
+      disabled: asking ? 'Its newest answer is still on its way.' : undefined,
+      // Said in words beside it, which it is described by (T182, AC-176).
+      describedBy: asking ? why : undefined,
+    },
+    ...(onEditChart === undefined
+      ? []
+      : [{ kind: 'item' as const, key: 'edit', label: 'Edit chart', onSelect: onEditChart }]),
+  ];
 
   return (
     <div className="tile-menu" ref={wrapper}>
       <button
         type="button"
         ref={trigger}
+        id={`${why}-trigger`}
         aria-label={`Actions for ${title}`}
+        aria-haspopup="menu"
         aria-expanded={open}
         data-testid={`tile-view-menu-${tileId}`}
         // What focus returns to when View query closes: its own attribute, so
@@ -203,188 +380,53 @@ export function TileViewMenu({
           // The menu and the note share the place under ⋯: opening it puts
           // the note away, so neither covers the other.
           setNote(undefined);
+          setPoint(undefined);
+          fromTile.current = false;
           setOpen((was) => !was);
         }}
       >
         <span aria-hidden="true">⋯</span>
       </button>
       {open ? (
-        <ul className="tile-menu__list" ref={list} aria-label={`Actions for ${title}`}>
-          {/* The marked-rows group first, as the prototype's: headed by the
-              tile's marking and how much it holds (AC-199). Shown with
-              nothing marked too: Unmark is then unavailable, while Invert,
-              Mark all and Create details tile still have something to do. */}
+        <div
+          className="tile-view-menu"
+          ref={popup}
+          // In the top layer (research/context-menu-and-submenus.md §6): a
+          // right-click opens it at the pointer, clear of the tile's box and
+          // of any transform above it, while it stays in the tile's DOM.
+          // Only where it can be shown: a popover not shown is not drawn.
+          popover={CAN_POP ? 'manual' : undefined}
+        >
+          {/* The marked-rows group's heading, outside the menu itself, which
+              holds items only (APG): the tile's marking and how much it holds
+              (AC-199). */}
           {marked === undefined ? null : (
-            <li>
-              <div role="group" aria-labelledby={`${why}-marked`} className="tile-menu__group">
-                <span id={`${why}-marked`} className="tile-menu__heading">
-                  <span aria-hidden="true">● </span>
-                  {marked.name} · {marked.count.toLocaleString('en-GB')} marked
-                </span>
-                {/* The marking as a dashboard filter, or its negation, which
-                    then clears it (AC-113, direction.md rule 53). */}
-                {(
-                  [
-                    ['Filter to marked', marked.filterTo],
-                    ['Filter out marked', marked.filterOut],
-                  ] as const
-                ).map(([label, action]) =>
-                  action === undefined ? null : (
-                    <button
-                      key={label}
-                      type="button"
-                      aria-disabled={typeof action === 'function' ? undefined : true}
-                      title={typeof action === 'function' ? undefined : action.refused}
-                      onClick={() => {
-                        if (typeof action !== 'function') return;
-                        action();
-                        close();
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ),
-                )}
-                {marked.onViewMarkedRows === undefined ? null : (
-                  <button
-                    type="button"
-                    disabled={marked.count === 0}
-                    onClick={() => {
-                      close();
-                      marked.onViewMarkedRows?.();
-                    }}
-                  >
-                    View marked rows
-                  </button>
-                )}
-                {/* On this tile's items alone, other tiles' left as they
-                    are (AC-115); offered where the tile has items to name. */}
-                {marked.onInvert === undefined ? null : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      marked.onInvert?.();
-                      close();
-                    }}
-                  >
-                    Invert marking
-                  </button>
-                )}
-                {marked.onMarkAll === undefined ? null : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      marked.onMarkAll?.();
-                      close();
-                    }}
-                  >
-                    Mark all
-                  </button>
-                )}
-                <button
-                  type="button"
-                  disabled={marked.count === 0}
-                  onClick={() => {
-                    marked.onUnmark();
-                    close();
-                  }}
-                >
-                  Unmark
-                </button>
-                {marked.onCreateDetails === undefined ? null : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      marked.onCreateDetails?.();
-                      close();
-                    }}
-                  >
-                    Create details tile
-                  </button>
-                )}
-              </div>
-            </li>
+            <div id={`${why}-marked`} className="tile-menu__heading">
+              <span aria-hidden="true">● </span>
+              {marked.name} · {marked.count.toLocaleString('en-GB')} marked
+            </div>
           )}
-          {onTableView === undefined ? null : (
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  onTableView(!tableView);
-                  close();
-                }}
-              >
-                {tableView ? 'View as chart' : 'View as table'}
-              </button>
-            </li>
-          )}
-          {onViewRows === undefined || (marked !== undefined && marked.count > 0) ? null : (
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  close();
-                  onViewRows();
-                }}
-              >
-                View underlying rows
-              </button>
-            </li>
-          )}
-          {onViewQuery === undefined ? null : (
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  // Back to ⋯ first, so focus is never left on the page; the
-                  // dialog then takes it, and gives it back when it closes.
-                  close();
-                  onViewQuery();
-                }}
-              >
-                View query
-              </button>
-            </li>
-          )}
-          <li>
-            <button
-              type="button"
-              disabled={asking}
-              aria-describedby={asking ? why : undefined}
-              onClick={() => {
-                // The tile's table, as it writes it, with the mark that tells
-                // a spreadsheet it is UTF-8 — and then what it holds.
-                download();
-                setOpen(false);
-                trigger.current?.focus();
-              }}
-            >
-              Download CSV
-            </button>
-            {/* Why not yet, in words beside it (T182, AC-176): a disabled
-                button takes no focus, so a tooltip on it was out of the
-                keyboard's reach. */}
-            {asking ? (
-              <StateLine kind="run" className="tile-menu__why" id={why}>
-                Its newest answer is still on its way.
-              </StateLine>
-            ) : null}
-          </li>
-          {onEditChart === undefined ? null : (
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  // As View query: ⋯ first, then the editor takes focus.
-                  close();
-                  onEditChart();
-                }}
-              >
-                Edit chart
-              </button>
-            </li>
-          )}
-        </ul>
+          <Menu
+            labelledBy={`${why}-trigger`}
+            entries={entries}
+            onClose={() => {
+              setOpen(false);
+              // Back to where it was opened from (APG): the tile, for its
+              // keys; ⋯ otherwise — before a dialog an item opened takes
+              // focus, and before Tab moves on from it.
+              const tile = wrapper.current?.closest<HTMLElement>('[data-tile]');
+              if (fromTile.current && tile !== null && tile !== undefined) tile.focus();
+              else trigger.current?.focus();
+              fromTile.current = false;
+            }}
+          />
+          {/* Why Download is off, in words (T182, AC-176). */}
+          {asking ? (
+            <StateLine kind="run" className="tile-menu__why" id={why}>
+              Its newest answer is still on its way.
+            </StateLine>
+          ) : null}
+        </div>
       ) : null}
       {/* Always there, so each message is announced as it changes. */}
       <p
