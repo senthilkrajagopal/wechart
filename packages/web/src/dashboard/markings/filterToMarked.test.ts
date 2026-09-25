@@ -27,6 +27,8 @@ describe('a filter made from a marking', () => {
       summary: 'Status: shipped',
       filter: { member: 'orders.status', operator: 'equals', values: ['shipped'] },
       members: ['orders.status'],
+      // What a bookmark or a link restores it by (T128's review).
+      predicate: shipped,
     });
     if ('refused' in made) throw new Error('refused');
     expect(markFilterLabel(made)).toBe('Filtered to Marking: Status: shipped');

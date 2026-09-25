@@ -2,7 +2,8 @@ import { predicateFrom } from '@wechart/core';
 
 import type { FilterValues } from '../../filters/model';
 import { valueFrom } from '../../filters/url';
-import type { MarkFilter } from '../markings/filterToMarked';
+import { markFilterFrom, type MarkFilter } from '../markings/filterToMarked';
+import { summariseMarking } from '../markings/MarkChip';
 import type { MarkingState } from '../markings/store';
 
 /**
@@ -35,22 +36,26 @@ function kept<T>(raw: unknown, read: (value: unknown, key: string) => T | undefi
   return out;
 }
 
-/** A filter "Filter to marked" made, if that is what this is. */
-function markFilterFrom(raw: unknown): MarkFilter | undefined {
+/**
+ * A filter "Filter to marked" made, made again from its marking's predicate —
+ * checked as a mark is (`predicateFrom`) — as the dashboard made it. The
+ * filter, members and words the JSON carries are not taken: they could say
+ * one thing and filter by another, or be no filter at all (T128's review).
+ * The dashboard words it again by its members' titles as it applies it.
+ */
+function restoredMarkFilter(raw: unknown): MarkFilter | undefined {
   if (!isRecord(raw)) return undefined;
-  const { id, negate, markingName, summary, filter, members } = raw;
+  const { id, negate, markingName } = raw;
   if (typeof id !== 'string' || id === '' || typeof negate !== 'boolean') return undefined;
-  if (typeof markingName !== 'string' || typeof summary !== 'string') return undefined;
-  if (!isRecord(filter) || !Array.isArray(members)) return undefined;
-  if (!members.every((member) => typeof member === 'string')) return undefined;
-  return {
+  if (typeof markingName !== 'string') return undefined;
+  const predicate = predicateFrom(raw['predicate']);
+  if (predicate === undefined) return undefined;
+  const made = markFilterFrom(predicate, negate, {
     id,
-    negate,
     markingName,
-    summary,
-    filter: filter as MarkFilter['filter'],
-    members: members as string[],
-  };
+    summary: summariseMarking(predicate, undefined, 3),
+  });
+  return 'refused' in made ? undefined : made;
 }
 
 /**
@@ -58,7 +63,8 @@ function markFilterFrom(raw: unknown): MarkFilter | undefined {
  * JSON anyone can have written — a link is pasted and edited by hand — so
  * each part is taken only if it is one, as the URL's filters are (AC-081):
  * a filter's value, a marking's predicate that holds (`predicateFrom`), a
- * "Filter to marked" filter whole. Anything else is dropped, never trusted.
+ * "Filter to marked" filter made again from its predicate. Anything else is
+ * dropped, never trusted.
  */
 export function viewStateFrom(raw: unknown): ViewState | undefined {
   if (!isRecord(raw)) return undefined;
@@ -70,7 +76,7 @@ export function viewStateFrom(raw: unknown): ViewState | undefined {
     ),
     marks: kept(raw['marks'], predicateFrom),
     markFilters: Array.isArray(raw['markFilters'])
-      ? raw['markFilters'].flatMap((each) => markFilterFrom(each) ?? [])
+      ? raw['markFilters'].flatMap((each) => restoredMarkFilter(each) ?? [])
       : [],
     from: kept(raw['from'], (value) => (typeof value === 'string' ? value : undefined)),
   };

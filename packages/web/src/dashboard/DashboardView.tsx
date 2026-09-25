@@ -2035,10 +2035,36 @@ export function DashboardView({
   const theme = useThemeName();
   const markings = markingsFrom(live.markings);
   /**
-   * A link with marks, as the dashboard opens (T129, AC-123), fitted to it as
-   * a bookmark is (`viewFor`): what the marks and the page tab start as.
+   * What a "Filter to marked" filter says it keeps (AC-113): its marking's
+   * values by the members' titles, a tile marked whole by its title. A
+   * restored one — from a bookmark or a link — is worded again so, from its
+   * predicate (T128's review).
    */
-  const [linked] = useState(() => (urlView === undefined ? undefined : viewFor(document, urlView)));
+  const markFilterWords = (predicate: MarkingPredicate) =>
+    summariseMarking(predicate, memberTitle, 3, (id) => {
+      const tile = elementAt(live, id);
+      return tile !== null && isTile(tile) && tile.chartId !== undefined
+        ? chartTitleOf(tile.chartId)
+        : undefined;
+    });
+  /** A view restored, fitted to the dashboard (`viewFor`) and its marking filters worded here. */
+  const restored = (state: ViewState, into: DashboardDocument): ViewState => {
+    const view = viewFor(into, state);
+    return {
+      ...view,
+      markFilters: view.markFilters.map((made) => ({
+        ...made,
+        summary: markFilterWords(made.predicate),
+      })),
+    };
+  };
+  /**
+   * A link with marks, as the dashboard opens (T129, AC-123), fitted to it as
+   * a bookmark is: what the marks and the page tab start as.
+   */
+  const [linked] = useState(() =>
+    urlView === undefined ? undefined : restored(urlView, document),
+  );
   const [marks, setMarks] = useState<MarkingState>(() => linked?.marks ?? {});
   /**
    * The filters "Filter to marked" and "Filter out marked" made (AC-113,
@@ -3519,12 +3545,7 @@ export function DashboardView({
             const made = markFilterFrom(predicate, negate, {
               id: `mark-filter-${String((markFilterSeq.current += 1))}`,
               markingName: named.name,
-              summary: summariseMarking(predicate, memberTitle, 3, (id) => {
-                const tile = elementAt(live, id);
-                return tile !== null && isTile(tile) && tile.chartId !== undefined
-                  ? chartTitleOf(tile.chartId)
-                  : undefined;
-              }),
+              summary: markFilterWords(predicate),
             });
             if ('refused' in made) return made;
             return () => {
@@ -4130,7 +4151,7 @@ export function DashboardView({
    * cross-filter selections, drills, the keyboard's place in a tile.
    */
   const applyView = (state: ViewState) => {
-    const view = viewFor(live, state);
+    const view = restored(state, live);
     setOpenPage(view.page);
     setFilterValues(view.filters);
     setMarks(view.marks);

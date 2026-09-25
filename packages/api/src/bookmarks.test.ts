@@ -33,6 +33,9 @@ function memoryBookmarks(): BookmarkStore & { saved: Bookmark[] } {
       saved.push(kept);
       return kept;
     },
+    removeFor: async (dashboardId) => {
+      saved.splice(0, saved.length, ...saved.filter((each) => each.dashboardId !== dashboardId));
+    },
   };
 }
 
@@ -41,6 +44,7 @@ const oneDashboard = {
   create: async () => ({ id: '' }),
   get: async (kind: string, id: string) =>
     kind === 'dashboard' && id === 'd1' ? { id, body: { title: 'Sales' }, version: 1 } : null,
+  remove: async (kind: string, id: string) => kind === 'dashboard' && id === 'd1',
 } as DocumentWriter;
 
 const STATE = {
@@ -87,6 +91,21 @@ describe('a dashboard’s bookmarks', () => {
         { error: 'A bookmark holds a page tab, filter values and marks.' },
       ]);
     expect(bookmarks.saved).toEqual([]);
+    await app.close();
+  });
+
+  it('go with their dashboard when it is deleted (T127’s review)', async () => {
+    const bookmarks = memoryBookmarks();
+    bookmarks.saved.push(
+      { id: 'b1', dashboardId: 'd1', name: 'x', state: STATE },
+      { id: 'b2', dashboardId: 'd2', name: 'y', state: STATE },
+    );
+    const app = buildServer({ config, bookmarks, documents: oneDashboard });
+
+    const deleted = await app.inject({ method: 'DELETE', url: '/api/documents/dashboard/d1' });
+
+    expect(deleted.statusCode).toBe(204);
+    expect(bookmarks.saved.map((each) => each.id)).toEqual(['b2']);
     await app.close();
   });
 

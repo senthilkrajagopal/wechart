@@ -57,6 +57,19 @@ describe('bookmark store', () => {
     expect((await store().list(dashboardId)).map((each) => each.name)).toEqual(['a', 'b']);
   });
 
+  it('removes a dashboard’s bookmarks, and no other’s (T127’s review)', async () => {
+    const gone = `d-${randomUUID()}`;
+    const kept = `d-${randomUUID()}`;
+    await store().save({ dashboardId: gone, name: 'a', state: STATE });
+    await store().save({ dashboardId: gone, name: 'b', state: STATE });
+    await store().save({ dashboardId: kept, name: 'a', state: STATE });
+
+    await store().removeFor(gone);
+
+    expect(await store().list(gone)).toEqual([]);
+    expect((await store().list(kept)).map((each) => each.name)).toEqual(['a']);
+  });
+
   it('replaces the bookmark of a name already in use on the dashboard', async () => {
     const dashboardId = `d-${randomUUID()}`;
     const first = await store().save({ dashboardId, name: 'Mine', state: STATE });

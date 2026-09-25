@@ -22,9 +22,11 @@ const VIEW: ViewState = {
       id: 'mark-filter-2',
       negate: false,
       markingName: 'Marking',
-      summary: 'Status: processing',
+      // As a restored one is worded before the dashboard words it by titles.
+      summary: 'orders.status = processing',
       filter: { member: 'orders.status', operator: 'equals', values: ['processing'] },
       members: ['orders.status'],
+      predicate: { items: [[{ member: 'orders.status', value: 'processing' }]], ranges: [] },
     },
   ],
   from: { m1: 'tile-status' },

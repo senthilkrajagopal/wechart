@@ -779,6 +779,8 @@ export function buildServer({
     }
 
     const removed = await docs.remove(kind, id);
+    // A dashboard's bookmarks are of it, and go with it (T127's review).
+    if (removed && kind === 'dashboard') await bookmarks?.removeFor(id);
     return reply.status(removed ? 204 : 404).send();
   });
 

@@ -1829,7 +1829,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **Routes.** `GET`/`POST /api/dashboards/:id/bookmarks`. The name is trimmed and required. The state must be an object holding `filters` and `marks` objects; the browser checks the rest when applying, as it does a URL. An unknown dashboard gets 404.
     - **Web.** The header's **Bookmarks ▾** is a menu button placed before the gear and hidden while editing; the prototype has no bookmarks, so the placement is a small decision. It has one item, **Save bookmark…**, which opens a modal named "Save a bookmark" with a Name field, a note on what it keeps, Save (disabled until a name is given) and Cancel. On success a status line says "Saved the bookmark “‹name›”."; a refusal is shown inside the dialog. `ViewState` (`bookmarks/viewState.ts`) holds the page, the filters' values, the marks, the filters that "Filter to marked" made, and each marking's source tile.
     - **Tests that failed first:** `repos/bookmarks.test.ts` (against the real metadata DB: kept whole under its name, listed by name for its dashboard only, a same-name save replaces), `bookmarks.test.ts` (routes: 201 with the trimmed name, 400 for no name or no page/filters/marks, 404 for no such dashboard), and `Bookmarks.test.tsx` (the POST carries the name and the state; a refusal is said in the dialog; no name, no save).
-  - Files: `packages/api/src/repos/bookmarks.ts`, `packages/web/src/dashboard/bookmarks/SaveBookmark.tsx`, `packages/api/src/repos/bookmarks.test.ts`
+  - Files: `packages/api/src/repos/bookmarks.ts`, `packages/web/src/dashboard/bookmarks/Bookmarks.tsx` (the save dialog is in it; no `SaveBookmark.tsx`), `packages/api/src/repos/bookmarks.test.ts`
   - Failing test: `bookmarks.test.ts`: the stored bookmark carries the tab, every filter value and the mark set, under the given name (AC-121).
   - Depends on: T087, T101
 - [x] T128 (AC-122) Apply a bookmark without changing the dashboard's saved definition
@@ -1859,7 +1859,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - `Bookmarks.test.tsx` (listed by name and applied, writing nothing; one just saved is listed; "No bookmarks yet").
       - The e2e was written after the code; its assertions each depend on the apply.
   - Files: `packages/web/src/dashboard/bookmarks/applyBookmark.ts`, `packages/web/src/dashboard/bookmarks/applyBookmark.test.ts`
-  - Failing test: `applyBookmark.test.ts`: applying restores the state and leaves the stored dashboard definition byte-identical (AC-122).
+  - Failing test: `applyBookmark.test.ts`: applying restores the state (AC-122). The stored dashboard staying the same is the e2e's to show, as it reads it back; the unit test can't.
   - Depends on: T127
 - [x] T129 (AC-123) Produce a link that reproduces the current filters and marks
   - Done 2026-09-25. **AC-123 is ticked** on `e2e/markings.spec.ts` "Copy link with marks gives a URL that opens the dashboard with the same filters, marks and page tab", in Chrome, Firefox and Safari. The test marks two bars under a filter, moves to the second tab, and chooses the chip's ▾ › Copy link with marks, recording what the app hands to the clipboard. It then opens the dashboard afresh (unmarked), then opens the link. The link restores the Second tab, "2 marked", the chip's "shipped, completed", and the filter in the URL. The `view` parameter leaves the URL once taken, and the first tab is marked too.
@@ -1870,6 +1870,16 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **Opening it.** The route checks `view` is an object, reads it with `viewFromLink` (checked as a bookmark is), and `DashboardView` seeds its marks, marking filters, sources and page tab from it, fitted by `viewFor`. Then `onViewTaken` drops `view` from the URL (replace). The URL therefore never claims marks the reader has since changed, and a reload opens unmarked, consistent with AC-124 (a small decision).
     - **The action.** It is in the chip's ▾, before Unmark, as in the prototype. The tile ⋯ menu doesn't have it yet; direction.md lists it there too, and an e2e pins that menu's order. A note beside the chips shows for four seconds and is also said in the marking live region; without a clipboard the page says so. `pageClipboard` and `NO_CLIPBOARD` are now exported from `TileViewMenu`, and marking-filter numbering skips past restored ids (`numberedPast`).
     - **Test that failed first:** `shareLink.test.ts` (round trip to the same view; no `filters` when none; no view without `view`). The e2e was written after the code.
+  - **Review round for T127–T129 (2026-09-25).** One cold review covered all three tasks. Verdict FAIL on one defect; AC-121, AC-122 and AC-123 were all met, and AC-124 and AC-081 had not regressed.
+    - **Fixed, medium.** A restored "Filter to marked" filter was taken on trust. A crafted link could show a chip saying one thing while filtering by another, and a malformed filter tree (`and: [null]`) could crash the dashboard when a member was renamed through a view. `MarkFilter` now carries its marking's `predicate`. `viewStateFrom` rebuilds each restored filter from that predicate alone (`predicateFrom`, then `markFilterFrom`), ignoring the filter, members and words the JSON carries. `DashboardView` then words it again by the members' titles (`markFilterWords`, shared with new filters). Test: `viewState.test.ts` "makes a "Filter to marked" filter again from its predicate…" (a lying filter is remade, one with an unchecked filter tree is remade, one with no valid predicate is dropped). It failed first.
+    - **Fixed, low.** Restored marking filters appeared in cross-filter mode, near AC-120; `viewFor` now drops them outside Markings mode, as it drops marks (`applyBookmark.test.ts`, which failed first).
+    - **Fixed, low.** Bookmarks were left behind when their dashboard was deleted. There is now `removeFor` on the store, and the dashboard `DELETE` calls it (`repos/bookmarks.test.ts` and `bookmarks.test.ts`, both of which failed first).
+    - **Moved to the phase-2 backlog:**
+      - A link with a very large marking can exceed a server's URL limit. The limit needs research before a cap is chosen.
+      - `view` is taken only when the dashboard mounts, so an in-app navigation to the same dashboard with `view` is ignored. No in-app path makes one.
+      - Two saves under the same name at the same moment can both be kept (standing guidance: don't harden concurrency).
+    - **Stale lines fixed:** T127's Files, T128's failing-test line and T130's note.
+    - Runs: API 316, web 1418, and the bookmark, link and Filter to marked e2e 9/9 across three browsers.
   - Files: `packages/web/src/dashboard/markings/shareLink.ts`, `packages/web/src/dashboard/markings/shareLink.test.ts`
   - Failing test: `shareLink.test.ts`: opening the copied URL reproduces the same filters and the same marks (AC-123).
   - Depends on: T087, T101
@@ -1878,7 +1888,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - The dashboard is saved with "shipped" marked, then reopened with no parameters. There's no chip, no badge, and every bar is solid.
     - Marks were always the page's state alone (T087, T090). This test shows it.
     - **It passed on its first run,** as the behaviour was there. It was not seen failing.
-    - This task's dependency on T129 (links) was for the "no link parameters" half. Until links carry marks, every open has none.
+    - This task's dependency on T129 (links) was for the "no link parameters" half. Since T129, a link's `view` brings marks; an open without it has none.
   - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/openEmpty.test.ts`
   - Failing test: `openEmpty.test.ts`: a plain open leaves every marking empty (AC-124).
   - Depends on: T129

@@ -13,9 +13,9 @@ import type { ViewState } from './viewState';
  * - its filters' values, on the filters still there, and each on another
  *   filter on the same field where its own has gone, as a link's values are
  *   taken on (AC-064);
- * - its marks, on the markings still there, and only in Markings mode —
- *   there are no marks in any other (AC-120);
- * - the filters "Filter to marked" made, which stand on their own.
+ * - its marks, on the markings still there, and the filters "Filter to
+ *   marked" made, only in Markings mode — there are no marks or marking
+ *   chips in any other (AC-120).
  *
  * All of it the reader's view state: nothing here is the dashboard's saved
  * definition, which applying never touches.
@@ -30,7 +30,8 @@ export function viewFor(document: DashboardDocument, state: ViewState): ViewStat
     page: pages.includes(state.page) ? state.page : (pages[0] ?? ''),
     filters: adoptValues(document.filters ?? [], state.filters),
     marks: ours(state.marks),
-    markFilters: state.markFilters,
+    // Chips of a marking, as its marks are: none outside Markings mode (AC-120).
+    markFilters: marking ? state.markFilters : [],
     from: ours(state.from),
   };
 }

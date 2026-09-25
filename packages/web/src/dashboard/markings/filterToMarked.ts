@@ -21,6 +21,12 @@ export interface MarkFilter {
   readonly filter: CubeFilter;
   /** Every member it names, so a tile whose cube cannot reach one is left as it is. */
   readonly members: readonly string[];
+  /**
+   * The marking's predicate it was made from: what a bookmark or a link
+   * restores it by, so its filter and words are made again, never taken on
+   * trust (T128's review).
+   */
+  readonly predicate: MarkingPredicate;
 }
 
 /** The filter a marking makes, or why it cannot make one. */
@@ -38,6 +44,7 @@ export function markFilterFrom(
     summary,
     filter: made.filter,
     members: markingMembers(predicate),
+    predicate,
   };
 }
 

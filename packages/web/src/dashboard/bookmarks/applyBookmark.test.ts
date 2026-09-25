@@ -66,6 +66,27 @@ describe('a bookmark applied', () => {
       settings: { width: 'fixed', interactions: { ...DEFAULT_INTERACTIONS, mode: 'crossFilter' } },
     };
 
-    expect(viewFor(crossFiltering, STATE)).toEqual({ ...STATE, marks: {}, from: {} });
+    const withMarkFilter: ViewState = {
+      ...STATE,
+      markFilters: [
+        {
+          id: 'mark-filter-1',
+          negate: false,
+          markingName: 'Marking',
+          summary: 'orders.status = shipped',
+          filter: { member: 'orders.status', operator: 'equals', values: ['shipped'] },
+          members: ['orders.status'],
+          predicate: SHIPPED,
+        },
+      ],
+    };
+
+    // Nor a filter made from marks (T128's review): no marking's chips there (AC-120).
+    expect(viewFor(crossFiltering, withMarkFilter)).toEqual({
+      ...STATE,
+      marks: {},
+      markFilters: [],
+      from: {},
+    });
   });
 });

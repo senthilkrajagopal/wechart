@@ -26,6 +26,8 @@ export interface BookmarkStore {
   list(dashboardId: string): Promise<Bookmark[]>;
   /** Kept under its name: one already of that name on the dashboard is replaced. */
   save(bookmark: Omit<Bookmark, 'id'>): Promise<Bookmark>;
+  /** A dashboard's bookmarks, gone with it (T127's review). */
+  removeFor(dashboardId: string): Promise<unknown>;
 }
 
 const dashboardOf = sql<string>`body ->> 'dashboardId'`;
@@ -76,6 +78,14 @@ export function bookmarkStore(db: Kysely<Database>): BookmarkStore {
         .returning(['id', 'body'])
         .executeTakeFirstOrThrow();
       return toBookmark(created);
+    },
+
+    async removeFor(dashboardId) {
+      await db
+        .deleteFrom('documents')
+        .where('kind', '=', 'bookmark')
+        .where(dashboardOf, '=', dashboardId)
+        .execute();
     },
   };
 }
