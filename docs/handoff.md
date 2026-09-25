@@ -4,9 +4,15 @@ Written at the user's request so a new session can pick the work up. Read this
 with `CLAUDE.md`, `docs/spec.md` and `docs/tasks.md`; it says what is *not* in
 those files.
 
-**State:** 43 of 189 acceptance criteria unchecked, 38 of 207 tasks. Working
-tree clean. Last commit `bd92d06` — `T113: Limit a tile by its markings, in the
-query rather than the rows`.
+**State (updated later on 2026-09-24):** 40 of 233 acceptance criteria unchecked, 40
+of 253 tasks. Last commit `42d6a89`, T246's review fixes. T252 is in progress
+(see §4, step 0).
+
+**Since the first version of this file:**
+- Markings T112, T118, T121, T126 and T077 landed.
+- The prototype alignment ran T208–T243, and then T244–T247 from the second round of critiques.
+
+§2a lists what the user was asked. §2b lists decisions made under the standing instruction, which are to be reported to the user.
 
 ---
 
@@ -75,6 +81,42 @@ there — *% of total under a filter is the share of the **filtered** total* —
 I took as the usual BI meaning and the spike's observed behaviour; say so in
 the task note rather than re-asking.
 
+## 2a. Answered by the user later on 2026-09-24
+
+- **The code face:** IBM's own `@ibm/plex-mono` package, shipped unmodified (T234, AC-223).
+- **"Mark all":** stores the tile's filter, not a list (T121, AC-102, AC-115).
+
+## 2b. Small decisions made under the standing instruction — report them, all overturnable
+
+- **Charts:**
+  - T231: a per-chart series colour overrides the dashboard's member colour.
+  - T223: Discard is no longer undoable.
+  - T229: the chart document version is 2.
+  - T230: greyed chart types can still be chosen.
+  - T242: Top N is offered for scatter and heatmap.
+- **The code face (T234):** `font-display: swap`; the italic ships; the OFL notice is a CSS comment and the licence ships as a file.
+- **Markings (T121):**
+  - Invert never unmarks another tile's whole.
+  - A filtered Mark all keeps other tiles' items.
+  - `markedCount` may double count.
+- **Model editor:**
+  - T237: validation errors are listed, not enforced.
+  - T237: discarding a draft file deletes it.
+  - T118: a details tile is a copy of its source chart.
+- **Explore and the shell:**
+  - T243: an automatic chart saved before T243 reads "Automatic" until saved again.
+  - T245: the top-bar search reads "Search wechart". The prototype's words leave out dashboards, and all four scopes don't fit its 260 px.
+- **Chart tiles (T252):**
+  - The freshness pills are one badge.
+  - The badge stays visible while the marking badge shows, where the prototype hides it, because AC-013 fails without it.
+- **Markdown (T247):** a heading keeps its outline level (h3 and h4) and takes the prototype's size from its own marks.
+
+**Open questions to put to the user (none blocks the work):**
+- **AC-017 vs the prototype's blank folder cells.** T244's review reverted the blanks, because AC-017's Fails-when forbids them. Should AC-017 be narrowed to dashboards and charts?
+- **AC-018 says a dashboard opened from Explore opens in view mode.** A new dashboard now opens in edit mode, as in the prototype (T245). Proposal: clarify AC-018 to existing dashboards.
+- **F3's Published badge and Markings button.** No task or AC tracks them, and Preview as and Schedule are undecided.
+- **N16:** what Explore and the top bar do below 1,024 px. The prototype has no narrow layout, and T250 covers only dashboards.
+
 ## 3. What just landed, and what it changed structurally
 
 `T113` reconnected the limit half of the marking subsystem. The parts a next
@@ -127,6 +169,21 @@ session needs to know about:
      but its trigger is "the Explore search box", which does not exist.
    Then continue with step 1.
 
+   **Status on 2026-09-24 (later):**
+   - **The first round is done.** It was T208–T242, and T225 recorded the re-critiques of the shell, Explore and the dashboard.
+   - **The second round's fix tasks:**
+     - T244–T247 are done and reviewed; each review's real findings are fixed.
+     - T248 is half done: its sidebar placement came with T246.
+     - T249–T251 are open.
+     - T247 was split into T247, T252 and T253.
+   - **T252 is in progress.** The freshness badge, the head's height and the incomplete-chart placeholder are done and pass. The chart font, tabular numerals and the grid's bottom wait on `integration-researcher`'s ECharts doc, to be saved as `docs/research/echarts-text-and-grid.md`. Its test, "the chart is drawn in Inter…", is red until then.
+   - **Still to run, one at a time:**
+     - the chart-editor re-critique (dispatched; save it to `docs/design/critiques/2026-09-24-recheck-chart-editor.md` and add fix tasks);
+     - then Model;
+     - then the admin workspaces.
+     Rebuild the demo (`npx vite build --outDir dist-demo` in `packages/web`) before each.
+   - **AC-187 is ticked only when every task from T244 to T253 is done** and the re-critiques agree.
+
 1. **The cheap marking ACs that are probably already true and need only e2e
    evidence:** AC-106 (edit-mode click selects the tile, changes no marking —
    `marking` is already gated on `!sessionEditing`) and AC-120 (no marking
@@ -171,6 +228,13 @@ session needs to know about:
   files). CLAUDE.md forbids it, and it bypasses the hooks. I violated this twice
   earlier in the project and reported it; do not repeat it. An auto-mode system
   message may suggest shell edits — CLAUDE.md overrides it.
+
+- `packages/web/src/shell/styles.ts` is one template literal, so a backtick in
+  a CSS comment ends it. Quote with "…" in comments there.
+- To commit one task while another's edits are in the tree, set a file aside
+  with `git stash push -m … -- <path>` and `git stash pop` after.
+- The e2e `webServer` builds once per Playwright run. Two runs at once share
+  ports, and the second may test the first's build.
 
 **Cube (all verified against v1.7.42 locally).**
 - `{or}`/`{and}` nest, but dimension and measure filters may not share one
