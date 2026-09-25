@@ -1202,6 +1202,28 @@ test('the tile menu is headed by its marking, the marked values by title, and ho
   await menu.getByRole('menuitem', { name: 'Mark all' }).click();
   await trigger.click();
   await expect(heading).toContainText('3 of 3 marked');
+  await page.keyboard.press('Escape');
+
+  /**
+   * T267's review: on a tile the marking holds none of the items of — By
+   * category, while statuses are marked — the heading counts the tile's own,
+   * none, as the tile draws them all faded; and the marking's actions stay
+   * there to take, since they act on the marking, not on this tile.
+   */
+  await status.getByRole('button', { name: 'Actions for By status' }).click();
+  await menu.getByRole('menuitem', { name: 'Unmark' }).click();
+  await clickBar(page, status, 'shipped');
+  const category = tile(page, 'tile-category');
+  await category.getByRole('button', { name: /^Actions for / }).click();
+  const other = category.getByRole('menu', { name: /^Actions for / });
+  await expect(category.locator('.tile-menu__heading')).toHaveText(
+    /^● Marking · Orders Status: shipped · 0 of \d+ marked$/,
+  );
+  for (const name of ['Unmark', 'View marked rows'])
+    await expect(other.getByRole('menuitem', { name })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
 });
 
 test('outside Markings mode, a chart tile’s menu has no marked-rows actions', async ({

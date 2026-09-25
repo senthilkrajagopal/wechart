@@ -692,7 +692,7 @@ Dashboards:
       Fails when: the folder or the description cannot be changed there, or a saved description does not appear in Explore.
 - [x] AC-198 WHEN the user opens Settings › Markings, THE SYSTEM SHALL list the dashboard's markings with their colour, name, whether each is the default and how many tiles mark with or are limited by it, let the user add a marking (up to four), rename, recolour, delete and make one the default, and show a table of every chart tile with the marking it marks with and the markings that limit it.
       Fails when: any of those changes cannot be made on that page, or the tiles table is missing.
-- [ ] AC-199 WHEN the user opens a chart tile's menu in view mode, THE SYSTEM SHALL offer View as table, View query, Export and Edit chart, and, while the dashboard is in Markings mode, the marked-rows actions headed by the tile's marking and its count.
+- [x] AC-199 WHEN the user opens a chart tile's menu in view mode, THE SYSTEM SHALL offer View as table, View query, Export and Edit chart, and, while the dashboard is in Markings mode, the marked-rows actions headed by the tile's marking and its count.
       > Reworded 2026-09-25 with F23: "Download CSV" is now Export's first item (AC-244).
       Fails when: one of those items is missing, or the marked-rows actions appear outside Markings mode.
 - [x] AC-200 THE SYSTEM SHALL show each non-empty marking in the filter bar as a chip bordered in the marking's colour, naming the marking, summarising its values by the members' titles, naming the tile it came from, and offering a menu and a control that unmarks it.

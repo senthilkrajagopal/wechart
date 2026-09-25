@@ -100,12 +100,19 @@ export function TileViewMenu({
   marked?:
     | {
         name: string;
-        /** How many are marked: of the tile's items where `of` is given. */
+        /**
+         * How many the marking holds: what Unmark and View marked rows go by,
+         * since both act on the marking, not on this tile (T267's review).
+         */
         count: number;
         /** What it holds, by the members' titles (AC-247): "Country: Norway, Spain". */
         values?: string | undefined;
-        /** How many items the tile has, where they can be counted (AC-247). */
-        of?: number | undefined;
+        /**
+         * How many of the tile's own items are marked, of how many (AC-247),
+         * where they can be counted. Asked only while the menu is open: it
+         * reads every item the tile draws (T267's review).
+         */
+        onTile?: (() => { readonly marked: number; readonly of: number } | undefined) | undefined;
         onUnmark: () => void;
         /**
          * Filter to marked and Filter out marked (AC-113): the action, or
@@ -544,13 +551,16 @@ export function TileViewMenu({
               {/* The marking, what it holds by the members' titles, and how
                   many of the tile's items (AC-247; the mockup's "Region =
                   West, East · 2 of 6"). */}
-              {[
-                marked.name,
-                ...(marked.values === undefined || marked.values === '' ? [] : [marked.values]),
-                `${marked.count.toLocaleString('en-GB')}${
-                  marked.of === undefined ? '' : ` of ${marked.of.toLocaleString('en-GB')}`
-                } marked`,
-              ].join(' · ')}
+              {(() => {
+                const own = marked.onTile?.();
+                return [
+                  marked.name,
+                  ...(marked.values === undefined || marked.values === '' ? [] : [marked.values]),
+                  own === undefined
+                    ? `${marked.count.toLocaleString('en-GB')} marked`
+                    : `${own.marked.toLocaleString('en-GB')} of ${own.of.toLocaleString('en-GB')} marked`,
+                ].join(' · ');
+              })()}
             </div>
           )}
           <Menu

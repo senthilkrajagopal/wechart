@@ -788,8 +788,11 @@ interface TileCharts {
             markedCount: number;
             /** What it holds, by the members' titles, for the menu's heading (AC-247). */
             values?: string;
-            /** How many of the tile's own items it marks, of how many (AC-247). */
-            onTile?: { readonly marked: number; readonly of: number };
+            /**
+             * How many of the tile's own items it marks, of how many (AC-247):
+             * asked when the menu opens, as it reads every item.
+             */
+            onTile?: () => { readonly marked: number; readonly of: number } | undefined;
           }
         | undefined)
     | undefined;
@@ -1139,9 +1142,10 @@ function Elements({
                     ? undefined
                     : {
                         name: shown.marking.name,
-                        // Of the tile's items where they can be counted (AC-247).
-                        count: shown.onTile?.marked ?? shown.markedCount,
-                        of: shown.onTile?.of,
+                        // The marking's own, which its actions go by; the
+                        // tile's "n of N" is `onTile` (T267's review).
+                        count: shown.markedCount,
+                        onTile: shown.onTile,
                         values: shown.values,
                         onUnmark: () => {
                           charts.onUnmark?.(element.id);
@@ -3182,33 +3186,38 @@ export function DashboardView({
             const predicate = markingOf(marks, found.id);
             /**
              * The tile's own items and how many of them are marked (AC-247):
-             * those Invert and Mark all name, each read as the row it stands
-             * for — a whole tile marked from here marks all of them. None for
-             * a tile whose click marks rows or series, where "of N" would
-             * count something else.
+             * those Invert and Mark all name, each marked as the tile draws
+             * it (`render.ts`) — the whole tile marked while still filtered
+             * as it was then, or else one of the rows drawn for the item
+             * matching the marking (T267's review: a Mark all counted every
+             * item after the filters had changed, while the tile drew some).
+             * None for a tile whose click marks rows or series, where "of N"
+             * would count something else.
              */
-            const items = tileItemsOf(tileId);
-            const whole = (predicate.wholes ?? []).some((each) => each.tileId === tileId);
-            const onTile =
-              items === undefined
-                ? undefined
-                : {
-                    marked: whole
-                      ? items.length
-                      : items.filter((item) =>
-                          matchesPredicate(
-                            predicate,
-                            Object.fromEntries(item.map((part) => [part.member, part.value])),
-                          ),
-                        ).length,
-                    of: items.length,
-                  };
+            const onTile = () => {
+              const items = tileItemsOf(tileId);
+              const chartId = element.chartId;
+              const spec = chartId === undefined ? undefined : withWholes[chartId];
+              if (items === undefined || spec === undefined) return undefined;
+              const drawnWhole = spec.marking?.whole === true;
+              const marked = items.filter((item) => {
+                if (drawnWhole) return true;
+                const part = item[0];
+                if (part === undefined) return false;
+                return spec.rows.some(
+                  (row) =>
+                    String(row[part.member]) === String(part.value) &&
+                    matchesPredicate(predicate, row),
+                );
+              }).length;
+              return { marked, of: items.length };
+            };
             return {
               marking: found,
               colour: markingColour(found.slot, theme),
               markedCount: markedCount(predicate),
               values: summariseMarking(predicate, memberTitle, 5, (id) => chartTitleOfTile(id)),
-              ...(onTile === undefined ? {} : { onTile }),
+              onTile,
             };
           },
         }

@@ -120,6 +120,22 @@ describe('summarising what a marking holds', () => {
     expect(summariseMarking(withItem(EMPTY_PREDICATE, pair))).toBe('1 item');
   });
 
+  it('names each member’s values where every item is one member’s (T267’s review)', () => {
+    // Two single-member items on different members: each value is an item
+    // of its own, so naming them per member misstates nothing.
+    const two = withItem(withItem(EMPTY_PREDICATE, shipped), [
+      { member: 'orders.category', value: 'Instruments' },
+    ]);
+    const titles: Record<string, string> = {
+      'orders.status': 'Status',
+      'orders.category': 'Category',
+    };
+
+    expect(summariseMarking(two, (member) => titles[member])).toBe(
+      'Status: shipped; Category: Instruments',
+    );
+  });
+
   it('describes a bounded range by its bounds', () => {
     const ranged = withRange(EMPTY_PREDICATE, { member: 'orders.count', from: 1, to: 9 });
 

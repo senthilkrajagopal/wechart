@@ -4114,6 +4114,16 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
       - A tile whose click marks rows or series (a table, say) has no items to count, so it keeps "n marked", the marking's count.
       - A tile marking with the same marking as another, whose items are that tile's members, reads "0 of N": none of its own items is marked, which is what it draws.
     - The menu e2e's exact heading was updated to the new words.
+  - **T267's review, 2026-09-25.** One cold review found real faults, all fixed in one commit, all three browsers:
+    - **H1.** The per-tile count had replaced the marking's count in `marked.count`, which the menu also uses to enable Unmark and View marked rows, and to hide View underlying rows. On a tile none of whose own items the marking holds (By category while statuses are marked), both actions were disabled as "Nothing is marked". Now:
+      - `count` is the marking's own again;
+      - the tile's "n of N" is a separate `onTile`.
+    - **M1.** After a Mark all, "n" counted every item even once the filters had changed and the tile drew only some marked. It now counts as the tile draws (`render.ts`): the whole tile only while its drawn spec says `whole`, otherwise an item whose drawn rows match the marking.
+    - **M2.** A marking over two members read "2 items", leaving the values out. Items of one member each, on several members, are now named per member: "Orders Status: shipped; Products Category: Instruments". The chip gains this too. A tuple across members is still counted, since naming it per member would misstate it.
+    - **M3 (tests).** The e2e now shows By category's heading at "0 of N" with Unmark and View marked rows enabled. `TileViewMenu.test.tsx` covers the same case, and failed first. `MarkBadge.test.tsx` covers M2, and failed first.
+    - **L2.** "n of N" reads every item the tile draws, so it is now asked only while the menu is open. It is no longer computed on every render for every tile.
+    - **L1 (not fixed):** a marked Top N "Other" or blank bar is counted in neither number. `tileItemsOf` leaves both out for Invert and Mark all, and the heading follows it.
+    - **AC-199 ticked** with this fix, on "a chart tile's menu offers its views, its query, a download and Edit chart, and its marking's actions" (now with Export) and "outside Markings mode, a chart tile's menu has no marked-rows actions". Every item it names is now in place (T272), and the marked-rows actions work on every tile again.
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `e2e/markings.spec.ts`
   - Failing test: with two of six countries marked, the heading reads the marking's name, both countries under the member's title, and "2 of 6".
   - Depends on: T266

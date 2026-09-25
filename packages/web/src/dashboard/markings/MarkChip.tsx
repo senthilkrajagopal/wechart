@@ -61,14 +61,26 @@ export function summariseMarking(
     const members = new Set(predicate.items.flatMap((item) => item.map((part) => part.member)));
     const single = predicate.items.every((item) => item.length === 1);
 
+    const listed = (all: readonly string[]) =>
+      max === undefined || all.length <= max
+        ? all.join(', ')
+        : `${all.slice(0, max).join(', ')} +${String(all.length - max)}`;
+    const valuesOf = (member: string) =>
+      predicate.items
+        .filter((item) => item[0]?.member === member)
+        .map((item) => String(item[0]?.value ?? ''));
+
     if (single && members.size === 1) {
       const member = [...members][0] ?? '';
-      const all = predicate.items.map((item) => String(item[0]?.value ?? ''));
-      const values =
-        max === undefined || all.length <= max
-          ? all.join(', ')
-          : `${all.slice(0, max).join(', ')} +${String(all.length - max)}`;
+      const values = listed(valuesOf(member));
       parts.push(titleOf === undefined ? `${member} = ${values}` : `${named(member)}: ${values}`);
+    } else if (single && titleOf !== undefined) {
+      // Items of one member each, on several members (T267's review): each
+      // value an item of its own, so named per member, which misstates
+      // nothing. A tuple across members is still counted, below.
+      parts.push(
+        [...members].map((member) => `${named(member)}: ${listed(valuesOf(member))}`).join('; '),
+      );
     } else {
       const n = predicate.items.length;
       parts.push(n === 1 ? '1 item' : `${String(n)} items`);

@@ -304,7 +304,11 @@ describe('a tile’s view-mode menu', () => {
         title="By country"
         spec={SPEC}
         save={vi.fn()}
-        marked={{ ...marked, values: 'Country: Norway, Spain', of: 6 }}
+        marked={{
+          ...marked,
+          values: 'Country: Norway, Spain',
+          onTile: () => ({ marked: 2, of: 6 }),
+        }}
       />,
     );
     await userEvent.click(screen.getByRole('button', { name: 'Actions for By country' }));
@@ -312,6 +316,34 @@ describe('a tile’s view-mode menu', () => {
     expect(
       screen.getByRole('group', { name: 'Marking · Country: Norway, Spain · 2 of 6 marked' }),
     ).toBeTruthy();
+    await userEvent.keyboard('{Escape}');
+
+    // T267's review: a marking holding items none of which is this tile's —
+    // another tile's member — is "0 of 6" here, and still something to
+    // unmark or view the rows of: those go by the marking's own count.
+    rerender(
+      <TileViewMenu
+        tileId="t1"
+        title="By country"
+        spec={SPEC}
+        save={vi.fn()}
+        marked={{
+          ...marked,
+          values: 'Status: shipped',
+          onTile: () => ({ marked: 0, of: 6 }),
+          onViewMarkedRows: vi.fn(),
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By country' }));
+    const group = screen.getByRole('group', { name: 'Marking · Status: shipped · 0 of 6 marked' });
+    for (const name of ['Unmark', 'View marked rows'])
+      expect(
+        [...group.querySelectorAll('[role="menuitem"]')]
+          .find((item) => item.textContent === name)
+          ?.getAttribute('aria-disabled'),
+      ).toBeNull();
+    await userEvent.keyboard('{Escape}');
 
     // A tile whose items cannot be counted — a table marks rows — says how
     // many are marked, and no "of".
@@ -324,6 +356,7 @@ describe('a tile’s view-mode menu', () => {
         marked={{ ...marked, values: 'Country: Norway, Spain' }}
       />,
     );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By country' }));
     expect(
       screen.getByRole('group', { name: 'Marking · Country: Norway, Spain · 2 marked' }),
     ).toBeTruthy();
