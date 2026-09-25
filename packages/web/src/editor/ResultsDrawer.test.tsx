@@ -142,13 +142,20 @@ describe('its values (AC-046)', () => {
 });
 
 describe('the three views', () => {
-  it('offers all three, and none of them before the drawer is opened', () => {
+  it('offers all three by their tabs, and shows none of them before the drawer is opened', () => {
+    // The strip is always there, as the prototype's drawer is (T257).
     drawer({ open: false });
 
-    expect(screen.queryByTestId('results-drawer')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Results' }).getAttribute('aria-expanded')).toBe(
-      'false',
-    );
+    expect(screen.queryByTestId('drawer-result-rows')).toBeNull();
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Results',
+      'Underlying rows',
+      'Cube query',
+      'Acceleration',
+    ]);
+    expect(
+      screen.getByRole('button', { name: 'Show the results' }).getAttribute('aria-expanded'),
+    ).toBe('false');
   });
 
   it('shows the rows it was given, rather than fetching its own', () => {
@@ -260,10 +267,44 @@ describe('opening and closing', () => {
       </QueryClientProvider>,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Results' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Show the results' }));
 
     // Held by the editor, so emptying a well cannot shut a drawer the user
     // opened.
     expect(onOpenChange).toHaveBeenCalledWith(true);
+  });
+
+  it('opens on the view whose tab is chosen while it is closed (T257)', async () => {
+    const onOpenChange = vi.fn();
+    const onViewChange = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={client}>
+        <ResultsDrawer
+          rows={RESULT_ROWS}
+          query={QUERY}
+          underlyingQuery={UNDERLYING_QUERY}
+          open={false}
+          view="result"
+          onOpenChange={onOpenChange}
+          onViewChange={onViewChange}
+        />
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Cube query' }));
+
+    expect(onViewChange).toHaveBeenCalledWith('query');
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+  });
+
+  it('sets a measure’s column right, as figures are (T257)', () => {
+    drawer();
+
+    const table = screen.getByTestId('drawer-result-rows');
+    expect(table.querySelector('th:last-child')?.className).toBe('num');
+    expect(table.querySelector('td:last-child')?.className).toBe('num');
+    expect(table.querySelector('td:first-child')?.className).toBe('');
   });
 });

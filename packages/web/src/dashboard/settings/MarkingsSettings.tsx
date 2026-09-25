@@ -70,7 +70,9 @@ export function MarkingsSettings({ document, onChange, titleOf }: MarkingsSettin
         A marking is a named, coloured selection shared by every tile that uses it, on every page
         tab. New chart tiles use the default marking.
       </p>
-      <table className="query-log markings-table" aria-label="Markings">
+      {/* The prototype's .grid-table (T249, mismatch 34): 12 px, a 28 px head,
+          rows as tall as a 28 px .input.sm. */}
+      <table className="grid-table markings-table" aria-label="Markings">
         <thead>
           <tr>
             <th scope="col">Colour</th>
@@ -93,6 +95,10 @@ export function MarkingsSettings({ document, onChange, titleOf }: MarkingsSettin
                     role="radiogroup"
                     aria-label={`Colour for ${marking.name}`}
                   >
+                    {/* The prototype's .mk-slot: the colour itself is the
+                        choice, ringed in the accent when chosen. A native
+                        radio laid over it, so the keys and the name are the
+                        platform's (T249, mismatch 34). */}
                     {MARKING_SLOTS.map((slot, at) => (
                       <label key={slot} className="marking-slot">
                         <input
@@ -178,14 +184,14 @@ export function MarkingsSettings({ document, onChange, titleOf }: MarkingsSettin
         ) : null}
       </div>
 
-      <h3>Tiles and markings</h3>
+      <h3 className="settings-page__subhead">Tiles and markings</h3>
       <p className="settings-page__later">
         Which marking each chart tile marks with, and which markings limit it — a details tile.
       </p>
       {tiles.length === 0 ? (
         <p className="settings-page__later">This dashboard has no chart tiles yet.</p>
       ) : (
-        <table className="query-log markings-table" aria-label="Tiles and markings">
+        <table className="grid-table markings-table" aria-label="Tiles and markings">
           <thead>
             <tr>
               <th scope="col">Tile</th>

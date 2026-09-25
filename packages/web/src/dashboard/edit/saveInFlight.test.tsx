@@ -75,13 +75,14 @@ describe('while a save is under way', () => {
   it('does not open the settings page, whose save would be dropped', async () => {
     const save = await savingDashboard();
 
-    expect(gear().disabled).toBe(true);
+    // aria-disabled since T182's second round, so it can still take focus.
+    expect(gear().getAttribute('aria-disabled')).toBe('true');
     await userEvent.click(gear());
     expect(screen.queryByTestId('dashboard-settings')).toBeNull();
 
     // And once the save has failed and the session is back, it opens again.
     await save.fail();
-    expect(gear().disabled).toBe(false);
+    expect(gear().hasAttribute('aria-disabled')).toBe(false);
   });
 
   it('does not open the chart editor, from the pencil or with E', async () => {

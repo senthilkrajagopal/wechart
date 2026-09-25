@@ -53,6 +53,9 @@ export const COLORS = {
     // The prototype's --role-dim-soft: the avatar's ground (T245, AC-187).
     'bg-role-dimension-soft': '#e6eef8',
     'role-measure': '#a85400',
+    // The prototype's --role-measure-soft: a measure's chip and well pill in
+    // the chart editor (T257, AC-187).
+    'bg-role-measure-soft': '#f8ecdf',
     'text-on-accent': '#ffffff',
     'status-success': '#1d7a3f',
     'status-warning': '#8a5a00',
@@ -91,6 +94,7 @@ export const COLORS = {
     'role-dimension': '#7fb0ea',
     'bg-role-dimension-soft': '#1d2a3a',
     'role-measure': '#f0a35c',
+    'bg-role-measure-soft': '#3a2a1a',
     'text-on-accent': '#1f1f1e',
     'status-success': '#17aa17',
     'status-warning': '#fab219',
@@ -193,8 +197,11 @@ export const FILLED_SURFACE_PAIRS = [
   { foreground: 'text-secondary', background: 'bg-accent-soft' },
   // A dashboard's icon chip and the preview banner: crossfilter on its tint.
   { foreground: 'crossfilter', background: 'bg-crossfilter-soft' },
-  // The avatar's initials (T245): the dimension role on its tint.
+  // The avatar's initials (T245): the dimension role on its tint. Also a
+  // dimension's chip and pill in the chart editor (T257).
   { foreground: 'role-dimension', background: 'bg-role-dimension-soft' },
+  // A measure's chip and pill in the chart editor (T257): the measure role on its tint.
+  { foreground: 'role-measure', background: 'bg-role-measure-soft' },
 ] as const satisfies readonly {
   foreground: ColorTokenName;
   background: ColorTokenName;

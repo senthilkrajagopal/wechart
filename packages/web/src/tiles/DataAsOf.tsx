@@ -9,16 +9,29 @@
  * (T014's review); the whole sentence is its text for a screen reader, and
  * its tooltip.
  */
-export function DataAsOf({ at, now = new Date() }: { at: string; now?: Date }) {
+/** The time a result is from, as the badge writes it; undefined when it cannot be read. */
+function shownTime(at: string, now: Date): string | undefined {
   const when = new Date(at);
-  if (Number.isNaN(when.getTime())) return null;
+  if (Number.isNaN(when.getTime())) return undefined;
   const today = when.toDateString() === now.toDateString();
-  const shown = when.toLocaleString(undefined, {
+  return when.toLocaleString(undefined, {
     ...(today ? {} : { month: 'short', day: 'numeric' }),
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
   });
+}
+
+/** "Data as of 10:32:18 PM", the badge's whole sentence (T250's review: its tooltip). */
+export function dataAsOfText(at: string, now: Date = new Date()): string | undefined {
+  const shown = shownTime(at, now);
+  return shown === undefined ? undefined : `Data as of ${shown}`;
+}
+
+export function DataAsOf({ at, now = new Date() }: { at: string; now?: Date }) {
+  const when = new Date(at);
+  const shown = shownTime(at, now);
+  if (shown === undefined) return null;
   return (
     <time
       className="tile-as-of"

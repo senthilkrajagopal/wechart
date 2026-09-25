@@ -34,8 +34,8 @@ export interface PreviewFrameProps {
  * the chart inside gets the height the dashboard gives it. Anything else would
  * be a different chart at a similar size.
  *
- * Opened with no tile — from Explore — the preview is drawn as it always was:
- * there is no actual size to offer.
+ * Opened with no tile — from Explore — there is no actual size to offer: the
+ * preview is a tile filling the editor (T257).
  *
  * **Fit is the tile scaled to fill the editor's width**, keeping its
  * proportions. Its width comes from the layout; its height is *derived* from
@@ -75,7 +75,15 @@ export function PreviewFrame({ tile, children }: PreviewFrameProps) {
     };
   }, [size]);
 
-  if (tile === undefined) return <>{children(undefined)}</>;
+  // Opened on its own, the chart is still drawn in a tile, as the prototype's
+  // editor draws it (editor.js 414; recheck-chart-editor N3, T257): the
+  // tile's chrome around it, its size the editor's.
+  if (tile === undefined)
+    return (
+      <div className="grid-tile preview-frame__tile" data-testid="preview-frame" data-size="fill">
+        {children(undefined)}
+      </div>
+    );
 
   const actual = size === 'actual';
   // How much larger than the tile the fitted frame is: the same factor for

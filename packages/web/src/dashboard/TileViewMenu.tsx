@@ -48,6 +48,8 @@ function copiesImages(): boolean {
 }
 
 const NO_CLIPBOARD = 'Copying needs a secure page: HTTPS, or localhost.';
+/** Why a failed tile's menu has nothing to copy or export (T251). */
+const FAILED = 'The chart could not be loaded, so nothing is drawn to copy or export.';
 
 /** Hands the browser a file to save: a Blob behind a link, clicked once. */
 export function saveFile(name: string, data: string | Blob, type = 'text/csv;charset=utf-8'): void {
@@ -113,7 +115,12 @@ export function TileViewMenu({
   openAt?: { readonly seq: number; readonly at?: { x: number; y: number } } | undefined;
   tileId: string;
   title: string;
-  spec: RenderSpec;
+  /**
+   * What the tile draws — undefined for a tile whose chart failed to load,
+   * which keeps its menu (T251; recheck-dashboard F10): its query to view and
+   * its chart to edit, with nothing drawn to copy or export, said so.
+   */
+  spec: RenderSpec | undefined;
   /**
    * A newer answer is on its way — a filter just changed, a refresh — and
    * what is drawn is the one before it: not downloaded, since the file would
@@ -234,6 +241,7 @@ export function TileViewMenu({
   const exporting = useRef<AbortController | null>(null);
   useEffect(() => () => exporting.current?.abort(), []);
   const download = () => {
+    if (spec === undefined) return;
     const written = spec.rows.length;
     save(csvFileName(title), `${BYTE_ORDER_MARK}${csvOf(spec)}`);
     setNote({
@@ -393,7 +401,10 @@ export function TileViewMenu({
     );
   };
   /** Why a tile has no image to export: it is drawn as text, not by ECharts. */
-  const imageless = tableView
+  const imageless =
+    spec === undefined
+      ? FAILED
+      : tableView
     ? 'Shown as a table: view it as a chart to export its image.'
     : ['kpi', 'table', 'pivot'].includes(spec.chartType)
       ? 'A KPI, table or pivot is drawn as text, not as a chart image.'
@@ -659,7 +670,12 @@ export function TileViewMenu({
           // The tile's table, as it writes it, with the mark that tells a
           // spreadsheet it is UTF-8 — and then what it holds.
           onSelect: download,
-          disabled: asking ? 'Its newest answer is still on its way.' : undefined,
+          disabled:
+            spec === undefined
+              ? FAILED
+              : asking
+                ? 'Its newest answer is still on its way.'
+                : undefined,
           // Said in words beside it, which it is described by (T182, AC-176).
           describedBy: asking ? why : undefined,
         },

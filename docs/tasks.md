@@ -3251,7 +3251,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - Files: `e2e/perf/marking-update.spec.ts`, `packages/web/src/query/concurrency.ts`
   - Failing test: `e2e/perf/marking-update.spec.ts`: the p95 time to update every affected tile after a marking change is under 3 s (AC-175). The client-side concurrency bound is set here against Cube's queue concurrency.
   - Depends on: T110, T180
-- [ ] T182 (AC-176) Make every action keyboard-reachable with a focus indicator distinct from the marking outline
+- [x] T182 (AC-176) Make every action keyboard-reachable with a focus indicator distinct from the marking outline
   - Files: `packages/web/src/shell/styles.ts` (the ring), `packages/web/src/shell/useFocusTrap.ts`, the dashboard, filter, settings, security, search and Explore surfaces it names below, `e2e/keyboard-coverage.spec.ts`. The planned `packages/ui/src/focus.css.ts` and `YamlEditor.tsx` hint were not needed; see below.
   - Failing test: `e2e/keyboard-coverage.spec.ts`: navigation, authoring, marking, filtering and every dialog are reachable from the keyboard, focus is visible on every control and is visually distinct from the marking outline, and Tab leaves the code editor, which is no keyboard trap (AC-176).
   - Depends on: T063, T106, T139
@@ -3293,6 +3293,18 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - Escape with search open over a dialog closes both;
       - removing the only filter leaves focus on the page;
       - after a view-mode settings save the gear may still be disabled, and then takes no focus.
+  - **Second round, 2026-09-25, with markings built.** `e2e/keyboard-coverage.spec.ts` "T182: what the first round left open" has ten tests. The nine that test changed behaviour failed first. The marking test passed from the start, because AC-100's keys were already built. Each item above is closed as follows:
+    - **Tabs take the arrow keys** (the APG tabs pattern, `shell/tabKeys.ts`). A dashboard's page tabs and a tab group's tabs are each one Tab stop, the tab showing. ← → Home End move along the strip, choosing as they go. The results drawer's tabs had them from T257.
+    - **The folder tree moves with ↑ ↓ Home End**, as its tree role promises. Each folder is still a button, so Tab and Enter work as before.
+    - **The grip is no dead stop.** Enter or Space on it hands focus to its tile, whose arrow keys move it (AC-057). It stays in the Tab order: T253's review asserts its focus ring from the keyboard.
+    - **The undo toast is held while focus or the pointer is in it** (WCAG 2.2.1). The 8 s start again on leaving. Undo and Dismiss give focus back to where it was before the toast: after a delete, the tile beside it.
+    - **Deleting a tab by its ×** leaves focus on its group's tab now showing.
+    - **Escape with the search palette open closes the palette alone.** It is taken on the way down and kept, so a dialog under the palette stays open.
+    - **Removing the last filter** leaves focus on the filter bar.
+    - **The gear is `aria-disabled` while a save answers**, not `disabled`, so it takes focus back as the settings page closes. `saveInFlight.test.tsx` reads the attribute. Its assertion that the gear opens nothing meanwhile is unchanged.
+    - **Marking by the keyboard, under a distinct ring.** A tile focused in view mode marks with AC-100's keys (→, then Space), and the chip appears. The focus ring is 2 px, 2 px outside the tile, in the accent. The marked items' outline is 1.5 px, hugging each mark, in the marking's ink. They differ in width, offset and colour, and the test measures all three.
+    - **Not built, and not needed for the criterion:** direction.md's ⌘Z, F6 and `/` shortcuts. Undo and Redo are buttons in every editor, reachable by Tab, so no action waits on a shortcut.
+  - AC-176 ticked on `e2e/keyboard-coverage.spec.ts` (both rounds), with AC-100's keyboard marking tests in `e2e/markings.spec.ts`, all three browsers.
 - [x] T183 (AC-177) Pair every status, validation and job state with an icon and a text label
   - Files: `packages/ui/src/StatusBadge.tsx`, `e2e/status-labels.spec.ts`
   - Failing test: `e2e/status-labels.spec.ts`: across every workspace, no status, validation or job state is conveyed by colour alone (AC-177).
@@ -4116,11 +4128,32 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - **The plain note had no style.** It is now 12/16 in the secondary colour, the prototype's `xs muted`. The folder list uses `FOLDERS_QUERY`, and the folder link uses `exploreHref`.
     - Also tested now: an unchanged Back writes nothing (the stored version is unchanged), and a refused save keeps the editor open with its reason.
     - Left as is: "on 1 dashboard · edits change it" is kept. It reads better than the prototype's "dashboard(s) · … all of them".
-- [ ] T257 (AC-187, AC-214) Match the chart editor's header, field list, wells, preview tile, drawer and empty state to the prototype, measured
+- [x] T257 (AC-187, AC-214) Match the chart editor's header, field list, wells, preview tile, drawer and empty state to the prototype, measured
   - Files: `packages/web/src/editor/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: computed against the prototype's rules. Undo and Redo as `.iconbtn`; the title input borderless at 15/600; field icons as 18 px role chips with a 6 px "used" dot; wells dashed with a 12/600 label and an inline "+" button; pills role-tinted at radius 4; the preview in a tile; the drawer's tabs showing; the empty state's two lines in the tile; one name for a member in the list and in the pills (recheck-chart-editor F4–F7, F18, N3–N5).
   - Depends on: a measured re-critique. The 2026-09-24 pass stopped when its DevTools server hung, before any value was measured (`docs/design/critiques/2026-09-24-recheck-chart-editor.md`).
   - Also noted there (N6): New › Chart writes the document before Save. Whether leaving it unsaved leaves an "Untitled chart" behind is unchecked.
+  - **Done 2026-09-25, all three browsers.** The prototype's editor was measured first (Playwright on `docs/design/prototype/` at 1,440 × 900; the DevTools server hung again), and `e2e/design-conformance.spec.ts` "T257: the chart editor" has five tests quoting each rule. All five failed first.
+    - **Header:** Undo and Redo are the prototype's 32 px `.iconbtn`s (↶ ↷, named by `aria-label`), at opacity .4 with nothing to step. The title was never borderless: the global input rule's four `:not()`s outranked its class, so it drew as a bordered field at rest. It now reads as a 15/600 heading until hovered or focused.
+    - **Field list:** each field has the prototype's 18 px role chip, the measure's orange or the dimension's blue on its tint, with a dimension's type glyph (Aa, #, ◷, ◐, ⊙, direction.md §5). "Used" is the 6 px accent dot after the name, still said in words to assistive technology. Rows are 28 px at 12 px, padded 0 12 0 22, under 28 px cube heads. The search is 28 px at 12 px.
+    - **Wells:** a 12/16/600 label over a dashed, 6 px-radius well holding the pills and an inline "+ metric", "+ dimension", "+ time" or "+ filter". That opens the prototype's 240 px picker (the shared `MenuButton`), listing each field it can take with its chip, or "Nothing more to add from this cube". Pills are 24 px, radius 4, 12/600 in their role's colours. Sort by now sits beside Top N under the wells, as `.select.sm` and `.input.sm`. It had been the last control in the tab.
+    - **Preview, drawer, empty state:** opened on its own, the preview is drawn in a tile filling the canvas. The Actual size / Fit choice is the prototype's `.seg`. The drawer always shows its tab strip (Results, Underlying rows, Cube query, Acceleration), opens by default at 220 px, and collapses to the strip. Its rows are the prototype's `.grid-table`, with measures set right. The empty editor's two lines ("Add at least one metric or dimension" and the prototype's hint) sit in the tile.
+    - **Inspector:** 360 px, the prototype's `.editor-page` column.
+    - **New token:** `bg-role-measure-soft` (the prototype's `--role-measure-soft`, light #f8ecdf, dark #3a2a1a). Its pair with `role-measure` is audited: 4.59:1 light and 6.6:1 dark.
+  - **Deviations, recorded:**
+    - The pill's aggregation tag is at full strength. The prototype's opacity .85 takes the measure's ink under AA on its tint (rule 2).
+    - The field list keeps its Measures, Dimensions and Time dimensions headings under each cube. AC-025 requires the members "grouped by type", and the prototype's list does not say so.
+  - **Not done, put to the user:** N5, one name for a member in the list and in the pills. The list shows Cube's `shortTitle` ("Count") and the pills its `title` ("Orders Count"), which AC-216's and AC-220's tests assert. Unifying them means reading AC-220's "its title" as allowing the short title. That is one of the proposed spec changes in this session's report, together with the Superset exercise's "Sales lines Revenue" labels.
+  - **Tests changed with the behaviour, one for one:** the wells' native "+ Add to …" selects became a button and menu. The e2e specs that filled a well now go through `e2e/wells.ts`'s `wellPicker(page, well).selectOption(member)`, which clicks the "+" and then the field. The "Results" button became the Results tab. `PreviewFrame.test.tsx`'s "no frame when opened on its own" now asserts the fill frame. `ResultsDrawer.test.tsx`'s closed drawer now asserts its tabs, and gains tests for a tab opening a closed drawer and for the right-set measure column. `Wells.test.tsx` gains the picker's tests. No assertion was weakened.
+  - **Found on the way:** `no-size-fields.spec.ts`'s sweep of the drawer's views never ran, because the drawer was closed and its tabs absent. It now sweeps them.
+  - 753 browser runs of the affected specs passed (design-conformance, chart-editor, new-chart, no-size-fields, table-view, editor-preview, preaggregations, a11y-tokens, keyboard-coverage, chart-save, library-chart, no-horizontal-scroll). 1,376 web unit tests passed.
+  - **N5 is split out of this task's line**, since it waits on the user's reading of AC-220 (see above). The rest of the line is done.
+  - **Cold review (one round), verdict FAIL. Fixed, each with a test that failed first:**
+    - **The "+" picker ran past the inspector's edge** once the well held a pill. It was placed against the "+", which the pills push along, because the menu button is itself positioned. It is now placed against the well, as the prototype's `.picker { left: 0 }` is. "T257: … the wells" asserts it starts at the well and ends inside the inspector.
+    - **AC-005, mid-drag in the dark theme:** a legal well's accent tint put the "+"'s `text-muted` at 4.28:1. It takes `text-secondary`, an audited pair, while the well is legal. A new test drags in the dark theme.
+    - **The Actual size / Fit `.seg` was 32 px, untested:** a class-less button's 32 px minimum outranked its 28. It is now 28 px, and a new test measures it against the prototype's `.seg`.
+    - **`no-size-fields.spec.ts` still skipped a view:** its list named a `rows` tab that does not exist, and left out Acceleration. It now sweeps all four views and asserts each is open.
+    - **Also:** a dead hover rule on the pill's × is gone, and PreviewFrame's comment now says what it draws.
 - [x] T253 (AC-187) Use the prototype's picker for tile menus, its inline grip, and its tinted edit grid
   - Files: `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: a tile's ⋯ menu is 250 px, `border-strong` with the pop shadow, 28 px items at 12 px, its heading 12/16 muted and Delete in `status-error`; the grip sits inline in the head at 14 px muted; the edit grid's columns are tinted bands (recheck-dashboard N4; mismatches 14, 19, 20).
@@ -4178,18 +4211,69 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
       - Escape lets go only from a focused tile. The prototype's Escape works from anywhere, and a double-click on a page tab opens the dashboard's properties.
       - F19's other gaps, planned nowhere so far: the "Use separate color for marked items" switch, swatches in the limit list, and "Manage markings…". They are passed to the 2026-09-24 UI review.
       - With nothing selected, Properties has no "Dashboard" heading with its name and description, as the prototype's has.
-- [ ] T249 (AC-187, AC-231) Give the dashboard settings page the prototype's bar, nav, content and tables, with Escape and an inactive banner
+- [x] T249 (AC-187, AC-231) Give the dashboard settings page the prototype's bar, nav, content and tables, with Escape and an inactive banner
   - Files: `packages/web/src/dashboard/settings/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: a 41 px bar titled "Dashboard settings" with 24 px buttons and a primary Save; a 220 px nav with `accent-soft` selection; flat content with an 18 px h2; mode cards with descriptions; an inactive section says so in a banner; Escape leaves as Cancel does; markings tables at 29 px rows (recheck-dashboard F26–F29; mismatches 27–35).
   - Depends on: none
-- [ ] T250 (AC-187) Below 1,024 pixels, stack a dashboard to one column in view mode only, keeping every tile's title
+  - **Done 2026-09-25, all three browsers.** The prototype's settings page was measured first (Playwright, 1,440 × 900). `e2e/design-conformance.spec.ts` "T249: the dashboard settings page" has six tests, and all six failed first.
+    - **The bar** is the prototype's `.settings-head`: 41 px, padded 8 16, on the surface over a subtle rule. It holds Back, then the page's title "Dashboard settings" (16 px), then "Unsaved changes" while there are any, then Cancel and the primary Save settings. All three buttons are `.btn.sm`: 24 px, 12 px, radius 6 (mismatches 27–29).
+    - **The nav** is 220 px on the surface with a rule on its right. Its rows are 32 px at 12 px, padded 0 12 0 24, radius 0, in the primary ink. The open section is on `accent-soft` in the accent at 600 (mismatch 30).
+    - **The content** is flat on the page, padded 16 24 48, with an 18 px h2 (mismatch 31). General is the prototype's `.formgrid`: Name and Folder side by side, Description the whole width below, with `.field` labels at 12/16/600 secondary tied by `htmlFor` (mismatch 32).
+    - **The mode cards** are the prototype's `.radio-card`s, side by side. Each has a 12 px pad, radius 8 and a strong rule. The chosen one is ringed in the accent over a 40 % tint of `accent-soft`. The radios are drawn in the accent, not the browser's blue. Each card says what its mode does and where it comes from, in the prototype's words. The radio is named by the mode alone and described by the rest, so it is still "Markings" (F27, mismatch 33).
+    - **An inactive section says so in a banner** with the warn icon, on both Markings and Cross-filtering (F28; rule 3).
+    - **Escape leaves as Cancel does** (F29). With nothing changed it leaves at once and gives focus back to the gear. With a change it asks the discard question first, and Escape on the question is "Keep editing". The key is taken in the capture phase, as the prototype's is, so nothing under the full-viewport page answers it too.
+    - **Markings' tables** are the prototype's `.grid-table`, not the query log's card:
+      - 12 px, a 28 px head, and 29 px rows around a 28 px `.input.sm` name and `.select.sm` "Marks with";
+      - each colour slot is a 22 × 24 `.mk-slot` ringed in the accent when chosen, a native radio laid over it, so the name and keys are the platform's;
+      - each limit is a `.chk` pill;
+      - the intro is in the secondary ink (mismatch 34).
+  - **Deviations, recorded:**
+    - The title and headings are 600, where the prototype's are 700 (direction.md §3: 400 and 600 only).
+    - The cards' small print is `text-secondary`, where the prototype has muted, for AA on the tinted card.
+    - A limit the tile cannot take is muted ink, where the prototype has opacity .5, which takes the text under AA.
+    - Mismatch 35 (the cross-filter default's segmented control at 420 px, "against inline-flex") is not changed. On the prototype it measures the content's full width, 872 px, because it sits in a grid `.field`.
+    - Layout keeps its radio cards; the prototype has a `.seg`. AC-075's tests choose "Full width" as a radio.
+  - The specs covering the touched criteria passed in all three browsers: design-conformance, dashboard (AC-069, AC-073, AC-185, AC-197), markings (AC-198), crossfilter (AC-118), keyboard-coverage (AC-176), a11y-tokens and status-labels, 714 runs. The 89 settings unit tests passed too.
+  - **Cold review (one round), verdict FAIL. Fixed, each with a test that failed first:**
+    - **Escape was taken from the search palette opened over the page** (AC-176, AC-191). The page's Escape listener sat in the capture phase and stopped the event, so the palette could not close. It now listens as the chart editor over a dashboard does: only while focus is on the page or nowhere, and not when Escape ends an IME composition. The test opens the palette over the settings page and closes it with Escape, leaving the page open with no question asked.
+    - **"Unsaved changes" had no icon** (AC-177): it now has the idle icon. It is also tested now.
+    - **The banner test** now also asserts that the section in use has no banner.
+    - **AC-005 evidence for the new grounds:** `a11y-tokens.spec.ts` sweeps the settings page, section by section, in both themes (axe contrast and the 12 px floor). This covers the chosen card's tint and the banner's warning tint.
+    - **Also:** a focused colour slot's ring now stands 3 px clear of the chosen slot's ring. The panel's children may shrink, so a wide cross-filter matrix scrolls in its own box.
+  - **Put to the user, from the review:** AC-231 asks for "the workspaces' page titles" at 20 px/600 and their tables as cards with 34 px rows. This page follows the prototype instead: a 16 px title and `.grid-table`s with 29 px rows. I read AC-231 as not covering it, as T228 read it not covering the chart editor, for the same reason: the page is a dashboard's, opened over it, not a workspace's page. AC-231's failing state, tabular numerals and a 20 px workspace title, is not reached. If the user reads AC-231 as covering it, the title and the rows change back.
+- [x] T250 (AC-187) Below 1,024 pixels, stack a dashboard to one column in view mode only, keeping every tile's title
   - Files: `packages/web/src/dashboard/*`, `packages/web/src/shell/styles.ts`, `e2e/no-horizontal-scroll.spec.ts`
   - Failing test: at 390×844 tiles are full width, each title is visible, and Edit is not offered (recheck-dashboard N2; direction.md §2).
   - Depends on: none
-- [ ] T251 (AC-187) Draw a dashboard's frame while it loads, and give a failed tile its details and its menu
+  - **Done 2026-09-25, all three browsers.** `e2e/no-horizontal-scroll.spec.ts` "T250: below 1,024 px, a dashboard is for reading" and "a three-column chart tile keeps its title beside its badges at 1,440 px". The 390 px test and the three-column test failed first. The widening test guards the way back and passed from the start. `dashboard/useNarrowWindow.test.tsx` covers the hook.
+    - **One column, in view mode:** below 1,024 px every element of the grid takes the whole row, in document order, at its own height. The stylesheet does it, since the columns are set inline. An edit session already open when the window narrows keeps its grid and its bar, so nothing is lost.
+    - **For reading:** below 1,024 px (`useNarrowWindow`, `matchMedia`) the dashboard is read-only, as while previewing. There is no Edit, no ✎, no Start editing, and no "Edit chart" in the tile's menu. A new dashboard asked to open in edit mode opens to be read. Widened again, all of them come back.
+    - **Every tile keeps its title.** The title takes the head's room before the freshness badge. The badge gives way first, down to "● Live…" or "⚡ 40m…", with the whole sentence in its tooltip. In a narrow head (360 px or less, by a container query), "Table view" is drawn as an icon (⊞, ▥ while showing the table), with its words kept as its text and name. Where there is no ✎, Refresh takes its place and the head the room it leaves.
+    - Measured: at 390 px a chart's title keeps 142 px, where it had 0. A three-column tile at 1,440 px keeps 108 px. This is the Superset exercise's "titles disappear on three-column tiles" (gap 2), fixed by the same rule.
+  - **Not done here:** direction.md's "the filter bar becomes a sheet" below 1,024 px. The filter band still wraps in place. The shell and Explore below 1,024 px are open question N16 for the user.
+  - **Cold review (one round), verdict FAIL. Fixed, each with a test that failed first:**
+    - **While previewing, Refresh slid under SQL.** The rule that moves Refresh into the pencil's place did not except a tile with SQL, which already holds it. The rule now excepts such a tile. SQL is a word, wider than the pencil it replaces: Refresh stands clear of it, and the head keeps room for both. That overlap was 2 px before this task. The new test hovers a previewed tile and asserts the two buttons do not meet.
+    - **Below 1,024 px the settings were still offered.** Their Save writes the dashboard. The gear is gone there now, unless an edit session is already open. The 390 px test also asserts the gear and the menu's "Edit chart" are absent.
+    - **The badge's parts lost their 4 px** when it became inline text. They are spaced again, and the widening test measures each gap.
+    - **The badge's tooltip was claimed but did not exist.** The badge now carries its whole sentence ("Live · Data as of 10:32:18 AM"). The icon-mode Table view carries its words as a tooltip too.
+    - **Also:** an empty dashboard that cannot be edited says "Nothing here yet." without asking to edit it.
+    - **Noted for the record:** moving the badge-gap assertion from the 390 px test to the widening test drew the test-integrity hook's warning ("removes 2 but adds 1"). The moved assertion was new and uncommitted. The file's net diff from the commit adds ten assertions and removes none.
+- [x] T251 (AC-187) Draw a dashboard's frame while it loads, and give a failed tile its details and its menu
   - Files: `packages/web/src/dashboard/*`, `e2e/dashboard.spec.ts`
   - Failing test: on a slow load the header, tabs and tile frames show before the data; a failed tile keeps its ⋯ menu and offers the query and error in a disclosure (recheck-dashboard F10, F15; direction.md §6, checklist 18).
   - Depends on: none
+  - **Done 2026-09-25.** Files as planned, plus `tiles/TileError.tsx` and `shell/styles.ts`. `e2e/dashboard.spec.ts` "while the dashboard is on its way, its frame is drawn…" and "a failed tile keeps its ⋯ menu, and its Details hold the error and the query" both failed first.
+    - **The frame while it loads** (`DashboardLoading`) replaces the lone "Loading…" while the dashboard's document is on its way. It is built from the dashboard's own classes, so nothing jumps when the dashboard takes its place:
+      - the 80 px header, with placeholders for the crumbs and the title;
+      - the page-tab strip and the 53 px filter band;
+      - three tile frames, each with a chart-shaped skeleton (AC-042's own `TileSkeleton`);
+      - "Loading the dashboard…" as a status with its icon (rule 3).
+    - **A failed tile keeps its ⋯ menu.** View query and Edit chart work there, since both read the chart's document, not an answer. Copy and Export stay in the menu, disabled with the reason "The chart could not be loaded, so nothing is drawn to copy or export." A chart that is gone still has no menu.
+    - **The error's "Details" disclosure** (direction.md §6) holds Cube's message with the HTTP status, then the query that met it. It replaces "Show query", which revealed the query alone. The tests that pressed "Show query" now press "Details", one for one.
+  - **Cold review (one round), verdict FAIL. Fixed:**
+    - **A chart with no fields yet got a failure menu**, whose Copy and Export said "could not be loaded". It had failed at nothing. The failed tile's menu is now kept to a load that failed. It is not offered for a chart that is gone, has no fields yet, or has no type yet, nor without the chart's document in hand, which View query and the editor read.
+    - **The loading frame's tab rule** now runs the whole width, as the dashboard's own row draws it.
+    - **Tests:** a new e2e shows that a tile with no fields and a chart that is gone get no menu. It failed first, with the fix set aside. The failed-tile test now chooses View query and sees the query.
 
 ## Spec F23. The chart tile's menu (DSH-08), and F16's join refusal
 

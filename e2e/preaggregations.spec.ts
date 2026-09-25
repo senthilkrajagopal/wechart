@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { ownCubeFile, PUBLISHED } from './model-files';
+import { wellPicker } from './wells';
 
 /**
  * F16 — pre-aggregations, on the sample model's accelerated cube,
@@ -353,8 +354,8 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
 
   await page.goto('/explore/charts/seed-chart-empty/edit');
   await page.getByLabel('Cube or view').selectOption({ value: 'monthly_orders' });
-  await page.getByTestId('add-measures').selectOption('monthly_orders.count');
-  await page.getByTestId('add-dimensions').selectOption('monthly_orders.status');
+  await wellPicker(page, 'measures').selectOption('monthly_orders.count');
+  await wellPicker(page, 'dimensions').selectOption('monthly_orders.status');
   /**
    * Waited for longer than the default: the other browsers publish cube files
    * of their own at the same time, and Cube compiles the store's model again
@@ -362,7 +363,7 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
    */
   const cube = { timeout: 30_000 };
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows', cube);
-  await page.getByRole('button', { name: 'Results', exact: true }).click();
+  await page.getByRole('tab', { name: 'Results', exact: true }).click();
   await page.getByTestId('drawer-tab-acceleration').click();
 
   // The rollup Cube serves the chart from, and no other.
@@ -373,7 +374,7 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
 
   // The time, asked by day (every time field is, `QUERY_GRANULARITY`): finer
   // than the rollup's month — a miss, and the member named.
-  await page.getByTestId('add-timeDimensions').selectOption('monthly_orders.ordered_at');
+  await wellPicker(page, 'timeDimensions').selectOption('monthly_orders.ordered_at');
   await expect(page.getByTestId('acceleration-member')).toHaveText(
     'monthly_orders.ordered_at',
     cube,
@@ -393,7 +394,7 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
 
   // A cube with no rollups says so.
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
-  await page.getByTestId('add-measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.count');
   await expect(page.getByTestId('acceleration-miss')).toHaveText(
     'Not served from a pre-aggregation. Stopped by orders.count: orders has no pre-aggregations.',
     cube,
@@ -414,7 +415,7 @@ test('a chart no rollup serves is warned of depending on the source database', a
   const cube = { timeout: 30_000 };
   await page.goto('/explore/charts/seed-chart-empty/edit');
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
-  await page.getByTestId('add-measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.count');
 
   // On the chart itself, beside its result — nothing to open first (T153's
   // review: "warn on the chart").
@@ -428,7 +429,7 @@ test('a chart no rollup serves is warned of depending on the source database', a
   await expect(warning.locator('[data-icon="warning"]')).toHaveCount(1);
   await expect(onChart.getByTestId('acceleration')).toContainText('Live');
   // And in its acceleration panel.
-  await page.getByRole('button', { name: 'Results', exact: true }).click();
+  await page.getByRole('tab', { name: 'Results', exact: true }).click();
   await page.getByTestId('drawer-tab-acceleration').click();
   await expect(
     page.getByRole('tabpanel', { name: 'Acceleration' }).getByTestId('rollup-only-warning'),
@@ -436,8 +437,8 @@ test('a chart no rollup serves is warned of depending on the source database', a
 
   // A chart the rollup serves: no warning, on the chart or in the panel.
   await page.getByLabel('Cube or view').selectOption({ value: 'monthly_orders' });
-  await page.getByTestId('add-measures').selectOption('monthly_orders.count');
-  await page.getByTestId('add-dimensions').selectOption('monthly_orders.status');
+  await wellPicker(page, 'measures').selectOption('monthly_orders.count');
+  await wellPicker(page, 'dimensions').selectOption('monthly_orders.status');
   await expect(page.getByTestId('acceleration-matched')).toBeVisible(cube);
   await expect(onChart.getByTestId('acceleration')).toContainText('Accelerated', cube);
   await expect(page.getByTestId('rollup-only-warning')).toHaveCount(0);

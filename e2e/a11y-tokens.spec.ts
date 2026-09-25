@@ -105,6 +105,36 @@ for (const theme of THEMES) {
 }
 
 /**
+ * T249's review / AC-005, AC-004: the dashboard settings page, section by
+ * section, in both themes — the chosen mode card's tint and the inactive
+ * banner's warning tint are grounds no token audit covers.
+ */
+for (const theme of THEMES) {
+  test(`the dashboard settings page meets AA contrast and the 12 px floor in ${theme} (AC-005, AC-004)`, async ({
+    page,
+  }) => {
+    await openInTheme(page, '/explore/dashboards/seed-root-dashboard-1', theme);
+    await page.getByRole('button', { name: 'Dashboard settings' }).click();
+    const settings = page.getByTestId('dashboard-settings');
+    const nav = settings.getByRole('navigation', { name: 'Settings sections' });
+    for (const section of ['General', 'Interactions', 'Markings', 'Cross-filtering', 'Layout']) {
+      await nav.locator(`[data-section="${section}"]`).click();
+      await expect(settings.getByRole('heading', { name: section, level: 2 })).toBeVisible();
+      const results = await new AxeBuilder({ page })
+        .include('[data-testid="dashboard-settings"]')
+        .withRules(['color-contrast'])
+        .analyze();
+      expect(
+        results.violations.flatMap((violation) =>
+          violation.nodes.map((node) => `${section}: ${node.target.join(' ')}: ${node.failureSummary ?? ''}`),
+        ),
+      ).toEqual([]);
+      expect(await page.evaluate(FONT_SIZE_SWEEP)).toEqual([]);
+    }
+  });
+}
+
+/**
  * T233 / AC-004, reopened 2026-09-24: the surfaces above are swept as they
  * open, and some text only exists in a state they never reach. The Model
  * critique measured one — a problem's `file:line`, at 11 px — which appears

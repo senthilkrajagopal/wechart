@@ -2046,6 +2046,45 @@ main:has(.dashboard) {
   z-index: 4;
   background: var(--wc-bg-page);
 }
+/* The dashboard's frame while it loads (T251, F15): its header's rows, the
+   tab strip and the band at their own heights, and tiles with a chart's
+   shape in them, each part a placeholder bar on the subtle ground. */
+.skeleton-bar {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--wc-bg-subtle);
+}
+.dashboard-loading__crumbs { display: block; flex-basis: 100%; height: 24px; }
+.dashboard-loading__crumbs > .skeleton-bar { width: 160px; height: 16px; margin-top: 4px; }
+.dashboard-loading__title { display: block; height: 32px; margin-right: auto; }
+.dashboard-loading__title > .skeleton-bar { width: 280px; height: 24px; margin-top: 4px; }
+.dashboard-loading__status { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+.dashboard-loading__tab { display: block; height: 36px; padding: 10px 12px; }
+.dashboard-loading__tab > .skeleton-bar { width: 72px; height: 14px; }
+.dashboard-loading__grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+}
+.dashboard-loading__grid .tile-head > .skeleton-bar { width: 45%; height: 14px; }
+/* A failed tile's Details (T251): the error, then the query, which scrolls
+   within the tile rather than widening it. */
+.tile-error__detail {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-secondary);
+}
+.tile-error__query {
+  margin: 4px 0 0;
+  max-height: 160px;
+  overflow: auto;
+  font-family: var(--wc-font-code);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+}
 /* <span class="xs muted"> (T246, mismatch 6). */
 .filter-bar__hint {
   color: var(--wc-text-muted);
@@ -2088,81 +2127,175 @@ main:has(.dashboard) {
   min-height: 0;
 }
 .dashboard--under-overlay { visibility: hidden; }
+/* The dashboard settings page, the prototype's settings overlay (T249,
+   index.html 2107–2205): a 41 px head, a 220 px nav, and the section's
+   content flat on the page, not in a card. */
 .settings-page { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .settings-page__bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 48px;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
+}
+/* 16 px as the prototype's h1; 600, not its 700 (direction.md §3). */
+.settings-page__title { margin: 0 0 0 8px; font-size: 16px; line-height: 20px; font-weight: 600; }
+.settings-page__spacer { flex: 1; }
+.settings-page__unsaved {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-secondary);
 }
 .settings-page__actions { display: flex; gap: 8px; }
-.settings-page__bar button {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--wc-border-strong);
-  border-radius: 4px;
-  background: var(--wc-bg-surface);
-  color: var(--wc-text-primary);
-  cursor: pointer;
-}
-.settings-page__save {
-  background: var(--wc-accent);
-  color: var(--wc-text-on-accent);
-  border-color: var(--wc-accent);
-}
-.settings-page__body { display: flex; align-items: stretch; gap: 16px; flex: 1; min-height: 0; }
-/* The left nav direction.md asks for, at the workbench tree's 280px. */
+/* A state said in the bar (saving, a refused save) takes a line of its own. */
+.settings-page__bar > .settings-page__state { flex-basis: 100%; margin: 0; }
+.settings-page__bar .btn-sm { border-radius: 6px; }
+.settings-page__body { display: flex; align-items: stretch; flex: 1; min-height: 0; }
+/* .settings-nav: 220 px on the surface, ruled off from the content. */
 .settings-page__nav {
-  flex: 0 0 280px;
+  flex: 0 0 220px;
   display: grid;
   align-content: start;
-  gap: 4px;
+  padding: 8px 0;
   overflow: auto;
   min-height: 0;
+  border-right: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
 }
+/* .settings-nav .file: 32 px rows at 12 px, flush to the nav's edges. */
 .settings-page__nav button {
-  padding: 8px 12px;
+  height: 32px;
+  padding: 0 12px 0 24px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 0;
   background: none;
-  color: var(--wc-text-secondary);
+  color: var(--wc-text-primary);
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
-.settings-page__nav button:hover { background: var(--wc-bg-subtle); }
-.settings-page__nav button[aria-current='true'] {
-  background: var(--wc-bg-subtle);
-  color: var(--wc-text-primary);
-  font-weight: var(--wc-text-sm-strong-weight);
+.settings-page__nav button:hover { background: var(--wc-bg-hover); }
+.settings-page__nav button[aria-current='true'],
+.settings-page__nav button[aria-current='true']:hover {
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-weight: 600;
 }
+/* .settings-inner: flat, padded 16 24 48, at most 920 px. */
 .settings-page__panel {
   flex: 1;
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 16px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 6px;
-  background: var(--wc-bg-surface);
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 16px 24px 48px;
 }
-.settings-page__later { color: var(--wc-text-secondary); }
+/* min-width 0: a wide cross-filter matrix scrolls in its own box rather than
+   widening the grid's track and the panel with it (T249's review). */
+.settings-page__panel > * { max-width: 872px; min-width: 0; }
+.settings-page__panel > h2 { margin: 0; font-size: 18px; line-height: 20px; font-weight: 600; }
+.settings-page__panel p { margin: 0; }
+.settings-page__later,
+.settings-page__intro { color: var(--wc-text-secondary); }
+.settings-page__subhead {
+  margin: 8px 0 0;
+  font-size: var(--wc-text-md-size);
+  line-height: var(--wc-text-md-line);
+  font-weight: 600;
+}
+/* .formgrid: fields two or more to a row, a wide one the whole row. */
+.settings-form {
+  display: grid;
+  gap: 8px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  align-items: start;
+}
+.settings-form__wide { grid-column: 1 / -1; }
+.settings-form textarea { font-size: 12px; line-height: 18px; }
+/* The prototype's .warnbar for a section whose mode is not in use (F28). */
+.settings-page__inactive {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 20px;
+  background: color-mix(in srgb, var(--wc-status-warning-icon) 16%, var(--wc-bg-surface));
+  color: var(--wc-text-primary);
+}
+.settings-page__inactive > svg[data-icon] { flex: none; margin-top: 3px; color: var(--wc-status-warning-icon); }
 /* Settings › Markings (AC-198): the prototype's colour slots, default radio,
    and a tile's limit checkboxes, each with its marking's swatch. */
-.markings-table { margin-bottom: 8px; }
-.marking-slots,
-.marking-limits { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
-.marking-slot,
-.marking-limit,
-.marking-default { display: inline-flex; gap: 4px; align-items: center; }
+.markings-table td,
+.markings-table th[scope='row'] { vertical-align: middle; }
+.markings-table th[scope='row'] { background: none; font-weight: 600; }
+.marking-slots { display: inline-flex; gap: 2px; align-items: center; }
+.marking-limits { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.marking-default { display: inline-flex; gap: 6px; align-items: center; }
+/* .mk-slot: 22 × 24, a transparent rule, ringed in the accent when chosen.
+   The radio lies over it, unseen, so it is what a pointer presses. */
+.marking-slot {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 24px;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+.marking-slot:has(input:checked) { border-color: var(--wc-accent); box-shadow: 0 0 0 1px var(--wc-accent); }
+.marking-slot > input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+/* Clear of the chosen ring by a gap, so focus is not read as the choice
+   (T249's review, AC-176). */
+.marking-slot:has(input:focus-visible) { outline: 2px solid var(--wc-accent); outline-offset: 3px; }
+/* .mk-swatch: the colour, ringed inside in border-strong. */
 .marking-swatch {
   display: inline-block;
+  flex: none;
   width: 14px;
   height: 14px;
   border-radius: 3px;
-  border: 1px solid var(--wc-border-subtle);
+  box-shadow: inset 0 0 0 1px var(--wc-border-strong);
+  vertical-align: middle;
 }
-.markings-add { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+.marking-slot > .marking-swatch { width: 16px; height: 16px; }
+/* .chk: a limit, a 12 px pill with its checkbox and the marking's swatch. */
+.marking-limit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.marking-limit > .marking-swatch { width: 10px; height: 10px; }
+/* The marking a tile marks with is not one it can be limited by: said in
+   muted ink (not the prototype's opacity, which takes the text under AA). */
+.marking-limit:has(input:disabled) { color: var(--wc-text-muted); }
+.settings-page input[type='radio'],
+.settings-page input[type='checkbox'] { accent-color: var(--wc-accent); }
+/* The page's small controls are the prototype's .input.sm and .select.sm. */
+.settings-page input.input-sm:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']),
+.settings-page .select-sm { height: 28px; font-size: 12px; }
+.markings-add { display: flex; gap: 12px; align-items: center; }
 
 /* "Limit data using markings" (AC-108). The reason sits beside the option it
    explains, not in a tooltip: a disabled control with no explanation is the
@@ -2220,28 +2353,49 @@ main:has(.dashboard) {
   gap: 4px;
   align-items: center;
   font-size: var(--wc-text-xs-size);
+  font-weight: 400;
   color: var(--wc-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
+.settings-page__nav button[aria-current='true'] .settings-page__activity { color: var(--wc-accent); }
 .settings-page__activity > svg[data-icon='ok'] { color: var(--wc-status-success); }
 /* direction.md calls these radio cards, so they are cards: the whole option is
-   the target, not a 13px circle beside it. */
-.settings-modes { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; max-width: 520px; }
+   the target, not a 13px circle beside it. The prototype's .radio-card (T249,
+   F27, mismatch 33): 12 px padding, radius 8, a strong rule; the chosen one
+   ringed in the accent over a 40 % tint of its soft ground. */
+.settings-modes { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
 .settings-modes legend { padding: 0 0 8px; font-weight: var(--wc-text-sm-strong-weight); }
+.settings-modes__cards {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
 .settings-modes__card {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
   padding: 12px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 6px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 8px;
+  background: var(--wc-bg-surface);
   cursor: pointer;
 }
-.settings-modes__card:hover { background: var(--wc-bg-subtle); }
-.settings-modes__card:has(input:checked) {
+.settings-modes__card:hover { background: var(--wc-bg-hover); }
+.settings-modes__card:has(input:checked),
+.settings-modes__card:has(input:checked):hover {
   border-color: var(--wc-accent);
-  background: var(--wc-bg-subtle);
+  box-shadow: 0 0 0 1px var(--wc-accent);
+  background: color-mix(in srgb, var(--wc-bg-accent-soft) 40%, var(--wc-bg-surface));
+}
+.settings-modes__card > input { flex: none; margin: 3px 0 0; }
+.settings-modes__text { display: grid; gap: 4px; }
+.settings-modes__name { font-size: 14px; line-height: 20px; font-weight: 600; }
+.settings-modes__about { color: var(--wc-text-secondary); }
+.settings-modes__refs {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-secondary);
 }
 .settings-field { display: grid; gap: 4px; max-width: 420px; }
 .settings-field input {
@@ -2716,8 +2870,11 @@ button.filter-pill__clear {
      (26 + 2 + 26, and its 8 px gap) and nothing lies under them. */
   padding-right: 62px;
 }
+/* The title takes the head's room before the freshness badge does (T250):
+   the badge gives way first, its words cut short with the whole sentence in
+   its tooltip, so a narrow tile never squeezes its title to nothing. */
 .tile-head__title {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -2732,6 +2889,34 @@ button.filter-pill__clear {
    row by a pixel each way, so the head stays the prototype's 22 (T252,
    mismatch 9) with the badges beside it. */
 .tile-head .tile-head__action { margin: -1px 0 -1px auto; }
+/* "Table view" keeps its words on one line; the title and badge give way. */
+.tile-head .tile-head__action { flex: none; white-space: nowrap; }
+/* In a narrow head — a three- or four-column tile, or a tile in a phone's
+   column (T250) — "Table view" is drawn as an icon, its words kept as its
+   text and name, so the title keeps room beside the freshness badge. */
+.chart-tile > .tile-head { container: tile-head / inline-size; }
+@container tile-head (max-width: 360px) {
+  .tile-head__action > .tile-head__action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .tile-head .tile-head__action { width: 24px; padding: 0; justify-content: center; }
+  /* Decorative: the empty alternative keeps the glyph out of its name. */
+  .tile-head .tile-head__action::before {
+    content: '⊞';
+    content: '⊞' / '';
+    font-size: 14px;
+    line-height: 1;
+  }
+  .tile-head .tile-head__action[aria-pressed='true']::before {
+    content: '▥';
+    content: '▥' / '';
+  }
+}
 /* A chart whose filtered answer is on its way (AC-078): still drawn, dimmed. */
 /* What is drawn fades while it is asked again; the head — the title, and the
    "Updating…" that says so — keeps its contrast (T183's review, AC-005). */
@@ -3007,6 +3192,16 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
    because the painted lines only agree with the real tracks while the canvas,
    the geometry and this rule all use the same gutter. */
 .grid-canvas { align-content: start; }
+/* direction.md §2, Breakpoints: "<1024: view mode only. Dashboards stack to
+   one column" (T250). Every element takes the whole row, in document order;
+   heights are kept. The grid's columns are set inline, hence !important. An
+   edit session still open when the window narrows keeps its grid. */
+@media (max-width: 1023.98px) {
+  .dashboard:not([data-editing='true']) .grid-canvas {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .dashboard:not([data-editing='true']) .grid-canvas > * { grid-column: 1 / -1 !important; }
+}
 /* The prototype's .gridlines: each column a band tinted 4 % accent, the
    gutters clear (T253, mismatch 20) — where 1 px rules marked only the
    columns' edges. */
@@ -3576,11 +3771,12 @@ main:has(.chart-editor) {
   flex-direction: column;
   padding: 0;
 }
+/* The prototype's .editor-page: 280 | the preview | 360 (T257). */
 .chart-editor {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  grid-template-columns: 280px minmax(0, 1fr) 360px;
   grid-template-rows: auto minmax(0, 1fr);
 }
 .chart-editor__head {
@@ -3608,8 +3804,10 @@ main:has(.chart-editor) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The title reads as a heading until it is pointed at or typed in. */
-.chart-editor__title {
+/* The title reads as a heading until it is pointed at or typed in. Named with
+   the global input rule's own :not()s, which otherwise outrank a class and
+   drew it as a bordered field at rest (T257). */
+input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']) {
   flex: 0 1 420px;
   min-width: 120px;
   height: 32px;
@@ -3622,13 +3820,23 @@ main:has(.chart-editor) {
   font-size: 15px;
   font-weight: 600;
 }
-.chart-editor__title:hover,
-.chart-editor__title:focus { border-color: var(--wc-border-strong); background: var(--wc-bg-surface); }
+input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):hover,
+input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):focus {
+  border-color: var(--wc-border-strong);
+  background: var(--wc-bg-surface);
+}
 .chart-editor__meta { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); white-space: nowrap; }
 .chart-editor__spacer { flex: 1; }
+/* Undo and Redo are .icon-button (the prototype's .iconbtn); with nothing to
+   step through, at the prototype's opacity .4 (editor.js 408, T257). */
+.chart-editor__head .icon-button:disabled { opacity: 0.4; }
 .chart-editor__fields,
 .chart-editor__inspector { min-height: 0; overflow: auto; background: var(--wc-bg-surface); }
-.chart-editor__fields { padding: 12px; border-right: 1px solid var(--wc-border-subtle); }
+.chart-editor__fields { padding: 0 0 12px; border-right: 1px solid var(--wc-border-subtle); }
+/* The inspector's small controls are the prototype's .input.sm and .select.sm:
+   28 px at 12 px (T257). */
+.chart-editor input.input-sm:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']),
+.chart-editor .select-sm { height: 28px; font-size: 12px; }
 .chart-editor__inspector { display: flex; flex-direction: column; border-left: 1px solid var(--wc-border-subtle); }
 .chart-editor__inspector-body {
   flex: 1;
@@ -3654,25 +3862,125 @@ main:has(.chart-editor) {
   flex-direction: column;
   gap: 8px;
 }
-.chart-editor__empty { margin: auto; color: var(--wc-text-secondary); }
+/* Opened on its own, the preview is a tile filling the canvas, as the
+   prototype's (editor.js 414: height 100%, min-height 240px; T257). */
+.chart-editor__canvas > .preview-frame__tile[data-size='fill'] { flex: 1 1 auto; min-height: 240px; }
+/* The empty editor: the prototype's two lines, centred in the preview's tile
+   (editor.js 481, T257). */
+.chart-editor__canvas > .chart-editor__empty-tile { display: grid; place-items: center; }
+.chart-editor__empty { text-align: center; }
+.chart-editor__empty-head {
+  margin: 0;
+  font-size: var(--wc-text-md-size);
+  line-height: var(--wc-text-md-line);
+  font-weight: 600;
+  color: var(--wc-text-primary);
+}
+.chart-editor__empty-line {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-secondary);
+}
 .chart-editor__missing { margin: auto; max-width: 480px; }
-/* The drawer at the foot of the preview (AC-214): the only place result rows
-   are printed, its height its own so the preview keeps the rest. */
+/* The drawer at the foot of the preview (AC-214), the prototype's .drawer
+   (T257): its tab strip always there, and open, 220 px with the strip — the
+   only place result rows are printed. */
 .chart-editor__center .results-drawer {
   flex: none;
-  max-height: 40%;
-  overflow: auto;
-  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
   border-top: 1px solid var(--wc-border-subtle);
   background: var(--wc-bg-surface);
 }
+.chart-editor__center .results-drawer[data-open='true'] { height: 220px; }
+.results-drawer__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.results-drawer__tabs { display: flex; flex: 1; gap: 2px; min-width: 0; overflow-x: auto; }
+/* The prototype's .tabs button. */
+.results-drawer__tabs [role='tab'] {
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.results-drawer__tabs [role='tab']:hover:not([aria-selected='true']) { background: none; color: var(--wc-text-primary); }
+.results-drawer__tabs [role='tab'][aria-selected='true'] {
+  color: var(--wc-accent);
+  border-bottom-color: var(--wc-accent);
+}
+/* Drawn inside the strip, which clips (T182's rule). */
+.results-drawer__tabs [role='tab']:focus-visible { outline-offset: -2px; }
+.results-drawer__toggle { width: 28px; height: 28px; flex: none; }
+.results-drawer__body { flex: 1; min-height: 0; overflow: auto; }
+.results-drawer__body > .state-line { margin: 8px 12px; }
+.results-drawer__body:focus-visible { outline-offset: -2px; }
+.results-drawer__query {
+  margin: 0;
+  padding: 12px;
+  font-family: var(--wc-font-code);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+}
+/* A measure's figures are set right, as the prototype's td.num (T257). */
+.grid-table th.num,
+.grid-table td.num { text-align: right; }
 
+/* A well (the prototype's .field + .well, T257): a 12/600 label over a dashed
+   box holding the pills and the "+" that adds to it. */
+.well-field { display: grid; gap: 4px; }
+.well-field__label {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+}
 .well {
-  padding: 8px;
-  border: 1px solid var(--wc-border-subtle);
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 6px;
+  border: 1px dashed var(--wc-border-strong);
   border-radius: 6px;
   background: var(--wc-bg-surface);
 }
+/* The prototype's .addbtn: borderless, muted, until pointed at. */
+.addbtn {
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--wc-text-muted);
+  font-size: 12px;
+}
+.addbtn:hover { color: var(--wc-text-primary); }
+/* Its .picker is 240 px (index.html 961), placed against the well — left: 0
+   — not against the "+", which the pills push along: from there it ran past
+   the inspector's edge (T257's review). */
+.well > .menu-button { position: static; }
+.well .menu-button__menu { width: 240px; }
+/* On a legal well's accent tint, text-muted is 4.28:1 in dark; the audited
+   text-secondary holds (T257's review, AC-005). */
+.well[data-drop='legal'] .addbtn { color: var(--wc-text-secondary); }
+.well .menu-button__item .field-row__icon { flex: none; }
+.wells__options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: end; }
 
 /* The chart editor opened over the dashboard from a tile (T032). Laid out
    as the settings page is: its own bar in place of the dashboard's, and the
@@ -3738,20 +4046,34 @@ main:has(.chart-editor) {
 /* Actual size or Fit (T032, direction.md section 2). The frame is the tile's
    own chrome, grid-tile, so actual size is the tile and not a likeness. */
 .preview-frame { display: flex; flex-direction: column; gap: 8px; }
-.preview-frame__sizes { display: flex; gap: 4px; }
-.preview-frame__sizes button {
-  height: 28px;
-  padding: 0 12px;
+/* The prototype's .seg (editor.js 414, index.html 609; T257): a segmented
+   control, not two primary buttons — the pressed one on the accent's tint. */
+.preview-frame__sizes {
+  display: inline-flex;
+  align-self: flex-start;
   border: 1px solid var(--wc-border-strong);
   border-radius: 4px;
+  overflow: hidden;
+}
+.preview-frame__sizes button {
+  /* Not the 32 px minimum a class-less button takes. */
+  min-height: 0;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-left: 1px solid var(--wc-border-subtle);
+  border-radius: 0;
   background: var(--wc-bg-surface);
   color: var(--wc-text-primary);
+  font-size: 12px;
   cursor: pointer;
 }
-.preview-frame__sizes button[aria-pressed='true'] {
-  border-color: var(--wc-accent);
-  background: var(--wc-accent);
-  color: var(--wc-text-on-accent);
+.preview-frame__sizes button:first-child { border-left: 0; }
+.preview-frame__sizes button[aria-pressed='true'],
+.preview-frame__sizes button[aria-pressed='true']:hover {
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-weight: 600;
 }
 .preview-frame__tile { flex: none; }
 
@@ -3802,6 +4124,15 @@ main:has(.chart-editor) {
 /* With "Refresh now" there, the head keeps room for three corner controls:
    26 + 2 + 26 + 2 + 26, and its 8 px gap. */
 .grid-tile:has(.tile-refresh) .tile-head { padding-right: 90px; }
+/* With no ✎ — a narrow window's reading view (T250), or a preview — Refresh
+   takes the pencil's place, and the head the room it leaves. */
+/* Not while previewing, where SQL already has the pencil's place (T250's review). */
+.grid-tile:has(.tile-refresh):not(:has(.tile-pencil)):not(:has(.tile-sql)) > .tile-refresh { right: 44px; }
+/* SQL is a word, wider than the pencil it replaces: Refresh stands clear of
+   it, and the head keeps room for both (T250's review). */
+.grid-tile:has(.tile-sql) > .tile-refresh:not(.tile-sql) { right: 78px; }
+.grid-tile:has(.tile-sql):has(.tile-refresh:not(.tile-sql)) .tile-head { padding-right: 112px; }
+.grid-tile:has(.tile-refresh):not(:has(.tile-pencil)):not(:has(.tile-sql)) .tile-head { padding-right: 62px; }
 /* A chart's SQL as the previewed context (T174): only while previewing, when
    there is no pencil, so it takes the pencil's place; a word, not an icon. */
 .tile-refresh.tile-sql {
@@ -3833,11 +4164,26 @@ main:has(.chart-editor) {
 }
 .tile-freshness,
 .acceleration { gap: 4px; }
+/* Gives way to the title (T250): shrinks far faster than it, cutting its
+   words short rather than the title's — but never below "● Live…" or
+   "⚡ 40m…", its state's icon and word (rule 3); the whole in its tooltip. */
+.tile-freshness {
+  display: block;
+  flex: 0 100 auto;
+  min-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 22px;
+}
 /* Its two parts are one badge's text (T252): no pill of their own inside it.
    Kept on screen while the marking badge shows, where the prototype hides it:
    AC-013 fails on an accelerated tile without its mark. */
 .tile-freshness > .acceleration,
-.tile-freshness > .tile-as-of { height: auto; padding: 0; background: none; }
+.tile-freshness > .tile-as-of { display: inline; height: auto; padding: 0; background: none; }
+/* The badge's 4 px between its parts, as inline text now (T250's review):
+   its gap no longer applies, and the markup has no spaces of its own. */
+.tile-freshness > * + * { margin-left: 4px; }
+.tile-freshness .acceleration--accelerated > .acceleration__short { margin-left: 4px; }
 .acceleration--accelerated { color: var(--wc-status-success); }
 @media (hover: none) {
   .tile-refresh,
@@ -3848,8 +4194,13 @@ main:has(.chart-editor) {
 .wells ul { margin: 0; padding: 0; list-style: none; }
 
 /* Legality is an outline plus a written reason, never colour alone
-   (direction.md rule 3, AC-027). */
-.well[data-drop='legal'] { outline: 2px solid var(--wc-accent); }
+   (direction.md rule 3, AC-027); a legal well also takes the prototype's
+   .well.legal tint. */
+.well[data-drop='legal'] {
+  outline: 2px solid var(--wc-accent);
+  border-color: var(--wc-accent);
+  background: var(--wc-bg-accent-soft);
+}
 .well[data-drop='illegal'] { outline: 2px dashed var(--wc-border-strong); }
 
 .well__reason {
@@ -3881,67 +4232,127 @@ main:has(.chart-editor) {
 .axis-panel { display: grid; gap: 4px; margin: 0 0 8px; padding: 8px; border: 1px solid var(--wc-border-subtle); border-radius: 6px; }
 .axis-panel > legend { padding: 0 4px; font-size: 12px; font-weight: 600; color: var(--wc-text-secondary); }
 .axis-panel > label { font-size: 12px; color: var(--wc-text-secondary); }
-.field-list { display: grid; gap: 8px; align-content: start; }
-.field-list > label { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--wc-text-secondary); }
+/* The chart editor's field list (AC-215): the prototype's field pane (T257) —
+   the source and the search each padded 8 12, then each cube's .tgroup. */
+.field-list { display: grid; align-content: start; }
+.field-list__source { display: grid; gap: 4px; padding: 8px 12px 0; }
+.field-list__source > label { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--wc-text-secondary); }
+.field-list__search-box { padding: 8px 12px; }
+.field-list__search { width: 100%; }
 .field-list ul { margin: 0; padding: 0; list-style: none; }
+/* By type within a cube (AC-025), which the prototype's list does not say. */
 .field-list h4 {
-  margin: 6px 0 2px;
+  margin: 4px 0 0;
+  padding: 0 12px;
   font-size: 12px;
   line-height: 16px;
   font-weight: 600;
-  color: var(--wc-text-secondary);
+  color: var(--wc-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.field-list__none { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+.field-list__none { margin: 0; padding: 8px 12px; font-size: 12px; color: var(--wc-text-secondary); }
 /* A cube's fields under its name and count (AC-215, the prototype's .tgroup). */
-.field-list__cube { display: grid; }
+.field-list__cube { display: grid; padding: 4px 0; }
 .field-list__cube-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 4px 0 0;
+  height: 28px;
+  margin: 0;
+  padding: 0 12px;
   font-size: 12px;
   line-height: 20px;
   font-weight: 600;
-  color: var(--wc-text-primary);
+  color: var(--wc-text-secondary);
 }
-.field-list__count { margin-left: auto; font-weight: 400; color: var(--wc-text-secondary); font-variant-numeric: tabular-nums; }
-/* One field (the prototype's .frow): icon, title, what it is, in the chart. */
+.field-list__count { margin-left: auto; font-weight: 400; color: var(--wc-text-muted); font-variant-numeric: tabular-nums; }
+/* One field (the prototype's .frow): chip, title with its "used" dot, what it is. */
 .field-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 0 6px;
+  gap: 8px;
+  height: 28px;
+  margin: 0 4px;
+  padding: 0 12px 0 22px;
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 12px;
   cursor: grab;
+  user-select: none;
 }
-.field-row[role='button']:hover { background: var(--wc-bg-subtle); }
-.field-row[data-used='true'] .field-row__name { font-weight: 600; }
+.field-row[role='button']:hover { background: var(--wc-bg-hover); }
 .field-row__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.field-row__meta { font-size: 12px; color: var(--wc-text-secondary); }
-.field-row__used { color: var(--wc-accent); }
+.field-row__meta { font-size: 12px; color: var(--wc-text-muted); }
+/* The prototype's .ficon: an 18 px chip in the role's colours. */
+.field-row__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-family: var(--wc-font-code);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--wc-role-dimension);
+  background: var(--wc-bg-role-dimension-soft);
+}
+.field-row__icon[data-role='measure'] { color: var(--wc-role-measure); background: var(--wc-bg-role-measure-soft); }
+/* The prototype's .frow.used .fname::after: a 6 px accent dot after the name. */
+.field-row__used {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--wc-accent);
+  vertical-align: middle;
+}
 /* A field in a well (AC-216, the prototype's .pill): its title, its tag or
-   grain, and ×. */
-.well__pills { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+   grain, and ×, in its role's colours (T257). */
+.well__pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.well__pills:empty { display: none; }
 .pill {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   max-width: 100%;
-  min-height: 24px;
-  padding: 0 4px 0 8px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 12px;
-  background: var(--wc-bg-subtle);
+  height: 24px;
+  padding: 0 4px 0 6px;
+  border: 0;
+  border-radius: 4px;
   font-size: 12px;
+  font-weight: 600;
+  color: var(--wc-role-dimension);
+  background: var(--wc-bg-role-dimension-soft);
 }
+.pill--measure { color: var(--wc-role-measure); background: var(--wc-bg-role-measure-soft); }
 .pill__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pill__tag { font-size: 12px; color: var(--wc-text-secondary); }
-.pill__grain { height: 20px; border: 0; background: none; color: var(--wc-text-secondary); font-size: 12px; }
-.pill__remove { border: 0; background: none; color: var(--wc-text-secondary); cursor: pointer; padding: 0 4px; }
+/* The prototype's .agg is 400 at opacity .85; at full strength here, since
+   .85 takes the measure's ink under AA on its tint (rule 2). */
+.pill__tag { font-size: 12px; font-weight: 400; color: inherit; }
+.pill__grain {
+  height: 20px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 400;
+}
+.pill__remove {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
 
 /* Above the sticky app bar (z-index 10): a modal dialog leaves nothing behind
    it to click, the workspace tabs included (N9). */

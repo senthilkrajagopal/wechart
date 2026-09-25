@@ -224,6 +224,8 @@ import {
   type NothingMarkedState,
 } from './tiles/NothingMarked';
 import { clauseOf } from './grid/sentence';
+import { useNarrowWindow } from './useNarrowWindow';
+import { onTabKey } from '../shell/tabKeys';
 import { duplicateChartTile, duplicatePlainTile } from './model/duplicate';
 import { withLocalCharts } from './model/localCharts';
 
@@ -718,6 +720,12 @@ interface TileCharts {
   readonly memberTitle?: ((member: string) => string | undefined) | undefined;
   /** A chart's own type, from its document (T132). */
   readonly typeOf?: ((chartId: string) => ChartType | undefined) | undefined;
+  /**
+   * Whether a chart's document is in hand (T251's review): a failed tile's
+   * menu reads its query and its editor from it, so without one there is no
+   * menu to offer.
+   */
+  readonly documented?: ((chartId: string) => boolean) | undefined;
   /** What Cube said of each chart's answer (T154, T014). */
   readonly answered?: Readonly<Record<string, AnswerMeta>> | undefined;
   /** Charts refreshed this session, whose answer may have come from a pre-aggregation (T154). */
@@ -1102,11 +1110,21 @@ function Elements({
               </button>
             )}
             {/* The ⋯ menu in view mode (T177, AC-171): the prototype's
-                "Download CSV", for a chart with something drawn. */}
+                "Download CSV", for a chart with something drawn — and for
+                one whose load failed, which keeps its menu to view its query
+                and edit it (T251; recheck-dashboard F10). Not for a chart
+                that is gone, nor one with no fields or no type yet, which
+                failed at nothing; and only with its document in hand, which
+                its query and editor are read from (T251's review). */}
             {affordances.editing ||
             element.kind !== 'chart' ||
             element.chartId === undefined ||
-            charts.specs[chartId] === undefined ? null : (
+            (charts.specs[chartId] === undefined &&
+              (charts.errors[chartId] === undefined ||
+                charts.errors[chartId] === CHART_MISSING ||
+                charts.errors[chartId] === CHART_UNTYPED ||
+                charts.errors[chartId] === NOTHING_CHOSEN ||
+                charts.documented?.(chartId) !== true)) ? null : (
               <TileViewMenu
                 tileId={element.id}
                 title={charts.titleOf?.(chartId) ?? element.text ?? 'chart'}
@@ -1480,12 +1498,20 @@ function TabGroupView({
             type="button"
             role="tab"
             aria-selected={tab.id === showing?.id}
+            // One Tab stop, the arrows along it (T182, APG tabs).
+            tabIndex={tab.id === showing?.id ? 0 : -1}
             /**
              * A tile dropped here goes into this tab, whether or not it is the
              * one on screen — the case AC-056 singles out.
              */
             data-droptab={tabKey(group.id, tab.id)}
             onClick={() => setOpen(tab.id)}
+            onKeyDown={(event) => {
+              onTabKey(event, (index) => {
+                const chosen = group.tabs[index];
+                if (chosen !== undefined) setOpen(chosen.id);
+              });
+            }}
           >
             {tab.title}
           </button>
@@ -1501,6 +1527,16 @@ function TabGroupView({
                 aria-label={`Delete tab ${tab.title}`}
                 onClick={() => {
                   affordances.onDeleteTab?.(group.id, tab.id);
+                  // Onto the group's tab now showing, not the page (T182).
+                  requestAnimationFrame(() => {
+                    const strip = window.document.querySelector(
+                      `[data-tab-group="${CSS.escape(group.id)}"] [role="tablist"]`,
+                    );
+                    (
+                      strip?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ??
+                      strip?.querySelector<HTMLElement>('[role="tab"]')
+                    )?.focus();
+                  });
                 }}
               >
                 <span aria-hidden="true">×</span>
@@ -1825,6 +1861,12 @@ export function DashboardView({
    * editing reaches the tiles as they are being edited.
    */
   const [live, setLive] = useState<DashboardDocument>(document);
+  /**
+   * Below 1,024 px a dashboard is for reading (T250, direction.md §2): no
+   * Edit, no ✎, and its tiles stacked by the stylesheet. An edit session
+   * already open when the window narrows keeps its bar, so nothing is lost.
+   */
+  const narrow = useNarrowWindow();
   /**
    * Whether the dashboard is being edited, mirrored up with it: clicking a
    * mark selects the tile while editing, so cross-filtering is off there —
@@ -3388,6 +3430,7 @@ export function DashboardView({
     titleOf: chartTitleOf,
     memberTitle,
     typeOf: (chartId: string) => drawn.documents?.[chartId]?.chart.chartType,
+    documented: (chartId: string) => drawn.documents?.[chartId] !== undefined,
     answered: withFiltered.answered,
     ...(onRefresh === undefined ? {} : { onRefresh: refreshTile }),
     refreshedFromRollup,
@@ -3866,10 +3909,14 @@ export function DashboardView({
          * `whyUnsaveable` for the wording and why it names Undo, not Discard.
          */
         saveBlocked={(shown) => whyUnsaveable(shown, dashboardId)}
-        readOnly={preview !== undefined}
+        readOnly={preview !== undefined || narrow}
         onStart={onEditStart}
         onDiscard={onDiscard}
-        headerActions={(session) => (
+        headerActions={(session) =>
+          // Not below 1,024 px, where the dashboard is for reading: the
+          // settings' Save writes it (T250's review). An edit session already
+          // open keeps it, as it keeps its bar.
+          narrow && !session.editing ? null : (
           <button
             ref={gear}
             type="button"
@@ -3882,8 +3929,12 @@ export function DashboardView({
              * goes to a session that takes no change — the page would close
              * with the settings lost and nothing said.
              */
-            disabled={session.saving}
+            // aria-disabled, not disabled: focus is given back to the gear as
+            // the settings page closes, and a natively disabled gear, while a
+            // view-mode save was answering, took none (T182's second round).
+            aria-disabled={session.saving ? 'true' : undefined}
             onClick={() => {
+              if (session.saving) return;
               // In view mode the settings page is an edit of its own, begun now
               // with the dashboard as it stands: its save is checked against
               // this moment's version (T198, AC-015). While editing, it is part
@@ -3909,7 +3960,8 @@ export function DashboardView({
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
           </button>
-        )}
+          )
+        }
         /**
          * The settings page, opened over the dashboard rather than navigated to,
          * so the edit session survives it (AC-069, and AC-074 later).
@@ -4352,7 +4404,7 @@ export function DashboardView({
             <DashboardPages
               session={session}
               charts={charts}
-              canEdit={preview === undefined}
+              canEdit={preview === undefined && !narrow}
               markSaid={markSaid}
               {...(marking ? { markKeys: { onKey: onTileMarkKey, itemsOn: markableItemsOf } } : {})}
               // A duplicate's chart is made from the stored one and what it
@@ -4365,7 +4417,7 @@ export function DashboardView({
               }}
               // Not while previewing a security context: the editor asks as
               // wechart (T172's review), so a preview is read, not edited.
-              onEditChart={preview === undefined ? openEditor : undefined}
+              onEditChart={preview === undefined && !narrow ? openEditor : undefined}
               onSaveToFolders={(tileId) => {
                 setSelected(tileId);
                 setAddTarget(null);
@@ -4466,10 +4518,18 @@ function PageTabsRow({
             type="button"
             role="tab"
             aria-selected={page.id === showing?.id}
+            // One Tab stop, the arrows along it (T182, APG tabs).
+            tabIndex={page.id === showing?.id ? 0 : -1}
             // A tile dropped on a page tab moves to that page (AC-056).
             data-droptab={pageKey(page.id)}
             onClick={() => {
               onOpenPage(page.id);
+            }}
+            onKeyDown={(event) => {
+              onTabKey(event, (index) => {
+                const chosen = document.pages[index];
+                if (chosen !== undefined) onOpenPage(chosen.id);
+              });
             }}
           >
             {page.title}
@@ -5156,7 +5216,11 @@ function DashboardPages({
             editing, the canvas's own drop zones and the Add panel are that. */}
         {!editing && (showing?.items.length ?? 0) === 0 ? (
           <div className="dashboard-empty">
-            <p>Nothing here yet. Edit the dashboard to add charts.</p>
+            {/* How to begin only where it can be begun: not while previewing,
+                nor in a narrow window (T250's review). */}
+            <p>
+              {canEdit ? 'Nothing here yet. Edit the dashboard to add charts.' : 'Nothing here yet.'}
+            </p>
             {/* Not while previewing, where the dashboard cannot be edited. */}
             {canEdit ? (
               <button type="button" className="btn-primary" onClick={session.edit}>

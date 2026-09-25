@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import type { DashboardDocument } from '../model/document';
 import { CrossFilterMatrix } from './CrossFilterMatrix';
@@ -58,11 +58,28 @@ const MODE_OF: Partial<Record<SettingsSection, InteractionMode>> = {
 interface Card<T> {
   readonly value: T;
   readonly label: string;
+  /** What choosing it does, under its name (the prototype's radio card, F27). */
+  readonly description?: string;
+  /** Where the mode comes from and what readers do, in the small print. */
+  readonly refs?: string;
 }
 
+/** The prototype's two mode cards, in its words (dash-settings.js, interactions()). */
 const MODE_CARDS: readonly Card<InteractionMode>[] = [
-  { value: 'markings', label: 'Markings' },
-  { value: 'crossFilter', label: 'Cross-filtering and cross-highlighting' },
+  {
+    value: 'markings',
+    label: 'Markings',
+    description:
+      'Clicking, dragging a rectangle or lasso marks items in a named, coloured marking. Every tile that uses the same marking shows the marked share and fades the rest, across all page tabs. Details tiles can be limited to what is marked.',
+    refs: 'Spotfire-style · Ctrl/⌘ adds or toggles · Esc unmarks',
+  },
+  {
+    value: 'crossFilter',
+    label: 'Cross-filtering and cross-highlighting',
+    description:
+      'Clicking a bar or slice filters or highlights the other tiles. Each source → target pair can be set to Filter, Highlight or None.',
+    refs: 'Power BI / Superset-style · one selection per tile',
+  },
 ];
 
 const WIDTH_CARDS: readonly Card<'fixed' | 'full'>[] = [
@@ -93,25 +110,61 @@ function RadioCards<T extends string>({
   readonly onChoose: (value: T) => void;
   readonly note?: string;
 }) {
+  const ids = useId();
   return (
     <fieldset className="settings-modes">
       <legend>{legend}</legend>
-      {cards.map((card) => (
-        <label key={card.value} className="settings-modes__card">
-          <input
-            type="radio"
-            name={group}
-            value={card.value}
-            checked={chosen === card.value}
-            onChange={() => {
-              onChoose(card.value);
-            }}
-          />
-          <span>{card.label}</span>
-        </label>
-      ))}
-      {note === undefined ? null : <p className="settings-page__later">{note}</p>}
+      <div className="settings-modes__cards">
+        {cards.map((card) => (
+          // The prototype's .radio-card (T249, F27): its name, then what it
+          // does and where it comes from. The radio is named by the name
+          // alone and described by the rest, so it is still "Markings".
+          <label key={card.value} className="settings-modes__card">
+            <input
+              type="radio"
+              name={group}
+              value={card.value}
+              checked={chosen === card.value}
+              aria-labelledby={`${ids}-${card.value}`}
+              aria-describedby={
+                card.description === undefined ? undefined : `${ids}-${card.value}-about`
+              }
+              onChange={() => {
+                onChoose(card.value);
+              }}
+            />
+            <span className="settings-modes__text">
+              <span id={`${ids}-${card.value}`} className="settings-modes__name">
+                {card.label}
+              </span>
+              {card.description === undefined ? null : (
+                <span id={`${ids}-${card.value}-about`}>
+                  <span className="settings-modes__about">{card.description}</span>{' '}
+                  {card.refs === undefined ? null : (
+                    <span className="settings-modes__refs">{card.refs}</span>
+                  )}
+                </span>
+              )}
+            </span>
+          </label>
+        ))}
+      </div>
+      {note === undefined ? null : <p className="settings-page__note">{note}</p>}
     </fieldset>
+  );
+}
+
+/**
+ * A section whose mode the dashboard is not using, said in the prototype's
+ * banner with its icon (T249, F28; rule 3): its settings are kept for when
+ * the mode is switched to.
+ */
+function InactiveBanner({ children }: { readonly children: string }) {
+  return (
+    <p className="settings-page__inactive" role="note">
+      <StatusIcon kind="warn" />
+      <span>{children}</span>
+    </p>
   );
 }
 
@@ -194,6 +247,7 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const [open, setOpen] = useState<SettingsSection>(section);
   const folders = useFolders();
+  const formId = useId();
 
   /**
    * The edits live here and nowhere else until Save. That is the whole of
@@ -251,6 +305,37 @@ export function SettingsPage({
   };
 
   /**
+   * Escape leaves as Cancel does, asking first when there is something to
+   * lose (T249, F29; the prototype's onKey). While the question is open its
+   * own Escape — "Keep editing" — is the one that counts.
+   *
+   * Only when focus is on the page, or nowhere, as the chart editor over a
+   * dashboard does (T249's review): the search palette opens over this page
+   * from the app bar, and its Escape is its own. And not when Escape ends an
+   * IME composition in a field here.
+   */
+  const page = useRef<HTMLDivElement>(null);
+  const leaveNow = useRef(leave);
+  useEffect(() => {
+    leaveNow.current = leave;
+  });
+  useEffect(() => {
+    if (asking) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+      const focused = window.document.activeElement;
+      if (focused !== null && focused !== window.document.body && !page.current?.contains(focused))
+        return;
+      event.preventDefault();
+      leaveNow.current();
+    };
+    window.document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [asking]);
+
+  /**
    * Focus onto the page as it opens (T182, AC-176): the gear it opened from is
    * gone while it is open. The section's heading, so what is read first is
    * where the page has opened.
@@ -268,22 +353,33 @@ export function SettingsPage({
   };
 
   return (
-    <div className="settings-page" data-testid="dashboard-settings">
+    <div ref={page} className="settings-page" data-testid="dashboard-settings">
       <header className="settings-page__bar">
         {/* Both ways out go through the guard, not just the one called
             Cancel: "← Back to …" is the one someone reaches for without
             thinking of it as cancelling, which makes it the more likely way
             to lose work (AC-073). */}
-        <button type="button" data-testid="settings-back" onClick={leave}>
+        <button type="button" className="btn-sm" data-testid="settings-back" onClick={leave}>
           ← Back to {document.title}
         </button>
+        {/* The prototype's settings head: Back, the page's title, then
+            Cancel and the primary Save at the far end (T249, F26). */}
+        <h1 className="settings-page__title">Dashboard settings</h1>
+        <span className="settings-page__spacer" />
+        {/* A state, with its icon as well as its words (AC-177). */}
+        {isDirty(document, draft) ? (
+          <span className="settings-page__unsaved">
+            <StatusIcon kind="idle" />
+            Unsaved changes
+          </span>
+        ) : null}
         <div className="settings-page__actions">
-          <button type="button" onClick={leave}>
+          <button type="button" className="btn-sm" onClick={leave}>
             Cancel
           </button>
           <button
             type="button"
-            className="settings-page__save"
+            className="btn-primary btn-sm settings-page__save"
             disabled={saving}
             onClick={() => {
               /**
@@ -385,20 +481,24 @@ export function SettingsPage({
              * from Explore writes; Explore lists by it, so saving here moves
              * the dashboard there.
              */
-            <>
-              <label className="settings-field">
-                Name
+            // The prototype's .formgrid (T249, mismatch 32): Name and Folder
+            // side by side, the description the whole width below them.
+            <div className="settings-form">
+              <div className="field">
+                <label htmlFor={`${formId}-name`}>Name</label>
                 <input
+                  id={`${formId}-name`}
                   type="text"
                   value={draft.title}
                   onChange={(event) => {
                     setDraft({ ...draft, title: event.target.value });
                   }}
                 />
-              </label>
-              <label className="settings-field">
-                Folder
+              </div>
+              <div className="field">
+                <label htmlFor={`${formId}-folder`}>Folder</label>
                 <select
+                  id={`${formId}-folder`}
                   value={draft.folderId ?? 'root'}
                   onChange={(event) => {
                     const chosen = event.target.value;
@@ -430,10 +530,11 @@ export function SettingsPage({
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="settings-field">
-                Description
+              </div>
+              <div className="field settings-form__wide">
+                <label htmlFor={`${formId}-description`}>Description</label>
                 <textarea
+                  id={`${formId}-description`}
                   rows={3}
                   value={draft.description ?? ''}
                   onChange={(event) => {
@@ -446,8 +547,8 @@ export function SettingsPage({
                     );
                   }}
                 />
-              </label>
-            </>
+              </div>
+            </div>
           ) : open === 'Interactions' ? (
             /**
              * direction.md: "Markings or Cross-filtering and cross-highlighting,
@@ -472,10 +573,10 @@ export function SettingsPage({
              */
             <>
               {interactions.mode === 'markings' ? null : (
-                <p className="settings-page__later" role="note">
+                <InactiveBanner>
                   Inactive: this dashboard uses cross-filtering. These settings apply if you switch
                   to Markings.
-                </p>
+                </InactiveBanner>
               )}
               <MarkingsSettings document={draft} titleOf={titleOf} onChange={setDraft} />
             </>
@@ -483,22 +584,31 @@ export function SettingsPage({
             /**
              * The default action, and the matrix that overrides it per pair
              * (AC-118, direction.md rule 32). Both live in the draft until
-             * Save, as every other setting on this page does.
+             * Save, as every other setting on this page does. Said to be
+             * inactive while the dashboard marks, as Markings is (F28).
              */
-            <CrossFilterMatrix
-              document={draft}
-              interactions={interactions}
-              titleOf={titleOf}
-              onChange={(crossFilter) => {
-                setDraft({
-                  ...draft,
-                  settings: {
-                    ...draft.settings,
-                    interactions: { ...interactions, crossFilter },
-                  },
-                });
-              }}
-            />
+            <>
+              {interactions.mode === 'crossFilter' ? null : (
+                <InactiveBanner>
+                  Inactive: this dashboard uses Markings. These settings apply if you switch to
+                  cross-filtering.
+                </InactiveBanner>
+              )}
+              <CrossFilterMatrix
+                document={draft}
+                interactions={interactions}
+                titleOf={titleOf}
+                onChange={(crossFilter) => {
+                  setDraft({
+                    ...draft,
+                    settings: {
+                      ...draft.settings,
+                      interactions: { ...interactions, crossFilter },
+                    },
+                  });
+                }}
+              />
+            </>
           ) : open === 'Layout' ? (
             /**
              * direction.md: "The dashboard is fixed-width and centred (max

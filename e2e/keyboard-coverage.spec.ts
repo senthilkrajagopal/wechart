@@ -9,8 +9,8 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
  * invisible on any control.
  *
  * Each case drives a surface with the keyboard alone, from the gaps an audit
- * of the running app found (2026-09-22). Marking is deferred with markings,
- * so AC-176 stays unticked until it is built.
+ * of the running app found (2026-09-22), and the gaps that round left open
+ * (2026-09-25, with markings built: see "T182: what the first round left open").
  */
 const API = 'http://localhost:4100';
 
@@ -373,6 +373,195 @@ test('a tile’s table can be reached and scrolled from the keyboard', async ({ 
   await expect(table).toBeFocused();
   // Its ring whole, inside a tile that clips.
   expect(await ringShows(table)).toBe('whole');
+});
+
+/**
+ * T182, completed 2026-09-25 with markings built: the gaps its first round
+ * left open, each driven by the keyboard alone.
+ */
+test.describe('T182: what the first round left open', () => {
+  test('page tabs are one Tab stop, and the arrow keys move between them (APG tabs)', async ({
+    page,
+  }) => {
+    await page.goto(DASHBOARD);
+    const pages = page.getByRole('tablist', { name: 'Pages' });
+    const overview = pages.getByRole('tab', { name: 'Overview' });
+    const appendix = pages.getByRole('tab', { name: 'Appendix' });
+    await expect(overview).toHaveAttribute('tabindex', '0');
+    await expect(appendix).toHaveAttribute('tabindex', '-1');
+    await overview.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(appendix).toBeFocused();
+    await expect(appendix).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('ArrowLeft');
+    await expect(overview).toBeFocused();
+    await expect(overview).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('a tab group’s tabs take the arrow keys too', async ({ page }) => {
+    await page.goto(DASHBOARD);
+    await page.getByRole('tablist', { name: 'Pages' }).getByRole('tab', { name: 'Appendix' }).click();
+    const group = page.locator('[data-tab-group="group-terms"]').getByRole('tablist');
+    const measures = group.getByRole('tab', { name: 'Measures' });
+    const dimensions = group.getByRole('tab', { name: 'Dimensions' });
+    await expect(dimensions).toHaveAttribute('tabindex', '-1');
+    await measures.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(dimensions).toBeFocused();
+    await expect(dimensions).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('the folder tree moves with the arrow keys, as a tree promises', async ({ page }) => {
+    await page.goto('/explore');
+    const tree = page.getByRole('tree', { name: 'Folders' });
+    const first = tree.getByRole('button').first();
+    const second = tree.getByRole('button').nth(1);
+    await first.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(second).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(first).toBeFocused();
+  });
+
+  test('a tile’s grip is no dead Tab stop: pressed, it hands the keyboard to its tile', async ({
+    page,
+  }) => {
+    await editSeedDashboard(page);
+    const grip = page.getByTestId('grip-tile-status');
+    await grip.focus();
+    await page.keyboard.press('Enter');
+    const tile = page.locator('[data-tile="tile-status"]');
+    await expect(tile).toBeFocused();
+    // And the tile's own keys move it: one place along, into the notes' place.
+    const before = (await tile.boundingBox())!.x;
+    await page.keyboard.press('ArrowRight');
+    await expect(async () => {
+      expect((await tile.boundingBox())!.x).not.toBe(before);
+    }).toPass();
+  });
+
+  test('the undo toast waits while focus is in it, and Undo leaves focus on the page’s tiles', async ({
+    page,
+  }) => {
+    await page.clock.install();
+    await editSeedDashboard(page);
+    await page.locator('[data-tile="tile-notes"]').focus();
+    await page.keyboard.press('Delete');
+    // The delete puts focus on the tile beside it, on the next frame.
+    await page.clock.runFor(100);
+    const toast = page.getByTestId('undo-toast');
+    const undo = toast.getByRole('button', { name: 'Undo' });
+    await undo.focus();
+    // Past its 8 s, with focus on it: still there (WCAG 2.2.1).
+    await page.clock.runFor(12_000);
+    await expect(toast).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('[data-tile="tile-notes"]')).toHaveCount(1);
+    // Focus goes back on the next frame, on the clock this test holds.
+    await page.clock.runFor(100);
+    // Not the page: where focus was before it went to the toast.
+    expect(await page.evaluate(() => document.activeElement?.closest('[data-tile]') !== null)).toBe(
+      true,
+    );
+  });
+
+  test('deleting a tab by its × leaves focus on its group’s tab strip', async ({ page }) => {
+    await editSeedDashboard(page);
+    await page.getByRole('tablist', { name: 'Pages' }).getByRole('tab', { name: 'Appendix' }).click();
+    await page.getByTestId('delete-tab-group-terms-dimensions').focus();
+    await page.keyboard.press('Enter');
+    const measures = page
+      .locator('[data-tab-group="group-terms"]')
+      .getByRole('tab', { name: 'Measures' });
+    await expect(measures).toBeFocused();
+  });
+
+  test('Escape closes the search palette opened over a dialog, and only the palette', async ({
+    page,
+  }) => {
+    await editSeedDashboard(page);
+    await page.getByTestId('tile-menu-section-detail').click();
+    await page.getByTestId('delete-section-detail').click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
+    const palette = page.getByRole('dialog', { name: /search/i });
+    await expect(palette).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(palette).toBeHidden();
+    await expect(dialog).toBeVisible();
+  });
+
+  test('removing the only filter leaves focus in the filter bar', async ({ page, request }) => {
+    const { id } = await filteredDashboard(request);
+    await page.goto(`/explore/dashboards/${id}`);
+    await page.getByRole('button', { name: 'Edit', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    for (const filter of ['f-status', 'f-ordered']) {
+      await pill(page, filter).locator('button[aria-expanded]').focus();
+      await page.keyboard.press('Enter');
+      await pill(page, filter)
+        .getByRole('button', { name: /^Remove / })
+        .focus();
+      await page.keyboard.press('Enter');
+      await expect(pill(page, filter)).toHaveCount(0);
+    }
+    // On the frame after the filter goes, so asked until then.
+    await expect(async () => {
+      expect(
+        await page.evaluate(() => document.activeElement?.closest('.filter-bar') !== null),
+      ).toBe(true);
+    }).toPass();
+  });
+
+  test('after a settings save in view mode, focus is back on the gear', async ({
+    page,
+    request,
+  }) => {
+    // A dashboard of its own: a save bumps the version other tests edit at.
+    const { id } = await filteredDashboard(request);
+    await page.goto(`/explore/dashboards/${id}`);
+    const gear = page.getByRole('button', { name: 'Dashboard settings' });
+    await gear.focus();
+    await page.keyboard.press('Enter');
+    const settings = page.getByTestId('dashboard-settings');
+    const description = settings.getByLabel('Description', { exact: true });
+    await description.fill(`Saved by the keyboard ${String(Date.now())}`);
+    await settings.getByRole('button', { name: 'Save settings' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(settings).toHaveCount(0);
+    await expect(gear).toBeFocused();
+  });
+
+  test('marking by the keyboard, under a focus ring unlike the marking’s outline', async ({
+    page,
+  }) => {
+    await page.goto(DASHBOARD);
+    const tile = page.locator('[data-tile="tile-status"]');
+    await expect(tile.getByTestId('chart-canvas')).toBeVisible();
+    await tile.focus();
+    // AC-100's keys: the arrows move between items, Space marks.
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Space');
+    await expect(page.locator('.mark-chip')).toHaveCount(1);
+    // The ring: 2 px, 2 px out from the tile, in the accent — the marked
+    // items' outline is 1.5 px, hugging each mark, in the marking's ink.
+    const ring = await tile.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { width: style.outlineWidth, offset: style.outlineOffset, colour: style.outlineColor };
+    });
+    expect(ring.width).toBe('2px');
+    expect(Number.parseFloat(ring.offset)).toBeGreaterThanOrEqual(2);
+    const outlined = await tile
+      .locator('svg path[stroke-width="1.5"], svg path[style*="stroke-width: 1.5"]')
+      .first()
+      .evaluate((path) => ({
+        stroke: getComputedStyle(path).stroke,
+        width: getComputedStyle(path).strokeWidth,
+      }));
+    expect(outlined.width).toBe('1.5px');
+    expect(outlined.stroke).not.toBe(ring.colour);
+  });
 });
 
 /**

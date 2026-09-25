@@ -384,11 +384,19 @@ function Filters({
                          * control focus was on.
                          */
                         const neighbour = (filters[index + 1] ?? filters[index - 1])?.id;
+                        // The bar's place, which outlives this bar: with its
+                        // last filter gone it is drawn by another component.
+                        const holder = bar.current?.parentElement ?? null;
                         setChosenOpen({ id: null });
                         onFilters?.(filters.filter((each) => each.id !== filter.id));
                         onValue(key, undefined);
-                        if (neighbour === undefined) return;
                         requestAnimationFrame(() => {
+                          // The last one gone: the bar itself, not the page
+                          // (T182's second round).
+                          if (neighbour === undefined) {
+                            holder?.querySelector<HTMLElement>(':scope > .filter-bar')?.focus();
+                            return;
+                          }
                           bar.current
                             ?.querySelector<HTMLElement>(
                               `[data-filter-id="${CSS.escape(neighbour)}"] button[aria-expanded]`,

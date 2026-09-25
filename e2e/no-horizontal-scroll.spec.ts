@@ -87,3 +87,179 @@ test('the model editor does not scroll sideways at 1,280 px', async ({ page }) =
   );
   expect(await overflowOf(page)).toEqual(NONE);
 });
+
+/**
+ * A chart tile's title keeps its room beside the tile's badges (T250): shown
+ * whole, or at least 64 px of it — eight characters or so — never squeezed to
+ * nothing, which a three-column tile's head did at 1,440 px beside
+ * "● Live · as of …" and "Table view" (the Superset parity exercise,
+ * 2026-09-25).
+ */
+async function titleRoom(tile: import('@playwright/test').Locator) {
+  return tile.locator('.tile-head__title').evaluate((title) => ({
+    width: title.clientWidth,
+    whole: title.scrollWidth <= title.clientWidth,
+  }));
+}
+
+/**
+ * T250 (AC-187), direction.md §2: "<1024: view mode only. Dashboards stack
+ * to one column." recheck-dashboard N2: at 390 px the tiles stayed side by
+ * side at 163 px, a chart's title was gone, and Edit was still offered.
+ */
+test.describe('T250: below 1,024 px, a dashboard is for reading', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('at 390 × 844 its tiles stack to one column, each keeps its title, and Edit is not offered', async ({
+    page,
+  }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await expect(drawnTile(page, 'tile-status')).toBeVisible({ timeout: 15_000 });
+
+    // One column: every element on the page as wide as the grid.
+    const grid = page.locator('.grid-canvas').first();
+    const gridWidth = await grid.evaluate(
+      (element) =>
+        element.clientWidth -
+        parseFloat(getComputedStyle(element).paddingLeft) -
+        parseFloat(getComputedStyle(element).paddingRight),
+    );
+    for (const id of ['tile-status', 'tile-notes', 'section-detail']) {
+      const width = (await page.locator(`[data-tile="${id}"]`).boundingBox())?.width ?? 0;
+      expect(Math.abs(width - gridWidth)).toBeLessThanOrEqual(1);
+    }
+    // Stacked, not side by side: the notes are below the chart.
+    const status = (await page.locator('[data-tile="tile-status"]').boundingBox())!;
+    const notes = (await page.locator('[data-tile="tile-notes"]').boundingBox())!;
+    expect(notes.y).toBeGreaterThanOrEqual(status.y + status.height);
+
+    // Each chart keeps its title.
+    for (const id of ['tile-status', 'tile-region']) {
+      const room = await titleRoom(page.locator(`[data-tile="${id}"]`));
+      expect(room.whole || room.width >= 64).toBe(true);
+    }
+
+    // For reading: no Edit, no ✎, no way into edit mode — nor into the
+    // settings, whose Save writes the dashboard (T250's review).
+    await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
+    await expect(page.locator('[data-edit-chart]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Dashboard settings' })).toHaveCount(0);
+    const statusTile = page.locator('[data-tile="tile-status"]');
+    await statusTile.getByTestId('tile-view-menu-tile-status').click();
+    const menu = statusTile.getByRole('menu', { name: /^Actions for / });
+    await expect(menu.getByRole('menuitem', { name: 'View query' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Edit chart' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    // In the narrow head, Table view is an icon — still named, and titled for
+    // a pointer (T250's review).
+    const table = statusTile.getByRole('button', { name: 'Table view' });
+    await expect(table).toHaveAttribute('title', 'Table view');
+    expect((await table.boundingBox())?.width).toBe(24);
+    // The badge says the whole of itself in its tooltip, however little room it has.
+    await expect(statusTile.getByTestId('tile-freshness')).toHaveAttribute(
+      'title',
+      /^Live · Data as of /,
+    );
+    // The canvas does not scroll sideways.
+    expect((await overflowOf(page)).canvas).toBe(0);
+  });
+
+  test('widened past 1,024 px, the dashboard is its grid again, and Edit comes back', async ({
+    page,
+  }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await expect(drawnTile(page, 'tile-status')).toBeVisible({ timeout: 15_000 });
+    await page.setViewportSize({ width: 1280, height: 844 });
+    const status = (await page.locator('[data-tile="tile-status"]').boundingBox())!;
+    const notes = (await page.locator('[data-tile="tile-notes"]').boundingBox())!;
+    // Side by side again, six columns each.
+    expect(notes.y).toBe(status.y);
+    await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+    // With room, the freshness badge's parts keep the prototype's 4 px apart
+    // (T250's review: its gap stopped applying to inline parts).
+    const gaps = await page
+      .locator('[data-tile="tile-status"]')
+      .getByTestId('tile-freshness')
+      .evaluate((badge) => {
+        const parts = [...badge.children].map((part) => part.getBoundingClientRect());
+        return parts.slice(1).map((part, at) => part.left - (parts[at]?.right ?? 0));
+      });
+    expect(gaps.length).toBeGreaterThan(0);
+    for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(3);
+  });
+});
+
+test('while previewing, Refresh and SQL each keep their own place in the tile’s corner (T250’s review)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(
+    `/explore/dashboards/seed-root-dashboard-1?preview=${encodeURIComponent(JSON.stringify({}))}`,
+  );
+  const tile = page.locator('[data-tile="tile-status"]');
+  await expect(tile.getByTestId('chart-canvas')).toBeVisible({ timeout: 15_000 });
+  await tile.hover();
+  const refresh = (await tile.getByRole('button', { name: /^Refresh / }).boundingBox())!;
+  const sql = (await tile.getByRole('button', { name: /^SQL for / }).boundingBox())!;
+  const apart = refresh.x + refresh.width <= sql.x || sql.x + sql.width <= refresh.x;
+  expect(apart).toBe(true);
+});
+
+test('a three-column chart tile keeps its title beside its badges at 1,440 px (T250)', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = 'http://localhost:4100/api';
+  const name = `Narrow tiles ${String(Date.now())}`;
+  const { id } = (await (
+    await request.post(`${api}/documents`, {
+      data: { kind: 'dashboard', title: name, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  const chart = (await (
+    await request.post(`${api}/documents`, {
+      data: { kind: 'chart', title: 'Orders by category and status', folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  await request.put(`${api}/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: 'Orders by category and status',
+        owner: 'admin',
+        localToDashboardId: id,
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+          chartType: 'bar',
+        },
+      },
+    },
+  });
+  await request.put(`${api}/documents/dashboard/${id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: name,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [{ id: 'tile-narrow', kind: 'chart', w: 3, h: 40, chartId: chart.id }],
+          },
+        ],
+      },
+    },
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  const tile = page.locator('[data-tile="tile-narrow"]');
+  await expect(tile.getByTestId('data-as-of')).toBeVisible({ timeout: 15_000 });
+  const room = await titleRoom(tile);
+  expect(room.whole || room.width >= 64).toBe(true);
+});

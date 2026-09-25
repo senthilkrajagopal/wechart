@@ -20,13 +20,14 @@ function draw(height: number | undefined) {
 }
 
 describe('opened on its own', () => {
-  it('draws the preview as it always has, with no size to choose', () => {
+  it('draws the preview in a tile filling the editor, with no size to choose', () => {
     // The editor reached from Explore has no tile, so there is no "actual
-    // size" to offer — and the standalone editor must not change.
+    // size" to offer. The chart is still drawn in a tile, as the prototype's
+    // editor draws it (T257, recheck-chart-editor N3).
     render(<PreviewFrame>{draw}</PreviewFrame>);
 
     expect(screen.queryByRole('button', { name: 'Actual size' })).toBeNull();
-    expect(screen.queryByTestId('preview-frame')).toBeNull();
+    expect(screen.getByTestId('preview-frame').dataset['size']).toBe('fill');
     expect(screen.getByTestId('drawn-at').textContent).toBe('natural');
   });
 });
