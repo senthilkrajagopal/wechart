@@ -69,17 +69,25 @@ export function enumerate(signature: Signature): Candidate[] {
     if (measures.length > 1) candidates.push(build('table', { valueFields: measures }));
   }
 
-  // Over time.
+  // Over time. `compile` colours these by the first dimension where there is
+  // one (`defaultEncoding`), so each carries it as its colour, and the colour
+  // cap applies to it (T305, AC-031).
   if (measures.length >= 1 && times.length >= 1) {
     const time = times[0]!;
+    const split = dimensions[0] ? { colorField: dimensions[0] } : {};
     candidates.push(
       build(measures.length > 1 ? 'multiLine' : 'line', {
         valueFields: measures,
         categoryField: time,
+        ...split,
       }),
     );
-    candidates.push(build('area', { valueFields: measures.slice(0, 1), categoryField: time }));
-    candidates.push(build('bar', { valueFields: measures.slice(0, 1), categoryField: time }));
+    candidates.push(
+      build('area', { valueFields: measures.slice(0, 1), categoryField: time, ...split }),
+    );
+    candidates.push(
+      build('bar', { valueFields: measures.slice(0, 1), categoryField: time, ...split }),
+    );
     if (dimensions[0]) {
       candidates.push(
         build('trellis', {
@@ -94,8 +102,15 @@ export function enumerate(signature: Signature): Candidate[] {
   // By category.
   if (measures.length >= 1 && dimensions.length >= 1 && times.length === 0) {
     const [first, second] = dimensions;
-    candidates.push(build('bar', { valueFields: measures.slice(0, 1), categoryField: first! }));
-    candidates.push(build('hbar', { valueFields: measures.slice(0, 1), categoryField: first! }));
+    // Coloured by the second dimension where there is one, as `compile`
+    // draws them (T305, AC-031).
+    const split = second ? { colorField: second } : {};
+    candidates.push(
+      build('bar', { valueFields: measures.slice(0, 1), categoryField: first!, ...split }),
+    );
+    candidates.push(
+      build('hbar', { valueFields: measures.slice(0, 1), categoryField: first!, ...split }),
+    );
     // Its slices as it draws them: a slice per row when split (AC-221).
     candidates.push(
       build('pie', {

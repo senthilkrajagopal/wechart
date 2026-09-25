@@ -4601,11 +4601,21 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
     - My first expectation that a dimension's cell computes `left` was wrong: the prototype's `td` sets no alignment, so it computes `start`, and the test now says so.
     - All three browsers pass. So do the specs that use tables: table-view, tiles, markings, keyboard-coverage, dashboard, crossfilter and filters (459 runs).
   - **Not done here:** the table's columns follow the row's keys, not the Metrics well's order (gap 9, first half). The prototype's `tableHtml` puts the dimensions first and then the measures in their well's order, but no criterion asks for column order. It is a proposed spec change.
-- [ ] T305 (AC-031) Hold a candidate that colours by a dimension to the 8-colour cap
+- [x] T305 (AC-031) Hold a candidate that colours by a dimension to the 8-colour cap
   - Gap 11 of the parity rebuild. The recommender offered bars coloured by 21 countries. Its bar, line and area candidates carried no colour field, although `defaultEncoding` colours them by the dimension the wells hold, so the colour cap was never applied to them.
   - Files: `packages/recommender/src/recommend.ts`, its test
   - Failing test: with a time dimension, a measure and a 21-member dimension, no bar, line or area candidate coloured by it is offered as top pick or runner-up. With 5 members, it is (AC-031).
   - Depends on: none
+  - **Done 2026-09-25.** `enumerate` gives these candidates the colour field `defaultEncoding` draws them with, so `high_cardinality_color` judges them:
+    - the line or multi-line, area and bar over time get the first dimension;
+    - the bar and horizontal bar by category get the second.
+    - `warningsFor` already treated a chosen type's split this way (T230); the recommender's own candidates now agree with it.
+  - **Tests, red first:** `recommend.test.ts` (3).
+    - Over time by a 21-member dimension, no bar, line, multi-line or area is offered. It first offered line and area.
+    - By a 5-member one, the line offered carries it as its colour.
+    - By category with a 21-member second dimension, neither bar nor horizontal bar is offered.
+    - The editor and Explore e2e specs that involve a recommendation still pass (372 runs, all three browsers).
+  - **Consequence:** with no rows yet, a dimension's cardinality is unknown, and an unknown count fails a cap (legality.ts). So a chart over time split by a dimension is recommended as a table until its rows arrive. That is the recommender's existing rule for unknown counts, and it now covers these candidates too.
 - [ ] T306 (AC-176, AC-100) Draw the item a tile's keyboard focus is on, distinct from the marking outline
   - From T182's review. AC-100's arrows move a focused item, but `markFocus` is state only. A sighted keyboard user cannot see which item Space will mark.
   - Files: `packages/web/src/dashboard/DashboardView.tsx`, `packages/charts/src/markings/*`, `e2e/keyboard-coverage.spec.ts`
