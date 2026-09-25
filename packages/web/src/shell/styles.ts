@@ -2881,6 +2881,11 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
    this; the few it writes as the "font" shorthand reset it inline, so the
    rule on the text is !important (research/echarts-text-and-grid.md, Q2). */
 .chart-canvas { font-variant-numeric: tabular-nums; }
+/* A tile that marks by shape (AC-088): a drag draws, never selects the axis text. */
+.chart-canvas[data-marks-shapes] { user-select: none; -webkit-user-select: none; }
+/* The rectangle or lasso while it is dragged, as the prototype draws it. */
+.mark-drag { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 1; }
+.mark-drag rect, .mark-drag polygon { fill: color-mix(in srgb, var(--wc-accent) 10%, transparent); stroke: var(--wc-accent); stroke-width: 1; stroke-dasharray: 4 3; }
 .chart-canvas svg text { font-variant-numeric: tabular-nums !important; }
 .grid-tile > .chart-tile {
   display: flex;

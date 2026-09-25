@@ -3324,6 +3324,30 @@ Each task below measures its components' computed styles in `e2e/design-conforma
     - The same rule now spares dashboard filters a doomed query too (AC-079): a tile that cannot be reached is marked as such before anything is sent.
     - **Tests:** `filters/coverage.test.ts` (a join-less cube ruled out, its own members still its own, a joined pair unaffected, and silence everywhere still "cannot say") and `e2e/markings.spec.ts` — a tile on `monthly_orders` labelled not linked, unmarked, nothing faded, and no error on it.
     - **Ticked here: AC-103.**
+  - **Stage 7, 2026-09-25: marking with a rectangle or a lasso (AC-088, AC-089).**
+    - **Gestures.** A drag on a tile that marks draws a dashed rectangle over the chart. With Alt it draws a lasso. On release, it marks every item the shape touched.
+      - The overlay is SVG over the canvas, drawn by `ChartCanvas`, as the prototype draws it.
+      - `dragGesture` decides drag from click on the same 5 px as `itemClicks`, so exactly one of them answers any press.
+      - A drag's release never counts as a click on empty plot area, which would unmark the tile.
+    - **What a shape touches.** `itemsInShape` (`charts/src/interaction`) reads the chart as drawn through `convertToPixel`, which is what `research/echarts.md` says marking must rest on.
+      - Bars, stacked segments, horizontal bars, line points, scatter points and heatmap cells are covered.
+      - Each item is named as a click names it, so the dashboard reads a drag and a click through the same `clickedValue`.
+      - Pies and treemaps have no axis to convert along. They mark by click, as the prototype's do.
+    - **What it does to the marking** (`onMarkShape`):
+      - A plain drag replaces the marking.
+      - Ctrl or ⌘ toggles the enclosed items when all or none are marked, and otherwise adds them. This is `applyToggleOrAdd`'s rule, and a tile marked whole is expanded first, as a Ctrl-click expands it.
+      - Growth stops at the 1,000-item cap and says so (`addItemsWithinLimit`).
+      - A shape that touched nothing changes nothing, as in the prototype.
+    - **Found on the way, fixed.** `touchesSpan` sampled nine points along a bar. A thin rectangle across a tall bar's foot fell between two samples and missed it: the e2e's first drag did exactly that. It is now exact: an end inside the shape, or the span crossing one of the shape's edges. The sampling test became one of a 1-pixel strip across a 1,000-pixel bar, for both a rectangle and a lasso.
+    - **Tests:**
+      - `charts/src/interaction/itemsInShape.test.ts`: a bar crossed at its foot, a miss, a lasso, a stacked segment, a horizontal bar, a line's and a scatter's points, the category an item carries, a gap.
+      - `e2e/markings.spec.ts` "marking with a shape", on a real dashboard in all three browsers:
+        - a rectangle over two bars marks both;
+        - an Alt-lasso round the third replaces them;
+        - a press moved under 5 px is a click;
+        - Ctrl-dragging over a partly marked pair adds, over an unmarked bar toggles it on, and over the wholly marked pair toggles them off.
+      - All failed first, for want of the drag.
+    - **Ticked here: AC-088, AC-089.**
   - **Why this task exists.** T086–T119 each built and tested one module, and every one of their Files lists names only that module and its test — no renderer, no e2e spec. The F5–F9 dashboard tasks by contrast each list `DashboardView.tsx` and `e2e/dashboard.spec.ts`. So the plan never contained the step that makes marking reachable, and 18 criteria were ticked on unit tests of code nothing imports. Unticked 2026-09-20; see the status note in `docs/spec.md` under F10.
   - **The lesson worth keeping, independent of markings.** A criterion whose `Fails when:` names an observation on a tile is not demonstrated by a test that renders a component with hand-passed props. When planning any future feature, the task that introduces a UI module must also name the renderer that mounts it, or the feature is finished everywhere except where the user is.
   - Known interface hazard for whoever does this: `allLimitsEmpty(limitingMarkings(xs))` is false for every input, because `limitingMarkings` keeps only the non-empty markings. Pinned by a test in `NothingMarked.test.tsx`.

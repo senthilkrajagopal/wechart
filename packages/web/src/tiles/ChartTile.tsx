@@ -6,7 +6,7 @@ import type { ClickedItem } from '../dashboard/crossfilter/clicked';
 import type { AnswerMeta } from '../query/answerMeta';
 import { StateLine, StatusIcon } from '../shell/StatusIcon';
 import { AccelerationBadge } from './AccelerationBadge';
-import { ChartCanvas } from './ChartCanvas';
+import { ChartCanvas, type ChartCanvasProps } from './ChartCanvas';
 import { DataAsOf } from './DataAsOf';
 import { DataTable, type DataTableProps } from './DataTable';
 import { Kpi } from './Kpi';
@@ -35,6 +35,8 @@ export interface ChartTileProps {
    * picks the tile up.
    */
   readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
+  /** A shape dragged over the chart, where the tile marks (AC-088, AC-089). */
+  readonly onShapeMark?: ChartCanvasProps['onShapeMark'];
   /** Marking this tile's rows, where it draws a table (AC-092). */
   readonly rowMarking?: DataTableProps['marking'];
   /**
@@ -94,6 +96,8 @@ interface ChartBodyProps {
   readonly height?: number;
   /** A click on one of its items, while the dashboard cross-filters (AC-117). */
   readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
+  /** A shape dragged over it, while the tile marks (AC-088). */
+  readonly onShapeMark?: ChartCanvasProps['onShapeMark'];
   /**
    * Marking this tile's rows, where it draws a table and the cube has a
    * primary key to identify them by (AC-092).
@@ -108,7 +112,7 @@ const DOM_TYPES: Partial<Record<ChartType, (props: ChartBodyProps) => React.Reac
   pivot: PivotTable,
 };
 
-function ChartBody({ spec, height, onItemClick, rowMarking }: ChartBodyProps) {
+function ChartBody({ spec, height, onItemClick, onShapeMark, rowMarking }: ChartBodyProps) {
   const DomChart = DOM_TYPES[spec.chartType];
   if (DomChart !== undefined) {
     return (
@@ -136,6 +140,7 @@ function ChartBody({ spec, height, onItemClick, rowMarking }: ChartBodyProps) {
       spec={spec}
       {...(height === undefined ? {} : { height })}
       {...(onItemClick === undefined ? {} : { onItemClick })}
+      {...(onShapeMark === undefined ? {} : { onShapeMark })}
     />
   );
 }
@@ -151,6 +156,7 @@ export function ChartTile({
   asOf,
   served,
   onItemClick,
+  onShapeMark,
   rowMarking,
   badge,
   notes,
@@ -263,6 +269,7 @@ export function ChartTile({
           spec={spec}
           {...(height === undefined ? {} : { height })}
           {...(onItemClick === undefined ? {} : { onItemClick })}
+          {...(onShapeMark === undefined ? {} : { onShapeMark })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
         />
       )}

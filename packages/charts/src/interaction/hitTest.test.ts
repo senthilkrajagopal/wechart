@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CLICK_SLOP_PX, itemClicks } from './itemClick';
 import { dragGesture } from './dragOverlay';
-import { BAR_SAMPLES, insideShape, touchesSpan, type Shape } from './hitTest';
+import { insideShape, touchesSpan, type Shape } from './hitTest';
 
 /**
  * T094 / AC-088: WHEN the user drags a rectangle, or Alt-drags a lasso, over a
@@ -121,11 +121,20 @@ describe('what a shape touches', () => {
       expect(touchesSpan(rect, [30, -200], [30, 20])).toBe(true);
     });
 
-    it('samples enough of the length to catch a thin shape crossing it', () => {
-      // The sampling is an approximation, and its resolution is the promise:
-      // a shape thinner than the gap between samples can slip through. Stated
-      // here so the number is a decision rather than an accident.
-      expect(BAR_SAMPLES).toBeGreaterThanOrEqual(8);
+    it('catches a shape thinner than any sampling of the length would', () => {
+      // A 1-pixel strip across a 1,000-pixel bar: exact, not sampled, so it
+      // cannot slip between two samples (T094's drag across a bar's foot).
+      const strip: Shape = { kind: 'rect', x0: 0, y0: 437, x1: 100, y1: 438 };
+      expect(touchesSpan(strip, [30, 0], [30, 1000])).toBe(true);
+      const lassoStrip: Shape = {
+        kind: 'lasso',
+        points: [
+          [0, 437],
+          [100, 437],
+          [100, 438],
+        ],
+      };
+      expect(touchesSpan(lassoStrip, [30, 0], [30, 1000])).toBe(true);
     });
   });
 });

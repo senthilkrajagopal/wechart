@@ -11,6 +11,8 @@ import {
   OTHER_LABEL,
   type MarkedItem,
   applyItemClick,
+  applyToggleOrAdd,
+  isItemMarked,
   EMPTY_PREDICATE,
   type CubeFilter,
   isEmptyPredicate,
@@ -444,6 +446,7 @@ function TileBody({
   chartType = tile.chartType,
   canEditChart = false,
   onItemClick,
+  onShapeMark,
   rowMarking,
   limited,
   onRetry,
@@ -473,6 +476,8 @@ function TileBody({
   limited?: LimitedState | undefined;
   /** A click on its chart: cross-filtering it (AC-117) or marking it (AC-087). */
   onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
+  /** A shape dragged over its chart, while it marks (AC-088, AC-089). */
+  onShapeMark?: ChartTileProps['onShapeMark'];
   /** Marking its rows, where it draws a table (AC-092). */
   rowMarking?: ChartTileProps['rowMarking'];
   spec: RenderSpec | undefined;
@@ -637,6 +642,7 @@ function TileBody({
           {...(onTableViewChange === undefined ? {} : { onTableViewChange })}
           {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
           {...(onItemClick === undefined ? {} : { onItemClick })}
+          {...(onShapeMark === undefined ? {} : { onShapeMark })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
         />
       );
@@ -723,6 +729,13 @@ interface TileCharts {
    */
   readonly onMarkClick?:
     ((tileId: string, chartId: string, item: ClickedItem, toggle: boolean) => void) | undefined;
+  /**
+   * A rectangle or lasso dragged over a tile's chart in Markings mode
+   * (AC-088): the items it touched, and whether Ctrl or ⌘ was held (AC-089).
+   */
+  readonly onMarkShape?:
+    | ((tileId: string, chartId: string, items: readonly ClickedItem[], toggle: boolean) => void)
+    | undefined;
   /**
    * Marking a table tile's rows (AC-092): the marking it shows, the key that
    * identifies its rows, and where a row click goes.
@@ -1227,6 +1240,13 @@ function Elements({
                     // what tells replace from toggle (AC-087).
                     onItemClick: (item: ClickedItem, toggle = false) => {
                       charts.onMarkClick?.(element.id, chartId, item, toggle);
+                    },
+                  })}
+              {...(charts.onMarkShape === undefined
+                ? {}
+                : {
+                    onShapeMark: (items: readonly ClickedItem[], toggle: boolean) => {
+                      charts.onMarkShape?.(element.id, chartId, items, toggle);
                     },
                   })}
               {...(() => {
@@ -2193,6 +2213,73 @@ export function DashboardView({
   };
 
   /**
+   * A rectangle, or a lasso, over a tile that marks (AC-088): every item it
+   * touched, each read as a click on it reads (`clickedValue`), so a drag and
+   * a click reach the same marking. Plain, it replaces the marking with them.
+   * With Ctrl or ⌘ it toggles them when all or none are marked and otherwise
+   * adds them (AC-089, Spotfire's ToggleOrAdd). A shape that touched nothing
+   * changes nothing, as the prototype has it; and growth stops at the
+   * marking's cap, which is said (AC-102).
+   */
+  const onMarkShape = (
+    tileId: string,
+    chartId: string,
+    items: readonly ClickedItem[],
+    toggle: boolean,
+  ) => {
+    const tile = elementAt(live, tileId);
+    if (tile === null || !isTile(tile)) return;
+    const markingId = marksWithOf(tile);
+    const spec = drawn.specs[chartId];
+    if (markingId === undefined || spec === undefined) return;
+
+    const enclosed: MarkedItem[] = [];
+    for (const item of items) {
+      const value = clickedValue(spec, item);
+      if (value !== undefined) enclosed.push([{ member: value.member, value: value.value }]);
+    }
+    if (enclosed.length === 0) return;
+
+    const held = markingOf(marks, markingId);
+    // A tile marked whole (Mark all), as its items again, as a Ctrl-click
+    // reads it (AC-115).
+    const expanded = toggle
+      ? expandWholeTile(held, tileId, tileItemsOf(tileId) ?? [])
+      : { predicate: held, refused: 0 };
+    if (expanded.refused > 0) {
+      setMarkSaid(
+        `This tile is marked whole and has more items than a marking holds (${MARKING_ITEM_LIMIT.toLocaleString('en-GB')}). Unmark it to mark its items one by one.`,
+      );
+      return;
+    }
+    const before = expanded.predicate;
+    const everyMarked = toggle && enclosed.every((item) => isItemMarked(before, item));
+    const grown = everyMarked
+      ? { predicate: applyToggleOrAdd(before, enclosed), message: undefined }
+      : addItemsWithinLimit(toggle ? before : { ...EMPTY_PREDICATE }, enclosed);
+    const after = grown.predicate;
+    if (after === before) {
+      if (grown.message !== undefined) setMarkSaid(grown.message);
+      return;
+    }
+
+    setMarks((now) => withMarking(now, markingId, after));
+    noteSource(markingId, tileId);
+    const named = markings.find((each) => each.id === markingId);
+    const from = chartTitleOf(chartId);
+    const said =
+      named === undefined
+        ? undefined
+        : announceMarking({
+            marking: named,
+            markedCount: markedCount(after),
+            ...(from === undefined ? {} : { tileName: from }),
+          });
+    // Said with its count and where from (AC-101), and the cap when reached.
+    setMarkSaid([said, grown.message].filter((part) => part !== undefined).join(' '));
+  };
+
+  /**
    * The items a tile's keyboard moves between (AC-100): its categories, in
    * the order they are drawn. The same items a click marks, so the two
    * gestures reach the same marking.
@@ -2706,7 +2793,7 @@ export function DashboardView({
      * a click picks the tile up.
      */
     ...(crossFiltering ? { onItemClick } : {}),
-    ...(marking ? { onMarkClick, notLinked } : {}),
+    ...(marking ? { onMarkClick, onMarkShape, notLinked } : {}),
     /**
      * Not gated on `marking`: a limited tile explains itself while the
      * dashboard is being edited too, where clicking selects the tile rather

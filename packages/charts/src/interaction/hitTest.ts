@@ -20,21 +20,6 @@ export type Shape =
     }
   | { readonly kind: 'lasso'; readonly points: readonly Point[] };
 
-/**
- * How many places along an item's length are tested.
- *
- * A bar is not a point: a rectangle dragged across the middle of a tall bar
- * touches it without enclosing either end, and marking only when an end is
- * enclosed would miss the ordinary case of dragging across a chart. The
- * prototype samples the length, and this is that sampling written down.
- *
- * It is an approximation, and the resolution is the promise: a shape thinner
- * than the gap between samples can pass through a long bar unnoticed. Nine
- * samples over a bar is the prototype's figure, kept so the behaviour matches
- * the design it was drawn from.
- */
-export const BAR_SAMPLES = 8;
-
 /** Whether a point is inside the shape. Edges count: touching is touching. */
 export function insideShape(shape: Shape, x: number, y: number): boolean {
   if (shape.kind === 'rect') {
@@ -51,16 +36,58 @@ export function insideShape(shape: Shape, x: number, y: number): boolean {
 /**
  * Whether the shape touches anywhere along an item that has length, such as a
  * bar running from its base to its value.
+ *
+ * A bar is not a point: a rectangle dragged across the middle of a tall bar
+ * touches it without enclosing either end. So the span touches the shape when
+ * either end is inside it, or when the span crosses one of its edges — exact,
+ * where the prototype sampled nine points along the bar, and a shape thinner
+ * than the gap between two samples slipped through a tall bar unmarked
+ * (found by T094's drag across a bar's foot).
  */
 export function touchesSpan(shape: Shape, from: Point, to: Point): boolean {
-  for (let step = 0; step <= BAR_SAMPLES; step++) {
-    const at = step / BAR_SAMPLES;
-    const x = from[0] + (to[0] - from[0]) * at;
-    const y = from[1] + (to[1] - from[1]) * at;
-    if (insideShape(shape, x, y)) return true;
-  }
+  if (insideShape(shape, from[0], from[1]) || insideShape(shape, to[0], to[1])) return true;
+  return edgesOf(shape).some(([a, b]) => segmentsMeet(from, to, a, b));
+}
 
-  return false;
+/** The shape's outline as segments, a lasso closed back to its start. */
+function edgesOf(shape: Shape): (readonly [Point, Point])[] {
+  const points: readonly Point[] =
+    shape.kind === 'rect'
+      ? [
+          [shape.x0, shape.y0],
+          [shape.x1, shape.y0],
+          [shape.x1, shape.y1],
+          [shape.x0, shape.y1],
+        ]
+      : shape.points;
+  return points.map((point, index) => [point, points[(index + 1) % points.length] ?? point]);
+}
+
+/** Which side of the line through a and b the point c is on: its sign. */
+function turn(a: Point, b: Point, c: Point): number {
+  return Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+}
+
+/** Whether c, on the line through a and b, lies within the segment a–b. */
+function within(a: Point, b: Point, c: Point): boolean {
+  return (
+    Math.min(a[0], b[0]) <= c[0] &&
+    c[0] <= Math.max(a[0], b[0]) &&
+    Math.min(a[1], b[1]) <= c[1] &&
+    c[1] <= Math.max(a[1], b[1])
+  );
+}
+
+/** Whether two segments share a point, touching and overlapping included. */
+function segmentsMeet(p: Point, q: Point, r: Point, s: Point): boolean {
+  const [a, b, c, d] = [turn(p, q, r), turn(p, q, s), turn(r, s, p), turn(r, s, q)];
+  if (a !== b && c !== d) return true;
+  return (
+    (a === 0 && within(p, q, r)) ||
+    (b === 0 && within(p, q, s)) ||
+    (c === 0 && within(r, s, p)) ||
+    (d === 0 && within(r, s, q))
+  );
 }
 
 /**

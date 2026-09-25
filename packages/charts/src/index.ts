@@ -33,13 +33,8 @@ export {
   type ItemClicks,
   type ItemEvent,
 } from './interaction/itemClick';
-export {
-  BAR_SAMPLES,
-  insideShape,
-  touchesSpan,
-  type Point,
-  type Shape,
-} from './interaction/hitTest';
+export { insideShape, touchesSpan, type Point, type Shape } from './interaction/hitTest';
+export { itemsInShape, type PixelConverter, type ShapeItem } from './interaction/itemsInShape';
 export { dragGesture, type DragEvent, type DragGesture } from './interaction/dragOverlay';
 export { stripeFor, type AxisPixels, type Stripe } from './interaction/axisRange';
 export { markFromLegend, type LegendModifiers } from './interaction/legendMark';

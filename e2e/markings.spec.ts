@@ -1493,6 +1493,158 @@ test('Create details tile adds a tile limited by the tile’s marking, its messa
  * the tile on click and change no marking.
  * `Fails when: clicking a chart in edit mode changes a marking.`
  */
+/**
+ * AC-088: WHEN the user drags a rectangle, or Alt-drags a lasso, over a tile
+ * that marks, THE SYSTEM SHALL mark every item the shape touches, and a
+ * press-and-release without movement SHALL be treated as a click, not a
+ * selection.
+ * `Fails when: a drag of at least 5 pixels is treated as a click, or a click
+ * is treated as an empty selection.`
+ * AC-089: WHEN the user Ctrl-drags or ⌘-drags a shape, THE SYSTEM SHALL
+ * toggle the enclosed items when all or none of them are marked, and
+ * otherwise add them (direction.md rule 47).
+ * `Fails when: a Ctrl-drag over a partly marked set unmarks items.`
+ */
+test.describe('marking with a shape', () => {
+  /** Each category's axis label, where it has come to rest, left to right. */
+  async function labelsOf(target: Locator, names: readonly string[]) {
+    const boxes: { name: string; x: number; y: number; width: number }[] = [];
+    for (const name of names) {
+      const label = target.locator('svg text', { hasText: name }).first();
+      await expect(label).toBeVisible();
+      let last = '';
+      let box = { x: 0, y: 0, width: 0 };
+      await expect
+        .poll(async () => {
+          box = await label.evaluate((text) => {
+            const rect = text.getBoundingClientRect();
+            return { x: rect.x, y: rect.y, width: rect.width };
+          });
+          const now = JSON.stringify(box);
+          const settled = box.width > 0 && now === last;
+          last = now;
+          return settled;
+        })
+        .toBe(true);
+      boxes.push({ name, ...box });
+    }
+    return boxes.sort((a, b) => a.x - b.x);
+  }
+
+  const centre = (box: { x: number; width: number }) => box.x + box.width / 2;
+
+  /** A press, a path, and a release, with the keys held throughout. */
+  async function drag(
+    page: Page,
+    path: readonly (readonly [number, number])[],
+    keys: ('Control' | 'Meta' | 'Alt')[] = [],
+  ) {
+    const [first, ...rest] = path;
+    if (first === undefined) return;
+    for (const key of keys) await page.keyboard.down(key);
+    await page.mouse.move(first[0], first[1]);
+    await page.mouse.down();
+    for (const [x, y] of rest) await page.mouse.move(x, y, { steps: 4 });
+    await page.mouse.up();
+    for (const key of keys) await page.keyboard.up(key);
+  }
+
+  test('a rectangle marks every bar it touches, a lasso the one it rings, and a still press is a click', async ({
+    page,
+    request,
+  }) => {
+    const { id, title } = await markingDashboard(request);
+    await open(page, id, title);
+    const status = tile(page, 'tile-status');
+    const [left, middle, right] = await labelsOf(status, ['completed', 'shipped', 'processing']);
+    if (left === undefined || middle === undefined || right === undefined) throw new Error('axis');
+
+    // Across the feet of the two left-hand bars, just above their labels.
+    const top = left.y - 40;
+    const foot = left.y - 6;
+    await drag(page, [
+      [centre(left) - 3, top],
+      [centre(middle) + 3, foot],
+    ]);
+    const badge = status.getByTestId('mark-badge');
+    await expect(badge).toContainText('2 marked');
+    const chip = page.getByTestId('mark-chip');
+    await expect(chip).toContainText(left.name);
+    await expect(chip).toContainText(middle.name);
+    await expect(chip).not.toContainText(right.name);
+
+    // Alt: a lasso, ringing the right-hand bar alone, replaces the marking.
+    await drag(
+      page,
+      [
+        [centre(right) - 6, top],
+        [centre(right) + 6, top],
+        [centre(right) + 6, foot],
+        [centre(right) - 6, foot],
+        [centre(right) - 6, top + 2],
+      ],
+      ['Alt'],
+    );
+    await expect(badge).toContainText('1 marked');
+    await expect(chip).toContainText(right.name);
+    await expect(chip).not.toContainText(left.name);
+
+    // Under 5 px of movement is a click on the bar, not an empty selection.
+    await drag(page, [
+      [centre(left), foot - 4],
+      [centre(left) + 2, foot - 3],
+    ]);
+    await expect(badge).toContainText('1 marked');
+    await expect(chip).toContainText(left.name);
+    await expect(chip).not.toContainText(right.name);
+  });
+
+  test('a Ctrl-drag adds to a partly marked set, and toggles a set wholly marked', async ({
+    page,
+    request,
+  }) => {
+    const { id, title } = await markingDashboard(request);
+    await open(page, id, title);
+    const status = tile(page, 'tile-status');
+    const [left, middle, right] = await labelsOf(status, ['completed', 'shipped', 'processing']);
+    if (left === undefined || middle === undefined || right === undefined) throw new Error('axis');
+    const top = left.y - 40;
+    const foot = left.y - 6;
+    const badge = status.getByTestId('mark-badge');
+    const chip = page.getByTestId('mark-chip');
+
+    await clickBar(page, status, left.name);
+    await expect(badge).toContainText('1 marked');
+
+    // Over the left two, one of them marked: add, so both are marked.
+    const overLeftTwo = [
+      [centre(left) - 3, top],
+      [centre(middle) + 3, foot],
+    ] as const;
+    await drag(page, overLeftTwo, ['Control']);
+    await expect(badge).toContainText('2 marked');
+    await expect(chip).toContainText(left.name);
+    await expect(chip).toContainText(middle.name);
+
+    // Over the right one, none marked: toggled on, beside the others.
+    await drag(
+      page,
+      [
+        [centre(right) - 3, top],
+        [centre(right) + 3, foot],
+      ],
+      ['Control'],
+    );
+    await expect(badge).toContainText('3 marked');
+
+    // Over the left two again, both marked: toggled off, the right one kept.
+    await drag(page, overLeftTwo, ['Control']);
+    await expect(badge).toContainText('1 marked');
+    await expect(chip).toContainText(right.name);
+    await expect(chip).not.toContainText(left.name);
+  });
+});
+
 test('a click while editing selects the tile and leaves the marking as it was', async ({
   page,
   request,

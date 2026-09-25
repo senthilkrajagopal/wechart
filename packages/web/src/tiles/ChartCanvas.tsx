@@ -1,4 +1,15 @@
-import { echarts, itemClicks, optionFor, themed, type Canvas } from '@wechart/charts';
+import {
+  CLICK_SLOP_PX,
+  dragGesture,
+  echarts,
+  itemClicks,
+  itemsInShape,
+  optionFor,
+  themed,
+  type Canvas,
+  type EChartsOption,
+  type Point,
+} from '@wechart/charts';
 import { seriesOf, type RenderSpec } from '@wechart/core';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
@@ -24,11 +35,24 @@ export interface ChartCanvasProps {
    * (AC-117). Absent, the chart takes no clicks at all.
    */
   readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
+  /**
+   * A rectangle dragged, or a lasso Alt-dragged, over the chart, where the
+   * tile marks (AC-088): every item the shape touches, named as a click
+   * names one, and whether Ctrl or ⌘ was held (AC-089). Absent, a drag does
+   * nothing.
+   */
+  readonly onShapeMark?: ((items: readonly ClickedItem[], toggle: boolean) => void) | undefined;
 }
 
 const DEFAULT_HEIGHT = 320;
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: ChartCanvasProps) {
+export function ChartCanvas({
+  spec,
+  height = DEFAULT_HEIGHT,
+  onItemClick,
+  onShapeMark,
+}: ChartCanvasProps) {
   /** The page's theme, which the chart is drawn in (AC-211). */
   const theme = useThemeName();
   const node = useRef<HTMLDivElement | null>(null);
@@ -59,6 +83,17 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
   useEffect(() => {
     clicked.current = onItemClick;
   }, [onItemClick]);
+  /** The latest, read at the end of a drag. */
+  const shaped = useRef(onShapeMark);
+  useEffect(() => {
+    shaped.current = onShapeMark;
+  }, [onShapeMark]);
+  /**
+   * Whether the press under way has become a drag (AC-088): its release is
+   * then the end of a shape, never a click on empty plot area that would
+   * unmark the tile's marking.
+   */
+  const dragging = useRef(false);
 
   useLayoutEffect(() => {
     const element = node.current;
@@ -163,7 +198,98 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
     chart.on('mousedown', 'title', onTitleDown);
     chart.on('mouseup', 'title', onTitleUp);
 
+    /**
+     * A rectangle, or a lasso with Alt held, dragged over the chart (AC-088,
+     * direction.md rule 47). `dragGesture` decides drag from click on the
+     * same 5 px as `itemClicks`, so exactly one of the two answers any press.
+     * The shape is drawn as SVG over the chart while it is dragged, as the
+     * prototype draws it, and taken away on release; what it touches is read
+     * off the chart as drawn, through `convertToPixel` (`itemsInShape`).
+     */
+    let band: SVGSVGElement | null = null;
+    let path: Point[] = [];
+    let origin: { left: number; top: number } = { left: 0, top: 0 };
+    let lasso = false;
+    const local = (event: MouseEvent): Point => [
+      event.clientX - origin.left,
+      event.clientY - origin.top,
+    ];
+    /** Ctrl or ⌘ held at the release: add or toggle, not replace (AC-089). */
+    let toggleOnRelease = false;
+    const gesture = dragGesture((shape) => {
+      const items = itemsInShape(chart, chart.getOption() as EChartsOption, shape);
+      shaped.current?.(
+        items.map(({ name, seriesName }) => ({ name, seriesName })),
+        toggleOnRelease,
+      );
+    });
+    const draw = () => {
+      if (band === null) {
+        band = window.document.createElementNS(SVG_NS, 'svg');
+        band.setAttribute('class', 'mark-drag');
+        band.setAttribute('aria-hidden', 'true');
+        element.appendChild(band);
+        // The tooltip would sit over what is being drawn round.
+        chart.dispatchAction({ type: 'hideTip' });
+      }
+      const first = path[0] ?? [0, 0];
+      const last = path[path.length - 1] ?? first;
+      band.innerHTML = '';
+      const outline = lasso
+        ? window.document.createElementNS(SVG_NS, 'polygon')
+        : window.document.createElementNS(SVG_NS, 'rect');
+      if (lasso) outline.setAttribute('points', path.map((point) => point.join(',')).join(' '));
+      else {
+        outline.setAttribute('x', String(Math.min(first[0], last[0])));
+        outline.setAttribute('y', String(Math.min(first[1], last[1])));
+        outline.setAttribute('width', String(Math.abs(last[0] - first[0])));
+        outline.setAttribute('height', String(Math.abs(last[1] - first[1])));
+      }
+      band.appendChild(outline);
+    };
+    const onMove = (event: MouseEvent) => {
+      const [x, y] = local(event);
+      gesture.move({ x, y, alt: lasso });
+      const first = path[0] ?? [x, y];
+      if (!dragging.current && Math.hypot(x - first[0], y - first[1]) < CLICK_SLOP_PX) return;
+      dragging.current = true;
+      path.push([x, y]);
+      draw();
+    };
+    const onRelease = (event: MouseEvent) => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onRelease);
+      band?.remove();
+      band = null;
+      toggleOnRelease = event.ctrlKey || event.metaKey;
+      const [x, y] = local(event);
+      gesture.up({ x, y, alt: lasso });
+      path = [];
+      // After the wrapper's own release has read it, so that release is
+      // not taken for a click on empty plot area.
+      queueMicrotask(() => {
+        dragging.current = false;
+      });
+    };
+    const onPress = (event: MouseEvent) => {
+      if (event.button !== 0 || shaped.current === undefined) return;
+      const box = element.getBoundingClientRect();
+      origin = { left: box.left, top: box.top };
+      lasso = event.altKey;
+      dragging.current = false;
+      const [x, y] = local(event);
+      path = [[x, y]];
+      gesture.down({ x, y, alt: lasso });
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onRelease);
+    };
+    element.addEventListener('mousedown', onPress);
+
     return () => {
+      element.removeEventListener('mousedown', onPress);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onRelease);
+      band?.remove();
       chart.off('mousedown', onDown);
       chart.off('mouseup', onUp);
       chart.off('mousedown', onTitleDown);
@@ -208,7 +334,9 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
           ? undefined
           : `${spec.highlight.kind}:${spec.highlight.member}=${spec.highlight.value}`
       }
-      style={{ height: `${String(height)}px`, width: '100%' }}
+      // Positioned, so a shape being dragged is drawn over the chart (AC-088).
+      style={{ height: `${String(height)}px`, width: '100%', position: 'relative' }}
+      data-marks-shapes={onShapeMark === undefined ? undefined : 'true'}
       /**
        * Mouse events, not pointer events: `pointerup` fires *before*
        * `mouseup`, so on a pointer release the series handler would not yet
@@ -228,7 +356,8 @@ export function ChartCanvas({ spec, height = DEFAULT_HEIGHT, onItemClick }: Char
         onItem.current = false;
       }}
       onMouseUp={(event) => {
-        if (onItem.current) return;
+        // The end of a shape dragged over the chart, not a click (AC-088).
+        if (onItem.current || dragging.current) return;
         /**
          * A release no mark took. Two things it can be: a legend entry,
          * which marks every item of that category (AC-090), or empty plot
