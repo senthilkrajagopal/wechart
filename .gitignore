@@ -16,3 +16,5 @@ playwright-report/
 # Claude Code: per-user settings and harness runtime state
 .claude/settings.local.json
 .claude/state/
+# Worktrees of agents working on a branch of their own
+.claude/worktrees/
