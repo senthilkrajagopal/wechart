@@ -6,6 +6,7 @@ import { CubeError, type CubeClient } from '../cube/client';
 import type { MetaCache } from '../cube/meta-cache';
 import type { Config } from '../config';
 import type { ModelFile, ModelFileStore } from '../server';
+import { refreshKeyProblemsOf } from './refreshKeys';
 import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
 import { compileErrorsOf, type CompileError } from './validate';
 
@@ -220,6 +221,9 @@ export function registerModelPublishing(
 
     const rollups = unknownInRollups(live, draft, paths);
     if (rollups.length > 0) return reply.status(422).send({ errors: rollups });
+    // Crons Cube's refresh worker can't run, in the files being changed (T258, AC-153).
+    const schedules = refreshKeyProblemsOf(changed);
+    if (schedules.length > 0) return reply.status(422).send({ errors: schedules });
 
     await modelFiles.write(changed);
     // A model the user just published must not look stale to them (AC-137).

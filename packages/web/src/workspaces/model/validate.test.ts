@@ -203,3 +203,42 @@ view_groups:
     expect(validationProblems('cubes/orders.js', 'cube(`orders`, {})')).toEqual([]);
   });
 });
+
+/**
+ * T258 / AC-153: a refresh key's cron Cube's refresh worker can't run is
+ * listed in Problems at its line, before the publish that would refuse it —
+ * on a rollup, and on a cube's own key (research/cube/refresh-key-schedule.md).
+ */
+describe('a refresh key Cube can’t run (AC-153)', () => {
+  const withKeys = (cubeEvery: string, rollupEvery: string) => `${ORDERS}    refresh_key:
+      every: "${cubeEvery}"
+    pre_aggregations:
+      - name: main
+        measures: [CUBE.count]
+        refresh_key:
+          every: "${rollupEvery}"
+`;
+
+  it('lists each cron Cube can’t run, or would run otherwise, at its line', () => {
+    const text = withKeys('0 * * * 1', '55 7 * * 1-5');
+    const problems = validationProblems('cubes/orders.yml', text);
+    expect(problems.map(({ line, message }) => ({ line, message }))).toEqual([
+      {
+        line: lineOf(text, 'every: "0 * * * 1"'),
+        message: expect.stringMatching(
+          /^Cube orders: Cube would run "0 \* \* \* 1" every hour, every day, not as it reads/,
+        ) as unknown as string,
+      },
+      {
+        line: lineOf(text, 'every: "55 7 * * 1-5"'),
+        message: expect.stringMatching(
+          /^Pre-aggregation main: Cube’s refresh worker can’t run "55 7 \* \* 1-5"/,
+        ) as unknown as string,
+      },
+    ]);
+  });
+
+  it('lists nothing for crons Cube runs as written, or intervals', () => {
+    expect(validationProblems('cubes/orders.yml', withKeys('1 hour', '0 8 * * *'))).toEqual([]);
+  });
+});

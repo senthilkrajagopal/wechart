@@ -2676,7 +2676,13 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - **The panel's tests check the words** it shows for every finished state, not only the hidden `data-state`.
       - Left as found: a raw queue state Cube might pass through reads as waiting, which the research doesn't settle. The accessibility sweep doesn't start a build before auditing `/jobs`; the status colours are held to contrast by the token audit.
     - AC-152 ticked. `StateBadge.test.tsx` checks every state's words, and that its icon is of its kind, a different drawing for each kind, and hidden from a screen reader. `e2e/jobs.spec.ts`, against the real Cube in all three browsers, shows the seed rollup's build job as "Done" with the ok icon.
-- [ ] T258 (AC-153) Refuse a refresh key's cron that Cube's refresh worker cannot run
+- [x] T258 (AC-153) Refuse a refresh key's cron that Cube's refresh worker cannot run
+  - Done 2026-09-24. Tests: `packages/core/src/refresh-key.test.ts`, `packages/api/src/publish.test.ts` "publishing a refresh key Cube can’t run", and `packages/web/src/workspaces/model/validate.test.ts` "a refresh key Cube can’t run". All failed first.
+    - **The rule, shared** (`@wechart/core` `refreshEveryRefusal`): Cube's run-time shape, `[second] minute hour * * day-of-week`, each a number or `*`, with each field in its range (`research/cube/refresh-key-schedule.md`). An interval string is accepted as Cube reads one.
+    - **Decided while building it (a small call, reported to the user):** wechart also refuses the shapes Cube accepts but runs on another schedule. Examples: `0 * * * 1` runs hourly every day, and `* 9 * * *` every minute. The message says what Cube would run, and asks for the missing number. So every cron wechart takes runs as it reads, which AC-153's "next runs Cube's refresh key implies" needs.
+    - **At publish**, the API refuses such a cron in a changed file with a 422, at the `every` line, for a pre-aggregation's key and a cube's own. A cube's own bad key would fail every query on the cube.
+    - **In the model editor**, Problems lists it at its line before any publish.
+    - AC-153 stays unticked: T159 builds the form and the next runs.
   - Files: `packages/web/src/workspaces/model/validate.ts` (+ test), `packages/api/src/model/publish.ts` (+ test)
   - Failing test: a pre-aggregation whose `refresh_key.every` is a cron Cube can't run (a range, list, step, day-of-month or month field, e.g. `55 7 * * 1-5`) is listed as a problem in the model editor and refused at publish. An equal-interval cron and an interval string are accepted.
   - **Why first:** such a cron passes Cube's compile check and wechart's publish check today, then fails later, at refresh time (per the 2026-09-24 analysis; the sources go in `docs/research/cube/refresh-key-schedule.md`). It is needed whatever else is built.

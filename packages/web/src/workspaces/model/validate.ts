@@ -1,3 +1,4 @@
+import { refreshEveryRefusal } from '@wechart/core';
 import { parseDocument, type Document, type Node } from 'yaml';
 
 import { dimensionShape, MEASURE_TYPES, SCHEMA, type Field, type SectionId } from './form/schema';
@@ -320,5 +321,37 @@ export function validationProblems(path: string, text: string): Problem[] {
         });
     });
   }
+
+  /**
+   * A refresh key's cron Cube's refresh worker can't run (T258, AC-153), at
+   * its "every": Cube compiles it, then fails the queries it serves
+   * (research/cube/refresh-key-schedule.md). A cube's own key, and each
+   * pre-aggregation's; said as the publish that would refuse it says it.
+   */
+  const cubes = lookUp(model, 'cubes');
+  if (cubes !== undefined && Array.isArray(cubes.own))
+    (cubes.own as unknown[]).forEach((cube, index) => {
+      if (!isPlain(cube)) return;
+      const here: Path = [...cubes.at, index];
+      const check = (owner: string, where: Path, holder: Value) => {
+        const key = lookUp(holder, 'refresh_key.every');
+        if (key === undefined || typeof key.own !== 'string') return;
+        const refusal = refreshEveryRefusal(key.own);
+        if (refusal !== undefined) at([...where, ...key.at], `${owner}: ${refusal}`);
+      };
+      const name = valueOf(cube, 'name');
+      check(`Cube ${typeof name === 'string' ? name : `#${String(index + 1)}`}`, here, cube);
+      const rollups = lookUp(cube, 'pre_aggregations');
+      if (rollups === undefined || !Array.isArray(rollups.own)) return;
+      (rollups.own as unknown[]).forEach((rollup, at) => {
+        if (!isPlain(rollup)) return;
+        const called = valueOf(rollup, 'name');
+        check(
+          `Pre-aggregation ${typeof called === 'string' ? called : `#${String(at + 1)}`}`,
+          [...here, ...rollups.at, at],
+          rollup,
+        );
+      });
+    });
   return problems.sort((a, b) => a.from - b.from);
 }

@@ -532,3 +532,77 @@ describe('publishing a rollup that names what the model doesn’t have', () => {
     await app.close();
   });
 });
+
+/**
+ * T258 / AC-153: a refresh key's cron that Cube's refresh worker can't run is
+ * refused at publish. Cube compiles it — its compile check only parses the
+ * cron — then fails every query the rollup serves, and the worker's refresh
+ * of it (research/cube/refresh-key-schedule.md, "Findings that change the plan").
+ */
+describe('publishing a refresh key Cube can’t run', () => {
+  const rollupEvery = (every: string) => ({
+    path: 'cubes/orders.yml',
+    content: `cubes:\n  - name: orders\n    sql_table: t\n    measures:\n      - name: count\n        type: count\n    pre_aggregations:\n      - name: main\n        measures: [CUBE.count]\n        refresh_key:\n          every: "${every}"\n          timezone: America/Los_Angeles\n`,
+  });
+  const compiling = () => {
+    const holder: { app?: FastifyInstance } = {};
+    return { holder, ...cubeReading(holder, () => ({ cubes: [] })) };
+  };
+
+  it('is refused on its line, saying why, and nothing is published', async () => {
+    const store = memory([ORDERS]);
+    const { holder, cube } = compiling();
+    const app = buildServer({ config, modelFiles: store, cube });
+    holder.app = app;
+
+    const response = await publish(app, [rollupEvery('55 7 * * 1-5')]);
+
+    expect(response.statusCode).toBe(422);
+    const { errors } = response.json() as {
+      errors: { path: string; line?: number; message: string }[];
+    };
+    expect(errors).toHaveLength(1);
+    // Line 11: "every" under the rollup's refresh_key.
+    expect(errors[0]).toMatchObject({ path: 'cubes/orders.yml', line: 11 });
+    expect(errors[0]?.message).toBe(
+      'Pre-aggregation main: Cube’s refresh worker can’t run "55 7 * * 1-5": Cube runs only crons of the form "[second] minute hour * * day-of-week", each of those a single number or *, with no ranges, lists, steps, names, day of the month or month.',
+    );
+    expect(store.files).toEqual([ORDERS]);
+    await app.close();
+  });
+
+  it('refuses a cube’s own refresh key Cube can’t run too, which fails every query on the cube', async () => {
+    const store = memory([ORDERS]);
+    const { holder, cube } = compiling();
+    const app = buildServer({ config, modelFiles: store, cube });
+    holder.app = app;
+    const cubeKey = {
+      path: 'cubes/orders.yml',
+      content:
+        'cubes:\n  - name: orders\n    sql_table: t\n    refresh_key:\n      every: "0 * * * 1"\n',
+    };
+
+    const response = await publish(app, [cubeKey]);
+
+    expect(response.statusCode).toBe(422);
+    const { errors } = response.json() as { errors: { line?: number; message: string }[] };
+    expect(errors[0]?.line).toBe(5);
+    expect(errors[0]?.message).toMatch(
+      /^Cube orders: Cube would run "0 \* \* \* 1" every hour, every day/,
+    );
+    expect(store.files).toEqual([ORDERS]);
+    await app.close();
+  });
+
+  it('publishes a cron Cube runs as written, and an interval', async () => {
+    for (const every of ['0 8 * * *', '1 hour']) {
+      const store = memory([ORDERS]);
+      const { holder, cube } = compiling();
+      const app = buildServer({ config, modelFiles: store, cube });
+      holder.app = app;
+      const response = await publish(app, [rollupEvery(every)]);
+      expect(response.statusCode, every).toBe(200);
+      await app.close();
+    }
+  });
+});
