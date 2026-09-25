@@ -187,9 +187,21 @@ export function ChartEditor({
   const inspectorId = useId();
   const inspectorTabs = useRef<(HTMLButtonElement | null)[]>([]);
 
+  /**
+   * The chart as it reads now: its history's present, with a title still
+   * being typed (T255). Reported as that, so a save pressed while the title
+   * field has the focus sends what the field shows — it sent the title from
+   * before the typing, the blur's commit arriving after the save had read the
+   * state (recheck-chart-editor N1). The typing is still one undo step, taken
+   * when it is set down.
+   */
+  const live = useMemo(
+    () => (typedTitle === null ? history.present : { ...history.present, title: typedTitle }),
+    [history.present, typedTitle],
+  );
   useEffect(() => {
-    onChange?.(history.present);
-  }, [history.present, onChange]);
+    onChange?.(live);
+  }, [live, onChange]);
 
   /** Records the change, which is what makes it undoable. */
   const change = (next: (current: EditorState) => EditorState) =>
@@ -504,7 +516,11 @@ export function ChartEditor({
           className="btn-sm"
           data-testid="discard"
           disabled={busy || !isDirty(history)}
-          onClick={() => setHistory(discard)}
+          onClick={() => {
+            // A title half typed goes with the rest (T255).
+            setTypedTitle(null);
+            setHistory(discard);
+          }}
         >
           Discard changes
         </button>

@@ -48,3 +48,33 @@ test('New › Chart opens the editor on an untitled chart, and saving it opens i
   await page.goto('/explore?folder=seed-folder-0');
   await expect(page.getByTestId(`item-${id}`)).toBeVisible();
 });
+
+/**
+ * T255 / AC-214 ("the title cannot be edited in the editor"): a title typed
+ * and saved straight away is the chart's title. Save chart pressed while the
+ * field still had the focus sent the title from before the typing, and the
+ * page read "Untitled chart" (recheck-chart-editor N1).
+ */
+test('a title typed and saved at once, without leaving the field, is the one saved', async ({
+  page,
+}) => {
+  const title = `Typed and saved ${String(Date.now())}`;
+  await page.goto('/explore?folder=seed-folder-0');
+  const contents = page.getByTestId('explore-contents');
+  await contents.getByRole('button', { name: 'New', exact: true }).click();
+  await page
+    .getByRole('menu', { name: 'New' })
+    .getByRole('menuitem', { name: /Chart$/ })
+    .click();
+  await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit$/);
+
+  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await page.getByTestId('add-measures').selectOption('orders.count');
+  const field = page.getByLabel('Chart title');
+  await field.fill(title);
+  await expect(field).toBeFocused();
+  await page.getByRole('button', { name: 'Save chart' }).click();
+
+  await expect(page).toHaveURL(/\/explore\/charts\/[^/]+$/);
+  await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText(title);
+});

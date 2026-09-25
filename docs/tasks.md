@@ -3726,8 +3726,14 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
       - the cross-filter helper waits for a settled box too;
       - the unsourced claim about Inter's digits is marked UNVERIFIED.
     - **Recorded choice:** the grid keeps ECharts' default 25 % clamp, not the research's 0. Very long labels then overflow, rather than shrinking the plot to nothing, which would itself draw empty axes. `nameMoveOverlap` stays at its default, which keeps axis titles clear of the labels and, under `'all'`, inside the grid.
-- [ ] T255 (AC-214) Save a chart with the title as it reads, one still being typed included
-  - Files: `packages/web/src/editor/ChartEditor.tsx`, `packages/web/src/router/routes.tsx`, `packages/web/src/dashboard/edit/ChartEditorOverlay.tsx`, `e2e/chart-editor.spec.ts`
+- [x] T255 (AC-214) Save a chart with the title as it reads, one still being typed included
+  - Files: `packages/web/src/editor/ChartEditor.tsx`, `e2e/new-chart.spec.ts`, `e2e/chart-save.spec.ts`
+  - Done 2026-09-24, all three browsers.
+    - **Tests:**
+      - `e2e/new-chart.spec.ts` "a title typed and saved at once…" failed first, reading "Untitled chart".
+      - `e2e/chart-save.spec.ts` "a title typed in the editor and saved at once, with Save dashboard…" passed before the fix, since the overlay's save is asynchronous. It now guards that path.
+    - **The cause:** the editor reported its state through an effect, and a title being typed was not part of it until the field's blur set it down. The blur that Save chart's own press caused arrived after the save had read the state.
+    - **The fix:** the editor now reports the chart as it reads, with the typed title included, and still takes one undo step when the typing is set down. Discard also drops a half-typed title.
   - Failing test: `e2e/chart-editor.spec.ts`: type a new title in "Chart title" and press Save chart without leaving the field. The chart page and the stored document carry the typed title. The same holds for Save dashboard and Back from a dashboard tile's editor (recheck-chart-editor N1; it lost the title on the main path for creating a chart).
   - Depends on: none
 - [ ] T256 (AC-214, AC-213) Give the chart editor the prototype's way back and its ownership note

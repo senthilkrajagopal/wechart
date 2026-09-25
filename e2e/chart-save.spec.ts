@@ -269,6 +269,29 @@ test('the editor’s Save dashboard applies the chart and saves the dashboard', 
   await expect(page.getByRole('heading', { name: 'New heading' })).toBeVisible();
 });
 
+/**
+ * T255 / AC-214: a title typed in the dashboard's editor and saved straight
+ * away, without leaving the field, is the one saved (recheck-chart-editor
+ * N1's sibling: the overlay takes the editor's state the same way).
+ */
+test('a title typed in the editor and saved at once, with Save dashboard, is the one saved', async ({
+  page,
+  request,
+}) => {
+  const { dashboardId, chartId } = await makeDashboard(request);
+  const title = `Typed on the dashboard ${String(Date.now())}`;
+  await page.goto(`/explore/dashboards/${dashboardId}`);
+  await expect(canvas(page)).toHaveAttribute('data-chart-type', 'bar');
+  await page.getByTestId('edit-chart-tile-save').click();
+  const field = editor(page).getByLabel('Chart title');
+  await field.fill(title);
+  await expect(field).toBeFocused();
+
+  await saveDashboard(page).click();
+  await expect(editor(page)).toBeHidden();
+  await expect.poll(async () => (await stored(request, chartId)).body['title']).toBe(title);
+});
+
 /** A second dashboard showing the same chart: a library chart's other user. */
 async function alsoOn(request: APIRequestContext, chartId: string) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
