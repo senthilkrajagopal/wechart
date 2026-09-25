@@ -60,9 +60,34 @@ export interface ModelFileTable {
   updated_at: Generated<Date>;
 }
 
+/** A data source, a folder item (phase 2). Its secrets are in `data_source_secrets`. */
+export interface DataSourceTable {
+  id: string;
+  folder_id: string;
+  name: string;
+  type: string;
+  settings: JSONColumnType<Record<string, unknown>>;
+  version: Generated<number>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+/** One sealed envelope per data source (T332, AC-298). */
+export interface DataSourceSecretTable {
+  data_source_id: string;
+  scheme: number;
+  key_id: string;
+  iv: Buffer;
+  ciphertext: Buffer;
+  tag: Buffer;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   documents: DocumentTable;
   query_log: QueryLogTable;
   images: ImageTable;
   model_files: ModelFileTable;
+  data_sources: DataSourceTable;
+  data_source_secrets: DataSourceSecretTable;
 }

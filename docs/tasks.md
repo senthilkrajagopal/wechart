@@ -5116,11 +5116,15 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.3 Credentials (F34)
 
-- [ ] T332 [P] (AC-298) Encrypt data-source credentials in the metadata database
-  - Files: a migration `…_data-sources.cjs` (`data_sources`, and `data_source_secrets` as bytea: key id, IV, ciphertext, tag), `packages/api/src/secrets/crypto.ts` (+ test)
+- [x] T332 [P] (AC-298) Encrypt data-source credentials in the metadata database
+  - Files: a migration `…_data-sources.cjs` (`data_sources`, and `data_source_secrets` as bytea: key id, IV, ciphertext, tag), `packages/api/src/secrets/crypto.ts` (+ test), `packages/api/src/repos/data-source-secrets.ts` (+ test, the `pg_dump` check), `packages/api/src/db/schema.ts`
   - Failing test: `crypto.test.ts`: AES-256-GCM with a 12-byte random IV and AAD naming the data source id; a `pg_dump` of the test database contains no plaintext secret; decrypting under another source's id fails (AC-298; research `credential-encryption.md`).
   - Depends on: none
-- [ ] T333 (AC-311) Load the encryption key, and refuse to start without a usable one
+  - **Done 2026-09-25.**
+    - `seal` and `open` implement the research's scheme v1. The dump test in `data-source-secrets.test.ts` greps a plain `pg_dump` of the test database for a canary in raw, hex, base64 and base64url form and for the key. It also asserts that the envelope's ciphertext *is* in the dump, so it can't pass on an empty table.
+    - The cold review (PASS) led to tests for an unknown scheme and for distinct ciphertexts.
+    - AC-298 stays open. No product flow seals credentials yet, and the key isn't from the Secret until T333. The dump test is to be extended to drive the flows that persist credentials: T335 (create, edit), T346 (copy), T352 (approve), T362 (test history) and T368 (audit), each now citing AC-298. Check all three base64 alignments once a JSON store holds the canary.
+- [ ] T333 (AC-311, AC-298) Load the encryption key, and refuse to start without a usable one
   - Files: `packages/api/src/secrets/key.ts` (+ test), `packages/api/src/main.ts`, `playwright.config.ts` and `playwright.security.config.ts` (the fixed development key), `deploy/helm/wechart/templates/{secrets.yaml,api.yaml}` (a generated key mounted as a file)
   - Failing test: `key.test.ts`: with no key, or with a key that can't decrypt a stored credential, start-up throws naming the missing file or the key id that fails, and the server never listens (AC-311).
   - Depends on: T332
@@ -5131,7 +5135,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: a migration `…_model-files-folder.cjs` (a `folder_id` column, existing files in the root; the key becomes `(folder_id, path)`), `packages/api/src/repos/model-files.ts`, `packages/api/src/repos/catalog.ts`, `packages/web/src/workspaces/explore/FolderContents.tsx`, `packages/api/src/repos/model-files.test.ts`
   - Failing test: `model-files.test.ts`: a folder's listing includes its model files with kind "Model" and "_n_ cubes · _n_ views", and `GET /api/model/files?folder=` returns each file's cubes, views, measures, dimensions, segments, hierarchies, joins and pre-aggregations (AC-269, AC-131).
   - Depends on: T325
-- [ ] T335 (AC-269, AC-164, AC-312) Keep data sources as folder items, never sending a credential to the browser
+- [ ] T335 (AC-269, AC-164, AC-312, AC-298) Keep data sources as folder items, never sending a credential to the browser
   - Files: `packages/api/src/repos/data-sources.ts` (+ test), `packages/api/src/routes/data-sources.ts` (+ test), `packages/api/src/repos/catalog.ts`
   - Failing test: `data-sources.test.ts`:
     - a folder lists its data sources with kind "Data source" and the driver (AC-269);
@@ -5184,7 +5188,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/server.ts` (`POST /api/documents` in a workspace requires `targetFolderId`), `packages/web/src/workspaces/explore/{CreateMenu,NewItemDialog,TargetPicker}.tsx` (+ tests)
   - Failing test: `NewItemDialog.test.tsx` and `targets.test.ts`: the workspace's New menu offers Dashboard, Chart, Model, Data source and Folder; the first four ask for a target among the folders where the user has read-write access, preselected when there is one; creating without a target, or with a folder they can't write, answers 400 or 403 (AC-282, AC-192; rule 74).
   - Depends on: T343, T325
-- [ ] T346 (AC-280) Copy a data source into the workspace with its credentials, still encrypted
+- [ ] T346 (AC-280, AC-298) Copy a data source into the workspace with its credentials, still encrypted
   - Files: `packages/api/src/routes/workspace-copy.ts`, `packages/api/src/secrets/crypto.ts`, `packages/api/src/routes/workspace-copy-source.test.ts`
   - Failing test: `workspace-copy-source.test.ts`: the copy has the connection settings and a secret re-encrypted under the copy's id, decrypts to the original value, and no response shows it (AC-280).
   - Depends on: T344, T335
@@ -5211,7 +5215,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/proposal-deciders.test.ts`
   - Failing test: `proposal-deciders.test.ts`: the author (with security on and off), a read-write member of the target and a Super-Admin may approve or reject; a read-only member and an outsider get 403; nothing reaches the folder except through an approval (AC-286, AC-254).
   - Depends on: T349
-- [ ] T352 (AC-288, AC-275) Land an approved item in its folder, keeping the replaced version in history
+- [ ] T352 (AC-288, AC-275, AC-298) Land an approved item in its folder, keeping the replaced version in history
   - Files: a migration `…_item-versions.cjs`, `packages/api/src/repos/versions.ts` (+ test), `packages/api/src/routes/proposals.ts`
   - Failing test: `versions.test.ts`: approving replaces the same-kind, same-name item and stores the replaced version with its author, approver, time and description; an approved model changes the served files of that folder's chains (AC-288, AC-275).
   - Depends on: T351
@@ -5254,7 +5258,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: the Cube fork, through the Cube-expert agent only: a `connection-test` scope and `POST /v1/introspection/connection-tests` in the `cube-introspection` package (explicit config, no path fields, a timeout per check, error text redacted, body kept out of Cube's logs; research `connection-testing.md` §3); the fork image rebuilt under a new tag. wechart: `packages/api/src/cube/client.ts`, `packages/api/src/routes/data-sources.ts` (`POST /api/data-sources/:id/test`), `docker-compose.yml`, `deploy/helm/values/docker-desktop.yaml` (the new image)
   - Failing test: `data-source-test.test.ts`, against the rebuilt Cube: a PostgreSQL source with a wrong password reports the checks Cube ran, the failing one with the driver's error text (SQLSTATE 28P01) and no secret in it; a correct one passes every check; the request never comes from the browser (AC-159).
   - Depends on: T333, T335, T360
-- [ ] T362 (AC-163) Record each connection test and show a source's test history
+- [ ] T362 (AC-163, AC-298) Record each connection test and show a source's test history
   - Files: a migration `…_connection-tests.cjs`, `packages/api/src/repos/connection-tests.ts` (+ test), `packages/web/src/workspaces/data-sources/TestHistory.tsx`
   - Failing test: `connection-tests.test.ts`: every test run is stored with its time, checks and outcome, and the source's history lists them newest first (AC-163).
   - Depends on: T361
@@ -5284,7 +5288,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.9 Audit trail (F32)
 
-- [ ] T368 (AC-294) Record every sign-in, permission change, proposal, approval, rejection, restore and data-source change
+- [ ] T368 (AC-294, AC-298) Record every sign-in, permission change, proposal, approval, rejection, restore and data-source change
   - Files: a migration `…_audit.cjs`, `packages/api/src/repos/audit.ts` (+ test), the routes that emit each event
   - Failing test: `audit.test.ts`: each of the seven kinds of event is recorded with who, what, which folder and when, and a data-source record shows credentials only as "replaced" (AC-294).
   - Depends on: T316, T314, T349, T352, T353, T354, T335
@@ -5505,7 +5509,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 | AC-287 | T355, T356 | AC-288 | T352 | AC-289 | T354, T357 |
 | AC-290 | T353 | AC-291 | T329 | AC-292 | T366 |
 | AC-293 | T367 | AC-294 | T368 | AC-295 | T369 |
-| AC-296 | T370 | AC-297 | T371 | AC-298 | T332 |
+| AC-296 | T370 | AC-297 | T371 | AC-298 | T332, T333, T335, T346, T352, T362, T368 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
 | AC-305 | T398 | AC-306 | T399 | AC-307 | T409 |
