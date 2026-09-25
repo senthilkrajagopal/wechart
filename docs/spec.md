@@ -344,7 +344,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: more than one extra query per tile is issued for a marking change, or the base result is re-fetched when only the marking changed.
 - [x] AC-105 WHEN the same set of items is marked again, THE SYSTEM SHALL produce an identical Cube query to the previous time, so the result can be served from cache.
       Fails when: two identical markings produce different query JSON.
-- [ ] AC-106 WHILE a dashboard is in edit mode, THE SYSTEM SHALL select the tile on click and change no marking.
+- [x] AC-106 WHILE a dashboard is in edit mode, THE SYSTEM SHALL select the tile on click and change no marking.
       Fails when: clicking a chart in edit mode changes a marking.
 
 ## F11. Details tiles and marked-rows actions

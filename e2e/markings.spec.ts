@@ -1158,3 +1158,42 @@ test('the marking’s chip names its values by title and its tile, is bordered i
   await expect(chip).toHaveCount(0);
   await expect(page.getByTestId('marking-announcer')).toContainText('Marking cleared');
 });
+
+/**
+ * T112 / AC-106: WHILE a dashboard is in edit mode, THE SYSTEM SHALL select
+ * the tile on click and change no marking.
+ * `Fails when: a click in edit mode changes a marking.`
+ */
+test('a click while editing selects the tile and leaves the marking as it was', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request);
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  const category = tile(page, 'tile-category');
+  await clickBar(page, status, 'shipped');
+  await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
+
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const bar = page.getByRole('toolbar', { name: 'Dashboard editing' });
+  await expect(bar).toBeVisible();
+
+  // Editing is arranging: a click on a bar picks the tile up, marking nothing
+  // — a plain click on another bar, a Ctrl-click, a click on another tile.
+  await clickBar(page, status, 'completed');
+  await expect(status).toHaveAttribute('data-selected', 'true');
+  await clickBar(page, status, 'completed', ['Control']);
+  await clickBar(page, category, 'Instruments');
+  await expect(category).toHaveAttribute('data-selected', 'true');
+  await expect(status).not.toHaveAttribute('data-selected', /./);
+
+  // Out of edit mode with nothing changed: the marking is the one made
+  // before, holding what it held — nothing clicked since replaced or joined it.
+  await bar.getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(bar).toBeHidden();
+  await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
+  const chip = page.getByTestId('mark-chip');
+  await expect(chip).toContainText('shipped');
+  for (const clicked of ['completed', 'Instruments']) await expect(chip).not.toContainText(clicked);
+});

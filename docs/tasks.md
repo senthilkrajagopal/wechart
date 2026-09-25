@@ -1597,9 +1597,9 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **Sorted by each filter's own JSON**, which needs no rule per shape: two filters that mean the same thing serialise the same, so the key is a total order over exactly the equivalences that matter. The comparator returns a real `0` on ties — a sort given an inconsistent comparator may order equal elements differently on different inputs, which is precisely the instability this criterion is about.
   - **The cache key carries the limit** (`filteredQueryKey`), so the same marks marked again are the same React Query key and the answer comes back without a request at all.
   - **Not canonical *across* markings:** the branches follow the tile's `limitedBy` order. That is stable per tile, so AC-105 holds, but reordering a tile's limit list would change its cache key once — recorded rather than fixed, because the order is also the order the user reads in the control.
-- [ ] T112 (AC-106) Select a tile on click in edit mode and change no marking
-  - Files: `packages/web/src/dashboard/grid/Canvas.tsx`, `packages/web/src/dashboard/edit/editModeClick.test.ts`
-  - Failing test: `editModeClick.test.ts`: clicking a chart in edit mode selects the tile and leaves every marking unchanged (AC-106).
+- [x] T112 (AC-106) Select a tile on click in edit mode and change no marking
+  - Files: `e2e/markings.spec.ts` (the behaviour was already in place: `marking` is gated on `!sessionEditing`)
+  - Failing test: `e2e/markings.spec.ts`: clicking a chart in edit mode selects the tile and leaves every marking unchanged (AC-106).
   - Depends on: T093, T060
 
 ## F11. Details tiles and marked-rows actions
