@@ -336,7 +336,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: an arrow key changes the marking, or Space does not mark the focused item.
 - [x] AC-101 WHEN a marking changes, THE SYSTEM SHALL announce the marking's name, the number of marked items and the source tile in a polite live region (direction.md rule 52).
       Fails when: no announcement is made, or it omits the count.
-- [ ] AC-102 IF a marking would exceed 1,000 items, THEN THE SYSTEM SHALL refuse the additional items and explain the limit; "Mark all" SHALL be exempt because it stores the tile's filter rather than a list (`[R7]`, direction.md rule 29 of §7a).
+- [x] AC-102 IF a marking would exceed 1,000 items, THEN THE SYSTEM SHALL refuse the additional items and explain the limit; "Mark all" SHALL be exempt because it stores the tile's filter rather than a list (`[R7]`, direction.md rule 29 of §7a).
       Fails when: a marking exceeds 1,000 stored items, or "Mark all" is refused.
 - [x] AC-103 WHEN a tile's cube or view cannot resolve every member of a marking's predicate, THE SYSTEM SHALL leave that tile unmarked and label it as not linked to that marking (direction.md rule 18 of §7a).
       Fails when: the tile shows a query error, or is silently left unbrushed with no label.
