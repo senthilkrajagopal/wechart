@@ -3676,16 +3676,31 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
   - Done 2026-09-24, all three browsers. `e2e/design-conformance.spec.ts` "T252: …" has two tests, and both failed first.
     - **One freshness badge.** "● Live" or "⚡ 40m", then "as of …", are one prototype `.badge` (22 px, `bg-subtle`, secondary); they were two pills. Its parts keep their test ids, so AC-013's and AC-148's tests read them as before.
     - **The badge is not hidden while the marking badge shows, as the prototype hides it.** AC-013 fails on an accelerated tile without its indicator. This is recorded as a deviation.
-    - **The head is at most 22 px.** "Table view" is 22 px, the badges' height. It stays a button in the head, not the prototype's menu item, since rule 5 wants the table one click away.
+    - **The head is at most 22 px.** "Table view" stays a button in the head, not the prototype's menu item, since rule 5 wants the table one click away.
+      - At first it was cut to 22 px, which broke T203's test of its 24 px `.btn.ghost.sm` and went below a pointer target's 24 px minimum.
+      - Found in T253's run and corrected there: it is 24 px again, overhanging the row by 1 px each way, so the head stays 22.
     - **An incomplete chart** keeps its head with its chart's title, and says what it needs at 12 px secondary. "Its ✎, or E when the tile is selected" shows only while editing.
 - [ ] T254 (AC-187) Draw a chart's text in Inter with tabular numerals, and its plot down to the tile's foot, as the prototype does
   - Files: `packages/charts/src/*`, `packages/web/src/shell/styles.ts`, `docs/research/echarts-text-and-grid.md`, `e2e/design-conformance.spec.ts`
   - Failing test: `e2e/design-conformance.spec.ts` "T254: …": every SVG text is Inter, with tabular numerals; the lowest label is no more than 12 px above the chart's foot (the prototype's `grid: { bottom: 8, containLabel: true }`) (recheck-dashboard N7, F9; mismatches 12, 13).
   - Depends on: `docs/research/echarts-text-and-grid.md` (ECharts 6.1's global `textStyle`, how its SVG writes text, and v6's grid label bounds)
-- [ ] T253 (AC-187) Use the prototype's picker for tile menus, its inline grip, and its tinted edit grid
-  - Files: `packages/web/src/dashboard/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
-  - Failing test: a tile's ⋯ menu is 250 px, `border-strong` with the pop shadow, 28 px items at 12 px, its heading 12/16 muted and Delete in `status-error`, `role=menu`; the grip sits inline in the head at 14 px muted; the edit grid's columns are tinted bands (recheck-dashboard N4; mismatches 14, 19, 20).
+- [x] T253 (AC-187) Use the prototype's picker for tile menus, its inline grip, and its tinted edit grid
+  - Files: `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
+  - Failing test: a tile's ⋯ menu is 250 px, `border-strong` with the pop shadow, 28 px items at 12 px, its heading 12/16 muted and Delete in `status-error`; the grip sits inline in the head at 14 px muted; the edit grid's columns are tinted bands (recheck-dashboard N4; mismatches 14, 19, 20).
   - Depends on: none
+  - **Amended while planning it: `role=menu` is out.** The tile menus are lists of buttons in the disclosure pattern, which AC-176's keyboard tests cover. The role would promise the arrow-key menu behaviour that the buttons don't have. The critique classes N4 as VISUAL, so the look is the fix.
+  - Done 2026-09-24, all three browsers. `e2e/design-conformance.spec.ts` "T253: …" has three tests, and all three failed first.
+    - **Both tile menus are the picker:**
+      - 250 px on the raised surface, with a strong rule and the pop shadow;
+      - 28 px items at 12 px, padded 0 6, radius 4;
+      - a group heading 12/16 muted at 400;
+      - Delete in `status-error`.
+    - **The grip** is the prototype's: 14 px, muted, padded 2 by 4. It sits at the start of its element's first row, and that row makes room for it while editing:
+      - in a chart's head;
+      - in a section's head (where the corner grip had partly covered the ▾);
+      - beside a Header or Divider (where, since T247 took their padding, it had sat on the heading's text; T247's review, finding 3).
+      An element with no row of its own, such as Markdown or an image, keeps it at its corner.
+    - **The edit grid:** each column is a band tinted 4 % accent, and 10 % while resizing; they were 1 px rules.
 - [ ] T248 (AC-187) Put the edit sidebar under the filter band, and match its palette, add slots, Properties and Outline to the prototype
   - Files: `packages/web/src/dashboard/edit/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: the sidebar starts below a full-width band; palette rows carry the 24 px kind chip; the add slot is "＋ Add" at 56 px; Properties' buttons are full width and its limit rows 12/600; Outline rows carry the kind chip; the page-tab list is not under a tile's properties (recheck-dashboard F19, F23; mismatches 22–26).

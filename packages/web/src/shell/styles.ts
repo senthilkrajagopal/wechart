@@ -2516,9 +2516,10 @@ button.filter-pill__clear {
   font-weight: var(--wc-text-sm-strong-weight);
   color: var(--wc-text-primary);
 }
-/* 22 px, the height of the badges beside it: at the small button's 24 it made
-   the head taller than the prototype's 20–22 (T252, mismatch 9). */
-.tile-head .tile-head__action { margin-left: auto; height: 22px; min-height: 22px; }
+/* The small button's 24 px — a pointer target's minimum — overhanging the
+   row by a pixel each way, so the head stays the prototype's 22 (T252,
+   mismatch 9) with the badges beside it. */
+.tile-head .tile-head__action { margin: -1px 0 -1px auto; }
 /* A chart whose filtered answer is on its way (AC-078): still drawn, dimmed. */
 /* What is drawn fades while it is asked again; the head — the title, and the
    "Updating…" that says so — keeps its contrast (T183's review, AC-005). */
@@ -2643,11 +2644,13 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 }
 /* A tile menu's marked-rows group (AC-199), headed by its marking and count. */
 .tile-menu__group { display: grid; border-bottom: 1px solid var(--wc-border-subtle); }
+/* A group's heading in the picker: 12/16 muted at 400 (T253, mismatch 14). */
 .tile-menu__heading {
-  padding: 4px 8px;
-  color: var(--wc-text-secondary);
+  padding: 4px 6px;
+  color: var(--wc-text-muted);
   font-size: var(--wc-text-xs-size);
-  font-weight: var(--wc-text-xs-strong-weight);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-weight);
 }
 /* The prototype's .mk-swatch: radius 3, ringed in border-strong so a pale
    marking colour still reads on the surface — 8 px in a badge, 10 in a chip
@@ -2747,22 +2750,27 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
    because the painted lines only agree with the real tracks while the canvas,
    the geometry and this rule all use the same gutter. */
 .grid-canvas { align-content: start; }
+/* The prototype's .gridlines: each column a band tinted 4 % accent, the
+   gutters clear (T253, mismatch 20) — where 1 px rules marked only the
+   columns' edges. */
 .grid-canvas[data-gridlines='true'] {
+  --wc-grid-column: calc((100% - ${String((COLUMNS - 1) * GUTTER_PX)}px) / ${String(COLUMNS)});
   background-image: repeating-linear-gradient(
     to right,
-    var(--wc-border-subtle) 0 1px,
-    transparent 1px calc((100% + ${String(GUTTER_PX)}px) / ${String(COLUMNS)})
+    color-mix(in srgb, var(--wc-accent) 4%, transparent) 0 var(--wc-grid-column),
+    transparent var(--wc-grid-column) calc(var(--wc-grid-column) + ${String(GUTTER_PX)}px)
   );
 }
 
 /* direction.md section 2: "a faint 12-column grid while editing, and a
    stronger one during a drag or resize" — the columns are what a resize is
-   aiming at, so they step forward while one is happening. */
+   aiming at, so they step forward while one is happening (the prototype's
+   .guides, 10 %). */
 .grid-canvas[data-gridlines='true'][data-resizing='true'] {
   background-image: repeating-linear-gradient(
     to right,
-    var(--wc-border-strong) 0 1px,
-    transparent 1px calc((100% + ${String(GUTTER_PX)}px) / ${String(COLUMNS)})
+    color-mix(in srgb, var(--wc-accent) 10%, transparent) 0 var(--wc-grid-column),
+    transparent var(--wc-grid-column) calc(var(--wc-grid-column) + ${String(GUTTER_PX)}px)
   );
 }
 .grid-tile {
@@ -2816,20 +2824,46 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 .grid-tile__handle--se::after { width: 8px; height: 8px; }
 
 /* The grip (AC-056). Top-left of the tile, revealed with the handles. */
+/* The prototype's .grip: 14 px at line height 1, padded 2 by 4, muted — at the
+   start of the element's first row, as its inline grip is (T253, mismatch
+   19). Placed absolutely there, since the canvas draws the grip and the
+   element its own row; the row makes room for it while editing. An element
+   with no row of its own keeps it at its corner. */
 .grid-tile__grip {
   position: absolute;
   top: 4px;
   left: 4px;
   z-index: 2;
-  width: 20px;
-  height: 20px;
-  padding: 0;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: 2px 4px;
   border: 0;
   border-radius: 4px;
   background: none;
-  color: var(--wc-text-secondary);
+  color: var(--wc-text-muted);
+  font-size: var(--wc-text-sm-size);
+  line-height: 1;
   cursor: grab;
   touch-action: none;
+}
+.grid-tile__grip:hover { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
+/* A chart's head: 16 px in, its row 22 px high. */
+.grid-tile:has(.tile-head) > .grid-tile__grip { top: 18px; left: 16px; }
+/* A section's head: 8 px down and 12 in, its row 36 px high. */
+.grid-tile:has(> .dashboard-section) > .grid-tile__grip { top: 17px; left: 12px; }
+/* The Header and the Divider, which have no padding: centred on their row. */
+.grid-tile:has(> .dashboard-heading) > .grid-tile__grip,
+.grid-tile:has(> .dashboard-divider) > .grid-tile__grip {
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+}
+.dashboard[data-editing='true'] .grid-tile:has(> .grid-tile__grip) .tile-head,
+.dashboard[data-editing='true'] .grid-tile:has(> .grid-tile__grip) > .dashboard-section > .dashboard-section__head,
+.dashboard[data-editing='true'] .grid-tile:has(> .grid-tile__grip):has(> .dashboard-heading),
+.dashboard[data-editing='true'] .grid-tile:has(> .grid-tile__grip):has(> .dashboard-divider) {
+  padding-left: 26px;
 }
 /* Every tile marked editable at rest while editing (AC-206, the prototype's
    .dtile.editing): its grip shown, its outline dashed, the accent on hover —
@@ -2920,12 +2954,15 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 @media (hover: none) {
   .tile-menu > button { opacity: 1; }
 }
+/* The prototype's .picker (T253, N4, mismatch 14): 250 px, on the raised
+   surface with the pop shadow and a strong rule, its items 28 px at 12 px —
+   as the app's menu buttons already are. */
 .tile-menu__list {
   position: absolute;
   top: 28px;
   right: 0;
   z-index: 3;
-  min-width: 180px;
+  width: 250px;
   /* Room for the view-mode menu's marked-rows group and its five items
      (AC-199) without scrolling; 200 px cut them off (T219's review). */
   max-height: 360px;
@@ -2933,20 +2970,30 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   padding: 4px;
   overflow: auto;
   list-style: none;
-  border: 1px solid var(--wc-border-subtle);
+  border: 1px solid var(--wc-border-strong);
   border-radius: 6px;
-  background: var(--wc-bg-surface);
+  background: var(--wc-bg-raised);
+  box-shadow: var(--wc-shadow-pop);
 }
 .tile-menu__list button {
+  display: flex;
+  align-items: center;
   width: 100%;
-  padding: 4px 8px;
+  height: 28px;
+  min-height: 0;
+  padding: 0 6px;
   border: 0;
+  border-radius: 4px;
   background: none;
   color: var(--wc-text-primary);
+  font-size: var(--wc-text-xs-size);
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
-.tile-menu__list button:hover { background: var(--wc-bg-subtle); }
+.tile-menu__list button:hover { background: var(--wc-bg-hover); }
+/* Delete in the error ink, as the prototype's is (mismatch 14). */
+.tile-menu__delete button { color: var(--wc-status-error); }
 .tile-menu__list button:disabled { color: var(--wc-text-muted); cursor: not-allowed; }
 /* Why an item is off, under it (T182, AC-176). */
 .tile-menu__why {

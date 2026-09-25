@@ -1783,3 +1783,118 @@ test.describe('T252: a chart tile’s badges, head and incomplete state', () => 
     await expect(empty).toContainText('✎');
   });
 });
+
+/**
+ * T253: a tile's menus as the prototype's .picker, its grip at the start of
+ * its head, and the edit grid's tinted columns (recheck-dashboard N4;
+ * mismatches 14, 19, 20).
+ */
+test.describe('T253: tile menus, the grip and the edit grid', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await expect(firstChart(page).getByTestId('chart-canvas')).toBeVisible();
+  });
+
+  const pickerOf = async (page: Page, menu: Locator) => {
+    // .picker { width: 250px; border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop) }
+    const pop = await page.evaluate(() => {
+      const probe = document.createElement('div');
+      probe.style.boxShadow = 'var(--wc-shadow-pop)';
+      document.body.append(probe);
+      const value = getComputedStyle(probe).boxShadow;
+      probe.remove();
+      return value;
+    });
+    expect(await style(menu, 'width', 'border-top-color', 'box-shadow')).toEqual({
+      width: '250px',
+      'border-top-color': await token(page, 'border-strong'),
+      'box-shadow': pop,
+    });
+    // .picker button { height: 28px; padding: 0 6px; border-radius: 4px; font-size: 12px }
+    expect(
+      await style(
+        menu.getByRole('button').first(),
+        'height',
+        'padding-left',
+        'border-top-left-radius',
+        'font-size',
+      ),
+    ).toEqual({
+      height: '28px',
+      'padding-left': '6px',
+      'border-top-left-radius': '4px',
+      'font-size': '12px',
+    });
+  };
+
+  test('the view menu is the prototype’s picker', async ({ page }) => {
+    const tile = firstChart(page);
+    await tile.hover();
+    await tile.getByRole('button', { name: /^Actions for / }).click();
+    await pickerOf(page, tile.getByRole('list', { name: /^Actions for / }));
+  });
+
+  test('the edit menu is the picker too, its heading muted and Delete in the error ink', async ({
+    page,
+  }) => {
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    const tile = firstChart(page);
+    await tile.hover();
+    await tile.getByRole('button', { name: /^Actions for / }).click();
+    const menu = tile.getByRole('list', { name: /^Actions for / });
+    await pickerOf(page, menu);
+    // The group heading: 12/16 400 muted (mismatch 14).
+    expect(
+      await style(
+        menu.getByText('Move to', { exact: true }),
+        'font-size',
+        'line-height',
+        'font-weight',
+        'color',
+      ),
+    ).toEqual({
+      'font-size': '12px',
+      'line-height': '16px',
+      'font-weight': '400',
+      color: await token(page, 'text-muted'),
+    });
+    // <button … style="color:var(--err)">Delete</button>
+    expect(await style(menu.getByRole('button', { name: /^Delete/ }), 'color')).toEqual({
+      color: await token(page, 'status-error'),
+    });
+  });
+
+  test('editing: the grip starts the tile’s head, and the grid’s columns are tinted bands', async ({
+    page,
+  }) => {
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    const tile = firstChart(page);
+    const grip = tile.getByRole('button', { name: /^Move / });
+    await expect(grip).toBeVisible();
+    // .grip { color: var(--text-muted); font-size: 14px; padding: 2px 4px; border-radius: 4px } (mismatch 19)
+    expect(
+      await style(grip, 'color', 'font-size', 'padding-top', 'padding-left', 'border-radius'),
+    ).toEqual({
+      color: await token(page, 'text-muted'),
+      'font-size': '14px',
+      'padding-top': '2px',
+      'padding-left': '4px',
+      'border-radius': '4px',
+    });
+    // In the head's row, before the title — not over the tile's corner.
+    const head = await tile.locator('.tile-head').first().boundingBox();
+    const at = await grip.boundingBox();
+    const title = await tile.getByRole('heading', { level: 3 }).first().boundingBox();
+    const middle = (at?.y ?? 0) + (at?.height ?? 0) / 2;
+    expect(middle).toBeGreaterThanOrEqual(head?.y ?? 0);
+    expect(middle).toBeLessThanOrEqual((head?.y ?? 0) + (head?.height ?? 0));
+    expect(title?.x ?? 0).toBeGreaterThanOrEqual((at?.x ?? 0) + (at?.width ?? 0));
+
+    // .gridlines: columns tinted 4 % accent, not 1 px rules (mismatch 20).
+    const bands = await page
+      .locator('.grid-canvas[data-gridlines="true"]')
+      .first()
+      .evaluate((canvas) => getComputedStyle(canvas).backgroundImage);
+    expect(bands).toMatch(/0\.04\)|4%/);
+  });
+});
