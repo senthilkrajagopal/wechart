@@ -189,6 +189,11 @@ export interface ChartMarking {
   readonly predicate: MarkingPredicate;
   /** The marking's own colour (its slot), for the outline on marked items. */
   readonly colour: string;
+  /**
+   * This tile is marked whole ("Mark all", AC-115): every item it draws is
+   * marked, whatever its rows carry — its own filters are what chose them.
+   */
+  readonly whole?: boolean;
 }
 
 export interface ChartHighlight {

@@ -90,49 +90,76 @@ export function markAll(tileFilter: MarkingPredicate): LimitedMarking {
   return { predicate: tileFilter, refused: 0 };
 }
 
+/** The predicate without this tile's items, nor its whole. Other tiles' are theirs. */
+function withoutTile(
+  predicate: MarkingPredicate,
+  tileId: string,
+  tileItems: readonly MarkedItem[],
+): MarkingPredicate {
+  const mine = { ...predicate, items: tileItems };
+  return {
+    ...predicate,
+    items: predicate.items.filter((item) => !isItemMarked(mine, item)),
+    wholes: (predicate.wholes ?? []).filter((whole) => whole.tileId !== tileId),
+  };
+}
+
+const markedWhole = (predicate: MarkingPredicate, tileId: string) =>
+  (predicate.wholes ?? []).some((whole) => whole.tileId === tileId);
+
 /**
  * Invert marking on one tile (AC-115): of the items the tile shows, the
  * marked come off and the unmarked go on — within the cap (AC-102), since
- * this adds a list. Items another tile contributed are not the tile's, and
- * stay as they are; so do ranges.
+ * this adds a list. A tile marked whole has no unmarked item, so it inverts
+ * to none of it. Items another tile contributed are not the tile's, and stay
+ * as they are; so do ranges.
  */
 export function invertTileItems(
   predicate: MarkingPredicate,
+  tileId: string,
   tileItems: readonly MarkedItem[],
 ): LimitedMarking {
-  const marked = tileItems.filter((item) => isItemMarked(predicate, item));
-  const kept: MarkingPredicate = {
-    ...predicate,
-    items: predicate.items.filter(
-      (item) => !marked.some((each) => isItemMarked({ ...predicate, items: [each] }, item)),
-    ),
-  };
+  const rest = withoutTile(predicate, tileId, tileItems);
+  if (markedWhole(predicate, tileId)) return { predicate: rest, refused: 0 };
   return addItemsWithinLimit(
-    kept,
+    rest,
     tileItems.filter((item) => !isItemMarked(predicate, item)),
   );
 }
 
 /**
- * Mark all on one tile (AC-115): every item it shows, each once, added to
- * what the marking holds — other tiles' items kept. Exempt from the cap, as
- * AC-102 makes "Mark all", and as the prototype's does
- * (docs/design/prototype/dashboard.js, `op === 'all'`): the tile's items are
- * its drawn categories, each already one of a bounded set on screen.
+ * Mark all on one tile (AC-115), stored as the tile's filter — what it was
+ * drawn with — and how many items it showed, never as a list (AC-102, the
+ * user's decision of 2026-09-24): so it is never refused, and stores nothing
+ * the cap counts. The tile's own items and any earlier whole of it go, since
+ * the whole holds them; other tiles' items are kept.
  */
-export function markAllTileItems(
+export function markAllOfTile(
   predicate: MarkingPredicate,
+  tileId: string,
+  filters: readonly Readonly<Record<string, unknown>>[],
   tileItems: readonly MarkedItem[],
 ): LimitedMarking {
-  const added = tileItems.filter(
-    (item, index) =>
-      !isItemMarked(predicate, item) &&
-      tileItems.findIndex((other) => isItemMarked({ ...predicate, items: [other] }, item)) ===
-        index,
-  );
+  const rest = withoutTile(predicate, tileId, tileItems);
   return {
-    predicate:
-      added.length === 0 ? predicate : { ...predicate, items: [...predicate.items, ...added] },
+    predicate: {
+      ...rest,
+      wholes: [...(rest.wholes ?? []), { tileId, filters, count: tileItems.length }],
+    },
     refused: 0,
   };
+}
+
+/**
+ * A tile marked whole, as its items again (within the cap), so one of them
+ * can be toggled — a Ctrl-click on a wholly marked tile unmarks that one item
+ * rather than doing nothing. A tile not marked whole is returned as it was.
+ */
+export function expandWholeTile(
+  predicate: MarkingPredicate,
+  tileId: string,
+  tileItems: readonly MarkedItem[],
+): LimitedMarking {
+  if (!markedWhole(predicate, tileId)) return { predicate, refused: 0 };
+  return addItemsWithinLimit(withoutTile(predicate, tileId, tileItems), tileItems);
 }

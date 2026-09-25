@@ -4,6 +4,7 @@ import {
   type BoundedRange,
   type MarkedItem,
   type MarkingPredicate,
+  type WholeTile,
 } from './predicate';
 
 /**
@@ -181,11 +182,27 @@ function rangeFilter(range: BoundedRange): Filter {
   };
 }
 
-/** One marking: any of its items, and any of its ranges. */
-function predicateFilter(predicate: MarkingPredicate): Filter | undefined {
+/** A marking that marks every row: one with a whole tile drawn with no filter (AC-115). */
+const EVERYTHING = 'everything';
+
+/** A whole tile (AC-115): what it was filtered by, ANDed; with nothing, every row. */
+function wholeFilter(whole: WholeTile): Filter | typeof EVERYTHING {
+  const filters = whole.filters as Filter[];
+  if (filters.length === 0) return EVERYTHING;
+  return filters.length === 1 ? (filters[0] as Filter) : { and: filters };
+}
+
+/** One marking: any of its items, any of its ranges, and any whole tile. */
+function predicateFilter(predicate: MarkingPredicate): Filter | typeof EVERYTHING | undefined {
   if (isEmptyPredicate(predicate)) return undefined;
 
-  const parts = canonical([...itemFilters(predicate.items), ...predicate.ranges.map(rangeFilter)]);
+  const wholes = (predicate.wholes ?? []).map(wholeFilter);
+  if (wholes.includes(EVERYTHING)) return EVERYTHING;
+  const parts = canonical([
+    ...itemFilters(predicate.items),
+    ...predicate.ranges.map(rangeFilter),
+    ...(wholes as Filter[]),
+  ]);
   if (parts.length === 0) return undefined;
   return parts.length === 1 ? (parts[0] as Filter) : { or: parts };
 }
@@ -201,9 +218,13 @@ export function limitFilterFor(
   markings: readonly MarkingPredicate[],
   combination: LimitCombination,
 ): Filter | undefined {
-  const parts = markings
-    .map(predicateFilter)
-    .filter((filter): filter is Filter => filter !== undefined);
+  const each = markings.map(predicateFilter);
+  // A marking of every row limits nothing: any of them is then every row, and
+  // all of them are the others.
+  if (combination === 'any' && each.includes(EVERYTHING)) return undefined;
+  const parts = each.filter(
+    (filter): filter is Filter => filter !== undefined && filter !== EVERYTHING,
+  );
 
   if (parts.length === 0) return undefined;
   if (parts.length === 1) return parts[0] as Filter;

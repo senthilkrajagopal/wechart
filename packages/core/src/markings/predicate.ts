@@ -44,17 +44,116 @@ export interface BoundedRange {
  */
 export type MarkedItem = readonly MemberValue[];
 
+/**
+ * Everything one tile shows, marked with "Mark all" (AC-115): the tile's own
+ * filters as it was drawn — a Cube filter each, ANDed — rather than a list of
+ * what they matched then. So it is exempt from the item cap (AC-102: "because
+ * it stores the tile's filter rather than a list"), and keeps meaning
+ * "everything there" as the data changes. No filters is every row.
+ */
+export interface WholeTile {
+  /** The tile it was marked on, which draws every item marked. */
+  readonly tileId: string;
+  readonly filters: readonly Readonly<Record<string, unknown>>[];
+  /** How many items the tile showed when marked: what its badge counts. */
+  readonly count: number;
+}
+
 export interface MarkingPredicate {
   /** Marked items. A row matches the predicate if it matches any of them. */
   readonly items: readonly MarkedItem[];
   /** Marked ranges, likewise alternatives rather than restrictions. */
   readonly ranges: readonly BoundedRange[];
+  /** Whole tiles marked with "Mark all", likewise alternatives. */
+  readonly wholes?: readonly WholeTile[];
 }
 
 export const EMPTY_PREDICATE: MarkingPredicate = { items: [], ranges: [] };
 
 export function isEmptyPredicate(predicate: MarkingPredicate): boolean {
-  return predicate.items.length === 0 && predicate.ranges.length === 0;
+  return (
+    predicate.items.length === 0 &&
+    predicate.ranges.length === 0 &&
+    (predicate.wholes ?? []).length === 0
+  );
+}
+
+/** How many items a marking holds: its items, its ranges, and what each whole tile showed. */
+export function markedCount(predicate: MarkingPredicate): number {
+  return (
+    predicate.items.length +
+    predicate.ranges.length +
+    (predicate.wholes ?? []).reduce((sum, whole) => sum + whole.count, 0)
+  );
+}
+
+type Filter = Readonly<Record<string, unknown>>;
+
+/**
+ * Whether a row passes a Cube filter, read as Cube reads it
+ * (research/cube/data-apis.md, the filter operators), for drawing a whole
+ * tile's marking on another tile's rows. A row without the member cannot be
+ * said to pass: like an item it names nothing, it marks nothing there.
+ */
+function passes(filter: Filter, row: Record<string, unknown>): boolean {
+  const any = filter['or'];
+  if (Array.isArray(any)) return (any as Filter[]).some((each) => passes(each, row));
+  const all = filter['and'];
+  if (Array.isArray(all)) return (all as Filter[]).every((each) => passes(each, row));
+  const member = filter['member'];
+  if (typeof member !== 'string' || !(member in row)) return false;
+  const value = row[member];
+  const values = (Array.isArray(filter['values']) ? (filter['values'] as unknown[]) : []).map(
+    String,
+  );
+  const text = value === null || value === undefined ? undefined : String(value);
+  const number = Number(value);
+  switch (filter['operator']) {
+    case 'equals':
+      return text !== undefined && values.includes(text);
+    case 'notEquals':
+      return text === undefined || !values.includes(text);
+    case 'set':
+      return text !== undefined;
+    case 'notSet':
+      return text === undefined;
+    case 'contains':
+      return (
+        text !== undefined && values.some((each) => text.toLowerCase().includes(each.toLowerCase()))
+      );
+    case 'notContains':
+      return (
+        text === undefined ||
+        !values.some((each) => text.toLowerCase().includes(each.toLowerCase()))
+      );
+    case 'startsWith':
+      return text !== undefined && values.some((each) => text.startsWith(each));
+    case 'endsWith':
+      return text !== undefined && values.some((each) => text.endsWith(each));
+    case 'gt':
+      return values.some((each) => number > Number(each));
+    case 'gte':
+      return values.some((each) => number >= Number(each));
+    case 'lt':
+      return values.some((each) => number < Number(each));
+    case 'lte':
+      return values.some((each) => number <= Number(each));
+    case 'inDateRange':
+      return (
+        text !== undefined && text >= (values[0] ?? '') && text.slice(0, 10) <= (values[1] ?? '')
+      );
+    case 'notInDateRange':
+      return (
+        text !== undefined && (text < (values[0] ?? '') || text.slice(0, 10) > (values[1] ?? ''))
+      );
+    case 'beforeDate':
+      return text !== undefined && text < (values[0] ?? '');
+    case 'afterDate':
+      return text !== undefined && text > (values[0] ?? '');
+    default:
+      // An operator not read here claims nothing.
+      return false;
+  }
 }
 
 /** The predicate with one more marked item in it. */
@@ -93,7 +192,11 @@ export function matchesPredicate(
     return false;
   };
 
-  return predicate.items.some(matchesItem) || predicate.ranges.some(inRange);
+  return (
+    predicate.items.some(matchesItem) ||
+    predicate.ranges.some(inRange) ||
+    (predicate.wholes ?? []).some((whole) => whole.filters.every((filter) => passes(filter, row)))
+  );
 }
 
 /**

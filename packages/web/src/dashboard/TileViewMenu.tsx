@@ -194,7 +194,8 @@ export function TileViewMenu({
         <ul className="tile-menu__list" aria-label={`Actions for ${title}`}>
           {/* The marked-rows group first, as the prototype's: headed by the
               tile's marking and how much it holds (AC-199). Shown with
-              nothing marked too, its action then unavailable. */}
+              nothing marked too: Unmark is then unavailable, while Invert,
+              Mark all and Create details tile still have something to do. */}
           {marked === undefined ? null : (
             <li>
               <div role="group" aria-labelledby={`${why}-marked`} className="tile-menu__group">

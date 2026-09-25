@@ -89,6 +89,16 @@ export interface ClickedValue {
   readonly value: string;
 }
 
+/**
+ * Whether a click on an item of this chart type marks its x category — the
+ * item Invert marking and Mark all count as the tile's (AC-115). Not where a
+ * click marks its series or its panel, nor a table's or a pivot's rows, which
+ * are marked by their own keys (AC-092).
+ */
+export function clickMarksCategory(chartType: string): boolean {
+  return !BY_SERIES.has(chartType) && !['trellis', 'table', 'pivot', 'kpi'].includes(chartType);
+}
+
 export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue | undefined {
   /**
    * A legend entry names a category of the split — the member the legend was

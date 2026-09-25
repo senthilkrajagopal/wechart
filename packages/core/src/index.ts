@@ -117,9 +117,10 @@ export { limitFilterFor, type CubeFilter } from './markings/query';
 export {
   MARKING_ITEM_LIMIT,
   addItemsWithinLimit,
+  expandWholeTile,
   invertTileItems,
   markAll,
-  markAllTileItems,
+  markAllOfTile,
   type LimitedMarking,
 } from './markings/limit';
 
@@ -134,6 +135,7 @@ export {
 export {
   EMPTY_PREDICATE,
   isEmptyPredicate,
+  markedCount,
   matchesPredicate,
   predicateProblems,
   withItem,
@@ -142,6 +144,7 @@ export {
   type MarkedItem,
   type MarkingPredicate,
   type MemberValue,
+  type WholeTile,
 } from './markings/predicate';
 
 export {

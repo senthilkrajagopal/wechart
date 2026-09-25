@@ -70,6 +70,32 @@ describe('drawing a tile that shows a marking', () => {
     expect(markedItemStyle(rows.shipped, '#eb6834', marking).color).toBe('#eb6834');
   });
 
+  it('marks every item of a tile marked whole, whatever its row carries (AC-115)', () => {
+    // Its filter was on a member these rows do not carry: the tile's own
+    // filters chose them, so each is marked.
+    const whole = {
+      predicate: {
+        items: [],
+        ranges: [],
+        wholes: [
+          {
+            tileId: 't1',
+            filters: [{ member: 'orders.region', operator: 'equals', values: ['North'] }],
+            count: 2,
+          },
+        ],
+      },
+      colour: '#151107',
+      whole: true,
+    };
+    for (const row of [rows.paid, rows.shipped]) {
+      expect(markedItemStyle(row, '#2a78d6', whole).opacity).toBe(1);
+      expect(markedItemStyle(row, '#2a78d6', whole).borderWidth).toBe(1.5);
+    }
+    // The same marking on another tile's rows: they do not carry the member.
+    expect(markedItemStyle(rows.paid, '#2a78d6', { ...whole, whole: false }).opacity).toBe(0.28);
+  });
+
   describe('when nothing is marked', () => {
     const nothing = { predicate: EMPTY_PREDICATE, colour: '#151107' };
 

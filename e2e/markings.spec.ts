@@ -993,9 +993,16 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
   let menu = await openMenu();
   // The marked-rows group first, headed by the tile's marking and its count.
   const marked = menu.getByRole('group', { name: 'Marking · 1 marked' });
-  await expect(marked.getByRole('button')).toHaveText(['Invert marking', 'Mark all', 'Unmark']);
+  await expect(marked.getByRole('button')).toHaveText([
+    'Invert marking',
+    'Mark all',
+    'Unmark',
+    'Create details tile',
+  ]);
   await expect(
-    menu.getByRole('button').filter({ hasNotText: /^(Invert marking|Mark all|Unmark)$/ }),
+    menu
+      .getByRole('button')
+      .filter({ hasNotText: /^(Invert marking|Mark all|Unmark|Create details tile)$/ }),
   ).toHaveText(['View as table', 'View query', 'Download CSV', 'Edit chart']);
 
   // View as table: the tile shows its rows.
@@ -1234,7 +1241,8 @@ test('Invert marking and Mark all change one tile’s items, and keep another ti
         nodes
           .map((node) => ({ box: (node as SVGGraphicsElement).getBoundingClientRect(), node }))
           .filter(({ box }) => box.width > 2 && box.height > 2 && box.left <= x && x <= box.right)
-          .map(({ node }) => Number(node.getAttribute('fill-opacity') ?? 1))[0] ?? -1,
+          // No bar found is no opacity at all, which no assertion accepts.
+          .map(({ node }) => Number(node.getAttribute('fill-opacity') ?? 1))[0] ?? Number.NaN,
       (at?.x ?? 0) + (at?.width ?? 0) / 2,
     );
   };
@@ -1252,14 +1260,66 @@ test('Invert marking and Mark all change one tile’s items, and keep another ti
   await act('Invert marking');
   await expect(status.getByTestId('mark-badge')).toContainText('3 marked');
   await expect.poll(() => faded(status)).toBe('1 of 3');
-  await expect.poll(() => opacityAt('shipped')).toBeLessThan(1);
+  // Faded to direction.md's unmarked strength, not merely something under 1.
+  await expect.poll(() => opacityAt('shipped')).toBe(0.28);
   await expect.poll(() => faded(category)).toBe('1 of 2');
 
-  // Mark all: every status the tile draws; Instruments still kept.
+  // Mark all: every status the tile draws, stored as what the tile is
+  // filtered by (AC-102) — nothing, here, so every row — and Instruments kept.
   await act('Mark all');
   await expect(status.getByTestId('mark-badge')).toContainText('4 marked');
   await expect.poll(() => faded(status)).toBe('0 of 3');
+  await expect.poll(() => faded(category)).toBe('0 of 2');
+  await expect(page.getByTestId('mark-chip').locator('.mark-chip__summary')).toHaveAttribute(
+    'title',
+    /all 3 in By status/,
+  );
+
+  // A Ctrl-click then takes one status away, as on any marked item.
+  await clickBar(page, status, 'completed', ['Control']);
+  await expect(status.getByTestId('mark-badge')).toContainText('3 marked');
+  await expect.poll(() => faded(status)).toBe('1 of 3');
+  await expect.poll(() => opacityAt('completed')).toBe(0.28);
   await expect.poll(() => faded(category)).toBe('1 of 2');
+
+  // Mark all, then Invert: none of the tile, Instruments still kept.
+  await act('Mark all');
+  await act('Invert marking');
+  await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect.poll(() => faded(status)).toBe('3 of 3');
+  await expect.poll(() => faded(category)).toBe('1 of 2');
+});
+
+test('Mark all limits a details tile by what the tile shows, and is offered only where a click marks its categories', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request, { limited: true, split: true });
+  await open(page, id, title);
+  const details = tile(page, 'tile-details');
+  const statuses = (await axisLabels(tile(page, 'tile-status'))).filter(
+    (text) => !/^[\d.,]+$/.test(text),
+  );
+  await expect(details.getByTestId('nothing-marked')).toBeVisible();
+
+  const group = async (target: Locator) => {
+    await target.getByRole('button', { name: /^Actions for / }).click();
+    return target
+      .getByRole('list', { name: /^Actions for / })
+      .getByRole('group', { name: /marked$/ });
+  };
+  // By status, unfiltered, marked whole: the details tile shows every status.
+  await (await group(tile(page, 'tile-status'))).getByRole('button', { name: 'Mark all' }).click();
+  await expect(details.getByTestId('chart-canvas')).toBeVisible();
+  await expect
+    .poll(async () => (await axisLabels(details)).filter((text) => statuses.includes(text)))
+    .toEqual(statuses);
+
+  // A stacked bar's click marks its series, not its categories: not offered there.
+  const split = await group(tile(page, 'tile-split'));
+  await expect(split.getByRole('button', { name: 'Unmark' })).toBeVisible();
+  await expect(split.getByRole('button', { name: 'Mark all' })).toHaveCount(0);
+  await expect(split.getByRole('button', { name: 'Invert marking' })).toHaveCount(0);
 });
 
 /**

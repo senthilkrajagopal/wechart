@@ -29,6 +29,8 @@ export interface TileMarking {
   readonly predicate: MarkingPredicate;
   /** The marking's own colour, from its slot (mk1–mk4). */
   readonly colour: string;
+  /** Every item of the tile is marked: it was marked whole (AC-115). */
+  readonly whole?: boolean;
 }
 
 export interface ItemStyle {
@@ -55,7 +57,7 @@ export function markedItemStyle(
     return { color: ownColour, opacity: 1, borderWidth: 0 };
   }
 
-  if (!matchesPredicate(marking.predicate, row)) {
+  if (marking.whole !== true && !matchesPredicate(marking.predicate, row)) {
     // Faded, not greyed: which series an item belongs to stays readable, so a
     // marking narrows attention rather than destroying the chart underneath.
     return { color: ownColour, opacity: UNMARKED_OPACITY, borderWidth: 0 };

@@ -21,6 +21,8 @@ export interface MarkChipProps {
   readonly titleOf?: ((member: string) => string | undefined) | undefined;
   /** The title of the tile it was last marked from (AC-200). */
   readonly from?: string | undefined;
+  /** A tile's title, for one marked whole (AC-115). */
+  readonly tileTitleOf?: ((tileId: string) => string | undefined) | undefined;
   /** Unmark it: the chip's × and its menu's Unmark (AC-200). */
   readonly onUnmark?: (() => void) | undefined;
 }
@@ -49,6 +51,8 @@ export function summariseMarking(
    * bound (T220's review): a marking can hold a thousand items (AC-102).
    */
   max?: number,
+  /** A tile's title, for a tile marked whole ("all 3 in By status", AC-115). */
+  tileTitleOf?: (tileId: string) => string | undefined,
 ): string {
   const parts: string[] = [];
   const named = (member: string) => titleOf?.(member) ?? member;
@@ -75,10 +79,23 @@ export function summariseMarking(
     parts.push(`${named(range.member)} ${String(range.from)} to ${String(range.to)}`);
   }
 
+  for (const whole of predicate.wholes ?? []) {
+    const tile = tileTitleOf?.(whole.tileId);
+    parts.push(`all ${String(whole.count)} in ${tile ?? 'a tile'}`);
+  }
+
   return parts.join(', ');
 }
 
-export function MarkChip({ marking, colour, predicate, titleOf, from, onUnmark }: MarkChipProps) {
+export function MarkChip({
+  marking,
+  colour,
+  predicate,
+  titleOf,
+  from,
+  tileTitleOf,
+  onUnmark,
+}: MarkChipProps) {
   // "Every *non-empty* marking has a chip": an empty one has nothing to name.
   if (isEmptyPredicate(predicate)) return null;
 
@@ -92,8 +109,11 @@ export function MarkChip({ marking, colour, predicate, titleOf, from, onUnmark }
       />
       <span className="mark-chip__name">{marking.name}</span>
       {/* Bounded to two values and "+n", the whole of it on hover. */}
-      <span className="mark-chip__summary" title={summariseMarking(predicate, titleOf)}>
-        {summariseMarking(predicate, titleOf, 2)}
+      <span
+        className="mark-chip__summary"
+        title={summariseMarking(predicate, titleOf, undefined, tileTitleOf)}
+      >
+        {summariseMarking(predicate, titleOf, 2, tileTitleOf)}
       </span>
       {from === undefined ? null : <span className="mark-chip__from">from {from}</span>}
       {onUnmark === undefined ? null : (

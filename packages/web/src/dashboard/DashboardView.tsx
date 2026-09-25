@@ -2,8 +2,12 @@ import { keyToMarking, markFromLegend, markFromPanel } from '@wechart/charts';
 import { COLORS } from '@wechart/ui';
 import {
   addItemsWithinLimit,
+  expandWholeTile,
   invertTileItems,
-  markAllTileItems,
+  markAllOfTile,
+  markedCount,
+  OTHER_LABEL,
+  type MarkedItem,
   applyItemClick,
   EMPTY_PREDICATE,
   type CubeFilter,
@@ -81,7 +85,13 @@ import { coverageOf, type Reach } from '../filters/coverage';
 import { chartTilesOf } from '../filters/scope';
 import { effectsOn, type CrossEffects, type CrossSelection } from './crossfilter/apply';
 import { CrossFilterChips } from './crossfilter/CrossFilterChip';
-import { clickedValue, membersDrawn, seriesCountOf, type ClickedItem } from './crossfilter/clicked';
+import {
+  clickedValue,
+  clickMarksCategory,
+  membersDrawn,
+  seriesCountOf,
+  type ClickedItem,
+} from './crossfilter/clicked';
 import { useThemeName } from '../shell/ThemeProvider';
 import { clearTileMarking } from './markings/clear';
 import { announceMarking, MarkingAnnouncer } from './markings/LiveRegion';
@@ -1670,7 +1680,7 @@ export function DashboardView({
   /** How many items a marking holds now: its items and its ranges. */
   const markedCountOf = (markingId: string) => {
     const predicate = markingOf(marks, markingId);
-    return predicate.items.length + predicate.ranges.length;
+    return markedCount(predicate);
   };
   const marking = interactions.mode === 'markings' && !sessionEditing && preview === undefined;
   const defaultMarking = defaultMarkingOf(live);
@@ -2007,7 +2017,12 @@ export function DashboardView({
 
     const spec = drawn.specs[chartId];
     const clicked = spec === undefined ? undefined : clickedValue(spec, item);
-    const before = markingOf(marks, markingId);
+    // A tile marked whole (Mark all), as its items again, so a Ctrl-click
+    // takes one of them away rather than doing nothing (AC-115).
+    const held = markingOf(marks, markingId);
+    const before = toggle
+      ? expandWholeTile(held, tileId, tileItemsOf(tileId) ?? []).predicate
+      : held;
     const after =
       clicked === undefined
         ? /**
@@ -2050,7 +2065,7 @@ export function DashboardView({
       setMarkSaid(
         announceMarking({
           marking: named,
-          markedCount: after.items.length + after.ranges.length,
+          markedCount: markedCount(after),
           ...(from === undefined ? {} : { tileName: from }),
         }),
       );
@@ -2075,6 +2090,52 @@ export function DashboardView({
     } catch {
       return [];
     }
+  };
+
+  /**
+   * The items a tile draws, each as a click on it marks it (AC-115): its x
+   * categories as the filters leave them (what is on screen, not the
+   * unfiltered answer), none blank — a click marks no blank — and not Top N's
+   * "Other", which stands for many. None for a chart whose click marks its
+   * series, its panel or its rows instead, where these would not be its items.
+   */
+  const tileItemsOf = (tileId: string): MarkedItem[] | undefined => {
+    const element = elementAt(live, tileId);
+    if (element === null || !isTile(element) || element.chartId === undefined) return undefined;
+    const spec = withFiltered.specs[element.chartId] ?? drawn.specs[element.chartId];
+    const member = spec === undefined ? undefined : memberOn(spec.encoding, 'x');
+    if (spec === undefined || member === undefined || !clickMarksCategory(spec.chartType)) {
+      return undefined;
+    }
+    let categories: readonly string[];
+    try {
+      categories = seriesOf(spec).categories;
+    } catch {
+      return undefined;
+    }
+    return categories
+      .filter((value) => value !== '' && !value.startsWith(`${OTHER_LABEL} (`))
+      .map((value) => [{ member, value }]);
+  };
+
+  /**
+   * What a chart's tile is filtered by, as Cube filters (AC-115's Mark all):
+   * the query it asks — dashboard filters, and the markings that limit it —
+   * with its time range as a filter too. Its segments are not filters Cube
+   * can be given back, and are left out.
+   */
+  const filtersOfChart = (chartId: string): CubeFilter[] => {
+    const query = queryOf(chartId);
+    if (query === undefined) return [];
+    const filters = Array.isArray(query['filters']) ? (query['filters'] as CubeFilter[]) : [];
+    const ranges = (
+      Array.isArray(query['timeDimensions']) ? (query['timeDimensions'] as CubeFilter[]) : []
+    ).flatMap((time) =>
+      Array.isArray(time['dateRange']) && typeof time['dimension'] === 'string'
+        ? [{ member: time['dimension'], operator: 'inDateRange', values: time['dateRange'] }]
+        : [],
+    );
+    return [...filters, ...ranges];
   };
 
   /**
@@ -2103,7 +2164,7 @@ export function DashboardView({
       setMarkSaid(
         `${announceMarking({
           marking: named,
-          markedCount: predicate.items.length + predicate.ranges.length,
+          markedCount: markedCount(predicate),
           ...(from === undefined ? {} : { tileName: from }),
         })}${extra ?? ''}`,
       );
@@ -2148,9 +2209,12 @@ export function DashboardView({
       }
       case 'replace':
       case 'toggle': {
-        const after = applyItemClick(before, itemAt(result.focused), {
-          toggle: result.action === 'toggle',
-        });
+        const toggling = result.action === 'toggle';
+        // As a Ctrl-click: a tile marked whole is its items again first (AC-115).
+        const base = toggling
+          ? expandWholeTile(before, tileId, tileItemsOf(tileId) ?? []).predicate
+          : before;
+        const after = applyItemClick(base, itemAt(result.focused), { toggle: toggling });
         setMarks((now) => withMarking(now, markingId, after));
         noteSource(markingId, tileId);
         say(after);
@@ -2165,7 +2229,7 @@ export function DashboardView({
         const after = addItemsWithinLimit({ ...EMPTY_PREDICATE }, reach);
         setMarks((now) => withMarking(now, markingId, after.predicate));
         noteSource(markingId, tileId);
-        say(after.predicate, after.message === undefined ? '' : ` ${after.message}`);
+        say(after.predicate, after.message === undefined ? '' : `. ${after.message}`);
         return;
       }
     }
@@ -2368,13 +2432,19 @@ export function DashboardView({
       // A tile that cannot reach the marking's members draws none of it
       // (AC-103); its label says why.
       if (spec === undefined || notLinked[chartId] !== undefined) continue;
+      const predicate = markingOf(marks, shown.markingId);
+      // Marked whole on a tile of this chart: every item it draws (AC-115).
+      const whole = (predicate.wholes ?? []).some((each) => {
+        const marked = elementAt(live, each.tileId);
+        return marked !== null && isTile(marked) && marked.chartId === chartId;
+      });
       specs[chartId] = {
         ...spec,
-        marking: { predicate: markingOf(marks, shown.markingId), colour: shown.colour },
+        marking: { predicate, colour: shown.colour, ...(whole ? { whole } : {}) },
       };
     }
     return specs;
-  }, [withHighlights, markedSpecs, marks, notLinked]);
+  }, [withHighlights, markedSpecs, marks, notLinked, live]);
 
   // The assignment is held across renders, so a filter that hides a member
   // does not hand its colour to whoever is now first (AC-039).
@@ -2515,7 +2585,7 @@ export function DashboardView({
                 setMarkSaid(
                   announceMarking({
                     marking: named,
-                    markedCount: predicate.items.length + predicate.ranges.length,
+                    markedCount: markedCount(predicate),
                     ...(from === undefined ? {} : { tileName: from }),
                   }),
                 );
@@ -2548,7 +2618,7 @@ export function DashboardView({
             setMarkSaid(
               announceMarking({
                 marking: named,
-                markedCount: cleared.items.length + cleared.ranges.length,
+                markedCount: markedCount(cleared),
                 ...(from === undefined ? {} : { tileName: from }),
               }),
             );
@@ -2565,21 +2635,19 @@ export function DashboardView({
               return undefined;
             }
             const markingId = marksWithOf(element);
-            const spec = drawn.specs[element.chartId];
-            const member = spec === undefined ? undefined : memberOn(spec.encoding, 'x');
-            const items = markableItemsOf(tileId);
-            if (markingId === undefined || markingId === '' || member === undefined) {
+            const tileItems = tileItemsOf(tileId);
+            if (markingId === undefined || markingId === '' || tileItems === undefined) {
               return undefined;
             }
-            if (items.length === 0) return undefined;
+            if (tileItems.length === 0) return undefined;
             const chartId = element.chartId;
             return (how: 'invert' | 'all') => {
-              const tileItems = items.map((value) => [{ member, value }]);
               const before = markingOf(marks, markingId);
               const after =
                 how === 'invert'
-                  ? invertTileItems(before, tileItems)
-                  : markAllTileItems(before, tileItems);
+                  ? invertTileItems(before, tileId, tileItems)
+                  : // What the tile is filtered by, not what that matched (AC-102).
+                    markAllOfTile(before, tileId, filtersOfChart(chartId), tileItems);
               setMarks((now) => withMarking(now, markingId, after.predicate));
               noteSource(markingId, tileId);
               const named = markings.find((each) => each.id === markingId);
@@ -2588,9 +2656,9 @@ export function DashboardView({
               setMarkSaid(
                 `${announceMarking({
                   marking: named,
-                  markedCount: after.predicate.items.length + after.predicate.ranges.length,
+                  markedCount: markedCount(after.predicate),
                   ...(from === undefined ? {} : { tileName: from }),
-                })}${after.message === undefined ? '' : ` ${after.message}`}`,
+                })}${after.message === undefined ? '' : `. ${after.message}`}`,
               );
             };
           },
@@ -2609,7 +2677,7 @@ export function DashboardView({
             return {
               marking: found,
               colour: markingColour(found.slot, theme),
-              markedCount: predicate.items.length + predicate.ranges.length,
+              markedCount: markedCount(predicate),
             };
           },
         }
@@ -3349,6 +3417,15 @@ export function DashboardView({
                             // By the members' titles, from its tile (AC-200).
                             titleOf={memberTitle}
                             from={markSourceTitle(each.id)}
+                            // A tile marked whole, by its title (AC-115).
+                            tileTitleOf={(tileId) => {
+                              const element = elementAt(live, tileId);
+                              return element !== null &&
+                                isTile(element) &&
+                                element.chartId !== undefined
+                                ? chartTitleOf(element.chartId)
+                                : undefined;
+                            }}
                             onUnmark={() => {
                               unmarkAll(each);
                             }}
