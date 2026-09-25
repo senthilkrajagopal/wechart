@@ -457,10 +457,16 @@ test('the dashboard is where it was scrolled to, after going back', async ({ pag
   await canvas.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
+  // The ✎ brought into view, as it must be for anyone to press it: at the
+  // very bottom it can sit above the canvas's edge (T248's taller "＋ Add"
+  // slots put it 14 px out), and Playwright would scroll it in for the click,
+  // moving the position this test compares.
+  const pencil = page.getByTestId('edit-chart-tile-region');
+  await pencil.scrollIntoViewIfNeeded();
   const before = await canvas.evaluate((element) => element.scrollTop);
   expect(before).toBeGreaterThan(0);
 
-  await page.getByTestId('edit-chart-tile-region').click();
+  await pencil.click();
   await expect(overlay(page)).toBeVisible();
   await page.getByTestId('editor-back').click();
   await expect(overlay(page)).toBeHidden();
