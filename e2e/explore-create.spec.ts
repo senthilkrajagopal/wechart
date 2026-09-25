@@ -46,7 +46,9 @@ test('creates a dashboard in the selected folder and opens it', async ({ page })
 
   // Landed in Finance, not at the root: this one, by its id — the title is
   // shared by every dashboard created this way.
-  const id = decodeURIComponent(page.url().split('/').pop() ?? '');
+  // By the path alone: the address carries `?editing=true` until edit mode
+  // has begun (T245's review).
+  const id = decodeURIComponent(new URL(page.url()).pathname.split('/').pop() ?? '');
   await listedIn(page, 'Finance', id);
 });
 

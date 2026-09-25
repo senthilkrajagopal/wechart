@@ -3613,6 +3613,15 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
       - a 6 px Close;
       - a fresh query each time it opens.
     - **New › Dashboard** opens the new dashboard with `?editing=true`. The dashboard enters edit mode once it loads, then takes the flag out of the address, so a reload or a link opens it to be read.
+  - **The cold review passed it.** Fixed from its findings:
+    - A dashboard that fails to load now drops the `editing` flag too, so a later reload can't open it in edit mode (tested with the dashboard's GET answering 500).
+    - The avatar test checks both themes and that the tint is painted at all.
+    - The kbd's rendered height is asserted, not only its line height.
+    - The New › Dashboard test reloads and finds view mode.
+    - AC-020's test reads the id from the path, not the whole address.
+  - **To put to the user:**
+    - **AC-018 says a dashboard opened from Explore opens in view mode.** A new one now opens in edit mode, as the prototype's does (N15). I read AC-018 as covering an existing dashboard, since it names "its saved page tabs, tiles and settings". The proposal: clarify AC-018 to "an existing dashboard", and state in AC-020, or a new F22 criterion, that a new dashboard opens in edit mode.
+    - **The trigger's words, "Search wechart".**
 - [x] T246 (AC-187) Match the dashboard header, filter band, marking chip and badge to the prototype
   - Files: `packages/web/src/dashboard/DashboardView.tsx` (`PageTabsRow`, the `band`), `packages/web/src/dashboard/edit/EditChrome.tsx` (`band`), `packages/web/src/workspaces/explore/FolderCrumbs.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`, `e2e/markings.spec.ts`, `e2e/dashboard.spec.ts`
   - Failing test: header 80 px with a 24 px ghost breadcrumb in the prototype's colours; the filter band always 53 px with a 12/16 `text-muted` hint, full width in edit mode; the chip and badge at the prototype's padding, colours and swatch (recheck-dashboard F3, N8; mismatches 1–8, 11).

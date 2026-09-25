@@ -1218,16 +1218,29 @@ test.describe('T245: the app bar’s search and avatar, the palette, and a new d
       'font-size': '12px',
       'font-weight': '600',
     });
+    // The height AC-187 measures: 16.5 px in the prototype, where a 20 px
+    // line had made it 22 (mismatch 2; T245's review).
+    expect((await trigger(page).locator('kbd').boundingBox())?.height).toBeLessThan(18);
   });
 
   test('the avatar: the dimension role on its tint', async ({ page }) => {
     await page.goto('/explore');
     // .avatar { background: var(--role-dim-soft); color: var(--role-dim) } (N7, mismatch 3)
     const avatar = page.getByRole('banner').getByRole('img', { name: /^Signed in/ });
-    expect(await style(avatar, 'background-color', 'color')).toEqual({
-      'background-color': await token(page, 'bg-role-dimension-soft', 'background-color'),
-      color: await token(page, 'role-dimension'),
-    });
+    // In both themes, and painted at all: a token the sheet never emitted
+    // would read as transparent on both sides of the comparison (T245's review).
+    for (const theme of ['light', 'dark'] as const) {
+      if (theme === 'dark') {
+        await page.getByRole('button', { name: /theme/i }).click();
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+      }
+      const painted = await style(avatar, 'background-color', 'color');
+      expect(painted).toEqual({
+        'background-color': await token(page, 'bg-role-dimension-soft', 'background-color'),
+        color: await token(page, 'role-dimension'),
+      });
+      expect(painted['background-color']).not.toBe('rgba(0, 0, 0, 0)');
+    }
   });
 
   test('the palette: over the app bar, lifted by the pop shadow, a 6 px Close, and a fresh query each time', async ({
@@ -1294,6 +1307,20 @@ test.describe('T245: the app bar’s search and avatar, the palette, and a new d
     await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
     // Once, not for good: the address says nothing of it after, so a reload
     // or a link opens the dashboard to be read.
+    await expect.poll(() => new URL(page.url()).searchParams.has('editing')).toBe(false);
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+    await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toHaveCount(0);
+  });
+
+  test('a dashboard that cannot be opened forgets the request to edit it too', async ({ page }) => {
+    // T245's review: left in the address, a reload once the server was back
+    // would have opened it in edit mode.
+    await page.route('**/api/documents/dashboard/seed-root-dashboard-1', (route) =>
+      route.fulfill({ status: 500, body: 'down' }),
+    );
+    await page.goto('/explore/dashboards/seed-root-dashboard-1?editing=true');
+    await expect(page.getByTestId('dashboard-error')).toBeVisible();
     await expect.poll(() => new URL(page.url()).searchParams.has('editing')).toBe(false);
   });
 });

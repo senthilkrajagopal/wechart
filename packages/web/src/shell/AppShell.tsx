@@ -42,7 +42,8 @@ function SearchTrigger() {
       </svg>
       {/* Words that fit the prototype's 260 px (N6): its "Search fields,
           charts, models" leaves out dashboards, and naming all four does not
-          fit. The palette's own field names them once it is open. */}
+          fit. The palette's own field names them once it is open. A small
+          choice made in T245 and put to the user; theirs to change. */}
       <span>Search wechart</span>
       <kbd>{shortcut()}</kbd>
     </button>

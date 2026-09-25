@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { readChartDocument, type ChartDocument, type RenderSpec } from '@wechart/core';
 
 import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
@@ -182,6 +182,16 @@ export function DashboardPage({
   });
 
   const document = saved.data?.document;
+
+  /**
+   * A request to open in edit mode (T245) that can never be met — the
+   * dashboard would not load — is forgotten as well, so a reload once the
+   * server is back opens it to be read (T245's review).
+   */
+  const failed = saved.isError && document === undefined;
+  useEffect(() => {
+    if (failed && startEditing === true) onStartedEditing?.();
+  }, [failed, startEditing, onStartedEditing]);
 
   if (saved.isPending)
     return (
