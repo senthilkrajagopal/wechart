@@ -3583,6 +3583,19 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - **Tests changed with the behaviour:**
       - `FolderContents.test.tsx`: an empty folder keeps its header, and folders show no date or owner. This reverses an earlier test, per F24 and F20.
       - `e2e/explore.spec.ts`: AC-003's scroll position and the docked-pane test now scroll the list rather than the window. AC-017's row check reads a dashboard row, since a folder, listed first, has no date.
+    - **The cold review failed it, fixed:**
+      - **The failure (H1):** the sticky header's `z-index: 1` painted over the ⌘K palette, whose backdrop had no z-index, and covered its input on Explore. T245's backdrop z-index cures it. T245's palette test now checks that the input is on top where the two overlap.
+      - **A spec conflict, reverted (M1):** a folder's Updated and Owner are shown again. Blanking them, as the prototype does (F20), broke AC-017's Fails-when ("a column is blank for an item that has that value"), and a critique finding does not amend the spec. **Proposed to the user:** narrow AC-017 to dashboards and charts, if the prototype's blank folder cells are wanted.
+      - **Also fixed:**
+        - A row focused by the keys comes to rest below the sticky header (`scroll-padding-top`, tested with ArrowUp onto a tucked row).
+        - Cells don't wrap, as the prototype's don't, so a long description keeps the row at 34 px (tested).
+        - The header cells' padding is asserted.
+        - The tree's focus ring is drawn inside its full-width row.
+        - A selected folder's count takes the row's 600 weight.
+        - AC-017's e2e checks Owner too.
+      - **Left, low:**
+        - AC-003's scroll test now covers a list's scroll position, not the window's.
+        - Right after load, with nothing focused, PageDown doesn't scroll the list.
 - [x] T245 (AC-187) Match the app bar's search trigger, avatar and palette to the prototype, and open a new dashboard in edit mode
   - Files: `packages/web/src/shell/{AppShell,SearchPalette}.tsx`, `packages/web/src/shell/styles.ts`, `packages/ui/src/tokens.ts`, `docs/design/direction.md` (§7d), `packages/web/src/workspaces/explore/ExplorePage.tsx`, `packages/web/src/router/routes.tsx`, `packages/web/src/dashboard/{DashboardPage,DashboardView}.tsx`, `e2e/design-conformance.spec.ts`
   - Failing test: the ⌘K hint is `text-muted` at normal height; the avatar is `role-dim`; the palette's Close is radius 6, its backdrop covers the app bar, it has the pop shadow and opens with its query cleared; New › Dashboard opens editing (recheck-shell-explore N6–N10, N15; mismatches 1–4).

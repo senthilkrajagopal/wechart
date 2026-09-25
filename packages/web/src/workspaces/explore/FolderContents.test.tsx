@@ -79,12 +79,14 @@ describe('folder contents (AC-017)', () => {
     expect(dashboard[3]?.textContent).toBe('—');
   });
 
-  it('leaves a folder’s Updated and Owner blank, as the prototype’s browse() does (recheck-shell-explore F20)', () => {
+  // T244 left these blank, as the prototype's browse() does (F20); its review
+  // found that AC-017's Fails-when forbids it: a folder has both values.
+  it('fills a folder’s Updated and Owner too, as AC-017 asks of every item', () => {
     render(<FolderContents items={items} />);
 
     const folder = within(screen.getByTestId('item-f1')).getAllByRole('cell');
-    expect(folder[2]?.textContent).toBe('');
-    expect(folder[3]?.textContent).toBe('');
+    expect(folder[2]?.textContent).toMatch(/^Sep 1(, 2026)?$/);
+    expect(folder[3]?.textContent).toBe('—');
   });
 
   it('carries a machine-readable timestamp alongside the shown one', () => {

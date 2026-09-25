@@ -36,6 +36,8 @@ test('lists each item with its type, owner and last-updated time', async ({ page
   await expect(cells.nth(0)).toContainText(/dashboard|chart|folder/i);
   await expect(cells.nth(1)).not.toBeEmpty();
   await expect(cells.nth(2)).not.toBeEmpty();
+  // Owner too, which the test is named for (T244's review).
+  await expect(cells.nth(3)).not.toBeEmpty();
 });
 
 test('selecting a folder shows that folder’s contents', async ({ page }) => {

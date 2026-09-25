@@ -1001,6 +1001,9 @@ fieldset.model-field > legend {
   gap: 12px;
   margin: 0 -24px;
   padding: 0 24px 16px;
+  /* A row the keys focus comes to rest below the sticky header, not under it
+     (T244's review), as the dashboard's canvas does below its band. */
+  scroll-padding-top: 28px;
 }
 .explore__note {
   margin: 0;
@@ -1103,11 +1106,14 @@ fieldset.model-field > legend {
   cursor: pointer;
 }
 .folder-tree__label:hover:not(:disabled) { background: var(--wc-bg-hover); }
+/* Its ring inside the row: a full-width row in a scrolling pane had it cut
+   off at both sides (T244's review). */
+.folder-tree__label:focus-visible { outline-offset: -2px; }
 .folder-tree__title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* The row's weight, as the prototype's count takes it: 600 when selected. */
 .folder-tree__count {
   color: var(--wc-text-muted);
   font-size: var(--wc-text-xs-size);
-  font-weight: var(--wc-text-xs-weight);
   font-variant-numeric: tabular-nums;
 }
 /* .file[aria-current='true']: the accent on its tint (mismatch 12). */
@@ -1266,7 +1272,7 @@ fieldset.model-field > legend {
 .folder-contents thead tr { height: 28px; }
 .folder-contents tbody tr { height: 34px; }
 .folder-contents th,
-.folder-contents td { padding: 0 8px; }
+.folder-contents td { padding: 0 8px; white-space: nowrap; }
 /* .grid-table th { position: sticky; top: 0 }: the header stays while the
    list scrolls beneath it (F23). */
 .folder-contents thead th { position: sticky; top: 0; z-index: 1; }
@@ -1690,8 +1696,9 @@ svg[data-icon] { flex: none; }
    flex item still offers its content height to its container's intrinsic size,
    flex-basis: 0 or not — measured, not assumed: the dashboard sized the shell
    to its tallest tile instead of the other way round. Sizing the shell itself
-   would fix that and take the window's scrollbar away from every other
-   workspace, including the long Explore list AC-003 scrolls. */
+   would fix that and take the window's scrollbar away from every workspace
+   that still scrolls the window. Explore, the Model workspace and the chart
+   editor now dock themselves the same way. */
 main:has(.dashboard) {
   position: relative;
   height: calc(100vh - var(--wc-app-bar-height));

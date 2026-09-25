@@ -882,8 +882,10 @@ test.describe('T244: Explore’s tree, header and table', () => {
       color: await token(page, 'text-muted'),
       'font-size': '12px',
     });
-    expect(await style(finance.locator('.folder-tree__count'), 'color')).toEqual({
+    // And in the selected row's weight, as the prototype's count inherits it.
+    expect(await style(finance.locator('.folder-tree__count'), 'color', 'font-weight')).toEqual({
       color: await token(page, 'text-secondary'),
+      'font-weight': '600',
     });
     // Each row's chip: .itemicon.ic-folder at 18 px — ◉ for My workspace, ▣
     // for a folder (F7, mismatch 14).
@@ -980,8 +982,10 @@ test.describe('T244: Explore’s tree, header and table', () => {
     const unique = String(Date.now());
     const home = await make(request, 'folder', 'root', `Table ${unique}`);
     const sub = await make(request, 'folder', home, `Sub ${unique}`);
+    // A description long enough to wrap, were cells let wrap: .grid-table
+    // td { white-space: nowrap } keeps the row at 34 px (T244's review).
     const board = await make(request, 'dashboard', home, `Board ${unique}`, {
-      description: 'What the board is for',
+      description: `What the board is for. ${'It reads on and on, well past its column. '.repeat(6)}`,
     });
     const chart = await make(request, 'chart', home, `Chart ${unique}`, {
       chart: {
@@ -997,9 +1001,12 @@ test.describe('T244: Explore’s tree, header and table', () => {
 
     // .grid-table th { height: 28px; padding: 0 8px }; .comfy td { height: 34px }
     // — a dashboard with its description line included (F17, mismatches 15–16).
-    expect((await table.getByRole('columnheader', { name: 'Name' }).boundingBox())?.height).toBe(
-      28,
-    );
+    const nameHeader = table.getByRole('columnheader', { name: 'Name' });
+    expect((await nameHeader.boundingBox())?.height).toBe(28);
+    expect(await style(nameHeader, 'padding-top', 'padding-left')).toEqual({
+      'padding-top': '0px',
+      'padding-left': '8px',
+    });
     for (const id of [sub, board, chart]) {
       expect((await row(id).boundingBox())?.height).toBe(34);
       expect(await style(row(id).getByRole('cell').first(), 'padding-top', 'padding-left')).toEqual(
@@ -1059,9 +1066,11 @@ test.describe('T244: Explore’s tree, header and table', () => {
     expect(await style(cells(sub).nth(1), 'color')).toEqual({
       color: await token(page, 'text-muted'),
     });
-    // A folder row has no date and no owner (F20).
-    await expect(cells(sub).nth(2)).toHaveText('');
-    await expect(cells(sub).nth(3)).toHaveText('');
+    // A folder row keeps its date and owner, though browse() leaves them
+    // blank (F20): AC-017 fails on a blank column for an item that has the
+    // value (T244's review).
+    await expect(cells(sub).nth(2)).toHaveText(/^[A-Z][a-z]{2} \d{1,2}(, \d{4})?$/);
+    await expect(cells(sub).nth(3)).toHaveText('admin');
 
     // .grid-table tbody tr:hover td { background: var(--bg-hover) } (mismatch 22).
     await cells(board).nth(2).hover();
@@ -1071,7 +1080,7 @@ test.describe('T244: Explore’s tree, header and table', () => {
     // A focused row takes the selection's tint, and its muted text turns
     // secondary on it: muted is 4.28:1 on the dark tint (T243's review).
     await row(board).focus();
-    const description = row(board).getByText('What the board is for');
+    const description = row(board).getByText(/^What the board is for/);
     expect(await style(cells(board).nth(2), 'background-color')).toEqual({
       'background-color': await token(page, 'bg-accent-soft', 'background-color'),
     });
@@ -1123,6 +1132,23 @@ test.describe('T244: Explore’s tree, header and table', () => {
     await expect(
       folders(page).getByRole('button', { name: 'Shared', exact: true }),
     ).toBeInViewport();
+
+    // A row the keys move onto comes to rest below the sticky header, not
+    // under it (T244's review): one tucked 10 px under the header, reached by
+    // ArrowUp from the row below, is brought out.
+    const scroller = main.getByRole('table').locator('..');
+    const tucked = rows.nth(12);
+    await tucked.evaluate((row) => {
+      const list = row.closest('table')?.parentElement;
+      if (list)
+        list.scrollTop += row.getBoundingClientRect().top - list.getBoundingClientRect().top - 10;
+    });
+    await rows.nth(13).focus();
+    await page.keyboard.press('ArrowUp');
+    await expect(tucked).toBeFocused();
+    const headerBottom = await header.evaluate((cell) => cell.getBoundingClientRect().bottom);
+    expect((await tucked.boundingBox())?.y).toBeGreaterThanOrEqual(headerBottom - 0.5);
+    expect(await scroller.evaluate((list) => list.scrollTop)).toBeGreaterThan(0);
   });
 
   test('an empty folder, and a search that finds nothing, keep the header over a centred 120 px row', async ({
@@ -1234,8 +1260,17 @@ test.describe('T245: the app bar’s search and avatar, the palette, and a new d
     );
     expect(covered).toBe(true);
 
-    // Opened again, it asks afresh rather than adding to the last search (N10).
+    // And over Explore's sticky table header, which lies across the palette's
+    // input: z-index 1 painted it over a backdrop left at auto (T244's review).
     const input = palette(page).getByRole('combobox');
+    const field = await input.boundingBox();
+    const onTop = await page.evaluate(
+      ([x, y]) => document.elementFromPoint(x ?? 0, y ?? 0)?.getAttribute('role'),
+      [(field?.x ?? 0) + (field?.width ?? 0) / 2, (field?.y ?? 0) + (field?.height ?? 0) - 3],
+    );
+    expect(onTop).toBe('combobox');
+
+    // Opened again, it asks afresh rather than adding to the last search (N10).
     await input.fill('fin');
     await page.keyboard.press('Escape');
     await expect(palette(page)).toHaveCount(0);

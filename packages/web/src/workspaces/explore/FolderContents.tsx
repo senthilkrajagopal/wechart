@@ -361,25 +361,15 @@ export function FolderContents({
               </th>
               <td className="folder-contents__type">{typeText(item)}</td>
               <td className={BUILT_ON_CLASS[item.kind]}>{builtOn(item)}</td>
-              {/* A folder has neither, as browse() leaves them (F20). */}
-              {item.kind === 'folder' ? (
-                <>
-                  <td />
-                  <td />
-                </>
-              ) : (
-                <>
-                  <td>
-                    <time
-                      dateTime={item.updatedAt}
-                      title={new Date(item.updatedAt).toLocaleString()}
-                    >
-                      {shortDate(item.updatedAt)}
-                    </time>
-                  </td>
-                  <td>{item.owner ?? '—'}</td>
-                </>
-              )}
+              {/* A folder's too, though browse() leaves them blank (F20):
+                  AC-017 fails on a blank column for an item that has the
+                  value (T244's review). */}
+              <td>
+                <time dateTime={item.updatedAt} title={new Date(item.updatedAt).toLocaleString()}>
+                  {shortDate(item.updatedAt)}
+                </time>
+              </td>
+              <td>{item.owner ?? '—'}</td>
               <td
                 className="folder-contents__actions"
                 ref={(element) => {
