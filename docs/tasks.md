@@ -914,27 +914,27 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 > **2026-09-21: T053–T058 are deferred for phase 1**, the quick calculations and the request flow alike. The user: "C. Defer or drop quick calculations for phase 1", then "any pending work.. defer". See the status note under F6 in spec.md. Don't start them unless asked. Nothing here had been built; the spike (`research/cube/spike-model-store-and-quick-calcs.md`) is kept.
 
-- [ ] T053 (AC-047) Offer the six quick calculations on a measure
+- [moved to phase 2] T053 (AC-047) Offer the six quick calculations on a measure
   - Files: `packages/web/src/editor/QuickCalcMenu.tsx`, `packages/web/src/editor/QuickCalcMenu.test.tsx`
   - Failing test: `QuickCalcMenu.test.tsx`: the menu offers % of total, difference from previous period, % difference from previous period, running total, rank and moving average (AC-047).
   - Depends on: T025
-- [ ] T054 (AC-049) Disable a quick calculation that needs a missing time dimension, and say which
+- [moved to phase 2] T054 (AC-049) Disable a quick calculation that needs a missing time dimension, and say which
   - Files: `packages/web/src/editor/QuickCalcMenu.tsx`, `packages/web/src/editor/quickCalcAvailability.test.ts`
   - Failing test: `quickCalcAvailability.test.ts`: without a time dimension the period calculations are disabled and name the missing field, rather than being offered and erroring (AC-049).
   - Depends on: T053
-- [ ] T055 (AC-048) Compute quick calculations in Cube as multi-stage measures and label the measure
+- [moved to phase 2] T055 (AC-048) Compute quick calculations in Cube as multi-stage measures and label the measure
   - Files: `packages/core/src/quickCalc.ts`, `packages/core/src/quickCalc.test.ts`
   - Failing test: `quickCalc.test.ts`: applying a calculation adds a multi-stage measure to the Cube query rather than post-processing fetched rows, and the tile labels the measure with the calculation (AC-048).
   - Depends on: T053
-- [ ] T056 (AC-050) Record a calculation request carrying the chart, the fields in use and the description
+- [moved to phase 2] T056 (AC-050) Record a calculation request carrying the chart, the fields in use and the description
   - Files: `packages/api/src/repos/calc-requests.ts`, `packages/web/src/editor/RequestCalcDialog.tsx`, `packages/api/src/repos/calc-requests.test.ts`
   - Failing test: `calc-requests.test.ts`: the stored request holds the chart reference, the fields and the description, and appears in the Model workspace listing (AC-050).
   - Depends on: T053, T137
-- [ ] T057 (AC-051) Open a calculation request's target cube in the model editor with the request beside it
+- [moved to phase 2] T057 (AC-051) Open a calculation request's target cube in the model editor with the request beside it
   - Files: `packages/web/src/workspaces/model/RequestPane.tsx`, `packages/web/src/workspaces/model/RequestPane.test.tsx`
   - Failing test: `RequestPane.test.tsx`: opening a request opens the cube the request names, with the request text visible beside the editor (AC-051).
   - Depends on: T056, T138
-- [ ] T058 (AC-052) Resolve a calculation request and name the member that resolves it
+- [moved to phase 2] T058 (AC-052) Resolve a calculation request and name the member that resolves it
   - Files: `packages/api/src/repos/calc-requests.ts`, `packages/api/src/repos/calc-resolution.test.ts`
   - Failing test: `calc-resolution.test.ts`: publishing a model containing the requested measure marks the request resolved and records the member name (AC-052).
   - Depends on: T057, T143
@@ -1584,7 +1584,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **The label names the missing members.** "Not linked" alone says the dashboard is not doing what was expected and nothing about why; the member name turns it into something fixable, usually a missing join. Every missing member is listed, because two missing joins are a different conversation from one.
   - **A caveat recorded from the research, and it is a security one.** `docs/research/cube/access-control.md` says `/v1/dry-run` returns "the normalized queries from *before* RLS and `queryRewrite`", so a member a security context would hide still looks resolvable. Fine for *linking*, which asks whether a join path exists — but **this must never be read as an authorisation check**, and the module says so.
   - **Mutation testing found dead code.** An early return for the empty-marking case turned out to change nothing: an empty marking names no members, so the general path already reports it linked. Removed, with the reasoning kept on the line that actually does the work and the behaviour still held by a test.
-- [ ] T110 (AC-104) Obtain the marked share with one extra query per tile and keep the base result cached
+- [moved to phase 2] T110 (AC-104) Obtain the marked share with one extra query per tile and keep the base result cached
   - Files: `packages/web/src/query/markedShare.ts`, `packages/web/src/query/markedShare.test.ts`
   - Failing test: `markedShare.test.ts`: a marking change issues at most one additional query per tile and does not re-fetch the base result (AC-104).
   - Depends on: T012, T103
@@ -1757,7 +1757,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
   - **Mark all stores the tile's filter, not a list** (the user's decision of 2026-09-24, as AC-102 is written): a `WholeTile` alternative in the predicate — the tile's effective Cube filters and time range as it was drawn, and how many items it showed, which is what the badge counts. The tile marked whole draws every item marked; another tile matches its rows against those filters; a tile limited by the marking gets them as a filter group, and an unfiltered whole limits nothing. A Ctrl-click on a wholly marked tile turns it back into its items first; Invert of a whole tile marks none of it. The cold review's first round (e0279de's) listed items instead, and offered it on series and table tiles; both are fixed here.
   - **The third review's fixes, and the rules they settle** (the last round on this, by the standing instruction): a whole records its tile's member, so a tile that cannot reach it says "not linked" (AC-103); the tile draws every item marked only while it is filtered as it was then, and is read row by row otherwise; a relative date range is kept as `inDateRange`'s one value; the filter evaluator follows Cube's semantics (case-insensitive text, NULL passing no comparison, the "OrOn" and "not" operators); a whole with more items than a marking holds is not cut short by a Ctrl-click — it is said so; a filtered Mark all keeps every other item (one tile's item cannot be told from another's); Invert adds no item another tile's whole already marks, and cannot take that whole away. `markedCount` adds a whole's count to the items, so an item a whole also covers is counted twice — left as it is.
   - Create details tile (T118) names every tile that marks with the marking (AC-110), and makes no change when there is nothing to make.
-- [ ] T122 (AC-116) Render marking and measure tokens in text tiles
+- [moved to phase 2] T122 (AC-116) Render marking and measure tokens in text tiles
   - Files: `packages/web/src/dashboard/tiles/TextTokens.ts`, `packages/web/src/dashboard/tiles/TextTokens.test.ts`
   - Failing test: `TextTokens.test.ts`: a marking token renders the summary or count, and a measure token limited by a marking shows the measure over the marked rows, or over all data when nothing is marked (AC-116).
   - Depends on: T113
@@ -2781,7 +2781,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - **Other fixes.** A plan Cube gives as a list, one per query it runs, is read whole. A Cube refusal on any of the three calls is passed on as Cube's. A dry run that owns nothing still names the query's first member.
     - Tests: the two fixtures that didn't match what Cube emits now do. Added: joined members (blamed and not), a rollup on a joined cube, a measure filter, segments, a date range without grouping, the non-additive granularity case, the list plan, and Cube's refusal.
     - Left as found: a rollup Cube plans to use but hasn't built yet reads as a match, while the chart itself shows Cube's "not built yet" error.
-- [ ] T151 (AC-145) List a rollup's partitions from Cube's system route, and rebuild the selected ones through the jobs API
+- [moved to phase 2] T151 (AC-145) List a rollup's partitions from Cube's system route, and rebuild the selected ones through the jobs API
   - **Un-deferred 2026-09-24** at the user's choice of "Cube's system API" (spec F16 status note). The partition list comes from `/cubejs-system/v1/pre-aggregations/partitions`, read-only. Rebuilds use the documented jobs API, one `dateRange` of a partition's start per selected partition. Building and failed states come from AC-150's history.
   - Files:
     - `docker-compose.yml`: the system secret, given to Cube and wechart's API only;
@@ -2883,12 +2883,12 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - **The accessibility sweep** covers the query log again (`/jobs?tab=queries` opens it). The e2e's job locator is the list item, not any `job-*` test id.
       - Left as found: a cube marked `public: false` is missing from the extended metadata outside dev mode, so its rollups can't be started here; the refresh worker still builds them.
     - AC-149 ticked. `e2e/jobs.spec.ts`, against the real Cube in all three browsers, builds the seed rollup from the Jobs page. The job's token appears, its state is followed to `done`, and it names its Cube Store table. Cube's own record of that token, asked afterwards, is `done`. `BuildPanel.test.tsx` shows the polling stopping at each finished state and not before.
-- [ ] T263 (AC-150, AC-149) Move Cube and Cube Store to v1.7.45, the user's pick after `docs/research/cube/upgrade-1.7.43.md` (which recommended 1.7.44)
+- [moved to phase 2] T263 (AC-150, AC-149) Move Cube and Cube Store to v1.7.45, the user's pick after `docs/research/cube/upgrade-1.7.43.md` (which recommended 1.7.44)
   - Files: `docker-compose.yml`, the research docs the upgrade doc corrects
   - Failing test: `e2e/jobs.spec.ts`: a build whose import fails is reported as a failure, not `done`. It can only fail on v1.7.42 if the research shows how to make an import fail on purpose; if it doesn't, the task says so and the full suite is the check.
   - **Why:** the user's decision of 2026-09-24 ("Proceed with cube update to 1.7.43", after research). On v1.7.42 a failed import can report `done`, and Run history would record it as a success.
   - Depends on: `docs/research/cube/upgrade-1.7.43.md`
-- [ ] T156 (AC-150) Record every build wechart starts in its own history, followed by the API to its end
+- [moved to phase 2] T156 (AC-150) Record every build wechart starts in its own history, followed by the API to its end
   - Re-scoped 2026-09-24, when the user un-deferred AC-150 ("Build it, all builds"). It was a repository alone.
   - Files: a migration and `packages/api/src/repos/build-history.ts` (+ test), `packages/api/src/jobs/build.ts` (+ test), `packages/api/src/jobs/follow.ts` (+ test)
   - Failing test: `follow.test.ts` and `build-history.test.ts`:
@@ -2899,18 +2899,18 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - the log keeps every state Cube reported, with the time wechart saw it;
     - a 101st record of a pre-aggregation drops its oldest (AC-150).
   - Depends on: T155, T263, `docs/research/cube/job-records.md`
-- [ ] T261 (AC-150) Record the refresh worker's builds through Cube's `logger` option
+- [moved to phase 2] T261 (AC-150) Record the refresh worker's builds through Cube's `logger` option
   - Files: `infra/cube/cube.js`, `packages/api/src/jobs/events.ts` (+ test), `e2e/jobs.spec.ts`
   - Failing test:
     - `events.test.ts`: a completed or failed build event, in the shape the research records, is stored as "started by Cube's refresh worker", with its partition, duration and time in queue, or Cube's error.
     - `e2e/jobs.spec.ts`: a rollup whose refresh key is `* * * * *` appears in Run history within one of Cube's check periods; this fails if Cube renames its events.
     - `cube.js`'s logger never throws, and still prints every message as Cube's own logger would. When wechart can't be reached, Cube's builds and logging carry on, and only that build's record is lost (AC-150).
   - Depends on: T156, `docs/research/cube/logger-build-events.md`
-- [ ] T262 (AC-150, AC-152) Show Run history in the Jobs workspace
+- [moved to phase 2] T262 (AC-150, AC-152) Show Run history in the Jobs workspace
   - Files: `packages/api/src/jobs/build.ts` (a paged history route), `packages/web/src/workspaces/jobs/*`, `e2e/jobs.spec.ts`
   - Failing test: `e2e/jobs.spec.ts`: Jobs › Run history lists builds newest first with the prototype's columns (started, pre-aggregation, partition, status with its icon and label, duration, what started it), filters by status and by what started it, and opens a build's log; a build older than Cube's 24 hours is still listed (AC-150, AC-152).
   - Depends on: T156
-- [ ] T157 (AC-151) Show the build queue and cancel a queued entry
+- [moved to phase 2] T157 (AC-151) Show the build queue and cancel a queued entry
   - Files: `packages/web/src/workspaces/jobs/BuildQueue.tsx`, `packages/api/src/routes/jobs.ts`, `packages/api/src/jobs/queue.test.ts`
   - Failing test: `queue.test.ts`: every queued build appears with its pre-aggregation, partition, state and token, and cancelling removes it from the queue (AC-151).
   - Depends on: T155
@@ -2996,7 +2996,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - one with no refresh schedule says it is not scheduled.
   - Depends on: `docs/research/cube/refresh-key-schedule.md`
   - Review 2026-09-25 (cold, FAIL): AC-154 is unticked until T264 fixes what it found. Rollups of `public: false` cubes are silently missing, and the empty state then says something false. Several keys are described wrongly. The link opens the cube rather than the pre-aggregation. The routing test's "Schedules" locator also matched this page's "Edit schedules_… in Model" links; it is now exact (committed with this record).
-- [ ] T264 (AC-153, AC-154) Fix what T258's, T159's and T160's reviews found, then tick AC-153 and AC-154 again
+- [moved to phase 2] T264 (AC-153, AC-154) Fix what T258's, T159's and T160's reviews found, then tick AC-153 and AC-154 again
   - Queued 2026-09-25 after the chart and dashboard work, at the user's direction ("focus on completing the chart and dashboards").
   - **T159 (AC-153):**
     - The form shows next runs for a rollup with `scheduled_refresh: false`, which the worker never refreshes. It should say it isn't scheduled.
@@ -3020,11 +3020,11 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - Add a "Next run" column from T159's `nextRefreshes`.
   - Failing tests: each finding above gets a test that fails first. The component, API and e2e tests are named in the reviews (session of 2026-09-25).
   - Depends on: T159, T160, T258
-- [ ] T161 (AC-155) Suspend a repeatedly failing schedule and offer Resume — **deferred with AC-155** (wechart's scheduler)
+- [moved to phase 2] T161 (AC-155) Suspend a repeatedly failing schedule and offer Resume — **deferred with AC-155** (wechart's scheduler)
   - Files: `packages/api/src/scheduler/suspend.ts`, `packages/api/src/scheduler/suspend.test.ts`
   - Failing test: `suspend.test.ts`: after the configured number of consecutive failures the schedule stops running, says so, and a Resume action restarts it (AC-155).
   - Depends on: T259
-- [ ] T259 (AC-234) Run a wechart-owned cron schedule through Cube's jobs API — **deferred** (2026-09-24)
+- [moved to phase 2] T259 (AC-234) Run a wechart-owned cron schedule through Cube's jobs API — **deferred** (2026-09-24)
   - Files: `packages/api/src/scheduler/{schedules,worker}.ts` (pg-boss per `docs/research/scheduler.md`), `packages/web/src/workspaces/schedules/ScheduleForm.tsx`
   - Failing test: `schedules.test.ts`: the next runs shown match the cron expression, and with a fake clock a due run starts (AC-234).
   - Depends on: T160
@@ -3060,23 +3060,23 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
 
 > **2026-09-21: deferred, except T168.** Cube Core has no API to list, add or test a connection. The user: "for requirements that dont work with cube defer". See the status note under F18 in spec.md. T168 writes `data_source` into a model file and is done with the Model workspace (F15).
 
-- [ ] T163 (AC-157) List every data source with its driver, health and assigned cubes
+- [moved to phase 2] T163 (AC-157) List every data source with its driver, health and assigned cubes
   - Files: `packages/web/src/workspaces/sources/SourceList.tsx`, `packages/api/src/routes/sources.ts`, `packages/web/src/workspaces/sources/SourceList.test.tsx`
   - Failing test: `SourceList.test.tsx`: every configured source is listed with its driver type, the health from its last test, and the cubes the model assigns to it (AC-157).
   - Depends on: T005, T137
-- [ ] T164 (AC-158) Gate creating a data source on a passing test, or an explicit override
+- [moved to phase 2] T164 (AC-158) Gate creating a data source on a passing test, or an explicit override
   - Files: `packages/web/src/workspaces/sources/AddSourceWizard.tsx`, `packages/web/src/workspaces/sources/AddSourceWizard.test.tsx`
   - Failing test: `AddSourceWizard.test.tsx`: the wizard takes driver type, connection fields, a Test step and a name, and refuses to create the source while the test fails unless the user overrides explicitly (AC-158).
   - Depends on: T163, T165
-- [ ] T165 (AC-159) Run connection tests from the service and show each check with the driver's error text
+- [moved to phase 2] T165 (AC-159) Run connection tests from the service and show each check with the driver's error text
   - Files: `packages/api/src/sources/test.ts`, `packages/api/src/sources/test.test.ts`
   - Failing test: `test.test.ts`: the test executes in the service, each check reports its own result, and a failing check carries the driver's error text (AC-159).
   - Depends on: T163
-- [ ] T166 (AC-160) Offer the six driver types with their own authentication fields
+- [moved to phase 2] T166 (AC-160) Offer the six driver types with their own authentication fields
   - Files: `packages/web/src/workspaces/sources/drivers/*.ts`, `packages/web/src/workspaces/sources/drivers/drivers.test.ts`
   - Failing test: `drivers.test.ts`: PostgreSQL, Snowflake, Databricks, BigQuery, SQL Server and Oracle are each offered, and each form covers every authentication method that driver requires (AC-160).
   - Depends on: T164
-- [ ] T167 (AC-161) Say that Cube must restart, and show whether it has picked the settings up
+- [moved to phase 2] T167 (AC-161) Say that Cube must restart, and show whether it has picked the settings up
   - Files: `packages/web/src/workspaces/sources/RestartNotice.tsx`, `packages/api/src/sources/appliedState.test.ts`
   - Failing test: `appliedState.test.ts`: after a connection change the UI reports a restart is required and reports "not yet applied" while Cube still uses the previous settings (AC-161).
   - Depends on: T164
@@ -3097,11 +3097,11 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
       - Source names aren't checked against known sources.
       - Whether Cube's compile refuses an unknown name is unobserved.
     - AC-162 ticked on `e2e/data-source.spec.ts` (Chrome, Firefox, Safari against the compose Cube).
-- [ ] T169 (AC-163) Record connection test results over time and show the history per source
+- [moved to phase 2] T169 (AC-163) Record connection test results over time and show the history per source
   - Files: `packages/api/src/repos/source-tests.ts`, `packages/api/src/repos/source-tests.test.ts`
   - Failing test: `source-tests.test.ts`: every test result is retained and listed under its source (AC-163).
   - Depends on: T165
-- [ ] T170 (AC-164) Never show a saved credential or send it to the browser
+- [moved to phase 2] T170 (AC-164) Never show a saved credential or send it to the browser
   - Files: `packages/api/src/sources/secrets.ts`, `packages/api/src/sources/secrets.test.ts`, `e2e/no-secret-leak.spec.ts`
   - Failing test: `secrets.test.ts`: a saved secret is never returned by any API response; `e2e/no-secret-leak.spec.ts`: no rendered field or network payload contains it (AC-164).
   - Depends on: T164
@@ -3417,7 +3417,7 @@ Inputs: [`docs/spec.md`](./spec.md) (180 acceptance criteria, F1–F21), [`docs/
     - the editor over a dashboard, at the widest seeded tile;
     - the model editor.
   - AC-179 ticked on `e2e/no-horizontal-scroll.spec.ts` (Chrome, Firefox, Safari). Edge runs in CI only.
-- [ ] T185 (AC-180) Run the acceptance suite in Chrome, Edge, Firefox and Safari against the built app
+- [moved to phase 2] T185 (AC-180) Run the acceptance suite in Chrome, Edge, Firefox and Safari against the built app
   - Files: `playwright.config.ts`, `.github/workflows/ci.yml`, `e2e/**`
   - Failing test: the full `e2e/` suite passes in all four desktop browsers (AC-180).
   - Depends on: T184
@@ -3564,7 +3564,7 @@ Each task below measures its components' computed styles in `e2e/design-conforma
 
 ## F22. Wiring the marking subsystem (deferred)
 
-- [ ] T190 (AC-087, AC-088, AC-089, AC-090, AC-091, AC-092, AC-093, AC-094, AC-095, AC-096, AC-097, AC-098, AC-100, AC-101, AC-102, AC-103, AC-107, AC-108, AC-109) Connect the marking subsystem to the rendering path
+- [moved to phase 2: its open criteria are AC-093 and AC-097] T190 (AC-087, AC-088, AC-089, AC-090, AC-091, AC-092, AC-093, AC-094, AC-095, AC-096, AC-097, AC-098, AC-100, AC-101, AC-102, AC-103, AC-107, AC-108, AC-109) Connect the marking subsystem to the rendering path
   - Files: `packages/web/src/tiles/ChartTile.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/model/document.ts`, `packages/web/src/dashboard/settings/TileLimits.tsx`, `e2e/markings.spec.ts`
   - Failing test: `e2e/markings.spec.ts`: clicking a bar in a running dashboard marks it, a second tile limited by that marking re-queries, and the badge names the marking and the count — each of the listed criteria observed on a tile, the way its `Fails when:` is written.
   - Depends on: T086–T119

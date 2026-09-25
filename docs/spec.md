@@ -177,18 +177,7 @@ Traces to: `[R7]`, `[R2]`, `[research/cube/data-modeling.md]`.
 > it as it is.. any pending work.. defer". None of F6 had been built beyond the
 > spike, so the whole of F6 waits.
 
-- [ ] AC-047 WHEN the user opens the menu on a measure in the chart editor, THE SYSTEM SHALL offer % of total, difference from previous period, % difference from previous period, running total, rank and moving average.
-      Fails when: any of the six is missing from the menu.
-- [ ] AC-048 WHEN a quick calculation is applied, THE SYSTEM SHALL compute it in Cube as a multi-stage measure rather than in the browser, and the tile SHALL label the measure with the calculation applied.
-      Fails when: the value is computed from the already-fetched rows, or the label does not name the calculation.
-- [ ] AC-049 WHEN a quick calculation needs a time dimension and the chart has none, THE SYSTEM SHALL disable it and say which field is missing.
-      Fails when: the calculation is offered and produces an error, or gives no reason when disabled.
-- [ ] AC-050 WHEN the user requests a calculation the menu cannot express, THE SYSTEM SHALL record a request carrying the chart, the fields in use and the user's description, and show it in the Model workspace.
-      Fails when: the request is stored without the chart reference, or does not appear in the Model workspace.
-- [ ] AC-051 WHEN a semantic-layer engineer opens a calculation request, THE SYSTEM SHALL open the target cube in the model editor with the request visible beside it.
-      Fails when: the editor opens without the request, or on a different cube than the request names.
-- [ ] AC-052 WHEN a requested measure is added to the model and published, THE SYSTEM SHALL mark the request as resolved and name the member that resolves it.
-      Fails when: the request stays open after the member exists, or names no member.
+> **Moved to phase 2** (the user's decision, 2026-09-25): AC-047, AC-048, AC-049, AC-050, AC-051 and AC-052, word for word in `docs/phase-2/backlog.md` §1.
 
 ## F7. Dashboard authoring
 
@@ -318,16 +307,14 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: the click marks a single item, or nothing.
 - [x] AC-092 WHEN the user clicks a row in a table tile, THE SYSTEM SHALL mark it; Shift-click SHALL mark the range from the anchor row; and rows SHALL be markable only when the cube's primary key is available (direction.md rule 10 of §7a).
       Fails when: Shift-click marks a single row, or rows are markable without a primary key.
-- [ ] AC-093 WHILE a marking is in range mode, THE SYSTEM SHALL let the user drag along an axis to mark a continuous range, show it as a coloured stripe on that axis, and keep its bounds when filters change (direction.md rule 30 of §7a; `[R7]`).
-      Fails when: the stripe does not appear, or the bounds move when a filter changes.
+> **Moved to phase 2** (2026-09-25): AC-093, in `docs/phase-2/backlog.md` §1.
 - [x] AC-094 WHEN the user clicks an empty plot area, or presses Escape on a focused tile, THE SYSTEM SHALL unmark that tile's marking and leave other markings unchanged.
       Fails when: another marking is cleared, or the marking survives.
 - [x] AC-095 WHEN a marking changes, THE SYSTEM SHALL update every tile that uses it or is limited by it, on every page tab of the dashboard (direction.md rule 48).
       Fails when: a tile on another page tab still shows the previous marking state when opened.
 - [x] AC-096 WHEN a tile shows a marking, THE SYSTEM SHALL draw marked items in their own colour with an outline in the marking's colour and fade unmarked items (direction.md rule 49).
       Fails when: unmarked items render at full strength, or marked items carry no outline.
-- [ ] AC-097 WHEN an item is partly marked and its measure is additive, THE SYSTEM SHALL draw the marked share from the baseline at full strength and fade the remainder; WHEN the measure is not additive, THE SYSTEM SHALL draw the whole item with a pattern and show the marked and total values in its tooltip (direction.md rule 49; `[docs/inputs §11]`).
-      Fails when: a partial average or distinct count is drawn as a sub-length, or a partly marked sum shows no marked share.
+> **Moved to phase 2** (2026-09-25): AC-097, in `docs/phase-2/backlog.md` §1.
 - [x] AC-098 THE SYSTEM SHALL convey marking state by more than colour: every tile using a non-empty marking shows a badge naming the marking and the number of marked items, and every non-empty marking has a chip naming it and summarising its values (direction.md rule 50).
       Fails when: a tile or chip conveys the marking only through colour.
 - [x] AC-099 THE SYSTEM SHALL keep every marking colour at least ΔE 15 from every categorical series colour under normal vision, and at least ΔE 8 under protan and deutan simulation, in both themes (direction.md rule 51).
@@ -340,8 +327,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: a marking exceeds 1,000 stored items, or "Mark all" is refused.
 - [x] AC-103 WHEN a tile's cube or view cannot resolve every member of a marking's predicate, THE SYSTEM SHALL leave that tile unmarked and label it as not linked to that marking (direction.md rule 18 of §7a).
       Fails when: the tile shows a query error, or is silently left unbrushed with no label.
-- [ ] AC-104 WHEN a tile needs the marked share and the marking's members are not among its own groupings, THE SYSTEM SHALL obtain it with one additional query per tile and keep the unmarked result cached across marking changes.
-      Fails when: more than one extra query per tile is issued for a marking change, or the base result is re-fetched when only the marking changed.
+> **Moved to phase 2** (2026-09-25): AC-104, in `docs/phase-2/backlog.md` §1.
 - [x] AC-105 WHEN the same set of items is marked again, THE SYSTEM SHALL produce an identical Cube query to the previous time, so the result can be served from cache.
       Fails when: two identical markings produce different query JSON.
 - [x] AC-106 WHILE a dashboard is in edit mode, THE SYSTEM SHALL select the tile on click and change no marking.
@@ -370,8 +356,7 @@ Traces to: `[docs/inputs §11]`, direction.md §7a, rules 33, 53, 55.
       Fails when: the rows shown do not match the marking, or the total is absent.
 - [x] AC-115 WHEN the user chooses Invert marking or Mark all on a tile, THE SYSTEM SHALL mark exactly the tile's unmarked items, or all of its items, and leave other tiles' contributions to that marking unchanged.
       Fails when: an inverted marking keeps a previously marked item, or Mark all misses a visible item.
-- [ ] AC-116 WHEN a text tile contains a marking token, THE SYSTEM SHALL render the marking's summary or count, and a measure token limited by a marking SHALL show the measure over the marked rows, or over all data when nothing is marked.
-      Fails when: a token renders as literal text, or a limited measure ignores the marking.
+> **Moved to phase 2** (2026-09-25): AC-116, in `docs/phase-2/backlog.md` §1.
 
 ## F12. Cross-filtering and cross-highlighting
 
@@ -492,8 +477,7 @@ Traces to: `[R4]`, `[docs/inputs §1]`, direction.md §7c; `[research/cube/pre-a
       > Added 2026-09-22 at the user's decision ("Yes, refuse to publish"): Cube compiles a rollup that names members the model doesn't have, and every query on that cube then fails (research/cube/pre-aggregations.md, "Observed locally").
 - [x] AC-144 WHEN the user opens a chart's acceleration panel, THE SYSTEM SHALL say whether the chart's query matches a pre-aggregation, and when it does not, name the member that prevents the match.
       Fails when: the panel reports a match that Cube does not use, or names no reason for a miss.
-- [ ] AC-145 WHEN the user opens a partitioned rollup in Jobs, THE SYSTEM SHALL list every partition Cube derives from its build range in the time zones wechart builds in, each with its period, its build state (built, not built, building or failed) and the time Cube last built it, and SHALL rebuild the partitions the user selects through Cube's jobs API.
-      Fails when: a partition Cube lists for the rollup is missing, or shows a last build time other than Cube's newest version of it; or a rebuild starts a job whose table names a partition the user did not select, or starts none for one they did.
+> **Moved to phase 2** (2026-09-25): AC-145, in `docs/phase-2/backlog.md` §1.
 - [x] AC-146 WHEN the user defines an index on a rollup, THE SYSTEM SHALL let the columns be ordered and mark aggregate indexes as such.
       Fails when: the column order cannot be changed, or an aggregate index is written as a regular one.
 - [x] AC-147 IF a query would fail under rollup-only mode, THEN THE SYSTEM SHALL warn on the chart that it depends on the source database.
@@ -555,20 +539,12 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
 
 - [x] AC-149 WHEN the user starts a build for a pre-aggregation, THE SYSTEM SHALL submit it to Cube, show the job token, and poll until the job reports done, missing partition, failure or not found.
       Fails when: the job's terminal state is never shown, or the token is absent.
-- [ ] AC-150 WHEN a pre-aggregation build finishes, whether wechart started it through Cube's jobs API or Cube's refresh worker started it on its refresh key, THE SYSTEM SHALL record it in wechart's own history with its pre-aggregation, partition, what started it, its duration, its outcome with Cube's error when it failed, and a log of what Cube reported for it. It SHALL also list the record in the Jobs workspace's Run history after Cube's own record of the job has expired, and keep the latest 100 records of each pre-aggregation.
-      Fails when: a build that finished more than 24 hours ago is missing from Run history, or lacks any of those fields; a rebuild of a rollup with a `* * * * *` refresh key is not in Run history within one of Cube's check periods of finishing; a build started from Jobs that finishes while no browser has Jobs open is not recorded; a recorded outcome differs from what Cube reported; or a pre-aggregation has more than 100 records.
-- [ ] AC-151 THE SYSTEM SHALL show the build queue with each entry's pre-aggregation, partition, state and token, and allow cancelling a queued entry.
-      Fails when: a queued build is missing, or cancelling leaves it queued.
+> **Moved to phase 2** (2026-09-25): AC-150 and AC-151, in `docs/phase-2/backlog.md` §1.
+
 - [x] AC-152 THE SYSTEM SHALL show every job and schedule with an icon and a text label for its state, never colour alone (direction.md rule 22).
       Fails when: a state is conveyed only by colour.
-- [ ] AC-153 WHEN the user sets a pre-aggregation's refresh schedule in the model editor as a cron expression and time zone, THE SYSTEM SHALL accept only expressions Cube's refresh worker can run, show the next runs Cube's refresh key implies with a note that a run can start up to about five minutes after its time, and write the schedule into the model as that pre-aggregation's `refresh_key`, validated and published as any model change.
-      Fails when: a shown run differs from when Cube's refresh key turns over, an expression Cube cannot run is published, or the pre-aggregation is not rebuilt within one of Cube's check periods of a shown run.
-- [ ] AC-154 THE SYSTEM SHALL list every pre-aggregation's refresh schedule in Schedules, label each with its owner, Cube's refresh worker or wechart's scheduler, show Cube-owned schedules read-only there with a link opening the pre-aggregation in the model editor, and say when one is not scheduled (direction.md rule 34).
-      Fails when: a `refresh_key` schedule is editable on the Schedules page, is unlabelled, or its link does not open the model editor.
-- [ ] AC-155 IF a scheduled build fails repeatedly, THEN THE SYSTEM SHALL suspend the schedule after the configured number of consecutive failures, say so on the schedule, and offer Resume.
-      Fails when: the schedule keeps running after the limit, or offers no Resume.
-- [ ] AC-234 WHEN the user creates a schedule for a pre-aggregation build or a cache warm-up that a refresh key cannot express, THE SYSTEM SHALL accept a cron expression and time zone, show the next runs it implies, and start each run at its time through Cube's jobs API. **Deferred with AC-150 and AC-155** (see the status note above).
-      Fails when: the next runs shown do not match the expression, or a due run does not start.
+> **Moved to phase 2** (2026-09-25): AC-153, AC-154, AC-155 and AC-234, in `docs/phase-2/backlog.md` §1.
+
 - [x] AC-156 THE SYSTEM SHALL show the refresh worker's state and the Cube deployment's health, and mark the deployment as down when Cube's health endpoint does not report healthy.
       Fails when: the indicator stays healthy while Cube reports otherwise.
 
@@ -589,22 +565,10 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
 > `data_source` into a cube's model file, and belongs with the Model workspace
 > (F15). Data sources are configured as they are today, in Cube's environment.
 
-- [ ] AC-157 THE SYSTEM SHALL list every configured data source with its driver type, its health from the last test, and the cubes assigned to it.
-      Fails when: a configured source is missing, or the cube list disagrees with the model.
-- [ ] AC-158 WHEN the user adds a data source, THE SYSTEM SHALL take the driver type, the connection fields for that driver, a Test step and a name, and SHALL refuse to create it until the test passes or the user explicitly overrides (direction.md rules 23, 35).
-      Fails when: a source is created with a failing test and no override.
-- [ ] AC-159 WHEN the user runs a connection test, THE SYSTEM SHALL run it from the wechart service, show each check's result, and show the driver's error text when a check fails.
-      Fails when: the test runs in the browser, or a failure shows no error text.
-- [ ] AC-160 THE SYSTEM SHALL offer PostgreSQL, Snowflake, Databricks, BigQuery, SQL Server and Oracle as driver types, with each driver's own authentication fields (`[R4]`).
-      Fails when: a listed driver is absent, or its form omits an authentication method the driver requires.
-- [ ] AC-161 WHEN a connection's settings change, THE SYSTEM SHALL say that Cube must restart before they take effect, and show whether the running Cube has picked them up.
-      Fails when: the UI claims the change is live while Cube still uses the previous settings.
+> **Moved to phase 2** (2026-09-25): AC-157, AC-158, AC-159, AC-160, AC-161, AC-163 and AC-164, in `docs/phase-2/backlog.md` §1.
+
 - [x] AC-162 WHEN the user assigns a cube to a data source, THE SYSTEM SHALL write `data_source` into that cube's model file.
       Fails when: the assignment is stored only in wechart and not in the model.
-- [ ] AC-163 THE SYSTEM SHALL record the result of each connection test over time and show that history per source.
-      Fails when: a test result is missing from the history.
-- [ ] AC-164 THE SYSTEM SHALL never show a stored credential in plain text after it is saved, and SHALL never send it to the browser.
-      Fails when: a saved secret is readable in the UI or in a response to the browser.
 
 ## F19. Security: policies and context preview
 
@@ -653,14 +617,9 @@ Traces to: `[R3]`, `[R7]`, direction.md rules 1–5, 39, 52.
       Fails when: a chart type offers no table view.
 - [x] AC-179 THE SYSTEM SHALL render dashboards, the chart editor and the model editor without horizontal scrolling at a viewport width of 1,280 pixels.
       Fails when: any of those surfaces scrolls horizontally at that width.
-- [ ] AC-180 THE SYSTEM SHALL work in current Chrome, Edge, Firefox and Safari on desktop (`[R7]`).
-      Fails when: any acceptance test in this spec fails in one of those browsers.
-      > **Status, 2026-09-22: deferred, at the user's direction.** The suite passes
-      > in Chrome, Firefox and WebKit locally on every task. Edge needs the
-      > `msedge` channel, whose install asks for the machine's password, or a CI
-      > run, which needs a push. Asked which to do, the user chose to defer. The
-      > Playwright and CI configuration for all four is in place (T001); this
-      > criterion is ticked by a four-browser run, not by the local three.
+> **Moved to phase 2** (2026-09-25): AC-180, in `docs/phase-2/backlog.md` §1, with
+> its 2026-09-22 status: deferred at the user's direction, as Edge needs the
+> `msedge` channel (its install asks for the machine's password) or a CI run.
 - [x] AC-188 THE SYSTEM SHALL write a time dimension's values by their granularity — a year as "2026", a quarter as "Q1 2026", a month as "Jan 2026", a week as "Week of Jan 5, 2026", a day as "Jan 2, 2026", and an hour or finer with the time — in axes, labels, tooltips and tables, unless the member's model format says otherwise.
       Fails when: a time value shows as a raw timestamp such as "2026-01-02T00:00:00.000".
 - [ ] AC-187 THE SYSTEM SHALL draw the app bar, workspace navigation, buttons and inputs, the dashboard header and page tabs, the filter bar, tiles, and the edit sidebar with the component styles of the design prototype the user approved (`docs/design/prototype/index.html`, published as "wechart Workbench"; the user, 2026-09-21: "align with the ui styles in" it), in the tokens of direction.md §3–5.
@@ -858,6 +817,8 @@ Copied from [requirements.md §7](./requirements.md):
 - Selling, distributing or open-sourcing wechart.
 
 ## Traceability
+
+The table still names the criteria moved to phase 2 on 2026-09-25, since those requirements trace to them: AC-047 … AC-052, AC-093, AC-097, AC-104, AC-116, AC-145, AC-150, AC-151, AC-153 … AC-155, AC-157 … AC-161, AC-163, AC-164, AC-180 and AC-234. Their text is in `docs/phase-2/backlog.md` §1.
 
 | Requirement                                                                                   | Acceptance criteria                                                   |
 | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
