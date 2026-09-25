@@ -11,6 +11,7 @@ import { allMembers } from '../filters/FilterBar';
 import type { FilterValues } from '../filters/model';
 import { CHART_MISSING, formatsFrom, tileChartOf, type TileChart } from './chartSpec';
 import { StateLine } from '../shell/StatusIcon';
+import { DashboardLoading } from './DashboardLoading';
 import { ROOT_FOLDERS } from '../workspaces/explore/roots';
 import { DashboardView } from './DashboardView';
 import { chartWritesOf, drawnWithDrafts } from './edit/chartDrafts';
@@ -123,12 +124,8 @@ export function DashboardPage({
     if (failed && startEditing === true) onStartedEditing?.();
   }, [failed, startEditing, onStartedEditing]);
 
-  if (saved.isPending)
-    return (
-      <StateLine kind="run" testId="dashboard-loading">
-        Loading…
-      </StateLine>
-    );
+  // Its frame, not a lone "Loading…" (T251, F15).
+  if (saved.isPending) return <DashboardLoading />;
   /**
    * The error only when there is no dashboard to show. A fetch that fails
    * after one has loaded — the library fetches again on its own, on

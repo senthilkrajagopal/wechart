@@ -1092,11 +1092,16 @@ function Elements({
               </button>
             )}
             {/* The ⋯ menu in view mode (T177, AC-171): the prototype's
-                "Download CSV", for a chart with something drawn. */}
+                "Download CSV", for a chart with something drawn — and for
+                one whose load failed, which keeps its menu to view its query
+                and edit it (T251; recheck-dashboard F10). Not for a chart
+                that is gone, which has neither. */}
             {affordances.editing ||
             element.kind !== 'chart' ||
             element.chartId === undefined ||
-            charts.specs[chartId] === undefined ? null : (
+            (charts.specs[chartId] === undefined &&
+              (charts.errors[chartId] === undefined ||
+                charts.errors[chartId] === CHART_MISSING)) ? null : (
               <TileViewMenu
                 tileId={element.id}
                 title={charts.titleOf?.(chartId) ?? element.text ?? 'chart'}

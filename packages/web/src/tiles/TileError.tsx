@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import { TileLoadError } from '../query/loadTile';
 import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
@@ -19,9 +19,11 @@ export interface TileErrorProps {
 }
 
 export function TileError({ error, onRetry }: TileErrorProps) {
-  const [showQuery, setShowQuery] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const detailsId = useId();
   const message = error instanceof Error ? error.message : String(error);
   const query = error instanceof TileLoadError ? error.query : null;
+  const status = error instanceof TileLoadError ? error.status : undefined;
 
   // A scope wechart's context lacks is not this chart's failure (T176, AC-170).
   const lacking = missingScopeOf(error);
@@ -43,20 +45,28 @@ export function TileError({ error, onRetry }: TileErrorProps) {
             Retry
           </button>
         ) : null}
+        {/* direction.md §6's "Details" disclosure, holding the error and
+            the query that met it (T251; recheck-dashboard F10). */}
         {query ? (
           <button
             type="button"
-            aria-expanded={showQuery}
-            onClick={() => setShowQuery((shown) => !shown)}
+            aria-expanded={showDetails}
+            aria-controls={showDetails ? detailsId : undefined}
+            onClick={() => setShowDetails((shown) => !shown)}
           >
-            {showQuery ? 'Hide query' : 'Show query'}
+            Details
           </button>
         ) : null}
       </div>
-      {showQuery && query ? (
-        <pre className="tile-error__query" data-testid="tile-error-query">
-          {JSON.stringify(query, null, 2)}
-        </pre>
+      {showDetails && query ? (
+        <div className="tile-error__details" id={detailsId}>
+          <p className="tile-error__detail" data-testid="tile-error-detail">
+            {status === undefined ? message : `${message} (HTTP ${String(status)})`}
+          </p>
+          <pre className="tile-error__query" data-testid="tile-error-query">
+            {JSON.stringify(query, null, 2)}
+          </pre>
+        </div>
       ) : null}
     </div>
   );

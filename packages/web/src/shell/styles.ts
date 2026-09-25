@@ -1949,6 +1949,45 @@ main:has(.dashboard) {
   z-index: 4;
   background: var(--wc-bg-page);
 }
+/* The dashboard's frame while it loads (T251, F15): its header's rows, the
+   tab strip and the band at their own heights, and tiles with a chart's
+   shape in them, each part a placeholder bar on the subtle ground. */
+.skeleton-bar {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--wc-bg-subtle);
+}
+.dashboard-loading__crumbs { display: block; flex-basis: 100%; height: 24px; }
+.dashboard-loading__crumbs > .skeleton-bar { width: 160px; height: 16px; margin-top: 4px; }
+.dashboard-loading__title { display: block; height: 32px; margin-right: auto; }
+.dashboard-loading__title > .skeleton-bar { width: 280px; height: 24px; margin-top: 4px; }
+.dashboard-loading__status { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+.dashboard-loading__tab { display: block; height: 36px; padding: 10px 12px; }
+.dashboard-loading__tab > .skeleton-bar { width: 72px; height: 14px; }
+.dashboard-loading__grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+}
+.dashboard-loading__grid .tile-head > .skeleton-bar { width: 45%; height: 14px; }
+/* A failed tile's Details (T251): the error, then the query, which scrolls
+   within the tile rather than widening it. */
+.tile-error__detail {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-secondary);
+}
+.tile-error__query {
+  margin: 4px 0 0;
+  max-height: 160px;
+  overflow: auto;
+  font-family: var(--wc-font-code);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+}
 /* <span class="xs muted"> (T246, mismatch 6). */
 .filter-bar__hint {
   color: var(--wc-text-muted);

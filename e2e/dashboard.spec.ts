@@ -100,14 +100,93 @@ test('a tile whose query fails offers Retry and the error, and Retry draws it', 
     .filter({ has: page.getByRole('alert') })
     .first();
   await expect(tile.getByRole('heading', { level: 3 })).not.toHaveText('');
-  // The details the criterion names: the query that failed, one control away.
-  await failed.getByRole('button', { name: 'Show query' }).click();
+  // The details the criterion names: the query that failed, one control away —
+  // since T251 direction.md §6's "Details" disclosure, with the error.
+  await failed.getByRole('button', { name: 'Details' }).click();
   await expect(failed.getByTestId('tile-error-query')).toContainText('measures');
 
   // Cube is back; Retry asks again, and the chart is drawn in its place.
   await page.unroute('**/api/load');
   await failed.getByRole('button', { name: 'Retry' }).click();
   await expect(page.getByTestId('chart-canvas').first()).toBeVisible();
+});
+
+/**
+ * T251 (AC-187; recheck-dashboard F10, F15; direction.md §6, checklist 18).
+ * While the dashboard itself is on its way, its frame is drawn — header, page
+ * tabs, filter band and tile frames in the shape of charts — not a lone
+ * "Loading…". A failed tile keeps its ⋯ menu, and its error offers a
+ * "Details" disclosure holding the error and the query.
+ */
+test('while the dashboard is on its way, its frame is drawn: header, tabs and tile frames', async ({
+  page,
+}) => {
+  const held: import('@playwright/test').Route[] = [];
+  let released = false;
+  await page.route('**/api/documents/dashboard/**', async (route) => {
+    if (released) await route.continue();
+    else held.push(route);
+  });
+  await page.goto(DASHBOARD);
+
+  const frame = page.getByTestId('dashboard-loading');
+  await expect(frame).toBeVisible();
+  // Said, as well as drawn (rule 3): a status with its icon and words.
+  const said = frame.getByRole('status').filter({ hasText: 'Loading the dashboard' });
+  await expect(said).toBeVisible();
+  await expect(said.locator('[data-icon]')).toHaveCount(1);
+  // The header's row, the page-tab strip and the filter band hold their places…
+  await expect(frame.locator('.dashboard__header')).toBeVisible();
+  await expect(frame.locator('.page-tabs')).toBeVisible();
+  await expect(frame.locator('.filter-bar')).toBeVisible();
+  // …and the tiles are frames with a chart's shape in them, not an empty page.
+  await expect(frame.locator('.grid-tile').first()).toBeVisible();
+  await expect(frame.getByTestId('tile-skeleton').first()).toHaveAttribute('data-shape', /\w+/);
+  const header = (await frame.locator('.dashboard__header').boundingBox())!;
+  expect(header.height).toBe(80);
+
+  released = true;
+  for (const route of held.splice(0)) await route.continue();
+  await expect(page.getByTestId('chart-canvas').first()).toBeVisible();
+  await expect(frame).toHaveCount(0);
+});
+
+test('a failed tile keeps its ⋯ menu, and its Details hold the error and the query', async ({
+  page,
+}) => {
+  await page.route('**/api/load', (route) =>
+    route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: '{"error":"Cube is down"}',
+    }),
+  );
+  await open(page);
+  const tile = page.locator('[data-tile="tile-status"]');
+  const failed = tile.getByRole('alert').filter({ hasText: 'Could not load this chart' });
+  await expect(failed).toBeVisible();
+
+  // The disclosure: closed at first, then the error and the query.
+  const details = failed.getByRole('button', { name: 'Details' });
+  await expect(details).toHaveAttribute('aria-expanded', 'false');
+  await details.click();
+  await expect(details).toHaveAttribute('aria-expanded', 'true');
+  await expect(failed.getByTestId('tile-error-detail')).toContainText('Cube is down');
+  await expect(failed.getByTestId('tile-error-query')).toContainText('"measures"');
+
+  // Its ⋯ menu is still there: the query can be viewed, and the chart edited.
+  const menu = tile.getByTestId('tile-view-menu-tile-status');
+  await expect(menu).toBeVisible();
+  await menu.click();
+  const items = tile.getByRole('menu', { name: /^Actions for / });
+  await expect(items.getByRole('menuitem', { name: 'View query' })).toBeVisible();
+  await expect(items.getByRole('menuitem', { name: 'Edit chart' })).toBeVisible();
+  // Nothing was drawn, so there is nothing to export — said, not hidden.
+  await tile.getByRole('menuitem', { name: /^Export/ }).click();
+  await expect(tile.getByRole('menuitem', { name: 'CSV', exact: true })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
 });
 
 test('a chart that cannot be read for a network failure is not called missing', async ({

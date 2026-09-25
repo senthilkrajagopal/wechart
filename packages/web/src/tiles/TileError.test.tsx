@@ -29,13 +29,19 @@ describe('tile error state (AC-012)', () => {
     );
   });
 
-  it('reveals the exact query that was sent', async () => {
+  it('reveals the exact query that was sent, and the error, in its Details (T251)', async () => {
     render(<TileError error={error} />);
 
-    await userEvent.click(screen.getByRole('button', { name: /query/i }));
+    const details = screen.getByRole('button', { name: 'Details' });
+    expect(details.getAttribute('aria-expanded')).toBe('false');
+    await userEvent.click(details);
+    expect(details.getAttribute('aria-expanded')).toBe('true');
 
     const shown = screen.getByTestId('tile-error-query').textContent ?? '';
     expect(JSON.parse(shown)).toEqual(query);
+    expect(screen.getByTestId('tile-error-detail').textContent).toBe(
+      "Can't find join path between Orders and Suppliers (HTTP 400)",
+    );
   });
 
   it('keeps the query out of the way until asked for', () => {
@@ -64,6 +70,7 @@ describe('tile error state (AC-012)', () => {
     render(<TileError error={new Error('Network unreachable')} />);
 
     expect(screen.getByRole('alert').textContent).toContain('Network unreachable');
-    expect(screen.queryByRole('button', { name: /query/i })).toBeNull();
+    // No Details to open: there is no query behind it (T251 renamed the control).
+    expect(screen.queryByRole('button', { name: 'Details' })).toBeNull();
   });
 });

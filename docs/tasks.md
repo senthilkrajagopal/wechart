@@ -4156,10 +4156,18 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - **Every tile keeps its title.** The title takes the head's room before the freshness badge. The badge gives way first, down to "● Live…" or "⚡ 40m…", with the whole sentence in its tooltip. In a narrow head (360 px or less, by a container query), "Table view" is drawn as an icon (⊞, ▥ while showing the table), with its words kept as its text and name. Where there is no ✎, Refresh takes its place and the head the room it leaves.
     - Measured: at 390 px a chart's title keeps 142 px, where it had 0. A three-column tile at 1,440 px keeps 108 px. This is the Superset exercise's "titles disappear on three-column tiles" (gap 2), fixed by the same rule.
   - **Not done here:** direction.md's "the filter bar becomes a sheet" below 1,024 px. The filter band still wraps in place. The shell and Explore below 1,024 px are open question N16 for the user.
-- [ ] T251 (AC-187) Draw a dashboard's frame while it loads, and give a failed tile its details and its menu
+- [x] T251 (AC-187) Draw a dashboard's frame while it loads, and give a failed tile its details and its menu
   - Files: `packages/web/src/dashboard/*`, `e2e/dashboard.spec.ts`
   - Failing test: on a slow load the header, tabs and tile frames show before the data; a failed tile keeps its ⋯ menu and offers the query and error in a disclosure (recheck-dashboard F10, F15; direction.md §6, checklist 18).
   - Depends on: none
+  - **Done 2026-09-25.** Files as planned, plus `tiles/TileError.tsx` and `shell/styles.ts`. `e2e/dashboard.spec.ts` "while the dashboard is on its way, its frame is drawn…" and "a failed tile keeps its ⋯ menu, and its Details hold the error and the query" both failed first.
+    - **The frame while it loads** (`DashboardLoading`) replaces the lone "Loading…" while the dashboard's document is on its way. It is built from the dashboard's own classes, so nothing jumps when the dashboard takes its place:
+      - the 80 px header, with placeholders for the crumbs and the title;
+      - the page-tab strip and the 53 px filter band;
+      - three tile frames, each with a chart-shaped skeleton (AC-042's own `TileSkeleton`);
+      - "Loading the dashboard…" as a status with its icon (rule 3).
+    - **A failed tile keeps its ⋯ menu.** View query and Edit chart work there, since both read the chart's document, not an answer. Copy and Export stay in the menu, disabled with the reason "The chart could not be loaded, so nothing is drawn to copy or export." A chart that is gone still has no menu.
+    - **The error's "Details" disclosure** (direction.md §6) holds Cube's message with the HTTP status, then the query that met it. It replaces "Show query", which revealed the query alone. The tests that pressed "Show query" now press "Details", one for one.
 
 ## Spec F23. The chart tile's menu (DSH-08), and F16's join refusal
 
