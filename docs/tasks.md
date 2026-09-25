@@ -4572,6 +4572,9 @@ Only gaps that break an accepted criterion or a numbered direction.md rule are t
   - **Tests, red first:**
     - `colours.test.ts` (9): pie, donut and treemap agree with a bar split by the same member; a donut first on the page gives each category its own colour; each of KPI, table, pivot, heatmap and trellis claims nothing. All failed first: a pie claimed only `orders.count`.
     - `e2e/dashboard.spec.ts` "a member keeps one colour between a donut of it and a bar split by it, after a KPI". With the fix set aside it failed in Chrome (a slice `#2a78d6` against its series `#1baf7a`). It passes in all three browsers, with dashboard, markings and crossfilter (291 runs).
+  - **Cold review of T300–T305 and T309 (one round), 2026-09-25.** It judged AC-039 met, with one real bug, now fixed:
+    - **A pie's or treemap's "Other (n)" took a palette slot.** `colouredMembersOf` claimed it, and the dashboard's colour then came before `colourFor`'s neutral for it. Each new count ("Other (5)", "Other (6)") took another slot. It now claims nothing for Top N's tail, which is drawn in the neutral as direction.md §5 says.
+    - Test, red first: `colours.test.ts` "claims no colour for a donut's / treemap's "Other (n)"" (2).
 - [x] T302 (AC-219) Offer "Stack series" on a horizontal bar with more than one series
   - Gap 6 of the parity rebuild. AC-219 has Customize offer "whether series stack". A horizontal bar with two measures, or with its series split by colour, draws two series side by side, but the tab offered no stacking: `STACKABLE_TYPES` left `hbar` out.
   - Files: `packages/charts/src/customize.ts`, its test, `packages/web/src/editor/CustomizeTab.test.tsx`, `e2e/customize.spec.ts`

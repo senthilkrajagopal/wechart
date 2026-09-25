@@ -15,7 +15,7 @@
  *   "Other" and null;
  * - every other chart colours its series.
  */
-import { seriesOf, type ChartType, type RenderSpec } from '@wechart/core';
+import { OTHER_LABEL, seriesOf, type ChartType, type RenderSpec } from '@wechart/core';
 
 import { colourKeyOf, isPieType, slicesOf } from './series/pie';
 import { isTreemapType, treemapNodesOf } from './series/treemap';
@@ -29,5 +29,8 @@ export function colouredMembersOf(spec: RenderSpec): string[] {
     : isTreemapType(spec.chartType)
       ? treemapNodesOf(spec).map((node) => node.name)
       : seriesOf(spec).series.map((one) => one.name);
-  return [...new Set(names)];
+  // Top N's folded tail is no member: `colourFor` draws it in the neutral,
+  // and a claim would spend a slot on it, and another each time its count
+  // changed (T301's review).
+  return [...new Set(names)].filter((name) => !name.startsWith(`${OTHER_LABEL} (`));
 }

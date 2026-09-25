@@ -239,6 +239,24 @@ describe('what each kind of tile claims (T301)', () => {
     },
   );
 
+  /**
+   * T301's review: a pie's or treemap's folded tail, "Other (n)", is not a
+   * member. Claimed, it took a palette slot — and another each time a filter
+   * changed its count — where direction.md §5 draws it in the neutral.
+   */
+  it.each(['donut', 'treemap'] as const)('claims no colour for a %s’s "Other (n)"', (chartType) => {
+    const withOther: RenderSpec = {
+      ...byStatus(chartType),
+      rows: [...statuses, { [STATUS]: 'Other (4)', [COUNT]: 3 }],
+    };
+    const { specs: coloured, assigned } = dashboardColours(doc(['slices']), {
+      slices: withOther,
+    });
+
+    expect(Object.keys(assigned).sort()).toEqual(['paid', 'refunded', 'shipped']);
+    expect(coloured['slices']?.colours?.['Other (4)']).toBeUndefined();
+  });
+
   it('gives a pie first on the page each category its own colour', () => {
     const { specs: coloured } = dashboardColours(doc(['slices']), {
       slices: byStatus('donut'),
