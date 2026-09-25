@@ -111,6 +111,10 @@ export function SearchPalette() {
   const show = useCallback((event?: Event) => {
     const from = event instanceof CustomEvent ? (event.detail as Element | undefined) : undefined;
     openerRef.current = from ?? document.activeElement;
+    // A fresh search each time: the last one's text, kept, had the next
+    // search typed onto its end (recheck-shell-explore N10).
+    setText('');
+    setActiveKey(null);
     setOpen(true);
   }, []);
 

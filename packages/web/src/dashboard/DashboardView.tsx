@@ -303,6 +303,13 @@ export interface DashboardViewProps {
    */
   readonly editTile?: string | undefined;
   /**
+   * Open in edit mode, once (T245): a new dashboard from Explore's New, which
+   * the prototype opens ready to be built (recheck-shell-explore N15).
+   */
+  readonly startEditing?: boolean | undefined;
+  /** Told once edit mode has been entered as asked, to forget the request. */
+  readonly onStartedEditing?: (() => void) | undefined;
+  /**
    * The filter values the URL holds now (AC-081). The dashboard opens with
    * them; after that it holds its own, and puts them back in the URL whenever
    * the URL comes to say otherwise — a change made here, or a Back or Forward
@@ -1474,6 +1481,8 @@ export function DashboardView({
   onDiscard,
   editTile,
   onEditTile,
+  startEditing,
+  onStartedEditing,
   urlFilterValues,
   onFilterValues,
   onSave,
@@ -3534,6 +3543,8 @@ export function DashboardView({
                 openSidebarPanel('Properties');
               }}
               editTile={editTile}
+              startEditing={startEditing}
+              onStartedEditing={onStartedEditing}
               editorOpenFor={editingChart?.tileId}
               where={where}
               onAim={(next) => {
@@ -3607,6 +3618,8 @@ function DashboardPages({
   onEditChart,
   onSaveToFolders,
   editTile,
+  startEditing = false,
+  onStartedEditing,
   editorOpenFor,
   where,
   onAim,
@@ -3668,6 +3681,9 @@ function DashboardPages({
   onSaveToFolders?: ((tileId: string) => void) | undefined;
   /** The tile the URL names as open in the editor (T196). */
   editTile?: string | undefined;
+  /** Enter edit mode once, as asked (T245). */
+  startEditing?: boolean | undefined;
+  onStartedEditing?: (() => void) | undefined;
   /** The tile the editor is open on now, if it is open. */
   editorOpenFor?: string | undefined;
   /** Where the next insert is aimed, owned above so the sidebar agrees. */
@@ -3730,6 +3746,19 @@ function DashboardPages({
       watching.disconnect();
     };
   }, []);
+
+  /**
+   * Asked to open in edit mode (T245): entered once, as Edit would enter it —
+   * not while previewing, where nothing can be edited — and the request then
+   * forgotten, so a reload opens the dashboard to be read.
+   */
+  const startedEditing = useRef(false);
+  useEffect(() => {
+    if (!startEditing || startedEditing.current) return;
+    startedEditing.current = true;
+    if (canEdit) session.edit();
+    onStartedEditing?.();
+  }, [startEditing, canEdit, session, onStartedEditing]);
 
   /**
    * The URL naming a tile the editor is not open on — a reload, or the

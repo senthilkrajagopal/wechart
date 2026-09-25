@@ -426,6 +426,7 @@ The user asked that the UI "align with the ui styles in" the design prototype (`
 - **13 px type**, which is outside the §3 scale, on filter pills and page tabs.
 - **Inspector controls** (the Properties panel) are 28 px at 12 px (`.input.sm`), as §4's compact row for inspectors.
 - **`bg-hover`**, a token not in §5, for a hovered button or row. Light `#efeeea`, dark `#2c2c2a`. These are the nearest shades to the prototype's that pass the contrast audit (AC-005); the prototype's own `#e9e8e4` does not.
+- **`bg-role-dimension-soft`**, the prototype's `--role-dim-soft`, a token not in §5: the avatar's ground, under `role-dimension` initials. Light `#e6eef8`, dark `#1d2a3a`, the prototype's own values. `role-dimension` on it is 4.68:1 in light and 6.44:1 in dark, and the pair is audited with the other tints (T245).
 - **`--wc-shadow-pop`**, the prototype's popover shadow, in each theme. It is a shadow, not a colour text sits on, so it is outside the audited tokens.
 - **Layout:** the dashboard runs edge to edge. The header, the page tabs, the filter band and the tiles are each padded 24 px from the sides, the filter band sits below the page tabs, and the edit sidebar is docked with a rule on its left.
 

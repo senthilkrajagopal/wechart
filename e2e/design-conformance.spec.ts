@@ -1160,3 +1160,105 @@ test.describe('T244: Explore’s tree, header and table', () => {
     await said('Nothing matches.');
   });
 });
+
+/**
+ * T245: the app bar's search and avatar, and the palette, as the prototype
+ * draws them (recheck-shell-explore N6–N10; AC-187 mismatches 1–4), and a new
+ * dashboard opened for editing, as its New › Dashboard does (N15).
+ */
+test.describe('T245: the app bar’s search and avatar, the palette, and a new dashboard', () => {
+  const trigger = (page: Page) => page.getByRole('banner').getByRole('button', { name: /^Search/ });
+  const palette = (page: Page) => page.getByRole('dialog', { name: 'Search' });
+
+  test('the search trigger: 260 px, its words whole, its shortcut muted at normal height', async ({
+    page,
+  }) => {
+    await page.goto('/explore');
+    await expect(trigger(page)).toBeVisible();
+
+    // .search { width: 260px } — with words that fit it (N6).
+    expect((await trigger(page).boundingBox())?.width).toBe(260);
+    const [needed, given] = await trigger(page)
+      .locator('span')
+      .evaluate((words) => [words.scrollWidth, words.clientWidth]);
+    expect(needed).toBeLessThanOrEqual(given ?? 0);
+    // .search kbd { font: 600 12px var(--font-ui) }: the field's text-muted,
+    // and the shorthand's normal line height (mismatches 1–2).
+    expect(
+      await style(trigger(page).locator('kbd'), 'color', 'line-height', 'font-size', 'font-weight'),
+    ).toEqual({
+      color: await token(page, 'text-muted'),
+      'line-height': 'normal',
+      'font-size': '12px',
+      'font-weight': '600',
+    });
+  });
+
+  test('the avatar: the dimension role on its tint', async ({ page }) => {
+    await page.goto('/explore');
+    // .avatar { background: var(--role-dim-soft); color: var(--role-dim) } (N7, mismatch 3)
+    const avatar = page.getByRole('banner').getByRole('img', { name: /^Signed in/ });
+    expect(await style(avatar, 'background-color', 'color')).toEqual({
+      'background-color': await token(page, 'bg-role-dimension-soft', 'background-color'),
+      color: await token(page, 'role-dimension'),
+    });
+  });
+
+  test('the palette: over the app bar, lifted by the pop shadow, a 6 px Close, and a fresh query each time', async ({
+    page,
+  }) => {
+    await page.goto('/explore');
+    await trigger(page).click();
+    await expect(palette(page)).toBeVisible();
+
+    // .btn { border-radius: 6px } (N8, mismatch 4).
+    expect(
+      await style(palette(page).getByRole('button', { name: 'Close' }), 'border-radius'),
+    ).toEqual({ 'border-radius': '6px' });
+    // bg-raised with --shadow-pop (direction §5; N9).
+    const pop = await page.evaluate(() => {
+      const probe = document.createElement('div');
+      probe.style.boxShadow = 'var(--wc-shadow-pop)';
+      document.body.append(probe);
+      const value = getComputedStyle(probe).boxShadow;
+      probe.remove();
+      return value;
+    });
+    expect(await style(palette(page), 'box-shadow')).toEqual({ 'box-shadow': pop });
+    // The backdrop covers the app bar too: a modal dialog leaves nothing
+    // behind it to click (N9) — here, the Jobs tab.
+    const jobs = await page.getByRole('banner').getByRole('link', { name: 'Jobs' }).boundingBox();
+    const covered = await page.evaluate(
+      ([x, y]) => document.elementFromPoint(x ?? 0, y ?? 0)?.closest('header') === null,
+      [(jobs?.x ?? 0) + (jobs?.width ?? 0) / 2, (jobs?.y ?? 0) + (jobs?.height ?? 0) / 2],
+    );
+    expect(covered).toBe(true);
+
+    // Opened again, it asks afresh rather than adding to the last search (N10).
+    const input = palette(page).getByRole('combobox');
+    await input.fill('fin');
+    await page.keyboard.press('Escape');
+    await expect(palette(page)).toHaveCount(0);
+    await trigger(page).click();
+    await expect(palette(page).getByRole('combobox')).toHaveValue('');
+  });
+
+  test('New › Dashboard opens the new dashboard ready to edit', async ({ page }) => {
+    await page.goto('/explore?folder=seed-folder-0');
+    await page
+      .getByTestId('explore-contents')
+      .getByRole('button', { name: 'New', exact: true })
+      .click();
+    await page
+      .getByRole('menu', { name: 'New' })
+      .getByRole('menuitem', { name: 'Dashboard' })
+      .click();
+
+    // explore.js: S.editNew = true — straight into edit mode (N15).
+    await expect(page).toHaveURL(/\/explore\/dashboards\//);
+    await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
+    // Once, not for good: the address says nothing of it after, so a reload
+    // or a link opens the dashboard to be read.
+    await expect.poll(() => new URL(page.url()).searchParams.has('editing')).toBe(false);
+  });
+});

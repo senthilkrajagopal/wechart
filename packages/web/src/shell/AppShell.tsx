@@ -40,7 +40,10 @@ function SearchTrigger() {
         <circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" strokeWidth="1.5" />
         <path d="M11 11l3.5 3.5" stroke="currentColor" strokeWidth="1.5" />
       </svg>
-      <span>Search dashboards, charts, fields, models</span>
+      {/* Words that fit the prototype's 260 px (N6): its "Search fields,
+          charts, models" leaves out dashboards, and naming all four does not
+          fit. The palette's own field names them once it is open. */}
+      <span>Search wechart</span>
       <kbd>{shortcut()}</kbd>
     </button>
   );

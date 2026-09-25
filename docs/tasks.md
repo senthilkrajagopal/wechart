@@ -3583,10 +3583,23 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
     - **Tests changed with the behaviour:**
       - `FolderContents.test.tsx`: an empty folder keeps its header, and folders show no date or owner. This reverses an earlier test, per F24 and F20.
       - `e2e/explore.spec.ts`: AC-003's scroll position and the docked-pane test now scroll the list rather than the window. AC-017's row check reads a dashboard row, since a folder, listed first, has no date.
-- [ ] T245 (AC-187) Match the app bar's search trigger, avatar and palette to the prototype, and open a new dashboard in edit mode
-  - Files: `packages/web/src/shell/*`, `packages/web/src/explore/*`, `e2e/design-conformance.spec.ts`
+- [x] T245 (AC-187) Match the app bar's search trigger, avatar and palette to the prototype, and open a new dashboard in edit mode
+  - Files: `packages/web/src/shell/{AppShell,SearchPalette}.tsx`, `packages/web/src/shell/styles.ts`, `packages/ui/src/tokens.ts`, `docs/design/direction.md` (§7d), `packages/web/src/workspaces/explore/ExplorePage.tsx`, `packages/web/src/router/routes.tsx`, `packages/web/src/dashboard/{DashboardPage,DashboardView}.tsx`, `e2e/design-conformance.spec.ts`
   - Failing test: the ⌘K hint is `text-muted` at normal height; the avatar is `role-dim`; the palette's Close is radius 6, its backdrop covers the app bar, it has the pop shadow and opens with its query cleared; New › Dashboard opens editing (recheck-shell-explore N6–N10, N15; mismatches 1–4).
   - Depends on: none
+  - Done 2026-09-24, all three browsers. `e2e/design-conformance.spec.ts` "T245: the app bar's search and avatar, the palette, and a new dashboard" has four tests, and all four failed first.
+    - **The search trigger is the prototype's 260 px.** Its words now fit: they were clipped at 300 px.
+    - **The trigger reads "Search wechart". This is a small decision, to be put to the user.**
+      - The prototype's "Search fields, charts, models" leaves out dashboards, which AC-191 also searches.
+      - Naming all four scopes takes 254 px, against about 178 px of room.
+      - The palette's own field still names all four once it opens.
+    - **The avatar** uses the prototype's `--role-dim` pair. The tint became the token `bg-role-dimension-soft`, recorded in direction.md §7d and audited (4.68:1 light, 6.44:1 dark).
+    - **The palette** now has:
+      - a backdrop above the sticky app bar, so the workspace tabs behind a modal can no longer be clicked;
+      - the pop shadow;
+      - a 6 px Close;
+      - a fresh query each time it opens.
+    - **New › Dashboard** opens the new dashboard with `?editing=true`. The dashboard enters edit mode once it loads, then takes the flag out of the address, so a reload or a link opens it to be read.
 - [ ] T246 (AC-187) Match the dashboard header, filter band, marking chip and badge to the prototype
   - Files: `packages/web/src/dashboard/*`, `packages/web/src/filters/FilterBar.tsx`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: header 80 px with a 24 px ghost breadcrumb in the prototype's colours; the filter band always 53 px with a 12/16 `text-muted` hint, full width in edit mode; the chip and badge at the prototype's padding, colours and swatch (recheck-dashboard F3, N8; mismatches 1–8, 11).

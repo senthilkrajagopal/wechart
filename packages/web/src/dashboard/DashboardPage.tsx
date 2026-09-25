@@ -140,6 +140,10 @@ export interface DashboardPageProps {
   readonly editTile?: string | undefined;
   /** Put a tile in the URL as the one open in the editor, or none (T196). */
   readonly onEditTile?: ((tileId: string | undefined) => void) | undefined;
+  /** Open in edit mode, as a new dashboard from Explore's New is (T245). */
+  readonly startEditing?: boolean | undefined;
+  /** Edit mode was entered as asked: take the request out of the URL (T245). */
+  readonly onStartedEditing?: (() => void) | undefined;
   /** The filter values the URL holds now (AC-081). */
   readonly urlFilterValues?: FilterValues | undefined;
   /** Put these filter values in the URL (AC-081). */
@@ -157,6 +161,8 @@ export function DashboardPage({
   dashboardId,
   editTile,
   onEditTile,
+  startEditing,
+  onStartedEditing,
   urlFilterValues,
   onFilterValues,
   preview,
@@ -213,6 +219,8 @@ export function DashboardPage({
       version={saved.data?.version ?? 1}
       editTile={editTile}
       onEditTile={onEditTile}
+      startEditing={startEditing}
+      onStartedEditing={onStartedEditing}
       urlFilterValues={urlFilterValues}
       onFilterValues={onFilterValues}
       preview={preview}
@@ -232,6 +240,8 @@ function LoadedDashboard({
   version,
   editTile,
   onEditTile,
+  startEditing,
+  onStartedEditing,
   urlFilterValues,
   onFilterValues,
   preview,
@@ -242,6 +252,8 @@ function LoadedDashboard({
   version: number;
   editTile: string | undefined;
   onEditTile: ((tileId: string | undefined) => void) | undefined;
+  startEditing: boolean | undefined;
+  onStartedEditing: (() => void) | undefined;
   urlFilterValues: FilterValues | undefined;
   onFilterValues: ((values: FilterValues) => void) | undefined;
   preview: Readonly<Record<string, unknown>> | undefined;
@@ -587,6 +599,8 @@ function LoadedDashboard({
         // The rejection is the session's to handle; why is shown above.
         editTile={editTile}
         onEditTile={onEditTile}
+        startEditing={startEditing}
+        onStartedEditing={onStartedEditing}
         urlFilterValues={urlFilterValues}
         onFilterValues={onFilterValues}
         onEditStart={() => {

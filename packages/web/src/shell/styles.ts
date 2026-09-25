@@ -213,7 +213,7 @@ textarea { height: auto; padding: 6px 8px; }
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 300px;
+  width: 260px;
   height: 32px;
   padding: 0 10px;
   border: 1px solid var(--wc-border-subtle);
@@ -225,14 +225,17 @@ textarea { height: auto; padding: 6px 8px; }
   cursor: text;
 }
 .app-search span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* .search kbd { font: 600 12px var(--font-ui) }: the shorthand's normal line
+   height, and the field's muted ink (N6). */
 .app-search kbd {
   font-family: inherit;
   font-size: var(--wc-text-xs-size);
   font-weight: var(--wc-text-xs-strong-weight);
+  line-height: normal;
   border: 1px solid var(--wc-border-strong);
   border-radius: 4px;
   padding: 0 4px;
-  color: var(--wc-text-secondary);
+  color: inherit;
 }
 
 /* Who is signed in (AC-190), the prototype's .avatar. */
@@ -243,8 +246,9 @@ textarea { height: auto; padding: 6px 8px; }
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--wc-bg-accent-soft);
-  color: var(--wc-accent);
+  /* .avatar { background: var(--role-dim-soft); color: var(--role-dim) } (N7) */
+  background: var(--wc-bg-role-dimension-soft);
+  color: var(--wc-role-dimension);
   font-size: var(--wc-text-xs-size);
   font-weight: var(--wc-text-xs-strong-weight);
 }
@@ -3369,9 +3373,12 @@ main:has(.chart-editor) {
 .pill__grain { height: 20px; border: 0; background: none; color: var(--wc-text-secondary); font-size: 12px; }
 .pill__remove { border: 0; background: none; color: var(--wc-text-secondary); cursor: pointer; padding: 0 4px; }
 
+/* Above the sticky app bar (z-index 10): a modal dialog leaves nothing behind
+   it to click, the workspace tabs included (N9). */
 .palette-backdrop {
   position: fixed;
   inset: 0;
+  z-index: 20;
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -3388,6 +3395,8 @@ main:has(.chart-editor) {
   border: 1px solid var(--wc-border-strong);
   border-radius: 6px;
   background: var(--wc-bg-raised);
+  /* bg-raised is white and a shadow (direction §5), as the menus are (N9). */
+  box-shadow: var(--wc-shadow-pop);
 }
 
 .palette__input {
@@ -3400,11 +3409,12 @@ main:has(.chart-editor) {
   font: inherit;
 }
 
+/* A .btn: radius 6, as every button (N8; direction §7d). */
 .palette__close {
   height: 32px;
   padding: 0 12px;
   border: 1px solid var(--wc-border-strong);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--wc-bg-surface);
   color: var(--wc-text-primary);
   font: inherit;

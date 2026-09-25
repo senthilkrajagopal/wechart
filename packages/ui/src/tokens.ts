@@ -50,6 +50,8 @@ export const COLORS = {
     mk3: '#5b3106',
     mk4: '#225c60',
     'role-dimension': '#2d6ab4',
+    // The prototype's --role-dim-soft: the avatar's ground (T245, AC-187).
+    'bg-role-dimension-soft': '#e6eef8',
     'role-measure': '#a85400',
     'text-on-accent': '#ffffff',
     'status-success': '#1d7a3f',
@@ -87,6 +89,7 @@ export const COLORS = {
     mk3: '#fab72a',
     mk4: '#81fbbe',
     'role-dimension': '#7fb0ea',
+    'bg-role-dimension-soft': '#1d2a3a',
     'role-measure': '#f0a35c',
     'text-on-accent': '#1f1f1e',
     'status-success': '#17aa17',
@@ -190,6 +193,8 @@ export const FILLED_SURFACE_PAIRS = [
   { foreground: 'text-secondary', background: 'bg-accent-soft' },
   // A dashboard's icon chip and the preview banner: crossfilter on its tint.
   { foreground: 'crossfilter', background: 'bg-crossfilter-soft' },
+  // The avatar's initials (T245): the dimension role on its tint.
+  { foreground: 'role-dimension', background: 'bg-role-dimension-soft' },
 ] as const satisfies readonly {
   foreground: ColorTokenName;
   background: ColorTokenName;

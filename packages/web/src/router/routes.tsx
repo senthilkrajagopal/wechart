@@ -104,12 +104,23 @@ const workspaceRoutes = WORKSPACES.map((workspace) =>
 function DashboardSurface() {
   const params = useParams({ strict: false }) as { objectId?: string };
   const dashboardId = decodeURIComponent(params.objectId ?? '');
-  const { edit, filters, preview } = dashboardRoute.useSearch();
+  const { edit, editing, filters, preview } = dashboardRoute.useSearch();
   const navigate = dashboardRoute.useNavigate();
   const router = useRouter();
   /** Leaving a security context preview (T172): the dashboard as wechart asks. */
   const onExitPreview = useCallback(() => {
     void navigate({ search: (prev) => ({ ...prev, preview: undefined }) });
+  }, [navigate]);
+  /**
+   * Edit mode entered as asked (T245): the request is taken out of the
+   * address, so a reload or a link opens the dashboard to be read.
+   */
+  const onStartedEditing = useCallback(() => {
+    void navigate({
+      search: (prev) => ({ ...prev, editing: undefined }),
+      replace: true,
+      resetScroll: false,
+    });
   }, [navigate]);
 
   /**
@@ -177,6 +188,8 @@ function DashboardSurface() {
         dashboardId={dashboardId}
         editTile={edit}
         onEditTile={onEditTile}
+        startEditing={editing === true}
+        onStartedEditing={onStartedEditing}
         urlFilterValues={valuesFromSearch(filters)}
         onFilterValues={onFilterValues}
         {...(preview === undefined ? {} : { preview, onExitPreview })}
@@ -198,10 +211,14 @@ const dashboardRoute = createRoute({
     search: Record<string, unknown>,
   ): {
     edit?: string | undefined;
+    editing?: true | undefined;
     filters?: SearchFilter[] | undefined;
     preview?: Record<string, unknown> | undefined;
   } => ({
     edit: typeof search['edit'] === 'string' && search['edit'] !== '' ? search['edit'] : undefined,
+    // Open in edit mode (T245): a new dashboard from Explore's New, as the
+    // prototype opens one. Only `true`; anything else is no request.
+    editing: search['editing'] === true ? true : undefined,
     // The filters in effect (AC-081), each checked; none is no parameter.
     filters: valuesToSearch(valuesFromSearch(search['filters'])),
     // A security context previewed from the Security workspace (T172,
