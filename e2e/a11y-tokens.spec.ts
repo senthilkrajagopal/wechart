@@ -127,6 +127,30 @@ test('renders no text below 12 px with a problem listed in the Model (AC-004)', 
 });
 
 /**
+ * T248's review / AC-004: a dashboard being edited has text a dashboard being
+ * read never shows — the sidebar's Add palette, its Outline and a tile's
+ * Properties. The Outline's kind chips were drawn at 10 px, and the sweep
+ * above, which reads the dashboard only in view mode, could not see them.
+ */
+test('renders no text below 12 px while a dashboard is edited: Add, Outline and Properties (AC-004)', async ({
+  page,
+}) => {
+  await page.goto('/explore/dashboards/seed-root-dashboard-1');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  await expect(sidebar).toBeVisible();
+  expect(await page.evaluate(FONT_SIZE_SWEEP)).toEqual([]);
+
+  await sidebar.getByRole('tab', { name: 'Outline' }).click();
+  await expect(sidebar.locator('.outline__icon').first()).toBeVisible();
+  expect(await page.evaluate(FONT_SIZE_SWEEP)).toEqual([]);
+
+  await page.locator('.grid-tile').first().click();
+  await sidebar.getByRole('tab', { name: 'Properties' }).click();
+  expect(await page.evaluate(FONT_SIZE_SWEEP)).toEqual([]);
+});
+
+/**
  * T210 / AC-005 and AC-211. axe's colour-contrast rule does not measure text
  * inside an SVG, which is how a chart's axis labels sat at 2.3:1 on the dark
  * tile while every audit here passed. So chart text is measured directly:

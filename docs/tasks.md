@@ -3841,6 +3841,19 @@ Order: the reopened criteria first (they are ticked-and-false, the worst state t
       - a selected tile's ring is 2 px out.
     - **The Outline:** rows padded 0 12 with an 18 px chip.
     - **The page tabs are the dashboard's own properties**, shown with nothing selected rather than under a tile's (F19). Escape on a selected element lets go of it, as the prototype's does, and an "＋ Add" slot already did. `discard.test.tsx`'s session now presses Escape before deleting a page, as a user would.
+  - **The cold review failed it, fixed** (four tests failed first; all three browsers):
+    - **AC-004 regressed:** the Outline's kind chips drew their glyphs at the prototype's inline 10 px. They are 12 px now. AC-004's sweep now also covers a dashboard being edited, with Add, Outline and Properties open, which it never visited.
+    - **A stale selection hid the page tabs.** Deleting the last tile on a page left the selection pointing at nothing, so the dashboard's properties never came back. A selection whose element is gone now counts as none.
+    - **Mismatch 25, the rest of it:**
+      - Properties' selects are padded 0 4 0 8, as the prototype's `.select.sm` is. WebKit draws a native select with its own padding, so that check runs in Chrome and Firefox.
+      - The limit rows are 12/16/600 in `text-secondary`, like a `.field`'s labels.
+    - **Label in name (WCAG 2.5.3):** an empty container's slot is named from the words it shows, e.g. "Add to this section: Only › Terms", where the name had been "Add to Only › Terms".
+    - **Tests made stronger:** the selected ring's style, width and colour, not only its offset; every chart-section button full width; the empty-container wording.
+    - **Cleanup:** two dead rules gone, and the Outline row's gap set once.
+    - **Left:**
+      - Escape lets go only from a focused tile. The prototype's Escape works from anywhere, and a double-click on a page tab opens the dashboard's properties.
+      - F19's other gaps, planned nowhere so far: the "Use separate color for marked items" switch, swatches in the limit list, and "Manage markings…". They are passed to the 2026-09-24 UI review.
+      - With nothing selected, Properties has no "Dashboard" heading with its name and description, as the prototype's has.
 - [ ] T249 (AC-187, AC-231) Give the dashboard settings page the prototype's bar, nav, content and tables, with Escape and an inactive banner
   - Files: `packages/web/src/dashboard/settings/*`, `packages/web/src/shell/styles.ts`, `e2e/design-conformance.spec.ts`
   - Failing test: a 41 px bar titled "Dashboard settings" with 24 px buttons and a primary Save; a 220 px nav with `accent-soft` selection; flat content with an 18 px h2; mode cards with descriptions; an inactive section says so in a banner; Escape leaves as Cancel does; markings tables at 29 px rows (recheck-dashboard F26–F29; mismatches 27–35).

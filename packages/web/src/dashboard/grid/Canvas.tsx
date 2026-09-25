@@ -101,6 +101,18 @@ export interface CanvasProps {
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
 /**
+ * An add slot's words, the prototype's (T248): "Add" after what a container
+ * holds, and what it takes when it holds nothing. Its accessible name starts
+ * with them (T248's review).
+ */
+function slotWords(count: number, containerKey: string): string {
+  if (count > 0) return 'Add';
+  if (containerKey.startsWith('sec:')) return 'Add to this section';
+  if (containerKey.startsWith('tabs:')) return 'Add to this tab';
+  return 'Add a chart, section or text';
+}
+
+/**
  * The document's numbers are snapped here rather than trusted. A width of 4.7
  * can reach the canvas from an older saved format, a hand-edited body or a
  * resize that rounded the wrong way, and the criterion is about where the tile
@@ -418,9 +430,16 @@ export function Canvas({
           /**
            * Named for the container it fills. Every slot reading "Add here"
            * is the same name repeated down the page, with nothing for a
-           * screen reader to tell them apart.
+           * screen reader to tell them apart. It starts with the words it
+           * shows, so a speech-input user saying what they see reaches it
+           * (WCAG 2.5.3; T248's review).
            */
-          aria-label={`Add to ${addHere.nameOf?.(containerKey) ?? 'this container'}`}
+          aria-label={
+            tiles.length > 0 ||
+            !(containerKey.startsWith('sec:') || containerKey.startsWith('tabs:'))
+              ? `${slotWords(tiles.length, containerKey)} to ${addHere.nameOf?.(containerKey) ?? 'this container'}`
+              : `${slotWords(tiles.length, containerKey)}: ${addHere.nameOf?.(containerKey) ?? 'this container'}`
+          }
           style={{ gridColumn: `span ${String(tiles.length === 0 ? COLUMNS : 3)}` }}
           onClick={(event) => {
             // The slot is inside whatever element holds this canvas, and that
@@ -430,15 +449,7 @@ export function Canvas({
             addHere.onChoose(containerKey);
           }}
         >
-          {/* The prototype's words (T248): "＋ Add" after what a container
-              holds, and what it takes when it holds nothing. */}
-          {tiles.length > 0
-            ? '＋ Add'
-            : containerKey.startsWith('sec:')
-              ? '＋ Add to this section'
-              : containerKey.startsWith('tabs:')
-                ? '＋ Add to this tab'
-                : '＋ Add a chart, section or text'}
+          {`＋ ${slotWords(tiles.length, containerKey)}`}
         </button>
       )}
 

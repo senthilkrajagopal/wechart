@@ -2451,6 +2451,7 @@ test.describe('T248: the edit sidebar', () => {
 
   test('Properties: the chart’s title at 14, its buttons full width, the limit list at 12/600', async ({
     page,
+    browserName,
   }) => {
     await firstChart(page).click();
     const properties = sidebar(page);
@@ -2477,13 +2478,141 @@ test.describe('T248: the edit sidebar', () => {
       color: await token(page, 'text-secondary'),
     });
     const row = limits.locator('.tile-limits__row').first();
-    expect(await style(row, 'font-size', 'font-weight', 'min-height')).toEqual({
+    // <label class="inline"> in a .field: 12/16/600 text-secondary (T248's review).
+    expect(
+      await style(row, 'font-size', 'line-height', 'font-weight', 'min-height', 'color'),
+    ).toEqual({
       'font-size': '12px',
+      'line-height': '16px',
       'font-weight': '600',
       'min-height': '28px',
+      color: await token(page, 'text-secondary'),
     });
-    // The selected tile's ring 2 px out, as .dtile.selected (mismatch 25).
-    expect(await style(firstChart(page), 'outline-offset')).toEqual({ 'outline-offset': '2px' });
+    // .select.sm { padding: 0 4px 0 8px } (mismatch 25; T248's review). WebKit
+    // draws a native select with padding of its own and computes the author's
+    // as 0, as the prototype's is in Safari too, so it is measured elsewhere.
+    if (browserName !== 'webkit')
+      for (const select of await properties.locator('.panel-section select').all())
+        expect(await style(select, 'padding-left', 'padding-right')).toEqual({
+          'padding-left': '8px',
+          'padding-right': '4px',
+        });
+    // Every action in the chart's section is full width, not only Edit chart.
+    for (const button of await section.locator(':scope > button').all())
+      expect((await button.boundingBox())?.width).toBeCloseTo(width, 0);
+    // The selected tile's ring: 2 px solid accent, 2 px out, as .dtile.selected
+    // (mismatch 25) — not the dashed 1 px every tile wears while editing.
+    expect(
+      await style(
+        firstChart(page),
+        'outline-offset',
+        'outline-style',
+        'outline-width',
+        'outline-color',
+      ),
+    ).toEqual({
+      'outline-offset': '2px',
+      'outline-style': 'solid',
+      'outline-width': '2px',
+      'outline-color': await token(page, 'accent'),
+    });
+  });
+
+  test('deleting the last tile on a page lets go of it: the page tabs come back (T248’s review)', async ({
+    page,
+    request,
+  }) => {
+    const api = 'http://localhost:4100/api';
+    const title = `Last tile ${String(Date.now())}`;
+    const { id } = (await (
+      await request.post(`${api}/documents`, {
+        data: { kind: 'dashboard', title, folderId: 'root' },
+      })
+    ).json()) as { id: string };
+    await request.put(`${api}/documents/dashboard/${id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          folderId: 'root',
+          owner: 'admin',
+          settings: { width: 'fixed' },
+          pages: [
+            {
+              id: 'only',
+              title: 'Only',
+              items: [{ id: 'el-note', kind: 'markdown', w: 6, h: 16, text: 'A note.' }],
+            },
+            { id: 'second', title: 'Second', items: [] },
+          ],
+        },
+      },
+    });
+    await page.goto(`/explore/dashboards/${id}`);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    const note = page.locator('[data-tile="el-note"]');
+    await note.click();
+    await sidebar(page).getByRole('tab', { name: 'Properties' }).click();
+    const pageTabs = sidebar(page).getByRole('heading', { name: 'Page tabs', level: 3 });
+    await expect(pageTabs).toHaveCount(0);
+    await note.hover();
+    await note.getByRole('button', { name: /^Actions for / }).click();
+    await page.getByTestId('delete-el-note').click();
+    await expect(note).toHaveCount(0);
+    // Nothing is selected now, so the dashboard's own properties show.
+    await expect(pageTabs).toBeVisible();
+  });
+
+  test('an empty container’s slot says what it takes, and its name starts with those words', async ({
+    page,
+    request,
+  }) => {
+    // T248's review: the visible words were "＋ Add to this section" and the
+    // name "Add to Only › Terms" — a speech-input user saying what they see
+    // did not match it (WCAG 2.5.3).
+    const api = 'http://localhost:4100/api';
+    const title = `Empty section ${String(Date.now())}`;
+    const { id } = (await (
+      await request.post(`${api}/documents`, {
+        data: { kind: 'dashboard', title, folderId: 'root' },
+      })
+    ).json()) as { id: string };
+    await request.put(`${api}/documents/dashboard/${id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          folderId: 'root',
+          owner: 'admin',
+          settings: { width: 'fixed' },
+          pages: [
+            {
+              id: 'only',
+              title: 'Only',
+              items: [{ id: 'el-terms', kind: 'section', title: 'Terms', items: [] }],
+            },
+            { id: 'blank', title: 'Blank', items: [] },
+          ],
+        },
+      },
+    });
+    await page.goto(`/explore/dashboards/${id}`);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    const inSection = page.getByTestId('add-here-sec:el-terms');
+    await expect(inSection).toHaveText('＋ Add to this section');
+    await expect(inSection).toHaveAccessibleName(/^Add to this section/);
+    await expect(inSection).toHaveAccessibleName(/Terms/);
+    // The page's own slot, once it holds something, reads "＋ Add".
+    const onPage = page.getByTestId('add-here-page:only');
+    await expect(onPage).toHaveText('＋ Add');
+    await expect(onPage).toHaveAccessibleName(/^Add/);
+    // An empty page: what it takes.
+    await page.getByRole('tab', { name: 'Blank' }).click();
+    const blank = page.getByTestId('add-here-page:blank');
+    await expect(blank).toHaveText('＋ Add a chart, section or text');
+    await expect(blank).toHaveAccessibleName(/^Add a chart, section or text/);
   });
 
   test('the page tabs are the dashboard’s properties, shown with nothing selected, and Escape selects nothing', async ({

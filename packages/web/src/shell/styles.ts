@@ -383,7 +383,7 @@ main:has(.explore) {
 .outline__row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
   height: 28px;
   border: 0;
@@ -402,7 +402,9 @@ main:has(.explore) {
 }
 /* The prototype's .ficon.dim at 18 px, and its .file row's 0 12 padding —
    the left set by depth inline (T248, mismatch 26). */
-.outline__row { gap: 8px; padding-block: 0; padding-right: 12px; }
+.outline__row { padding-block: 0; padding-right: 12px; }
+/* Its glyphs at 12 px, the .ficon default and AC-004's floor: the prototype
+   set these at an inline 10 px, which no token allows (T248's review). */
 .outline__icon {
   display: grid;
   place-items: center;
@@ -412,7 +414,7 @@ main:has(.explore) {
   border-radius: 4px;
   background: var(--wc-bg-role-dimension-soft);
   color: var(--wc-role-dimension);
-  font-size: 10px;
+  font-size: var(--wc-text-xs-size);
   font-weight: var(--wc-text-xs-strong-weight);
 }
 .outline__tab, .outline__empty {
@@ -2041,8 +2043,12 @@ main:has(.dashboard) {
   gap: 8px;
   flex-wrap: wrap;
   min-height: 28px;
+  /* A .field's label, as the prototype's rows are: 12/16/600 secondary
+     (dashboard.js:431-434; T248's review). */
   font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
   font-weight: var(--wc-text-xs-strong-weight);
+  color: var(--wc-text-secondary);
 }
 .tile-limits__reason {
   flex: 1 1 100%;
@@ -2157,7 +2163,8 @@ main:has(.dashboard) {
    than its 28 px, so a select does not stretch the row it sits in. */
 .select-sm {
   height: 24px;
-  padding: 0 6px;
+  /* The prototype's .select.sm, padded 0 4 0 8 (mismatch 25, T248's review). */
+  padding: 0 4px 0 8px;
   border: 1px solid var(--wc-border-strong);
   border-radius: 4px;
   background: var(--wc-bg-surface);
@@ -2280,7 +2287,6 @@ main:has(.dashboard) {
 /* Its buttons run the section's width, as the prototype's do (T248, mismatch 25). */
 .chart-section > button { width: 100%; justify-content: center; }
 .chart-section__source { font-family: var(--wc-font-code); }
-.chart-section > button { justify-self: start; }
 /* A sized tile's Layout, collapsed as the prototype's is: its summary set as
    a section heading, at the same inset. */
 details.panel-section { display: block; }
@@ -2304,6 +2310,7 @@ details.panel-section { display: block; }
 .panel-section .field input:not([type='checkbox']):not([type='radio']):not([type='file']),
 .panel-section .field select {
   height: 28px;
+  padding: 0 4px 0 8px;
   font-size: 12px;
 }
 .field > label {
@@ -2812,7 +2819,6 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   border-color: var(--wc-accent);
   color: var(--wc-text-primary);
 }
-.grid-tile[data-selected='true'] { outline: 2px solid var(--wc-accent); outline-offset: -1px; }
 
 /* The canvas grid (AC-054). The track count and the tile spans are set as
    inline style by Canvas.tsx, because they are layout the component computes;

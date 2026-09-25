@@ -3517,9 +3517,11 @@ export function DashboardView({
                * prototype's Properties shows them rather than a row of ×
                * under the tabs (AC-187): the dashboard's own properties, shown
                * with nothing selected, not under a tile's (T248, F19). Escape
-               * and an "＋ Add" slot both let go of a selection.
+               * and an "＋ Add" slot both let go of a selection, and one whose
+               * element is gone — the last tile on a page, deleted — is none
+               * (T248's review).
                */}
-              {selected === null ? (
+              {selected === null || elementAt(session.document, selected) === null ? (
                 <PageTabsProperties
                   document={session.document}
                   onDelete={(page) => {
