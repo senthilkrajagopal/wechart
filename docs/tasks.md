@@ -4087,11 +4087,17 @@ Planned 2026-09-25 from the user's choices on `docs/design/reviews/2026-09-24/ch
 
 ## Spec F24. Deployment to Kubernetes
 
-- [ ] T274 (AC-248) A Helm chart that deploys wechart, Cube, its refresh worker and Cube Store to docker-desktop, with Superset's northwind database as Cube's data source
+- [x] T274 (AC-248) A Helm chart that deploys wechart, Cube, its refresh worker and Cube Store to docker-desktop, with Superset's northwind database as Cube's data source
   - Dispatched 2026-09-25 to an independent agent in its own worktree, at the user's request.
   - Files: `deploy/helm/wechart/**`, Dockerfiles for `packages/web` and `packages/api`, `docs/research/` (Helm, Cube on Kubernetes), `docs/deploy.md`
   - Failing test: a script or e2e check against the installed release. Every Deployment and StatefulSet is Ready. The web app's address loads. `/api/health` reports Cube healthy. A query through wechart's API reaches northwind: a `/v1/sql` or `/v1/load` naming a northwind table's cube.
   - Depends on: none
+  - Done 2026-09-25 on docker-desktop, namespace `wechart`, at http://localhost:8089. The test is `deploy/helm/verify.sh`. It failed first, before the chart existed, then passed in full three times: on the install, on an upgrade, and on a reinstall after `helm uninstall`.
+    - **Chart** `deploy/helm/wechart`: web (nginx, unprivileged), API, the metadata Postgres (StatefulSet with a volume), Cube's API, its refresh worker, and Cube Store as one node (StatefulSet with a volume). Both wechart images build from one `deploy/Dockerfile`. `deploy/helm/values/docker-desktop.yaml` names northwind on Superset's Postgres. `docs/deploy.md` covers the build, the data source's Secret, install, verify, uninstall, and other data sources.
+    - **The test's checks.** Every component is Ready, and the address serves the app on deep links. `/api/cube-health` says Cube and the worker are healthy. A cube published through `/api/model/publish` counts northwind's 830 `orders` through `/api/load` at the web app's address, and its file is then removed again, leaving the model empty.
+    - **Role.** Cube reads northwind as `postgres`, the server's superuser. Superset's own role, `northwind`, has its password only inside Superset, and no read-only role exists. `docs/deploy.md` says how to switch.
+    - **Outside `deploy/`.** `@wechart/api` now lists `node-pg-migrate` under `dependencies`: `dist/main.js` imports it as it starts, and a production install left it out. It also names its `files` (`dist`, `src/db/migrations`) for `pnpm deploy`. The lockfile moves the same entry. `.prettierignore` and `eslint.config.js` skip the Helm templates and the chart's link to `infra/cube/cube.js`, and `.dockerignore` is new.
+    - **Research.** `docs/research/helm.md`, `cube/kubernetes.md`, `nginx.md`, `postgres-image.md`, `node-docker-pnpm.md`. `cube/kubernetes.md` corrects `cube/configuration-deployment.md`: with `contextToAppId` set, Cube's `/readyz` tests nothing, so the data path is checked by the query.
 
 ---
 

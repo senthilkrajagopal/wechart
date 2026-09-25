@@ -10,3 +10,9 @@ playwright-report
 # researchers that produced them, and the hooks parse exact shapes out of
 # spec.md, tasks.md and research frontmatter. Reformatting them is not safe.
 docs
+
+# Helm templates are Go templates that render YAML; they are not YAML
+# themselves, and Prettier can't parse them. The chart's link to
+# infra/cube/cube.js is checked where the file itself lives.
+deploy/helm/*/templates
+deploy/helm/*/files

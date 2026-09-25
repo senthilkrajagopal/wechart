@@ -1,0 +1,87 @@
+{{- $name := include "wechart.component" (list . "web") }}
+# The web app's address: a LoadBalancer on the port the values name, which
+# Docker Desktop publishes on the host's localhost.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list . "web") | nindent 4 }}
+spec:
+  type: {{ .Values.web.service.type }}
+  selector:
+    {{- include "wechart.selectorLabels" (list . "web") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.web.service.port }}
+      targetPort: http
+---
+# nginx, serving the built app and passing /api to the API
+# (docs/research/nginx.md).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list . "web") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "wechart.selectorLabels" (list . "web") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "wechart.labels" (list . "web") | nindent 8 }}
+      annotations:
+        # nginx reads its configuration once, as it starts.
+        checksum/config: {{ include (print $.Template.BasePath "/web-config.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          image: {{ include "wechart.image" (list . .Values.images.web) }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            # nginx's pid file and temporary files, in this image.
+            - name: tmp
+              mountPath: /tmp
+            # Over the image's own default.conf.
+            - name: config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+          {{- with .Values.web.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: {{ $name }}

@@ -1,0 +1,11 @@
+wechart is installed as {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+
+The web app is served by the {{ include "wechart.component" (list . "web") }} Service ({{ .Values.web.service.type }}, port {{ .Values.web.service.port }}).
+{{- if eq .Values.web.service.type "LoadBalancer" }}
+On Docker Desktop that is http://localhost:{{ .Values.web.service.port }}
+{{- end }}
+
+Cube reads {{ .Values.cube.dataSource.type }}://{{ .Values.cube.dataSource.user }}@{{ .Values.cube.dataSource.host }}:{{ .Values.cube.dataSource.port }}/{{ .Values.cube.dataSource.database }}
+with the password in Secret {{ .Values.cube.dataSource.passwordSecret.name }}.
+
+Check the release with deploy/helm/verify.sh --no-install (docs/deploy.md).

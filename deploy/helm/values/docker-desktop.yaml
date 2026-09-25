@@ -1,0 +1,27 @@
+# wechart on Docker Desktop's Kubernetes (context docker-desktop, namespace
+# wechart), with Cube reading the northwind database the Superset install in
+# the same cluster uses (F24, AC-248; docs/deploy.md).
+
+web:
+  service:
+    type: LoadBalancer
+    # http://localhost:8089. 8088 is Superset's; 8090, 8092 and 8094 are taken
+    # in this cluster too.
+    port: 8089
+
+cube:
+  dataSource:
+    type: postgres
+    host: superset-postgresql.superset.svc.cluster.local
+    port: 5432
+    database: northwind
+    user: postgres
+    # Copied from Superset's Secret into this namespace (docs/deploy.md,
+    # "The data source's Secret"); only its name is here.
+    passwordSecret:
+      name: wechart-northwind
+      key: password
+
+cubestore:
+  # The host is Apple silicon.
+  image: cubejs/cubestore:v1.7.45-arm64v8

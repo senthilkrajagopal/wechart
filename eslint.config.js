@@ -16,6 +16,8 @@ export default tseslint.config(
       'docs/**',
       'test-results/**',
       'playwright-report/**',
+      // The Helm chart's link to infra/cube/cube.js, linted where it lives.
+      'deploy/helm/*/files/**',
     ],
   },
   js.configs.recommended,

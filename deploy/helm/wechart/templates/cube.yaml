@@ -1,0 +1,112 @@
+{{- /*
+Cube's API and its refresh worker: the same image, configuration and
+environment, the worker told only to build and refresh pre-aggregations
+(docker-compose.yml; docs/research/cube/configuration-deployment.md §4, §8).
+*/ -}}
+{{- range $component := list "cube" "cube-refresh-worker" }}
+{{- $name := include "wechart.component" (list $ $component) }}
+{{- $values := ternary $.Values.cube $.Values.cube.refreshWorker (eq $component "cube") }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list $ $component) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "wechart.selectorLabels" (list $ $component) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $.Values.cube.port }}
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list $ $component) | nindent 4 }}
+spec:
+  # The API instance could be more than one; the refresh worker must be one
+  # (docs/research/cube/configuration-deployment.md §8).
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "wechart.selectorLabels" (list $ $component) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "wechart.labels" (list $ $component) | nindent 8 }}
+      annotations:
+        checksum/cube-config: {{ include (print $.Template.BasePath "/cube-config.yaml") $ | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # The image runs as root; its node user, uid 1000, is enough for Cube
+      # with wechart's configuration, which writes nothing to disk
+      # (docs/research/cube/kubernetes.md, "Writable paths"; observed on
+      # Docker Desktop, docs/deploy.md).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: cube
+          image: {{ $.Values.cube.image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 4000
+          env:
+            {{- include "wechart.cubeEnv" $ | nindent 12 }}
+            {{- if eq $component "cube-refresh-worker" }}
+            - name: CUBEJS_REFRESH_WORKER
+              value: "true"
+            {{- end }}
+          # With contextToAppId configured, as infra/cube/cube.js does,
+          # /readyz answers once the server is up and tests nothing further;
+          # /livez tests the data source and Cube Store, and an outage there
+          # is not something a restart mends. So /readyz for both, and the
+          # data source is checked by a query (deploy/helm/verify.sh)
+          # (docs/research/cube/kubernetes.md, Gotchas 1 and 2).
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: config
+              mountPath: /cube/conf/cube.js
+              subPath: cube.js
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          {{- with $values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "wechart.component" (list $ "cube-config") }}
+        - name: tmp
+          emptyDir: {}
+{{- end }}

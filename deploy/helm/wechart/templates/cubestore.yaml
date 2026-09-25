@@ -1,0 +1,108 @@
+{{- $name := include "wechart.component" (list . "cubestore") }}
+# Headless: the StatefulSet's governing Service, and the address Cube reaches
+# Cube Store's HTTP port at. Cube Store has no authentication of its own, so
+# nothing else is published: not its MySQL port, and nothing outside the
+# cluster (docs/research/cube/kubernetes.md, Gotchas 7).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list . "cubestore") | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "wechart.selectorLabels" (list . "cubestore") | nindent 4 }}
+  ports:
+    - name: http
+      port: 3030
+      targetPort: http
+---
+# Cube Store as one node, router and worker at once: no CUBESTORE_WORKERS, no
+# worker port, no remote metastore (docs/research/cube/kubernetes.md, "Cube
+# Store as a single node"). Cube's own guidance is a cluster for production.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list . "cubestore") | nindent 4 }}
+spec:
+  serviceName: {{ $name }}
+  # Cube Store nodes must never be replicated.
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "wechart.selectorLabels" (list . "cubestore") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "wechart.labels" (list . "cubestore") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: cubestore
+          image: {{ .Values.cubestore.image }}
+          imagePullPolicy: IfNotPresent
+          env:
+            # Names this node to itself; kept stable while its metastore persists.
+            - name: CUBESTORE_SERVER_NAME
+              value: {{ printf "%s:9999" (include "wechart.host" (list . "cubestore")) | quote }}
+            # Its metastore, cache store and pre-aggregations, all on the volume.
+            - name: CUBESTORE_DATA_DIR
+              value: /cube/.cubestore/data
+            {{- range $variable, $value := .Values.cubestore.env }}
+            - name: {{ $variable }}
+              value: {{ $value | toString | quote }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 3030
+            - name: status
+              containerPort: 3031
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: status
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: status
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 6
+          lifecycle:
+            # Cube Store stops on SIGINT only; Kubernetes sends SIGTERM, which
+            # it ignores as PID 1.
+            preStop:
+              exec:
+                command: [sh, -c, 'kill -INT 1']
+          securityContext:
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: data
+              mountPath: /cube/.cubestore/data
+          {{- with .Values.cubestore.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "wechart.selectorLabels" (list . "cubestore") | nindent 10 }}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.cubestore.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.cubestore.storage }}
