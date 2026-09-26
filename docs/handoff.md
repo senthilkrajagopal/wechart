@@ -58,7 +58,25 @@
 >     - T433: YAML only, **AC-332 ticked**;
 >     - T418: drafts in the database;
 >     - T422: tile queries wait out an outage, and an unreachable Cube is a 503;
->     - T329: direct changes; a folder's move or delete now needs write on the folder holding it.
+>     - T329: direct changes; a folder's move or delete now needs write on the folder holding it;
+>     - T330: the Access panel, **AC-259 and AC-260 ticked**;
+>     - T390: "Other (n)" or leave out, and a result limit, **AC-041 ticked**;
+>     - T333: xcube's public key checked at start, with the fixed development key pair in `infra/xcube/`;
+>     - T366: bookmarks their saver's own, **AC-292 ticked**.
+>     - A complete run in every browser after T330: the security suite 69/69; the phase-1 suite
+>       1759/1767, its 8 failures being the known perf flakes (pass alone), a jobs flake, and
+>       `no-size-fields` failing on T390's "Row limit" label (renamed "Result limit" in T390).
+>   - **2026-09-26, xcube's slice 2 is built** in the fork at `83cb9f0888`
+>     (`docs/inputs/2026-09-26-xcube-slice-2-contract.md`, written by the fork session and left
+>     uncommitted here as not mine; verified in `docs/research/xcube-slice-2.md`). **Round R29**
+>     (every answer the recommended one): only YAML goes to xcube, and the seed's Jinja sample is
+>     rewritten; every break refuses a publish (no `compare`); the model store goes in slice 2's
+>     cut-over; xcube's static admin token until slice 4. Spec AC-333–AC-335 added, AC-235
+>     unticked and amended, AC-326 given the interim. Plan: T419 and T421 rewritten, T445 (dry-run
+>     check), T446 (YAML only) and T447 (the cut-over) added, T431 moved into slice 2, T420 to
+>     slice 4. The image `xcube:v1.7.45-83cb9f0888` is built locally.
+>   - **In progress:** T386 (range marking) and T419 (pushes to xcube) are written and in cold
+>     review; then T445, T421, T446, T447, T431, T423 in that order.
 >   - **Asked, not yet answered:**
 >     1. May the contract points (JWKS push route, the gate instead of written policies, YAML only,
 >        the `f…` folder-id form, the build-event record) be posted as comments on the plan doc's
@@ -71,6 +89,15 @@
 >     5. Deleting a non-empty folder leaves its contents unreachable to everyone. Refuse it, or
 >        delete everything inside?
 >     6. Does renaming a folder need write on the folder holding it, as moving and deleting do?
+>     7. T366: with sign-in on, phase 1's bookmarks (given to `admin`) are listed for nobody,
+>        Super-Admins included. Keep that, or show them to Super-Admins?
+>     8. T390: a pie's slice warning counts N + 1 slices with "Leave out" (one early); and a result
+>        limit at or under the top N cuts "Other (n)". Fix either?
+>     9. T333: the research's start-up comparison of wechart's key id with xcube's ("the only
+>        real pin") has no task yet. Add one?
+>     10. T330: with sign-in off there's no Access button (one user, no groups). Confirm.
+>     11. The fork session's input file `docs/inputs/2026-09-26-xcube-slice-2-contract.md` is
+>        cited but uncommitted. Commit it?
 > - **Pushing is the user's** (this session's push was refused by the permission classifier):
 >   `git push origin main feat/xcube --tags`.
 > - **Done since (2026-09-25, later):**
