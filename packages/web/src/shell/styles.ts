@@ -208,6 +208,43 @@ textarea { height: auto; padding: 6px 8px; }
    .spacer does; the toggle no longer has to. */
 .app-bar__spacer { flex: 1; }
 
+/* The narrow menu (T396, AC-304): below 1,024 px the bar's switcher and
+   search field fold into it, so the bar fits a phone's width rather than the
+   page scrolling sideways. Its panel drops from under the bar, full width,
+   the workspaces stacked, the current one marked at its left edge. */
+.app-bar__menu { display: none; }
+.app-bar__menu-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 12px 12px;
+  background: var(--wc-bg-surface);
+  border-bottom: 1px solid var(--wc-border-subtle);
+  box-shadow: var(--wc-shadow-pop);
+}
+.app-bar__menu-panel[hidden] { display: none; }
+.app-bar__menu-panel .workspace-switcher ul { flex-direction: column; gap: 0; }
+.app-bar__menu-panel .workspace-switcher a {
+  height: 40px;
+  padding: 0 10px;
+  border-bottom: 0;
+  border-left: 2px solid transparent;
+}
+.app-bar__menu-panel .workspace-switcher a[aria-current='page'] {
+  border-left-color: var(--wc-accent);
+}
+.app-bar__menu-panel .app-search { width: 100%; }
+@media (max-width: 1023.98px) {
+  .app-bar { gap: 8px; }
+  .app-bar > .workspace-switcher,
+  .app-bar > .app-search { display: none; }
+  .app-bar__menu { display: block; }
+}
+
 /* The top bar's search field (AC-190), the prototype's .search. */
 .app-search {
   display: flex;
@@ -633,6 +670,16 @@ main:has(.model-page) {
   padding: 0;
 }
 .model-page { flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr); }
+/* Narrower than 1,024 px the Model workspace's panes stack, each as wide as
+   the page, which grows and scrolls down instead of sideways (T396,
+   AC-304): the tree above the file, the form above its YAML. Every pane
+   keeps what it holds. The chart editor does the same, after its own rule. */
+@media (max-width: 1023.98px) {
+  main:has(.model-page) { height: auto; }
+  .model-page,
+  .model-editor { grid-template-columns: minmax(0, 1fr); }
+  .model-tree { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--wc-border-subtle); }
+}
 .model-page__main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .model-page__main > .state-line { margin: 16px; }
 .model-page__overview { flex: 1; min-height: 0; overflow: auto; padding: var(--wc-surface-padding); }
@@ -1295,6 +1342,13 @@ fieldset.model-field > legend {
 /* The Access panel (T330; direction.md §7e): docked right of the contents,
    360 px, rows of 28, read-write groups before read-only (rules 62–66). */
 .explore--access { grid-template-columns: 260px minmax(0, 1fr) 360px; }
+/* Narrower than 1,024 px, stacked, as the Model workspace and the chart
+   editor are: the tree, the folder's contents, then its access, each as
+   wide as the page, which grows down instead of sideways (T396, AC-304). */
+@media (max-width: 1023.98px) {
+  main:has(.explore--access) { height: auto; }
+  .explore--access { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
+}
 .explore__alone {
   font-size: var(--wc-text-xs-size);
   line-height: var(--wc-text-xs-line);
@@ -1429,6 +1483,19 @@ fieldset.model-field > legend {
   border-radius: 6px;
   background: var(--wc-bg-surface);
   font-variant-numeric: tabular-nums;
+}
+/* Narrower than 1,024 px, a workspace's table wider than the page scrolls
+   sideways in its own box (TableScroll), and the page doesn't (T396,
+   AC-304); the table stays a table, as wide as its box. Only there: wider,
+   the box clips nothing, and the page is the scroller a sticky header sticks
+   to (T240). Positioned, so what a cell places absolutely (a label for
+   screen readers alone) is held in the box rather than pushing the page
+   wide. The query log, whose header must stay in view as the page scrolls
+   (AC-230), wraps its cells instead, and needs no such box. */
+@media (max-width: 1023.98px) {
+  .table-scroll-narrow { position: relative; max-width: 100%; overflow-x: auto; }
+  .query-log--sticky th,
+  .query-log--sticky td { overflow-wrap: anywhere; }
 }
 .folder-contents thead th,
 .query-log thead th { background: var(--wc-bg-subtle); }
@@ -1581,7 +1648,8 @@ fieldset.model-field > legend {
 .admin-pane__empty { margin: 0; color: var(--wc-text-secondary); }
 /* The query log (AC-230): the prototype's filter row of small selects, a
    header kept in view under the app bar while the rows scroll, and a pager. */
-.query-log-view { display: grid; gap: 8px; }
+/* One column as wide as the page leaves it, not as its table (T396, AC-304). */
+.query-log-view { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .query-log__filters { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 .query-log__filters label { color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
 .query-log--sticky thead th {
@@ -1631,7 +1699,16 @@ fieldset.model-field > legend {
 .build-jobs__table { color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 .build-panel__note { margin: 8px 0 0; color: var(--wc-text-secondary); font-size: 12px; }
 /* The Security workspace (T171): its policies' table, and the note on phase 2. */
-.security-workspace { display: grid; gap: 12px; align-content: start; min-width: 0; }
+/* One column as wide as the page leaves it, not as its widest table: an
+   implicit column took the tables' width, and the title and notes ran past a
+   phone's screen with them (T396, AC-304). */
+.security-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+}
 .security-workspace__note { margin: 0; color: var(--wc-text-secondary); }
 .security-workspace__head { margin: 8px 0 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
 /* A screen that needs a Cube API scope wechart lacks (T176, AC-170): said as
@@ -2003,7 +2080,10 @@ fieldset.model-field > legend {
 /* A job's or query's failure carries Cube's message, which can be long: it
    wraps where it stands rather than pushing the page sideways (T158's review). */
 .build-jobs__job .status,
-.query-log__outcome .status { white-space: normal; overflow-wrap: anywhere; align-items: flex-start; }
+.query-log__outcome .status,
+/* So does the Security workspace's word on Cube's sign-in, a sentence
+   (T396, AC-304: it ran past a phone's screen). */
+.auth-check .status { white-space: normal; overflow-wrap: anywhere; align-items: flex-start; }
 .status--ok { color: var(--wc-status-success); }
 .status--warn { color: var(--wc-status-warning); }
 .status--err { color: var(--wc-status-error); }
@@ -4090,6 +4170,15 @@ main:has(.chart-editor) {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr) 360px;
   grid-template-rows: auto minmax(0, 1fr);
+}
+/* Narrower than 1,024 px its panes stack, each as wide as the page, which
+   grows and scrolls down instead of sideways (T396, AC-304): the fields
+   above the preview above the inspector. */
+@media (max-width: 1023.98px) {
+  main:has(.chart-editor) { height: auto; }
+  .chart-editor { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
+  /* Its header row's controls wrap onto a second line, not past the page. */
+  .chart-editor__head { flex-wrap: wrap; }
 }
 .chart-editor__head {
   grid-column: 1 / -1;

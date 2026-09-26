@@ -3,6 +3,7 @@ import { useEffect, useId, useRef } from 'react';
 
 import { missingScopeOf, ScopeUnavailable } from '../../query/scopes';
 import { StateLine } from '../../shell/StatusIcon';
+import { TableScroll } from '../../shell/TableScroll';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import { MODEL_FILES_QUERY } from '../model/FileList';
 import { objectsOf } from '../model/objects';
@@ -246,26 +247,28 @@ export function GeneratedSql({
         ) : declared.length === 0 ? (
           <p>No policy on these cubes or views names this context&rsquo;s groups.</p>
         ) : (
-          <table className="query-log" aria-label="Row filters declared for this context">
-            <thead>
-              <tr>
-                <th scope="col">Cube / view</th>
-                <th scope="col">Group</th>
-                <th scope="col">Rows</th>
-                <th scope="col">Only if</th>
-              </tr>
-            </thead>
-            <tbody>
-              {declared.map((each, index) => (
-                <tr key={String(index)}>
-                  <td className="query-log__query">{each.object}</td>
-                  <td className="query-log__query">{each.groups}</td>
-                  <td>{each.rows}</td>
-                  <td className="query-log__query">{each.conditions}</td>
+          <TableScroll label="Row filters declared for this context">
+            <table className="query-log" aria-label="Row filters declared for this context">
+              <thead>
+                <tr>
+                  <th scope="col">Cube / view</th>
+                  <th scope="col">Group</th>
+                  <th scope="col">Rows</th>
+                  <th scope="col">Only if</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {declared.map((each, index) => (
+                  <tr key={String(index)}>
+                    <td className="query-log__query">{each.object}</td>
+                    <td className="query-log__query">{each.groups}</td>
+                    <td>{each.rows}</td>
+                    <td className="query-log__query">{each.conditions}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
         )}
         {model === undefined || model.unread.length === 0 ? null : (
           <p data-testid="generated-sql-unread">

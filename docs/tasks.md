@@ -5936,10 +5936,37 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - Labels that didn't fit beside the ring were drawn over it: they no longer are. The ring shrinks, or the labels move inside or hide.
     - **For the user:** shrinking the ring to keep labels beside it is a choice made here. The alternatives were labels over the ring, or inside a donut's band. See the handoff.
     - **AC-303 ticked** on `pie.test.ts` and `pie-labels.spec.ts`.
-- [ ] T396 [P] (AC-304) Fold the app bar into a menu below 1,024 pixels
-  - Files: `packages/web/src/shell/AppShell.tsx`, `e2e/shell.spec.ts`
+- [x] T396 [P] (AC-304) Fold the app bar into a menu below 1,024 pixels
+  - Files: `packages/web/src/shell/AppShell.tsx`, `e2e/shell.spec.ts` *(as built, also: `packages/web/src/shell/styles.ts`, `TableScroll.tsx` (+ test), the five workspace tables that use it, and `e2e/security/access.spec.ts`)*
   - Failing test: `shell.spec.ts`: at 390 pixels wide no page scrolls sideways, and navigation and search are in a menu (AC-304).
   - Depends on: none
+  - **Done 2026-09-26.**
+    - **The bar:** below 1,024 px, the bar's workspace links and search field fold into a Menu button, and the bar keeps the brand, the theme toggle and the account. The menu is a disclosure:
+      - the button says whether it is open, and the panel is always in the page, hidden while closed;
+      - it closes on a choice, on Escape from within it (focus back on the button), when focus or a press leaves it, and when the window widens past 1,024 px;
+      - search opened from it hands focus back to its button.
+    - **What still ran sideways at 390 px, and now doesn't:**
+      - the Security workspace's column and its sign-in sentence;
+      - the jobs log view's column;
+      - five workspace tables, which scroll in a box of their own (`TableScroll`): a named region the keyboard reaches, only below 1,024 px. The table keeps its role and width;
+      - the query log, whose cells wrap instead, so its header still sticks as the page scrolls (AC-230);
+      - the chart editor, the Model workspace with a file open, and Explore with the Access panel open. Their panes stack in one column, each as wide as the page, which grows down. The chart editor's header row wraps.
+    - **What the tests show:**
+      - `shell.spec.ts` (Chrome), at 390 px:
+        - the document, `main` and a dashboard's canvas don't scroll sideways on every workspace, a dashboard, a library chart, the chart editor, a model file, and `/jobs` with a filled query log;
+        - the menu: search, Escape, Tab out, and widening;
+        - the query log's header stays in view as the page scrolls;
+        - at 1,280 px the bar keeps its links and search.
+      - `security/access.spec.ts` checks Explore at 390 px with the panel open.
+      - Unit tests: `AppShell.test.tsx` and `TableScroll.test.tsx`.
+      - Web 1,499 unit tests pass. The Chrome e2e for the shell, width, design, editor, model, jobs, schedules, dashboard and admin specs pass (286), and the security suite passes 29/29.
+    - **The cold review (FAIL)** led to:
+      - the chart editor, a model file and Explore's Access panel still scrolling sideways: now stacked;
+      - `display: block` on tables, which broke AC-230's sticky header below 1,024 px and risked their table role: replaced by `TableScroll`, with the query log wrapping;
+      - Escape handled from anywhere, the menu kept open on Tab out or on widening, and `aria-controls` naming nothing while closed: fixed;
+      - a menu check that couldn't fail, `/jobs` measured with an empty log, and the canvas left unmeasured: fixed.
+    - **AC-304 ticked** on `shell.spec.ts` and `access.spec.ts`.
+    - **For the user:** stacking the chart editor and the Model workspace below 1,024 px keeps them usable, as the T184 ruling on panes allows. The alternative was hiding editing there, as a dashboard does (direction.md §2, "view mode only"). See the handoff.
 - [x] T397 [P] (AC-313) Detect ISO-3 country codes, with the model's marking overriding
   - Files: `packages/core/src/geo/iso3.ts` (+ test; the ISO 3166-1 alpha-3 list, per `research/country-map.md`), `packages/web/src/workspaces/model/form/*` (a "Country code" setting on a dimension, written as its `meta`)
   - Failing test: `iso3.test.ts`: a dimension whose non-empty values are all ISO-3 codes counts; one marked as a country code counts whatever its values; one marked "not a country code" never does (AC-313).

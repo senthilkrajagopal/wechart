@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
+import { TableScroll } from '../../shell/TableScroll';
 
 /**
  * Schedules (T160, AC-154): every pre-aggregation's refresh schedule, labelled
@@ -61,44 +62,46 @@ export function SchedulesPage() {
       ) : schedules.data.length === 0 ? (
         <p>The model declares no pre-aggregations.</p>
       ) : (
-        <table className="query-log" aria-label="Refresh schedules">
-          <thead>
-            <tr>
-              <th scope="col">Pre-aggregation</th>
-              <th scope="col">When</th>
-              <th scope="col">Owner</th>
-              <th scope="col">
-                <span className="visually-hidden">Where it is set</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {schedules.data.map((schedule) => {
-              const href = modelHref(schedule);
-              return (
-                <tr key={schedule.id}>
-                  <td className="query-log__query">{schedule.id}</td>
-                  <td>
-                    {schedule.scheduled ? (
-                      schedule.when
-                    ) : (
-                      // A state, so with its icon, never colour alone (AC-152).
-                      <StateLine kind="idle">{schedule.when}</StateLine>
-                    )}
-                  </td>
-                  <td>{OWNERS[schedule.owner]}</td>
-                  <td>
-                    {href === undefined ? null : (
-                      <a href={href} aria-label={`Edit ${schedule.id} in Model`}>
-                        Edit in Model
-                      </a>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <TableScroll label="Refresh schedules">
+          <table className="query-log" aria-label="Refresh schedules">
+            <thead>
+              <tr>
+                <th scope="col">Pre-aggregation</th>
+                <th scope="col">When</th>
+                <th scope="col">Owner</th>
+                <th scope="col">
+                  <span className="visually-hidden">Where it is set</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {schedules.data.map((schedule) => {
+                const href = modelHref(schedule);
+                return (
+                  <tr key={schedule.id}>
+                    <td className="query-log__query">{schedule.id}</td>
+                    <td>
+                      {schedule.scheduled ? (
+                        schedule.when
+                      ) : (
+                        // A state, so with its icon, never colour alone (AC-152).
+                        <StateLine kind="idle">{schedule.when}</StateLine>
+                      )}
+                    </td>
+                    <td>{OWNERS[schedule.owner]}</td>
+                    <td>
+                      {href === undefined ? null : (
+                        <a href={href} aria-label={`Edit ${schedule.id} in Model`}>
+                          Edit in Model
+                        </a>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </TableScroll>
       )}
     </div>
   );

@@ -45,6 +45,25 @@ test.describe('as a Super-Admin', () => {
     await setAccess(page.request, ids.p, { readWrite: ['sales-rw'], readOnly: ['sales-ro'] });
   });
 
+  /**
+   * T396, AC-304: `Fails when: a page scrolls sideways at 390 pixels wide.`
+   * Explore with the panel open drew the tree, the contents and the panel
+   * side by side, 260 + 360 px and more (T396's review).
+   */
+  test('at 390 pixels, with the panel open, the page doesn’t scroll sideways', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/explore?folder=${ids.p}`);
+    await page.getByRole('button', { name: 'Access', exact: true }).click();
+    const panel = page.getByRole('complementary', { name: 'Folder access' });
+    await expect(panel.getByRole('region', { name: 'Read-write groups' })).toBeVisible();
+    const over = await page.evaluate(() => {
+      const past = (element: Element | null) =>
+        element === null ? 0 : element.scrollWidth - element.clientWidth;
+      return { page: past(document.scrollingElement), main: past(document.querySelector('main')) };
+    });
+    expect(over).toEqual({ page: 0, main: 0 });
+  });
+
   test('shows inherited groups locked with their source, and an unset list’s inheritance', async ({
     page,
   }) => {

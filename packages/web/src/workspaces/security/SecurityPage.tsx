@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
+import { TableScroll } from '../../shell/TableScroll';
 import { MODEL_FILES_QUERY } from '../model/FileList';
 import { AuthWarning } from './AuthWarning';
 import { ContextPreview, modelHref } from './ContextPreview';
@@ -94,36 +95,38 @@ function PolicyList({
       {rows.length === 0 ? (
         <p>The model declares no access policies.</p>
       ) : (
-        <table className="query-log" aria-label="Access policies">
-          <thead>
-            <tr>
-              <th scope="col">Cube / view</th>
-              <th scope="col">Group</th>
-              <th scope="col">Members</th>
-              <th scope="col">Rows</th>
-              <th scope="col">Conditions</th>
-              <th scope="col">Masked</th>
-              <th scope="col">Source</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ policy, path }, index) => (
-              // Positions: one object may declare several policies for one group.
-              <tr key={`${path}:${String(index)}`}>
-                <td className="query-log__query">{policy.object}</td>
-                <td className="query-log__query">{groupsText(policy)}</td>
-                <td>{membersText(policy.memberLevel)}</td>
-                <td>{rowsText(policy.rowLevel)}</td>
-                <td className="query-log__query">{conditionsText(policy.conditions)}</td>
-                <td>{maskingText(policy.memberMasking)}</td>
-                <td className="query-log__query">
-                  {/* Its file, opened in Model where it is authored (AC-232). */}
-                  <a href={modelHref(path)}>{path}</a>
-                </td>
+        <TableScroll label="Access policies">
+          <table className="query-log" aria-label="Access policies">
+            <thead>
+              <tr>
+                <th scope="col">Cube / view</th>
+                <th scope="col">Group</th>
+                <th scope="col">Members</th>
+                <th scope="col">Rows</th>
+                <th scope="col">Conditions</th>
+                <th scope="col">Masked</th>
+                <th scope="col">Source</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map(({ policy, path }, index) => (
+                // Positions: one object may declare several policies for one group.
+                <tr key={`${path}:${String(index)}`}>
+                  <td className="query-log__query">{policy.object}</td>
+                  <td className="query-log__query">{groupsText(policy)}</td>
+                  <td>{membersText(policy.memberLevel)}</td>
+                  <td>{rowsText(policy.rowLevel)}</td>
+                  <td className="query-log__query">{conditionsText(policy.conditions)}</td>
+                  <td>{maskingText(policy.memberMasking)}</td>
+                  <td className="query-log__query">
+                    {/* Its file, opened in Model where it is authored (AC-232). */}
+                    <a href={modelHref(path)}>{path}</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableScroll>
       )}
       {open.length === 0 ? null : (
         // Warnings, with their icon (T183, AC-177); not live regions, being

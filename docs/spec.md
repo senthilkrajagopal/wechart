@@ -1113,7 +1113,7 @@ Traces to: §P2.6 H, `[R8, R16, R19, R21, R22]`, `[backlog]` §5. Rewritten phas
       Fails when: a markdown tile's text can't be changed in the UI.
 - [x] AC-303 WHEN data labels are on for a pie or donut, THE SYSTEM SHALL draw each label whole, moving or hiding the labels that don't fit (gap 3).
       Fails when: a slice's label shows a truncated value such as "$…".
-- [ ] AC-304 WHILE the window is narrower than 1,024 pixels, THE SYSTEM SHALL fit the app bar within it, folding navigation and search into a menu (the UI review's narrow-shell change).
+- [x] AC-304 WHILE the window is narrower than 1,024 pixels, THE SYSTEM SHALL fit the app bar within it, folding navigation and search into a menu (the UI review's narrow-shell change).
       Fails when: a page scrolls sideways at 390 pixels wide.
 - [ ] AC-305 WHEN a chart has one measure and a dimension holding ISO-3 country codes, THE SYSTEM SHALL offer a country map that colours each country by the measure on a sequential scale with a legend, and names any codes it can't place. Its boundaries are Natural Earth's 1:50m admin-0 units, so small states such as Singapore (SGP) are placed (`[R8, R22]`).
       Fails when: a country code in the data isn't coloured (SGP included), the map has no legend, or an unplaced code isn't named.

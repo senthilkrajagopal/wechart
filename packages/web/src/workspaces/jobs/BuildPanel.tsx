@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 
 import { missingScopeOf, ScopeUnavailable, useScopes } from '../../query/scopes';
 import { StateLine } from '../../shell/StatusIcon';
+import { TableScroll } from '../../shell/TableScroll';
 import { StateBadge, stateOf, Status } from './StateBadge';
 
 /**
@@ -240,66 +241,68 @@ export function BuildPanel({
         {buildable.data.length === 0 ? (
           <p>The model declares no pre-aggregations.</p>
         ) : (
-          <table className="query-log" aria-label="Pre-aggregations">
-            <thead>
-              <tr>
-                <th scope="col">Pre-aggregation</th>
-                <th scope="col">Status</th>
-                <th scope="col">Trigger</th>
-                <th scope="col">Partition granularity</th>
-                <th scope="col">
-                  <span className="visually-hidden">Build</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {buildable.data.map(({ id, partitionGranularity, trigger, fileName }) => (
-                <tr
-                  key={id}
-                  // Selecting a row shows it in the pane (AC-228): by pointer
-                  // anywhere in it, or Enter or Space on the row itself.
-                  aria-selected={selected === id}
-                  tabIndex={0}
-                  className="build-panel__row"
-                  onClick={() => {
-                    setSelected(id);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget) return;
-                    if (event.key !== 'Enter' && event.key !== ' ') return;
-                    event.preventDefault();
-                    setSelected(id);
-                  }}
-                >
-                  <td className="query-log__query">
-                    {/* Its definition, in Model (AC-229). */}
-                    {fileName === undefined ? id : <a href={modelHref(fileName)}>{id}</a>}
-                  </td>
-                  <td>
-                    {/* Its latest build's state here, in its own row (rule 22). */}
-                    <BuildState build={latestOf(id)} pollMs={pollMs} testId="row-state" />
-                  </td>
-                  <td>{trigger ?? '—'}</td>
-                  <td>{partitionGranularity ?? 'none'}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="btn-sm"
-                      aria-label={`Build ${id}`}
-                      // One start at a time, so each start's answer — a refusal
-                      // included — is the one shown (T155's review).
-                      disabled={start.isPending}
-                      onClick={() => {
-                        start.mutate(id);
-                      }}
-                    >
-                      Build
-                    </button>
-                  </td>
+          <TableScroll label="Pre-aggregations">
+            <table className="query-log" aria-label="Pre-aggregations">
+              <thead>
+                <tr>
+                  <th scope="col">Pre-aggregation</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Trigger</th>
+                  <th scope="col">Partition granularity</th>
+                  <th scope="col">
+                    <span className="visually-hidden">Build</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {buildable.data.map(({ id, partitionGranularity, trigger, fileName }) => (
+                  <tr
+                    key={id}
+                    // Selecting a row shows it in the pane (AC-228): by pointer
+                    // anywhere in it, or Enter or Space on the row itself.
+                    aria-selected={selected === id}
+                    tabIndex={0}
+                    className="build-panel__row"
+                    onClick={() => {
+                      setSelected(id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return;
+                      if (event.key !== 'Enter' && event.key !== ' ') return;
+                      event.preventDefault();
+                      setSelected(id);
+                    }}
+                  >
+                    <td className="query-log__query">
+                      {/* Its definition, in Model (AC-229). */}
+                      {fileName === undefined ? id : <a href={modelHref(fileName)}>{id}</a>}
+                    </td>
+                    <td>
+                      {/* Its latest build's state here, in its own row (rule 22). */}
+                      <BuildState build={latestOf(id)} pollMs={pollMs} testId="row-state" />
+                    </td>
+                    <td>{trigger ?? '—'}</td>
+                    <td>{partitionGranularity ?? 'none'}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn-sm"
+                        aria-label={`Build ${id}`}
+                        // One start at a time, so each start's answer — a refusal
+                        // included — is the one shown (T155's review).
+                        disabled={start.isPending}
+                        onClick={() => {
+                          start.mutate(id);
+                        }}
+                      >
+                        Build
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
         )}
         {/* Starting, in words with its icon, not only by the buttons fading (AC-177). */}
         {start.isPending ? <StateLine kind="run">Asking Cube to start the build…</StateLine> : null}
