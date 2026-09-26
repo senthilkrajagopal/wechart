@@ -26,6 +26,21 @@ function serviceBlock(compose: string, name: string): string {
   return rest.slice(0, end === -1 ? undefined : end).join('\n');
 }
 
+describe('the docker-desktop Helm release runs it (T414, AC-248)', () => {
+  it('names it as Cube’s image, for Cube and its refresh worker', () => {
+    const values = fromRoot('deploy/helm/values/docker-desktop.yaml');
+    const cube = /^cube:\n((?: {2}.*\n|\s*\n)+)/m.exec(values)?.[1] ?? '';
+    expect(/^ {2}image: (.+)$/m.exec(cube)?.[1]).toBe(IMAGE);
+  });
+
+  it('gives Cube’s containers the image’s own command', () => {
+    const template = fromRoot('deploy/helm/wechart/templates/cube.yaml');
+    // One template serves both Deployments (research, "Where it runs today").
+    expect(template).toContain('image: {{ $.Values.cube.image }}');
+    expect(template).not.toMatch(/^\s*(command|args):/m);
+  });
+});
+
 describe('compose runs the package’s image for Cube and its refresh worker (T413, AC-139, AC-250)', () => {
   const compose = fromRoot('docker-compose.yml');
 

@@ -5677,10 +5677,14 @@ The user's Cube fork moved the introspection API out of Cube's own packages into
   - Failing test: `cube-image.test.ts`: compose's `CUBE_IMAGE` default for `cube` and `cube-refresh-worker` is `cube:v1.7.45-introspection-0b6eef90a9`, and neither sets `command:` or `entrypoint:`, which would start Cube without the routes (research, "Don't override the container command"). Then compose up with the default, and `e2e/generate-cubes.spec.ts` passes against it (AC-139, AC-250).
   - Depends on: none
   - **Done 2026-09-25.** The test failed on the old tag, then passed. `docker compose up -d --wait --force-recreate cube cube-refresh-worker` started both from the new default: `cmd=["node","/cube/node_modules/cube-introspection/dist/src/bin/server.js"]`, "Cube API server (1.7.45) is listening on 4000". Against it, `generate-cubes.spec.ts`, `cube-scopes.spec.ts` and `data-source.spec.ts` passed in Chrome (7). The compose comment now gives the package's build, and `generate-cubes.spec.ts`'s comment no longer names the old image.
-- [ ] T414 (AC-248) Run it in the docker-desktop Helm release
+- [x] T414 (AC-248) Run it in the docker-desktop Helm release
   - Files: `deploy/helm/values/docker-desktop.yaml` (`cube.image`), `packages/api/src/deploy/cube-image.test.ts`
   - Failing test: `cube-image.test.ts`: the values' `cube.image` is the tag, and the chart's Cube template gives its containers no `command` or `args`. Then `deploy/helm/verify.sh` passes against the upgraded release (AC-248).
   - Depends on: T413
+  - **Done 2026-09-25.** The test failed on the old tag, then passed.
+    - **The upgrade.** `IMAGE_TAG=0a798d3 deploy/helm/verify.sh` upgraded the release (security off, as it was) to wechart's images at 0a798d3 and Cube at the new tag, with no command set, as uid 1000 on a read-only root filesystem.
+    - **A race on the first run.** Every check passed but step 4: `/api/cube-health` said `"cube":"down"`, because the new Cube pod was still starting after the rollout (the events show its first readiness probe refused). Run again on the settled release, every check passed, the 830-row count of northwind's `orders` included. Recorded as a known flake of `verify.sh` right after an upgrade that replaces the Cube pods.
+    - **The introspection routes on the cluster.** Through the release's API at http://localhost:8089, northwind's data source, its schemas (`analytics`, `public`) and its tables listed. A scaffold of `categories` and `products` returned both cubes, with `products`' six unmapped columns named. This is the first Helm release on the package's image, which the research listed as unverified (its open question 5).
 - [ ] T415 (AC-248) Say how to build the image from the package
   - Files: `docs/deploy.md`, `packages/api/src/model/introspection.ts` (a comment that describes the old image), `packages/api/src/deploy/cube-image.test.ts`
   - Failing test: `cube-image.test.ts`: `docs/deploy.md` builds from `~/Work/bi/cube/cube-introspection` with `docker build -t cube:v1.7.45-introspection-$(git rev-parse --short=10 HEAD) .`, names the tag the release runs, and names no `overlay.Dockerfile` (AC-248).
