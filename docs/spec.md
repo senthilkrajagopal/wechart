@@ -885,7 +885,7 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R14, R15, R18, R19]`.
 
 - [ ] AC-251 WHERE security is enabled, WHEN a request without a signed-in session reaches a wechart page or API route, THE SYSTEM SHALL send a page request to the configured OIDC provider's sign-in, and answer an API request with 401, returning no wechart content either way. Health routes are exempt.
       Fails when: any page renders wechart content, or any API route other than health returns data, without a signed-in session.
-- [ ] AC-252 WHERE security is enabled, WHEN a user signs in, THE SYSTEM SHALL take their identity and AD groups from the provider's token, as the configuration names them (issuer, client, groups claim), and show the user's name and a Sign out control in the top bar.
+- [x] AC-252 WHERE security is enabled, WHEN a user signs in, THE SYSTEM SHALL take their identity and AD groups from the provider's token, as the configuration names them (issuer, client, groups claim), and show the user's name and a Sign out control in the top bar.
       Fails when: the groups wechart grants access by differ from the token's, or the top bar shows no name or no Sign out.
 - [ ] AC-253 WHEN the user signs out, THE SYSTEM SHALL end the wechart session, so that the next request needs a new sign-in.
       Fails when: after signing out, a page or API route still answers as that user.

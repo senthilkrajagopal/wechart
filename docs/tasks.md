@@ -5094,13 +5094,22 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - an identity equal to the name shown twice; comments claiming more than the code does; untested outside-click closing and identity fallbacks.
     - Recorded, not changed: a failed sign-out goes to `/` without a message; the Reviews sentence of the chip's menu waits for T359.
     - AC-252 stays open for T320's real top bar; AC-254 for its workspace and proposals half (T359).
-- [ ] T320 (AC-257, AC-252) Build the security end-to-end harness: its own API, web preview and Dex, with a sign-in fixture per role
+- [x] T320 (AC-257, AC-252) Build the security end-to-end harness: its own API, web preview and Dex, with a sign-in fixture per role
   - Files: `playwright.security.config.ts`, `e2e/security/fixtures.ts` (signs `super`, `writer`, `reader`, `many` and `nobody` in through Dex's form; storage state per role), `e2e/security/sign-in.spec.ts`, `e2e/package.json` (`e2e:security`)
   - Failing test: `sign-in.spec.ts`: `writer` signs in through Dex in docker-compose and sees their name in the top bar (AC-257, compose half).
   - Depends on: T315, T316, T319
+  - **Done 2026-09-25.**
+    - `pnpm --filter @wechart/e2e e2e:security` runs the suite: an API on 4300 with security on, the built app on 5373 and Dex from compose. `e2e/security/prepare-stack.mjs` starts Dex and creates the suite's own database (`wechart_security`) before the API. The phase-1 config ignores `e2e/security/`.
+    - `fixtures.ts` signs a role in through Dex's own login form once per worker and hands its storage state to each test that sets `role` (research/test-stack.md, T320 addendum).
+    - `sign-in.spec.ts`, in Chrome, Firefox and Safari:
+      - `writer` sees their name beside a 28 px avatar, and a menu with their identity and Sign out;
+      - below 1,280 px the avatar stands alone;
+      - every role (`super`, `writer`, `reader`, `many` with 20 groups, `nobody` with none) is named in the top bar, and `/api/me` holds exactly its token's groups.
+    - The cold review (PASS) led to that every-role spec, the per-worker sign-in's source in the research, and two notes in the config: the suites mustn't run at once (both rebuild `dist`), and a task that publishes models from this suite needs port 4300 among Cube's model stores.
+    - AC-252 is ticked on this real top bar with the groups check. AC-257 stays open for its Helm half (T324).
 - [ ] T321 (AC-251, AC-316, AC-253) Send a page request without a session to sign-in, rendering no wechart content first
   - Files: `packages/web/src/shell/AuthGate.tsx` (+ test), `packages/web/src/api/http.ts` (a 401 sends the browser to `/api/auth/login?returnTo=…`), `deploy/helm/wechart/templates/web-config.yaml` (`auth_request` to `/api/auth/check` when security is on)
-  - Failing test: `AuthGate.test.tsx`: nothing of the app renders until `/api/me` succeeds; `e2e/security/sign-in.spec.ts`: opening `/explore` without a session lands on Dex's login form with no wechart text on the page (AC-251); signing out through the account menu, then opening `/explore`, lands on Dex's form with no user named (AC-253's page half, T317's review).
+  - Failing test: `AuthGate.test.tsx`: nothing of the app renders until `/api/me` succeeds; `e2e/security/sign-in.spec.ts`: opening `/explore` without a session lands on Dex's login form with no wechart text on the page (AC-251); signing out through the account menu, then opening `/explore`, lands on Dex's form with no user named (AC-253's page half, T317's review); a session whose 12 hours have passed (its row's expiry moved into the past) sends `/explore` to Dex's form too (AC-316 through the browser, T320's review).
   - Depends on: T318, T320
 - [ ] T322 (AC-008) Put the signed-in user's groups into every Cube request's security context
   - Files: `packages/api/src/cube/client.ts` (a per-request `groups` claim), `packages/api/src/server.ts`, `packages/api/src/cube/client.test.ts`, `e2e/security/cube-groups.spec.ts`

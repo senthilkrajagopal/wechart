@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "playwright test -c ../playwright.config.ts",
+    "e2e:security": "playwright test -c ../playwright.security.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

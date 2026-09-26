@@ -20,6 +20,9 @@ const edgeProject = {
 
 export default defineConfig({
   testDir: './e2e',
+  // The security-on suite has its own servers and config (T320):
+  // playwright.security.config.ts.
+  testIgnore: '**/security/**',
   /**
    * Generous on purpose, and raised twice now from Playwright's 30s.
    *
