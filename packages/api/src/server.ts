@@ -181,7 +181,7 @@ export function buildServer({
   registerRouteAccess(app);
   if (security === 'oidc') registerSignIn(app, signInOptionsOf(config, sessions));
   registerUser(app, security, config.superAdminGroup);
-  registerGuard(app, security);
+  registerGuard(app, security, config.publicUrl);
 
   /**
    * Whether anyone is signed in, for the web server's `auth_request` (T321,

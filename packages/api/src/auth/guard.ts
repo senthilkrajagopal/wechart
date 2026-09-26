@@ -25,6 +25,9 @@ declare module 'fastify' {
   }
 }
 
+/** The methods that change something (T412, AC-317). */
+const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 /** A route's options declaring its class: `app.get(url, USER, handler)`. */
 export const PUBLIC = { config: { access: 'public' } } as const;
 export const CUBE = { config: { access: 'cube' } } as const;
@@ -64,15 +67,38 @@ export function registerRouteAccess(app: FastifyInstance): void {
 }
 
 /**
- * With security on, a `user` route answers 401 `{ error: 'unauthenticated' }`
- * to a request with no signed-in user, before its body is read or its handler
- * runs. Registered after `registerUser`, whose `preParsing` hook it follows
+ * With security on, before a body is read or a handler runs:
+ * - a request from another site that would change something answers 403,
+ *   whatever it carries, by its `Sec-Fetch-Site` or an `Origin` that isn't
+ *   the public address (T412, AC-317);
+ * - a `user` or `admin` route answers 401 `{ error: 'unauthenticated' }` to a
+ *   request with no signed-in user;
+ * - an `admin` route answers 403 to anyone signed in who isn't a Super-Admin.
+ * Registered after `registerUser`, whose `preParsing` hook it follows
  * (research/openid-client.md, "Plugins, the guard and the OIDC routes").
  * Security off registers nothing: the single user is always there.
  */
-export function registerGuard(app: FastifyInstance, security: SecurityMode): void {
+export function registerGuard(
+  app: FastifyInstance,
+  security: SecurityMode,
+  publicUrl?: string,
+): void {
   if (security === 'off') return;
+  const ours = publicUrl === undefined ? undefined : new URL(publicUrl).origin;
   app.addHook('preParsing', async (request, reply) => {
+    // A request from another site that would change something is refused,
+    // whatever cookie it carries: sign-out included (T412, AC-317; the user's
+    // R25). A tool that sends neither header is let through to the checks below.
+    if (UNSAFE.has(request.method)) {
+      const site = request.headers['sec-fetch-site'];
+      const origin = request.headers['origin'];
+      if (site === 'cross-site' || (origin !== undefined && origin !== ours)) {
+        await reply
+          .code(403)
+          .send({ error: 'A request from another site can’t change anything here.' });
+        return;
+      }
+    }
     const access = request.routeOptions.config.access;
     if (access === 'public' || access === 'cube') return;
     // Sent and awaited, the reply stops the chain: no body is read and no

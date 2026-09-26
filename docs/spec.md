@@ -891,7 +891,7 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R14, R15, R18, R19]`.
       Fails when: after signing out, a page or API route still answers as that user.
 - [x] AC-316 WHERE security is enabled, THE SYSTEM SHALL end a sign-in 12 hours after it began, whatever the activity, so that the next request needs a new sign-in (`[R24]`).
       Fails when: a session signed in more than 12 hours ago still answers as its user, or one signed in less than 12 hours ago is refused.
-- [ ] AC-317 WHERE security is enabled, IF a request that changes something (POST, PUT, PATCH or DELETE) comes from another site, as its `Sec-Fetch-Site: cross-site` header or an `Origin` other than wechart's public address says, THEN THE SYSTEM SHALL refuse it with 403 and change nothing, whatever session cookie it carries (`[R25]`).
+- [x] AC-317 WHERE security is enabled, IF a request that changes something (POST, PUT, PATCH or DELETE) comes from another site, as its `Sec-Fetch-Site: cross-site` header or an `Origin` other than wechart's public address says, THEN THE SYSTEM SHALL refuse it with 403 and change nothing, whatever session cookie it carries (`[R25]`).
       Fails when: such a request from another site changes something or answers other than 403, or the same request from wechart's own pages is refused.
 - [ ] AC-254 WHILE security is disabled, THE SYSTEM SHALL run in single-user mode: no sign-in, and one user holding every permission, as a Super-Admin does. Workspaces and proposals SHALL work as with security on, and that user approves their own proposals (`[P2 input, R19]`).
       Fails when: a sign-in is asked for, or any permission is refused, while security is disabled.

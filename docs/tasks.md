@@ -5196,10 +5196,19 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - research marked verified: the cookie through `auth_request`, pattern B, and the localhost LoadBalancer.
     - **Ticked:** AC-257 (compose T320, Helm here) and AC-251 (API T318, app T321, deployment here).
 
-- [ ] T412 (AC-317) Refuse a request from another site that would change something
+- [x] T412 (AC-317) Refuse a request from another site that would change something
   - Files: `packages/api/src/auth/guard.ts` (with security on, every POST, PUT, PATCH and DELETE, sign-out included), `packages/api/src/auth/cross-site.test.ts`
   - Failing test: `cross-site.test.ts`: with security on and a signed-in cookie, a POST with `Sec-Fetch-Site: cross-site`, or with an `Origin` other than the public address, answers 403 and changes nothing (a document create makes none; sign-out ends no session); the same request with wechart's own `Origin`, or `Sec-Fetch-Site: same-origin`, goes through; a GET from another site is untouched; with security off, nothing is refused (AC-317; research/openid-client.md, "SPA behaviour and CSRF"; the user's R25).
   - Depends on: T318
+  - **Done 2026-09-25.**
+    - With security on, the guard refuses any POST, PUT, PATCH or DELETE with 403 when its `Sec-Fetch-Site` is `cross-site` or its `Origin` is not the public address's origin (`null` included). This happens before the session is looked at, on every route, sign-out included. A tool that sends neither header goes on to the usual checks, which is how `verify.sh` publishes.
+    - `cross-site.test.ts` covers:
+      - the three methods and POST, by header, foreign origin, foreign port and `null`, with and without a cookie; nothing is created and sign-out ends no session;
+      - wechart's own origin, `same-origin` and neither header all going through;
+      - a GET untouched, and security off.
+    - The security suite's sign-out and saves still work through the preview's proxy, which keeps `Origin`. nginx in the Helm release passes it through too.
+    - The cold review (PASS) led to the other methods, the no-cookie and `null` cases, and the guard's comment.
+    - AC-317 ticked.
 
 ## P2.2 Folder permissions and roles (F26)
 
