@@ -214,6 +214,10 @@ textarea { height: auto; padding: 6px 8px; }
   align-items: center;
   gap: 8px;
   width: 260px;
+  /* Narrower, its words ellipsed, where the bar runs out of room: at 900 px
+     with security off's Single-user mode chip in words beside the avatar
+     (rule 59, AC-190), rather than the page scrolling sideways (T319). */
+  min-width: 0;
   height: 32px;
   padding: 0 10px;
   border: 1px solid var(--wc-border-subtle);
@@ -252,6 +256,73 @@ textarea { height: auto; padding: 6px 8px; }
   font-size: var(--wc-text-xs-size);
   font-weight: var(--wc-text-xs-strong-weight);
 }
+
+/* The account button and its menu (T319, rule 59; references.md › Phase 2 ›
+   Surface 1): the avatar and the name, 12/16 600, truncated at 160 px and
+   hidden below 1,280 px; security off, the Single-user mode chip. */
+.account { position: relative; display: inline-flex; align-items: center; gap: 8px; }
+.account-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 6px 0 2px;
+  border-color: transparent;
+  background: transparent;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
+.account-button__name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 1279.98px) {
+  .account-button__name { display: none; }
+}
+.account-button--single {
+  gap: 6px;
+  padding: 0 8px;
+  border-color: var(--wc-border-strong);
+  border-radius: 999px;
+  color: var(--wc-status-warning);
+}
+.account-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  margin-top: 4px;
+  width: 260px;
+  padding: 4px;
+  background: var(--wc-bg-raised);
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  box-shadow: var(--wc-shadow-pop);
+}
+.account-panel__who {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  padding: 6px 6px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.account-panel__name {
+  font-size: var(--wc-text-sm-size);
+  line-height: var(--wc-text-sm-line);
+  font-weight: var(--wc-text-sm-strong-weight);
+  overflow-wrap: anywhere;
+}
+.account-panel__identity {
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  overflow-wrap: anywhere;
+}
+.account-panel__badge { gap: 4px; margin-top: 4px; }
 
 main { padding: var(--wc-surface-padding); }
 

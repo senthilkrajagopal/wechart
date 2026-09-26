@@ -6,7 +6,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import * as oidc from 'openid-client';
 
 import type { Config, OidcSettings } from '../config';
-import { displayNameFrom, groupsFrom, oidcConfig } from './oidc';
+import { displayNameFrom, groupsFrom, identityFrom, oidcConfig } from './oidc';
 
 /**
  * Signing in, with security on (T316, AC-252, AC-316; research/openid-client.md):
@@ -28,6 +28,8 @@ export interface SessionUser {
   /** The issuer and subject together: the only stable identity (research, OIDC Core §5.7). */
   readonly key: string;
   readonly name: string;
+  /** The email or username the provider sent, for the account menu (T319). */
+  readonly identity?: string;
   readonly groups: readonly string[];
 }
 
@@ -237,6 +239,7 @@ export function registerSignIn(app: FastifyInstance, options: SignInOptions): vo
     request.session.user = {
       key: userKeyOf(claims.iss, claims.sub),
       name: displayNameFrom(claims),
+      identity: identityFrom(claims),
       groups,
     };
     if (tokens.id_token !== undefined) request.session.idToken = tokens.id_token;

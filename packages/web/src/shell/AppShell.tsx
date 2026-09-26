@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-
+import { AccountMenu } from './AccountMenu';
 import { openSearch, SearchPalette } from './SearchPalette';
 import { ThemeToggle } from './ThemeToggle';
 import { WorkspaceSwitcher, type WorkspaceId } from './WorkspaceSwitcher';
@@ -50,52 +49,6 @@ function SearchTrigger() {
   );
 }
 
-/**
- * Who is signed in (AC-190): phase 1's single user, named by the API, as the
- * prototype's initials at the far right — where a user menu will sit once
- * there are users (phase 2).
- */
-function Avatar() {
-  const [name, setName] = useState<string | null>(null);
-  useEffect(() => {
-    const asked = new AbortController();
-    // A plain fetch rather than a query: the shell's own tests render it
-    // bare, and one small request needs no cache.
-    fetch('/api/me', { signal: asked.signal })
-      .then(async (response) =>
-        response.ok ? ((await response.json()) as { name?: unknown }) : {},
-      )
-      .then((me) => {
-        if (typeof me.name === 'string') setName(me.name);
-      })
-      .catch(() => undefined);
-    return () => {
-      asked.abort();
-    };
-  }, []);
-  /**
-   * Always there, as AC-190 asks: the initials once the API has said who,
-   * and a person until then — or for good, if it cannot — rather than an
-   * empty slot the avatar later pops into (T211's review).
-   */
-  return (
-    <span
-      className="app-avatar"
-      role="img"
-      aria-label={name === null ? 'Signed in' : `Signed in as ${name}`}
-    >
-      {name === null ? (
-        <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-          <circle cx="8" cy="5.5" r="3" fill="currentColor" />
-          <path d="M2.5 14.5a5.5 5 0 0 1 11 0z" fill="currentColor" />
-        </svg>
-      ) : (
-        name.slice(0, 2).toUpperCase()
-      )}
-    </span>
-  );
-}
-
 export function AppShell({ workspace, children }: AppShellProps) {
   return (
     <div className="app-shell">
@@ -111,7 +64,8 @@ export function AppShell({ workspace, children }: AppShellProps) {
         <span className="app-bar__spacer" />
         <SearchTrigger />
         <ThemeToggle />
-        <Avatar />
+        {/* Who is signed in, at the far right (AC-190, AC-252, AC-254). */}
+        <AccountMenu />
       </header>
       <main>{children}</main>
       <SearchPalette />

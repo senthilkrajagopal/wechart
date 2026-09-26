@@ -64,6 +64,19 @@ export function groupsFrom(claims: Record<string, unknown>, claim: string): stri
   return [];
 }
 
+/**
+ * Who the provider says this is, as the account menu shows it under the name
+ * (T319; references.md › Phase 2 › Surface 1): the email, else the username,
+ * else the subject.
+ */
+export function identityFrom(claims: Record<string, unknown>): string {
+  for (const key of ['email', 'preferred_username', 'sub']) {
+    const value = claims[key];
+    if (typeof value === 'string' && value !== '') return value;
+  }
+  return 'unknown';
+}
+
 /** What the top bar shows: the name, else the username, else the email, else the subject. */
 export function displayNameFrom(claims: Record<string, unknown>): string {
   for (const key of ['name', 'preferred_username', 'email', 'sub']) {

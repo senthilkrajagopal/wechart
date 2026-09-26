@@ -236,7 +236,13 @@ export function buildServer({
    */
   app.get('/api/me', async (request) => {
     const user = userOf(request);
-    return { name: user.name, groups: user.groups, superAdmin: user.superAdmin, security };
+    return {
+      name: user.name,
+      ...(user.identity === undefined ? {} : { identity: user.identity }),
+      groups: user.groups,
+      superAdmin: user.superAdmin,
+      security,
+    };
   });
 
   /**

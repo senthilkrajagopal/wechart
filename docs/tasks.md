@@ -4982,7 +4982,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 ## P2.0 Foundations: the request's user and effective access
 
 - [x] T311 [P] (AC-254) Carry the request's user, and run as the single Super-Admin while security is off
-  - Files: `packages/api/src/config.ts` (`WECHART_SECURITY=off|oidc`, default `off`), `packages/api/src/auth/user.ts` (+ test), `packages/api/src/server.ts` (an `onRequest` hook filling `request.wechartUser`; `/api/me` returns `{ name, superAdmin, security }`, and `groups` since T316)
+  - Files: `packages/api/src/config.ts` (`WECHART_SECURITY=off|oidc`, default `off`), `packages/api/src/auth/user.ts` (+ test), `packages/api/src/server.ts` (an `onRequest` hook filling `request.wechartUser`; `/api/me` returns `{ name, superAdmin, security }`, `groups` since T316, and, signed in, `identity` since T319)
   - Failing test: `user.test.ts` and `server.test.ts`: with security off, `/api/me` answers `{ name: 'admin', superAdmin: true, security: 'off' }`, and every route answers without a session (AC-254).
   - Depends on: none
   - **Done 2026-09-25.**
@@ -5077,11 +5077,24 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/auth/guard.ts` (+ test), `packages/api/src/server.ts` (each route's `config.access`), `packages/api/src/model/publish.ts`, `packages/api/src/model/introspection.ts`, `packages/api/src/jobs/*.ts`
   - Failing test: `guard.test.ts`: with security on and no session, every route registered on the server (collected with an `onRoute` hook) answers 401 `{ error: 'unauthenticated' }` and no data, except `/api/health`, `/api/cube-health`, `/api/auth/*` and the key-guarded `/api/cube-model/*`; with security off, no route answers 401 (T311's review); a route registered without an access class fails the test (AC-251).
   - Depends on: T316
-- [ ] T319 (AC-252, AC-254) Show the account button and menu, or the single-user chip
+- [x] T319 (AC-252, AC-254) Show the account button and menu, or the single-user chip
   - Files: `packages/web/src/shell/AccountMenu.tsx` (+ test), `packages/web/src/shell/AppShell.tsx`
   - Failing test: `AccountMenu.test.tsx`: signed in, the top bar shows the name and a 28 px avatar, and the menu holds the identity, "Super-Admin" for Super-Admins and Sign out; with security off it shows "Single-user mode" with no Sign out (AC-252, AC-254; rule 59).
   - Depends on: T311, T316
-- [ ] T320 (AC-257) Build the security end-to-end harness: its own API, web preview and Dex, with a sign-in fixture per role
+  - **Done 2026-09-25.**
+    - `AccountMenu` replaces the shell's avatar. Signed in, it is the avatar and the name (hidden below 1,280 px, truncated at 160 px). Its menu is the shell's APG menu, holding Sign out and named by the name, the identity and a Super-Admin label, so entering it says who it is for. Sign out POSTs `/api/auth/logout` and goes to its `redirectTo`.
+    - With security off it is the "Single-user mode" chip (open padlock and words, `status-warning`), whose menu says sign-in is off, with no Sign out.
+    - For the menu's identity, the session and `/api/me` gain `identity`: the token's email, else its username, else its subject (`identityFrom`, tested). Security off sends none.
+    - **Decision (small, the user's to change):** with security off, phase 1's "AD" avatar stays at the far right after the chip. references.md says the account button "becomes" the chip; keeping the avatar keeps ticked AC-190 and the phase-1 suite as they are (the user's R13).
+    - The search field may now narrow below 260 px (`min-width: 0`), so the bar, chip and avatar fit a 900 px window without the page scrolling sideways (design-conformance's "many page tabs" test).
+    - An end-to-end race found here: the loading avatar and the answered one were different elements, so a check could read one being removed. It is now one element.
+    - The cold review (FAIL) found:
+      - the identity and Super-Admin label outside the element that is the menu, so a screen reader entering it heard only Sign out: the menu is now named by them;
+      - the chip's words hidden below 1,280 px (my first answer to the 900 px overflow), against rule 59's "icon and label": undone;
+      - an identity equal to the name shown twice; comments claiming more than the code does; untested outside-click closing and identity fallbacks.
+    - Recorded, not changed: a failed sign-out goes to `/` without a message; the Reviews sentence of the chip's menu waits for T359.
+    - AC-252 stays open for T320's real top bar; AC-254 for its workspace and proposals half (T359).
+- [ ] T320 (AC-257, AC-252) Build the security end-to-end harness: its own API, web preview and Dex, with a sign-in fixture per role
   - Files: `playwright.security.config.ts`, `e2e/security/fixtures.ts` (signs `super`, `writer`, `reader`, `many` and `nobody` in through Dex's form; storage state per role), `e2e/security/sign-in.spec.ts`, `e2e/package.json` (`e2e:security`)
   - Failing test: `sign-in.spec.ts`: `writer` signs in through Dex in docker-compose and sees their name in the top bar (AC-257, compose half).
   - Depends on: T315, T316, T319
@@ -5269,6 +5282,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `e2e/workspace-single-user.spec.ts` (the phase-1 configuration)
   - Failing test: `workspace-single-user.spec.ts`: with security off, editing a dashboard goes through "Edit in my workspace", a proposal and "Approve my own proposal", and nothing asks for a sign-in or refuses a permission (AC-254).
   - Depends on: T356, T358
+  - Also (T319's review): the Single-user mode chip's menu gains its second sentence from references.md › Surface 1, "Your proposals still wait for your approval in Reviews.", once proposals and Reviews exist.
 
 ## P2.7 Data sources and connections (F18, returned)
 
@@ -5541,7 +5555,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
 | AC-234 | T378 | AC-246 | T404 | AC-249 | T336 |
-| AC-251 | T318, T321 | AC-252 | T316, T319 | AC-253 | T317, T321 |
+| AC-251 | T318, T321 | AC-252 | T316, T319, T320 | AC-253 | T317, T321 |
 | AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
 | AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327 |

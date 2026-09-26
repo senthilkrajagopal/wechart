@@ -10,6 +10,8 @@ export interface WechartUser {
   readonly key: string;
   /** What the top bar shows. */
   readonly name: string;
+  /** The email or username the provider sent, under the name in the account menu; none with security off. */
+  readonly identity?: string;
   /** The AD groups the provider's token carried, exactly as it carried them. */
   readonly groups: readonly string[];
   readonly superAdmin: boolean;
@@ -74,6 +76,12 @@ export function registerUser(app: FastifyInstance, security: SecurityMode): void
     request.wechartUser =
       user === undefined
         ? null
-        : { key: user.key, name: user.name, groups: [...user.groups], superAdmin: false };
+        : {
+            key: user.key,
+            name: user.name,
+            ...(user.identity === undefined ? {} : { identity: user.identity }),
+            groups: [...user.groups],
+            superAdmin: false,
+          };
   });
 }

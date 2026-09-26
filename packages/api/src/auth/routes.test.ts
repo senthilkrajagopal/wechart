@@ -63,8 +63,10 @@ describe('signing in through the configured OIDC provider (T316, AC-252)', () =>
 
     const me = await app.inject({ method: 'GET', url: '/api/me', headers: { cookie } });
     expect(me.statusCode).toBe(200);
+    // The identity as the provider sent it, for the account menu (T319).
     expect(me.json()).toEqual({
       name: 'Wren Writer',
+      identity: 'writer@wechart.test',
       groups: ['sales-rw'],
       superAdmin: false,
       security: 'oidc',
