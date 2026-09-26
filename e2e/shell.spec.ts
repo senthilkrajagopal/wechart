@@ -83,7 +83,10 @@ test.describe('at 390 pixels wide', () => {
       expect(widths.page, widths.past.join(', ')).toBeLessThanOrEqual(widths.window);
     });
 
-  test('the app bar folds navigation and search into a menu', async ({ page }) => {
+  test('the app bar folds navigation and search into a menu', async ({ page, browserName }) => {
+    // Safari's Tab passes over links unless Option is held, as its own
+    // setting has it; its keyboard users move through a menu with Option-Tab.
+    const TAB = browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
     await page.goto('/explore');
     const bar = page.getByRole('banner');
     // Not in the bar itself, where they would push it past the window.
@@ -111,12 +114,12 @@ test.describe('at 390 pixels wide', () => {
     // Escape closes it, back on its button; Tab out of it closes it too.
     await page.keyboard.press('Enter');
     await expect(menu).toHaveAttribute('aria-expanded', 'true');
-    await page.keyboard.press('Tab');
+    await page.keyboard.press(TAB);
     await page.keyboard.press('Escape');
     await expect(menu).toHaveAttribute('aria-expanded', 'false');
     await expect(menu).toBeFocused();
     await page.keyboard.press('Enter');
-    for (let press = 0; press < 8; press += 1) await page.keyboard.press('Tab');
+    for (let press = 0; press < 8; press += 1) await page.keyboard.press(TAB);
     await expect(menu).toHaveAttribute('aria-expanded', 'false');
 
     // Open when the window widens past 1,024 px: closed, not left to come back.
