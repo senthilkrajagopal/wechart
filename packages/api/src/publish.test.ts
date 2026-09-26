@@ -288,6 +288,21 @@ describe('publishing model changes', () => {
       const response = await publish(app, [{ path, content: 'cubes: []\n' }]);
       expect({ path, status: response.statusCode }).toEqual({ path, status: 400 });
     }
+    // A model that isn't YAML is refused as that, naming the file (T433, AC-332).
+    for (const [path, what] of [
+      ['cubes/orders.js', 'JavaScript'],
+      ['cubes/orders.mjs', 'JavaScript'],
+      ['globals.py', 'Python'],
+      ['cubes/orders.yml.jinja', 'a Jinja template'],
+      ['cubes/orders.yaml.jinja', 'a Jinja template'],
+      ['cubes/notes.txt', 'not a YAML file'],
+      ['cubes/Orders.JS', 'not a YAML file'],
+    ] as const) {
+      const response = await publish(app, [{ path, content: 'cubes: []\n' }]);
+      expect(response.json<{ error: string }>().error).toBe(
+        `Only YAML models can be published: ${path} is ${what}.`,
+      );
+    }
     await app.close();
   });
 
@@ -318,6 +333,10 @@ describe('publishing model changes', () => {
         },
       ]);
       expect(response.statusCode).toBe(400);
+      // Said as what it is: only YAML models can be published (T433, AC-332).
+      expect(response.json<{ error: string }>().error).toBe(
+        'Only YAML models can be published: cubes/orders.yml is a Jinja template, which Cube would render with its own environment.',
+      );
     }
     expect(asked).toBe(false);
     expect(store.files).toEqual([ORDERS]);

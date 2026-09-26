@@ -1149,7 +1149,7 @@ Traces to: §P2.4 Architecture, `[AD 1, AD 10, AD 11, AD 12, R27]` (added 2026-0
       Fails when: any request from a Cube or xcube process reaches wechart during a publish, a query, a refresh or a connection test; wechart serves a route for Cube to read a model or a connection from; or the browser makes a request to Cube or xcube.
 - [ ] AC-330 WHEN wechart's API starts, THE SYSTEM SHALL bring xcube's copy up to what wechart has published (folders, their allowed groups, model items and data sources), sending a full snapshot when xcube's copy is missing or behind. Cube SHALL then answer queries on published items with every API replica stopped (`[IP 1, IP 2, plan]`).
       Fails when: after xcube's copy is emptied and the API restarts, a published item can't be queried; or a query on a published item fails while every API replica is stopped.
-- [ ] AC-332 IF a model item is anything but YAML (a JavaScript or Python file, or YAML generated with Jinja), THEN THE SYSTEM SHALL refuse to publish it into a folder, saying that only YAML models can be published (`[R28]`).
+- [x] AC-332 IF a model item is anything but YAML (a JavaScript or Python file, or YAML generated with Jinja), THEN THE SYSTEM SHALL refuse to publish it into a folder, saying that only YAML models can be published (`[R28]`).
       Fails when: such an item is published, or the refusal doesn't say that only YAML can be.
 
 ## Non-goals (phase 1)

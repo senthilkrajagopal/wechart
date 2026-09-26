@@ -32,6 +32,18 @@ import { compileErrorsOf, type CompileError } from './validate';
 const MODEL_PATH = /^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.ya?ml$/;
 
 /**
+ * What a file that isn't YAML is, by its extension, for saying why it isn't
+ * published (AC-332): the other kinds Cube reads (research/cube/data-modeling.md,
+ * "How each file type is compiled"), or else any other file.
+ */
+const NOT_YAML: readonly (readonly [RegExp, string])[] = [
+  [/\.[cm]?js$/, 'JavaScript'],
+  [/\.py$/, 'Python'],
+  [/\.jinja$/, 'a Jinja template'],
+  [/^(?!.*\.ya?ml$)/, 'not a YAML file'],
+];
+
+/**
  * Cube renders a YAML file with Jinja first if it matches this
  * (research/cube/data-modeling.md, "How each file type is compiled", from
  * Cube's source): Cube's own test, so exactly what Cube would render. A
@@ -190,6 +202,19 @@ export function registerModelPublishing(
         typeof (file as ModelFile).content === 'string' &&
         MODEL_PATH.test((file as ModelFile).path),
     );
+    // Only YAML models are published: code in any other form runs where
+    // Cube's secrets are (R28; AC-332).
+    for (const file of files) {
+      const path = (file as ModelFile | null)?.path;
+      const kind =
+        typeof path === 'string' && path !== ''
+          ? NOT_YAML.find(([test]) => test.test(path))?.[1]
+          : undefined;
+      if (kind !== undefined)
+        return reply
+          .status(400)
+          .send({ error: `Only YAML models can be published: ${path} is ${kind}.` });
+    }
     if (changed.length === 0 || changed.length !== files.length)
       return reply.status(400).send({
         error: 'Send the changed YAML model files, each by a plain path inside the model.',
@@ -197,7 +222,7 @@ export function registerModelPublishing(
     const template = changed.find((file) => JINJA.test(file.content));
     if (template !== undefined)
       return reply.status(400).send({
-        error: `${template.path} is a Jinja template: templates are read-only here, and Cube would render one with its own environment.`,
+        error: `Only YAML models can be published: ${template.path} is a Jinja template, which Cube would render with its own environment.`,
       });
     if (config.cubeStoreUrl === undefined || modelFiles === undefined)
       return reply.status(409).send({

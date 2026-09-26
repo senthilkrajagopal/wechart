@@ -5943,7 +5943,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - a direct delete of a model applies only if xcube accepts it;
     - a stale base revision (`409`) is checked again (AC-321, AC-288, AC-291).
 
-    AC-136 is reworded and ticked again here (R28 Q9).
+    AC-136 is reworded and ticked again here (R28 Q9). T433's refusal of anything that isn't YAML (AC-332) holds through the changeset publish, checked here.
   - Depends on: T420, T425
 - [ ] T427 (AC-322) Word a refused publish: breaks named in the folders the user may see, a count for the rest, all in the audit trail
   - Files: `packages/api/src/xcube/refusal.ts` (+ test), `packages/web/src/workspaces/reviews/Refusal.tsx` (+ test)
@@ -5982,12 +5982,21 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
   - Files: `packages/api/src/cube/meta-cache.ts`, `packages/api/src/xcube/meta.ts` (+ test)
   - Failing test: `meta.test.ts`: after a changeset lands, `/api/meta` from either replica returns its new members once xcube reports the revision active on every instance, within 60 s, and without restarting Cube. AC-009 and AC-137 are reworded and ticked again here (R28 Q9).
   - Depends on: T421, T426
-- [ ] T433 [P] (AC-332) Refuse to publish a model item that isn't plain YAML
-  - Files: `packages/api/src/model/publish.ts`, `packages/api/src/model/yaml-only.test.ts`
-  - Failing test: `yaml-only.test.ts`:
+- [x] T433 [P] (AC-332) Refuse to publish a model item that isn't plain YAML
+  - Files: `packages/api/src/model/publish.ts`, ~~`packages/api/src/model/yaml-only.test.ts`~~ `packages/api/src/publish.test.ts` (the publish route's own tests, where the refusals already were)
+  - Failing test: ~~`yaml-only.test.ts`~~ `publish.test.ts`:
     - a `.js` or `.py` model file, or YAML generated with Jinja, is refused at publish, saying only YAML models can be published;
     - a plain YAML file passes (AC-332).
   - Depends on: none
+  - **Done 2026-09-26.**
+    - **Before:** the publish route already refused files that aren't YAML (400) and Jinja content, but with words that didn't say only YAML can be published. The new assertions failed on that wording.
+    - **Now:** every file that isn't YAML is refused, before anything else is checked, as "Only YAML models can be published: `<path>` is JavaScript / Python / a Jinja template / not a YAML file". YAML with Jinja content is refused as "Only YAML models can be published: `<path>` is a Jinja template, which Cube would render with its own environment". Plain YAML still publishes.
+    - **The cold review (PASS)** led to:
+      - the "not a YAML file" case, for any other extension;
+      - `.mjs` and `.yaml.jinja` cases;
+      - a comment that claims nothing unsourced about Cube.
+    - **AC-332 ticked**, at the one route that publishes a model today. T426 replaces that route with xcube's changesets and must keep these refusals (its failing test).
+    - **For T419:** the development model ships a live Jinja template, `infra/cube/model/cubes/product_catalog.yml`, read from disk rather than published. Under R28 xcube takes YAML only, so the snapshot must say what happens to it.
 - [ ] T435 (AC-273, AC-310) Bind a model's data sources at publish, nearest first from its folder, and give a cube with none the nearest `default`
   - Files: `e2e/security/data-source-binding.spec.ts`, `packages/api/src/xcube/changesets.ts`
   - Failing test: `data-source-binding.spec.ts`, against xcube's slice 3:
@@ -6115,6 +6124,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-317 | T412 | AC-318 | T416 | AC-139 | T413, T417 |
 | AC-248 | T414, T415, T417 | AC-250 | T413, T420 | AC-009 | T432 |
 | AC-136 | T426 | AC-137 | T432 | AC-166 | T438 |
+| AC-332 (again) | T426 | | | | |
 | AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | T426 |
 | AC-322 | T427 | AC-323 | T347, T440 | AC-324 | T333 |
 | AC-325 | T441 | AC-326 | T420, T437 | AC-327 | T419, T431, T442 |
