@@ -23,12 +23,23 @@
 >   the fork's package, `cube:v1.7.45-introspection-0b6eef90a9` (research re-pinned, T413–T415).
 >   Its complete test passed apart from load flakes, and at the user's word it was merged
 >   into `main` with `--no-ff` (98c2d2e, revertible in one step with `git revert -m 1`) and
->   tagged `cube-package-0b6eef90a9`, with T416. `feat/xcube` was then brought up to `main`;
->   slice 0's rest (the rename, a registry, a digest pin) and slices 1 onward start there.
-> - **Deployed:** the release on docker-desktop runs `feat/xcube`: wechart-api/web:abad2c2,
->   Cube on the package's image, sign-in on through `values/docker-desktop-security.yaml`
->   (Helm revision 12; revision 14 is a rollback to it after an accidental upgrade, below).
->   The user tests it as `super@wechart.test`.
+>   tagged `cube-package-0b6eef90a9`, with T416. `feat/xcube` was then brought up to `main`
+>   (66eab16). Since then work has gone on `main`: T325, T326, the 2026-09-25 docs pass,
+>   and T417 (slice 0's rename). `feat/xcube` is behind it. Which branch slices 2 onward use
+>   is asked of the user (2026-09-26).
+> - **Deployed:** the release on docker-desktop runs wechart-api/web:abad2c2, and Cube on the
+>   xcube image `xcube:v1.7.45-a13b9cff43` (T417, Helm revision 15), with sign-in on through
+>   `values/docker-desktop-security.yaml`. Revision 14 was a rollback after an accidental upgrade
+>   (below). The user tests it as `super@wechart.test`.
+> - **2026-09-26: the integration plan is final** (`docs/inputs/2026-09-26-integration-plan-decisions.md`,
+>   superseding the 2026-09-25 decisions; the shared doc
+>   https://claude.ai/code/artifact/18e15cb7-61fe-4f04-9a33-d6f3eef664b8, read through the Claude Docs
+>   connector). Slice 0's wechart side is done (T417). The list of what the decisions contradict
+>   went to the user for confirmation before any amendment. It is in this session's scratchpad
+>   as `integration-plan-worklist.md`, with questions Q1–Q9 in the chat. Seven researcher reports
+>   exist: two are committed (`cube/whole-model-publish.md`, `cube/generated-policies.md`) and five
+>   are held for the component-research step (prefixed names, xcube runtime, tokens, HA, credential
+>   sealing).
 > - **Pushing is the user's** (this session's push was refused by the permission classifier):
 >   `git push origin main feat/xcube --tags`.
 > - **Done since (2026-09-25, later):**
