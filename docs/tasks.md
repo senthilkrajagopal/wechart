@@ -5684,6 +5684,34 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Depends on: T410
   - Also to check there (T317's review): the provider must accept wechart's public root as a post-logout redirect URI, which Entra requires to be registered; and a sign-out URL whose `id_token_hint` carries a token with up to 200 group GUIDs must fit the URL limits on the way.
 
+## P2.16 The Cube introspection package (branch `feat/xcube`)
+
+The user's Cube fork moved the introspection API out of Cube's own packages into a standalone package, `cube-introspection/`, on an unmodified Cube v1.7.45: branch `feat/introspection-package` at `0b6eef90a9` (`docs/inputs/2026-09-25-cube-introspection-package.md`; research `cube/introspection-api.md`, which found no difference over HTTP and seven below it, none reaching wechart). The user took the switch on 2026-09-25 as the first step of slice 0 of their wechart ↔ Cube integration plan, on branch `feat/xcube` in both repositories so it can be rolled back. The image is still built locally; the rename, registry and digest pin are the rest of slice 0.
+
+- [x] T413 (AC-139, AC-250) Run the package's image in compose, for Cube and its refresh worker
+  - Files: `docker-compose.yml` (the `CUBE_IMAGE` default and the comment above it), `packages/api/src/deploy/cube-image.test.ts`
+  - Failing test: `cube-image.test.ts`: compose's `CUBE_IMAGE` default for `cube` and `cube-refresh-worker` is `cube:v1.7.45-introspection-0b6eef90a9`, and neither sets `command:` or `entrypoint:`, which would start Cube without the routes (research, "Don't override the container command"). Then compose up with the default, and `e2e/generate-cubes.spec.ts` passes against it (AC-139, AC-250).
+  - Depends on: none
+  - **Done 2026-09-25.** The test failed on the old tag, then passed. `docker compose up -d --wait --force-recreate cube cube-refresh-worker` started both from the new default: `cmd=["node","/cube/node_modules/cube-introspection/dist/src/bin/server.js"]`, "Cube API server (1.7.45) is listening on 4000". Against it, `generate-cubes.spec.ts`, `cube-scopes.spec.ts` and `data-source.spec.ts` passed in Chrome (7). The compose comment now gives the package's build, and `generate-cubes.spec.ts`'s comment no longer names the old image.
+- [x] T414 (AC-248) Run it in the docker-desktop Helm release
+  - Files: `deploy/helm/values/docker-desktop.yaml` (`cube.image`), `packages/api/src/deploy/cube-image.test.ts`
+  - Failing test: `cube-image.test.ts`: the values' `cube.image` is the tag, and the chart's Cube template gives its containers no `command` or `args`. Then `deploy/helm/verify.sh` passes against the upgraded release (AC-248).
+  - Depends on: T413
+  - **Done 2026-09-25.** The test failed on the old tag, then passed.
+    - **The upgrade.** `IMAGE_TAG=0a798d3 deploy/helm/verify.sh` upgraded the release (security off, as it was) to wechart's images at 0a798d3 and Cube at the new tag, with no command set, as uid 1000 on a read-only root filesystem.
+    - **A flake on the first run.** Every check passed but step 4: `/api/cube-health` said `"cube":"down"`. Run again on the settled release, every check passed, the 830-row count of northwind's `orders` included.
+      - The cause is unconfirmed. It wasn't readiness: `helm upgrade --wait` had already seen the new pod Ready.
+      - `/api/cube-health` asks both `/readyz` and `/livez`, each with a 3 s deadline (`cube/health.ts`). A fresh instance's first `/livez` outlasting that is a guess, not shown.
+      - Recorded as a known flake of `verify.sh` right after an upgrade that replaces the Cube pods (T414's review).
+    - **The introspection routes on the cluster.** Through the release's API at http://localhost:8089, northwind's data source, its schemas (`analytics`, `public`) and its tables listed. A scaffold of `categories` and `products` returned both cubes, with `products`' six unmapped columns named. This is the first Helm release on the package's image, which the research listed as unverified (its open question 5).
+- [x] T415 (AC-248) Say how to build the image from the package
+  - Files: `docs/deploy.md`, `packages/api/src/model/introspection.ts` (a comment that describes the old image), `packages/api/src/deploy/cube-image.test.ts`
+  - Failing test: `cube-image.test.ts`: `docs/deploy.md` builds from `~/Work/bi/cube/cube-introspection` with `docker build -t cube:v1.7.45-introspection-$(git rev-parse --short=10 HEAD) .`, names the tag the release runs, and names no `overlay.Dockerfile` (AC-248).
+  - Depends on: T414
+  - **Done 2026-09-25.** The test failed on the overlay build and the old tag, then passed.
+    - `docs/deploy.md` gives the package's build, the tag the release runs, and why Cube must keep the image's own command.
+    - `introspection.ts`'s comment says catalog reads have a queue of their own and "Continue wait" is a 200, keeping the old 500 form as an earlier build's.
+
 ## Phase 2 coverage: acceptance criterion → task
 
 | AC | Tasks | AC | Tasks | AC | Tasks |
@@ -5723,4 +5751,5 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 | AC-308 | T410 | AC-309 | T337 | AC-310 | T338 |
 | AC-311 | T333 | AC-312 | T335 | AC-313 | T397, T398 |
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
-| AC-317 | T412 | AC-318 | T416 | | |
+| AC-317 | T412 | AC-318 | T416 | AC-139 | T413 |
+| AC-248 | T414, T415 | AC-250 | T413 | | |

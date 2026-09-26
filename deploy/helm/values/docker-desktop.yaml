@@ -10,12 +10,13 @@ web:
     port: 8089
 
 cube:
-  # The user's Cube fork, built locally and pushed nowhere (T275, R10): the
-  # node runs on Docker's engine, so the pods use the local image, as they do
-  # wechart's own (docs/deploy.md). Cube and its refresh worker both run it.
-  # Tagged by the fork's commit: a rebuild under the same tag wouldn't restart
-  # the pods, which pull only what isn't there.
-  image: cube:v1.7.45-introspection-f6355de982
+  # Cube v1.7.45 with the user's fork's introspection package (T275, T414,
+  # R10), built locally and pushed nowhere: the node runs on Docker's engine,
+  # so the pods use the local image, as they do wechart's own
+  # (docs/deploy.md). Cube and its refresh worker both run it, with the
+  # image's own command. Tagged by the fork's commit: a rebuild under the same
+  # tag wouldn't restart the pods, which pull only what isn't there.
+  image: cube:v1.7.45-introspection-0b6eef90a9
   dataSource:
     type: postgres
     host: superset-postgresql.superset.svc.cluster.local

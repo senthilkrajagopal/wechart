@@ -20,10 +20,11 @@ import { checkScaffold, type UnmappedColumn } from './scaffoldCheck';
  *   against its table's columns for what it lost unsaid (`countMeasure`, and
  *   `member_name_taken` among its `unmappedColumns`: scaffoldCheck.ts).
  *
- * Cube reads the catalog through the data source's query queue, and when that
- * outlasts its wait the request is asked again, as a query is. Its docs say
- * `200 {"error":"Continue wait"}`; the fork lets the queue's error escape as
- * `500 {"error":"Error: Continue wait"}` (research, "Errors"). Both are waits.
+ * Cube reads the catalog through a queue of the package's own, beside the data
+ * source's query queue, and when that outlasts its wait the request is asked
+ * again, as a query is: `200 {"error":"Continue wait"}`. An earlier build of the
+ * fork let the queue's error escape as `500 {"error":"Error: Continue wait"}`
+ * (research, "Errors"); both are still taken as waits.
  */
 
 /** How often a "Continue wait" is asked again before wechart gives up. */
