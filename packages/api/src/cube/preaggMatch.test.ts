@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { missOf, rollupsFrom, type Transformed } from './preaggMatch';
+import { missOf, rollupsFrom, titlesFrom, type Transformed } from './preaggMatch';
 
 /**
  * T150 / AC-144: WHEN the user opens a chart's acceleration panel, THE SYSTEM
@@ -465,5 +465,76 @@ describe('why Cube did not use a rollup', () => {
     expect(miss.rollup).toBe('monthly_orders.by_status_month');
     expect(miss.member).toBe('monthly_orders.ordered_at');
     expect(miss.reason).toMatch(/^Cube did not use monthly_orders\.by_status_month/);
+  });
+});
+
+/**
+ * T403, AC-220: THE SYSTEM SHALL name every member by its title from the model
+ * wherever a person reads it, and never by its internal name — the
+ * Acceleration tab included. `Fails when: any of those shows a name such as
+ * "orders.count" …` The re-critique read "Stopped by orders.count: orders has
+ * no pre-aggregations." The rules still match on names; what a person reads
+ * is written in titles, from the same compiled model (`/v1/meta?extended`).
+ */
+describe('its reasons, in the model’s titles (T403, AC-220)', () => {
+  const TITLED = {
+    cubes: [
+      {
+        ...META.cubes[0],
+        title: 'Monthly Orders',
+        measures: [{ name: 'monthly_orders.count', title: 'Monthly Orders Count' }],
+        dimensions: [
+          { name: 'monthly_orders.status', title: 'Monthly Orders Status' },
+          { name: 'monthly_orders.ordered_at', title: 'Monthly Orders Ordered at' },
+        ],
+      },
+      {
+        name: 'orders',
+        title: 'Orders',
+        measures: [{ name: 'orders.count', title: 'Orders Count' }],
+        dimensions: [{ name: 'orders.status', title: 'Orders Status' }],
+        segments: [{ name: 'orders.shipped', title: 'Orders Shipped' }],
+        preAggregations: [],
+      },
+    ],
+  };
+  const name = titlesFrom(TITLED);
+
+  it('names members and cubes by their titles, and anything it doesn’t know as it is', () => {
+    expect(name('monthly_orders.ordered_at')).toBe('Monthly Orders Ordered at');
+    expect(name('orders.count')).toBe('Orders Count');
+    expect(name('orders.shipped')).toBe('Orders Shipped');
+    expect(name('orders')).toBe('Orders');
+    expect(name('nowhere.at_all')).toBe('nowhere.at_all');
+  });
+
+  it('writes each reason in titles, matching on names as before', () => {
+    const finer = missOf(
+      transformed(byDay('monthly_orders.ordered_at')),
+      {
+        measures: ['monthly_orders.count'],
+        timeDimensions: [{ dimension: 'monthly_orders.ordered_at', granularity: 'day' }],
+      },
+      rollups,
+      name,
+    );
+    expect(finer).toEqual({
+      rollup: 'monthly_orders.by_status_month',
+      member: 'monthly_orders.ordered_at',
+      reason: 'Monthly Orders Ordered at is grouped by day, and the rollup keeps it by month.',
+    });
+    // The re-critique's own case: a cube with no rollups, by its title.
+    expect(
+      missOf(
+        transformed({
+          leafMeasures: ['orders.count'],
+          measureToLeafMeasures: additive('orders.count'),
+          ownedDimensions: ['orders.status'],
+        }),
+        { measures: ['orders.count'], dimensions: ['orders.status'] },
+        rollups,
+        name,
+      ).reason,
+    ).toBe('Orders has no pre-aggregations.');
   });
 });

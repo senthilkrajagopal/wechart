@@ -21,7 +21,7 @@ import { authCheckOf } from './cube/authCheck';
 import { scopesOf } from './cube/scopes';
 import { healthOf, originOf } from './cube/health';
 import { MetaCache, MetaCachesByGroups } from './cube/meta-cache';
-import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
+import { missOf, rollupsFrom, titlesFrom, type Transformed } from './cube/preaggMatch';
 import type { SessionStore } from '@fastify/session';
 
 import { ADMIN, PUBLIC, registerGuard, registerRouteAccess, USER } from './auth/guard';
@@ -518,7 +518,11 @@ export function buildServer({
       const [dryRun, compiled] = await Promise.all([cube.dryRun(query), cube.metaExtended()]);
       const transformed =
         (dryRun as { transformedQueries?: Transformed[] } | null)?.transformedQueries?.[0] ?? {};
-      return { matched: null, miss: missOf(transformed, query, rollupsFrom(compiled)) };
+      // Said in the model's titles, as a person reads it (T403, AC-220); the
+      // member's name stays beside its title for what matches on it.
+      const name = titlesFrom(compiled);
+      const miss = missOf(transformed, query, rollupsFrom(compiled), name);
+      return { matched: null, miss: { ...miss, title: name(miss.member) } };
     } catch (failure) {
       request.log.warn({ failure }, 'why a query is not served from a rollup could not be read');
       return { matched: null };

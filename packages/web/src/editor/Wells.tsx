@@ -179,10 +179,24 @@ export function Wells({
    * A member as a reader knows it: its title from the model (AC-216, AC-220)
    * — from every cube's, for a chart naming members of more than one.
    */
-  const titleOf = (name: string) =>
+  const fullTitleOf = (name: string) =>
     available.find((member) => member.name === name)?.title ??
     (Object.hasOwn(titles, name) ? titles[name] : undefined) ??
     name;
+  /**
+   * Where every member the chart holds is one cube's or view's, its source is
+   * evident, and a pill says "Count", not "Orders Count" (T403, AC-220; the
+   * UI review's UX-061); over two, each keeps its full title.
+   */
+  const held = [
+    ...WELLS.flatMap((well) => spec[well.name]),
+    ...(spec.filters ?? []).map((filter) => filter.member),
+    ...(eachPointIs?.member === undefined ? [] : [eachPointIs.member]),
+  ];
+  const oneSource = new Set(held.map((name) => name.split('.')[0])).size === 1;
+  const titleOf = (name: string) =>
+    (oneSource ? available.find((member) => member.name === name)?.shortTitle : undefined) ??
+    fullTitleOf(name);
   const filters = spec.filters ?? [];
   const filterable = available.filter((member) => member.kind === 'dimension');
   // Any dimension but the category the boxes are drawn by (T400).

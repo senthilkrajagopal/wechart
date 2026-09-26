@@ -27,6 +27,7 @@ export {
 export { assignColours, OTHER_COLOUR, type ColourAssignment } from './colorAssignment';
 export { colouredMembersOf } from './colouredMembers';
 export { legendFor, seriesCount } from './legend';
+export { isOneSource, labelOf } from './modelWriter';
 export { echarts } from './echarts';
 export { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from './theme';
 export {

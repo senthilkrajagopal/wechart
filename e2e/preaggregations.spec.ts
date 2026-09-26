@@ -467,13 +467,14 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
   // The time, asked by day (every time field is, `QUERY_GRANULARITY`): finer
   // than the rollup's month — a miss, and the member named.
   await wellPicker(page, 'timeDimensions').selectOption('monthly_orders.ordered_at');
+  // By its title from the model, never its internal name (T403, AC-220).
   await expect(page.getByTestId('acceleration-member')).toHaveText(
-    'monthly_orders.ordered_at',
+    'Monthly Orders Ordered at',
     cube,
   );
   await expect(page.getByTestId('acceleration-miss')).toContainText(
-    'the nearest is monthly_orders.by_status_month. Stopped by monthly_orders.ordered_at: ' +
-      'monthly_orders.ordered_at is grouped by day, and the rollup keeps it by month.',
+    'the nearest is monthly_orders.by_status_month. Stopped by Monthly Orders Ordered at: ' +
+      'Monthly Orders Ordered at is grouped by day, and the rollup keeps it by month.',
   );
   // And Cube does answer that chart from the database.
   expect(
@@ -484,11 +485,12 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
     }),
   ).toEqual([]);
 
-  // A cube with no rollups says so.
+  // A cube with no rollups says so, by titles (T403, AC-220): the re-critique
+  // read "Stopped by orders.count: orders has no pre-aggregations."
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
   await wellPicker(page, 'measures').selectOption('orders.count');
   await expect(page.getByTestId('acceleration-miss')).toHaveText(
-    'Not served from a pre-aggregation. Stopped by orders.count: orders has no pre-aggregations.',
+    'Not served from a pre-aggregation. Stopped by Orders Count: Orders has no pre-aggregations.',
     cube,
   );
 });

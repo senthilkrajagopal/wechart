@@ -61,8 +61,8 @@ test('removing a field re-runs the query too', async ({ page }) => {
   await wellPicker(page, 'dimensions').selectOption('orders.status');
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
 
-  // Named by its title (AC-216).
-  await page.getByRole('button', { name: /Remove Orders Status/ }).click();
+  // Named by its title (AC-216): its short one, the chart being Orders' alone (AC-220, T403).
+  await page.getByRole('button', { name: 'Remove Status from Dimensions' }).click();
 
   await expect(page.getByTestId('result-row-count')).toHaveText('1 rows');
 });
@@ -476,7 +476,7 @@ test('a scatter, a heatmap, small multiples and a pivot draw from the wells', as
   await expect.poll(texts).toEqual(expect.arrayContaining(['shipped', 'completed', 'processing']));
   await expect.poll(painted).toBeGreaterThan(3);
   // One grouping is not enough for them: said, not drawn empty (AC-033).
-  await page.getByRole('button', { name: /Remove Orders Ordered at/ }).click();
+  await page.getByRole('button', { name: 'Remove Ordered at from Time' }).click();
   await expect(page.getByTestId('missing-fields')).toContainText(
     'Small multiples needs 2 dimensions, or a time dimension and a dimension',
   );
@@ -985,11 +985,12 @@ test('fields by cube, searched and added by click or key; pills by title with a 
   await expect(fields.getByTestId('member-orders.count')).toHaveCount(0);
   await expect(fields.getByTestId('member-orders.average_amount')).toBeVisible();
 
-  // A click adds a measure to Metrics, shown by its title, and marks the field used.
+  // A click adds a measure to Metrics, shown by its title — its short one, the
+  // chart being Orders' alone (AC-220, T403) — and marks the field used.
   const average = fields.getByTestId('member-orders.average_amount');
   await average.getByRole('button').click();
   const pill = page.getByTestId('in-measures-orders.average_amount');
-  await expect(pill).toContainText('Orders Average Amount');
+  await expect(pill.locator('.pill__title')).toHaveText('Average Amount');
   await expect(pill).not.toContainText('orders.average_amount');
   await expect(average).toContainText('in the chart');
 
@@ -1001,14 +1002,14 @@ test('fields by cube, searched and added by click or key; pills by title with a 
   await expect(page.getByTestId('in-timeDimensions-orders.ordered_at')).toBeVisible();
 
   // The time pill's grain is the query's grain.
-  await page.getByLabel('Grain of Orders Ordered at').selectOption('month');
+  await page.getByLabel('Grain of Ordered at').selectOption('month');
   await page.getByRole('tab', { name: 'Results', exact: true }).click();
   await page.getByTestId('drawer-tab-query').click();
   await expect(page.getByTestId('drawer-query')).toContainText('"granularity": "month"');
 
   // The Filters well holds the chart to a value the member has.
   await wellPicker(page, 'filters').selectOption('orders.status');
-  await page.getByLabel('Value of Orders Status').selectOption('shipped');
+  await page.getByLabel('Value of Status').selectOption('shipped');
   await expect(page.getByTestId('drawer-query')).toContainText('"operator": "equals"');
   await expect(page.getByTestId('drawer-query')).toContainText('"shipped"');
 
@@ -1058,9 +1059,12 @@ test('the Customize tab moves the legend, writes data labels and lets the axis l
   await page.getByRole('tab', { name: 'Customize' }).click();
 
   // The legend, from above the plot to its right: its entry for the average,
-  // by the measure's title (AC-220).
+  // by the measure's short title, the chart being one source's (AC-220, T403).
   const legendEntry = () =>
-    canvas.locator('svg text').filter({ hasText: 'Orders Average Amount' }).first();
+    canvas
+      .locator('svg text')
+      .filter({ hasText: /^Average Amount$/ })
+      .first();
   const plotBox = await canvas.boundingBox();
   const above = await legendEntry().boundingBox();
   expect((above?.y ?? 0) - (plotBox?.y ?? 0)).toBeLessThan(40);
@@ -1081,7 +1085,7 @@ test('the Customize tab moves the legend, writes data labels and lets the axis l
   // back to zero, and a label is not the axis.
   await page.getByLabel('Data labels').uncheck();
   await page.getByRole('tab', { name: 'Data' }).click();
-  await page.getByRole('button', { name: /Remove Orders Average Amount/ }).click();
+  await page.getByRole('button', { name: 'Remove Average Amount from Metrics' }).click();
   await page.getByRole('tab', { name: 'Customize' }).click();
   const zero = canvas.locator('svg text', { hasText: /^\D*0(\.0+)?\D*$/ });
   await expect(zero).not.toHaveCount(0);
@@ -1142,10 +1146,11 @@ test('a two-measure legend, the results headers and the trace read the members�
   const canvas = page.getByTestId('chart-canvas');
   await expect(canvas).toBeVisible();
 
-  // The legend.
+  // The legend: a one-source chart's, so by the short titles (AC-220 as
+  // amended, R16; T403).
   const written = canvas.locator('svg text');
-  await expect(written.filter({ hasText: /^Orders Count$/ })).toHaveCount(1);
-  await expect(written.filter({ hasText: /^Orders Total Amount$/ })).toHaveCount(1);
+  await expect(written.filter({ hasText: /^Count$/ })).toHaveCount(1);
+  await expect(written.filter({ hasText: /^Total Amount$/ })).toHaveCount(1);
   await expect(written.filter({ hasText: /orders\.(count|total_amount)/ })).toHaveCount(0);
 
   // The results' headers.
@@ -1278,8 +1283,8 @@ test('a manual combo, or a pie of too many slices, warns why and offers the reco
   await expect(page.getByTestId('type-warning')).toHaveCount(0);
 
   // 240 orders, one slice each.
-  await page.getByRole('button', { name: /Remove Orders Total Amount/ }).click();
-  await page.getByRole('button', { name: /Remove Orders Status/ }).click();
+  await page.getByRole('button', { name: 'Remove Total Amount from Metrics' }).click();
+  await page.getByRole('button', { name: 'Remove Status from Dimensions' }).click();
   await wellPicker(page, 'dimensions').selectOption('orders.id');
   await expect(page.getByTestId('result-row-count')).toHaveText('240 rows');
   await chooseChartType(page, 'pie');

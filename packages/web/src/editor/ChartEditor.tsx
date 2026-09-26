@@ -54,7 +54,7 @@ import { signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { FieldList } from './FieldList';
 import { Wells } from './Wells';
-import { cubesFrom, formatsOf, membersOf, titlesOf, type Member } from './fields';
+import { cubesFrom, formatsOf, membersOf, shortTitlesOf, titlesOf, type Member } from './fields';
 
 /**
  * The chart editor (AC-025, AC-026).
@@ -253,6 +253,8 @@ export function ChartEditor({
    * results' headers and the trace name members as the model does.
    */
   const titles = useMemo(() => titlesOf(meta.data), [meta.data]);
+  /** And its short title, for a one-source chart's legend and KPI (T403). */
+  const shortTitles = useMemo(() => shortTitlesOf(meta.data), [meta.data]);
 
   /**
    * A chosen type that asks Cube differently is part of the query: a box plot
@@ -461,10 +463,10 @@ export function ChartEditor({
     () =>
       isEmpty(spec) || shownType === null || missing.length > 0 || !result.isSuccess
         ? undefined
-        : compile(previewDocument, { rows, chartType: shownType, formats, titles }),
+        : compile(previewDocument, { rows, chartType: shownType, formats, titles, shortTitles }),
     // `missing` is derived from `spec` and `shownType` alone.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [spec, shownType, result.isSuccess, previewDocument, rows, formats, titles],
+    [spec, shownType, result.isSuccess, previewDocument, rows, formats, titles, shortTitles],
   );
   /** Its series, each with how a reader knows it: a member's title, or the value. */
   const drawnSeries = useMemo(() => {
@@ -662,7 +664,13 @@ export function ChartEditor({
                     <ChartTile
                       spec={
                         drawnSpec ??
-                        compile(previewDocument, { rows, chartType: shownType, formats, titles })
+                        compile(previewDocument, {
+                          rows,
+                          chartType: shownType,
+                          formats,
+                          titles,
+                          shortTitles,
+                        })
                       }
                       {...(chartHeight === undefined ? {} : { height: chartHeight })}
                       // Held here, not in the tile: the tile unmounts whenever

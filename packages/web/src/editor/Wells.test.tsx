@@ -183,15 +183,25 @@ describe('the wells’ pills, Filters and Top N (AC-216)', () => {
   };
   const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
-  it('shows each field by its title, a measure with its aggregation', () => {
+  /**
+   * T403, AC-220: "Where the member's cube or view is evident (a pill, a
+   * legend or a KPI label of a one-source chart), it SHALL use the member's
+   * short title". Every member here is Orders', so "Count", not "Orders
+   * Count" (UX-061's "Orders Count" beside its "count" tag).
+   */
+  it('shows each field by its short title in a one-source chart, a measure with its aggregation', () => {
     render(
       <Wells spec={spec} available={[measure, timeDimension]} onAdd={vi.fn()} onRemove={vi.fn()} />,
     );
     const pill = screen.getByTestId('in-measures-orders.count');
-    expect(pill.textContent).toContain('Orders Count');
+    expect(pill.querySelector('.pill__title')?.textContent).toBe('Count');
     expect(pill.textContent).toContain('count');
     expect(pill.textContent).not.toContain('orders.count');
-    expect(screen.getByRole('button', { name: 'Remove Orders Count from Metrics' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Remove Count from Metrics' })).toBeTruthy();
+    expect(
+      screen.getByTestId('in-timeDimensions-orders.ordered_at').querySelector('.pill__title')
+        ?.textContent,
+    ).toBe('Ordered at');
   });
 
   // T232's review / AC-220: a member of a cube other than the one chosen —
@@ -209,6 +219,10 @@ describe('the wells’ pills, Filters and Top N (AC-216)', () => {
     const pill = screen.getByTestId('in-dimensions-customers.country');
     expect(pill.textContent).toContain('Customers Country');
     expect(pill.textContent).not.toContain('customers.country');
+    // Two cubes, so neither is evident: Orders' members by their full titles too (T403).
+    expect(
+      screen.getByTestId('in-measures-orders.count').querySelector('.pill__title')?.textContent,
+    ).toBe('Orders Count');
   });
 
   it('changes a time field’s grain from its pill', async () => {
@@ -222,7 +236,8 @@ describe('the wells’ pills, Filters and Top N (AC-216)', () => {
         onGranularity={onGranularity}
       />,
     );
-    const grain = screen.getByLabelText('Grain of Orders Ordered at');
+    // Labelled as the pill reads: its short title, the chart being Orders' alone (T403).
+    const grain = screen.getByLabelText('Grain of Ordered at');
     expect((grain as HTMLSelectElement).value).toBe('month');
     await userEvent.selectOptions(grain, 'quarter');
     expect(onGranularity).toHaveBeenCalledWith('orders.ordered_at', 'quarter');
@@ -266,7 +281,8 @@ describe('the wells’ pills, Filters and Top N (AC-216)', () => {
         />
       </QueryClientProvider>,
     );
-    const value = screen.getByLabelText('Value of Orders Status');
+    // Labelled as the pill reads: its short title, the chart being Orders' alone (T403).
+    const value = screen.getByLabelText('Value of Status');
     await screen.findByRole('option', { name: 'refunded' });
     await userEvent.selectOptions(value, 'refunded');
     expect(onFilters).toHaveBeenLastCalledWith([
@@ -294,10 +310,8 @@ describe('the wells’ pills, Filters and Top N (AC-216)', () => {
     );
     await screen.findByRole('option', { name: 'shipped' });
     // Never "any value" while the chart is filtered.
-    expect((screen.getByLabelText('Value of Orders Status') as HTMLSelectElement).value).toBe(
-      'retired',
-    );
-    expect((screen.getByLabelText('How Orders Status is held') as HTMLSelectElement).value).toBe(
+    expect((screen.getByLabelText('Value of Status') as HTMLSelectElement).value).toBe('retired');
+    expect((screen.getByLabelText('How Status is held') as HTMLSelectElement).value).toBe(
       'notEquals',
     );
   });

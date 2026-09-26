@@ -6026,10 +6026,29 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/web/src/tiles/ChartTile.tsx`, `e2e/markings.spec.ts`
   - Failing test: `markings.spec.ts`: on a marked KPI tile the badge sits beside the title without pushing it down or squeezing it out of view, and no tile with an empty marking shows one (AC-201).
   - Depends on: none
-- [ ] T403 [P] (AC-220) Name members by their titles in the Acceleration tab and every other place the re-critique found
-  - Files: `packages/web/src/editor/acceleration/*`, `e2e/titles.spec.ts`
+- [x] T403 [P] (AC-220) Name members by their titles in the Acceleration tab and every other place the re-critique found
+  - Files: ~~`packages/web/src/editor/acceleration/*`~~ (as built) `packages/api/src/cube/preaggMatch.ts`, `packages/api/src/server.ts`, `packages/web/src/editor/AccelerationPanel.tsx`, `packages/core/src/{render-spec,compile}.ts`, `packages/charts/src/{modelWriter,legend,index}.ts`, `packages/web/src/tiles/Kpi.tsx`, `packages/web/src/editor/{fields,Wells,ChartEditor}.tsx`, `packages/web/src/dashboard/{DashboardPage,DashboardView}.tsx`, `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, their tests, `e2e/titles.spec.ts`, and `e2e/{chart-editor,preaggregations,acceleration}.spec.ts`
   - Failing test: `titles.spec.ts`: no legend, tooltip, table header, pill, marking chip, "Why this chart?" trace or Acceleration tab shows an internal name such as `orders.count`, and a one-source chart's legend and KPI label use the short title (AC-220).
   - Depends on: none
+  - **Done 2026-09-26.**
+    - **The Acceleration tab** read "Stopped by orders.count: orders has no pre-aggregations." Now the API's matcher still matches on names, but writes its reasons, and the member it names, in the compiled model's titles (`titlesFrom`, from `/v1/meta?extended`). It reads "Stopped by Orders Count: Orders has no pre-aggregations." The "Why not accelerated?" dialog shows the same panel.
+    - **Short titles where the source is evident.** Every member of a one-source chart is one cube's or view's (`isOneSource`), so these read the short title ("Count", not "Orders Count"):
+      - the legend and the KPI label, through `labelOf` and `RenderSpec.shortTitles`, which the editor, dashboards (a drilled view included) and a library chart's page all pass;
+      - the pills, whose aria labels match what they show.
+    - **Full titles elsewhere:** in a chart over two cubes, and in tooltips, table headers, marking chips and the trace.
+    - **A pre-aggregation's id** (`monthly_orders.by_status_month`) is left as it is in the tab. It isn't a member, and the model gives it no title.
+    - **The cold review (FAIL) found:**
+      - `acceleration.spec`'s dialog assertion was stale;
+      - pills kept full titles against AC-220's SHALL (the amendment is for them: N5, UX-061);
+      - a unit test pinned "Stopped by orders.count";
+      - the library page's short titles were untested.
+
+      All four are fixed.
+    - **AC-220 ticked** on `titles.spec.ts` (4 tests), with `legend.test.ts`, `Kpi.test.tsx`, `Wells.test.tsx`, `preaggMatch.test.ts`, `server.test.ts` and `AccelerationPanel.test.tsx`.
+    - **Not T403's:** `acceleration.spec.ts` "Data as of says what served a tile…" fails every time in Chrome at line 261. Playwright finds the tile menu's "Data as of" item "outside of the viewport", while the page measures it fully on screen (IntersectionObserver ratio 1). It fails at other steps from run to run.
+      - The menu's content is 498 px, over its 480 px cap, so that item sits in the menu's own scroll.
+      - Letting the menu grow to the window got the accelerated tile's steps through once, but not every time, so it was reverted.
+      - Four probes; left for the user (see the handoff).
 - [x] T404 [P] (AC-246) Open the tile's menu with Shift+F10 or the Menu key on any chart tile, one with no fields included
   - Files: ~~`packages/web/src/tiles/ChartTile.tsx`~~ `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/TileViewMenu.tsx`, `e2e/tile-menu.spec.ts`, `e2e/dashboard.spec.ts` (as built)
   - Failing test: `tile-menu.spec.ts`: Shift+F10 and the Menu key open the tile's menu on a focused chart tile with no fields yet, and the browser's own menu never opens there (AC-246).

@@ -325,6 +325,8 @@ export interface DashboardViewProps {
   readonly formats?: MemberFormats | undefined;
   /** Each member's title from the model, for every chart's names (AC-220). */
   readonly titles?: Readonly<Record<string, string>> | undefined;
+  /** And its short title, for a one-source chart's legend and KPI (T403). */
+  readonly shortTitles?: Readonly<Record<string, string>> | undefined;
   /**
    * An edit has begun — an edit session, or the settings page opened in view
    * mode — for the page, which checks that edit's save against the version
@@ -1984,6 +1986,7 @@ export function DashboardView({
   memberTitle,
   formats,
   titles,
+  shortTitles,
   onEditStart,
   onDiscard,
   editTile,
@@ -2648,8 +2651,13 @@ export function DashboardView({
       formats === undefined ? withFiltered.specs : withFormats(withFiltered.specs, formats);
     return titles === undefined
       ? written
-      : Object.fromEntries(Object.entries(written).map(([id, spec]) => [id, { ...spec, titles }]));
-  }, [withFiltered.specs, formats, titles]);
+      : Object.fromEntries(
+          Object.entries(written).map(([id, spec]) => [
+            id,
+            { ...spec, titles, ...(shortTitles === undefined ? {} : { shortTitles }) },
+          ]),
+        );
+  }, [withFiltered.specs, formats, titles, shortTitles]);
 
   /**
    * A click on a mark (AC-117): the selection from that tile, replacing
@@ -3684,6 +3692,7 @@ export function DashboardView({
                 ...state.spec,
                 ...(formats === undefined ? {} : { formats }),
                 ...(titles === undefined ? {} : { titles }),
+                ...(shortTitles === undefined ? {} : { shortTitles }),
               },
               ...(state.answered === undefined ? {} : { answered: state.answered }),
             }

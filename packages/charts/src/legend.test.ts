@@ -139,3 +139,52 @@ describe('a legend of measures names them by their titles (AC-220)', () => {
     expect(said).not.toContain(COUNT);
   });
 });
+
+/**
+ * T403, AC-220 as amended (R16): "Where the member's cube or view is evident
+ * (a pill, a legend or a KPI label of a one-source chart), it SHALL use the
+ * member's short title, and its full title elsewhere." `Fails when: … a
+ * one-source chart's legend or KPI label repeats the source's title.`
+ */
+describe('a one-source chart’s legend names its measures by their short titles (T403)', () => {
+  const titles = {
+    [COUNT]: 'Orders Count',
+    [AMOUNT]: 'Orders Amount',
+    'customers.count': 'Customers Count',
+  };
+  const shortTitles = { [COUNT]: 'Count', [AMOUNT]: 'Amount', 'customers.count': 'Count' };
+
+  it('writes each by its short title when every member is one cube’s', () => {
+    const labels = drawn({ ...cartesian([COUNT, AMOUNT]), titles, shortTitles });
+    expect(labels).toContain('Count');
+    expect(labels).toContain('Amount');
+    expect(labels).not.toContain('Orders Count');
+    expect(labels).not.toContain('Orders Amount');
+  });
+
+  it('keeps the full titles where the chart draws on two cubes, and in the tooltip', () => {
+    const two: RenderSpec = {
+      ...cartesian([COUNT, 'customers.count']),
+      rows: [
+        { [STATUS]: 'paid', [COUNT]: 10, 'customers.count': 3 },
+        { [STATUS]: 'refunded', [COUNT]: 20, 'customers.count': 4 },
+      ],
+      titles,
+      shortTitles,
+    };
+    const labels = drawn(two);
+    expect(labels).toContain('Orders Count');
+    expect(labels).toContain('Customers Count');
+
+    const option = optionFor({ ...cartesian([COUNT, AMOUNT]), titles, shortTitles }) as {
+      tooltip?: { formatter?: (params: unknown) => string };
+    };
+    const said =
+      option.tooltip?.formatter?.([
+        { seriesName: COUNT, name: 'paid', value: 10, marker: '' },
+        { seriesName: AMOUNT, name: 'paid', value: 100, marker: '' },
+      ]) ?? '';
+    expect(said).toContain('Orders Count');
+    expect(said).toContain('Orders Amount');
+  });
+});

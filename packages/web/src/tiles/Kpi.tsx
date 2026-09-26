@@ -1,3 +1,4 @@
+import { labelOf } from '@wechart/charts';
 import { formatValue, memberOn, type RenderSpec } from '@wechart/core';
 
 /**
@@ -24,8 +25,9 @@ export function Kpi({ spec }: KpiProps) {
   const row = spec.rows[0];
   const raw = measure === undefined || row === undefined ? undefined : row[measure];
   const value = raw === null || raw === undefined || raw === '' ? Number.NaN : Number(raw);
-  // By its title from the model (AC-220), never "orders.count".
-  const label = measure === undefined ? undefined : (spec.titles?.[measure] ?? measure);
+  // By its title from the model (AC-220), never "orders.count": its short
+  // one, as a KPI's one measure makes its cube evident (T403).
+  const label = measure === undefined ? undefined : labelOf(spec, measure);
 
   if (!Number.isFinite(value)) {
     // An empty result is not zero, and a value that will not parse is not

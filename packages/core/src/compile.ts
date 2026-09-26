@@ -35,6 +35,8 @@ export interface CompileOptions {
   readonly formats?: MemberFormats;
   /** Each member's title from the model (AC-220). */
   readonly titles?: Readonly<Record<string, string>>;
+  /** Each member's short title, for a one-source chart's legend and KPI label (T403, AC-220). */
+  readonly shortTitles?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -137,6 +139,7 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
         ...(chart.options === undefined ? {} : { options: chart.options }),
         ...(options.formats === undefined ? {} : { formats: options.formats }),
         ...(options.titles === undefined ? {} : { titles: options.titles }),
+        ...(options.shortTitles === undefined ? {} : { shortTitles: options.shortTitles }),
         // By the grain each was asked at, chosen or not (AC-188, AC-216).
         granularities: granularitiesOf(chart.wells.timeDimensions, chart.granularities),
         measures: [...chart.wells.measures],

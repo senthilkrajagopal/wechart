@@ -52,6 +52,32 @@ export interface Miss {
 
 type Query = Record<string, unknown>;
 
+/** How a reason writes a member or cube: as it is, unless told its title. */
+export type Namer = (name: string) => string;
+const asIs: Namer = (name) => name;
+
+/**
+ * Each cube's and member's title in the compiled model (`/v1/meta?extended`),
+ * so a reason is written as a person reads the model (T403, AC-220): its
+ * rules still match on names. A name the model doesn't title is written as
+ * it is.
+ */
+export function titlesFrom(meta: unknown): Namer {
+  const titles = new Map<string, string>();
+  const cubes = (meta as { cubes?: unknown } | null)?.cubes;
+  for (const cube of Array.isArray(cubes) ? (cubes as Record<string, unknown>[]) : []) {
+    if (typeof cube['name'] === 'string' && typeof cube['title'] === 'string')
+      titles.set(cube['name'], cube['title']);
+    for (const kind of ['measures', 'dimensions', 'segments'])
+      for (const member of Array.isArray(cube[kind])
+        ? (cube[kind] as Record<string, unknown>[])
+        : [])
+        if (typeof member['name'] === 'string' && typeof member['title'] === 'string')
+          titles.set(member['name'], member['title']);
+  }
+  return (name) => titles.get(name) ?? name;
+}
+
 /**
  * A member by its own cube and name. The dry run spells a joined cube's member
  * by its join path from the query's root — `orders.customers.country` — where
@@ -136,7 +162,12 @@ const sameMembers = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && [...a].sort().join() === [...b].sort().join();
 
 /** What stops one rollup serving the query, in the order Cube checks. */
-function blockers(transformed: Transformed, query: Query, rollup: Rollup): Omit<Miss, 'rollup'>[] {
+function blockers(
+  transformed: Transformed,
+  query: Query,
+  rollup: Rollup,
+  name: Namer,
+): Omit<Miss, 'rollup'>[] {
   const found: Omit<Miss, 'rollup'>[] = [];
   const leaves = (transformed.leafMeasures ?? []).map(own);
   // Filtered dimensions and segments are among these; a filtered measure is not.
@@ -154,14 +185,17 @@ function blockers(transformed: Transformed, query: Query, rollup: Rollup): Omit<
 
   for (const measure of leaves)
     if (!rollup.measures.includes(measure))
-      found.push({ member: measure, reason: `${measure} is not one of the rollup’s measures.` });
+      found.push({
+        member: measure,
+        reason: `${name(measure)} is not one of the rollup’s measures.`,
+      });
   for (const dimension of dimensions)
     if (!servable.includes(dimension))
       found.push({
         member: dimension,
         reason: filters.has(dimension)
-          ? `${dimension} is filtered on, and is not one of the rollup’s dimensions.`
-          : `${dimension} is not one of the rollup’s dimensions.`,
+          ? `${name(dimension)} is filtered on, and is not one of the rollup’s dimensions.`
+          : `${name(dimension)} is not one of the rollup’s dimensions.`,
       });
   for (const [dimension, granularity] of times) {
     if (dimension !== rollup.timeDimension) {
@@ -169,8 +203,8 @@ function blockers(transformed: Transformed, query: Query, rollup: Rollup): Omit<
         member: dimension,
         reason:
           rollup.timeDimension === undefined
-            ? `${dimension} is in the query, and the rollup has no time dimension.`
-            : `${dimension} is not the rollup’s time dimension (${rollup.timeDimension}).`,
+            ? `${name(dimension)} is in the query, and the rollup has no time dimension.`
+            : `${name(dimension)} is not the rollup’s time dimension (${name(rollup.timeDimension)}).`,
       });
       continue;
     }
@@ -187,8 +221,8 @@ function blockers(transformed: Transformed, query: Query, rollup: Rollup): Omit<
           asked !== undefined && asked !== granularity
             ? // By month over a range that is not whole months, for a rollup
               // that matches only whole periods.
-              `${dimension}’s date range is not whole ${rollup.granularity ?? 'periods'}, and the rollup matches only ranges that are.`
-            : `${dimension} is grouped by ${granularity}, and the rollup keeps it by ${rollup.granularity ?? 'no granularity'}.`,
+              `${name(dimension)}’s date range is not whole ${rollup.granularity ?? 'periods'}, and the rollup matches only ranges that are.`
+            : `${name(dimension)} is grouped by ${granularity}, and the rollup keeps it by ${rollup.granularity ?? 'no granularity'}.`,
       });
     }
   }
@@ -210,7 +244,7 @@ function blockers(transformed: Transformed, query: Query, rollup: Rollup): Omit<
       if (part !== undefined && rollup.measures.includes(own(part.measure)))
         found.push({
           member: own(measure),
-          reason: `${own(measure)} does not add up${part.type === undefined ? '' : ` (${part.type})`}, so only a rollup grouped exactly as the query can serve it.`,
+          reason: `${name(own(measure))} does not add up${part.type === undefined ? '' : ` (${part.type})`}, so only a rollup grouped exactly as the query can serve it.`,
         });
     }
   return found;
@@ -228,6 +262,8 @@ export function missOf(
   transformed: Transformed,
   query: Query,
   rollups: Readonly<Record<string, readonly Rollup[]>>,
+  /** How its reason writes a member or cube: by title, given `titlesFrom` (T403). */
+  name: Namer = asIs,
 ): Miss {
   const members = [
     ...(transformed.leafMeasures ?? []),
@@ -246,12 +282,12 @@ export function missOf(
     return {
       rollup: null,
       member: own(first),
-      reason: `${cubes.length > 0 ? cubes.join(', ') : 'Its cube'} ${cubes.length > 1 ? 'have' : 'has'} no pre-aggregations.`,
+      reason: `${cubes.length > 0 ? cubes.map(name).join(', ') : 'Its cube'} ${cubes.length > 1 ? 'have' : 'has'} no pre-aggregations.`,
     };
 
   let nearest: { rollup: Rollup; found: Omit<Miss, 'rollup'>[] } | undefined;
   for (const rollup of candidates) {
-    const found = blockers(transformed, query, rollup);
+    const found = blockers(transformed, query, rollup, name);
     if (nearest === undefined || found.length < nearest.found.length) nearest = { rollup, found };
   }
   const { rollup, found } = nearest as { rollup: Rollup; found: Omit<Miss, 'rollup'>[] };

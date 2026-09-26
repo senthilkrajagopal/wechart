@@ -60,18 +60,21 @@ describe('a chart’s acceleration panel', () => {
       miss: {
         rollup: 'monthly_orders.by_status_month',
         member: 'monthly_orders.id',
-        reason: 'monthly_orders.id is not one of the rollup’s dimensions.',
+        title: 'Monthly Orders ID',
+        reason: 'Monthly Orders ID is not one of the rollup’s dimensions.',
       },
     });
 
+    // T403, AC-220: the member by its title, never its internal name.
     const miss = await screen.findByTestId('acceleration-miss');
     expect(miss.querySelector('[data-testid="acceleration-member"]')?.textContent).toBe(
-      'monthly_orders.id',
+      'Monthly Orders ID',
     );
     expect(miss.textContent).toBe(
       'Not served from a pre-aggregation; the nearest is monthly_orders.by_status_month. ' +
-        'Stopped by monthly_orders.id: monthly_orders.id is not one of the rollup’s dimensions.',
+        'Stopped by Monthly Orders ID: Monthly Orders ID is not one of the rollup’s dimensions.',
     );
+    expect(miss.textContent).not.toContain('monthly_orders.id');
   });
 
   /**
@@ -125,15 +128,22 @@ describe('a chart’s acceleration panel', () => {
     expect(screen.queryByTestId('rollup-only-warning')).toBeNull();
   });
 
+  // As the API answers it since T403 (AC-220): the member's title beside its
+  // name, and the reason in titles — the re-critique's own case.
   it('says so when the chart’s cubes have no rollups at all', async () => {
     answering({
       matched: null,
-      miss: { rollup: null, member: 'orders.count', reason: 'orders has no pre-aggregations.' },
+      miss: {
+        rollup: null,
+        member: 'orders.count',
+        title: 'Orders Count',
+        reason: 'Orders has no pre-aggregations.',
+      },
     });
 
     const miss = await screen.findByTestId('acceleration-miss');
     expect(miss.textContent).toBe(
-      'Not served from a pre-aggregation. Stopped by orders.count: orders has no pre-aggregations.',
+      'Not served from a pre-aggregation. Stopped by Orders Count: Orders has no pre-aggregations.',
     );
   });
 });

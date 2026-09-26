@@ -497,6 +497,12 @@ function LoadedDashboard({
     () => Object.fromEntries(allMembers(meta.data).map((member) => [member.name, member.title])),
     [meta.data],
   );
+  /** And its short title, for a one-source chart's legend and KPI (T403). */
+  const shortTitles = useMemo(
+    () =>
+      Object.fromEntries(allMembers(meta.data).map((member) => [member.name, member.shortTitle])),
+    [meta.data],
+  );
   const memberTitle = useMemo(() => (name: string) => titles[name], [titles]);
 
   return (
@@ -531,6 +537,7 @@ function LoadedDashboard({
         primaryKey={primaryKey}
         memberTitle={memberTitle}
         titles={titles}
+        shortTitles={shortTitles}
         formats={formats}
         errors={charts.data?.errors ?? {}}
         loading={charts.isPending}

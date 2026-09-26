@@ -1460,6 +1460,9 @@ describe('whether a query is served from a rollup (AC-144)', () => {
             cubes: [
               {
                 name: 'monthly_orders',
+                title: 'Monthly Orders',
+                measures: [{ name: 'monthly_orders.count', title: 'Monthly Orders Count' }],
+                dimensions: [{ name: 'monthly_orders.id', title: 'Monthly Orders ID' }],
                 preAggregations: [
                   {
                     name: 'by_status_month',
@@ -1497,7 +1500,12 @@ describe('whether a query is served from a rollup (AC-144)', () => {
     await app.close();
   });
 
-  it('on a miss, names the member that stops the nearest rollup', async () => {
+  /**
+   * T403, AC-220: named by its title, never its internal name — the member
+   * and the reason alike, in the compiled model's titles; its name kept
+   * beside them for what matches on it.
+   */
+  it('on a miss, names the member that stops the nearest rollup, by its title', async () => {
     const { cube, asked } = cubeAnswering([]);
     const app = buildServer({ config, cube });
 
@@ -1512,7 +1520,8 @@ describe('whether a query is served from a rollup (AC-144)', () => {
       miss: {
         rollup: 'monthly_orders.by_status_month',
         member: 'monthly_orders.id',
-        reason: 'monthly_orders.id is not one of the rollup’s dimensions.',
+        title: 'Monthly Orders ID',
+        reason: 'Monthly Orders ID is not one of the rollup’s dimensions.',
       },
     });
     expect(asked.sort()).toEqual([

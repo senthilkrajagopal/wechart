@@ -300,9 +300,11 @@ test('Data as of says what served a tile, how fresh it is and where that is set'
   ]);
   await menu.getByRole('menuitem', { name: 'Why not accelerated?' }).click();
   const why = page.getByRole('dialog', { name: /is not accelerated$/ });
+  // In the model's titles, never its internal names (T403, AC-220).
   await expect(why.getByTestId('acceleration-miss')).toContainText(
-    'orders has no pre-aggregations',
+    'Orders has no pre-aggregations',
   );
+  await expect(why.getByTestId('acceleration-miss')).not.toContainText('orders.count');
   await page.keyboard.press('Escape');
   await expect(why).toHaveCount(0);
 });

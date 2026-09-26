@@ -14,7 +14,7 @@
 import { distinctValues, memberOn, seriesOf, type ChartType, type RenderSpec } from '@wechart/core';
 
 import type { EChartsOption } from './theme';
-import { modelWriter, seriesWriter } from './modelWriter';
+import { labelOf, modelWriter } from './modelWriter';
 import { slicesOf } from './series/pie';
 
 /** Types whose colour says how much rather than which. */
@@ -61,12 +61,13 @@ export function legendFor(spec: RenderSpec): EChartsOption {
   const named = COLOURED_BY_CATEGORY.includes(spec.chartType)
     ? memberOn(spec.encoding, 'x')
     : memberOn(spec.encoding, 'color');
-  // A series per measure is named by the measure's title (AC-220); a pie's
-  // slices come already written, by every value they are grouped by (AC-221).
+  // A series per measure is named by the measure's title (AC-220), its short
+  // one in a one-source chart (T403); a pie's slices come already written,
+  // by every value they are grouped by (AC-221).
   const write = PIE_TYPES.includes(spec.chartType)
     ? undefined
     : named === undefined && spec.titles !== undefined
-      ? seriesWriter(spec, undefined)
+      ? (value: unknown) => labelOf(spec, String(value ?? ''))
       : modelWriter(spec, named);
 
   return {

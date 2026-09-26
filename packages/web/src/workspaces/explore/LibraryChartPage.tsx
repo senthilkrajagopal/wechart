@@ -117,6 +117,10 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
             titles: Object.fromEntries(
               allMembers(meta.data).map((member) => [member.name, member.title]),
             ),
+            // For a one-source chart's legend and KPI (T403).
+            shortTitles: Object.fromEntries(
+              allMembers(meta.data).map((member) => [member.name, member.shortTitle]),
+            ),
           },
     [spec, meta.data],
   );

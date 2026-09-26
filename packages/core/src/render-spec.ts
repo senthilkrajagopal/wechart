@@ -144,6 +144,13 @@ export interface RenderSpec {
    */
   readonly titles?: Readonly<Record<string, string>>;
   /**
+   * Each member's short title from the model — "Count" for "Orders Count" —
+   * for where its cube or view is evident: the legend and KPI label of a
+   * chart whose members are all one cube's (T403, AC-220). Its full title
+   * everywhere else.
+   */
+  readonly shortTitles?: Readonly<Record<string, string>>;
+  /**
    * Each time member's granularity in the query the rows answer (AC-188), so
    * every place a time value is written can write it by its bucket — "Jan
    * 2026" for a month — rather than as Cube's raw timestamp.

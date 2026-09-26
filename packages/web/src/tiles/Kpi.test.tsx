@@ -52,6 +52,21 @@ describe('a KPI with a value', () => {
     expect(screen.getByTestId('kpi-label').textContent).toBe('Orders Count');
   });
 
+  /**
+   * T403, AC-220 as amended (R16): a KPI's one measure is one cube's, so its
+   * source is evident and its label is the short title. `Fails when: … a
+   * one-source chart's … KPI label repeats the source's title.`
+   */
+  it('names the measure by its short title, its cube being evident', () => {
+    render(
+      <Kpi
+        spec={spec({ titles: { [COUNT]: 'Orders Count' }, shortTitles: { [COUNT]: 'Count' } })}
+      />,
+    );
+
+    expect(screen.getByTestId('kpi-label').textContent).toBe('Count');
+  });
+
   it('reads the value Cube sent, which is a string over JSON', () => {
     render(<Kpi spec={spec({ rows: [{ [COUNT]: '80' }] })} />);
 

@@ -45,3 +45,25 @@ export function titleOf(spec: Pick<RenderSpec, 'titles'>, name: string): string 
   const titles = spec.titles;
   return titles !== undefined && Object.hasOwn(titles, name) ? (titles[name] ?? name) : name;
 }
+
+/** Whether every member a chart draws is one cube's or view's, so its source is evident. */
+export function isOneSource(spec: Pick<RenderSpec, 'encoding'>): boolean {
+  const members = Object.values(spec.encoding).flatMap((each) => each ?? []);
+  return members.length > 0 && new Set(members.map((name) => name.split('.')[0])).size === 1;
+}
+
+/**
+ * A member as a chart's legend or KPI label names it (T403, AC-220): by its
+ * short title where every member is one cube's or view's — "Count", not
+ * "Orders Count", as the source is evident — and by its full title
+ * elsewhere, or where the model gives no short one.
+ */
+export function labelOf(
+  spec: Pick<RenderSpec, 'encoding' | 'titles' | 'shortTitles'>,
+  name: string,
+): string {
+  const short = spec.shortTitles;
+  return isOneSource(spec) && short !== undefined && Object.hasOwn(short, name)
+    ? (short[name] ?? titleOf(spec, name))
+    : titleOf(spec, name);
+}

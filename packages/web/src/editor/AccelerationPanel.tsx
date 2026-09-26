@@ -16,7 +16,8 @@ import { RollupOnlyWarning } from './RollupOnlyWarning';
  */
 interface Answer {
   readonly matched: string | null;
-  readonly miss?: { rollup: string | null; member: string; reason: string };
+  /** The member by its name, and by its title, which is what a person reads (T403, AC-220). */
+  readonly miss?: { rollup: string | null; member: string; title?: string; reason: string };
 }
 
 async function askAcceleration(query: Record<string, unknown>, signal: AbortSignal) {
@@ -76,7 +77,10 @@ export function AccelerationPanel({ query }: { query: Record<string, unknown> })
         {miss === undefined ? null : (
           <>
             {' '}
-            Stopped by <code data-testid="acceleration-member">{miss.member}</code>: {miss.reason}
+            {/* By its title from the model, never its internal name (T403, AC-220). */}
+            Stopped by{' '}
+            <strong data-testid="acceleration-member">{miss.title ?? miss.member}</strong>:{' '}
+            {miss.reason}
           </>
         )}
       </p>
