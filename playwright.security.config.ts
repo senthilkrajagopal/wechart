@@ -1,4 +1,12 @@
+import { readFileSync } from 'node:fs';
+
 import { defineConfig, devices } from '@playwright/test';
+
+/** xcube's development public key, without which the API won't start (infra/xcube/README.md; T333). */
+const DEV_XCUBE_PUBLIC_KEY = readFileSync(
+  new URL('./infra/xcube/dev-credential-key.pub.jwk', import.meta.url),
+  'utf8',
+).trim();
 
 const PORT = 5373;
 const API_PORT = 4300;
@@ -48,6 +56,7 @@ export default defineConfig({
         WECHART_DB_URL: 'postgres://wechart:wechart@localhost:55432/wechart_security',
         CUBE_API_SECRET: 'dev-secret',
         CUBE_API_URL: 'http://localhost:54000/cubejs-api',
+        WECHART_XCUBE_PUBLIC_KEY: DEV_XCUBE_PUBLIC_KEY,
         WECHART_SEED: '1',
         WECHART_RESET_DATA: '1',
         WECHART_MODEL_KEY: 'dev-model-key',

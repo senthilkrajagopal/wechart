@@ -100,6 +100,10 @@ spec:
                 secretKeyRef:
                   name: {{ include "wechart.secretName" . }}
                   key: model-key
+            # xcube's public key, which credentials are encrypted to; the API
+            # won't start without it (T333, AC-324). Public: no Secret needed.
+            - name: WECHART_XCUBE_PUBLIC_KEY
+              value: {{ required "api.xcubePublicKey is required: xcube's public key, as a JWK (docs/deploy.md)" .Values.api.xcubePublicKey | quote }}
             {{- if .Values.api.seed }}
             # wechart's sample dashboards, which name the sample database's cubes.
             - name: WECHART_SEED

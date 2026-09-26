@@ -1,4 +1,12 @@
+import { readFileSync } from 'node:fs';
+
 import { defineConfig, devices } from '@playwright/test';
+
+/** xcube's development public key, without which the API won't start (infra/xcube/README.md; T333). */
+const DEV_XCUBE_PUBLIC_KEY = readFileSync(
+  new URL('./infra/xcube/dev-credential-key.pub.jwk', import.meta.url),
+  'utf8',
+).trim();
 
 const PORT = 5273;
 const baseURL = `http://localhost:${PORT}`;
@@ -77,6 +85,7 @@ export default defineConfig({
         // signs every Cube request with it (AC-008).
         CUBE_API_SECRET: 'dev-secret',
         CUBE_API_URL: 'http://localhost:54000/cubejs-api',
+        WECHART_XCUBE_PUBLIC_KEY: DEV_XCUBE_PUBLIC_KEY,
         WECHART_SEED: '1',
         // These tests create objects, so each run starts from the seed rather
         // than from whatever the last run left behind.

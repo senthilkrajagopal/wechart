@@ -13,6 +13,7 @@ import { readModelDir } from './model/read-dir';
 import { imageStore } from './repos/images';
 import { modelFileStore } from './repos/model-files';
 import { queryLog } from './repos/query-log';
+import { xcubePublicKeyOf } from './secrets/xcube-key';
 import { seedDevData } from './seed';
 import { buildServer } from './server';
 
@@ -22,7 +23,12 @@ import { buildServer } from './server';
  * (docs/research/db-access.md).
  */
 async function main(): Promise<void> {
-  const config = loadConfig();
+  const config = {
+    ...loadConfig(),
+    // Before anything else is touched: without it, no credential could be
+    // taken, and the API refuses to start (T333, AC-324).
+    xcubePublicKey: xcubePublicKeyOf(process.env),
+  };
   await migrateToLatest();
 
   const db = getDb();

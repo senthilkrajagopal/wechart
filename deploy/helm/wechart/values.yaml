@@ -33,6 +33,10 @@ api:
   # wechart's sample dashboards, which name the sample database's cubes.
   # Off: this release's model starts empty, to be built in the Model workspace.
   seed: false
+  # xcube's public key, as a JWK, which data-source credentials are encrypted
+  # to (AC-298, AC-324). Required: the API won't start without it. Only the
+  # public key: wechart never holds the private one.
+  xcubePublicKey: ''
   resources: {}
 
 # wechart's metadata database: dashboards, charts, folders and the model.

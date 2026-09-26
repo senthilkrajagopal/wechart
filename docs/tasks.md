@@ -5416,7 +5416,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The cold review (PASS) led to tests for an unknown scheme and for distinct ciphertexts.
     - AC-298 stays open. No product flow seals credentials yet, and the key isn't from the Secret until T333. The dump test is to be extended to drive the flows that persist credentials: T335 (create, edit), T346 (copy), T352 (approve), T362 (test history) and T368 (audit), each now citing AC-298. Check all three base64 alignments once a JSON store holds the canary.
     - **Superseded in part (2026-09-26):** AES-256-GCM under a key wechart holds gives way to HPKE sealing to xcube's public key, in the browser (T441; `[AD 7, IP 1, R27, R28]`; research `credential-sealing.md`). The `pg_dump` canary test carries over to T441.
-- [ ] T333 (AC-324, AC-298) ~~(AC-311, AC-298) Load the encryption key, and refuse to start without a usable one~~ Load xcube's public key, and refuse to start without it *(rewritten 2026-09-26: AC-311 is retired; wechart holds no decryption key, `[AD 7, IP 1, R27]`)*
+- [x] T333 (AC-324, AC-298) ~~(AC-311, AC-298) Load the encryption key, and refuse to start without a usable one~~ Load xcube's public key, and refuse to start without it *(rewritten 2026-09-26: AC-311 is retired; wechart holds no decryption key, `[AD 7, IP 1, R27]`)*
   - Files: `packages/api/src/secrets/xcube-key.ts` (+ test), `packages/api/src/config.ts`, `packages/api/src/main.ts`, `playwright.config.ts` and `playwright.security.config.ts` (the public half of the fixed development key pair), `docker-compose.yml`, `deploy/helm/wechart/templates/api.yaml`
   - Failing test: `xcube-key.test.ts`:
     - with no public key configured, or one that isn't a key HPKE can seal to, start-up throws naming the setting, and the server never listens;
@@ -5425,6 +5425,40 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     xcube's own check, refusing to start without its private key or with one that can't open a sample credential, is xcube's, on the Cube side.
   - ~~Failing test: `key.test.ts`: with no key, or with a key that can't decrypt a stored credential, start-up throws naming the missing file or the key id that fails, and the server never listens (AC-311).~~
   - Depends on: T332, `docs/research/credential-sealing.md`
+  - **Done 2026-09-26.**
+    - **The key pair.** R27's fixed development pair is in `infra/xcube/`, made with `openssl genpkey -algorithm X25519`:
+      - `dev-credential-key.pem`, the private half, is mounted by compose into `cube` and `cube-refresh-worker` alone, as a secret file at `/run/secrets/xcube-credential-keys/<kid>.pem`. That is the layout the research gives xcube's loader. It was checked in the recreated containers: present, and readable by Cube's process.
+      - `dev-credential-key.pub.jwk`, the public half, is a JWK whose `kid` is its RFC 7638 thumbprint.
+      - The README says which is which. xcube's loader, its `.check` sample credential and its own start-up refusal are the Cube side's, through the Cube-expert agent.
+    - **wechart's check.** `secrets/xcube-key.ts` reads `WECHART_XCUBE_PUBLIC_KEY`, and `main.ts` calls it after `loadConfig` and before migrations or anything else. It refuses, naming the setting and the problem, and never repeating a private value, when the key:
+      - is missing;
+      - isn't a JWK;
+      - holds a private part (`d`);
+      - isn't X25519;
+      - has an `x` that isn't 32 bytes of canonical base64url;
+      - has a `kid` other than its thumbprint;
+      - is a point no key can be agreed with.
+      The last check is sourced in the sibling research `x25519-public-key-checks.md` (RFC 9180 §7.1.4, and Node observed).
+    - **Where it's given:**
+      - both Playwright configs read the development JWK;
+      - the chart's `api.xcubePublicKey` is `required`, and Docker Desktop's values give the development key;
+      - `docs/deploy.md` has a section on it.
+    - **What the tests show** (`xcube-key.test.ts`):
+      - each refusal;
+      - `import('../main')` rejecting, with nothing listening on its port, both without a key and with a bad one;
+      - the committed pair being a pair;
+      - compose mounting the private half into the two Cube services only;
+      - a scan of every file git tracks or would add, which finds the private key (its JWK value, hex, base64 at every alignment, PEM lines, or the whole PEM in base64) in no other file, and finds the `.pem` named only by compose, `infra/xcube/`, this test and the docs.
+    - **Runs:** the security suite passed in every browser with the key given (69/69), and the Chrome runs of the phase-1 suite passed after.
+    - **The cold review (PASS)** led to:
+      - the repository-wide scan, in place of a list of files;
+      - the non-canonical `x` case;
+      - the research note;
+      - the mount named by key id;
+      - messages pointing at `docs/deploy.md`.
+    - **Decided here, small:** the private half is mounted as a secret file rather than an environment variable (research open question 7), as the research recommends.
+    - **For the user:** the research calls a start-up comparison of wechart's `kid` with the keys xcube lists "the only real pin" (its open question 5). No task has it yet.
+    - AC-324 stays open for xcube's half. AC-298 stays open for the browser's sealing (T441) and the flows that store credentials.
 
 ## P2.4 Models and data sources in folders; names and per-folder Cube (F27, F28)
 

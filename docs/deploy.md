@@ -122,6 +122,12 @@ This release's model starts empty. The API seeds its model store from `WECHART_M
 
 Build the model in the browser's **Model** workspace, then the dashboards. A publish goes from the API to Cube as a draft to compile. Cube reads the draft back from the API through `WECHART_MODEL_STORES`, and the chart sets it to the API's in-cluster address.
 
+## xcube's public key
+
+Data-source credentials are encrypted to xcube's public key, and only xcube can decrypt them. `api.xcubePublicKey` gives the API that key as a JWK: `{"kty":"OKP","crv":"X25519","x":…,"kid":…}`, where `kid` is the key's RFC 7638 thumbprint. It is required. The chart won't render without it, and the API won't start with one that isn't an X25519 public key under its own thumbprint, naming `WECHART_XCUBE_PUBLIC_KEY` and the problem. It is only the public key, so it is a plain value rather than a Secret. The API refuses a JWK that holds a private key.
+
+`deploy/helm/values/docker-desktop.yaml` gives the development key, from `infra/xcube/dev-credential-key.pub.jwk` (`infra/xcube/README.md`). Where xcube's private key is kept in production is still to be decided. Until then, the Cube pods in this chart are not given one.
+
 ## Pointing Cube at another data source
 
 Everything about the data source is in `cube.dataSource`:

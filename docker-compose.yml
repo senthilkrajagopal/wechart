@@ -121,6 +121,14 @@ services:
     volumes: &cube-volumes
       - ./infra/cube/cube.js:/cube/conf/cube.js:ro
       - ./infra/cube/model:/cube/conf/model:ro
+    # xcube's development private key, which opens data-source credentials:
+    # mounted into the containers that run Cube's drivers and nowhere else,
+    # since wechart is given only the public half (T333, AC-298, AC-324;
+    # infra/xcube/README.md). A file named by its key id, as the research
+    # lays out xcube's keys (credential-sealing.md, "Key management").
+    secrets: &cube-secrets
+      - source: xcube_credential_key
+        target: /run/secrets/xcube-credential-keys/uYWeMx6i173fsiolFp1xi-qiav50k52AGinM56Y8JEw.pem
 
   # Cube's refresh worker: the same image and configuration, told only to
   # build and refresh pre-aggregations. The API instance above is in
@@ -143,6 +151,7 @@ services:
     ports:
       - '127.0.0.1:54001:4000'
     volumes: *cube-volumes
+    secrets: *cube-secrets
 
   # The development and test OIDC provider (T315, AC-257; research/dex.md, the
   # user's R20): Dex 2.45.1 with static users and their groups
@@ -173,3 +182,8 @@ volumes:
   wechart-meta-data:
   wechart-sample-data:
   wechart-cubestore-data:
+
+secrets:
+  # Development only: the fixed key pair's private half (infra/xcube/README.md).
+  xcube_credential_key:
+    file: ./infra/xcube/dev-credential-key.pem

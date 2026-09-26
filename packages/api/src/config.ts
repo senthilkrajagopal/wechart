@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
 import type { SecurityMode } from './auth/user';
+import type { XcubePublicKey } from './secrets/xcube-key';
 
 /**
  * Everything the service reads from its environment.
@@ -79,6 +80,13 @@ export interface Config {
    * Super-Admin, and no group is read.
    */
   readonly superAdminGroup?: string;
+  /**
+   * xcube's public key, which data-source credentials are encrypted to:
+   * `WECHART_XCUBE_PUBLIC_KEY`, a JWK, read and checked at start by
+   * `secrets/xcube-key.ts` (T333, AC-324). wechart never holds a key that
+   * decrypts them (AC-298).
+   */
+  readonly xcubePublicKey?: XcubePublicKey;
 }
 
 /** The OIDC provider wechart signs users in through (AC-252; research/openid-client.md). */
