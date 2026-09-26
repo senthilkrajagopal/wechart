@@ -403,6 +403,8 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 | **Admin** | Members of a folder's read-write groups (set or inherited) | Create data sources, models, dashboards and charts in that folder, through their workspace and an approval (§P2.6). Create subfolders under it and set their permissions. Run and schedule builds of the folder's pre-aggregations in Jobs and Schedules `[R18]`. |
 | **User** | Members of a folder's read-only groups (set or inherited) | View the dashboards in that folder, its descendants and its ancestors. |
 
+With security on, a deployment that names no Super-Admin group refuses to start and says why, as it does for its other missing sign-in settings: without one, nobody could reach the admin surfaces `[R26]`.
+
 **Workspaces.** Every Super-Admin and every member of any read-write group has a private workspace, which only they can open. Read-only users have none, and only view `[P2 input, R12]`.
 
 **Scale.** Phase 1's figure stands: 500 or more people `[R2, R13]`. One user can belong to hundreds of AD groups, nested groups included `[R12]`.
@@ -652,6 +654,9 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
+
+**R26 — asked after T323** (its cold review raised it)
+- Q: With sign-in on and no Super-Admin group configured, should the API refuse to start? A: "yes"
 
 **R25 — asked while implementing T318–T322** (the cold reviews raised them)
 - Q: AC-251 exempts only "health routes", but sign-in's own routes and the model routes Cube reads with its key are exempt too. Reword AC-251? A: "yes go ahead and change it"

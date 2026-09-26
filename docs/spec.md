@@ -899,6 +899,8 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R14, R15, R18, R19]`.
       Fails when: a folder granted only to the last of a 20-group user's groups is refused to them.
 - [ ] AC-256 THE SYSTEM SHALL take the Super-Admin group's name from the deployment's configuration, and treat that group's members as Super-Admins (`[R18]`).
       Fails when: a member of the configured group lacks a Super-Admin permission, or someone outside it has one.
+- [ ] AC-318 WHERE security is enabled, IF the deployment names no Super-Admin group, THEN THE SYSTEM SHALL refuse to start and say that the Super-Admin group is missing, and the Helm chart SHALL refuse to render such a release (`[R26]`).
+      Fails when: the API starts with security on and no Super-Admin group, its refusal doesn't name the missing setting, or `helm template` renders a release with security on and no Super-Admin group.
 - [x] AC-257 WHERE security is enabled, THE SYSTEM SHALL sign users in through the development OIDC provider in docker-compose and in the Helm release on docker-desktop, with the provider running beside wechart (`[R14, R15]`).
       Fails when: signing in fails in either environment, or either environment needs a provider outside it.
 - [ ] AC-258 WHEN wechart is configured against Microsoft Entra ID, or against on-prem AD through an OIDC broker, THE SYSTEM SHALL sign users in and resolve their AD groups as it does with the development provider. Checked once, at the end of phase 2 (`[R14, R15]`).
@@ -1177,6 +1179,7 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | §P2.4 Security off is single-user mode, with phase 2's flows `[P2 input, R19]` | AC-254 |
 | §P2.2 Users in hundreds of groups; the test uses 20 `[R12, R19]` | AC-255 |
 | §P2.2 The Super-Admin group, named in the deployment's configuration `[R18]` | AC-256, AC-265 |
+| §P2.2 No Super-Admin group, no start `[R26]` | AC-318 |
 | §P2.4 Any OIDC provider; the development provider; Entra ID or a broker at phase end `[R14, R15]` | AC-252, AC-257, AC-258 |
 | §P2.2 Read-only and read-write groups per folder, inherited when unset, groups only `[P2 input, R11]` | AC-259, AC-260 |
 | §P2.2 A grant reaches down to every descendant `[P2 input, R12]` | AC-261 |

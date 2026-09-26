@@ -5226,6 +5226,12 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The security suite's sign-out and saves still work through the preview's proxy, which keeps `Origin`. nginx in the Helm release passes it through too.
     - The cold review (PASS) led to the other methods, the no-cookie and `null` cases, and the guard's comment.
     - AC-317 ticked.
+- [ ] T416 (AC-318) Refuse to start with sign-in on and no Super-Admin group
+  - Files: `packages/api/src/config.ts` (`WECHART_SUPER_ADMIN_GROUP` required with `WECHART_SECURITY=oidc`), `packages/api/src/auth/admin.test.ts`, `deploy/helm/wechart/templates/api.yaml` (a `fail` when `security.enabled` and no `security.superAdminGroup`), `deploy/helm/verify.sh`
+  - Failing test:
+    - `admin.test.ts`: `loadConfig` with `WECHART_SECURITY=oidc` and every other sign-in setting, but no `WECHART_SUPER_ADMIN_GROUP` (unset, or empty), throws a `ConfigError` naming `WECHART_SUPER_ADMIN_GROUP`; with it set, it loads; with security off, it isn't asked for (AC-318; the user's R26).
+    - `verify.sh`: `helm template` with `security.enabled=true` and no `security.superAdminGroup` fails, naming the setting (AC-318).
+  - Depends on: T323
 
 ## P2.2 Folder permissions and roles (F26)
 
@@ -5707,4 +5713,4 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 | AC-308 | T410 | AC-309 | T337 | AC-310 | T338 |
 | AC-311 | T333 | AC-312 | T335 | AC-313 | T397, T398 |
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
-| AC-317 | T412 | | | | |
+| AC-317 | T412 | AC-318 | T416 | | |
