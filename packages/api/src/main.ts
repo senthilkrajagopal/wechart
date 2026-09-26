@@ -9,6 +9,7 @@ import { catalog } from './repos/catalog';
 import { documents } from './repos/documents';
 import { folderAccessStore } from './repos/folder-access';
 import { readModelDir } from './model/read-dir';
+import { startModel } from './model/split';
 import { imageStore } from './repos/images';
 import { modelFileStore } from './repos/model-files';
 import { queryLog } from './repos/query-log';
@@ -42,7 +43,13 @@ async function main(): Promise<void> {
    * is, so a restart never writes over an edit.
    */
   const modelFiles = modelFileStore(db);
-  await modelFiles.seed(await readModelDir(config.modelDir));
+  // One cube or view per file (T448, AC-337): what the store holds split,
+  // then the directory's files seeded split, so none is taken in whole or
+  // twice. Said in the app's log once there is one.
+  const splits: string[] = [];
+  await startModel(modelFiles, await readModelDir(config.modelDir), (message) =>
+    splits.push(message),
+  );
 
   const sessions = pgSessionStore(db);
   /**
@@ -90,6 +97,7 @@ async function main(): Promise<void> {
     sessions,
     logger: true,
   });
+  for (const message of splits) app.log.info(message);
 
   // Expired sessions are swept out: Postgres has no TTL (T316's review).
   const sweeping = setInterval(

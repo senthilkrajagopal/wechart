@@ -1039,3 +1039,52 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
     await app.close();
   });
 });
+
+/**
+ * T448 / AC-337: THE SYSTEM SHALL keep one cube or one view per model file: …
+ * a publish of a file declaring more than one is refused, naming them.
+ * `Fails when: … a file declaring two cubes or views is published, or its
+ * refusal doesn't name them.` One file is one xcube item, which holds one
+ * cube or view (`xcube-slice-3a.md`, "Items"; R30).
+ */
+describe('one cube or view per model file (T448, AC-337)', () => {
+  it('refuses a file declaring two or more, naming them, before xcube is asked', async () => {
+    const store = memory([ORDERS]);
+    const stub = fakeXcube();
+    const app = serve({ config, modelFiles: store }, stub);
+    const two = {
+      path: 'cubes/sales.yml',
+      content: 'cubes:\n  - name: sales\n  - name: returns\nviews:\n  - name: sales_view\n',
+    };
+
+    const response = await publish(app, [two]);
+
+    expect([response.statusCode, response.json()]).toEqual([
+      422,
+      {
+        errors: [
+          {
+            path: 'cubes/sales.yml',
+            message:
+              'A model file holds one cube or view, and this one declares 3: the cubes sales and returns, and the view sales_view. Put each in a file of its own.',
+          },
+        ],
+      },
+    ]);
+    expect(checkedFiles(stub)).toEqual([]);
+    expect(store.files).toEqual([ORDERS]);
+    await app.close();
+  });
+
+  it('publishes a file declaring one', async () => {
+    const store = memory([ORDERS]);
+    const app = serve({ config, modelFiles: store });
+    const one = { path: 'cubes/sales.yml', content: 'cubes:\n  - name: sales\n' };
+
+    const response = await publish(app, [one]);
+
+    expect(response.statusCode).toBe(200);
+    expect(store.files).toEqual([ORDERS, one]);
+    await app.close();
+  });
+});

@@ -1169,8 +1169,9 @@ Traces to: §P2.4 Architecture, `[AD 1, AD 10, AD 11, AD 12, R27]` (added 2026-0
 
 - [ ] AC-336 WHEN wechart first moves its model to xcube's items mode (one items snapshot of its published files, each file a root item), THE SYSTEM SHALL answer every existing dashboard with the same data as before, and change no stored chart, dashboard, marking, bookmark or link (`[X3, user; X3A, R30]`).
       Fails when: after the move an existing dashboard's tile shows different data, or an error, compared with before it; a stored chart, dashboard, marking, bookmark or link differs from before it; or a root cube's rollup is rebuilt because of the move.
-- [ ] AC-337 THE SYSTEM SHALL keep one cube or one view per model file: the move to items mode splits a file declaring several into one file each, named for what it declares, and a publish of a file declaring more than one is refused, naming them (`[X3A, R30]`).
+- [x] AC-337 THE SYSTEM SHALL keep one cube or one view per model file: the move to items mode splits a file declaring several into one file each, named for what it declares, and a publish of a file declaring more than one is refused, naming them (`[X3A, R30]`).
       Fails when: after the move a stored model file declares two or more cubes or views, or a split file's cube serves different members than before; or a file declaring two cubes or views is published, or its refusal doesn't name them.
+      Note (2026-09-26, T448): "a stored model file" means one that is published as an item. A Jinja template is read-only and never sent (AC-140, AC-335), so it is left as it is.
 
 ## Non-goals (phase 1)
 

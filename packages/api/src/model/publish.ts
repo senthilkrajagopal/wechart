@@ -12,6 +12,7 @@ import type { XcubeAdmin } from '../xcube/client';
 import { clashesOf, compiledIn } from './clashes';
 import { refreshKeyProblemsOf } from './refreshKeys';
 import { rollupProblemsOf } from './rollupReferences';
+import { severalIn } from './split';
 import type { CompileError } from './validate';
 
 /**
@@ -161,6 +162,9 @@ export function registerModelPublishing(
       return reply.status(400).send({
         error: `Only YAML models can be published: ${template.path} is a Jinja template, which Cube would render with its own environment.`,
       });
+    // One cube or view per file: each file is one xcube item (T448, AC-337).
+    const several = changed.map(severalIn).filter((each) => each !== undefined);
+    if (several.length > 0) return reply.status(422).send({ errors: several });
     // xcube checks a change and serves it (T445, T447); without it, neither happens.
     if (modelFiles === undefined || xcube === undefined)
       return reply.status(409).send({

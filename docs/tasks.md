@@ -6473,12 +6473,28 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
 - *Order: T448 and T425 run first, on today's image. T449 is the switch and brings the image. T430, T426 and then the rest follow it. Every commit leaves both suites working.*
 - *Questions for xcube go through `~/Work/xcube-exchange/`.*
 
-- [ ] T448 [P] (AC-337) Keep one cube or view per model file: split files at start, and refuse a publish declaring two
-  - Files: `packages/api/src/model/split.ts` (+ test), `packages/api/src/model/publish.ts`, `packages/api/src/main.ts` (the split, once, at start), `packages/api/src/publish.test.ts`
+- [x] T448 [P] (AC-337) Keep one cube or view per model file: split files at start, and refuse a publish declaring two
+  - Files: `packages/api/src/model/split.ts` (+ test), `packages/api/src/model/publish.ts`, `packages/api/src/main.ts` (the split, once, at start), `packages/api/src/publish.test.ts`, and (as built) `packages/api/src/repos/model-files.ts` (+ test, a transactional `replace`)
   - Failing test:
     - `split.test.ts`: a stored file declaring two cubes and a view becomes three files, each named for what it declares, each declaring the same members as before, and a file declaring one is left as it is;
     - `publish.test.ts`: a publish of a file declaring two cubes or views is refused, naming them (AC-337).
   - Depends on: none
+  - **Done 2026-09-26.**
+    - **Splitting.** `splitFile` splits on `yaml`'s document tree, so each piece keeps its definition as written, comments included: the file's opening comment goes on the first piece, and a comment above `views:` on that list's first. Each piece is named `<its name>.yml` in the same folder, never over another file's path (`-2`, `-3`…). An alias whose anchor lands in another piece is written as the value it stood for. A Jinja template, a file that isn't YAML, one that doesn't parse, and one declaring one or none are left as they are.
+    - **At start** (`startModel`), the store is split first, each file replaced in one transaction, and logged. Then the model directory's files are seeded split. So a file already stored whole, and perhaps edited, keeps its cubes' names, and none is taken in whole or twice.
+    - **A publish** of a file declaring more than one is refused before xcube is asked: 422, "A model file holds one cube or view, and this one declares 3: the cubes sales and returns, and the view sales_view. Put each in a file of its own."
+    - **The cold review (FAIL) found:**
+      - seeding before splitting declared every cube twice on the upgrade path (`orders.yml` beside `orders-2.yml`), a model Cube refuses;
+      - a shared anchor made the split throw, which stopped the API;
+      - two replicas splitting at once crashed one of them;
+      - non-YAML paths were split.
+
+      All four are fixed and tested. A note on AC-337 says a Jinja template, never an item, is left whole.
+    - **AC-337 ticked** on `split.test.ts` (13), `publish.test.ts` and `model-files.test.ts`, and on the built API run twice against a throwaway Postgres database:
+      - a two-cube file in the directory was seeded as two;
+      - a two-cube row put into the store was split on restart, logged, and not split again;
+      - the upgrade path above left each cube declared once, in the store's edited copy.
+    - **The model e2e specs pass in Chrome** (35, then 7 after the fixes).
 - [ ] T425 [P] (AC-328) ~~Push the folder tree to xcube, ids and parents, when the API starts and on every folder change~~ Give each folder a stored xcube id, never reused, and build the published folder tree
   - Files: a migration `…_folder-xcube-id.cjs` (a unique `xcube_id` column, filled for every folder), `packages/api/src/xcube/folders.ts` (+ test), `packages/api/src/repos/folders.ts` (allocate on create)
   - Failing test: `folders.test.ts`:

@@ -51,4 +51,52 @@ describe('model file store', () => {
     expect(paths.indexOf(a)).toBeLessThan(paths.indexOf(b));
     expect([...paths].sort()).toEqual(paths);
   });
+
+  // T448, AC-337: a file declaring several becomes one file each, in one step.
+  it('replaces a file with the files it was split into, together', async () => {
+    const [whole, one, two] = [path('sales'), path('orders'), path('returns')];
+    await store().seed([{ path: whole, content: 'both\n' }]);
+
+    await store().replace(whole, [
+      { path: one, content: 'orders\n' },
+      { path: two, content: 'returns\n' },
+    ]);
+
+    const files = await store().list();
+    expect(files.some((each) => each.path === whole)).toBe(false);
+    expect(files.find((each) => each.path === one)?.content).toBe('orders\n');
+    expect(files.find((each) => each.path === two)?.content).toBe('returns\n');
+  });
+
+  // Two replicas starting at once split the same file (T448's review, finding 3):
+  // the second finds it gone, and leaves what the first wrote.
+  it('does nothing when the file it would replace is already gone', async () => {
+    const [whole, one] = [path('sales'), path('orders')];
+    await store().seed([{ path: one, content: 'first replica\n' }]);
+
+    await store().replace(whole, [{ path: one, content: 'second replica\n' }]);
+
+    const files = await store().list();
+    expect(files.find((each) => each.path === one)?.content).toBe('first replica\n');
+    expect(files.some((each) => each.path === whole)).toBe(false);
+  });
+
+  it('writes over no other file, and keeps the one it would replace when it would', async () => {
+    const [whole, other] = [path('sales'), path('orders')];
+    await store().seed([
+      { path: whole, content: 'both\n' },
+      { path: other, content: 'kept\n' },
+    ]);
+
+    await expect(
+      store().replace(whole, [
+        { path: other, content: 'orders\n' },
+        { path: path('returns'), content: 'returns\n' },
+      ]),
+    ).rejects.toThrow();
+
+    const files = await store().list();
+    expect(files.find((each) => each.path === whole)?.content).toBe('both\n');
+    expect(files.find((each) => each.path === other)?.content).toBe('kept\n');
+  });
 });
