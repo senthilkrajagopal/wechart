@@ -21,6 +21,7 @@ import { applyCustomize } from './customize';
 import { isTrellisType, trellisOption } from './layout/trellis';
 import { legendFor } from './legend';
 import { tooltipFor } from './tooltip';
+import { boxplotOption, isBoxplotType } from './series/boxplot';
 import { comboOption, isComboType } from './series/combo';
 import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { lineOption, isLineType } from './series/line';
@@ -50,6 +51,7 @@ export const DRAWABLE_TYPES = [
   'heatmap',
   'trellis',
   'combo',
+  'boxplot',
 ] as const satisfies readonly ChartType[];
 
 export function isDrawable(chartType: string): boolean {
@@ -116,6 +118,7 @@ export function optionFor(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
     return { ...trellisOption(spec, canvas), ...tooltipFor(spec) };
   }
   if (isComboType(spec.chartType)) return drawn(onGrid(comboOption(spec, canvas)));
+  if (isBoxplotType(spec.chartType)) return drawn(onGrid(boxplotOption(spec)));
 
   // Reached only by the DOM-rendered types — KPI, table and pivot — which
   // `ChartTile` routes before this is called, and which ECharts genuinely

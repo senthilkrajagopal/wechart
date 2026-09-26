@@ -194,6 +194,8 @@ export {
 
 export { folderRights, isSuperAdmin, type FolderRight, type Viewer } from './access/visibility';
 
+export { boxStats, quantile7, type BoxStats, type WhiskerRule } from './stats/boxplot';
+
 export {
   DRIVER_TYPES,
   DRIVERS,

@@ -76,6 +76,9 @@ export const REQUIREMENTS: Record<ChartType, readonly Requirement[]> = {
   pivot: [groupings(2)],
   trellis: [measures(1), groupings(2)],
   combo: [measures(2)],
+  // A measure's values spread per category (AC-306): one plain dimension to
+  // box by, as `compile` encodes it.
+  boxplot: [measures(1), dimensions(1)],
 };
 
 /** How many fields the chart has towards a requirement. */

@@ -40,7 +40,9 @@ export type ChartType =
   | 'table'
   | 'pivot'
   | 'trellis'
-  | 'combo';
+  | 'combo'
+  // Phase 2 (AC-306): the spread of a measure's values in each category.
+  | 'boxplot';
 
 /**
  * The visual channels a member can be bound to.
@@ -77,6 +79,7 @@ export const CHART_TYPES: readonly ChartType[] = [
   'pivot',
   'trellis',
   'combo',
+  'boxplot',
 ];
 
 /**

@@ -27,6 +27,7 @@ const SHAPES: Record<ChartType, Shape> = {
   groupedBar: 'bars',
   stackedBar: 'bars',
   combo: 'bars',
+  boxplot: 'bars',
   hbar: 'hbars',
   line: 'line',
   multiLine: 'line',

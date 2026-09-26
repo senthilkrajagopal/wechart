@@ -133,8 +133,10 @@ describe('gaps', () => {
  * holds. Each is left as it came.
  */
 describe('the types with no category ranked on y', () => {
-  it('leaves a scatter and a heatmap as they came', () => {
-    for (const chartType of ['scatter', 'heatmap'] as const) {
+  it('leaves a scatter, a heatmap and a box plot as they came', () => {
+    // A box plot's rows are its observations (T399): folding them would draw
+    // an "Other" box from the sums of other categories' values.
+    for (const chartType of ['scatter', 'heatmap', 'boxplot'] as const) {
       const unfolded = spec({ chartType });
       expect(applyTopN(unfolded)).toBe(unfolded);
     }

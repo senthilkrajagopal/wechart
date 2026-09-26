@@ -271,6 +271,7 @@ const REASONS: Record<ChartType, string> = {
   pivot: 'Two categories crossed, as numbers.',
   trellis: 'One small chart per category, on a shared scale.',
   combo: 'Two measures of the same scale together.',
+  boxplot: 'How a measure’s values spread within each category.',
 };
 
 function reasonFor(candidate: Candidate): string {

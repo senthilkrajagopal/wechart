@@ -114,6 +114,21 @@ export function toCubeQuery(spec: ChartSpec): Record<string, unknown> {
     dimensions: [...spec.dimensions].sort(),
   };
 
+  // A box plot summarises the rows themselves (T399, AC-306): ungrouped, so
+  // each row is one observation, and as many as Cube returns in one query.
+  // Unordered: by default Cube sorts by the first measure, descending, so past
+  // the limit the boxes would be drawn from one tail (research/box-plot.md).
+  if (spec.chartType === 'boxplot') {
+    const filters = cubeFiltersOf(spec.filters);
+    return {
+      ...query,
+      ...(filters.length > 0 ? { filters } : {}),
+      ungrouped: true,
+      order: [],
+      limit: BOX_PLOT_ROW_LIMIT,
+    };
+  }
+
   if (spec.timeDimensions.length > 0) {
     const grains = granularitiesOf(spec.timeDimensions, spec.granularities);
     query['timeDimensions'] = [...spec.timeDimensions]
@@ -153,6 +168,14 @@ export function granularitiesOf(
  * Cube `ungrouped` query, capped", without naming the cap.
  */
 export const UNDERLYING_ROW_LIMIT = 100;
+
+/**
+ * The most rows a box plot asks for: Cube's maximum for one query without
+ * `CUBEJS_DB_QUERY_LIMIT` raised; a larger limit is refused, not capped
+ * (research/box-plot.md §5). Past it, the box plot says it was computed from
+ * part of the data (AC-315, T401).
+ */
+export const BOX_PLOT_ROW_LIMIT = 50_000;
 
 /**
  * The rows underneath a chart's aggregate: the same query with no `GROUP BY`

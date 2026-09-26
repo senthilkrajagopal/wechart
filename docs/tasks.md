@@ -5445,10 +5445,22 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/charts/src/geo/{countries-50m.geo.json,countryMap.ts}` (the slim file derived from Natural Earth v5.1.2, keyed `ISO_A3`, then `ISO_A3_EH`), `packages/charts/package.json` (d3-geo 3.1.1), `packages/charts/src/series/map.ts` (+ test), `packages/charts/src/echarts.ts` (`MapChart`), `packages/core/src/render-spec.ts` (`map`), `packages/core/src/topN.ts` (the map is excluded), `packages/recommender/src/*` (offered per AC-313), `packages/web/src/tiles/UnplacedCodes.tsx`, `e2e/country-map.spec.ts`
   - Failing test: `map.test.ts`: every code in the data, SGP, FRA and NOR included, is filled from the sequential ramp; the legend shows the range and "No data"; `country-map.spec.ts`: an unplaced code is named under the map (AC-305; rules 86–87).
   - Depends on: T397
-- [ ] T399 [P] (AC-306) Draw a box plot with type-7 quartiles, and whiskers per the chart option
+- [x] T399 [P] (AC-306) Draw a box plot with type-7 quartiles, and whiskers per the chart option
   - Files: `packages/core/src/stats/boxplot.ts` (+ test), `packages/charts/src/series/boxplot.ts` (+ test), `packages/charts/src/echarts.ts` (`BoxplotChart`), `packages/core/src/render-spec.ts` (`boxplot`)
   - Failing test: `boxplot.test.ts`: medians and quartiles equal PostgreSQL's `percentile_cont` on the same values; Tukey whiskers end at the most extreme value within 1.5 × IQR with values beyond as dots; the min/max option draws the extremes (AC-306; rule 88).
   - Depends on: none
+  - **Done 2026-09-25.**
+    - wechart computes each box itself (`boxStats`): type-7 quartiles and T1 Tukey whiskers. `packages/api/src/stats/boxplot-oracle.test.ts` matches PostgreSQL's `percentile_cont` exactly on 1 to 1,000 values.
+    - The query asks Cube for the rows ungrouped, unordered (`order: []`), up to 50,000. No deployment sets `CUBEJS_DB_QUERY_LIMIT`, so Cube's default of 50,000 holds; T401 reads the total.
+    - Reaching the drawn chart also took: the chart-type list and name, compile's encoding, Top N and the recommender's requirement, the editor's query for a manual pick, and the Customize tab's Whiskers choice.
+    - The cold review (FAIL) found:
+      - the box's tooltip showing its lower whisker as its value: it now lists the category, n, the minimum, Q1, median, Q3 and maximum, and the whisker ends under Tukey (rule 88); an outlier's names the measure by its title;
+      - the query sorted by the measure, descending, so past the limit the boxes came from one tail: `order: []`, confirmed against the local Cube's SQL;
+      - the colour and the dots' 60 % applied only with a palette, which the app never passes: now through `colourFor`;
+      - an e2e that couldn't show the whisker option changing the drawing, because the seeded amounts have no outliers. `e2e/boxplot.spec.ts` now filters to five orders with one far value, reads the drawn box's statistics from its tooltip, and sees the dot go and come back with the option;
+      - a spurious "Colour carries 8 categories" warning (AC-218): a box plot colours by nothing;
+      - Legend and Data labels offered for a box plot, which has neither.
+    - Left as they are: sorting by value orders boxes by their most extreme value, and a category on the "many" side of a join repeats values (AC-314's field is the remedy).
 - [ ] T400 (AC-314) Compute a box plot's values once per "Each point is"
   - Files: `packages/core/src/compile.ts`, `packages/web/src/editor/wells/*`, `packages/core/src/stats/boxplot.test.ts`
   - Failing test: `boxplot.test.ts` and `e2e/boxplot.spec.ts`: with "Each point is" set to Order ID, the query groups by category and order, and each box holds one value per order (AC-314).

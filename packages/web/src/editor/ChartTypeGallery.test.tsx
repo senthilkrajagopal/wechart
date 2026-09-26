@@ -1,3 +1,4 @@
+import { CHART_TYPES } from '@wechart/core';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -45,7 +46,8 @@ describe('the chart type gallery (AC-217)', () => {
   it('lists every type under All charts, and a purpose’s under it', async () => {
     const { dialog } = gallery();
     await userEvent.click(within(dialog).getByRole('button', { name: 'All charts' }));
-    expect(typesShown(dialog)).toHaveLength(18);
+    // Every type the spec knows, the box plot (T399) included.
+    expect(typesShown(dialog)).toEqual([...CHART_TYPES]);
     expect(dialog.textContent).not.toContain('groupedBar');
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Part of a whole' }));

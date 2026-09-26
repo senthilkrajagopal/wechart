@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  BOX_PLOT_ROW_LIMIT,
   UNDERLYING_ROW_LIMIT,
   addToWell,
   emptySpec,
@@ -106,6 +107,29 @@ describe('the Cube query a spec asks for', () => {
     // AC-105 depends on this: the same request must be byte-identical so the
     // result can be served from cache.
     expect(JSON.stringify(toCubeQuery(a))).toBe(JSON.stringify(toCubeQuery(b)));
+  });
+});
+
+/**
+ * T399 (AC-306): a box plot is computed from the rows, so its query asks Cube
+ * for them ungrouped, up to Cube's maximum (research/box-plot.md §5).
+ */
+describe('a box plot’s query', () => {
+  it('asks for the rows ungrouped, unordered, as many as Cube returns in one query', () => {
+    let spec = addToWell(emptySpec('orders'), 'measures', 'orders.amount');
+    spec = addToWell(spec, 'dimensions', 'orders.status');
+    spec = { ...spec, chartType: 'boxplot' };
+
+    // Unordered (T399's review): by default Cube sorts by the first measure,
+    // descending, so past the limit the boxes would be drawn from one tail.
+    expect(toCubeQuery(spec)).toEqual({
+      measures: ['orders.amount'],
+      dimensions: ['orders.status'],
+      ungrouped: true,
+      order: [],
+      limit: BOX_PLOT_ROW_LIMIT,
+    });
+    expect(BOX_PLOT_ROW_LIMIT).toBe(50_000);
   });
 });
 

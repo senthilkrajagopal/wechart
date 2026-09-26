@@ -365,13 +365,23 @@ const NO_VALUE_AXIS: readonly string[] = ['pie', 'donut', 'treemap', 'heatmap'];
 
 describe('every drawable type', () => {
   it.each(DRAWABLE_TYPES)('writes a %s’s measure as money in its tooltip', (chartType) => {
+    // Each as ECharts hands it over: a box as its category's index and its
+    // five values, `refunded` being the second category (T399).
     const value =
-      chartType === 'heatmap' ? [0, 0, 4000] : chartType === 'scatter' ? [0.75, 4000] : 4000;
+      chartType === 'heatmap'
+        ? [0, 0, 4000]
+        : chartType === 'scatter'
+          ? [0.75, 4000]
+          : chartType === 'boxplot'
+            ? [1, 4000, 4000, 4000, 4000, 4000]
+            : 4000;
     const text = tooltipOf(everyTypeSpec(chartType))({
       seriesName: AMOUNT,
       name: 'refunded',
       value,
       seriesIndex: 0,
+      dataIndex: 1,
+      ...(chartType === 'boxplot' ? { seriesType: 'boxplot' } : {}),
     });
 
     expect(text).toMatch(/\$4,000(?![\d,.])/);

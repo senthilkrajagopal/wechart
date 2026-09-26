@@ -132,6 +132,17 @@ describe('the default encoding of the types that read their channels differently
     });
   });
 
+  it('boxes a box plot’s first measure by its first plain dimension, even beside a time dimension (T399)', () => {
+    expect(defaultEncoding(overTime.chart, 'boxplot')).toEqual({
+      x: ['orders.status'],
+      y: ['orders.count'],
+    });
+    expect(defaultEncoding(twoMeasuresTwoDimensions.chart, 'boxplot')).toEqual({
+      x: ['orders.status'],
+      y: ['orders.count'],
+    });
+  });
+
   it('encodes every other type as before, and a compile uses the type it draws', () => {
     expect(defaultEncoding(twoMeasuresTwoDimensions.chart, 'groupedBar')).toEqual(
       defaultEncoding(twoMeasuresTwoDimensions.chart),

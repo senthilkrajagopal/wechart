@@ -113,8 +113,19 @@ const SERIES_TYPES: readonly (ChartType | null)[] = [
   'combo',
 ];
 
-/** The types with no marks for a legend or a label: the Customize tab offers neither. */
-const UNDRAWN_TYPES: readonly (ChartType | null)[] = ['kpi', 'table', 'pivot', 'trellis', null];
+/**
+ * The types with no marks for a legend or a label: the Customize tab offers
+ * neither. A box plot has one series and a box per category, with nothing a
+ * label could say that its tooltip doesn't (T399's review).
+ */
+const UNDRAWN_TYPES: readonly (ChartType | null)[] = [
+  'kpi',
+  'table',
+  'pivot',
+  'trellis',
+  'boxplot',
+  null,
+];
 
 export interface ChartEditorProps {
   /**
@@ -243,7 +254,16 @@ export function ChartEditor({
    */
   const titles = useMemo(() => titlesOf(meta.data), [meta.data]);
 
-  const query = useMemo(() => toCubeQuery(spec), [spec]);
+  /**
+   * A chosen type that asks Cube differently is part of the query: a box plot
+   * wants its rows ungrouped (T399). Only a manual choice can be one — the
+   * recommender, which reads the rows, never proposes it — so this can't loop.
+   */
+  const query = useMemo(
+    () =>
+      toCubeQuery(chartTypeState.manual === 'boxplot' ? { ...spec, chartType: 'boxplot' } : spec),
+    [spec, chartTypeState.manual],
+  );
 
   /** The members the chart uses, marked in the field list (AC-215). */
   const used = useMemo<ReadonlySet<string>>(
@@ -835,6 +855,7 @@ export function ChartEditor({
                 const at = drawnSeries.findIndex((one) => one.name === name);
                 return DEFAULT_PALETTE[Math.max(0, at) % DEFAULT_PALETTE.length] ?? '#000000';
               }}
+              whiskers={shownType === 'boxplot'}
             />
           )}
         </div>

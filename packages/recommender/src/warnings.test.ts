@@ -95,6 +95,16 @@ describe('what a chosen type warns of (AC-218)', () => {
     ).toEqual([]);
   });
 
+  // T399's review: a box plot colours by nothing, so no count of categories
+  // exceeds a colour's capacity; its boxes lie along an axis.
+  it('warns of no colours on a box plot, whatever its dimensions', () => {
+    expect(warningsFor('boxplot', signature(measure(), dimension(20)))).toEqual([]);
+    expect(
+      warningsFor('boxplot', signature(measure(), dimension(3), dimension(20, 'orders.region'))),
+    ).toEqual([]);
+    expect(warningsFor('boxplot', signature(measure(), time, dimension(20)))).toEqual([]);
+  });
+
   it('warns of nothing a chart can show as it is', () => {
     expect(warningsFor('bar', signature(measure(), dimension(4)))).toEqual([]);
     expect(warningsFor('table', signature(measure(), dimension(400)))).toEqual([]);

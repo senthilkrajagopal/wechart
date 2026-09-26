@@ -22,6 +22,7 @@ import {
 
 import type { EChartsOption } from './theme';
 import { nameWriter, seriesWriter, titleOf } from './modelWriter';
+import { boxesOf, whiskerRuleOf } from './series/boxplot';
 import { isPieType } from './series/pie';
 
 /** Types where a shared crosshair reads better than a per-mark hit. */
@@ -39,7 +40,14 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-type Params = { seriesName?: string; name?: string; value?: unknown; seriesIndex?: number };
+type Params = {
+  seriesName?: string;
+  name?: string;
+  value?: unknown;
+  seriesIndex?: number;
+  seriesType?: string;
+  dataIndex?: number;
+};
 
 /**
  * A scatter point is `[x, y]`, and both are measures, each with its own
@@ -99,10 +107,55 @@ function heatmapTooltip(spec: RenderSpec): EChartsOption {
   return { tooltip: { trigger: 'item', formatter: render } };
 }
 
+/**
+ * A box: its category, n, the minimum, quartiles, median and maximum, and
+ * under Tukey's rule where the whiskers end (direction.md rule 88; tabular
+ * numerals come with every tooltip, `themed.ts`). ECharts hands a box over as
+ * `[category index, low, Q1, median, Q3, high]`, without n, minimum or maximum,
+ * so the box is read by its index from the same boxes the chart draws. An
+ * outlier is `[category, value]`.
+ */
+function boxplotTooltip(spec: RenderSpec): EChartsOption {
+  const measure = memberOn(spec.encoding, 'y') ?? '';
+  const format = formatterFor(measure, spec.formats ?? {});
+  const category = nameWriter(spec, memberOn(spec.encoding, 'x'));
+  const boxes = boxesOf(spec);
+  const tukey = whiskerRuleOf(spec) === 'tukey';
+
+  const render = (params: Params) => {
+    const value = Array.isArray(params.value) ? params.value : [];
+    if (params.seriesType === 'scatter') {
+      const [name, outlier] = value;
+      return [
+        escapeHtml(category(name)),
+        `${escapeHtml(titleOf(spec, measure))}: ${escapeHtml(format(outlier))}, beyond the whiskers`,
+      ].join('<br/>');
+    }
+    const box = boxes[params.dataIndex ?? -1];
+    if (box === undefined) return '';
+    const { stats } = box;
+    return [
+      escapeHtml(category(box.name)),
+      `n: ${stats.n.toLocaleString('en-US')}`,
+      `Minimum: ${escapeHtml(format(stats.min))}`,
+      `Q1: ${escapeHtml(format(stats.q1))}`,
+      `Median: ${escapeHtml(format(stats.median))}`,
+      `Q3: ${escapeHtml(format(stats.q3))}`,
+      `Maximum: ${escapeHtml(format(stats.max))}`,
+      ...(tukey
+        ? [`Whiskers: ${escapeHtml(format(stats.low))} – ${escapeHtml(format(stats.high))}`]
+        : []),
+    ].join('<br/>');
+  };
+
+  return { tooltip: { trigger: 'item', formatter: render } };
+}
+
 export function tooltipFor(spec: RenderSpec): EChartsOption {
   if (NO_TOOLTIP.includes(spec.chartType)) return {};
   if (spec.chartType === 'scatter') return scatterTooltip(spec);
   if (spec.chartType === 'heatmap') return heatmapTooltip(spec);
+  if (spec.chartType === 'boxplot') return boxplotTooltip(spec);
 
   const measures = membersOn(spec.encoding, 'y');
   const formats = spec.formats ?? {};

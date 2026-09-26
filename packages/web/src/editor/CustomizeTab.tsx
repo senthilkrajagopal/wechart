@@ -29,6 +29,8 @@ export interface CustomizeTabProps {
   readonly series: readonly { readonly name: string; readonly title: string }[];
   /** Each series' colour as drawn now, the default a picker starts from. */
   readonly colourOf: (name: string) => string;
+  /** A box plot: its whiskers are a chart option (T399, AC-306). */
+  readonly whiskers?: boolean;
 }
 
 const POSITIONS: readonly [LegendPosition, string][] = [
@@ -67,6 +69,7 @@ export function CustomizeTab({
   stackable,
   series,
   colourOf,
+  whiskers = false,
 }: CustomizeTabProps) {
   const ids = useId();
   const axes = record(options['axes']) as AxesSettings;
@@ -82,7 +85,7 @@ export function CustomizeTab({
       series: sparse({ ...perSeries, [name]: sparse({ ...perSeries[name], ...patch }) }),
     });
 
-  if (!drawn && !cartesian) {
+  if (!drawn && !cartesian && !whiskers) {
     return <p className="panel-section__note">This chart type has nothing to customize here.</p>;
   }
 
@@ -220,6 +223,33 @@ export function CustomizeTab({
           <p className="panel-section__note">
             For the data labels; the value axis’s own format is set under Axes.
           </p>
+        </section>
+      ) : null}
+
+      {whiskers ? (
+        /* A box plot's whiskers (T399, AC-306): Tukey's unless chosen otherwise. */
+        <section className="customize-tab__section" aria-labelledby={`${ids}-whiskers`}>
+          <h3 id={`${ids}-whiskers`}>Whiskers</h3>
+          <div role="radiogroup" aria-labelledby={`${ids}-whiskers`}>
+            <label className="customize-tab__check">
+              <input
+                type="radio"
+                name={`${ids}-whiskers`}
+                checked={options['whiskers'] !== 'minmax'}
+                onChange={() => onOptions({ whiskers: undefined })}
+              />
+              1.5 × IQR, values beyond as dots
+            </label>
+            <label className="customize-tab__check">
+              <input
+                type="radio"
+                name={`${ids}-whiskers`}
+                checked={options['whiskers'] === 'minmax'}
+                onChange={() => onOptions({ whiskers: 'minmax' })}
+              />
+              Minimum and maximum
+            </label>
+          </div>
         </section>
       ) : null}
     </div>

@@ -29,7 +29,11 @@ export const TYPE_PURPOSES: readonly TypePurpose[] = [
     name: 'Part of a whole',
     types: ['pie', 'donut', 'treemap', 'stackedBar', 'stackedArea'],
   },
-  { id: 'matrix', name: 'Distribution and matrix', types: ['heatmap', 'pivot', 'trellis'] },
+  {
+    id: 'matrix',
+    name: 'Distribution and matrix',
+    types: ['boxplot', 'heatmap', 'pivot', 'trellis'],
+  },
   { id: 'correlation', name: 'Correlation', types: ['scatter'] },
   { id: 'kpi', name: 'KPI', types: ['kpi'] },
   { id: 'table', name: 'Table', types: ['table', 'pivot'] },
@@ -56,6 +60,7 @@ export const TYPE_DESCRIPTIONS: Readonly<Record<ChartType, string>> = {
   pivot: 'Rows × columns with totals',
   trellis: 'One small panel per member',
   combo: 'Bars plus a line on two axes (use with care)',
+  boxplot: 'Spread of values per category: median, quartiles and outliers',
 };
 
 /** What a type needs, in the words the field list uses (AC-033's requirements). */

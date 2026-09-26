@@ -138,3 +138,59 @@ describe('the Customize tab (AC-219)', () => {
     expect(screen.getByLabelText('Colour of Orders Amount')).toBeTruthy();
   });
 });
+
+/**
+ * T399 (AC-306): a box plot's whiskers follow a chart option — by default
+ * Tukey's 1.5 × IQR with values beyond as dots, or else the minimum and
+ * maximum.
+ */
+describe('a box plot’s whiskers (AC-306)', () => {
+  // As the editor passes a box plot's: no legend or labels to set (T399's review).
+  const boxplotTab = (options: Record<string, unknown> = {}) => {
+    const onOptions = vi.fn();
+    render(
+      <CustomizeTab
+        options={options}
+        onOptions={onOptions}
+        cartesian={false}
+        valueAxes={['y']}
+        drawn={false}
+        stackable={false}
+        series={[]}
+        colourOf={() => '#123456'}
+        whiskers
+      />,
+    );
+    return onOptions;
+  };
+
+  it('offers only what a box plot can change: its whiskers, not a legend or labels', () => {
+    boxplotTab();
+    expect(screen.getByRole('radiogroup', { name: 'Whiskers' })).toBeTruthy();
+    expect(screen.queryByText('This chart type has nothing to customize here.')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Legend' })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: 'Data labels' })).toBeNull();
+  });
+
+  it('offers Tukey’s whiskers, chosen by default, or the minimum and maximum', async () => {
+    const onOptions = boxplotTab();
+    const group = screen.getByRole('radiogroup', { name: 'Whiskers' });
+    const tukey = within(group).getByRole('radio', { name: /1\.5 × IQR/ });
+    const minmax = within(group).getByRole('radio', { name: 'Minimum and maximum' });
+    expect((tukey as HTMLInputElement).checked).toBe(true);
+
+    await userEvent.click(minmax);
+    expect(onOptions).toHaveBeenLastCalledWith({ whiskers: 'minmax' });
+  });
+
+  it('clears the option back to Tukey’s, keeping the saved options sparse', async () => {
+    const onOptions = boxplotTab({ whiskers: 'minmax' });
+    await userEvent.click(screen.getByRole('radio', { name: /1\.5 × IQR/ }));
+    expect(onOptions).toHaveBeenLastCalledWith({ whiskers: undefined });
+  });
+
+  it('isn’t offered for any other chart', () => {
+    tab();
+    expect(screen.queryByRole('radiogroup', { name: 'Whiskers' })).toBeNull();
+  });
+});

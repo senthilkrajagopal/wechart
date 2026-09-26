@@ -81,6 +81,10 @@ export function defaultEncoding(chart: ChartDefinition, chartType?: ChartType): 
   // Its renderer draws the first measure in every panel.
   if (chartType === 'trellis')
     return encoded({ x: channel(x), y: channel(firstMeasure), facet: channel(color) });
+  // A box per member of its first plain dimension, of its first measure's
+  // values (T399): a box per day of a time dimension says nothing.
+  if (chartType === 'boxplot')
+    return encoded({ x: channel(firstDimension), y: channel(firstMeasure) });
   // Its groupings down the rows and across the columns, its measures in the cells.
   if (chartType === 'pivot')
     return encoded({

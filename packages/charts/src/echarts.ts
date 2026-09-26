@@ -15,6 +15,7 @@
  */
 import {
   BarChart,
+  BoxplotChart,
   HeatmapChart,
   LineChart,
   PieChart,
@@ -35,6 +36,7 @@ import { SVGRenderer } from 'echarts/renderers';
 
 echarts.use([
   BarChart,
+  BoxplotChart,
   LineChart,
   ScatterChart,
   PieChart,

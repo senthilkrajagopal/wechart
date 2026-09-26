@@ -76,6 +76,9 @@ function candidateFor(
       return at(split === undefined ? {} : { secondCategoryField: split });
     case 'trellis':
       return at(split === undefined ? {} : { facetField: split });
+    case 'boxplot':
+      // Its boxes lie along an axis, and colour carries nothing (T399's review).
+      return at({});
     case 'scatter':
       // Both measures on the axes, coloured by the first dimension — as
       // `compile` colours a scatter, whatever else there is (T242).
