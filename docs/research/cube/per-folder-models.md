@@ -30,6 +30,9 @@ sources: [
 >   - connections served by wechart.
 > - Kept as the record, and still useful: its facts about Cube's own source (findings 4–5, §3's driver lifecycle, Gotchas 7–10 and 14).
 > - Replaced by [xcube-runtime.md](./xcube-runtime.md), [prefixed-names.md](./prefixed-names.md), [generated-policies.md](./generated-policies.md) and [whole-model-publish.md](./whole-model-publish.md).
+>
+> **Confirmed superseded, 2026-09-26**, by the final integration plan ([docs/inputs/2026-09-26-integration-plan-decisions.md](../../inputs/2026-09-26-integration-plan-decisions.md), decisions 3 and 4; the plan's "What changes in wechart's docs").
+> - Layout B, one app id per folder chain composed by wechart and `cube.js`, becomes modules. xcube computes them from the reference graph and compiles each on its own, and wechart publishes changesets and folders.
 
 ## Summary
 

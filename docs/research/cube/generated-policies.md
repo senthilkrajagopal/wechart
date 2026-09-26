@@ -8,6 +8,11 @@ sources: [/Users/srajagopal/Work/bi/cube/packages/cubejs-server-core/src/core/Co
 
 # Cube 1.7.45: a folder gate that xcube generates
 
+> **Chosen, 2026-09-26.** The user took this doc's recommendation, option C, in round R28 (Q6): xcube gates policy evaluation by folder inside its own `CompilerApi` subclass, and the model's own policies still apply. Folder policies are not written into the model, where Cube would OR them with authored ones. See requirements §P2.4 and AC-320.
+> - **Where the plan's wording differs.** The integration plan ([docs/inputs/2026-09-26-integration-plan.md](../../inputs/2026-09-26-integration-plan.md), "Flows") says xcube "generates access policies from folder groups" at publish. Read that as this gate. The difference was put to the user in R28 (Q6), who agreed to the gate.
+> - **Modules.** Under the plan (decision 4) each module compiles on its own. The gate's cube → folder map is per module version, as `compilerVersion` is.
+> - **The root.** The root is prefixed like every folder (R28 Q1), so its cubes are gated by folder like any other.
+
 > **Where this was read.** Everything comes from the local checkout at `/Users/srajagopal/Work/bi/cube`, on branch `spike/xcube-feasibility`, where `@cubejs-backend/server-core` is version 1.7.45 ([pkg] L5). Line numbers are that checkout's. Docs are its `docs-mintlify` sources.
 >
 > **What it builds on.** `access-control.md` and `access-policy-evaluation.md`, both written against 1.7.42. Anything here that corrects them is listed under Gotchas, "Corrections to sibling docs".

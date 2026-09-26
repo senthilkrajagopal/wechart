@@ -33,6 +33,18 @@ sources:
 ---
 # Cube whole-model publish check 1.7.45
 
+> **Superseded in part, 2026-09-26**, by the final integration plan ([docs/inputs/2026-09-26-integration-plan-decisions.md](../../inputs/2026-09-26-integration-plan-decisions.md), decisions 4 and 5; [the plan's snapshot](../../inputs/2026-09-26-integration-plan.md), "Modules" and "Flows"; requirements §P2.4, round R28). The researcher's text below is kept as written.
+> - **Replaced: one whole-model compile per publish.** xcube groups cubes that reference each other into modules. A publish compiles only the modules it affects, each in a throwaway compile, and a break in any refuses it (AC-321). The costs in "Cost" become the cost of one module of a few hundred cubes, not the deployment's.
+> - **Replaced: rebinding (R27, AC-275).** A published item keeps its binding until it is next published (R28 Q2). "Where hidden breaks come from" reasons from rebinding, and needs re-reading on that basis.
+> - **Replaced: phase-1-style root names.** The shared root is prefixed like every folder (R28 Q1).
+> - **Still holds, per module:**
+>   - the compile API and its phases;
+>   - what compile checks and what it doesn't;
+>   - error attribution: Cube's list is not a complete per-file count, so an index of references is needed;
+>   - the rollup gate needing no database;
+>   - landing by compare-and-swap on a revision (the plan's `409` on a stale base revision);
+>   - the transpile-cache and worker gotchas.
+
 ## Summary
 
 **What this covers.** Every publish compiles the whole flat Cube 1.7.45 model with the change applied, and is refused if anything anywhere breaks.
