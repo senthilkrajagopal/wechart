@@ -65,7 +65,7 @@ AC-150, AC-151, AC-155 and AC-234 need wechart's own scheduler and build history
 - AC-234 WHEN the user creates a schedule for a pre-aggregation build or a cache warm-up that a refresh key cannot express, THE SYSTEM SHALL accept a cron expression and time zone, show the next runs it implies, and start each run at its time through Cube's jobs API. **Deferred with AC-150 and AC-155** (see the status note above).
   Fails when: the next runs shown do not match the expression, or a due run does not start.
 
-Tasks: T151, T156, T261, T262, T157, T264, T161, T259, and T263. Cube already runs v1.7.45 (on branch `feat/xcube`, the fork's introspection package, `cube:v1.7.45-introspection-0b6eef90a9`; on `main`, the earlier overlay build, `cube:v1.7.45-introspection-f6355de982`). What's left of T263 is its check that a failed import reports as a failure, which belongs with Run history (AC-150).
+Tasks: T151, T156, T261, T262, T157, T264, T161, T259, and T263. Cube already runs v1.7.45: since 2026-09-26 the fork's package xcube, `xcube:v1.7.45-a13b9cff43` (T417). It was the package's earlier name, `cube:v1.7.45-introspection-0b6eef90a9` (T413), and before that the overlay build, `cube:v1.7.45-introspection-f6355de982`. What's left of T263 is its check that a failed import reports as a failure, which belongs with Run history (AC-150).
 
 ### F18. Data sources and connections
 

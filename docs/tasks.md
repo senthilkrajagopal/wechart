@@ -5731,7 +5731,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.16 The Cube introspection package (branch `feat/xcube`)
 
-The user's Cube fork moved the introspection API out of Cube's own packages into a standalone package, `cube-introspection/`, on an unmodified Cube v1.7.45: branch `feat/introspection-package` at `0b6eef90a9` (`docs/inputs/2026-09-25-cube-introspection-package.md`; research `cube/introspection-api.md`, which found no difference over HTTP and seven below it, none reaching wechart). The user took the switch on 2026-09-25 as the first step of slice 0 of their wechart ↔ Cube integration plan, on branch `feat/xcube` in both repositories so it can be rolled back. The image is still built locally; the rename, registry and digest pin are the rest of slice 0.
+The user's Cube fork moved the introspection API out of Cube's own packages into a standalone package, `cube-introspection/`, on an unmodified Cube v1.7.45: branch `feat/introspection-package` at `0b6eef90a9` (`docs/inputs/2026-09-25-cube-introspection-package.md`; research `cube/introspection-api.md`, which found no difference over HTTP and seven below it, none reaching wechart). The user took the switch on 2026-09-25 as the first step of slice 0 of their wechart ↔ Cube integration plan, on branch `feat/xcube` in both repositories so it can be rolled back. The image is still built locally. The rename to xcube landed with T417 (2026-09-26); a registry and a digest pin are the rest of slice 0.
 
 - [x] T413 (AC-139, AC-250) Run the package's image in compose, for Cube and its refresh worker
   - Files: `docker-compose.yml` (the `CUBE_IMAGE` default and the comment above it), `packages/api/src/deploy/cube-image.test.ts`
@@ -5756,6 +5756,23 @@ The user's Cube fork moved the introspection API out of Cube's own packages into
   - **Done 2026-09-25.** The test failed on the overlay build and the old tag, then passed.
     - `docs/deploy.md` gives the package's build, the tag the release runs, and why Cube must keep the image's own command.
     - `introspection.ts`'s comment says catalog reads have a queue of their own and "Continue wait" is a 200, keeping the old 500 form as an earlier build's.
+- [x] T417 (AC-139, AC-248) Run the renamed package, xcube, for Cube and its refresh worker in compose and the docker-desktop release
+  - Why: slice 0 of the integration plan (`docs/inputs/2026-09-26-integration-plan-decisions.md`, "Do now" 2). The fork renamed `cube-introspection/` to `xcube/` at `a13b9cff43` on `feat/xcube`, with no Cube file changed. Its commit message records the HTTP contract as unchanged: side by side with the `0b6eef90a9` image, 28 of 28 requests answered byte for byte the same.
+  - Files: `docker-compose.yml` (the `CUBE_IMAGE` default and its comment), `deploy/helm/values/docker-desktop.yaml` (`cube.image`), `docs/deploy.md` (the build command and the tag), `packages/api/src/deploy/cube-image.test.ts`
+  - Failing test: `cube-image.test.ts`:
+    - compose's `CUBE_IMAGE` default for `cube` and `cube-refresh-worker`, and the values' `cube.image`, are `xcube:v1.7.45-a13b9cff43`, still with no `command`, `entrypoint` or `args`;
+    - `docs/deploy.md` builds from `~/Work/bi/cube/xcube` with `docker build -t xcube:v1.7.45-$(git rev-parse --short=10 HEAD) .` and names that tag and no other.
+
+    Then compose up on the new default: the API's introspection tests and `e2e/generate-cubes.spec.ts`, `cube-scopes.spec.ts` and `data-source.spec.ts` pass against it in Chrome (AC-139). `deploy/helm/verify.sh` passes against the upgraded release (AC-248).
+  - Depends on: T415
+  - **Done 2026-09-26.** The test failed 5 of 6 on the old tag, then passed.
+    - **The image.** It was built from `~/Work/bi/cube/xcube` at `a13b9cff43` as `xcube:v1.7.45-a13b9cff43`, with `Cmd` `node /cube/node_modules/xcube/dist/src/bin/server.js`.
+    - **Compose.** `docker compose up -d --wait --force-recreate cube cube-refresh-worker` started both from the new default, with no command set. Against it:
+      - the API's introspection-related unit tests passed, 37 of 37;
+      - `generate-cubes.spec.ts`, `cube-scopes.spec.ts` and `data-source.spec.ts` passed in Chrome, 7 of 7.
+    - **The Helm release.** `IMAGE_TAG=abad2c2 EXTRA_VALUES=deploy/helm/values/docker-desktop-security.yaml deploy/helm/verify.sh` upgraded it to the new image, keeping sign-in on and wechart's images, and every check passed (Helm revision 15).
+    - **The research.** `docs/research/cube/xcube-rename.md` records the rename and these runs, as a sibling of `introspection-api.md`.
+    - **Review.** It passed. On the review's word, the test also refuses the old build directory, and `docs/phase-2/backlog.md` and the P2.16 intro no longer name the old image as current.
 
 ## Phase 2 coverage: acceptance criterion → task
 
@@ -5796,5 +5813,5 @@ The user's Cube fork moved the introspection API out of Cube's own packages into
 | AC-308 | T410 | AC-309 | T337 | AC-310 | T338 |
 | AC-311 | T333 | AC-312 | T335 | AC-313 | T397, T398 |
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
-| AC-317 | T412 | AC-318 | T416 | AC-139 | T413 |
-| AC-248 | T414, T415 | AC-250 | T413 | | |
+| AC-317 | T412 | AC-318 | T416 | AC-139 | T413, T417 |
+| AC-248 | T414, T415, T417 | AC-250 | T413 | | |
