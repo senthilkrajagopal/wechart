@@ -1,3 +1,5 @@
+> **Superseded 2026-09-26** by [`2026-09-26-integration-plan-decisions.md`](2026-09-26-integration-plan-decisions.md), the final wechart ↔ Cube integration plan. The text below is kept verbatim as the record.
+
 Several architecture decisions were made on 2026-09-25 that change what your docs record. First, save this message verbatim as docs/inputs/2026-09-25-architecture-decisions.md (raw input for project-interview). Then correct the docs through your normal gates.
 
 Decisions:
