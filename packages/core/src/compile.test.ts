@@ -191,6 +191,27 @@ describe('compiling a saved document', () => {
     expect(compiled.rows.map((row) => row['orders.status'])).toEqual(['a', 'b', 'Other (2)']);
   });
 
+  // T390, AC-041: a row limit drops the rows past it, as they are drawn:
+  // after the sort, so it keeps what the reader sees first.
+  it('drops the rows past a row limit, after sorting', () => {
+    const limited: ChartDocument = {
+      ...withStatusAndCount,
+      chart: {
+        ...withStatusAndCount.chart,
+        options: { rowLimit: 2, sort: { by: 'value', direction: 'asc' } },
+      },
+    };
+    const rows = [
+      { 'orders.status': 'a', 'orders.count': 50 },
+      { 'orders.status': 'b', 'orders.count': 40 },
+      { 'orders.status': 'c', 'orders.count': 30 },
+      { 'orders.status': 'd', 'orders.count': 20 },
+    ];
+
+    const compiled = compile(limited, { rows, chartType: 'bar' });
+    expect(compiled.rows.map((row) => row['orders.status'])).toEqual(['d', 'c']);
+  });
+
   it('carries the chart type options through untouched', () => {
     const withOptions: ChartDocument = {
       ...withStatusAndCount,

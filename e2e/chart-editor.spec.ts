@@ -600,6 +600,59 @@ test('sorting a chart reorders its categories', async ({ page }) => {
 });
 
 /**
+ * T390, AC-041: WHEN a categorical chart exceeds its top-N setting, THE SYSTEM
+ * SHALL offer either to fold the remainder into a single "Other (n)" item,
+ * labelled with the number of members it covers, or to drop it. It SHALL also
+ * offer a row limit that drops rows past it.
+ * `Fails when: the chart renders more categories than the setting, the
+ * remainder is unlabelled when folded or still drawn when dropped, or no row
+ * limit can be set.`
+ *
+ * Read through the table view, which shows the rows the chart draws.
+ */
+test('a top N folds the rest into “Other (n)” or leaves it out, and a row limit cuts the rows', async ({
+  page,
+}) => {
+  await page.goto('/explore/charts/seed-chart-empty/edit');
+  await page.getByLabel('Cube or view').selectOption({ label: 'Products' });
+  await expect(page.getByTestId('member-products.count')).toBeVisible();
+  await wellPicker(page, 'measures').selectOption('products.count');
+  await wellPicker(page, 'dimensions').selectOption('products.name');
+  // Asked again with the name: one row per product, past the one row of the count alone.
+  const count = page.getByTestId('result-row-count');
+  // The sample holds four products (infra/sample-db).
+  await expect(count).toHaveText('4 rows');
+
+  await page.getByTestId('toggle-table-view').click();
+  const rows = page.getByTestId('data-table').locator('tbody tr');
+  await expect(rows).toHaveCount(4);
+
+  // Beside Top N under the wells, as the prototype's Data tab has it.
+  const top = page.getByLabel('Top N (+ Other)');
+  await top.fill('2');
+  await top.press('Enter');
+  await expect(rows).toHaveCount(3);
+  await expect(rows.last().locator('td').first()).toHaveText('Other (2)');
+
+  const rest = page.getByRole('group', { name: 'The rest' });
+  await rest.getByRole('button', { name: 'Leave out' }).click();
+  await expect(rows).toHaveCount(2);
+  await expect(page.getByTestId('data-table')).not.toContainText('Other (');
+  // And folded again.
+  await rest.getByRole('button', { name: 'Fold into “Other (n)”' }).click();
+  await expect(rows).toHaveCount(3);
+  await expect(rows.last().locator('td').first()).toHaveText('Other (2)');
+
+  await top.fill('');
+  await top.press('Enter');
+  await expect(rows).toHaveCount(4);
+  const limit = page.getByLabel('Result limit');
+  await limit.fill('3');
+  await limit.press('Enter');
+  await expect(rows).toHaveCount(3);
+});
+
+/**
  * T303, AC-044 on a pivot: its categories are its row groups, and the Sort
  * setting orders them (the Superset-parity rebuild's gap 8: it did not).
  */

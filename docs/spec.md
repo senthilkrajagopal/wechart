@@ -183,7 +183,7 @@ Traces to: `[docs/inputs §2]`, direction.md §6, rules 4–7, 18–19.
       Fails when: a member's colour changes between tiles or after filtering.
 - [x] AC-040 WHEN the user edits an axis, THE SYSTEM SHALL apply minimum, maximum, logarithmic scale, gridlines, tick rotation, number format and axis title to the rendered chart.
       Fails when: any of those settings has no effect on the rendered axis.
-- [ ] AC-041 WHEN a categorical chart exceeds its top-N setting, THE SYSTEM SHALL offer either to fold the remainder into a single "Other (n)" item, labelled with the number of members it covers, or to drop it. It SHALL also offer a row limit that drops rows past it (phase 2: the UI review's gap 10, `[R16]`).
+- [x] AC-041 WHEN a categorical chart exceeds its top-N setting, THE SYSTEM SHALL offer either to fold the remainder into a single "Other (n)" item, labelled with the number of members it covers, or to drop it. It SHALL also offer a row limit that drops rows past it (phase 2: the UI review's gap 10, `[R16]`).
       Fails when: the chart renders more categories than the setting, the remainder is unlabelled when folded or still drawn when dropped, or no row limit can be set.
 - [x] AC-042 WHEN a chart is loading, THE SYSTEM SHALL show a skeleton in the shape of the chart, and WHEN it fails, an error state offering Retry and the error details (direction.md rule 18).
       Fails when: loading shows an empty tile, or the error state offers no Retry or no details.

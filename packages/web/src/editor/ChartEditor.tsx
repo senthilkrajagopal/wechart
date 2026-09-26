@@ -427,6 +427,15 @@ export function ChartEditor({
    * recommender rejects its own candidates with, on these fields.
    */
   const topN = typeof options['topN'] === 'number' ? options['topN'] : undefined;
+  const rowLimit = typeof options['rowLimit'] === 'number' ? options['rowLimit'] : undefined;
+  /** One option set or cleared, as one change (T390's settings beside Top N). */
+  const setOption = (key: string, value: unknown) =>
+    change((current) => {
+      const next = { ...current.options };
+      if (value === undefined) delete next[key];
+      else next[key] = value;
+      return { ...current, options: next };
+    });
   const typeWarnings = useMemo(
     () =>
       // Only of a chart these fields draw — what they lack is said apart
@@ -792,14 +801,11 @@ export function ChartEditor({
                     }
                   : {})}
                 topN={topN}
-                onTopN={(n) =>
-                  change((current) => {
-                    const next = { ...current.options };
-                    if (n === undefined) delete next['topN'];
-                    else next['topN'] = n;
-                    return { ...current, options: next };
-                  })
-                }
+                onTopN={(n) => setOption('topN', n)}
+                tail={options['tail'] === 'drop' ? 'drop' : undefined}
+                onTail={(tail) => setOption('tail', tail)}
+                rowLimit={rowLimit}
+                onRowLimit={(n) => setOption('rowLimit', n)}
                 sort={
                   /*
                     Sorting (AC-044), beside Top N as the prototype has it

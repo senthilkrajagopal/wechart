@@ -16,6 +16,12 @@ import type { Member } from './fields';
  */
 const VALUE_LIMIT = 500;
 
+/** What becomes of the categories past the top N (T390, AC-041): folded, the default, or left out. */
+const REST: readonly { value: 'drop' | undefined; label: string }[] = [
+  { value: undefined, label: 'Fold into “Other (n)”' },
+  { value: 'drop', label: 'Leave out' },
+];
+
 /**
  * The wells a chart is built from (AC-026), as the prototype's Data tab has
  * them (AC-216): Metrics, Dimensions and Time, each field in them by its
@@ -127,6 +133,12 @@ export interface WellsProps {
   /** How many categories are kept before the rest fold into Other (AC-216, AC-041). */
   readonly topN?: number | undefined;
   readonly onTopN?: (n: number | undefined) => void;
+  /** What becomes of the rest past the top N (T390, AC-041): folded into "Other (n)", or dropped. */
+  readonly tail?: 'drop' | undefined;
+  readonly onTail?: (tail: 'drop' | undefined) => void;
+  /** The rows past this are dropped, after sorting (T390, AC-041). */
+  readonly rowLimit?: number | undefined;
+  readonly onRowLimit?: (n: number | undefined) => void;
   /** Every member's title, of every cube (AC-220): a pill of another cube's member. */
   readonly titles?: Readonly<Record<string, string>>;
   /**
@@ -154,6 +166,10 @@ export function Wells({
   onFilters,
   topN,
   onTopN,
+  tail,
+  onTail,
+  rowLimit,
+  onRowLimit,
   titles = {},
   sort,
   eachPointIs,
@@ -339,7 +355,38 @@ export function Wells({
           into one Other (AC-041). */}
       <div className="wells__options">
         {sort}
-        <TopN id={`${ids}-top`} topN={topN} onTopN={onTopN} />
+        <TopN id={`${ids}-top`} label="Top N (+ Other)" topN={topN} onTopN={onTopN} />
+        {/* What becomes of the rest, as a segmented control (direction.md
+            §8's inspector fields), and a row limit (T390, AC-041). */}
+        <div className="field">
+          <span id={`${ids}-rest`} className="field__label">
+            The rest
+          </span>
+          <div className="seg" role="group" aria-labelledby={`${ids}-rest`}>
+            {REST.map(({ value, label }) => (
+              <button
+                key={label}
+                type="button"
+                disabled={topN === undefined}
+                aria-pressed={tail === value}
+                onClick={() => {
+                  if (tail !== value) onTail?.(value);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <TopN
+          id={`${ids}-limit`}
+          // Not "Row limit": "rows" reads as a size unit, and no size field
+          // may be offered anywhere in the editor (AC-055, rule 36).
+          label="Result limit"
+          placeholder="None"
+          topN={rowLimit}
+          onTopN={onRowLimit}
+        />
       </div>
     </div>
   );
@@ -408,10 +455,14 @@ function EachPointIs({
  */
 function TopN({
   id,
+  label,
+  placeholder = 'All',
   topN,
   onTopN,
 }: {
   id: string;
+  label: string;
+  placeholder?: string;
   topN: number | undefined;
   onTopN: ((n: number | undefined) => void) | undefined;
 }) {
@@ -429,12 +480,12 @@ function TopN({
   };
   return (
     <div className="field">
-      <label htmlFor={id}>Top N (+ Other)</label>
+      <label htmlFor={id}>{label}</label>
       <input
         id={id}
         className="input-sm"
         inputMode="numeric"
-        placeholder="All"
+        placeholder={placeholder}
         value={typed ?? (topN === undefined ? '' : String(topN))}
         onChange={(event) => setTyped(event.target.value)}
         onBlur={setDown}

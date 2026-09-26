@@ -5733,10 +5733,30 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.13 Charts (F35)
 
-- [ ] T390 [P] (AC-041) Fold the remainder into "Other (n)" or drop it, and offer a row limit
-  - Files: `packages/core/src/topN.ts` (+ test), `packages/web/src/editor/customize/*`
+- [x] T390 [P] (AC-041) Fold the remainder into "Other (n)" or drop it, and offer a row limit
+  - Files: `packages/core/src/{topN,compile,drill}.ts` (+ tests), `packages/web/src/editor/{Wells,ChartEditor}.tsx` (+ Wells test), `e2e/chart-editor.spec.ts` (~~`packages/web/src/editor/customize/*`~~: no such directory; the controls sit beside the existing Top N under the wells, as the prototype's Data tab has them)
   - Failing test: `topN.test.ts`: a chart over its top-N either folds the remainder into "Other (_n_)" naming the members' count or drops it, and a row limit drops rows past it (AC-041).
   - Depends on: none
+  - **Done 2026-09-26.**
+    - **Core.** `applyTopN` leaves the rest out when the chart's `tail` is `drop`, and folds it into "Other (_n_)" otherwise, as before. A new `applyRowLimit` keeps the first `rowLimit` rows, and `compile` applies it after sorting, so it cuts the rows in the order they are drawn.
+    - **The editor.** Beside "Top N (+ Other)" under the wells there are now:
+      - "The rest": a segmented control, "Fold into “Other (n)”" or "Leave out", disabled until there is a top N;
+      - "Result limit", a count, with "None" for no limit.
+    - **What the tests show.**
+      - `topN.test.ts`: leaving out keeps only the top N; any other value folds; the row limit cuts, and leaves a chart within it untouched.
+      - `compile.test.ts`: the limit comes after the sort.
+      - `drill.test.ts`: a drill lets go of the limit and of `tail`.
+      - `Wells.test.tsx`: the choices, both ways, and the limit.
+      - `e2e/chart-editor.spec.ts` (Chrome): on the Products cube's four products, read through the table view (the rows the chart draws), top 2 gives three rows ending "Other (2)", Leave out gives two, Fold gives three again, and a limit of 3 gives three.
+    - **The cold review (FAIL)** found one real bug: a drilled tile kept the parent chart's row limit, so its rows were cut, which regressed AC-236. The drill now lets go of `rowLimit` and `tail` as it did of `topN`. The same round also:
+      - replaced bare radios with the segmented control direction.md gives inspector choices;
+      - added the switch back to Fold, in the unit test and the e2e test;
+      - renamed a misnamed test, and put T242's comment back above its tests.
+    - **The complete run** (10 tasks since the last) caught one more. The size-field sweep of AC-055 (`no-size-fields.spec.ts`) reads "rows" as a size unit, so a field labelled "Row limit" failed it in every browser. The field is labelled "Result limit" instead, and the sweep is unchanged.
+    - **Left as is, for the user:**
+      - A pie's slice warning still counts N + 1 slices with "Leave out", and ignores the result limit, so it can warn one slice early. It is never missing when due (AC-218 holds).
+      - A result limit at or under the top N cuts the "Other (_n_)" row too, since it applies last. That is what AC-041 says ("drops rows past it"), but nothing says so on the chart.
+    - AC-041 is ticked.
 - [ ] T391 [P] (AC-299) Thin or abbreviate value-axis labels so none overlap
   - Files: `packages/charts/src/axes.ts` (+ test)
   - Failing test: `axes.test.ts`, with `renderToSvg`: at a narrow tile width no two value-axis labels overlap (AC-299).

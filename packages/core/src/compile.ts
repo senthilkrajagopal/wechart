@@ -20,7 +20,7 @@ import { granularitiesOf } from './chart-spec';
 import type { MemberFormats } from './format';
 import { CHANNELS, type ChartType, type Encoding, type RenderSpec } from './render-spec';
 import { applySort } from './sort';
-import { applyTopN } from './topN';
+import { applyRowLimit, applyTopN } from './topN';
 
 export interface CompileOptions {
   readonly rows: readonly Record<string, unknown>[];
@@ -125,21 +125,24 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
   // *selects* which categories are shown (AC-041) and the sort *arranges*
   // what survives (AC-044), so folding first means the tail is chosen on
   // merit rather than on whatever the sort put last.
-  return applySort(
-    applyTopN({
-      chartType: chart.chartType ?? options.chartType,
-      encoding,
-      rows: options.rows,
-      // Carried through unchanged. Compile decides the encoding; it has no
-      // business interpreting what a chart type does with its own options.
-      ...(chart.options === undefined ? {} : { options: chart.options }),
-      ...(options.formats === undefined ? {} : { formats: options.formats }),
-      ...(options.titles === undefined ? {} : { titles: options.titles }),
-      // By the grain each was asked at, chosen or not (AC-188, AC-216).
-      granularities: granularitiesOf(chart.wells.timeDimensions, chart.granularities),
-      measures: [...chart.wells.measures],
-      ...(options.palette === undefined ? {} : { palette: options.palette }),
-      ...(options.surface === undefined ? {} : { surface: options.surface }),
-    }),
+  // The row limit last, on the rows as drawn (T390, AC-041).
+  return applyRowLimit(
+    applySort(
+      applyTopN({
+        chartType: chart.chartType ?? options.chartType,
+        encoding,
+        rows: options.rows,
+        // Carried through unchanged. Compile decides the encoding; it has no
+        // business interpreting what a chart type does with its own options.
+        ...(chart.options === undefined ? {} : { options: chart.options }),
+        ...(options.formats === undefined ? {} : { formats: options.formats }),
+        ...(options.titles === undefined ? {} : { titles: options.titles }),
+        // By the grain each was asked at, chosen or not (AC-188, AC-216).
+        granularities: granularitiesOf(chart.wells.timeDimensions, chart.granularities),
+        measures: [...chart.wells.measures],
+        ...(options.palette === undefined ? {} : { palette: options.palette }),
+        ...(options.surface === undefined ? {} : { surface: options.surface }),
+      }),
+    ),
   );
 }

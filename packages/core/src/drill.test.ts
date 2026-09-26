@@ -307,6 +307,22 @@ describe('the drilled chart (AC-236)', () => {
     });
   });
 
+  // T390's review: a row limit cuts the drilled rows too (AC-236), and the
+  // Top N's "the rest" has no Top N left to follow.
+  it('lets go of a row limit, and of what a Top N does with the rest', () => {
+    const limited: ChartDocument = {
+      ...CHART,
+      chart: {
+        ...CHART.chart,
+        options: { legend: 'bottom', topN: { n: 3, other: true }, tail: 'drop', rowLimit: 2 },
+      },
+    };
+
+    expect(drilledDocument(limited, { member: 'products.category' }).chart.options).toEqual({
+      legend: 'bottom',
+    });
+  });
+
   it('groups by a time dimension at the chosen grain', () => {
     const drilled = drilledDocument(CHART, { member: 'orders.shipped_at', granularity: 'week' });
 

@@ -1,6 +1,6 @@
 import { emptySpec } from '@wechart/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -339,6 +339,89 @@ describe('the wells’ pills, Filters and Top N (AC-216)', () => {
     await userEvent.clear(box);
     await userEvent.keyboard('{Enter}');
     expect(onTopN).toHaveBeenLastCalledWith(undefined);
+  });
+
+  /**
+   * T390, AC-041: the rest past the top N folded into "Other (n)" or dropped,
+   * and a row limit that drops rows past it.
+   */
+  it('folds the rest into Other (n) by default, or leaves it out, once there is a top N', async () => {
+    const onTail = vi.fn();
+    const { rerender } = render(
+      <Wells
+        spec={spec}
+        available={[measure]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onTail={onTail}
+      />,
+    );
+    // A segmented control, as direction.md's inspector fields have it.
+    const group = screen.getByRole('group', { name: 'The rest' });
+    // Nothing to fold or leave out without a top N.
+    const choices = within(group).getAllByRole('button');
+    expect(choices.map((choice) => choice.textContent)).toEqual([
+      'Fold into “Other (n)”',
+      'Leave out',
+    ]);
+    for (const choice of choices) expect((choice as HTMLButtonElement).disabled).toBe(true);
+
+    const withTopN = (tail?: 'drop') => (
+      <Wells
+        spec={spec}
+        available={[measure]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        topN={5}
+        tail={tail}
+        onTail={onTail}
+      />
+    );
+    rerender(withTopN());
+    const fold = within(group).getByRole('button', { name: 'Fold into “Other (n)”' });
+    const leaveOut = within(group).getByRole('button', { name: 'Leave out' });
+    expect(fold.getAttribute('aria-pressed')).toBe('true');
+    expect(leaveOut.getAttribute('aria-pressed')).toBe('false');
+    await userEvent.click(leaveOut);
+    expect(onTail).toHaveBeenLastCalledWith('drop');
+
+    // And back (T390's review).
+    rerender(withTopN('drop'));
+    expect(leaveOut.getAttribute('aria-pressed')).toBe('true');
+    await userEvent.click(fold);
+    expect(onTail).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it('sets a row limit down as one change, and clears it back to none', async () => {
+    const onRowLimit = vi.fn();
+    const { rerender } = render(
+      <Wells
+        spec={spec}
+        available={[measure]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onRowLimit={onRowLimit}
+      />,
+    );
+    const limit = screen.getByLabelText('Result limit');
+    await userEvent.type(limit, '20');
+    expect(onRowLimit).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Enter}');
+    expect(onRowLimit).toHaveBeenLastCalledWith(20);
+
+    rerender(
+      <Wells
+        spec={spec}
+        available={[measure]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        rowLimit={20}
+        onRowLimit={onRowLimit}
+      />,
+    );
+    await userEvent.clear(limit);
+    await userEvent.keyboard('{Enter}');
+    expect(onRowLimit).toHaveBeenLastCalledWith(undefined);
   });
 });
 

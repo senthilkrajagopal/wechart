@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from './render-spec';
-import { applyTopN, OTHER_LABEL } from './topN';
+import { applyRowLimit, applyTopN, OTHER_LABEL } from './topN';
 
 /**
  * T048 / AC-041: WHEN a categorical chart exceeds its top-N setting, THE
@@ -123,6 +123,40 @@ describe('gaps', () => {
 
     // "a" has no measurement, so it cannot outrank one that does.
     expect(categoriesOf(applyTopN(withGap))[0]).toBe('b');
+  });
+});
+
+/**
+ * T390, AC-041 (phase 2, the UI review's gap 10): the remainder past the top
+ * N can be folded into "Other (n)" or dropped, and a row limit drops the rows
+ * past it.
+ */
+describe('dropping the tail instead of folding it (T390)', () => {
+  it('keeps the top N and draws nothing of the rest', () => {
+    const dropped = applyTopN(spec({ options: { topN: 3, tail: 'drop' } }));
+    expect(categoriesOf(dropped)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('folds the rest for any value but "drop"', () => {
+    expect(categoriesOf(applyTopN(spec({ options: { topN: 3, tail: 'other' } })))).toEqual([
+      'a',
+      'b',
+      'c',
+      `${OTHER_LABEL} (2)`,
+    ]);
+  });
+});
+
+describe('a row limit (T390)', () => {
+  it('drops the rows past it, in the order they are drawn', () => {
+    expect(categoriesOf(applyRowLimit(spec({ options: { rowLimit: 2 } })))).toEqual(['a', 'b']);
+  });
+
+  it('leaves a chart within its limit, or with none, as it came', () => {
+    const within = spec({ options: { rowLimit: 5 } });
+    expect(applyRowLimit(within)).toBe(within);
+    const unlimited = spec({ options: {} });
+    expect(applyRowLimit(unlimited)).toBe(unlimited);
   });
 });
 

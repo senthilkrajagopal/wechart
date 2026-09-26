@@ -169,6 +169,9 @@ export function drillOptions(
   return options;
 }
 
+/** The options that change which of a chart's rows are drawn, which a drill lets go of. */
+const CUTS_ROWS = new Set(['topN', 'tail', 'rowLimit']);
+
 /**
  * The tile's chart grouped by what it's drilled by (AC-236): its measures,
  * filters and options kept; its grouping, chart type and pinned channels let
@@ -181,11 +184,13 @@ export function drilledDocument(
   to: { readonly member: string; readonly granularity?: TimeGranularity },
 ): ChartDocument {
   const { source, options, filters } = document.chart;
-  // A Top N would fold the drilled rows into N and "Other" (T270's review).
+  // A Top N would fold the drilled rows into N and "Other" (T270's review),
+  // and a row limit would cut them (T390's review): what the rest of a Top N
+  // does goes with it.
   const kept =
     options === undefined
       ? undefined
-      : Object.fromEntries(Object.entries(options).filter(([key]) => key !== 'topN'));
+      : Object.fromEntries(Object.entries(options).filter(([key]) => !CUTS_ROWS.has(key)));
   const time = to.granularity !== undefined;
   return {
     ...document,

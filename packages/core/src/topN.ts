@@ -84,6 +84,11 @@ export function applyTopN(spec: RenderSpec): RenderSpec {
   const kept = ranked.slice(0, limit);
   const folded = ranked.slice(limit);
 
+  // Or not drawn at all, when the chart says so (T390, AC-041).
+  if (spec.options?.['tail'] === 'drop') {
+    return { ...spec, rows: kept.flatMap((entry) => entry.rows) };
+  }
+
   const otherRow: Record<string, unknown> = {
     [category]: `${OTHER_LABEL} (${String(folded.length)})`,
   };
@@ -94,4 +99,16 @@ export function applyTopN(spec: RenderSpec): RenderSpec {
   }
 
   return { ...spec, rows: [...kept.flatMap((entry) => entry.rows), otherRow] };
+}
+
+/**
+ * A chart's row limit (T390, AC-041): the rows past it are not drawn, in the
+ * order the chart draws them, so it applies after sorting. The same object when
+ * nothing is cut, as `applyTopN` returns it.
+ */
+export function applyRowLimit(spec: RenderSpec): RenderSpec {
+  const limit = spec.options?.['rowLimit'];
+  if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1) return spec;
+  if (spec.rows.length <= limit) return spec;
+  return { ...spec, rows: spec.rows.slice(0, limit) };
 }
