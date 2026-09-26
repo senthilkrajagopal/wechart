@@ -26,6 +26,24 @@ function serviceBlock(compose: string, name: string): string {
   return rest.slice(0, end === -1 ? undefined : end).join('\n');
 }
 
+describe('docs/deploy.md builds it from the package (T415, AC-248)', () => {
+  const deploy = fromRoot('docs/deploy.md');
+
+  it('builds from the package’s directory, tagged by the fork’s commit', () => {
+    expect(deploy).toContain('cd ~/Work/bi/cube/cube-introspection');
+    expect(deploy).toContain(
+      'docker build -t cube:v1.7.45-introspection-$(git rev-parse --short=10 HEAD) .',
+    );
+    // The overlay build is gone with the branch it lived on.
+    expect(deploy).not.toContain('overlay.Dockerfile');
+  });
+
+  it('names the image the release runs, and no other', () => {
+    expect(deploy).toContain(`\`${IMAGE}\``);
+    expect(deploy).not.toMatch(/cube:v1\.7\.45-introspection-(?!0b6eef90a9|\$|<)/);
+  });
+});
+
 describe('the docker-desktop Helm release runs it (T414, AC-248)', () => {
   it('names it as Cube’s image, for Cube and its refresh worker', () => {
     const values = fromRoot('deploy/helm/values/docker-desktop.yaml');
