@@ -194,6 +194,14 @@ test('a failed tile keeps its ⋯ menu, and its Details hold the error and the q
   await expect(page.getByRole('dialog', { name: /query/i })).toContainText('"measures"');
 });
 
+/**
+ * T251's review: neither tile failed, so neither is offered a failure's menu.
+ * Since AC-246 (T404), a tile with no fields yet has a menu all the same, for
+ * Shift+F10 and the Menu key to open: its editor, and its exports refused
+ * because it has no fields, never because it could not be loaded, and no
+ * query to view. And, as the user ruled for T404, so does a chart that is
+ * gone: nothing to edit or view, its exports refused because it is gone.
+ */
 test('a tile with no fields yet, or a chart that is gone, has no failure menu (T251’s review)', async ({
   page,
   request,
@@ -253,8 +261,32 @@ test('a tile with no fields yet, or a chart that is gone, has no failure menu (T
     page.locator('[data-tile="tile-empty"]').getByTestId('tile-empty-chart'),
   ).toBeVisible();
   await expect(page.locator('[data-tile="tile-gone"]')).toContainText('no longer available');
-  await expect(page.getByTestId('tile-view-menu-tile-empty')).toHaveCount(0);
-  await expect(page.getByTestId('tile-view-menu-tile-gone')).toHaveCount(0);
+
+  const gone = page.locator('[data-tile="tile-gone"]');
+  await gone.getByTestId('tile-view-menu-tile-gone').click();
+  const itsItems = gone.getByRole('menu', { name: /^Actions for / });
+  await expect(itsItems.getByRole('menuitem', { name: 'Edit chart' })).toHaveCount(0);
+  await expect(itsItems.getByRole('menuitem', { name: 'View query' })).toHaveCount(0);
+  await gone.getByRole('menuitem', { name: /^Export/ }).click();
+  const itsCsv = gone.getByRole('menuitem', { name: 'CSV', exact: true });
+  await expect(itsCsv).toHaveAttribute('aria-disabled', 'true');
+  await expect(itsCsv).toHaveAccessibleDescription(
+    'This chart is no longer available, so nothing is drawn to copy or export.',
+  );
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+
+  const unbuilt = page.locator('[data-tile="tile-empty"]');
+  await unbuilt.getByTestId('tile-view-menu-tile-empty').click();
+  const items = unbuilt.getByRole('menu', { name: /^Actions for / });
+  await expect(items.getByRole('menuitem', { name: 'Edit chart' })).toBeVisible();
+  await expect(items.getByRole('menuitem', { name: 'View query' })).toHaveCount(0);
+  await unbuilt.getByRole('menuitem', { name: /^Export/ }).click();
+  const csv = unbuilt.getByRole('menuitem', { name: 'CSV', exact: true });
+  await expect(csv).toHaveAttribute('aria-disabled', 'true');
+  await expect(csv).toHaveAccessibleDescription(
+    'This chart has no fields yet, so nothing is drawn to copy or export.',
+  );
 });
 
 test('a chart that cannot be read for a network failure is not called missing', async ({

@@ -6028,10 +6028,30 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/web/src/editor/acceleration/*`, `e2e/titles.spec.ts`
   - Failing test: `titles.spec.ts`: no legend, tooltip, table header, pill, marking chip, "Why this chart?" trace or Acceleration tab shows an internal name such as `orders.count`, and a one-source chart's legend and KPI label use the short title (AC-220).
   - Depends on: none
-- [ ] T404 [P] (AC-246) Open the tile's menu with Shift+F10 or the Menu key on any chart tile, one with no fields included
-  - Files: `packages/web/src/tiles/ChartTile.tsx`, `e2e/tile-menu.spec.ts`
+- [x] T404 [P] (AC-246) Open the tile's menu with Shift+F10 or the Menu key on any chart tile, one with no fields included
+  - Files: ~~`packages/web/src/tiles/ChartTile.tsx`~~ `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/dashboard/TileViewMenu.tsx`, `e2e/tile-menu.spec.ts`, `e2e/dashboard.spec.ts` (as built)
   - Failing test: `tile-menu.spec.ts`: Shift+F10 and the Menu key open the tile's menu on a focused chart tile with no fields yet, and the browser's own menu never opens there (AC-246).
   - Depends on: none
+  - **Done 2026-09-26.**
+    - **Why the keys did nothing:** the keyboard handler asked for the tile's menu, but no ⋯ menu was drawn for a chart with no fields or no type yet (T251's review), so nothing opened.
+    - **Now, as the user ruled on T404's review, every chart tile in view mode has its menu,** offering what it has and refusing the rest with its reason:
+      - a chart with no fields yet: Edit chart; no query, rows or marked rows; exports "This chart has no fields yet, so nothing is drawn to copy or export.";
+      - a chart with no type yet: Edit chart and its query, which it has; exports refused as having no chart type yet;
+      - one still waiting for its first answer: Edit chart; exports "Its first answer is still on its way, so nothing is drawn to copy or export yet.". The "newest answer" note is only for a tile with something drawn;
+      - one whose document couldn't be read: Edit chart; no query; the failure's reason, as before;
+      - one that is gone: nothing to edit or view; exports "This chart is no longer available, so nothing is drawn to copy or export."
+    - **T251's ruling** ("no menu for a chart with no fields or no type yet, nor one that is gone") is superseded by AC-246 and the user's ruling. What it guarded is kept: none of these menus gives a failure's reason where nothing failed.
+    - **What the tests show:** `tile-menu.spec.ts` (Chrome):
+      - Shift+F10 and the Menu key open the no-fields tile's menu, with the first item focused, Escape back to the tile, and both keys' defaults prevented;
+      - the untyped, unread, gone and still-waiting tiles each open from Shift+F10 with the items and reasons above;
+      - `dashboard.spec.ts`'s T251 test checks the no-fields and gone tiles' menus;
+      - dashboard, markings, tiles and tile-menu specs pass (101); web 1,499.
+    - **The cold review (FAIL)** led to:
+      - the ruling above;
+      - an untyped chart keeping View query and underlying rows;
+      - no marked-rows group for a chart with no query;
+      - the untyped test.
+    - **AC-246 ticked** on `tile-menu.spec.ts` and `markings.spec.ts`'s right-click and Menu-key test.
 - [ ] T405 (AC-176) Reach the remaining pointer-only actions from the keyboard
   - Files and failing test: as T307 and T182 (above), extended to every phase-2 panel, dialog and popover (rule 85) (AC-176).
   - Depends on: T330, T356, T357, T367

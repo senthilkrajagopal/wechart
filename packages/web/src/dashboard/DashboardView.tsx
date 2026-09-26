@@ -1041,6 +1041,24 @@ function Elements({
   affordances: Affordances;
 }) {
   const { editing, charts, onResize, drag } = affordances;
+  /** A chart with no fields or no type yet (T404): nothing drawn, and nothing failed. */
+  const unbuilt = (chartId: string) =>
+    charts.specs[chartId] === undefined &&
+    (charts.errors[chartId] === NOTHING_CHOSEN || charts.errors[chartId] === CHART_UNTYPED);
+  /**
+   * One with no fields yet: no query at all, so nothing to view, list or
+   * mark. An untyped chart has its query, and keeps them (T404's review).
+   */
+  const fieldless = (chartId: string) =>
+    charts.specs[chartId] === undefined && charts.errors[chartId] === NOTHING_CHOSEN;
+  /** A chart that is gone (T404: its menu still opens, saying so). */
+  const gone = (chartId: string) =>
+    charts.specs[chartId] === undefined && charts.errors[chartId] === CHART_MISSING;
+  /** A chart still waiting for its first answer. */
+  const waiting = (chartId: string) =>
+    charts.specs[chartId] === undefined && charts.errors[chartId] === undefined;
+  /** Its document in hand: what its query, its copy and its rows are read from (T251's review). */
+  const documented = (chartId: string) => !gone(chartId) && charts.documented?.(chartId) === true;
 
   return (
     <Canvas
@@ -1208,19 +1226,19 @@ function Elements({
             {/* The ⋯ menu in view mode (T177, AC-171): the prototype's
                 "Download CSV", for a chart with something drawn — and for
                 one whose load failed, which keeps its menu to view its query
-                and edit it (T251; recheck-dashboard F10). Not for a chart
-                that is gone, nor one with no fields or no type yet, which
-                failed at nothing; and only with its document in hand, which
-                its query and editor are read from (T251's review). */}
+                and edit it (T251; recheck-dashboard F10). And for one with no
+                fields or no type yet, whose menu Shift+F10 and the Menu key
+                open too (T404, AC-246): Edit chart, with nothing to export
+                and no query to view. And, as the user ruled for T404, on
+                every other chart tile too: one still waiting for its first
+                answer, one whose document couldn't be read, one that is
+                gone. Each offers what it has: Edit chart where there is a
+                chart to edit, its query only with its document in hand
+                (T251's review), and every other item refused with its
+                reason, never a failure's where nothing failed. */}
             {affordances.editing ||
             element.kind !== 'chart' ||
-            element.chartId === undefined ||
-            (charts.specs[chartId] === undefined &&
-              (charts.errors[chartId] === undefined ||
-                charts.errors[chartId] === CHART_MISSING ||
-                charts.errors[chartId] === CHART_UNTYPED ||
-                charts.errors[chartId] === NOTHING_CHOSEN ||
-                charts.documented?.(chartId) !== true)) ? null : (
+            element.chartId === undefined ? null : (
               <TileViewMenu
                 tileId={element.id}
                 title={charts.titleOf?.(chartId) ?? element.text ?? 'chart'}
@@ -1254,7 +1272,9 @@ function Elements({
                       }
                 }
                 onViewQuery={
-                  charts.onViewQuery === undefined
+                  // A chart with no fields yet has no query to view, and one
+                  // gone or unread has no document to read it from.
+                  charts.onViewQuery === undefined || fieldless(chartId) || !documented(chartId)
                     ? undefined
                     : () => {
                         charts.onViewQuery?.(chartId, element.id);
@@ -1262,20 +1282,27 @@ function Elements({
                 }
                 dataAsOf={charts.dataAsOfOf?.(chartId, element.id)}
                 undrawn={
-                  // A limited tile waiting shows its message, not its chart.
-                  charts.limitedStates?.[chartId] === undefined
-                    ? undefined
-                    : 'Nothing is marked yet, so the tile draws no chart.'
+                  unbuilt(chartId)
+                    ? `${String(charts.errors[chartId]).replace(/\.$/, '')}, so nothing is drawn to copy or export.`
+                    : gone(chartId)
+                      ? 'This chart is no longer available, so nothing is drawn to copy or export.'
+                      : waiting(chartId)
+                        ? 'Its first answer is still on its way, so nothing is drawn to copy or export yet.'
+                        : // A limited tile waiting shows its message, not its chart.
+                          charts.limitedStates?.[chartId] === undefined
+                          ? undefined
+                          : 'Nothing is marked yet, so the tile draws no chart.'
                 }
                 onCopyToDashboard={
-                  charts.onCopyToDashboard === undefined
+                  charts.onCopyToDashboard === undefined || !documented(chartId)
                     ? undefined
                     : () => {
                         charts.onCopyToDashboard?.(chartId, element.id);
                       }
                 }
                 onEditChart={
-                  affordances.onEditChart === undefined
+                  // Not for a chart that is gone: there is nothing to edit.
+                  affordances.onEditChart === undefined || gone(chartId)
                     ? undefined
                     : () => {
                         affordances.onEditChart?.(element.id, chartId);
@@ -1283,8 +1310,13 @@ function Elements({
                 }
                 onViewRows={
                   // Not on a limited tile showing its waiting state, whose
-                  // rows are none of these (T120's review), as View as table.
-                  charts.onViewRows === undefined || charts.limitedStates?.[chartId] !== undefined
+                  // rows are none of these (T120's review), as View as table;
+                  // nor on a chart with no fields yet, which has none, nor
+                  // one gone or unread (T404).
+                  charts.onViewRows === undefined ||
+                  charts.limitedStates?.[chartId] !== undefined ||
+                  fieldless(chartId) ||
+                  !documented(chartId)
                     ? undefined
                     : () => {
                         charts.onViewRows?.(chartId, element.id, false);
@@ -1294,7 +1326,13 @@ function Elements({
                 marked={(() => {
                   const shown = charts.markingOn?.(element.id);
                   const markItems = charts.markItemsOn?.(element.id);
-                  return shown === undefined || charts.onUnmark === undefined
+                  // No marked rows to view, export or drill for a chart with
+                  // no fields yet, or one gone or unread: no query to ask
+                  // (T404's review).
+                  return shown === undefined ||
+                    charts.onUnmark === undefined ||
+                    fieldless(chartId) ||
+                    !documented(chartId)
                     ? undefined
                     : {
                         name: shown.marking.name,

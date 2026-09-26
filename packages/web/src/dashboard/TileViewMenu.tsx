@@ -159,7 +159,9 @@ export function TileViewMenu({
   dataAsOf?: (() => { label: string; entries: MenuEntry[] } | undefined) | undefined;
   /**
    * Why the tile draws no chart just now — a limited tile waiting for a
-   * marking — so there is no image of it to make (T272's review).
+   * marking — so there is no image of it to make (T272's review); or, with no
+   * `spec`, a chart with no fields or type yet, so there is nothing to export
+   * either (T404).
    */
   undrawn?: string | undefined;
   /**
@@ -477,7 +479,8 @@ export function TileViewMenu({
   /** Why a tile has no image to export: it is drawn as text, not by ECharts. */
   const imageless =
     spec === undefined
-      ? FAILED
+      ? // Nothing drawn: its load failed, or it has no fields yet (T404).
+        (undrawn ?? FAILED)
       : tableView
         ? 'Shown as a table: view it as a chart to export its image.'
         : ['kpi', 'table', 'pivot'].includes(spec.chartType)
@@ -768,12 +771,13 @@ export function TileViewMenu({
           onSelect: download,
           disabled:
             spec === undefined
-              ? FAILED
+              ? (undrawn ?? FAILED)
               : asking
                 ? 'Its newest answer is still on its way.'
                 : undefined,
-          // Said in words beside it, which it is described by (T182, AC-176).
-          describedBy: asking ? why : undefined,
+          // Said in words beside it, which it is described by (T182, AC-176);
+          // with nothing drawn yet, its own reason says it (T404).
+          describedBy: spec !== undefined && asking ? why : undefined,
         },
         ...(marked?.exportRows === undefined || marked.count === 0
           ? []
@@ -903,8 +907,10 @@ export function TileViewMenu({
               fromTile.current = false;
             }}
           />
-          {/* Why Download is off, in words (T182, AC-176). */}
-          {asking ? (
+          {/* Why Download is off, in words (T182, AC-176): a newer answer
+              than the one drawn. With nothing drawn, each item's own reason
+              says why instead (T404). */}
+          {asking && spec !== undefined ? (
             <StateLine kind="run" className="tile-menu__why" id={why}>
               Its newest answer is still on its way.
             </StateLine>
