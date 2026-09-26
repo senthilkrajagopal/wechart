@@ -382,6 +382,9 @@ As in Part 1, every statement traces to a round or an input. Anything undecided 
 - The work is split into the plan's slices 0–8. wechart's side of each goes through these gates.
 - Passages the plan overturns are marked **Superseded** in the same way, with `[IP n]`, `[plan]` or `[R28]`.
 
+**Amended again 2026-09-26 by xcube's slice 2 as built** (`docs/inputs/2026-09-26-xcube-slice-2-contract.md`, written from the Cube fork session at the user's request), cited as `[X2]`. Its claims were checked against the fork at commit `83cb9f0888` (`docs/research/xcube-slice-2.md`), and only verified ones are stated here. Round R29 settled what it left open or contradicted.
+- xcube serves wechart's model from its own schema, and wechart pushes its published files to xcube. The details are in §P2.4, "Architecture", under "Slice 2 as built".
+
 ## P2.1 Problem
 
 Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in and one trusted user. It has one Cube model and one data source for everything, and a change to shared content is live at once `[Part 1 §4]`. Phase 2 adds:
@@ -518,8 +521,17 @@ With security on, a deployment that names no Super-Admin group refuses to start 
   - Every Cube process runs the plan's runtime settings. These include the Cube Store queue, and a queue heartbeat of 5–10 s, so a crashed instance releases its queries in about 30 s `[IP 9, plan]`.
 - **Tokens** carry groups only, for now `[AD 12]`.
   - wechart signs them RS256 and pushes its public keys (JWKS) to xcube when it starts and when keys rotate, so Cube verifies them without calling wechart `[AD 12, R27]`. The push goes to an xcube admin route. xcube never fetches keys from wechart `[R28]`.
-  - Admin calls use the separate service credential `[AD 12]`.
+  - Admin calls use the separate service credential `[AD 12]`. **Until slice 4** they use xcube's static admin token instead (below) `[X2, R29]`.
   - Where xcube's private key and wechart's signing key are kept in production is decided before slice 6 `[plan]`. Until then, development keeps the fixed key pair (above).
+- **Slice 2 as built** `[X2, R29]`. xcube's side is done in the fork. wechart's side is one cut-over, with no switch between old and new: the previous image and release are the way back `[X2]`.
+  - **A model** is one wechart instance's whole data model, named by an id of 1–63 lower-case letters, digits, `_` and `-`, starting with a letter or digit: for example `dev`, `demo`, or the Helm release's name `[X2]`. Folders are paths inside it, never separate models `[X2; research]`.
+  - **wechart pushes the whole published file set** to xcube: when the API starts, after each publish, and from a reconcile every 60 s. It reads xcube's current revision first and pushes only when the content differs. It records what xcube acknowledged (its generation, revision and content hash), and commits to its own store before pushing, so xcube is never ahead of wechart `[X2]`.
+  - **A publish is checked by xcube's dry run**, in place of the draft Cube compiles today: the merged files, wechart's base context, and a probe for each cube's rollups `[X2]`. Every break in what the publish affects refuses it, a rollup already refused before the change included. No `compare` probe is sent, as IP 5 already has it `[R29]`.
+  - **Only YAML files go to xcube** `[R29]`. A JavaScript, Python or Jinja file already in wechart's store stays there, viewable read-only with the reason (AC-140), and is never served. The seed's Jinja sample is rewritten as plain YAML, so its cube keeps working. xcube itself refuses such files unless told otherwise, and it is not `[X2, R28]`.
+  - **Query tokens name the model** in a `wechartModel` claim, and the oldest revision the answer may come from in `wechartRevision`, so wechart reads its own writes across Cube instances and its own replicas. A Cube instance that hasn't reached that revision catches up first, or answers 503 to be tried again `[X2]`. In slice 2 tokens are still signed as today; RS256 comes with its own slice `[X2, plan]`.
+  - **The model store goes in this cut-over** `[R29]`: the `/api/cube-model/*` routes, the publish-drafts table, the route class Cube used, the store settings and the draft claims. ~~Removed in slice 3.~~ Nothing reads them once xcube serves the model.
+  - **Admin calls use xcube's static admin token until slice 4**, which replaces it with the service credential `[X2, R29]`. The token is kept as a secret, at least 32 characters long, and more than one can be configured so it can be rotated `[X2]`. Every other call wechart makes on its own behalf stays as it is until then.
+  - **What Cube needs xcube's database for** `[research]`. Cube answers from its active revision without reading the database. It reads the database to catch up to a newer revision, to load a model it doesn't have yet, and to start after a restart. So "Cube keeps answering with wechart and Postgres both down" holds only for requests the active revision already satisfies.
 
 ## P2.5 Stack
 
@@ -527,7 +539,8 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - credentials encrypted in the metadata database `[R14, R15]`, to xcube's public key `[AD 7]`;
 - changes to the Cube fork where needed, through the Cube-expert agent `[R15]`, in xcube's package `[AD 1]`;
 - Cube plus xcube as the semantic service, with wechart as its client `[AD 1]`;
-- RS256 user tokens with their public keys pushed to xcube, and a separate service credential for admin calls `[AD 12, R27]`;
+- RS256 user tokens with their public keys pushed to xcube, and a separate service credential for admin calls `[AD 12, R27]`, with xcube's static admin token in its place until slice 4 `[X2, R29]`;
+- xcube's slice 2 at the fork's commit `83cb9f0888`, as the Cube image for every Cube process `[X2]`;
 - `jose` 6.2.12 to sign tokens in wechart's API, and `hpke` 1.1.7 (RFC 9180) to encrypt credentials to xcube's public key in the browser `[R28]`.
 
 **Decided after research** (these were the open items; the user chose on 2026-09-25, rounds R20–R22)
@@ -647,7 +660,7 @@ The rest still apply: AI and chat authoring, scheduled delivery and alerts, embe
 
 ## P2.8 Open questions
 
-**None.** All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections. The ten the 2026-09-26 plan left open were settled in round R28, in the same way.
+**None.** All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections. The ten the 2026-09-26 plan left open were settled in round R28, in the same way. The four xcube's slice 2 left open were settled in round R29, and are in §P2.4, "Slice 2 as built".
 
 | # | Question | Decision |
 |---|---|---|
@@ -754,6 +767,13 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
+
+**R29 — what xcube's slice 2, as built, left open or contradicted** (`docs/inputs/2026-09-26-xcube-slice-2-contract.md`, checked in `docs/research/xcube-slice-2.md`; asked together, 2026-09-26)
+- Q: xcube takes only plain YAML by default. The seed model holds one Jinja file, cubes/product_catalog.yml, which AC-140 shows read-only and model.spec checks Cube compiles. What happens to non-YAML files when wechart pushes its whole model to xcube? A: "Leave them out (Recommended)"
+  - *The option read: "Only YAML files go into xcube's snapshot. Non-YAML files already stored stay viewable read-only (AC-140) but are never served. The seed's template is rewritten as plain YAML so product_catalog keeps working."*
+- Q: A publish's rollup probes: the fork session's contract sends compare: true so a rollup already refused before the change doesn't block it. The requirements (AD 6, then IP 5) say a publish is refused if any module it affects breaks, and the research says the second probe can go. Which holds? A: "Refuse every break (Recommended)"
+- Q: When do Cube's model callbacks go: /api/cube-model/*, the publish_drafts table (T418's interim fix), the CUBE route class, WECHART_MODEL_STORES/KEY and the draft claims? A: "In slice 2's cut-over (Recommended)"
+- Q: xcube's admin routes take a static token from XCUBE_ADMIN_TOKENS (32+ characters, rotatable as a list), which slice 4 replaces with the service credential. AC-326 says every own-behalf call uses the service credential. For slice 2: A: "Static token until slice 4 (Recommended)"
 
 **R28 — the questions the 2026-09-26 integration plan left open** (`docs/inputs/2026-09-26-integration-plan-decisions.md`; the list of places it contradicts went to the user first, and the user answered all ten in one message, then asked that the whole list be worked through)
 - Q1: The shared root: R27 kept its names unprefixed, with nothing migrated. Decision 3 and the plan prefix every name and migrate chart and dashboard references in slice 3. Should the root be prefixed too? A: "keep it consistent... no special handling for root"
