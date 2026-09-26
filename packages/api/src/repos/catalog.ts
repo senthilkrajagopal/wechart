@@ -114,8 +114,11 @@ export function catalog(db: Kysely<Database>) {
   };
 
   return {
-    /** Every folder, for the tree. */
-    async folders(): Promise<FolderNode[]> {
+    /**
+     * Every folder, for the tree. `counted: false` leaves out every count,
+     * for a caller that counts only what its user may see (T325).
+     */
+    async folders({ counted = true }: { counted?: boolean } = {}): Promise<FolderNode[]> {
       const rows = await db
         .selectFrom('documents')
         .select(['id', 'title', 'folder_id'])
@@ -124,13 +127,41 @@ export function catalog(db: Kysely<Database>) {
         .execute();
 
       // Each with its items, its subfolders' included (AC-194).
-      const counts = await itemCounts(rows.map((row) => row.id));
+      const counts = counted
+        ? await itemCounts(rows.map((row) => row.id))
+        : new Map<string, number>();
       return rows.map((row) => ({
         id: row.id,
         title: row.title ?? '(untitled)',
         parentId: row.folder_id,
         itemCount: counts.get(row.id) ?? 0,
       }));
+    },
+
+    /**
+     * Each folder's own dashboards and library charts, not its subfolders':
+     * what a count of only the folders a user may see adds up (T325, AC-194).
+     * Dashboard-local charts are no catalog objects, and not counted (AC-126).
+     */
+    async libraryCounts(): Promise<Map<string, { dashboards: number; charts: number }>> {
+      const rows = await db
+        .selectFrom('documents')
+        .select(['folder_id', 'kind'])
+        .select((eb) => eb.fn.countAll<string>().as('count'))
+        .where('kind', 'in', ['dashboard', 'chart'])
+        .where('local_to_dashboard_id', 'is', null)
+        .where('folder_id', 'is not', null)
+        .groupBy(['folder_id', 'kind'])
+        .execute();
+      const counts = new Map<string, { dashboards: number; charts: number }>();
+      for (const row of rows) {
+        const folder = row.folder_id as string;
+        const each = counts.get(folder) ?? { dashboards: 0, charts: 0 };
+        if (row.kind === 'dashboard') each.dashboards = Number(row.count);
+        else each.charts = Number(row.count);
+        counts.set(folder, each);
+      }
+      return counts;
     },
 
     /** The shared root's and My workspace's items, everything beneath each counted (AC-194). */
@@ -146,7 +177,11 @@ export function catalog(db: Kysely<Database>) {
      * because it is not a catalog object (AC-126) — it belongs to its dashboard
      * and appears in no folder listing.
      */
-    async contents(folderId: string = ROOT_FOLDER_ID): Promise<CatalogItem[]> {
+    async contents(
+      folderId: string = ROOT_FOLDER_ID,
+      /** `false`: no subfolder counts, for a caller that counts what its user may see (T325). */
+      { counted = true }: { counted?: boolean } = {},
+    ): Promise<CatalogItem[]> {
       const rows = await selectItems()
         .where('folder_id', '=', folderId)
         .where('local_to_dashboard_id', 'is', null)
@@ -155,9 +190,9 @@ export function catalog(db: Kysely<Database>) {
         .orderBy('title', 'asc')
         .execute();
 
-      const counts = await itemCounts(
-        rows.filter((row) => row.kind === 'folder').map((row) => row.id),
-      );
+      const counts = counted
+        ? await itemCounts(rows.filter((row) => row.kind === 'folder').map((row) => row.id))
+        : new Map<string, number>();
       return rows.map((row) => ({
         ...toItem(row),
         itemCount: row.kind === 'folder' ? (counts.get(row.id) ?? 0) : null,
@@ -217,13 +252,29 @@ export function catalog(db: Kysely<Database>) {
       limit = 50,
       /** One kind alone — dashboards, for the security preview's list (T241). */
       only?: 'dashboard' | 'chart',
+      /**
+       * With security on, the folders whose dashboards, and whose library
+       * charts, the user may see (T325, AC-264): narrowed here, before the
+       * limit, so hidden rows can't crowd out visible ones.
+       */
+      within?: { readonly dashboards: readonly string[]; readonly charts: readonly string[] },
     ): Promise<CatalogItem[]> {
       const needle = text.trim();
       if (needle === '') return [];
+      if (within !== undefined && within.dashboards.length === 0 && within.charts.length === 0)
+        return [];
 
       const rows = await selectItems()
         .where('kind', 'in', only === undefined ? ['dashboard', 'chart'] : [only])
         .where('local_to_dashboard_id', 'is', null)
+        // Each list one array parameter, however many folders (T325's review:
+        // one parameter per id slows planning and caps out at 65,535).
+        .$if(within !== undefined, (query) =>
+          query.where(
+            sql<boolean>`((kind = 'dashboard' and folder_id = any(${[...within!.dashboards]}::text[]))
+              or (kind = 'chart' and folder_id = any(${[...within!.charts]}::text[])))`,
+          ),
+        )
         .where((eb) =>
           eb(eb.fn('lower', ['title']), 'like', `%${escapeLike(needle.toLowerCase())}%`),
         )

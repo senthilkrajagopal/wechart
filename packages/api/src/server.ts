@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import {
   ChartDocumentError,
+  folderRights,
   IMAGE_HEAD_BYTES,
   imageProblem,
   newDashboardBody,
@@ -31,7 +32,9 @@ import { registerIntrospection } from './model/introspection';
 import type { Config } from './config';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, type ReferenceDocument } from './model/references';
+import { searchable, visibleCounts, type Visibility } from './access/visible';
 import type { BookmarkStore } from './repos/bookmarks';
+import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from './repos/catalog';
 import type { FolderAccessStore } from './repos/folder-access';
 import { registerFolderAccess } from './routes/access';
 import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
@@ -132,11 +135,20 @@ export interface DocumentWriter {
 
 /** The slice of the catalog repository the server exposes. */
 export interface CatalogReader {
-  folders(): Promise<unknown[]>;
+  /** `counted: false`: no counts, for a caller that counts what its user may see (T325). */
+  folders(options?: { counted?: boolean }): Promise<unknown[]>;
   /** The shared root's and My workspace's item counts (AC-194). */
   rootCounts?(): Promise<Record<string, number>>;
-  contents(folderId: string): Promise<unknown[]>;
-  search(text: string, limit?: number, only?: 'dashboard' | 'chart'): Promise<unknown[]>;
+  contents(folderId: string, options?: { counted?: boolean }): Promise<unknown[]>;
+  search(
+    text: string,
+    limit?: number,
+    only?: 'dashboard' | 'chart',
+    /** With security on, the folders whose dashboards and library charts the user may find (T325). */
+    within?: { readonly dashboards: readonly string[]; readonly charts: readonly string[] },
+  ): Promise<unknown[]>;
+  /** Each folder's own dashboards and library charts, for counts of what a user may see (T325). */
+  libraryCounts?(): Promise<ReadonlyMap<string, { dashboards: number; charts: number }>>;
   dashboardsUsing?(chartId: string): Promise<unknown[]>;
   /** Every chart and dashboard, with its body: what uses a member (T147). */
   referenceDocuments?(): Promise<readonly ReferenceDocument[]>;
@@ -476,13 +488,82 @@ export function buildServer({
   });
 
   // Explore's folder tree and contents (AC-017).
-  app.get('/api/folders', USER, async () => (cat ? cat.folders() : []));
-  // The two roots' counts, which are no folder's (AC-194).
-  app.get('/api/folder-roots', USER, async () => (cat?.rootCounts ? cat.rootCounts() : {}));
+  /**
+   * With security on, what the request's user may see of the shared tree
+   * (T325, AC-264): each folder a grant reaches, down or up (`folderRights`).
+   * With it off, undefined: the single user sees everything, as in phase 1.
+   */
+  const visibilityOf = async (request: FastifyRequest): Promise<Visibility | undefined> => {
+    if (security === 'off') return undefined;
+    const user = userOf(request);
+    if (folderAccess === undefined) {
+      // No store of groups: a Super-Admin sees everything, and no one else anything.
+      return user.superAdmin ? undefined : { tree: [], rights: new Map() };
+    }
+    const tree = await folderAccess.tree();
+    return {
+      tree,
+      rights: folderRights(tree, { groups: user.groups, superAdmin: user.superAdmin }),
+    };
+  };
+  /** Each visible folder's count of what the user may see in and beneath it (AC-194). */
+  /** These visible folders' counts of what the user may see in and beneath them (AC-194). */
+  const countsOf = async (seen: Visibility, only: readonly string[]) =>
+    visibleCounts(seen, cat?.libraryCounts ? await cat.libraryCounts() : new Map(), only);
 
-  app.get('/api/folders/:folderId/contents', USER, async (request) => {
+  app.get('/api/folders', USER, async (request) => {
+    if (!cat) return [];
+    const seen = await visibilityOf(request);
+    if (seen === undefined) return cat.folders();
+    // Counted here, for what this user may see: the catalog's counts go unasked.
+    const folders = (await cat.folders({ counted: false })).filter((folder) =>
+      seen.rights.has((folder as { id: string }).id),
+    ) as { id: string }[];
+    const counts = await countsOf(
+      seen,
+      folders.map((folder) => folder.id),
+    );
+    return folders.map((folder) => ({ ...folder, itemCount: counts.get(folder.id) ?? 0 }));
+  });
+  // The two roots' counts, which are no folder's (AC-194).
+  app.get('/api/folder-roots', USER, async (request) => {
+    const seen = await visibilityOf(request);
+    if (seen === undefined) return cat?.rootCounts ? cat.rootCounts() : {};
+    // My workspace is each user's own, and empty until T343 gives them one.
+    return {
+      [ROOT_FOLDER_ID]: (await countsOf(seen, [ROOT_FOLDER_ID])).get(ROOT_FOLDER_ID) ?? 0,
+      [MY_WORKSPACE_ID]: 0,
+    };
+  });
+
+  app.get('/api/folders/:folderId/contents', USER, async (request, reply) => {
     const { folderId } = request.params as { folderId: string };
-    return cat ? cat.contents(folderId) : [];
+    if (!cat) return [];
+    const seen = await visibilityOf(request);
+    if (seen === undefined) return cat.contents(folderId);
+    if (folderId === MY_WORKSPACE_ID) return [];
+    const right = seen.rights.get(folderId);
+    // Explore opens on the shared root: for someone no grant reaches, it holds
+    // nothing, rather than being an error (T325's review).
+    if (right === undefined && folderId === ROOT_FOLDER_ID) return [];
+    // Any other folder they may not see answers as one that isn't there (AC-264).
+    if (right === undefined) {
+      return reply.code(404).send({ error: 'There’s no such folder, or it isn’t yours to see.' });
+    }
+    const rows = (
+      (await cat.contents(folderId, { counted: false })) as { kind: string; id: string }[]
+    ).filter((row) =>
+      row.kind === 'folder'
+        ? seen.rights.has(row.id)
+        : row.kind === 'dashboard' || right.kinds === 'all',
+    );
+    const counts = await countsOf(
+      seen,
+      rows.filter((row) => row.kind === 'folder').map((row) => row.id),
+    );
+    return rows.map((row) =>
+      row.kind === 'folder' ? { ...row, itemCount: counts.get(row.id) ?? 0 } : row,
+    );
   });
 
   /**
@@ -999,8 +1080,11 @@ export function buildServer({
     const most = limit === undefined ? undefined : Number(limit);
     if (most !== undefined && most > 5000) throw new BadRequest('limit is at most 5,000.');
     if (!cat) return [];
-    if (kind !== undefined) return cat.search(q ?? '', most, kind);
-    return most === undefined ? cat.search(q ?? '') : cat.search(q ?? '', most);
+    // Nothing to look for: no need to read the tree.
+    if ((q ?? '').trim() === '') return [];
+    // With security on, only what the user may see (T325, AC-264).
+    const seen = await visibilityOf(request);
+    return cat.search(q ?? '', most, kind, seen === undefined ? undefined : searchable(seen));
   });
 
   app.get('/api/jobs/queries', USER, async (request) => {

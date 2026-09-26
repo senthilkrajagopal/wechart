@@ -5245,11 +5245,31 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.2 Folder permissions and roles (F26)
 
-- [ ] T325 (AC-264, AC-194, AC-261) List and count only what the user may see in the tree, listings and search
-  - Files: `packages/api/src/repos/catalog.ts`, `packages/api/src/server.ts`, `packages/api/src/repos/catalog-access.test.ts`
+- [x] T325 (AC-264, AC-194, AC-261) List and count only what the user may see in the tree, listings and search
+  - Files: `packages/api/src/repos/catalog.ts`, `packages/api/src/server.ts`, `packages/api/src/access/visible.ts`, `packages/api/src/repos/catalog-access.test.ts`
   - Failing test: `catalog-access.test.ts`: `/api/folders`, `/api/folder-roots`, `/api/folders/:id/contents` and `/api/search` never name a folder or item the user may not see, and every count counts only visible items, subfolders included (AC-264, AC-194).
   - Depends on: T313, T314
-- [ ] T326 (AC-263, AC-266) Read-only users read dashboards and change nothing
+  - **Done 2026-09-25.**
+    - **Security off:** the four routes are unchanged.
+    - **Security on:** the server builds each request's visibility from `folderAccessStore.tree()` and `folderRights`.
+      - `/api/folders` lists the visible folders.
+      - A folder's contents list its visible subfolders, its dashboards, and its library charts where every kind is the user's. A folder they can't see answers 404, as a missing one does.
+      - Every count is what the user may see in and beneath the folder (`access/visible.ts`, from `catalog.libraryCounts`).
+      - Search is narrowed in SQL, before the limit, one array parameter per list.
+      - My workspace lists nothing and counts 0 until T343.
+    - **The cold review failed the first version.** Its test never put a hidden folder inside a visible one, so the subfolder filter and the hidden-count guard could go unnoticed. The fixture now has D, hidden beside B inside A, and the test covers:
+      - the root's listing, including for someone in no group;
+      - the limit applied after narrowing, and `kind=chart`;
+      - `mine`;
+      - the same 404 for a missing folder and a hidden one.
+    - **Other review fixes:**
+      - The shared root answered 404 to someone no grant reaches; it now lists nothing, since Explore opens there.
+      - The catalog's own counts are no longer computed and thrown away.
+      - Counts are made only for the folders listed.
+      - An empty search reads no tree.
+    - **Left for later (performance, noted by the review):** every request reads the whole access tree (two queries) and aggregates `documents` for the counts. At 500+ users that wants a cached, versioned tree.
+    - **Nothing ticked.** Each criterion's other half is another task's: AC-264 opening items (T326, T327), AC-194 the rendered pane (T331, T343), AC-261 opening and writing (T326–T329, T408).
+- [ ] T326 (AC-263, AC-266, AC-264) Read-only users read dashboards and change nothing
   - Files: `packages/api/src/server.ts` (write routes), `packages/api/src/access/readonly.test.ts`
   - Failing test: `readonly.test.ts`: a read-only user can open the folder's dashboards and their charts, load their data, export and bookmark; a model, data source or library chart answers 404; every create, change, move, delete, propose and access route answers 403 (AC-263, AC-266).
   - Depends on: T325
@@ -5733,7 +5753,7 @@ The user's Cube fork moved the introspection API out of Cube's own packages into
 | AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323, T325, T326 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
 | AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327 |
-| AC-263 | T313, T326 | AC-264 | T313, T325 | AC-265 | T313, T323, T328, T330, T369, T371 |
+| AC-263 | T313, T326 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371 |
 | AC-266 | T326 | AC-267 | T328 | AC-268 | T340, T408 |
 | AC-269 | T334, T335 | AC-270 | T336 | AC-271 | T336 |
 | AC-272 | T337, T339, T340 | AC-273 | T338 | AC-274 | T341 |
