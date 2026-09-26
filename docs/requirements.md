@@ -385,6 +385,10 @@ As in Part 1, every statement traces to a round or an input. Anything undecided 
 **Amended again 2026-09-26 by xcube's slice 2 as built** (`docs/inputs/2026-09-26-xcube-slice-2-contract.md`, written from the Cube fork session at the user's request), cited as `[X2]`. Its claims were checked against the fork at commit `83cb9f0888` (`docs/research/xcube-slice-2.md`), and only verified ones are stated here. Round R29 settled what it left open or contradicted.
 - xcube serves wechart's model from its own schema, and wechart pushes its published files to xcube. The details are in §P2.4, "Architecture", under "Slice 2 as built".
 
+**Amended again 2026-09-26 by xcube's slice 3 as built** (`docs/inputs/2026-09-26-xcube-slice-3a-contract.md`, cited as `[X3]`, and xcube's answers to wechart's questions about it, `docs/inputs/2026-09-26-xcube-answers-slice-3.md`, cited as `[X3A]`; both written from the Cube fork session at the user's request). Their claims were checked against the fork at `36aedeb6c4` (3a, `docs/research/xcube-slice-3a.md`) and `c0610bb768` (3b and the fixes after it, `docs/research/xcube-slice-3b.md`); only verified ones are stated here. The user's decisions recorded in `[X3]` are cited as `[X3, user]`. Round R30 settled what they left open.
+- The shared root keeps its bare names; only items in other folders are prefixed. Nothing stored is migrated.
+- wechart publishes **items** (one cube or view each) and its folder tree through xcube's changesets. xcube resolves names and compiles the model in modules. The details are in §P2.4, "Architecture", under "Slice 3 as built".
+
 ## P2.1 Problem
 
 Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in and one trusted user. It has one Cube model and one data source for everything, and a change to shared content is live at once `[Part 1 §4]`. Phase 2 adds:
@@ -475,11 +479,11 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 **Relaxed from phase 1.** ~~A cube's name no longer has to be unique across the whole model.~~ Cubes, models, dashboards and data sources must be unique **within a folder** `[P2 input]`.
 - **Superseded in part** `[AD 2, R27]`. The whole deployment is one flat model.
 - Every cube, view and data source is published under a unique name, prefixed by its folder's id.
-- ~~The shared root adds no prefix, so phase-1 content and links resolve as they are.~~ **Superseded** `[IP 3, R28]`: the shared root is prefixed like any other folder, with no special handling.
-  - A published name is `<folderId>__<shortName>`.
-  - The folder id is written as `f` plus the id's letters and digits, since Cube names can't hold a hyphen or start with a digit. A folder's UUID gives its 32 hex digits. The shared root, whose id is `root`, gives `froot`: one rule, with no special case.
-  - xcube gives every cube and pre-aggregation a short, stable `sql_alias`, so database identifiers stay within the database's limits `[plan, R28]`.
-  - Every stored reference to a member is migrated to the prefixed names in slice 3. That covers charts, dashboards, markings, bookmarks and links, the places R27 lists as naming members by short cube names. Every existing dashboard renders unchanged `[IP 3, plan, R27]`.
+- ~~The shared root adds no prefix, so phase-1 content and links resolve as they are.~~ ~~**Superseded** `[IP 3, R28]`: the shared root is prefixed like any other folder, with no special handling.~~ **Superseded again** `[X3, user]`: **the shared root keeps its bare names** (`orders`), and only an item in any other folder is published as `<folderId>__<shortName>` (`f7k2__orders`). Short names never hold `__`, so the two can't collide `[X3; research xcube-slice-3a.md]`.
+  - ~~A published name is `<folderId>__<shortName>`.~~ A published name is the bare short name in the root, and `<folderId>__<shortName>` elsewhere `[X3, user]`.
+  - ~~The folder id is written as `f` plus the id's letters and digits, since Cube names can't hold a hyphen or start with a digit. A folder's UUID gives its 32 hex digits. The shared root, whose id is `root`, gives `froot`: one rule, with no special case.~~ **Superseded** `[X3A, R30]`: xcube checks only a folder id's form (`f` and 1–40 lower-case letters and digits; the root `froot`), and wechart allocates the ids. **Each folder stores its xcube id**, allocated when the folder is made and never reused: a folder with a UUID takes `f` plus its 32 hex digits, and any other folder a new id. Stripping an id to its letters and digits would not do, since `ws:a.b` and `ws:ab` would collide `[X3A, R30]`. The id never changes, so renaming or moving a folder changes no name `[X3A]`.
+  - ~~xcube gives every cube and pre-aggregation a short, stable `sql_alias`, so database identifiers stay within the database's limits `[plan, R28]`.~~ **Superseded** `[X3; research]`: xcube gives a folder item a short, stable `sql_alias`, and a pre-aggregation one only where its rollup table's name would be too long. Root items keep their SQL and rollup table names as they were, so nothing is rebuilt `[X3A]`.
+  - ~~Every stored reference to a member is migrated to the prefixed names in slice 3. That covers charts, dashboards, markings, bookmarks and links, the places R27 lists as naming members by short cube names. Every existing dashboard renders unchanged `[IP 3, plan, R27]`.~~ **Superseded** `[X3, user]`: nothing stored is migrated. Charts, dashboards, markings, bookmarks and links keep naming the root's cubes as they do, so every existing dashboard renders unchanged by construction. A before-and-after comparison of each dashboard's data is kept as a check.
 
 **Architecture** `[AD 1–12, R27; IP 1–9, plan, R28]`
 - **Who owns what** `[AD 1]`:
@@ -532,6 +536,27 @@ With security on, a deployment that names no Super-Admin group refuses to start 
   - **The model store goes in this cut-over** `[R29]`: the `/api/cube-model/*` routes, the publish-drafts table, the route class Cube used, the store settings and the draft claims. ~~Removed in slice 3.~~ Nothing reads them once xcube serves the model.
   - **Admin calls use xcube's static admin token until slice 4**, which replaces it with the service credential `[X2, R29]`. The token is kept as a secret, at least 32 characters long, and more than one can be configured so it can be rotated `[X2]`. Every other call wechart makes on its own behalf stays as it is until then.
   - **What Cube needs xcube's database for** `[research]`. Cube answers from its active revision without reading the database. It reads the database to catch up to a newer revision, to load a model it doesn't have yet, and to start after a restart. So "Cube keeps answering with wechart and Postgres both down" holds only for requests the active revision already satisfies.
+- **Slice 3 as built** `[X3, X3A, R30]`. xcube's side is done in the fork: 3a (folders, items and names) and 3b (modules) `[X3]`. wechart's side moves the model to **items mode** once, then publishes through changesets.
+  - **The switch.** wechart sends one items snapshot of today's published model files, each file one root item `[X3]`. A model in items mode never takes a file set again `[X3; research]`.
+    - **One cube or view per file** from the switch on `[R30]`. The switch splits any file declaring several into one file each, and the editor then refuses a file declaring a second. Each file is one item, so xcube's errors land on it directly `[X3A]`.
+    - **Nothing Cube serves changes for the root's items.** Their names, SQL and rollup tables stay as they were, so no rollup is rebuilt. `/v1/meta` gains each cube's `meta.xcube = { folderId, shortName }` `[X3A]`.
+    - **The way back** is not in place: the slice-2 image refuses xcube's schema once any 3a or 3b process has started. Since xcube's schema is derived data, the way back is to drop it, re-run the bootstrap, and deploy the slice-2 release, which re-imports its file set as a new generation. This is written into the deployment guide `[X3A, R30]`.
+  - **The folder tree** (each folder's xcube id and its parent) is pushed when the API starts and after every folder change. xcube can't give the tree back, so wechart compares the tree's hash with the one the push returns `[X3; research]`.
+    - **Workspaces stay out of the tree until slice 5,** which brings overlays. Anything in the tree and published is served `[X3A, R30]`.
+  - **A publish goes through xcube's changesets**: items upserted and deleted, on the base revision wechart last recorded. A proposal is checked with the changeset's dry run when it is made `[X3]`. Every break refuses it, as R29 has it.
+  - **The reconcile** compares wechart's items hash with the one xcube reports, in place of slice 2's file-set hash `[X3]`.
+  - **Charts and dashboards bind their cubes through xcube's resolver** at publish, nearest first from their folder. Other cubes a chart uses are bound through the recorded bindings of the item it starts from, so an override can't break a join `[X3]`.
+  - **Deletes and renames.** xcube refuses removing an item another item is bound to, naming them. wechart checks its own charts and dashboards against xcube's items before sending a delete `[X3]`.
+  - **People see titles, never full names** `[X3, AC-329]`. A folder item's title comes from its short name, as Cube would make it `[X3A]`.
+  - **The field list is Cube's `/v1/meta`**, merged across modules and keyed by the revision header, as slice 2 already reads it. xcube has no field-list route of its own `[X3A]`, so the task that was to read one is folded into the publish task's retest of the field list `[R30]`.
+  - **Modules (3b) change nothing wechart sends** `[X3, X3A]`. Queries, the field list and jobs are routed to modules by xcube.
+    - *Qualified 2026-09-26 by `docs/research/xcube-slice-3b.md` (Gotchas 3-7).* What wechart sends is unchanged, but what comes back can differ:
+      - a query needing a union of modules waits up to 120 s for it to compile, or answers `503` with `Retry-After: 120`;
+      - the merged `/v1/meta` orders cubes and numbers `connectedComponent` differently;
+      - jobs return one token per module.
+    - Today's model is one module, so none of this applies until a root cube is shared by a root item and a folder item, or by two top-level folders.
+  - **The image** is xcube's published one, `ghcr.io/senthilkrajagopal/xcube:v1.7.45-<commit>` for amd64 and arm64, pulled by digest (the user, 2026-09-26: "Build against the published image, ghcr.io/senthilkrajagopal/xcube (amd64 and arm64), pulled by digest"). Its titles match Cube's own, and its compile errors name the item with no line `[X3A]`.
+  - **Questions to xcube** go as files in `~/Work/xcube-exchange/to-xcube/`, and its answers come back in `to-wechart/`. Anything that changes these requirements also arrives in `docs/inputs/` (the user, 2026-09-26).
 
 ## P2.5 Stack
 
@@ -540,7 +565,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - changes to the Cube fork where needed, through the Cube-expert agent `[R15]`, in xcube's package `[AD 1]`;
 - Cube plus xcube as the semantic service, with wechart as its client `[AD 1]`;
 - RS256 user tokens with their public keys pushed to xcube, and a separate service credential for admin calls `[AD 12, R27]`, with xcube's static admin token in its place until slice 4 `[X2, R29]`;
-- xcube's slice 2 at the fork's commit `83cb9f0888`, as the Cube image for every Cube process `[X2]`;
+- ~~xcube's slice 2 at the fork's commit `83cb9f0888`, as the Cube image for every Cube process `[X2]`;~~ **Superseded** `[X3A, the user]`: xcube's published image `ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768` (3a, 3b and the fixes after them), pulled by digest, as the Cube image for every Cube process;
 - `jose` 6.2.12 to sign tokens in wechart's API, and `hpke` 1.1.7 (RFC 9180) to encrypt credentials to xcube's public key in the browser `[R28]`.
 
 **Decided after research** (these were the open items; the user chose on 2026-09-25, rounds R20–R22)
@@ -593,7 +618,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - **Prefixes are built from folder ids**, so renaming or moving a folder keeps names, references, pre-aggregations and links. People see titles in the UI; the prefixed name shows only in YAML and SQL `[R27]`.
   - The picker shows each cube's title with its folder path beside it `[plan]`.
   - The name's form and the folder id's are set out in §P2.4, "Relaxed from phase 1" `[IP 3, R28]`.
-- ~~**The shared root has no prefix**, so phase-1 content and links resolve as they are, with nothing migrated `[R27]`.~~ **Superseded** `[IP 3, R28]`: the root is prefixed like every folder. Stored references are migrated in slice 3, and every existing dashboard renders unchanged.
+- ~~**The shared root has no prefix**, so phase-1 content and links resolve as they are, with nothing migrated `[R27]`.~~ ~~**Superseded** `[IP 3, R28]`: the root is prefixed like every folder. Stored references are migrated in slice 3, and every existing dashboard renders unchanged.~~ **Superseded again** `[X3, user]`: **the shared root has no prefix**, and nothing stored is migrated, as R27 had it. Every existing dashboard renders unchanged by construction.
 - **A cube that names no data source** uses one called `default`, bound at publish like any other name `[R22, AD 3]`. The deployment's own default connection is a data source named `default` in the shared root, stored and managed like any other; the Helm values seed it on install `[R27]`.
 
 **E. Workspaces, copying and approval** `[P2 input, R12, R17]`
@@ -660,7 +685,7 @@ The rest still apply: AI and chat authoring, scheduled delivery and alerts, embe
 
 ## P2.8 Open questions
 
-**None.** All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections. The ten the 2026-09-26 plan left open were settled in round R28, in the same way. The four xcube's slice 2 left open were settled in round R29, and are in §P2.4, "Slice 2 as built".
+**None.** All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections. The ten the 2026-09-26 plan left open were settled in round R28, in the same way. The four xcube's slice 2 left open were settled in round R29, and are in §P2.4, "Slice 2 as built". The six xcube's slice 3 left open were settled in round R30, after xcube answered the questions they raised, and are in §P2.4, "Relaxed from phase 1" and "Slice 3 as built".
 
 | # | Question | Decision |
 |---|---|---|
@@ -767,6 +792,22 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
+
+**R30 — what xcube's slice 3, as built, left open** (`docs/inputs/2026-09-26-xcube-slice-3a-contract.md`, checked in `docs/research/xcube-slice-3a.md`; xcube's answers `docs/inputs/2026-09-26-xcube-answers-slice-3.md`, checked in `docs/research/xcube-slice-3b.md`; 2026-09-26)
+- The user's brief, before the round, recorded as `[X3, user]`:
+  - "Root items keep their bare names. Only items in other folders are <folderId>__<shortName>. Amend AC-328 accordingly and drop AC-331's reference migration: no stored chart, dashboard, bookmark or URL changes, and every dashboard renders unchanged by construction (keep T430's comparison as a check)."
+  - "Slice 3 ships as 3a (names) and 3b (modules). 3b needs nothing from wechart: queries, /v1/meta and jobs are routed to modules transparently."
+  - "Use image xcube:v1.7.45-f9f833d324."
+- Claude listed what the contract changes in the plan; the user answered "go ahead" and "withe interview round R30".
+- First asking (folder ids, workspaces, model files, rollback): the user answered each "Please check what is implemented in ~/Work/bi/cube/xcube branch feat/xcube".
+- Claude read the fork at `f9f833d324` and reported: folder ids checked only by form, with no mapping; no overlays; exactly one cube or view per item, nothing split; the slice-2 image refused once 3a has run. The rephrased questions were declined with "The user wants to clarify these questions", and the user then said: "If you any questions give it to me as a prompt and i will work with the agent in cube that will answer it for you.."
+- Claude wrote the eight questions as a prompt; xcube's answers came back as `[X3A]`. The user then asked that the two sessions work directly through `~/Work/xcube-exchange/`, and: "Build against the published image, ghcr.io/senthilkrajagopal/xcube (amd64 and arm64), pulled by digest."
+- Q: xcube's answer: wechart allocates folder ids; they must be stable, unique and never reused, and any injective encoding works (UUIDs as `f` + 32 hex; others e.g. `f` + 24 hex of SHA-256, or a stored counter). Which for wechart's non-UUID ids (seed and workspace)? A: "Stored id per folder (Recommended)"
+- Q: xcube's answer: splitting multi-cube files into items when sending is supported, but one cube or view per file keeps error placement and the items hash simple, and is its recommended layout. wechart's model store: A: "One per file (Recommended)"
+- Q: xcube's answer: overlays are slice 5 and not built; until then workspaces should stay out of the folder tree, since anything in it is published and served. For slice 3: A: "Out until slice 5 (Recommended)"
+- Q: AC-331 (rewrite every stored reference to its prefixed name) no longer applies: root names stay bare, so nothing stored changes. What should the spec do? A: "Retire it, add a new one (Recommended)"
+- Q: xcube's answer: there's no xcube field-list route; Cube's /v1/meta, merged across modules and keyed by x-xcube-revision, is the field list (slice 4 plans an own-behalf admin read). T432 ('serve metadata from xcube's merged field list') therefore has nothing new to build. What happens to it? A: "Retire it into T426 (Recommended)"
+- Q: xcube's answer: the slice-2 image refuses a schema migrated by 3a or 3b, but xcube's schema is derived data, so the way back is dropping it and letting the slice-2 release re-import its file set (or restoring a pg_dump taken before the first 3a start). For the switch: A: "Drop and re-import (Recommended)"
 
 **R29 — what xcube's slice 2, as built, left open or contradicted** (`docs/inputs/2026-09-26-xcube-slice-2-contract.md`, checked in `docs/research/xcube-slice-2.md`; asked together, 2026-09-26)
 - Q: xcube takes only plain YAML by default. The seed model holds one Jinja file, cubes/product_catalog.yml, which AC-140 shows read-only and model.spec checks Cube compiles. What happens to non-YAML files when wechart pushes its whole model to xcube? A: "Leave them out (Recommended)"

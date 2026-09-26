@@ -46,6 +46,11 @@ sources: [
 >   - the gotchas on `extends`, `FILTER_PARAMS`, views' `prefix`/`split`, and Postgres truncation.
 > - **The `__` separator:** Cube uses `__` between cube and member in its SQL aliases. With `sql_alias` set, that alias is the short one, so `f…__orders__count` never reaches SQL.
 
+> **Corrected again, 2026-09-26**, by xcube's slice 3 as built, checked in [../xcube-slice-3a.md](../xcube-slice-3a.md) and [../xcube-slice-3b.md](../xcube-slice-3b.md), and round R30 (requirements §P2.4, AC-328). The note above is kept as written.
+> - **The root is bare again.** Root items keep their short names; only items in other folders are `<folderId>__<shortName>`. Rule 2 and Gotcha 2 apply as the researcher wrote them: a root name never holds `__`, so it can't be taken for a prefixed one.
+> - **Folder ids are wechart's to allocate and store,** never reused. xcube checks only their form, `^f[a-z0-9]{1,40}$`, root `froot`. Stripping an id to its letters and digits isn't injective.
+> - **`sql_alias` goes on folder items only,** and on a pre-aggregation only when its rollup table's name would pass 25 characters of stem. Root items keep their SQL and rollup table names.
+
 ## Summary
 
 **What this covers.** This doc covers the naming scheme that gives every cube, view and data source outside the shared root a unique name. The name is built from the item's folder id, so the whole deployment compiles as one flat Cube model. It also covers how xcube rewrites short names into those full names at publish. The decisions it serves:

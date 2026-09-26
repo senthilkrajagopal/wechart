@@ -5503,14 +5503,16 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - a query naming a member its item isn't bound to answers 403 and reaches no Cube (AC-268).
   - ~~`queries.test.ts`: … a query for a dashboard in /A/B is signed with /A/B's chain. `resolution.spec.ts`: a chart in /A/B draws /A/B's `sales` while /A defines its own (AC-272, AC-268).~~
   - Depends on: T326
-- [ ] T341 (AC-274, AC-328) Keep two folders' same-named cubes and their rollups apart, under their prefixed names *(rewritten 2026-09-26: xcube publishes each under `<folderId>__<shortName>` with its own `sql_alias`; nothing is served from wechart, `[IP 3, plan, R28]`)*
+- [ ] T341 (AC-274, AC-328) Keep two folders' same-named cubes and their rollups apart, under their prefixed names *(rewritten 2026-09-26: xcube publishes each under `<folderId>__<shortName>` with its own `sql_alias`; nothing is served from wechart, `[IP 3, plan, R28]`; amended again 2026-09-26, `[X3, user; R30]`: the root's stay bare)*
   - Files: `e2e/security/isolation.spec.ts`, the stub `packages/api/src/xcube/fake.ts`
   - Failing test: `isolation.spec.ts`, against compose's Cube running xcube's slice 3:
     - /A and /C each define `sales` over different tables. They publish as `fa…__sales` and `fc…__sales`, and each folder's chart returns its own count (AC-274);
+    - the root's own `sales`, where it has one, stays `sales`, with its SQL and rollup table as before;
     - their rollups build into differently named tables, none over 63 bytes on Postgres;
     - renaming and moving /A changes neither published name, and rebuilds no rollup (AC-328).
+  - **Watch (2026-09-26, `xcube-slice-3b.md` Gotchas 3 and 6):** this is the first task whose model has more than one module. A root cube that a folder item uses becomes shared, so `commons` and copies appear. A query spanning modules can wait for a union compile inside the request.
   - ~~Files: `packages/api/src/model/chain.ts` (each served cube's `sql_alias` from its origin folder and resolved data source) … Failing test: `isolation.spec.ts`, against the real Cube: … the same query from each folder returns each one's own count …~~
-  - Depends on: T425, T426, T429
+  - Depends on: T425, T426, T429, T334, T449
 - [ ] T342 (AC-222, AC-131) Open a model in its folder, beside that folder's files, read-only when shared
   - Files: `packages/web/src/router/routes.tsx` (`/explore/folders/$folderId/models/$path`), `packages/web/src/workspaces/model/{ModelFilePage,FileTree}.tsx`, `packages/web/src/workspaces/model/ModelInFolder.test.tsx`, `e2e/security/model-in-folder.spec.ts`
   - Failing test: `model-in-folder.spec.ts`: opening a model from a folder shows that folder's files beside the editor with the folder and file in the URL; every object each file defines is listed; a file with an error is marked; in a shared folder the editor is read-only with "Edit in my workspace" and no New cube or New view (AC-222, AC-131).
@@ -6445,20 +6447,64 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
 
 ### Slice 3: names and modules
 
-- [ ] T425 (AC-328) Push the folder tree to xcube, ids and parents, when the API starts and on every folder change
-  - Files: `packages/api/src/xcube/folders.ts` (+ test), `packages/api/src/server.ts` (folder create, rename, move, delete)
-  - Failing test: `folders.test.ts`: after each create, rename, move or delete, the stub xcube holds every folder with its id written as `f` plus its letters and digits (the root's `froot`) and its parent. A rename or a move changes no folder's id (AC-328).
-  - Depends on: T419; xcube's slice 3 (`PUT /v1/semantic/folders`)
-- [ ] T426 (AC-321, AC-136, AC-288, AC-291) Publish through xcube's changesets, checking every module a change affects
-  - Files: `packages/api/src/xcube/changesets.ts` (+ test), `packages/api/src/model/publish.ts`, `packages/api/src/routes/proposals.ts`, `packages/api/src/server.ts` (direct changes to models, data sources and folders holding them), `e2e/security/publish-check.spec.ts`
+*Rewritten 2026-09-26 for xcube's slice 3 as built (`[X3, X3A, R30]`; `docs/research/xcube-slice-3a.md`, `xcube-slice-3b.md`). xcube's side is done in the fork, and published as `ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768`.*
+- *The root keeps its bare names, and nothing stored is migrated (AC-331 retired; AC-336).*
+- *wechart moves its model to items mode once (T449), then publishes through changesets (T426).*
+- *Modules (3b) change nothing wechart sends. What comes back can differ once a cube is shared across zones: union waits and `503`s, merged meta, a job token per module (`xcube-slice-3b.md`, Gotchas 3-7). Today's model is one module.*
+- *Order: T448 and T425 run first, on today's image. T449 is the switch and brings the image. T430, T426 and then the rest follow it. Every commit leaves both suites working.*
+- *Questions for xcube go through `~/Work/xcube-exchange/`.*
+
+- [ ] T448 [P] (AC-337) Keep one cube or view per model file: split files at start, and refuse a publish declaring two
+  - Files: `packages/api/src/model/split.ts` (+ test), `packages/api/src/model/publish.ts`, `packages/api/src/main.ts` (the split, once, at start), `packages/api/src/publish.test.ts`
+  - Failing test:
+    - `split.test.ts`: a stored file declaring two cubes and a view becomes three files, each named for what it declares, each declaring the same members as before, and a file declaring one is left as it is;
+    - `publish.test.ts`: a publish of a file declaring two cubes or views is refused, naming them (AC-337).
+  - Depends on: none
+- [ ] T425 [P] (AC-328) ~~Push the folder tree to xcube, ids and parents, when the API starts and on every folder change~~ Give each folder a stored xcube id, never reused, and build the published folder tree
+  - Files: a migration `…_folder-xcube-id.cjs` (a unique `xcube_id` column, filled for every folder), `packages/api/src/xcube/folders.ts` (+ test), `packages/api/src/repos/folders.ts` (allocate on create)
+  - Failing test: `folders.test.ts`:
+    - a folder with a UUID gets `f` plus its 32 hex digits, the root `froot`, and any other folder (a seed's, `ws:…`) a new id of the same form;
+    - no two folders share one, and a deleted folder's id is never given to another;
+    - a rename or a move changes no id;
+    - the tree holds each published folder's id and its parent's, and no workspace (AC-328; `[X3A, R30]`).
+  - ~~Depends on: T419; xcube's slice 3 (`PUT /v1/semantic/folders`)~~ Depends on: none. T449 pushes the tree.
+- [ ] T449 (AC-333) Move the model to xcube's items mode with one items snapshot, and reconcile on the items hash, on xcube's published image
+  - Files:
+    - `packages/api/src/xcube/items.ts` (+ test: each file one item, and the items hash);
+    - `packages/api/src/xcube/sync.ts` (+ test) and `packages/api/src/xcube/client.ts` (the items snapshot, `PUT …/folders`, `mode` and `itemsHash` from `GET …/revision`);
+    - `packages/api/src/server.ts` (the tree pushed after every folder change);
+    - `docker-compose.yml` and `deploy/helm/wechart/values.yaml`: `ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768@sha256:d787e67c23f567437e49e1ad1e3eab1802c143bd1bfab465ded9e9468c5e1ab8`;
+    - `docs/deploy.md` (the way back: drop the `xcube` schema, re-run the bootstrap, deploy the slice-2 release);
+    - `e2e/xcube-cutover.spec.ts`, `deploy/helm/verify.sh`.
+  - Failing test:
+    - `items.test.ts`: the items hash of xcube's golden vector is `49ef16c8…eee4` (`[X3A]` §7).
+    - `sync.test.ts`, against the stub:
+      - a model xcube holds in files mode gets one items snapshot, with the tree, each file a root item;
+      - from then, a start, a publish and the 60 s reconcile compare `current.itemsHash`, and send only when it differs;
+      - no file set is sent again, and a `409 mode` is never answered by a files import (research 3a, Gotcha 4);
+      - a folder change pushes the tree, and a tree hash that differs from xcube's answer is pushed again (AC-333).
+    - The cut-over e2e and `verify.sh` run on the new image.
+  - Depends on: T448, T425; T419, T447 (slice 2's sync and cut-over)
+- [ ] T430 (~~AC-331~~ AC-336) ~~Migrate every stored member reference to its prefixed name, and show every dashboard as before~~ Show every existing dashboard as before across the move to items mode, with nothing stored changed
+  - Files: ~~a migration `…_prefixed-references.cjs` (+ test),~~ ~~`e2e/security/migration.spec.ts`~~ `e2e/items-switch.spec.ts`
+  - Failing test: ~~`migration.spec.ts`: each seeded dashboard's tile data is recorded before the migration, and matches after it; no reference stored in a chart, dashboard, marking, bookmark or link names a short cube name any more (AC-331).~~ `items-switch.spec.ts`:
+    - a model is put to xcube in files mode, as slice 2 left it, and each seeded dashboard's tile data is recorded;
+    - an API of its own then moves it to items mode;
+    - each tile's data matches, every stored chart, dashboard, marking, bookmark and link is as it was, and the seed rollup's table name is unchanged (AC-336).
+  - Depends on: ~~T429~~ T449
+- [ ] T426 (AC-321, AC-136, AC-288, AC-291, AC-009, AC-137) Publish through xcube's changesets, checking every module a change affects
+  - Files: `packages/api/src/xcube/changesets.ts` (+ test), `packages/api/src/model/publish.ts` (in place of T445's file-set dry run), `packages/api/src/routes/proposals.ts`, `packages/api/src/server.ts` (direct changes to models, data sources and folders holding them), `e2e/security/publish-check.spec.ts`
   - Failing test: `changesets.test.ts` and `publish-check.spec.ts`, against xcube's slice 3:
     - a proposal is checked (`dryRun`) when made, and applied at approval;
     - a break refuses it and changes no folder, proposal or module;
     - a direct delete of a model applies only if xcube accepts it;
-    - a stale base revision (`409`) is checked again (AC-321, AC-288, AC-291).
+    - a stale base revision (`409`) is checked again (AC-321, AC-288, AC-291);
+    - a retried changeset xcube already holds (`200`) is taken as done.
 
-    AC-136 is reworded and ticked again here (R28 Q9). T433's refusal of anything that isn't YAML (AC-332) holds through the changeset publish, checked here.
-  - Depends on: ~~T420,~~ T419 (xcube's admin client, with the static admin token until slice 4), T445, T425
+    AC-136 is reworded and ticked again here (R28 Q9); its error lands on the item, with no line from xcube's resolved copy (`[X3A]` §3). T433's refusal of anything that isn't YAML (AC-332) holds through the changeset publish, checked here.
+
+    *Absorbs T432 (retired, 2026-09-26, `[R30]`):* xcube has no field-list route, so Cube's `/v1/meta`, merged across modules and keyed by `x-xcube-revision`, stays the field list. AC-009's and AC-137's tests are re-run here on items mode: after a changeset lands, `/api/meta` from either replica lists its new members within 60 s, without restarting Cube.
+  - Depends on: ~~T420,~~ T419 (xcube's admin client, with the static admin token until slice 4), T445, T425, T449
 - [ ] T427 (AC-322) Word a refused publish: breaks named in the folders the user may see, a count for the rest, all in the audit trail
   - Files: `packages/api/src/xcube/refusal.ts` (+ test), `packages/web/src/workspaces/reviews/Refusal.tsx` (+ test)
   - Failing test: `refusal.test.ts`:
@@ -6469,23 +6515,20 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - the audit trail records every one (AC-322).
   - Depends on: T426, T368
 - [ ] T428 (AC-275) Keep published items bound until they are published again, and refuse to delete or rename a name still referenced
-  - Files: `packages/api/src/xcube/changesets.ts`, `e2e/security/binding.spec.ts`
+  - Files: `packages/api/src/xcube/changesets.ts`, `packages/api/src/model/references.ts` (+ test), `e2e/security/binding.spec.ts`
   - Failing test: `binding.spec.ts`, against xcube's slice 3:
     - /A/B publishes its own `orders`, and a chart published earlier in /A/B/C keeps /A's until it is published again, then takes /A/B's;
-    - deleting /A's `orders` while that chart references it is refused, naming the chart (AC-275).
-  - Depends on: T426, T429
-- [ ] T429 (AC-272, AC-329) Bind a chart's and a dashboard's cubes at publish to their prefixed names, and pick cubes by title and folder path
-  - Files: `packages/api/src/model/bind.ts` (+ test), `packages/api/src/xcube/meta.ts` (`GET /v1/semantic/meta`), `packages/web/src/workspaces/builder/FieldList.tsx`, `e2e/security/picker.spec.ts`
+    - deleting /A's `orders` while that chart references it is refused, naming the chart;
+    - deleting it while another model item is bound to it is refused with xcube's naming of that item (AC-275).
+
+    wechart checks its own charts and dashboards against `GET …/items` before it sends a delete. xcube refuses a removal another item is bound to itself (`[X3]`; research 3a, "Removal and renames").
+  - Depends on: T426, T429, T334
+- [ ] T429 (AC-272, AC-329) Bind a chart's and a dashboard's cubes at publish ~~to their prefixed names~~ through xcube's resolver, and pick cubes by title and folder path
+  - Files: `packages/api/src/model/bind.ts` (+ test), ~~`packages/api/src/xcube/meta.ts` (`GET /v1/semantic/meta`)~~ `packages/api/src/xcube/client.ts` (`POST …/resolve`, `GET …/items`), `packages/web/src/workspaces/builder/FieldList.tsx`, `e2e/security/picker.spec.ts`
   - Failing test:
-    - `bind.test.ts`: a chart in /A/B binds /A/B's `sales` over /A's, never /A/B/C's or a sibling's, and stores `f…__sales`. A name found nowhere on its path is refused, naming it (AC-272).
-    - `picker.spec.ts`: the picker lists only the cubes on the item's path, each by its title with its folder path, never a prefixed name (AC-329).
-  - Depends on: T425, T426
-- [ ] T430 (AC-331) Migrate every stored member reference to its prefixed name, and show every dashboard as before
-  - Files: a migration `…_prefixed-references.cjs` (+ test), `e2e/security/migration.spec.ts`
-  - Failing test:
-    - `migration.spec.ts`: each seeded dashboard's tile data is recorded before the migration, and matches after it;
-    - no reference stored in a chart, dashboard, marking, bookmark or link names a short cube name any more (AC-331).
-  - Depends on: T429
+    - `bind.test.ts`: a chart in /A/B binds /A/B's `sales` over /A's, never /A/B/C's or a sibling's, and stores its published name: `f…__sales`, or `sales` for the root's. A name found nowhere on its path is refused, naming it. A second cube the chart uses is bound as its source cube's recorded bindings have it (AC-272).
+    - `picker.spec.ts`: the picker lists only the cubes on the item's path, each by its title with its folder path (from `meta.xcube`), never a prefixed name (AC-329).
+  - Depends on: T425, T426, T334
 - [x] T431 (AC-327, AC-251) Remove Cube's model callbacks: `/api/cube-model/*`, the `cube` access class, and the model logic in `cube.js` *(moved into slice 2's cut-over, 2026-09-26, `[R29]`: it follows T447 there)*
   - Files: `packages/api/src/model/publish.ts` (the draft path), `packages/api/src/model/drafts.ts` and `publish-drafts.test.ts` (T418's, gone), a migration dropping `publish_drafts`, `packages/api/src/auth/guard.ts` (+ test), `packages/api/src/config.ts` (`WECHART_MODEL_KEY`, `WECHART_CUBE_STORE_URL`), `packages/api/src/cube/client.ts` (the draft-only `meta(context)` and `sqlUnder`), `infra/cube/cube.js` (the draft's scopes), the Playwright configs, `docker-compose.yml` (`WECHART_MODEL_STORES`, `WECHART_MODEL_KEY`, `extra_hosts`), the Helm chart's same settings and nginx's `/api/cube-model/` block, `deploy/helm/verify.sh`, ~~`e2e/security/no-callbacks.spec.ts`~~ `e2e/no-callbacks.spec.ts` and `e2e/api-process.ts` (as built)
   - Failing test:
@@ -6523,10 +6566,15 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - **Left:**
       - The recorder watches the one address wechart ever gave Cube, not the API's own port.
       - On Linux, the control request needs a host route that compose no longer adds.
-- [ ] T432 (AC-009, AC-137) Serve metadata from xcube's merged field list, with a new revision seen within 60 s
-  - Files: `packages/api/src/cube/meta-cache.ts`, `packages/api/src/xcube/meta.ts` (+ test)
-  - Failing test: `meta.test.ts`: after a changeset lands, `/api/meta` from either replica returns its new members once xcube reports the revision active on every instance, within 60 s, and without restarting Cube. ~~AC-009 and AC-137 are reworded and ticked again here (R28 Q9).~~ AC-009 and AC-137 keep their wording, and T447 re-runs their tests against xcube (2026-09-26, `[R29]`); here they are checked again against the merged field list.
-  - Depends on: T421, T426
+- [ ] T450 (AC-329, AC-189, AC-249) Compare a folder item's members by short name and show them by title, in the checks and places that read the model
+  - Files: `packages/api/src/model/rollupReferences.ts` (it skips names containing `__`), `packages/api/src/model/refreshKeys.ts`, `packages/api/src/model/clashes.ts`, `packages/web/src/workspaces/model/editedMembers.ts`, `packages/web/src/shell/globalSearch.ts`, `packages/web/src/workspaces/model/ModelFilePage.tsx` (+ their tests)
+  - Failing test: each module's test, with a model item in a folder (`fsales__orders` in `/v1/meta`, `orders` in its YAML, `meta.xcube = { folderId, shortName }`):
+    - a rollup naming an unknown member is refused, and one naming a known member isn't (AC-189);
+    - a generated cube clashing with a folder item is named by its short name and folder (AC-249);
+    - search, the Model workspace and the edited-member list show titles, never `fsales__orders` (AC-329).
+  - Depends on: T426, T334
+- **T432 (retired 2026-09-26 into T426, `[R30]`; the ID stays and is never reused):** ~~(AC-009, AC-137) Serve metadata from xcube's merged field list, with a new revision seen within 60 s~~ xcube has no field-list route; T426 re-runs AC-009's and AC-137's tests on items mode.
+  - ~~Files: `packages/api/src/cube/meta-cache.ts`, `packages/api/src/xcube/meta.ts` (+ test). Failing test: `meta.test.ts`: after a changeset lands, `/api/meta` from either replica returns its new members once xcube reports the revision active on every instance, within 60 s, and without restarting Cube. AC-009 and AC-137 keep their wording, and T447 re-runs their tests against xcube (2026-09-26, `[R29]`); here they are checked again against the merged field list. Depends on: T421, T426~~
 - [x] T433 [P] (AC-332) Refuse to publish a model item that isn't plain YAML
   - Files: `packages/api/src/model/publish.ts`, ~~`packages/api/src/model/yaml-only.test.ts`~~ `packages/api/src/publish.test.ts` (the publish route's own tests, where the refusals already were)
   - Failing test: ~~`yaml-only.test.ts`~~ `publish.test.ts`:
@@ -6542,13 +6590,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
       - a comment that claims nothing unsourced about Cube.
     - **AC-332 ticked**, at the one route that publishes a model today. T426 replaces that route with xcube's changesets and must keep these refusals (its failing test).
     - **For T419:** the development model ships a live Jinja template, `infra/cube/model/cubes/product_catalog.yml`, read from disk rather than published. Under R28 xcube takes YAML only, so the snapshot must say what happens to it.
-- [ ] T435 (AC-273, AC-310) Bind a model's data sources at publish, nearest first from its folder, and give a cube with none the nearest `default`
-  - Files: `e2e/security/data-source-binding.spec.ts`, `packages/api/src/xcube/changesets.ts`
-  - Failing test: `data-source-binding.spec.ts`, against xcube's slice 3:
-    - a model in /A/B naming `warehouse` binds /A's when /A has one, and never /A/B/C's or a sibling's;
-    - a name found nowhere on its path is refused, naming it (AC-273);
-    - a cube with no data source binds /A/B's `default`, else /A's, else the root's (AC-310).
-  - Depends on: T426
+- **T435 moved to slice 6 (2026-09-26).** xcube binds `data_source` with connections, not in slice 3. Until then it passes the name through unchanged `[xcube answer to-wechart/2026-09-26-1030-data-source-binding.md]`.
 
 ### Slice 4: permissions and tokens
 
@@ -6578,6 +6620,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
   - Failing test: `preview-as.spec.ts`:
     - a Super-Admin previews a dashboard as two groups, and every query it makes carries exactly those groups and nothing else;
     - a banner names them (AC-166).
+  - **Also (2026-09-26, `xcube-slice-3b.md` Gotcha 4):** xcube honours an `xcubeModule` key in a security context, so a previewed context must also lose every `xcube…` key, as it already loses `wechart…` ones (`previewClaimsOf` in `packages/api/src/cube/client.ts`).
   - Depends on: T437
 
 ### Slice 5: previews
@@ -6612,6 +6655,15 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
     - a deleted source is removed;
     - the API serves no route that hands a connection to Cube (AC-327, AC-161).
   - Depends on: T420, T441, T352
+- [ ] T435 (AC-273, AC-310) Bind a model's data sources at publish, nearest first from its folder, and give a cube with none the nearest `default` *(moved here from slice 3, 2026-09-26)*
+  - **Why here.** xcube answered that binding comes with slice 6: a bound name must be a connection Cube can open, and connections arrive with T442. At publish xcube resolves `data_source` along the item's folder path, as it does cube names. It pushes no data-source items into the tree `[xcube answer to-wechart/2026-09-26-1030-data-source-binding.md]`.
+  - **Until slice 6.** xcube passes `data_source` through unchanged. With `CUBEJS_DATASOURCES` unset, Cube maps any name to the default connection, so `data_source: warehouse` reads the default database. With it set, an undeclared name fails the publish's compile. That is xcube's reading of Cube 1.7.45, not run (same answer, §2).
+  - Files: `e2e/security/data-source-binding.spec.ts`, `packages/api/src/xcube/connections.ts`
+  - Failing test: `data-source-binding.spec.ts`, against xcube's slice 6:
+    - a model in /A/B naming `warehouse` binds /A's when /A has one, and never /A/B/C's or a sibling's;
+    - a name found nowhere on its path is refused, naming it (AC-273);
+    - a cube with no data source binds /A/B's `default`, else /A's, else the root's (AC-310).
+  - Depends on: T426, T442
 - [ ] T443 (AC-310) Seed the shared root's `default` data source from the Helm values, and manage it like any other
   - Files: `deploy/helm/wechart/templates/api.yaml`, `packages/api/src/seed.ts`, `e2e/security/root-default.spec.ts`
   - Failing test: `root-default.spec.ts`:
@@ -6668,13 +6720,14 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
 | AC-317 | T412 | AC-318 | T416 | AC-139 | T413, T417 |
 | AC-248 | T414, T415, T417 | AC-250 | T413, T420 | AC-009 | T447, T432 |
-| AC-136 | T445, T447, T426 | AC-137 | T447, T432 | AC-166 | T438 |
+| AC-136 | T445, T447, T426 | AC-137 | T447, ~~T432~~ T426 | AC-166 | T438 |
 | AC-332 (again) | T426 | AC-235 (again) | T445, T447 | AC-140 (again) | T446 |
 | AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | T426 |
 | AC-322 | T427 | AC-323 | T347, T440 | AC-324 | T333 |
 | AC-325 | T441 | AC-326 | T420, T437 | AC-327 | T431, T442 |
-| AC-328 | T341, T425 | AC-329 | T429 | AC-330 | T419, T447, T425, T436, T442 |
-| AC-331 | T430 | AC-332 | T433 | AC-333 | T419, T447 |
-| AC-334 | T421, T447 | AC-335 | T446, T447 | | |
+| AC-328 | T341, T425, T449 | AC-329 | T429, T450 | AC-330 | T419, T447, T425, T449, T436, T442 |
+| ~~AC-331~~ (retired, `[R30]`) | ~~T430~~ | AC-332 | T433 | AC-333 | T419, T447, T449, T425 |
+| AC-334 | T421, T447 | AC-335 | T446, T447 | AC-336 | T430, T449 |
+| AC-337 | T448 | AC-009 (again) | T426 | AC-189, AC-249 (again, folder items) | T450 |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.
