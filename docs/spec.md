@@ -7,8 +7,13 @@ wechart is a browser BI tool on the Cube semantic layer, built to replace Spotfi
 **Phase 2** adds four things:
 - sign-in through OIDC, switchable to phase 1's single-user mode;
 - folder access by AD group, with Super-Admin, Admin and User roles;
-- models and data sources as folder items, resolved per folder;
+- models and data sources as folder items, ~~resolved per folder~~ published into one flat model under folder-prefixed names, with short names bound at publish;
 - private workspaces, whose work reaches shared folders only through approved proposals.
+
+**Amended 2026-09-25** by the user's architecture decisions (`docs/inputs/2026-09-25-architecture-decisions.md`) and round R27.
+- Cube plus **xcube**, the Cube-side package in the user's fork, is the semantic service: it owns the published model, Cube's rules and the connection runtime.
+- wechart is its client, and owns workflow, folders, permissions, dashboards and the UI.
+- Criteria the decisions overturn are reworded in place, or retired with their text kept and struck through. Their IDs are kept, never reused.
 
 It also brings back everything phase 1 moved to its backlog. Its features are F25–F36, after F24. The phase-1 criteria it changes are rewritten in place, marked "phase 2", and unchecked until tests show them again. It traces to [docs/requirements.md](./requirements.md) Part 2.
 
@@ -24,7 +29,7 @@ Acceptance criteria are global and sequential. A criterion is checked only when 
 | **Granularity**              | The time bucket of a time dimension: day, week, month, quarter, year, or a custom granularity.                                                                                     |
 | **Pre-aggregation (rollup)** | A materialised summary Cube builds and queries instead of the source database.                                                                                                     |
 | **Cube Store**               | The store that holds pre-aggregations.                                                                                                                                             |
-| **Security context**         | The claims wechart sends with a query; Cube uses them for row-level policies and masking.                                                                                          |
+| **Security context**         | The claims wechart sends with a query; Cube uses them for row-level policies and masking. Phase 2: a signed-in user's token carries their groups only, signed RS256 (AC-326). |
 | **Tile**                     | One element on a dashboard: chart, text, header, divider, image or link.                                                                                                           |
 | **Chart spec**               | The saved, engine-neutral definition of a chart: source, metrics, dimensions, time, filters, type and options.                                                                     |
 | **Marking**                  | A named, coloured selection shared by the tiles that use it. Stored as a predicate over dimension members. Spotfire's term, kept.                                                  |
@@ -43,7 +48,13 @@ Acceptance criteria are global and sequential. A criterion is checked only when 
 | **Workspace**                | A user's private area, "My workspace", where all creating and editing happens.                                                                                                    |
 | **Target folder**            | The shared folder a workspace item is meant for. Its path resolves the item's cubes after the workspace's own.                                                                    |
 | **Proposal**                 | A request to put a workspace item into its target folder. It lands only when approved by its author, a read-write member of the folder, or a Super-Admin.                      |
-| **Resolution**               | Finding what a name means in a folder: cubes from the folder up to the root, nearest first; data sources the same way, then in the folder's descendants.                          |
+| **Resolution**               | Finding what a short name inside an item means. The search runs when the item is published, nearest first from the item's own folder up to the root, and the full prefixed name is stored. xcube does it. ~~Cubes from the folder up to the root, nearest first; data sources the same way, then in the folder's descendants.~~ (Amended 2026-09-25.) |
+| **xcube**                    | The Cube-side package in the user's Cube fork (formerly `cube-introspection`). It owns the published model, Cube's validation and access policies, the connection runtime, overlays and name resolution, and knows the folder tree and each folder's allowed groups. |
+| **Prefixed name**            | The unique name a cube, view or data source is published under: its short name, prefixed by its folder's id. The shared root adds no prefix. |
+| **Allowed groups**           | The groups whose members may query a folder's cubes: those granted on the folder, an ancestor or a descendant, plus the Super-Admin group. xcube turns them into access policies. |
+| **Whole-model check**        | Compiling the entire published model with a change applied. The change is refused if anything, anywhere, breaks. |
+| **Overlay**                  | Unpublished workspace or proposal content that xcube holds for a short time, so it can be queried before it lands. |
+| **Service credential**       | The credential wechart uses for calls it makes on its own behalf (introspection, builds and jobs, system partitions, health, xcube's admin calls), separate from users' tokens. |
 | **Audit trail**              | wechart's record of sign-ins, permission changes, proposals, approvals, rejections, restores and data-source changes. Super-Admins can browse it.                                |
 
 ---
@@ -73,8 +84,8 @@ Traces to: `[R5]`, `[R4]`, `[research/cube/data-apis.md]`, `[research/cube/acces
 
 - [x] AC-007 WHEN the browser needs data or metadata, THE SYSTEM SHALL obtain it through the wechart API, and the browser SHALL make no request to the Cube API host.
       Fails when: a network request from the browser targets the Cube API host, or any response to the browser contains the Cube API secret.
-- [ ] AC-008 WHEN wechart queries Cube, THE SYSTEM SHALL attach the configured security context to every request. WHILE security is enabled, every query made for a signed-in user SHALL also carry that user's AD groups, so the model's access policies filter its rows and members by group; what wechart asks Cube for itself (compiling a model, builds, schedules, a data source's catalog, health) carries the configured context alone (phase 2: `[R14, R25]`).
-      Fails when: a request reaches Cube without the configured context; with security enabled, a query made for a signed-in user carries no groups or groups other than the user's; or a group's access policy doesn't apply to its members' queries.
+- [ ] AC-008 WHEN wechart queries Cube, THE SYSTEM SHALL attach the configured security context to every request. WHILE security is enabled, every query made for a signed-in user SHALL carry that user's AD groups and nothing else of theirs, so the model's access policies, and the policies xcube generates from folders, filter its rows and members by group. What wechart asks Cube or xcube for on its own behalf uses the service credential, never a user's token (phase 2: `[R14, R25; AD 1, AD 4, AD 12]`; ~~what wechart asks Cube for itself (compiling a model, builds, schedules, a data source's catalog, health) carries the configured context alone~~, superseded 2026-09-25).
+      Fails when: a request reaches Cube without the configured context; with security enabled, a query made for a signed-in user carries no groups, groups other than the user's, or any other attribute of theirs; a group's access policy doesn't apply to its members' queries; or an own-behalf call carries a user's token.
 - [x] AC-009 WHEN Cube reports a new `schemaVersion`, THE SYSTEM SHALL serve metadata from the new model within 60 seconds without a restart.
       Fails when: 60 seconds after the change, a metadata request still returns members from the previous model.
 - [x] AC-010 WHILE Cube replies "Continue wait" for a query, THE SYSTEM SHALL keep the request open, show the tile in a loading state, and deliver the result when it arrives.
@@ -465,11 +476,11 @@ Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[researc
 - [x] AC-139 WHEN the user generates cubes from a data source, THE SYSTEM SHALL browse that connection's schemas and tables and create a cube per selected table with its columns mapped to dimensions and a count measure (`[R7]`).
       Fails when: a selected table produces no cube, or a column is dropped without saying so.
       > Deferred 2026-09-21 with F18, at the user's direction ("for requirements that dont work with cube defer"). Browsing a connection's tables is Cube's drivers called from wechart's server, not a Cube API (`research/cube-capabilities.md` §6).
-      > **Un-deferred 2026-09-25 `[R10]`.** Browsing and generating go through the data-source introspection API in the user's Cube fork (`research/cube/introspection-api.md`). The generated YAML is shown with the columns Cube left unmapped and each one's reason, saved to wechart's model store, and published as any model change is (AC-136, AC-137).
+      > **Un-deferred 2026-09-25 `[R10]`.** Browsing and generating go through the data-source introspection API in the user's Cube fork (`research/cube/introspection-api.md`). The generated YAML is shown with the columns Cube left unmapped and each one's reason, ~~saved to wechart's model store, and published as any model change is~~ saved in the author's workspace, and published to xcube through a proposal and the whole-model check (AC-136, AC-137; amended 2026-09-25, AC-321).
 - [ ] AC-249 IF a cube generated from a data source has the name or file name of a cube or file already in the target folder, THEN THE SYSTEM SHALL refuse to save it, name the existing cube or file, and leave the existing one unchanged (`[R10]`; phase 2: names are unique per folder, `[P2 input]`).
       Fails when: an existing model file changes; a clashing cube is saved into the same folder; a cube is refused for a name used only in another folder; or the refusal does not name what it clashes with.
-- [x] AC-250 THE SYSTEM SHALL grant Cube's `introspection` scope only to the short-lived tokens its API signs to browse a data source and generate cubes, never to a draft's token or to any other request's token, and never to the browser (`[R10]`).
-      Fails when: a token signed for a query, a publish or a draft is granted `introspection`, or a response to the browser carries a token that has it.
+- [ ] AC-250 THE SYSTEM SHALL grant Cube's `introspection` scope only to wechart's service credential, used to browse a data source and generate cubes, never to a user's token, and never to the browser (`[R10]`; phase 2: `[AD 12, R27]`; ~~the short-lived tokens its API signs … never to a draft's token~~, amended 2026-09-25 and unticked until retested).
+      Fails when: a user's token is granted `introspection`, or a response to the browser carries a credential that has it.
 - [x] AC-140 WHEN a model file uses Jinja, Python or JavaScript generation, THE SYSTEM SHALL open it read-only in the code view and say why it cannot be edited as a form.
       Fails when: such a file opens in an editable form, or gives no reason.
 - [x] AC-141 WHEN the user edits a member that charts use, THE SYSTEM SHALL list the charts and dashboards that reference it before saving.
@@ -622,9 +633,13 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
 > - Data sources are folder items, under the folders' access rules. They are
 >   created and changed in a workspace and land through approval (F27–F30).
 > - The Data sources workspace lists every source the user may see (`[R19]`).
-> - Credentials are encrypted in wechart's metadata database (AC-298, `[R14]`).
-> - How Cube takes connections from wechart, rather than from its own
->   environment, is research's to find, with fork changes allowed (`[R15]`).
+> - Credentials are encrypted in wechart's metadata database (AC-298, `[R14]`),
+>   to xcube's public key (amended 2026-09-25, `[AD 7]`).
+> - ~~How Cube takes connections from wechart, rather than from its own
+>   environment, is research's to find, with fork changes allowed (`[R15]`).~~
+>   Superseded 2026-09-25 `[AD 1, AD 7]`: wechart pushes each data source to
+>   xcube with its credential as ciphertext. xcube owns the connection runtime,
+>   and Cube never calls wechart.
 >   AC-161 is reworded so it doesn't assume a restart.
 > - A connection test runs in Cube, with Cube's own drivers, at wechart's
 >   request (`[R20]`, `research/connection-testing.md`). AC-159 is reworded
@@ -638,8 +653,8 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
       Fails when: the test runs in the browser or through a driver other than Cube's, or a failure shows no error text.
 - [ ] AC-160 THE SYSTEM SHALL offer PostgreSQL, Snowflake, Databricks, BigQuery, SQL Server and Oracle as driver types, with each driver's own authentication fields (`[R4]`).
       Fails when: a listed driver is absent, or its form omits an authentication method the driver requires.
-- [ ] AC-161 WHEN an approved change to a data source's settings lands in its folder, THE SYSTEM SHALL say whether Cube needs a restart before it takes effect, and show whether the running Cube uses the new settings (phase 2: `[R15]`).
-      Fails when: the UI claims the change is live while Cube still uses the previous settings.
+- [ ] AC-161 WHEN an approved change to a data source's settings lands in its folder, THE SYSTEM SHALL say whether Cube needs a restart before it takes effect, and show whether every running Cube instance uses the new settings (phase 2: `[R15, AD 11]`).
+      Fails when: the UI claims the change is live while any Cube instance still uses the previous settings.
 - [ ] AC-163 THE SYSTEM SHALL record the result of each connection test over time and show that history per source.
       Fails when: a test result is missing from the history.
 - [ ] AC-164 THE SYSTEM SHALL never show a stored credential in plain text after it is saved, and SHALL never send it to the browser.
@@ -655,8 +670,8 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rule 21; `[research/c
 
 - [x] AC-165 THE SYSTEM SHALL list every access policy in the model with its role, member-level rules, row-level filters, conditions and masking, as declared.
       Fails when: a declared policy or rule is missing from the listing.
-- [x] AC-166 WHEN the user edits a security context and previews a dashboard, THE SYSTEM SHALL run that dashboard's queries with the edited context and show a persistent banner naming the context in effect (direction.md rule 21).
-      Fails when: the queries use the default context, or no banner is shown.
+- [ ] AC-166 WHEN the user ~~edits a security context~~ chooses one or more groups and previews a dashboard, THE SYSTEM SHALL run that dashboard's queries as a token carrying exactly those groups, and show a persistent banner naming them (direction.md rule 21; phase 2: tokens carry groups only, `[AD 12, R27]`; amended 2026-09-25 and unticked until retested).
+      Fails when: the queries use the default context or carry anything but the chosen groups, or no banner is shown.
 - [x] AC-167 WHEN a preview context hides a member a chart uses, THE SYSTEM SHALL show that tile as unavailable to the context rather than as an error.
       Fails when: the tile shows a raw Cube error.
 - [x] AC-168 THE SYSTEM SHALL show the generated SQL and the effective filters for a chart under the previewed context.
@@ -868,6 +883,10 @@ Traces to: `[R4]` ("self-hosted Kubernetes … running wechart, Cube and Cube St
 > **Status, 2026-09-25: added at the user's direction**, before the Superset-parity
 > test. Its data source is set in the chart's values, in Cube's environment, as data
 > sources are configured today while F18 is deferred.
+>
+> **Phase 2 (amended 2026-09-25, `[AD 11, R27]`):**
+> - The chart runs 2 or more Cube instances on the Cube Store queue and 2 or more API replicas (AC-319).
+> - The chart's values seed the root's `default` data source on install; it is then managed like any other (AC-310).
 
 - [x] AC-248 WHEN the wechart Helm chart is installed into a Kubernetes cluster, THE SYSTEM SHALL run the web app, the API, its metadata database, Cube's API, Cube's refresh worker and Cube Store there, with Cube's data source taken from the chart's values, and SHALL serve the web app at the address the values name.
       Fails when: after the install a component is not Ready, the web app's address does not load, or a query from the web app does not reach the data source the values name.
@@ -876,15 +895,15 @@ Traces to: `[R4]` ("self-hosted Kubernetes … running wechart, Cube and Cube St
 
 # Phase 2
 
-Phase 2's criteria start at AC-251. Its requirements are in [docs/requirements.md](./requirements.md), Part 2, and cited there as §P2.n, rounds R11–R19, and `[P2 input]`. Phase 1's criteria above still hold, except for the ones rewritten and marked "phase 2". Authoring criteria such as F7's apply as they did, but now in the user's workspace, because shared content is no longer edited in place (AC-278).
+Phase 2's criteria start at AC-251. Its requirements are in [docs/requirements.md](./requirements.md), Part 2, and cited there as §P2.n, rounds R11–R19, and `[P2 input]`. The architecture decisions of 2026-09-25 are cited as `[AD n]`, with round R27. They reworded AC-008, AC-161, AC-166, AC-250, AC-251, AC-263, AC-264, AC-272–AC-275, AC-288, AC-291, AC-298 and AC-310, retired AC-309 and AC-311, and added AC-319–AC-329 and F37. Phase 1's criteria above still hold, except for the ones rewritten and marked "phase 2". Authoring criteria such as F7's apply as they did, but now in the user's workspace, because shared content is no longer edited in place (AC-278).
 
 ## F25. Sign-in and the security mode
 
 Purpose: nobody reaches wechart without signing in when security is on, and one user has everything when it's off.
 Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R14, R15, R18, R19]`.
 
-- [x] AC-251 WHERE security is enabled, WHEN a request without a signed-in session reaches a wechart page or API route, THE SYSTEM SHALL send a page request to the configured OIDC provider's sign-in, and answer an API request with 401, returning no wechart content either way. Exempt are the health routes, sign-in's own routes, and the routes Cube reads the model through, which answer only to Cube's key (`[R25]`).
-      Fails when: any page renders wechart content, or any API route other than those exempt returns data, without a signed-in session; or a model route returns data without Cube's key.
+- [ ] AC-251 WHERE security is enabled, WHEN a request without a signed-in session reaches a wechart page or API route, THE SYSTEM SHALL send a page request to the configured OIDC provider's sign-in, and answer an API request with 401, returning no wechart content either way. Exempt are the health routes and sign-in's own routes (`[R25]`; ~~and the routes Cube reads the model through, which answer only to Cube's key~~: Cube no longer reads the model from wechart, `[AD 1]`; amended 2026-09-25 and unticked until retested).
+      Fails when: any page renders wechart content, or any API route other than those exempt returns data, without a signed-in session; or wechart serves any route for Cube to read the model through.
 - [x] AC-252 WHERE security is enabled, WHEN a user signs in, THE SYSTEM SHALL take their identity and AD groups from the provider's token, as the configuration names them (issuer, client, groups claim), and show the user's name and a Sign out control in the top bar.
       Fails when: the groups wechart grants access by differ from the token's, or the top bar shows no name or no Sign out.
 - [x] AC-253 WHEN the user signs out, THE SYSTEM SHALL end the wechart session, so that the next request needs a new sign-in.
@@ -919,10 +938,10 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R17, R18, R19]`.
       Fails when: a member of a group granted on /A is refused in /A/B/C, or given less access there, where /A/B sets a different group.
 - [ ] AC-262 WHEN a group has read-write access to a folder, THE SYSTEM SHALL let its members see, view-only, every dashboard, chart, model and data source in each ancestor folder up to the root (`[R12, R19]`).
       Fails when: an item in an ancestor is hidden from them, or they can change it without a proposal.
-- [ ] AC-263 WHILE a user has only read-only access, THE SYSTEM SHALL show them the dashboards, and the charts on those dashboards, in the folders they may see (the folder, its descendants and its ancestors), and no models, data sources or library charts. Their dashboards still resolve cubes through the folder's path (`[P2 input, R19]`).
-      Fails when: a read-only user sees or opens a model, a data source or a library chart, or a dashboard they may see fails because a model is hidden from them.
-- [ ] AC-264 IF a user belongs to no group with access to a folder (set, inherited, or reaching up from a grant on a descendant), THEN THE SYSTEM SHALL neither list nor open that folder, nor anything in it.
-      Fails when: the folder's name or any of its items appears to that user anywhere: the tree, a listing, search, a link or the API.
+- [ ] AC-263 WHILE a user has only read-only access, THE SYSTEM SHALL show them the dashboards, and the charts on those dashboards, in the folders they may see (the folder, its descendants and its ancestors), and no models, data sources or library charts. A chart on a dashboard they may see opens for them even when it is kept in a folder they can't see, without naming or linking that folder. Their dashboards query the cubes their charts were bound to at publish, which Cube's generated policies admit them to (`[P2 input, R19]`; amended 2026-09-25, `[AD 3, AD 4, R27]`; ~~their dashboards still resolve cubes through the folder's path~~).
+      Fails when: a read-only user sees or opens a model, a data source or a library chart that is on none of their dashboards; a dashboard they may see fails because a model is hidden from them; or a chart opened through their dashboard names or links a folder they can't see.
+- [ ] AC-264 IF a user belongs to no group with access to a folder (set, inherited, or reaching up from a grant on a descendant), THEN THE SYSTEM SHALL neither list nor open that folder, nor anything in it, except a chart on a dashboard they may see (AC-263).
+      Fails when: the folder's name, or any of its items other than such a chart, appears to that user anywhere: the tree, a listing, search, a link or the API.
 - [ ] AC-265 THE SYSTEM SHALL give Super-Admins read-write access to every folder, and every admin surface (Jobs, Schedules, Security, folder permissions and the audit trail) (`[P2 input, R12]`).
       Fails when: a Super-Admin is refused any folder or admin surface.
 - [ ] AC-266 WHILE a user has only read-only access to a folder, THE SYSTEM SHALL let them read its dashboards (filter, mark, drill, export, bookmark) and change nothing in it.
@@ -931,6 +950,8 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R17, R18, R19]`.
       Fails when: anyone but a Super-Admin sees phase-1 content before a group is assigned to it.
 - [ ] AC-268 THE SYSTEM SHALL enforce folder access on every API route, not only in the UI. An automated suite SHALL ask every route as users in and out of each group, and nothing outside their permitted folders SHALL come back (S1, `[R13]`).
       Fails when: any route returns, lists, counts or finds by search an item the asking user may not see, or accepts a change they may not make.
+- [ ] AC-320 WHERE security is enabled, THE SYSTEM SHALL have Cube itself refuse a query for a folder's cubes unless the token carries one of that folder's allowed groups: groups granted on it, on an ancestor or on a descendant, or the Super-Admin group. A folder no group reaches admits only Super-Admins. Row-level policies written in the model still apply within (`[AD 4, AD 5, R27]`).
+      Fails when: a user token asked directly of Cube, past wechart's own check, returns data from a folder's cube although none of its groups is allowed there; or a member of a group granted on /A/B is refused the /A cube that /A/B's chart is bound to.
 
 ## F27. Folders hold models and data sources
 
@@ -942,25 +963,28 @@ Traces to: §P2.6 C, `[P2 input]`, `[R19]`. Rewritten phase-1 criteria: AC-001, 
 
 ## F28. Names and resolution per folder
 
-Purpose: the same name can mean different things in different folders; within a folder it means one thing, found from the nearest folder up.
-Traces to: §P2.6 D, `[P2 input]`, `[R17, R19, R20, R22]`. Rewritten phase-1 criterion: AC-249.
+Purpose: the same short name can mean different things in different folders. The whole deployment is one flat model under folder-prefixed names, and a short name inside an item is bound when the item is published, nearest first from the item's own folder.
+Traces to: §P2.6 D, `[P2 input]`, `[R17, R19, R22]`, `[AD 2, AD 3, AD 5, AD 6, R27]` (amended 2026-09-25; `[R20]` superseded). Rewritten phase-1 criterion: AC-249.
 
 - [ ] AC-270 IF an item would take the name of an item of the same kind in the same folder (a cube, by cube name across the folder's models; a model file; a dashboard; or a data source), THEN THE SYSTEM SHALL refuse it and name the existing item (`[P2 input]`).
       Fails when: two items of one kind share a name in one folder, or the refusal doesn't name the existing item.
 - [ ] AC-271 THE SYSTEM SHALL let a cube, model, dashboard or data source share its name with one in another folder (`[P2 input]`).
       Fails when: a name is refused because a different folder uses it.
-- [ ] AC-272 WHEN a dashboard or chart in a folder names a cube, THE SYSTEM SHALL resolve the name from that folder up through its ancestors to the root, and use the nearest definition. A cube defined only in a descendant or a sibling folder is not available to it (`[P2 input, R17]`).
-      Fails when: a chart in /A/B uses /A's `sales` while /A/B defines its own, or uses a cube defined only in /A/B/C or a sibling.
-- [ ] AC-273 WHEN a model names a data source, THE SYSTEM SHALL resolve the name bottom-up from the model's own folder: that folder first, then each ancestor to the root. Only if none on that path has the name SHALL it use one in the model's descendants. It SHALL refuse a name found in two descendants and none on the path, naming both (`[P2 input, R19]`).
-      Fails when: a model in /A/B uses /A/B/C's `warehouse` while /A has one; or it uses a data source from a sibling branch; or an ambiguous name is used rather than refused.
-- [ ] AC-274 WHEN two folders' paths define different cubes of the same name, and each is asked the same query, THE SYSTEM SHALL answer each from its own cube and keep their pre-aggregations apart (`[P2 input]`).
-      Fails when: one folder's answer, or pre-aggregation, comes from the other folder's cube.
-- [ ] AC-275 WHEN an approved change to a model lands in a folder, THE SYSTEM SHALL use it for that folder and its descendants (unless one defines the name nearer), and for no other folder.
-      Fails when: a dashboard outside that subtree changes, or one inside it that doesn't define the name nearer keeps the old definition.
-- [ ] AC-309 WHEN a chart or dashboard uses a model defined in an ancestor of its folder, and that model names a cube (in a join, a view or an `extends`), THE SYSTEM SHALL resolve that name bottom-up from the chart's or dashboard's own folder, as AC-272 does (`[R20]`).
-      Fails when: a chart in /A/B, using a model from /A whose join names `orders`, joins to /A's `orders` while /A/B defines its own.
-- [ ] AC-310 WHEN a cube names no data source, THE SYSTEM SHALL use the data source named `default` nearest on its model's path (the model's folder, then each ancestor to the root), and only when that path has none, the deployment's own default connection (`[R22]`).
-      Fails when: such a cube in /A/B queries the deployment's connection while /A has a data source named `default`, or queries /A's `default` while /A/B has one.
+- [ ] AC-272 WHEN a dashboard or chart is published into a folder, THE SYSTEM SHALL bind each cube it names: search nearest first from that folder up through its ancestors to the root, and store the full prefixed name of the nearest definition. A cube defined only in a descendant or a sibling folder is not available to it, and a name found nowhere on the path is refused at publish, naming it (`[P2 input, R17, AD 3, AD 5, R27]`; amended 2026-09-25: ~~resolve the name from that folder up … and use the nearest definition~~ at query time).
+      Fails when: a chart published in /A/B binds /A's `sales` while /A/B defines its own; binds a cube defined only in /A/B/C or a sibling; or publishes with a name found nowhere on its path.
+- [ ] AC-273 WHEN a model is published, THE SYSTEM SHALL bind each data source it names nearest first from the model's own folder, then each ancestor to the root, and store the full prefixed name. A name found nowhere on that path is refused at publish, naming it (`[P2 input, R19, AD 3, R27]`; amended 2026-09-25: ~~Only if none on that path has the name SHALL it use one in the model's descendants. It SHALL refuse a name found in two descendants and none on the path, naming both~~, dropped by R27).
+      Fails when: a model in /A/B binds /A/B/C's `warehouse` or a sibling branch's; binds /A's while /A/B has one; or publishes with a name found nowhere on its path.
+- [ ] AC-274 WHEN two folders define cubes of the same short name, THE SYSTEM SHALL publish them under different prefixed names, answer each folder's items from the cube they were bound to, and keep their pre-aggregations apart (`[P2 input, AD 2]`).
+      Fails when: one folder's answer, or pre-aggregation, comes from the other folder's cube, or the two publish under the same name.
+- [ ] AC-275 WHEN a change to a model lands in a folder (approved, or a direct rename, move or delete), THE SYSTEM SHALL rebind at that publish every item whose binding the change alters. A nearer definition takes over the items beneath it, and no item outside that folder's subtree changes. The whole model is checked (AC-321), so deleting something others are bound to is refused, naming what depends on it (`[AD 3, AD 6, R27]`; amended 2026-09-25).
+      Fails when: a dashboard outside that subtree changes; one inside it that doesn't define the name nearer keeps the old definition; or a delete leaves an item bound to something no longer there.
+- **AC-309 (retired 2026-09-25, superseded by decision 3 and R27; the ID stays and is never reused):** ~~WHEN a chart or dashboard uses a model defined in an ancestor of its folder, and that model names a cube (in a join, a view or an `extends`), THE SYSTEM SHALL resolve that name bottom-up from the chart's or dashboard's own folder, as AC-272 does (`[R20]`).~~ Names inside a model bind from the model's own folder when it is published. A child folder overrides by publishing its own item.
+- [ ] AC-310 WHEN a cube names no data source, THE SYSTEM SHALL bind it at publish to the data source named `default` nearest on its model's path: the model's folder, then each ancestor to the root. The deployment's own default connection is the shared root's `default` data source, stored and managed like any other and seeded by the Helm values on install (`[R22, AD 3, R27]`; amended 2026-09-25: ~~and only when that path has none, the deployment's own default connection~~).
+      Fails when: such a cube in /A/B binds the root's `default` while /A has one, or /A's while /A/B has one; or the root's `default` can't be opened and changed in Data sources.
+- [ ] AC-328 WHEN a cube, view or data source is published in a folder other than the shared root, THE SYSTEM SHALL publish it under a unique name prefixed by the folder's id. The shared root's keep their short names, and renaming or moving a folder changes no published name (`[AD 2, R27]`).
+      Fails when: two folders' same-named cubes publish under one name; a root cube's published name differs from its short name, or a phase-1 chart stops resolving; or renaming or moving a folder changes a published name, breaks a stored reference, or rebuilds a pre-aggregation.
+- [ ] AC-329 WHEN the user picks a cube for a chart or dashboard, THE SYSTEM SHALL offer only the cubes found on the item's own folder path, each by its title, never by its prefixed name. For a workspace item, that path is the workspace, then its origin's or target's path, as AC-281 has it (`[R27]`).
+      Fails when: the picker lists a cube from a descendant or sibling folder, or shows a prefixed name.
 
 ## F29. Workspaces
 
@@ -997,14 +1021,20 @@ Traces to: §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
       Fails when: a read-only member, or someone without access, can approve; or a proposal lands unapproved.
 - [ ] AC-287 THE SYSTEM SHALL show each user, in the app, the proposals they may approve, each with its item, folder, author and description, and their number in the top bar. There are no notices outside the app (`[R12]`).
       Fails when: a proposal the user may approve is missing, the number differs from the list, or a proposal is shown to someone who may not approve it.
-- [ ] AC-288 WHEN a proposal is approved, THE SYSTEM SHALL put its item into the folder, replacing any item of the same kind and name, and keep the replaced version in the item's history (`[R17]`).
-      Fails when: the folder shows the old version after approval, or the replaced version is missing from history.
+- [ ] AC-288 WHEN a proposal is approved and the whole model still compiles with it (AC-321), THE SYSTEM SHALL put its item into the folder, replacing any item of the same kind and name, and keep the replaced version in the item's history, a copy wechart holds (`[R17, AD 6, R27]`; amended 2026-09-25).
+      Fails when: the folder shows the old version after an approval that passed the check; the replaced version is missing from history; or an approval that fails the check changes the folder.
 - [ ] AC-289 THE SYSTEM SHALL keep an item's last 10 versions, each with its author, approver, time and description, show them to the folder's read-write members and to Super-Admins only, and SHALL let a read-write member restore one through a proposal (`[R17, R23]`).
       Fails when: an item that has had more than 10 versions keeps other than its last 10, a read-only user can open its history, or a restore lands without an approval.
 - [ ] AC-290 WHEN a proposal is rejected, THE SYSTEM SHALL return it unchanged to the author's workspace, with the approver's reason of at most 1,000 characters, and leave the folder as it was (`[R18]`).
       Fails when: the folder changes, the author's workspace loses the work, or the author isn't shown the reason.
-- [ ] AC-291 WHEN a read-write member creates a subfolder, sets permissions, or renames, moves or deletes an item in a folder they may write, THE SYSTEM SHALL apply it at once, without a proposal. A move SHALL need read-write access to both folders (`[R17]`).
-      Fails when: one of these waits for an approval, or is allowed without read-write access to the folders involved.
+- [ ] AC-291 WHEN a read-write member creates a subfolder, sets permissions, or renames, moves or deletes an item in a folder they may write, THE SYSTEM SHALL apply it at once, without a proposal. A move SHALL need read-write access to both folders. A rename, move or delete touching a model, a data source or a folder holding them SHALL apply only if the whole model still compiles (AC-321) (`[R17]`; amended 2026-09-25, `[AD 6, R27]`).
+      Fails when: one of these waits for an approval; is allowed without read-write access to the folders involved; or a change touching models or data sources applies although the whole model then fails to compile.
+- [ ] AC-321 WHEN a change would publish (a proposal made or approved, or a direct rename, move or delete touching a model, a data source or a folder holding them), THE SYSTEM SHALL compile the whole model with the change applied and refuse the change if anything anywhere breaks. A refused change leaves every folder and the proposal as they were. A proposal is checked when it is made, as an overlay, and again at approval (`[AD 6, R27]`).
+      Fails when: a proposal is made, an approval lands or a direct change applies although some item anywhere then fails to compile; or a refusal changes a folder or the proposal.
+- [ ] AC-322 WHEN the whole-model check refuses a change, THE SYSTEM SHALL name each break in the folders the user may see, with Cube's error and its file, and give only a count of the rest ("n items in folders you can't see would break"). A Super-Admin sees every break named, and the audit trail records every one (`[R27]`).
+      Fails when: a refusal names an item or folder the user can't see; omits a break they can see; gives a count other than the hidden breaks'; or a break is missing from the audit trail.
+- [ ] AC-323 WHILE an item is in a workspace or in a proposal, THE SYSTEM SHALL let it be queried through an xcube overlay only by the workspace's owner, or, for a proposal, by its author, the target folder's read-write members and Super-Admins. Names resolve in the overlay first, then along the target's or origin's folder path. A proposal's overlay is dropped once it is approved or rejected (`[AD 8, R27]`).
+      Fails when: anyone else gets data from the overlay; a name resolves outside the overlay while the overlay defines it; or a query against a landed or rejected proposal's overlay succeeds.
 
 ## F31. Personal bookmarks
 
@@ -1038,13 +1068,16 @@ Traces to: `[R18]`; F17.
 
 ## F34. Credentials
 
-Purpose: data-source credentials are unreadable without the deployment's key.
-Traces to: §P2.4, `[R14, R15, R21]`; F18's AC-164.
+Purpose: data-source credentials are readable only by xcube, which alone holds the private key; wechart keeps them, and their lifecycle, without ever decrypting them. ~~Data-source credentials are unreadable without the deployment's key.~~ (Amended 2026-09-25.)
+Traces to: §P2.4, `[R14, R15, R21]`, `[AD 7, R27]`; F18's AC-164.
 
-- [ ] AC-298 THE SYSTEM SHALL store data-source credentials in the metadata database encrypted with a key from the deployment's Secret, so the database alone can't reveal them.
-      Fails when: a credential can be read from a dump of the metadata database without the key.
-- [ ] AC-311 IF the API starts without the encryption key, or with a key that can't decrypt the stored credentials, THEN THE SYSTEM SHALL refuse to start, and say which key is missing or can't decrypt them (`[R21]`).
-      Fails when: the API serves requests without a usable key, or exits without naming the key problem.
+- [ ] AC-298 THE SYSTEM SHALL store data-source credentials in the metadata database encrypted to xcube's public key, so neither the database nor anything wechart holds can reveal them (amended 2026-09-25, `[AD 7]`: ~~encrypted with a key from the deployment's Secret, so the database alone can't reveal them~~).
+      Fails when: a credential can be read from a dump of the metadata database, or from anything wechart holds, without xcube's private key.
+- **AC-311 (retired 2026-09-25, superseded by decision 7 and R27; the ID stays and is never reused; see AC-324):** ~~IF the API starts without the encryption key, or with a key that can't decrypt the stored credentials, THEN THE SYSTEM SHALL refuse to start, and say which key is missing or can't decrypt them (`[R21]`).~~
+- [ ] AC-324 IF wechart's API starts without xcube's public key, or xcube starts without its private key or with one that can't decrypt a sample credential, THEN THE SYSTEM SHALL refuse to start and say which key is missing or can't decrypt (`[AD 7, R27]`).
+      Fails when: either service serves requests without its key, or exits without naming the key problem.
+- [ ] AC-325 WHEN a user types a data source's secret, THE SYSTEM SHALL encrypt it in the browser, to xcube's public key, before sending it. No request to wechart, nothing wechart stores, and no log line SHALL hold the typed secret, the connection test included (`[AD 7, R27]`).
+      Fails when: a request body to wechart's API, a stored row, or a log line contains the typed secret.
 - [ ] AC-312 WHEN a data source's connection target changes (its host, port, account, workspace, warehouse, project or connect string), THE SYSTEM SHALL clear its stored secret and require the secret again before the source can be tested or saved (`[R21]`).
       Fails when: after the target changes, a test or save uses the previously stored secret.
 
@@ -1086,6 +1119,18 @@ Traces to: §P2.3, `[R13, R19]`.
 - [ ] AC-308 WHILE security is disabled, THE SYSTEM SHALL pass the phase-1 end-to-end suite, its editing steps going through the workspace and a self-approved proposal. Checked once, at the end of phase 2 (S3).
       Fails when: a phase-1 end-to-end test fails.
 
+## F37. The semantic service: Cube and xcube
+
+Purpose: Cube plus xcube own the published model, Cube's rules and the connection runtime. wechart is their only caller and never their server. The query path survives losing one instance of each service.
+Traces to: §P2.4 Architecture, `[AD 1, AD 10, AD 11, AD 12, R27]` (added 2026-09-25).
+
+- [ ] AC-319 WHILE the query path runs 2 Cube instances on the Cube Store queue and 2 wechart API replicas, WHEN one Cube instance and one API replica stop during use, THE SYSTEM SHALL keep every signed-in session and answer every query the web app retries. Any API replica SHALL serve any request, keeping no work of its own in memory. Cube Store stays single-node (`[AD 1, AD 11, R27]`).
+      Fails when: after one Cube instance and one API replica stop, a signed-in user is asked to sign in again, or a query the web app retries fails; or work begun through one replica (a workspace edit, a proposal) can't be carried on through the other.
+- [ ] AC-326 WHERE security is enabled, THE SYSTEM SHALL sign each token for a signed-in user's queries with RS256, carrying their groups and no other attribute of theirs. It SHALL push its public keys to xcube when it starts and whenever they rotate, and SHALL use the service credential for every call it makes on its own behalf (`[AD 12, R27]`).
+      Fails when: a user's token isn't RS256 or carries any attribute of theirs beyond their groups; a token signed with a new key is refused after a rotation; an own-behalf call (introspection, a build or job, system partitions, health, an xcube admin call) uses a user's token; or a response to the browser contains the signing key or the service credential.
+- [ ] AC-327 THE SYSTEM SHALL publish, query, refresh and test connections with no request from Cube or xcube to wechart. Cube SHALL take its model and its connections from xcube, and only wechart's server SHALL call Cube or xcube (`[AD 1, AD 10]`).
+      Fails when: any request from a Cube or xcube process reaches wechart during a publish, a query, a refresh or a connection test; wechart serves a route for Cube to read a model or a connection from; or the browser makes a request to Cube or xcube.
+
 ## Non-goals (phase 1)
 
 Copied from [requirements.md §7](./requirements.md):
@@ -1117,12 +1162,15 @@ Copied from [requirements.md §P2.7](./requirements.md):
 - User attributes in Cube's security context: groups only, for now.
 - Notices outside the app, such as email or chat.
 - Testing more than one identity provider during development. Entra ID and brokers are checked once, at the end of phase 2 (AC-258).
+- Sharding the model: designed for 100–200 model-bearing folders; sharding is a later add-on `[AD 9]`.
+- Cube Store beyond one node `[AD 11]`.
+- Anything but wechart's server calling Cube or xcube, for now `[AD 10]`.
 
 Phase 1's non-goals still stand, except these, which phase 2 brings in:
 - users, groups, roles and SSO (F25–F26);
 - maps, as the country map (AC-305).
 
-Per-folder models (F28) aren't multi-tenancy in phase 1's sense: they're one organisation's folders, not per-tenant deployments. That non-goal stands.
+~~Per-folder models (F28)~~ Folder-prefixed names in one flat model (F28) aren't multi-tenancy in phase 1's sense: they're one organisation's folders, not per-tenant deployments. That non-goal stands.
 
 ## Traceability
 
@@ -1190,14 +1238,21 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | §P2.3 S1 Zero access leaks `[R13]` | AC-268, AC-264, AC-276 |
 | §P2.6 C Folders hold models and data sources; no Model tab; a Data sources list `[P2 input, R19]` | AC-001, AC-131, AC-157, AC-192, AC-194, AC-222, AC-233, AC-269 |
 | §P2.6 D Names unique per folder `[P2 input]` | AC-249, AC-270, AC-271 |
-| §P2.6 D Cube and data-source resolution `[P2 input, R17, R19, R20, R22]` | AC-272, AC-273, AC-274, AC-275, AC-309, AC-310 |
+| §P2.6 D Names bound at publish from the item's own folder; rebinding; path-only; root `default` `[P2 input, R17, R19, R22, AD 3, AD 5, R27]` (`[R20]` superseded; AC-309 retired) | AC-272, AC-273, AC-274, AC-275, AC-310, AC-329 |
+| §P2.4, §P2.6 D One flat model, folder-id prefixes, root unprefixed `[AD 2, R27]` | AC-274, AC-328 |
+| §P2.4 Cube enforces folder access through generated policies `[AD 4, AD 5, R27]` | AC-320, AC-263 |
+| §P2.4 Whole-model check on every publish, with the refusal's wording `[AD 6, R27]` | AC-321, AC-322, AC-275, AC-288, AC-291 |
+| §P2.4 Workspace and proposal content as xcube overlays `[AD 8, R27]` | AC-323, AC-281 |
+| §P2.4 Cube and xcube own the model and connections; nobody but wechart's server calls them; Cube never calls wechart `[AD 1, AD 10]` | AC-327, AC-251 |
+| §P2.4 HA query path: 2+ Cube instances, 2+ stateless API replicas `[AD 11, R27]` | AC-319, AC-161 |
+| §P2.4 RS256 tokens carrying groups only, keys pushed to xcube, a service credential `[AD 12, R27]` | AC-326, AC-008, AC-166, AC-250 |
 | §P2.6 E Workspaces: private, copy in, resolution, target folders `[P2 input, R12, R17, R18]` | AC-276 … AC-283 |
 | §P2.6 E Proposals, approval, rejection, history, direct actions `[R12, R17, R18]` | AC-284 … AC-291 |
 | §P2.6 F Personal bookmarks, shareable `[R12]` | AC-292, AC-293 |
-| §P2.4 Groups in Cube's security context `[R14]` | AC-008 |
+| §P2.4 Groups in Cube's security context `[R14, AD 12]` | AC-008, AC-326 |
 | §P2.4 Audit trail and its retention `[R14, R18]` | AC-294, AC-295, AC-296 |
 | §P2.2 Jobs and Schedules for a folder's read-write members `[R18]` | AC-297 |
-| §P2.4 Credentials encrypted in the metadata database `[R14, R15, R21]` | AC-298, AC-164, AC-280, AC-311, AC-312 |
+| §P2.4 Credentials encrypted in the metadata database, to xcube's public key, in the browser; key checks at start `[R14, R15, R21, AD 7, R27]` (AC-311 retired) | AC-298, AC-164, AC-280, AC-312, AC-324, AC-325 |
 | §P2.6 G Data sources: all of F18, per folder `[R16]` | AC-157 … AC-161, AC-163, AC-164 |
 | §P2.6 H Quick calculations (F6) `[R16]` | AC-047 … AC-052 |
 | §P2.6 H Scheduling and build history (F17) `[R16]` | AC-145, AC-150, AC-151, AC-153 … AC-155, AC-234 |
