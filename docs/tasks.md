@@ -4975,9 +4975,9 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - **Where the user comes from.** Every request carries `request.wechartUser = { key, name, groups, superAdmin }`. With security off it is the one user `admin`, a Super-Admin. With security on it comes from the server-side session. Handlers read nothing else (research `openid-client.md`, "Security off").
 - **Group access is stored on the folder.** Each folder document's body gains `access: { readOnly: string[] | null, readWrite: string[] | null }`, where `null` means unset. The shared root's access is a `setting` document `root-access`. Effective access is computed in memory from the folder list by a pure function in `packages/core/src/access/`.
 - **Workspaces are folder ids** of the form `ws:<userKey>`. The phase-1 pseudo-root `mine` resolves to the signed-in user's workspace, and phase-1 items in `mine` move to the workspace of the single user `admin`.
-- **The folder chain Cube compiles** is the list of model-bearing folder ids, nearest first, in a signed `wechartModel` claim that only the API mints after checking access (research `cube/per-folder-models.md`, layout B).
+- ~~**The folder chain Cube compiles** is the list of model-bearing folder ids, nearest first, in a signed `wechartModel` claim that only the API mints after checking access (research `cube/per-folder-models.md`, layout B).~~ **Superseded 2026-09-25** by the user's architecture decisions 1–3 and 5 (`docs/inputs/2026-09-25-architecture-decisions.md`; requirements §P2.4 "Architecture", R27). Cube plus xcube serve one flat model under folder-id prefixes. xcube binds short names at publish, nearest first from each item's own folder. No chain is signed into tokens.
 - **The security-on end-to-end suite is separate.** It is `playwright.security.config.ts`, with its own API (port 4300), web preview (port 5373) and Dex, so the phase-1 suite (security off) stays as it is until AC-308's end-of-phase check (the user's R13).
-- **Every API route declares its access class**: `public` (health and `/api/auth/*`), `cube` (key-guarded model routes), `user`, or `admin` (a Super-Admin's alone, T323). A test fails for any unclassified route (T318).
+- **Every API route declares its access class**: `public` (health and `/api/auth/*`), `cube` (key-guarded model routes), `user`, or `admin` (a Super-Admin's alone, T323). A test fails for any unclassified route (T318). *The `cube` class goes with the model routes (decision 1: Cube never calls wechart; AC-251, AC-327).*
 
 ## P2.0 Foundations: the request's user and effective access
 
@@ -5354,7 +5354,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/model/names.ts` (+ test), `packages/api/src/model/publish.ts`, `packages/api/src/server.ts`
   - Failing test: `names.test.ts`: in one folder, a second cube of a name (across the folder's models), model file, dashboard or data source is refused with the existing item named; the same names in two folders are accepted; a generated cube clashing with one in the target folder is refused, naming it, and the existing file is unchanged (AC-270, AC-271, AC-249).
   - Depends on: T334, T335
-- [ ] T337 (AC-272, AC-275, AC-309) Serve each folder chain its model, nearest definition first
+- **T337 (retired 2026-09-25, superseded by the architecture decisions 1–3 and 5; the ID stays):** ~~(AC-272, AC-275, AC-309) Serve each folder chain its model, nearest definition first~~. There are no chains: xcube binds names at publish in one flat model, and AC-309 is retired. The new resolution and publish tasks replace it (P2.17).
   - Files: `packages/api/src/model/chain.ts` (+ test), `packages/api/src/model/publish.ts` (`GET /api/cube-model/chains`, `/chains/:chain/files`, `/chains/:chain/version`)
   - Failing test: `chain.test.ts`:
     - /A/B's chain serves /A/B's `sales` and not /A's, and nothing from /A/B/C or a sibling (AC-272);
@@ -5365,7 +5365,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/model/data-sources.ts` (+ test), `packages/api/src/model/chain.ts` (served files name canonical `ds_<id>_v<n>` sources)
   - Failing test: `data-sources.test.ts`: a model in /A/B naming `warehouse` uses /A's when /A has one, and /A/B/C's only when no folder on the path has it; two descendants' `warehouse` and none on the path is refused, naming both (AC-273); a cube with no data source uses the nearest `default` on its model's path, else the deployment's (AC-310).
   - Depends on: T335, T337
-- [ ] T339 (AC-008, AC-272) Configure Cube for folder chains: app id, files, version, refresh contexts and data sources from wechart
+- **T339 (retired 2026-09-25, superseded by the architecture decisions 1, 2 and 7; the ID stays):** ~~(AC-008, AC-272) Configure Cube for folder chains: app id, files, version, refresh contexts and data sources from wechart~~. Cube takes its model and connections from xcube, never from wechart. xcube's configuration task replaces it, through the Cube-expert agent (P2.17).
   - Files: `infra/cube/cube.js` (the `wechartModel` claim in `contextToAppId`, `repositoryFactory` and `schemaVersion`; `scheduledRefreshContexts` from `/chains`; `driverFactory` answering `ds_*` names from `/api/cube-model/data-sources/:name`, from memory), `packages/api/src/model/publish.ts` (the key-guarded, decrypted data-source route), `packages/api/src/model/cube-config.test.ts`
   - Failing test: `cube-config.test.ts`: two chains get different app ids and fetch their own files; groups never enter an app id; `driverFactory` answers a `ds_*` name from wechart once and from memory after; an unknown name throws (AC-008, AC-272).
   - Depends on: T337, T338, T333
