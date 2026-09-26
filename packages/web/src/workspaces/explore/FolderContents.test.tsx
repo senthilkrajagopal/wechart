@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
-import { FolderContents, type CatalogItem } from './FolderContents';
+import { FolderContents, opensFromExplore, type CatalogItem } from './FolderContents';
 
 /**
  * AC-017: WHEN the user opens Explore, THE SYSTEM SHALL show a folder tree and
@@ -448,5 +448,73 @@ describe("the contents' columns and row menu (AC-193)", () => {
 
     expect(within(rowFor('board')).queryByRole('combobox')).toBeNull();
     expect(onMove).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * T334, AC-269: a folder's models are listed beside its dashboards and
+ * charts, labelled by kind, with Built on "_n_ cubes · _n_ views"
+ * (references.md §4), and open in the model editor.
+ */
+describe('models in a folder (T334, AC-269)', () => {
+  const model = (id: string, folderId: string, declares = { cubes: 1, views: 0 }): CatalogItem => ({
+    kind: 'model',
+    id,
+    title: id.slice(id.lastIndexOf('/') + 1),
+    owner: null,
+    updatedAt: '2026-09-20T10:00:00.000Z',
+    folderId,
+    declares,
+  });
+  const models = [
+    model('cubes/orders.yml', 'root'),
+    model('views/summary.yml', 'root', { cubes: 0, views: 1 }),
+    model('cubes/returns.yml', 'emea', { cubes: 2, views: 3 }),
+  ];
+
+  it('labels each a model, built on its cubes and views', () => {
+    render(<FolderContents items={models} />);
+
+    const cells = (id: string) =>
+      within(screen.getByTestId(`item-${id}`))
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent);
+    expect(cells('cubes/orders.yml').slice(0, 2)).toEqual(['Model', '1 cube · 0 views']);
+    expect(cells('views/summary.yml').slice(0, 2)).toEqual(['Model', '0 cubes · 1 view']);
+    expect(cells('cubes/returns.yml').slice(0, 2)).toEqual(['Model', '2 cubes · 3 views']);
+    expect(
+      screen
+        .getByTestId('item-cubes/orders.yml')
+        .querySelector('.itemicon')
+        ?.getAttribute('data-icon'),
+    ).toBe('model');
+  });
+
+  it('offers no rename or move: a model’s name is its file’s', () => {
+    render(<FolderContents items={models} onRename={vi.fn()} onMove={vi.fn()} folders={[]} />);
+
+    expect(screen.queryByRole('button', { name: 'Actions for orders.yml' })).toBeNull();
+  });
+
+  it('opens a model it may open, and leaves one it may not as its name alone', async () => {
+    const onOpen = vi.fn();
+    render(
+      <FolderContents
+        items={models}
+        onOpen={onOpen}
+        // Explore's own rule (T334's review): the root's models open.
+        opens={opensFromExplore}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'orders.yml' }));
+    expect(onOpen).toHaveBeenCalledWith(models[0]);
+
+    onOpen.mockClear();
+    expect(screen.queryByRole('button', { name: 'returns.yml' })).toBeNull();
+    await userEvent.click(screen.getByText('returns.yml'));
+    screen.getByTestId('item-cubes/returns.yml').focus();
+    await userEvent.keyboard('{Enter}');
+    expect(onOpen).not.toHaveBeenCalled();
   });
 });

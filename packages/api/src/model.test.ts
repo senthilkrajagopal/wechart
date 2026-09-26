@@ -32,13 +32,28 @@ const memory = (): ModelFileStore => ({
 });
 
 describe('the model files', () => {
+  // With their folder, the root's where none is asked for, and what each
+  // defines, read by the model editor's parser (T334, AC-131).
   it('are served with their paths and their text', async () => {
     const app = buildServer({ config, modelFiles: memory() });
 
     const response = await app.inject({ method: 'GET', url: '/api/model/files' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ files });
+    expect(response.json()).toEqual({
+      files: [
+        {
+          folderId: 'root',
+          ...files[0],
+          objects: [{ kind: 'cube', name: 'orders', members: [] }],
+        },
+        {
+          folderId: 'root',
+          ...files[1],
+          objects: [{ kind: 'view', name: 'summary', members: [] }],
+        },
+      ],
+    });
     await app.close();
   });
 

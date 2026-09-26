@@ -6,6 +6,7 @@ import {
   IMAGE_HEAD_BYTES,
   imageProblem,
   newDashboardBody,
+  objectsOf,
 } from '@wechart/core';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 
@@ -93,15 +94,21 @@ export interface BuildOptions {
   readonly introspectionRetryMs?: number;
 }
 
-/** One model file: its path under the model directory, and its text. */
+/**
+ * One model file: its path under the model directory, and its text. It sits
+ * in a folder (T334, AC-269), the shared root where none is named; the same
+ * path in two folders is two files.
+ */
 export interface ModelFile {
+  readonly folderId?: string;
   readonly path: string;
   readonly content: string;
 }
 
 /** Where the Cube model's files are kept (T137). */
 export interface ModelFileStore {
-  list(): Promise<readonly ModelFile[]>;
+  /** One folder's files, the shared root's where none is named (T334). */
+  list(folderId?: string): Promise<readonly ModelFile[]>;
   /** Stores each file whose path is not stored yet; never writes over one that is. */
   seed(files: readonly ModelFile[]): Promise<unknown>;
   /** Stores each file, over the one at its path if there is one: a publish (T142). */
@@ -379,13 +386,35 @@ export function buildServer({
   app.get('/api/cube-scopes', USER, async () => scopesOf((path, init) => client.ask(path, init)));
 
   /**
-   * The Cube model's files, each with its whole text (T137, AC-131). What a
-   * file defines is read from the text in the Model workspace, by the parser
-   * its editor uses, so the two cannot disagree.
+   * A folder's model files, the shared root's where none is named, each with
+   * its whole text and what it defines (T137, T334; AC-131): read by the
+   * parser the model editor uses, so the two cannot disagree.
+   *
+   * With security on (T334; AC-262, AC-263, AC-264): only in a folder whose
+   * every kind of item the user may see. A folder they can't see answers as
+   * one that isn't there; the root, and a folder they see only dashboards
+   * of, has none for them.
    */
-  app.get('/api/model/files', USER, async () => ({
-    files: modelFiles ? await modelFiles.list() : [],
-  }));
+  app.get('/api/model/files', USER, async (request, reply) => {
+    const { folder } = request.query as { folder?: unknown };
+    const folderId = typeof folder === 'string' && folder !== '' ? folder : ROOT_FOLDER_ID;
+    const seen = await visibilityOf(request);
+    if (seen !== undefined) {
+      const right = seen.rights.get(folderId);
+      if (right === undefined && folderId !== ROOT_FOLDER_ID)
+        return reply.code(404).send({ error: 'There’s no such folder, or it isn’t yours to see.' });
+      if (right?.kinds !== 'all') return { files: [] };
+    }
+    const files = modelFiles ? await modelFiles.list(folderId) : [];
+    return {
+      files: files.map((file) => ({
+        folderId: file.folderId ?? ROOT_FOLDER_ID,
+        path: file.path,
+        content: file.content,
+        ...objectsOf(file.path, file.content),
+      })),
+    };
+  });
 
   registerModelPublishing(app, {
     config,
@@ -398,6 +427,15 @@ export function buildServer({
       },
     },
     modelFiles,
+    // With security on, only in a folder they may write in (T334, AC-262,
+    // AC-266): one they can't see answers as one that isn't there.
+    refusalIn: async (request, folderId) => {
+      const seen = await visibilityOf(request);
+      if (seen === undefined || mayWrite(seen, folderId)) return undefined;
+      return folderId !== ROOT_FOLDER_ID && !seen.rights.has(folderId)
+        ? { status: 404, body: { error: 'There’s no such folder, or it isn’t yours to see.' } }
+        : { status: 403, body: { error: READ_ONLY } };
+    },
     ...(afterPublish === undefined ? {} : { afterPublish }),
     ...(xcube === undefined ? {} : { xcube }),
   });

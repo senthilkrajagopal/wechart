@@ -198,6 +198,14 @@ export {
 
 export { folderRights, isSuperAdmin, type FolderRight, type Viewer } from './access/visibility';
 
+export {
+  CUBE_PARSE,
+  objectsOf,
+  type FileObjects,
+  type MemberKind,
+  type ModelObject,
+} from './model/objects';
+
 export { boxStats, quantile7, type BoxStats, type WhiskerRule } from './stats/boxplot';
 export { countryCodeMarkingOf, holdsCountryCodes, ISO_3166_ALPHA_3 } from './geo/iso3';
 

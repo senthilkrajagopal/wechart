@@ -5403,6 +5403,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the switcher lists Explore to all; Data sources, Jobs and Schedules to Super-Admins and read-write members; Security to Super-Admins; and never Model (AC-001);
     - the folder header shows the access chip (rule 69); a shared folder's New menu offers only Folder to its read-write members and nothing to readers (AC-192);
     - the tree is headed "Folders", holds "My workspace" only for users who have one, and counts only visible items (AC-194).
+  - *2026-09-26, from T334's review:* models are folder items now, but a folder's count (`catalog.ts` `itemCounts`, `libraryCounts`, and so `visibleCounts`) still counts only dashboards and library charts. So a folder holding only models reads "0 items". Counting them, for those who may see them, belongs to AC-194 here, with data sources after T335.
   - Depends on: T325, T326, T345
 
 ## P2.3 Credentials (F34)
@@ -5464,10 +5465,28 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 *2026-09-26: "per-folder Cube" is superseded. wechart keeps model files and data sources as folder items, and publishes them to xcube as changesets. The tasks that served Cube a chain per folder are retired or rewritten here, and the publishing itself is in P2.17.*
 
-- [ ] T334 (AC-269, AC-131, AC-262, AC-266) Keep model files in folders and list them in Explore
+- [x] T334 (AC-269, AC-131, AC-262, AC-266) Keep model files in folders and list them in Explore
   - Files: a migration `…_model-files-folder.cjs` (a `folder_id` column, existing files in the root; the key becomes `(folder_id, path)`), `packages/api/src/repos/model-files.ts`, `packages/api/src/repos/catalog.ts`, `packages/api/src/model/publish.ts` and `packages/api/src/server.ts` (`GET /api/model/files` and `POST /api/model/publish` check the folder, T327's review), `packages/web/src/workspaces/explore/FolderContents.tsx`, `packages/api/src/repos/model-files.test.ts`
   - Failing test: `model-files.test.ts`: a folder's listing includes its model files with kind "Model" and "_n_ cubes · _n_ views", and `GET /api/model/files?folder=` returns each file's cubes, views, measures, dimensions, segments, hierarchies, joins and pre-aggregations (AC-269, AC-131). A read-write member of /A/B lists and opens /A's and the root's model files, and every change to them answers 403 (AC-262, its models' half, from T327). With security on, a user without read-write on a model's folder gets 403 from `POST /api/model/publish`, and a user who may not see the folder gets none of its files from `GET /api/model/files` (AC-266; today neither route checks a folder, T327's review).
   - Depends on: T325
+  - **Done 2026-09-26.**
+    - **Storage.** Migration `1758320000000_model-files-folder.cjs` adds `folder_id` (existing files in `root`) and keys `model_files` on `(folder_id, path)`: the same path in two folders is two files. `ModelFile.folderId` is optional, a file naming none being the root's. The store's `list(folder)` reads one folder (the root's by default), and `seed`, `write` and `replace` write into each file's.
+    - **Explore.** `catalog.contents(folder)` lists the folder's model files after its dashboards and charts: kind `model`, by path, titled with the file name, with `declares: { cubes, views }`. `FolderContents` shows them as Model, built on "_n_ cubes · _n_ views", with a new glyph and no ⋯ menu (a model's name is its file's). A root model opens in the model editor; another folder's is listed by name, not opened, until T342 (`opensFromExplore`).
+    - **One parser.** `objectsOf` moved from the web to `@wechart/core` (web's `objects.ts` re-exports it), so the API lists what each file defines as the model editor reads it.
+    - **Routes.**
+      - `GET /api/model/files?folder=` (the root's by default) answers each file with its folder and its objects. With security on: 404 for a folder the user can't see; none for the root when no grant reaches it, or for a folder they see dashboards-only (AC-263).
+      - `POST /api/model/publish` takes `folderId` (the root's by default). With security on, before anything else of the request is read: 404 for a folder they can't see, 403 without read-write. The files are rebuilt from path and text, so a file naming its own folder can't reach another.
+      - **A decision taken here:** a publish into a folder other than the root answers 409, and only the root's files are sent to xcube, as before. Sending a folder's files as its own items is T341's (noted there); until then a folder's file sent as the root's would take a root name.
+    - **Tests.**
+      - `repos/model-files.test.ts`: a folder lists only its own files; a folder's contents list its models with what each declares.
+      - `access/models.test.ts` (security on, Dex sign-in): the listing and every object a file defines (AC-269, AC-131); `writer` (read-write on /A/B) lists and opens /A's and the root's models and gets 403 changing them (AC-262); `reader` (read-only on /A/B) sees no model and gets 403 (AC-266, AC-263); a folder they can't see answers 404 to a read and a change; a folder's own member gets the 409.
+      - `publish.test.ts`: a file naming another folder is stored in the one published to.
+      - `FolderContents.test.tsx`: the Model rows, no menu, and Explore's own open rule. `e2e/explore.spec.ts`: the root lists its model files as models after everything else, and one opens in the model editor.
+      - Changed for the new behaviour: `model.test.ts` (the route's answer now carries the folder and objects), `auth/cube-groups.test.ts` (a Super-Admin publishes at the root) and `db/product-catalog-yaml.test.ts` (the new key).
+    - **The cold review** (FAIL) found the new catalog test flaky (its two files in different random directories); fixed. It also led to the e2e checking paths rather than counts, and to testing Explore's open rule rather than a copy of it.
+    - **Noted elsewhere:** a folder's counts leave models out (T331, AC-194). Builds and Schedules still read the root's files for anyone signed in (T408's route matrix).
+    - **For the user:** AC-193 (checked) says every row has a rename and move menu; model rows have none, a model being renamed in the model editor. Its Fails-when line isn't broken, but its text could say so.
+    - No AC is ticked: AC-269 and AC-262 wait for data sources (T335), AC-131 for opening a model in its folder (T342), AC-266 for T340.
 - [ ] T335 (AC-269, AC-164, AC-312, AC-298, AC-262) Keep data sources as folder items, never sending a credential to the browser
   - Files: `packages/api/src/repos/data-sources.ts` (+ test), `packages/api/src/routes/data-sources.ts` (+ test), `packages/api/src/repos/catalog.ts`
   - Failing test: `data-sources.test.ts`:
@@ -5511,6 +5530,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - their rollups build into differently named tables, none over 63 bytes on Postgres;
     - renaming and moving /A changes neither published name, and rebuilds no rollup (AC-328).
   - **Watch (2026-09-26, `xcube-slice-3b.md` Gotchas 3 and 6):** this is the first task whose model has more than one module. A root cube that a folder item uses becomes shared, so `commons` and copies appear. A query spanning modules can wait for a union compile inside the request.
+  - *2026-09-26, from T334:* model files now sit in folders, but only the root's are sent to xcube (`modelFiles.list()` is the root's), and `POST /api/model/publish` refuses any other folder with 409. This task sends each folder's files as that folder's items (`xcube/items.ts` from the folder's stored xcube id; the sync's `files`, the check's `live` and the changeset), and lifts the 409. Names are then per folder (T336), so `redeclaredIn`, `pathsByName` and the check's placing of errors by name must look within the folder.
   - ~~Files: `packages/api/src/model/chain.ts` (each served cube's `sql_alias` from its origin folder and resolved data source) … Failing test: `isolation.spec.ts`, against the real Cube: … the same query from each folder returns each one's own count …~~
   - Depends on: T425, T426, T429, T334, T449
 - [ ] T342 (AC-222, AC-131) Open a model in its folder, beside that folder's files, read-only when shared

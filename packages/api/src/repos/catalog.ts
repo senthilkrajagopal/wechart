@@ -1,3 +1,4 @@
+import { objectsOf } from '@wechart/core';
 import { sql, type Kysely } from 'kysely';
 
 import type { Database } from '../db/schema';
@@ -9,7 +10,8 @@ import type { Database } from '../db/schema';
  * the object it lists.
  */
 export interface CatalogItem {
-  readonly kind: 'folder' | 'dashboard' | 'chart';
+  /** A model is one model file, by its path (T334, AC-269). */
+  readonly kind: 'folder' | 'dashboard' | 'chart' | 'model';
   readonly id: string;
   readonly title: string;
   readonly owner: string | null;
@@ -39,6 +41,12 @@ export interface CatalogItem {
   readonly tabs: number | null;
   /** A folder's dashboards and charts, including those in its subfolders. */
   readonly itemCount: number | null;
+  /**
+   * A model's cubes and views, what Explore's Built on says of it (T334,
+   * AC-269; references.md §4): read from its text by the model editor's
+   * parser. Null for every other kind.
+   */
+  readonly declares?: { readonly cubes: number; readonly views: number } | null;
 }
 
 export interface FolderNode {
@@ -193,10 +201,42 @@ export function catalog(db: Kysely<Database>) {
       const counts = counted
         ? await itemCounts(rows.filter((row) => row.kind === 'folder').map((row) => row.id))
         : new Map<string, number>();
-      return rows.map((row) => ({
-        ...toItem(row),
-        itemCount: row.kind === 'folder' ? (counts.get(row.id) ?? 0) : null,
-      }));
+      // Then its models, one to a model file, by path (T334, AC-269).
+      const models = await db
+        .selectFrom('model_files')
+        .select(['path', 'content', 'updated_at'])
+        .where('folder_id', '=', folderId)
+        .orderBy(sql`path collate "C"`)
+        .execute();
+      return [
+        ...rows.map((row) => ({
+          ...toItem(row),
+          itemCount: row.kind === 'folder' ? (counts.get(row.id) ?? 0) : null,
+        })),
+        ...models.map((model): CatalogItem => {
+          const { objects } = objectsOf(model.path, model.content);
+          return {
+            kind: 'model',
+            id: model.path,
+            title: model.path.slice(model.path.lastIndexOf('/') + 1),
+            owner: null,
+            updatedAt: model.updated_at,
+            localToDashboardId: null,
+            description: null,
+            folderId,
+            chartType: null,
+            drawnAs: null,
+            source: null,
+            hasFields: false,
+            tabs: null,
+            itemCount: null,
+            declares: {
+              cubes: objects.filter((object) => object.kind === 'cube').length,
+              views: objects.filter((object) => object.kind === 'view').length,
+            },
+          };
+        }),
+      ];
     },
 
     /** Every chart and dashboard with its body, for what uses a member (T147, AC-141). */

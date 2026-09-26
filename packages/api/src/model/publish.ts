@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
 import type { MetaCache } from '../cube/meta-cache';
 import type { Config } from '../config';
+import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile, ModelFileStore } from '../server';
 import { checkWithXcube } from '../xcube/check';
 import type { XcubeAdmin } from '../xcube/client';
@@ -106,6 +107,7 @@ export function registerModelPublishing(
     modelFiles,
     afterPublish,
     xcube,
+    refusalIn,
   }: {
     config: Config;
     client: CubeClient;
@@ -125,6 +127,15 @@ export function registerModelPublishing(
      * one else checks a change, or serves it (T431).
      */
     xcube?: XcubeAdmin;
+    /**
+     * Why this user may not change the models in a folder, as the answer to
+     * send; nothing where they may (T334, AC-262, AC-266). Asked before
+     * anything else of the request is read.
+     */
+    refusalIn?: (
+      request: FastifyRequest,
+      folderId: string,
+    ) => Promise<{ status: number; body: unknown } | undefined>;
   },
 ): void {
   /**
@@ -133,15 +144,33 @@ export function registerModelPublishing(
    * xcube's errors come back on the files they are about.
    */
   app.post('/api/model/publish', USER, async (request, reply) => {
-    const body = request.body as { files?: unknown; create?: unknown } | undefined;
+    const body = request.body as
+      { files?: unknown; create?: unknown; folderId?: unknown } | undefined;
+    // The folder whose models change: the shared root's unless one is named (T334).
+    const folderId =
+      typeof body?.folderId === 'string' && body.folderId !== '' ? body.folderId : ROOT_FOLDER_ID;
+    const refusal = await refusalIn?.(request, folderId);
+    if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
+    // Each item in a folder is named `<folderId>__<name>` in xcube (AC-328), and
+    // sending one there is T341's. Until then only the root's are published:
+    // another folder's file sent as the root's would take a root name.
+    if (folderId !== ROOT_FOLDER_ID)
+      return reply.status(409).send({
+        error:
+          'Models in a folder other than the root can’t be published yet: only the root’s are.',
+      });
     const files = Array.isArray(body?.files) ? (body.files as unknown[]) : [];
-    const changed = files.filter(
-      (file): file is ModelFile =>
-        typeof (file as ModelFile | null)?.path === 'string' &&
-        typeof (file as ModelFile).content === 'string' &&
-        MODEL_PATH.test((file as ModelFile).path) &&
-        (file as ModelFile).path.length <= MAX_PATH_LENGTH,
-    );
+    const changed = files
+      .filter(
+        (file): file is ModelFile =>
+          typeof (file as ModelFile | null)?.path === 'string' &&
+          typeof (file as ModelFile).content === 'string' &&
+          MODEL_PATH.test((file as ModelFile).path) &&
+          (file as ModelFile).path.length <= MAX_PATH_LENGTH,
+      )
+      // Each in the folder checked above, whatever a file says of its own
+      // (T334's review): its path and text, and nothing else it was sent with.
+      .map(({ path, content }): ModelFile => ({ path, content }));
     // Only YAML models are published: code in any other form runs where
     // Cube's secrets are (R28; AC-332).
     for (const file of files) {

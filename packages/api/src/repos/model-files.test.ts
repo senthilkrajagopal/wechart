@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getDb } from '../db/client';
+import { catalog } from './catalog';
 import { modelFileStore } from './model-files';
 
 /**
@@ -98,5 +99,72 @@ describe('model file store', () => {
     const files = await store().list();
     expect(files.find((each) => each.path === whole)?.content).toBe('both\n');
     expect(files.find((each) => each.path === other)?.content).toBe('kept\n');
+  });
+});
+
+/**
+ * T334, AC-269, AC-131: a model file lives in a folder. The same path in two
+ * folders is two files; a folder's listing names each of its own.
+ */
+describe('model files in folders', () => {
+  const cube = (name: string) =>
+    `cubes:\n  - name: ${name}\n    sql_table: public.${name}\n    measures:\n      - name: count\n        type: count\n`;
+
+  it('keeps each file in its folder, and a folder lists only its own', async () => {
+    const [a, b] = [`folder-${randomUUID()}`, `folder-${randomUUID()}`];
+    const file = path('sales');
+    await store().seed([
+      { folderId: a, path: file, content: 'in a\n' },
+      { folderId: b, path: file, content: 'in b\n' },
+    ]);
+    await store().write([{ folderId: b, path: file, content: 'b, changed\n' }]);
+
+    expect(await store().list(a)).toEqual([{ folderId: a, path: file, content: 'in a\n' }]);
+    expect(await store().list(b)).toEqual([{ folderId: b, path: file, content: 'b, changed\n' }]);
+    // The root's are the root's alone.
+    expect((await store().list()).some((each) => each.path === file)).toBe(false);
+  });
+
+  it('lists a folder’s model files in its contents, each a model with the cubes and views it declares', async () => {
+    const folder = `folder-${randomUUID()}`;
+    // In one directory, so their order is their names' (T334's review).
+    const dir = `model/test-${randomUUID()}`;
+    const [orders, byMonth] = [`${dir}/orders.yml`, `${dir}/orders_by_month.yml`];
+    await store().seed([
+      { folderId: folder, path: orders, content: cube('orders') },
+      {
+        folderId: folder,
+        path: byMonth,
+        content:
+          'views:\n  - name: orders_by_month\n    cubes:\n      - join_path: orders\n        includes: "*"\n',
+      },
+    ]);
+
+    const rows = await catalog(getDb()).contents(folder);
+
+    expect(
+      rows.map(({ kind, id, title, folderId, declares }) => ({
+        kind,
+        id,
+        title,
+        folderId,
+        declares,
+      })),
+    ).toEqual([
+      {
+        kind: 'model',
+        id: orders,
+        title: 'orders.yml',
+        folderId: folder,
+        declares: { cubes: 1, views: 0 },
+      },
+      {
+        kind: 'model',
+        id: byMonth,
+        title: 'orders_by_month.yml',
+        folderId: folder,
+        declares: { cubes: 0, views: 1 },
+      },
+    ]);
   });
 });

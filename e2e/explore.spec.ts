@@ -285,6 +285,51 @@ test('the contents are listed under Name, Type, Built on, Updated and Owner, sub
 });
 
 /**
+ * T334, AC-269, AC-131: a folder's models are listed beside its dashboards
+ * and charts, each a model file labelled Model and built on its cubes and
+ * views, and one opens in the model editor. The root holds the model here.
+ */
+test('the root lists its model files as models, after its charts, and one opens in the model editor', async ({
+  page,
+  request,
+}) => {
+  const { files } = (await (await request.get('/api/model/files?folder=root')).json()) as {
+    files: { path: string; objects: { kind: string; name: string }[] }[];
+  };
+  const orders = files.find((file) => file.path === 'cubes/orders.yml');
+  expect(orders?.objects.filter((object) => object.kind === 'cube').map((o) => o.name)).toEqual([
+    'orders',
+  ]);
+
+  await page.goto('/explore');
+  // Each file the root held when asked is a row, labelled Model; other tests
+  // may add files meanwhile, so the rows aren't counted (T334's review).
+  for (const file of files)
+    await expect(page.getByTestId(`item-${file.path}`).getByRole('cell').nth(0)).toHaveText(
+      'Model',
+    );
+  // After everything else in the folder: no row of another kind follows one.
+  const kinds = await contentsOf(page)
+    .locator('tbody tr')
+    .locator('td:nth-of-type(1)')
+    .allTextContents();
+  const firstModel = kinds.indexOf('Model');
+  expect(firstModel).toBeGreaterThan(-1);
+  expect(kinds.slice(firstModel).every((kind) => kind === 'Model')).toBe(true);
+
+  const row = page.getByTestId('item-cubes/orders.yml');
+  await expect(row.getByRole('cell').nth(0)).toHaveText('Model');
+  await expect(row.getByRole('cell').nth(1)).toHaveText('1 cube · 0 views');
+  await expect(row.getByRole('button', { name: /^Actions for/ })).toHaveCount(0);
+
+  await row.getByRole('button', { name: 'orders.yml' }).click();
+  await expect(page).toHaveURL(/\/model\/files\/cubes%2Forders\.yml$/);
+  await expect(page.getByRole('textbox', { name: 'cubes/orders.yml, as YAML' })).toContainText(
+    'name: orders',
+  );
+});
+
+/**
  * T243 / AC-193 (recheck-shell-explore N1, N11, F19): a chart that follows
  * the recommendation is listed by what it was drawn as when saved — as its
  * own page names it — not "Automatic"; a row opens from any of its cells;

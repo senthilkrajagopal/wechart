@@ -147,7 +147,8 @@ describe('a signed-in user’s groups in every Cube request (T322, AC-008)', () 
     const { cube, asked } = recordingCube();
     const files: { path: string; content: string }[] = [];
     const app = serve({
-      config: secured,
+      // With a Super-Admin to publish (T334).
+      config: { ...secured, superAdminGroup: 'wechart-super-admins' },
       cube,
       sessions: pgSessionStore(getDb()),
       modelFiles: {
@@ -175,10 +176,12 @@ describe('a signed-in user’s groups in every Cube request (T322, AC-008)', () 
     await app.inject({ method: 'GET', url: '/api/meta', headers: { cookie } });
     await app.inject({ method: 'GET', url: '/api/meta', headers: { cookie } });
     expect(writersMeta()).toHaveLength(1);
+    // By someone who may change the root's models (T334): here, with no
+    // folder's groups stored, a Super-Admin alone.
     const published = await app.inject({
       method: 'POST',
       url: '/api/model/publish',
-      headers: { cookie },
+      headers: { cookie: await signIn(app, USERS['super']!) },
       payload: {
         files: [{ path: 'cubes/a.yml', content: 'cubes:\n  - name: a\n    sql_table: a\n' }],
       },

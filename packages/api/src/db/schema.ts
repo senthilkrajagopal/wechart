@@ -55,6 +55,8 @@ export interface ImageTable {
 
 /** The Cube model's files (T137, AC-131), one row a file, by its path. */
 export interface ModelFileTable {
+  /** Its folder (T334): the shared root's, `root`, unless one is named. */
+  folder_id: Generated<string>;
   path: string;
   content: string;
   updated_at: Generated<Date>;

@@ -124,6 +124,23 @@ describe('publishing model changes', () => {
     await app.close();
   });
 
+  // T334's review: the folder checked is the request's, so a file naming its
+  // own is stored in that one all the same.
+  it('stores each file in the folder published to, whatever folder a file names', async () => {
+    const store = memory([ORDERS, VIEW]);
+    const app = serve({ config, modelFiles: store });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/model/publish',
+      payload: { files: [{ ...edited, folderId: 'someone-elses' }] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(store.files).toEqual([edited, VIEW]);
+    await app.close();
+  });
+
   it('refuses what xcube rejects, with its error on the file, and publishes nothing', async () => {
     const store = memory([ORDERS, VIEW]);
     const stub = fakeXcube();

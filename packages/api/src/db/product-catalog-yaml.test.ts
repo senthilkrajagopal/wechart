@@ -64,7 +64,8 @@ const put = async (content: string) =>
   getDb()
     .insertInto('model_files')
     .values({ path: PATH, content })
-    .onConflict((conflict) => conflict.column('path').doUpdateSet({ content }))
+    // The root's file: a path is unique within its folder (T334).
+    .onConflict((conflict) => conflict.columns(['folder_id', 'path']).doUpdateSet({ content }))
     .execute();
 
 describe('the seed’s product catalogue, as plain YAML (T446, AC-335)', () => {

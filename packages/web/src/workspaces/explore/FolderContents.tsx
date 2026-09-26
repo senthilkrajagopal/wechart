@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { MenuButton } from '../../shell/MenuButton';
 import { chartTypeText } from './chartTypeLabels';
+import { SHARED_ROOT } from './roots';
 
 /**
  * The contents of the selected folder (AC-017), under the prototype's columns
@@ -12,7 +13,8 @@ import { chartTypeText } from './chartTypeLabels';
  * rather than by position alone (AC-176, AC-178).
  */
 export interface CatalogItem {
-  readonly kind: 'folder' | 'dashboard' | 'chart';
+  /** A model is one model file, by its path (T334, AC-269). */
+  readonly kind: 'folder' | 'dashboard' | 'chart' | 'model';
   readonly id: string;
   readonly title: string;
   readonly owner: string | null;
@@ -33,6 +35,8 @@ export interface CatalogItem {
   readonly tabs?: number | null;
   /** A folder's dashboards and charts, including its subfolders'. */
   readonly itemCount?: number | null;
+  /** A model's cubes and views (T334, AC-269). */
+  readonly declares?: { readonly cubes: number; readonly views: number } | null;
 }
 
 export interface FolderMove {
@@ -59,12 +63,18 @@ export interface FolderContentsProps {
   readonly folderNames?: ReadonlyMap<string, string>;
   /** What an empty list says: a folder's, or a search's (AC-019). */
   readonly emptyText?: string;
+  /**
+   * Whether a row opens: every row unless said. One that doesn't shows its
+   * name as text, not as a control that does nothing (T334).
+   */
+  readonly opens?: (item: CatalogItem) => boolean;
 }
 
 const TYPE_LABEL: Record<CatalogItem['kind'], string> = {
   folder: 'Folder',
   dashboard: 'Dashboard',
   chart: 'Chart',
+  model: 'Model',
 };
 
 /** Each kind's chip, the prototype's .itemicon — the New menu's own (F20). */
@@ -72,6 +82,7 @@ const CHIP: Record<CatalogItem['kind'], string> = {
   folder: 'ic-folder',
   dashboard: 'ic-dash',
   chart: 'ic-chart',
+  model: 'ic-model',
 };
 
 /**
@@ -83,9 +94,18 @@ const BUILT_ON_CLASS: Record<CatalogItem['kind'], string> = {
   folder: 'folder-contents__built-on is-muted',
   dashboard: 'folder-contents__built-on is-secondary',
   chart: 'folder-contents__built-on is-code',
+  model: 'folder-contents__built-on is-secondary',
 };
 
 const plural = (count: number, one: string) => `${String(count)} ${one}${count === 1 ? '' : 's'}`;
+
+/**
+ * Whether Explore opens a row (T334): every kind, and a model only in the
+ * shared root, whose files the model editor opens. Another folder's models
+ * open in their folder with T342; until then they are listed by name.
+ */
+export const opensFromExplore = (item: CatalogItem): boolean =>
+  item.kind !== 'model' || item.folderId === SHARED_ROOT.id;
 
 /** The Type column: a chart by its chart type, never only "Chart" (AC-193). */
 function typeText(item: CatalogItem): string {
@@ -96,6 +116,11 @@ function typeText(item: CatalogItem): string {
 function builtOnText(item: CatalogItem, kinds: ReadonlyMap<string, 'cube' | 'view'>): string {
   if (item.kind === 'folder') return item.itemCount == null ? '—' : plural(item.itemCount, 'item');
   if (item.kind === 'dashboard') return item.tabs == null ? '—' : plural(item.tabs, 'tab');
+  // "_n_ cubes · _n_ views" (references.md §4).
+  if (item.kind === 'model')
+    return item.declares == null
+      ? '—'
+      : `${plural(item.declares.cubes, 'cube')} · ${plural(item.declares.views, 'view')}`;
   if (item.source == null || item.source === '') return '—';
   // Unknown to the meta (not loaded, or hidden): the name alone, not a guess.
   const kind = kinds.get(item.source);
@@ -166,7 +191,11 @@ export function FolderContents({
   sourceKinds = new Map(),
   folderNames,
   emptyText = 'This folder is empty.',
+  opens = () => true,
 }: FolderContentsProps) {
+  const open = (item: CatalogItem) => {
+    if (opens(item)) onOpen?.(item);
+  };
   const builtOn = (item: CatalogItem) => {
     const text = builtOnText(item, sourceKinds);
     const folder = item.folderId == null ? undefined : folderNames?.get(item.folderId);
@@ -233,7 +262,7 @@ export function FolderContents({
       case 'Enter': {
         event.preventDefault();
         const item = items[index];
-        if (item) onOpen?.(item);
+        if (item) open(item);
         break;
       }
       default:
@@ -289,7 +318,7 @@ export function FolderContents({
                 if (target.closest('button, a, input, select, textarea, form, [role="menu"]'))
                   return;
                 if (renaming === item.id || moving === item.id) return;
-                onOpen?.(item);
+                open(item);
               }}
             >
               <th scope="row">
@@ -344,13 +373,17 @@ export function FolderContents({
                       aria-hidden="true"
                     />
                     <span>
-                      <button
-                        type="button"
-                        className="folder-contents__open"
-                        onClick={() => onOpen?.(item)}
-                      >
-                        {item.title}
-                      </button>
+                      {opens(item) ? (
+                        <button
+                          type="button"
+                          className="folder-contents__open"
+                          onClick={() => onOpen?.(item)}
+                        >
+                          {item.title}
+                        </button>
+                      ) : (
+                        <span className="folder-contents__title">{item.title}</span>
+                      )}
                       {/* The prototype's second line: what the dashboard is for. */}
                       {item.kind === 'dashboard' && item.description ? (
                         <span className="folder-contents__description">{item.description}</span>
@@ -377,25 +410,29 @@ export function FolderContents({
                   else actionRefs.current.set(item.id, element);
                 }}
               >
-                <MenuButton
-                  label={`Actions for ${item.title}`}
-                  className="btn-ghost btn-sm folder-contents__menu"
-                  items={[
-                    {
-                      key: 'rename',
-                      label: 'Rename',
-                      onSelect: () => {
-                        setRenaming(item.id);
-                        setDraft(item.title);
+                {/* A model's name is its file's, changed in the model editor
+                    (T334): it has no rename or move here. */}
+                {item.kind === 'model' ? null : (
+                  <MenuButton
+                    label={`Actions for ${item.title}`}
+                    className="btn-ghost btn-sm folder-contents__menu"
+                    items={[
+                      {
+                        key: 'rename',
+                        label: 'Rename',
+                        onSelect: () => {
+                          setRenaming(item.id);
+                          setDraft(item.title);
+                        },
                       },
-                    },
-                    ...(onMove && targets.length > 0
-                      ? [{ key: 'move', label: 'Move to…', onSelect: () => setMoving(item.id) }]
-                      : []),
-                  ]}
-                >
-                  <span aria-hidden="true">⋯</span>
-                </MenuButton>
+                      ...(onMove && targets.length > 0
+                        ? [{ key: 'move', label: 'Move to…', onSelect: () => setMoving(item.id) }]
+                        : []),
+                    ]}
+                  >
+                    <span aria-hidden="true">⋯</span>
+                  </MenuButton>
+                )}
                 {/* Over the row, beside its ⋯, rather than in its place: the
                     table does not reflow (recheck-shell-explore N14). */}
                 {moving === item.id ? (

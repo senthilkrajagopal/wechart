@@ -7,7 +7,7 @@ import type { Me } from '../../shell/AccountMenu';
 import { StateLine } from '../../shell/StatusIcon';
 import { AccessPanel, folderAccessQuery, refreshFolderAccess } from './access/AccessPanel';
 import { CreateMenu, DEFAULT_TITLES, type CreatableKind } from './CreateMenu';
-import { FolderContents, type CatalogItem } from './FolderContents';
+import { FolderContents, opensFromExplore, type CatalogItem } from './FolderContents';
 import { FolderTree } from './FolderTree';
 import { exploreHref, folderChain, FOLDERS_QUERY } from './folders';
 import { MY_WORKSPACE, ROOT_FOLDERS, SHARED_ROOT, rootTitleOf } from './roots';
@@ -402,8 +402,14 @@ export function ExplorePage() {
                   openFolder(item.id);
                   return;
                 }
+                // A model file, in the model editor (T334, AC-269).
+                if (item.kind === 'model') {
+                  globalThis.location.assign(`/model/files/${encodeURIComponent(item.id)}`);
+                  return;
+                }
                 globalThis.location.assign(`/explore/${item.kind}s/${encodeURIComponent(item.id)}`);
               }}
+              opens={opensFromExplore}
               onRename={(item, title) => relocate.mutate({ item, title })}
               onMove={(item, target) => relocate.mutate({ item, folderId: target })}
             />
