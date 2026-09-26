@@ -5918,7 +5918,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
 
 ### Slice 2: foundation
 
-- [ ] T418 [P] (AC-319) Keep publish drafts in the metadata database, so any API replica answers Cube's read-back
+- [x] T418 [P] (AC-319) Keep publish drafts in the metadata database, so any API replica answers Cube's read-back
   - Why: the drafts `Map` in `model/publish.ts` breaks with two replicas: Cube's read-back can land on the other one (research `cube/ha-topology.md`, table row 1). This is interim until slice 3 removes the read-back (T431).
   - Files: a migration `…_publish-drafts.cjs`, `packages/api/src/db/schema.ts`, `packages/api/src/model/drafts.ts` (the store), `packages/api/src/model/publish.ts`, `packages/api/src/server.ts` and `packages/api/src/main.ts` (wiring), `packages/api/src/model/publish-drafts.test.ts`
   - Failing test: `publish-drafts.test.ts`: with two API instances on one database, a publish started through one has its draft read by Cube's callback through the other. No draft is held in a process's memory (AC-319).
