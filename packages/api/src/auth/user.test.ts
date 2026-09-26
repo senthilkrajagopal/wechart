@@ -41,6 +41,8 @@ const SIGN_IN_ENV = {
   WECHART_OIDC_ISSUER: 'http://localhost:5556/dex',
   WECHART_OIDC_CLIENT_ID: 'wechart',
   WECHART_OIDC_CLIENT_SECRET: 'dev-oidc-secret',
+  // Required with sign-in on too (T416, AC-318; the user's R26).
+  WECHART_SUPER_ADMIN_GROUP: 'wechart-super-admins',
 };
 
 describe('the security mode (T311)', () => {

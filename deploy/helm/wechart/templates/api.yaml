@@ -141,10 +141,10 @@ spec:
             - name: WECHART_OIDC_BACKCHANNEL_URL
               value: {{ default (printf "http://%s:%d" (include "wechart.host" (list $ "dex")) (int .dex.port)) .oidc.backchannelUrl | quote }}
             {{- end }}
-            {{- with .superAdminGroup }}
+            # Required with sign-in on (T416, AC-318; the user's R26): without
+            # it nobody could reach the admin surfaces, and the API refuses to start.
             - name: WECHART_SUPER_ADMIN_GROUP
-              value: {{ . | quote }}
-            {{- end }}
+              value: {{ required "security.superAdminGroup is required when security.enabled: the AD group whose members are Super-Admins" .superAdminGroup | quote }}
             {{- end }}
             {{- end }}
           readinessProbe:

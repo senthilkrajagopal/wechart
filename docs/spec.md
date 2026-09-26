@@ -899,7 +899,7 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R14, R15, R18, R19]`.
       Fails when: a folder granted only to the last of a 20-group user's groups is refused to them.
 - [ ] AC-256 THE SYSTEM SHALL take the Super-Admin group's name from the deployment's configuration, and treat that group's members as Super-Admins (`[R18]`).
       Fails when: a member of the configured group lacks a Super-Admin permission, or someone outside it has one.
-- [ ] AC-318 WHERE security is enabled, IF the deployment names no Super-Admin group, THEN THE SYSTEM SHALL refuse to start and say that the Super-Admin group is missing, and the Helm chart SHALL refuse to render such a release (`[R26]`).
+- [x] AC-318 WHERE security is enabled, IF the deployment names no Super-Admin group, THEN THE SYSTEM SHALL refuse to start and say that the Super-Admin group is missing, and the Helm chart SHALL refuse to render such a release (`[R26]`).
       Fails when: the API starts with security on and no Super-Admin group, its refusal doesn't name the missing setting, or `helm template` renders a release with security on and no Super-Admin group.
 - [x] AC-257 WHERE security is enabled, THE SYSTEM SHALL sign users in through the development OIDC provider in docker-compose and in the Helm release on docker-desktop, with the provider running beside wechart (`[R14, R15]`).
       Fails when: signing in fails in either environment, or either environment needs a provider outside it.

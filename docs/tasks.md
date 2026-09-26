@@ -5226,12 +5226,22 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The security suite's sign-out and saves still work through the preview's proxy, which keeps `Origin`. nginx in the Helm release passes it through too.
     - The cold review (PASS) led to the other methods, the no-cookie and `null` cases, and the guard's comment.
     - AC-317 ticked.
-- [ ] T416 (AC-318) Refuse to start with sign-in on and no Super-Admin group
+- [x] T416 (AC-318) Refuse to start with sign-in on and no Super-Admin group
   - Files: `packages/api/src/config.ts` (`WECHART_SUPER_ADMIN_GROUP` required with `WECHART_SECURITY=oidc`), `packages/api/src/auth/admin.test.ts`, `deploy/helm/wechart/templates/api.yaml` (a `fail` when `security.enabled` and no `security.superAdminGroup`), `deploy/helm/verify.sh`
   - Failing test:
     - `admin.test.ts`: `loadConfig` with `WECHART_SECURITY=oidc` and every other sign-in setting, but no `WECHART_SUPER_ADMIN_GROUP` (unset, or empty), throws a `ConfigError` naming `WECHART_SUPER_ADMIN_GROUP`; with it set, it loads; with security off, it isn't asked for (AC-318; the user's R26).
     - `verify.sh`: `helm template` with `security.enabled=true` and no `security.superAdminGroup` fails, naming the setting (AC-318).
   - Depends on: T323
+  - **Done 2026-09-25.**
+    - **The API.** With `WECHART_SECURITY=oidc`, `loadConfig` requires `WECHART_SUPER_ADMIN_GROUP` beside the other sign-in settings. `main.ts` calls it first, so a missing or empty one stops the start with a `ConfigError` naming it.
+    - **The chart.** The API template takes `security.superAdminGroup` through `required`. `verify.sh`'s new step 1 check renders with sign-in on and the group blank, and passes only when `helm template` refuses naming `security.superAdminGroup`.
+    - **Also touched:** `user.test.ts`, whose complete sign-in environment gains the group (its "everything sign-in needs" loop now checks it too); `docs/deploy.md`; and the comments in `config.ts` and `values.yaml`.
+    - **Checked:**
+      - unit suites green;
+      - the security suite in Chrome, 15 passed;
+      - `verify.sh --no-install` step 1, with and without the sign-in overlay.
+    - The cold review (PASS) led to the `ConfigError` check and the two comments.
+    - AC-318 ticked on `admin.test.ts` "is required with sign-in on: without one, the API refuses to start and says so", and `verify.sh`'s step 1 check.
 
 ## P2.2 Folder permissions and roles (F26)
 

@@ -77,6 +77,17 @@ if helm template "$release" "$chart" -n "$namespace" "${values_args[@]}" > /dev/
 else
   fail '1. helm template'
 fi
+# With sign-in on and no Super-Admin group, the chart refuses to render
+# (T416, AC-318; the user's R26): nobody could reach the admin surfaces.
+refusal=$(helm template "$release" "$chart" -n "$namespace" "${values_args[@]}" \
+  --set security.enabled=true --set security.dex.enabled=true \
+  --set-string security.publicUrl=http://localhost:8089 \
+  --set-string security.superAdminGroup= 2>&1 > /dev/null)
+if [[ $? -ne 0 && "$refusal" == *security.superAdminGroup* ]]; then
+  pass '1. with sign-in on and no Super-Admin group, helm template refuses, naming security.superAdminGroup'
+else
+  fail "1. helm template rendered sign-in with no Super-Admin group, or refused for another reason: ${refusal:-no error}"
+fi
 
 # 2. Installed with --wait, every component is Ready.
 if ((install)); then

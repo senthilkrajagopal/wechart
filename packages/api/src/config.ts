@@ -74,8 +74,9 @@ export interface Config {
   readonly trustProxy?: boolean | readonly string[];
   /**
    * `WECHART_SUPER_ADMIN_GROUP`: the AD group whose members are Super-Admins,
-   * exactly as the provider's groups claim carries it (T323, AC-256). Unset,
-   * no one signed in is a Super-Admin; with security off the single user is.
+   * exactly as the provider's groups claim carries it (T323, AC-256). Required
+   * with security on (T416, AC-318); with security off the single user is the
+   * Super-Admin, and no group is read.
    */
   readonly superAdminGroup?: string;
 }
@@ -180,6 +181,9 @@ function signInOf(
     if (!value) throw new ConfigError(`${name} is required with WECHART_SECURITY=oidc.`);
     return value;
   };
+  // Without a Super-Admin group, nobody could reach the admin surfaces
+  // (T416, AC-318; the user's R26): read below, with the rest of the config.
+  required('WECHART_SUPER_ADMIN_GROUP');
   const sessionSecret = required('WECHART_SESSION_SECRET');
   if (sessionSecret.length < 32) {
     throw new ConfigError('WECHART_SESSION_SECRET must be at least 32 characters.');

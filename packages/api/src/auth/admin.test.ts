@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { loadConfig } from '../config';
+import { ConfigError, loadConfig } from '../config';
 import { CubeClient } from '../cube/client';
 import { closeDb, getDb } from '../db/client';
 import { buildServer } from '../server';
@@ -97,6 +97,35 @@ describe('the Super-Admin group, from the configuration (T323, AC-256)', () => {
     });
     expect(config.superAdminGroup).toBe(GROUP);
     expect(loadConfig({ CUBE_API_SECRET: 'secret' }).superAdminGroup).toBeUndefined();
+  });
+
+  /**
+   * T416 / AC-318: WHERE security is enabled, IF the deployment names no
+   * Super-Admin group, THEN THE SYSTEM SHALL refuse to start and say that the
+   * Super-Admin group is missing (the user's R26).
+   */
+  it('is required with sign-in on: without one, the API refuses to start and says so', () => {
+    const signingIn = {
+      CUBE_API_SECRET: 'secret',
+      WECHART_SECURITY: 'oidc',
+      WECHART_SESSION_SECRET: 'a-test-session-secret-at-least-32-characters',
+      WECHART_PUBLIC_URL: PUBLIC_URL,
+      WECHART_OIDC_ISSUER: 'http://localhost:5556/dex',
+      WECHART_OIDC_CLIENT_ID: 'wechart',
+      WECHART_OIDC_CLIENT_SECRET: 'dev-oidc-secret',
+    };
+    for (const missing of [{}, { WECHART_SUPER_ADMIN_GROUP: '' }]) {
+      expect(() => loadConfig({ ...signingIn, ...missing }), JSON.stringify(missing)).toThrow(
+        'WECHART_SUPER_ADMIN_GROUP is required with WECHART_SECURITY=oidc.',
+      );
+      // A configuration error, which main.ts lets stop the process.
+      expect(() => loadConfig({ ...signingIn, ...missing })).toThrow(ConfigError);
+    }
+    expect(loadConfig({ ...signingIn, WECHART_SUPER_ADMIN_GROUP: GROUP }).superAdminGroup).toBe(
+      GROUP,
+    );
+    // With security off, the single user is the Super-Admin: no group is asked for.
+    expect(loadConfig({ CUBE_API_SECRET: 'secret', WECHART_SECURITY: 'off' }).security).toBe('off');
   });
 
   it('makes its members Super-Admins, and no one else', async () => {

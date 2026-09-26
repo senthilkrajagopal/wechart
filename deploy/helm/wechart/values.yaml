@@ -110,6 +110,7 @@ security:
     # the browser uses (an in-cluster Service): only the origin is rewritten.
     backchannelUrl: ''
   # The group whose members are Super-Admins (AC-256), as the provider sends it.
+  # Required when security.enabled: the chart refuses to render without it (T416, AC-318).
   superAdminGroup: ''
   # The development provider, Dex 2.45.1, beside wechart with the test users
   # of infra/dex (AC-257): never for production.
