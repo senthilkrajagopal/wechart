@@ -24,9 +24,10 @@
 >   Its complete test passed apart from load flakes, and at the user's word it was merged
 >   into `main` with `--no-ff` (98c2d2e, revertible in one step with `git revert -m 1`) and
 >   tagged `cube-package-0b6eef90a9`, with T416. `feat/xcube` was then brought up to `main`
->   (66eab16). Since then work has gone on `main`: T325, T326, the 2026-09-25 docs pass,
->   and T417 (slice 0's rename). `feat/xcube` is behind it. Which branch slices 2 onward use
->   is asked of the user (2026-09-26).
+>   (66eab16). Since then work went on `main`: T325, T326, the 2026-09-25 docs pass,
+>   and T417 (slice 0's rename). On 2026-09-26 `feat/xcube` was fast-forwarded to `main`
+>   (c1b3876), and the user ruled: **all work is on `feat/xcube` until they merge it to main
+>   explicitly** (R28 Q10). Never commit to `main`.
 > - **Deployed:** the release on docker-desktop runs wechart-api/web:abad2c2, and Cube on the
 >   xcube image `xcube:v1.7.45-a13b9cff43` (T417, Helm revision 15), with sign-in on through
 >   `values/docker-desktop-security.yaml`. Revision 14 was a rollback after an accidental upgrade
@@ -34,12 +35,26 @@
 > - **2026-09-26: the integration plan is final** (`docs/inputs/2026-09-26-integration-plan-decisions.md`,
 >   superseding the 2026-09-25 decisions; the shared doc
 >   https://claude.ai/code/artifact/18e15cb7-61fe-4f04-9a33-d6f3eef664b8, read through the Claude Docs
->   connector). Slice 0's wechart side is done (T417). The list of what the decisions contradict
->   went to the user for confirmation before any amendment. It is in this session's scratchpad
->   as `integration-plan-worklist.md`, with questions Q1–Q9 in the chat. Seven researcher reports
->   exist: two are committed (`cube/whole-model-publish.md`, `cube/generated-policies.md`) and five
->   are held for the component-research step (prefixed names, xcube runtime, tokens, HA, credential
->   sealing).
+>   connector; snapshot `docs/inputs/2026-09-26-integration-plan.md`). Slice 0's wechart side is
+>   done (T417).
+>   - **The amendment pass:** the user confirmed the list of contradictions and answered Q1–Q10
+>     (round R28). Requirements, spec (AC-330–AC-332 added), research and tasks were then amended
+>     on `feat/xcube`.
+>   - **R28 in short:**
+>     - the root is prefixed like any folder, and names are `<folderId>__<shortName>` with folder
+>       id `f` plus its letters and digits (`froot`);
+>     - no rebinding: an item binds on its next publish;
+>     - tokens carry only the groups some policy names, plus `role`, with no `sub`;
+>     - keys are pushed to xcube;
+>     - folder access in Cube is a per-request gate in xcube;
+>     - only YAML models;
+>     - `jose` 6.2.12 and `hpke` 1.1.7;
+>     - AC-009, AC-136 and AC-137 stay ticked until slice 3.
+>   - **Next:** wechart's slice 2 tasks in P2.17 (T418, T422 and T433 can start now; the rest wait on
+>     xcube's routes). The paused access tasks T327 onward are still open.
+>   - **Asked, not yet answered:** may the contract points (JWKS push route, the gate instead of
+>     written policies, YAML only, the `f…` folder-id form, the build-event record) be posted as
+>     comments on the plan doc's contract section?
 > - **Pushing is the user's** (this session's push was refused by the permission classifier):
 >   `git push origin main feat/xcube --tags`.
 > - **Done since (2026-09-25, later):**

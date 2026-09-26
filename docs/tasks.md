@@ -4970,14 +4970,21 @@ Inputs: `docs/spec.md` F25–F36 and the phase-1 criteria returned or rewritten 
 
 The `[moved to phase 2]` tasks above are superseded by the tasks below, which carry their notes forward where they still hold.
 
+**Amended 2026-09-26** by the final integration plan (`docs/inputs/2026-09-26-integration-plan-decisions.md`, cited `[IP n]`; its doc's snapshot `docs/inputs/2026-09-26-integration-plan.md`, cited `[plan]`), round R28, and the spec's amendment (AC-319 to AC-332).
+- Tasks the plan overturns are retired or rewritten in place, with the old text struck through and the ID kept.
+- wechart's side of the plan's slices 2–8 is in **P2.17**, one task per behaviour. Each waits on xcube's routes for its slice. Those are built on the Cube side, never from this repository.
+- All work is on branch `feat/xcube` until the user merges it (R28 Q10).
+- New research: `cube/xcube-runtime.md`, `cube/prefixed-names.md`, `cube/generated-policies.md`, `cube/whole-model-publish.md`, `cube/tokens-and-service-credential.md` (`jose` 6.2.12), `cube/ha-topology.md`, `credential-sealing.md` (`hpke` 1.1.7) and `cube/xcube-rename.md`, each marked where the plan supersedes it.
+
 **Decisions this plan takes** (small, under the standing instruction; each can be changed with its task):
 
 - **Where the user comes from.** Every request carries `request.wechartUser = { key, name, groups, superAdmin }`. With security off it is the one user `admin`, a Super-Admin. With security on it comes from the server-side session. Handlers read nothing else (research `openid-client.md`, "Security off").
 - **Group access is stored on the folder.** Each folder document's body gains `access: { readOnly: string[] | null, readWrite: string[] | null }`, where `null` means unset. The shared root's access is a `setting` document `root-access`. Effective access is computed in memory from the folder list by a pure function in `packages/core/src/access/`.
 - **Workspaces are folder ids** of the form `ws:<userKey>`. The phase-1 pseudo-root `mine` resolves to the signed-in user's workspace, and phase-1 items in `mine` move to the workspace of the single user `admin`.
-- ~~**The folder chain Cube compiles** is the list of model-bearing folder ids, nearest first, in a signed `wechartModel` claim that only the API mints after checking access (research `cube/per-folder-models.md`, layout B).~~ **Superseded 2026-09-25** by the user's architecture decisions 1–3 and 5 (`docs/inputs/2026-09-25-architecture-decisions.md`; requirements §P2.4 "Architecture", R27). Cube plus xcube serve one flat model under folder-id prefixes. xcube binds short names at publish, nearest first from each item's own folder. No chain is signed into tokens.
+- ~~**The folder chain Cube compiles** is the list of model-bearing folder ids, nearest first, in a signed `wechartModel` claim that only the API mints after checking access (research `cube/per-folder-models.md`, layout B).~~ **Superseded 2026-09-25** by the user's architecture decisions 1–3 and 5 (`docs/inputs/2026-09-25-architecture-decisions.md`; requirements §P2.4 "Architecture", R27). Cube plus xcube serve one flat model under folder-id prefixes. xcube binds short names at publish, nearest first from each item's own folder. No chain is signed into tokens. **Then, 2026-09-26** `[IP 1–4]`: wechart publishes changesets and the folder tree to xcube, and xcube compiles the published items as modules.
 - **The security-on end-to-end suite is separate.** It is `playwright.security.config.ts`, with its own API (port 4300), web preview (port 5373) and Dex, so the phase-1 suite (security off) stays as it is until AC-308's end-of-phase check (the user's R13).
-- **Every API route declares its access class**: `public` (health and `/api/auth/*`), `cube` (key-guarded model routes), `user`, or `admin` (a Super-Admin's alone, T323). A test fails for any unclassified route (T318). *The `cube` class goes with the model routes (decision 1: Cube never calls wechart; AC-251, AC-327).*
+- **Every API route declares its access class**: `public` (health and `/api/auth/*`), `cube` (key-guarded model routes), `user`, or `admin` (a Super-Admin's alone, T323). A test fails for any unclassified route (T318). *The `cube` class goes with the model routes (decision 1: Cube never calls wechart; AC-251, AC-327). That happens in slice 3 (T431).*
+- **The service credential and xcube's admin routes (2026-09-26).** wechart calls xcube's admin API (`/v1/semantic/*`, `[plan]` "The contract") only from its server, with a service token of its own (`role: service`, `aud: xcube-admin`). The contract's paths are the plan's draft. A route the tasks need but the draft lacks, such as the JWKS push, is proposed on the plan doc's contract section before it is built.
 
 ## P2.0 Foundations: the request's user and effective access
 
@@ -5101,6 +5108,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The cold review (PASS) led to that key test, a wider security-off sweep, and a plain return from the guard's hook.
     - Not decided here, for the user: AC-251 exempts "health routes", while the plan also exempts sign-in (by necessity) and Cube's key-guarded model routes; and research's suggested cross-site check (`Sec-Fetch-Site`/`Origin`) has no task (SameSite=Lax already stops cross-site POSTs carrying the cookie).
     - AC-251 stays open for its page half (T321).
+    - **Follow-up (2026-09-26):** the key-guarded `/api/cube-model/*` routes and the `CUBE` class go in slice 3 (T431), once Cube reads its model from xcube `[IP 2]`.
 - [x] T319 (AC-252, AC-254) Show the account button and menu, or the single-user chip
   - Files: `packages/web/src/shell/AccountMenu.tsx` (+ test), `packages/web/src/shell/AppShell.tsx`
   - Failing test: `AccountMenu.test.tsx`: signed in, the top bar shows the name and a 28 px avatar, and the menu holds the identity, "Super-Admin" for Super-Admins and Sign out; with security off it shows "Single-user mode" with no Sign out (AC-252, AC-254; rule 59).
@@ -5172,6 +5180,10 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - `e2e/security/cube-groups.spec.ts`, in every browser: `manager` gets every status of the seeded `secured_orders` view; `writer` gets Cube's refusal (a hidden member) and no rows.
     - The cold review (PASS) led to the publish test, the exact calls and statuses, and the writer test asserting Cube's refusal rather than any failure.
     - AC-008 stays open: it is traced to T339 too.
+    - **Follow-up (2026-09-26):** T339 is retired, and AC-008 moves to T437.
+      - The groups a token carries are trimmed to those some policy names, in RS256 tokens `[IP 8, R28]`.
+      - Own-behalf calls use the service credential (T420), which replaces "the configured context alone" above.
+      - `MetaCachesByGroups` must agree across API replicas, so it is keyed by xcube's revision (T421).
 - [x] T323 (AC-256, AC-265) Take the Super-Admin group from the deployment's configuration and open every admin surface to its members
   - Files: `packages/api/src/config.ts` (`WECHART_SUPER_ADMIN_GROUP`), `packages/api/src/auth/user.ts`, `packages/api/src/auth/admin.test.ts`
   - Failing test: `admin.test.ts`: a member of the configured group gets `superAdmin: true` and reaches every folder and admin route; a user outside it gets 403 on the admin routes (AC-256, AC-265).
@@ -5309,6 +5321,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [ ] T329 (AC-291) Apply subfolders, permissions, renames, moves and deletes at once for read-write members
   - Files: `packages/api/src/server.ts` (`POST /api/documents` for folders, `PATCH`, `DELETE`), `packages/api/src/access/direct.test.ts`
   - Failing test: `direct.test.ts`: a read-write member creates a subfolder, sets its groups, renames, moves and deletes, each applied at once; a move needs read-write on both folders and answers 403 otherwise; a read-only member gets 403 for each (AC-291).
+  - *2026-09-26:* the part of AC-291 about models, data sources and folders holding them is T426's: the publish check through xcube `[IP 5]`. The rest stands here.
   - Depends on: T314, T325
 - [ ] T330 (AC-259, AC-260, AC-265) Edit a folder's groups in the Access panel
   - Files: `packages/web/src/workspaces/explore/access/{AccessPanel,GroupRow,GroupCombobox}.tsx` (+ tests), `packages/web/src/workspaces/explore/ExplorePage.tsx`, `e2e/security/access.spec.ts`
@@ -5332,12 +5345,20 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `seal` and `open` implement the research's scheme v1. The dump test in `data-source-secrets.test.ts` greps a plain `pg_dump` of the test database for a canary in raw, hex, base64 and base64url form and for the key. It also asserts that the envelope's ciphertext *is* in the dump, so it can't pass on an empty table.
     - The cold review (PASS) led to tests for an unknown scheme and for distinct ciphertexts.
     - AC-298 stays open. No product flow seals credentials yet, and the key isn't from the Secret until T333. The dump test is to be extended to drive the flows that persist credentials: T335 (create, edit), T346 (copy), T352 (approve), T362 (test history) and T368 (audit), each now citing AC-298. Check all three base64 alignments once a JSON store holds the canary.
-- [ ] T333 (AC-311, AC-298) Load the encryption key, and refuse to start without a usable one
-  - Files: `packages/api/src/secrets/key.ts` (+ test), `packages/api/src/main.ts`, `playwright.config.ts` and `playwright.security.config.ts` (the fixed development key), `deploy/helm/wechart/templates/{secrets.yaml,api.yaml}` (a generated key mounted as a file)
-  - Failing test: `key.test.ts`: with no key, or with a key that can't decrypt a stored credential, start-up throws naming the missing file or the key id that fails, and the server never listens (AC-311).
-  - Depends on: T332
+    - **Superseded in part (2026-09-26):** AES-256-GCM under a key wechart holds gives way to HPKE sealing to xcube's public key, in the browser (T441; `[AD 7, IP 1, R27, R28]`; research `credential-sealing.md`). The `pg_dump` canary test carries over to T441.
+- [ ] T333 (AC-324, AC-298) ~~(AC-311, AC-298) Load the encryption key, and refuse to start without a usable one~~ Load xcube's public key, and refuse to start without it *(rewritten 2026-09-26: AC-311 is retired; wechart holds no decryption key, `[AD 7, IP 1, R27]`)*
+  - Files: `packages/api/src/secrets/xcube-key.ts` (+ test), `packages/api/src/config.ts`, `packages/api/src/main.ts`, `playwright.config.ts` and `playwright.security.config.ts` (the public half of the fixed development key pair), `docker-compose.yml`, `deploy/helm/wechart/templates/api.yaml`
+  - Failing test: `xcube-key.test.ts`:
+    - with no public key configured, or one that isn't a key HPKE can seal to, start-up throws naming the setting, and the server never listens;
+    - nothing in wechart's configuration, compose or the chart holds xcube's private key (AC-324; research `credential-sealing.md`).
+
+    xcube's own check, refusing to start without its private key or with one that can't open a sample credential, is xcube's, on the Cube side.
+  - ~~Failing test: `key.test.ts`: with no key, or with a key that can't decrypt a stored credential, start-up throws naming the missing file or the key id that fails, and the server never listens (AC-311).~~
+  - Depends on: T332, `docs/research/credential-sealing.md`
 
 ## P2.4 Models and data sources in folders; names and per-folder Cube (F27, F28)
+
+*2026-09-26: "per-folder Cube" is superseded. wechart keeps model files and data sources as folder items, and publishes them to xcube as changesets. The tasks that served Cube a chain per folder are retired or rewritten here, and the publishing itself is in P2.17.*
 
 - [ ] T334 (AC-269, AC-131) Keep model files in folders and list them in Explore
   - Files: a migration `…_model-files-folder.cjs` (a `folder_id` column, existing files in the root; the key becomes `(folder_id, path)`), `packages/api/src/repos/model-files.ts`, `packages/api/src/repos/catalog.ts`, `packages/web/src/workspaces/explore/FolderContents.tsx`, `packages/api/src/repos/model-files.test.ts`
@@ -5349,6 +5370,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - a folder lists its data sources with kind "Data source" and the driver (AC-269);
     - no response contains a stored secret, only `stored: true` (AC-164);
     - changing host, port, account, workspace, warehouse, project or connect string clears the secret, and a test or save then asks for it again (AC-312).
+  - *2026-09-26:* the secret it stores is the ciphertext the browser sealed to xcube's key (T441). wechart keeps it and never opens it `[IP 1]`.
   - Depends on: T332, T333, T325
 - [ ] T336 (AC-270, AC-271, AC-249) Keep names unique per folder, and free across folders
   - Files: `packages/api/src/model/names.ts` (+ test), `packages/api/src/model/publish.ts`, `packages/api/src/server.ts`
@@ -5361,7 +5383,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - a join inside /A's model naming `orders` binds to /A/B's `orders` in /A/B's chain (AC-309);
     - changing /A changes the version of every chain through /A that doesn't define the name nearer, and of no other (AC-275).
   - Depends on: T334
-- [ ] T338 (AC-273, AC-310) Resolve each model's data sources from its own folder, and give a cube with none the nearest `default`
+- **T338 (retired 2026-09-26, superseded by decision 3 and the plan; the ID stays):** ~~(AC-273, AC-310) Resolve each model's data sources from its own folder, and give a cube with none the nearest `default`~~. xcube binds `data_source` names at publish, nearest first from the model's own folder, with no descendant fallback `[IP 3, plan]`. wechart's side is T435 (binding) and T443 (the root's `default`).
   - Files: `packages/api/src/model/data-sources.ts` (+ test), `packages/api/src/model/chain.ts` (served files name canonical `ds_<id>_v<n>` sources)
   - Failing test: `data-sources.test.ts`: a model in /A/B naming `warehouse` uses /A's when /A has one, and /A/B/C's only when no folder on the path has it; two descendants' `warehouse` and none on the path is refused, naming both (AC-273); a cube with no data source uses the nearest `default` on its model's path, else the deployment's (AC-310).
   - Depends on: T335, T337
@@ -5369,14 +5391,21 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `infra/cube/cube.js` (the `wechartModel` claim in `contextToAppId`, `repositoryFactory` and `schemaVersion`; `scheduledRefreshContexts` from `/chains`; `driverFactory` answering `ds_*` names from `/api/cube-model/data-sources/:name`, from memory), `packages/api/src/model/publish.ts` (the key-guarded, decrypted data-source route), `packages/api/src/model/cube-config.test.ts`
   - Failing test: `cube-config.test.ts`: two chains get different app ids and fetch their own files; groups never enter an app id; `driverFactory` answers a `ds_*` name from wechart once and from memory after; an unknown name throws (AC-008, AC-272).
   - Depends on: T337, T338, T333
-- [ ] T340 (AC-272, AC-268) Make every query name the item it serves, check access, and sign that item's chain
-  - Files: `packages/api/src/server.ts` (`/api/load`, `/api/sql`, `/api/acceleration`, `/api/meta` take `for: { kind, id }`), `packages/api/src/cube/client.ts`, `packages/web/src/query/*` (tiles, the chart editor and the model editor pass their item), `packages/api/src/access/queries.test.ts`, `e2e/security/resolution.spec.ts`
-  - Failing test: `queries.test.ts`: a query for an item the user may not see answers 404 and reaches no Cube; a query for a dashboard in /A/B is signed with /A/B's chain. `resolution.spec.ts`: a chart in /A/B draws /A/B's `sales` while /A defines its own (AC-272, AC-268).
-  - Depends on: T339
-- [ ] T341 (AC-274) Keep two folders' same-named cubes and their rollups apart
-  - Files: `packages/api/src/model/chain.ts` (each served cube's `sql_alias` from its origin folder and resolved data source), `e2e/security/isolation.spec.ts`
-  - Failing test: `isolation.spec.ts`, against the real Cube: /A and /C each define `sales` over different tables; the same query from each folder returns each one's own count, and their rollups build into differently named tables (AC-274).
-  - Depends on: T340
+- [ ] T340 (AC-268) ~~(AC-272, AC-268) Make every query name the item it serves, check access, and sign that item's chain~~ Make every query name the item it serves, and check access before it reaches Cube *(rewritten 2026-09-26: there is no chain to sign; binding is T429's, `[IP 3, IP 6]`)*
+  - Files: `packages/api/src/server.ts` (`/api/load`, `/api/sql`, `/api/acceleration`, `/api/meta` take `for: { kind, id }`), `packages/web/src/query/*` (tiles, the chart editor and the model editor pass their item), `packages/api/src/access/queries.test.ts`
+  - Failing test: `queries.test.ts`:
+    - a query for an item the user may not see answers 404 and reaches no Cube;
+    - a query naming a member its item isn't bound to answers 403 and reaches no Cube (AC-268).
+  - ~~`queries.test.ts`: … a query for a dashboard in /A/B is signed with /A/B's chain. `resolution.spec.ts`: a chart in /A/B draws /A/B's `sales` while /A defines its own (AC-272, AC-268).~~
+  - Depends on: T326
+- [ ] T341 (AC-274, AC-328) Keep two folders' same-named cubes and their rollups apart, under their prefixed names *(rewritten 2026-09-26: xcube publishes each under `<folderId>__<shortName>` with its own `sql_alias`; nothing is served from wechart, `[IP 3, plan, R28]`)*
+  - Files: `e2e/security/isolation.spec.ts`, the stub `packages/api/src/xcube/fake.ts`
+  - Failing test: `isolation.spec.ts`, against compose's Cube running xcube's slice 3:
+    - /A and /C each define `sales` over different tables. They publish as `fa…__sales` and `fc…__sales`, and each folder's chart returns its own count (AC-274);
+    - their rollups build into differently named tables, none over 63 bytes on Postgres;
+    - renaming and moving /A changes neither published name, and rebuilds no rollup (AC-328).
+  - ~~Files: `packages/api/src/model/chain.ts` (each served cube's `sql_alias` from its origin folder and resolved data source) … Failing test: `isolation.spec.ts`, against the real Cube: … the same query from each folder returns each one's own count …~~
+  - Depends on: T425, T426, T429
 - [ ] T342 (AC-222, AC-131) Open a model in its folder, beside that folder's files, read-only when shared
   - Files: `packages/web/src/router/routes.tsx` (`/explore/folders/$folderId/models/$path`), `packages/web/src/workspaces/model/{ModelFilePage,FileTree}.tsx`, `packages/web/src/workspaces/model/ModelInFolder.test.tsx`, `e2e/security/model-in-folder.spec.ts`
   - Failing test: `model-in-folder.spec.ts`: opening a model from a folder shows that folder's files beside the editor with the folder and file in the URL; every object each file defines is listed; a file with an error is marked; in a shared folder the editor is read-only with "Edit in my workspace" and no New cube or New view (AC-222, AC-131).
@@ -5396,14 +5425,25 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/server.ts` (`POST /api/documents` in a workspace requires `targetFolderId`), `packages/web/src/workspaces/explore/{CreateMenu,NewItemDialog,TargetPicker}.tsx` (+ tests)
   - Failing test: `NewItemDialog.test.tsx` and `targets.test.ts`: the workspace's New menu offers Dashboard, Chart, Model, Data source and Folder; the first four ask for a target among the folders where the user has read-write access, preselected when there is one; creating without a target, or with a folder they can't write, answers 400 or 403 (AC-282, AC-192; rule 74).
   - Depends on: T343, T325
-- [ ] T346 (AC-280, AC-298) Copy a data source into the workspace with its credentials, still encrypted
-  - Files: `packages/api/src/routes/workspace-copy.ts`, `packages/api/src/secrets/crypto.ts`, `packages/api/src/routes/workspace-copy-source.test.ts`
-  - Failing test: `workspace-copy-source.test.ts`: the copy has the connection settings and a secret re-encrypted under the copy's id, decrypts to the original value, and no response shows it (AC-280).
-  - Depends on: T344, T335
-- [ ] T347 (AC-281, AC-283) Resolve a workspace item's cubes in the workspace first, then along its origin's or target's path
-  - Files: `packages/api/src/model/chain.ts` (`ws:<user>` chains), `packages/api/src/model/workspace-chain.test.ts`
-  - Failing test: `workspace-chain.test.ts`: a workspace dashboard uses the workspace's `sales` over its origin folder's; a copied item resolves along its origin's path and a new one along its target's; every model, data source, dashboard and chart the user may see can be used there, and none they may not (AC-281, AC-283).
-  - Depends on: T344, T337
+- [ ] T346 (AC-280, AC-298) Copy a data source into the workspace with its credentials, still encrypted *(rewritten 2026-09-26: wechart copies the ciphertext and never opens it, `[AD 7, IP 1]`)*
+  - Files: `packages/api/src/routes/workspace-copy.ts`, `packages/api/src/routes/workspace-copy-source.test.ts`
+  - Failing test: `workspace-copy-source.test.ts`:
+    - the copy has the connection settings and the original's ciphertext, byte for byte, with no call that could decrypt it;
+    - the stub xcube accepts it for a test as it does the original;
+    - no response shows it (AC-280).
+
+    It follows `credential-sealing.md` on whether the sealed envelope binds the source's id; if it does, the copy asks xcube to re-seal.
+  - ~~Failing test: `workspace-copy-source.test.ts`: the copy has the connection settings and a secret re-encrypted under the copy's id, decrypts to the original value, and no response shows it (AC-280).~~
+  - Depends on: T344, T335, T441
+- [ ] T347 (AC-281, AC-283, AC-323) Resolve a workspace item's cubes in the workspace first, then along its origin's or target's path, through an xcube overlay *(rewritten 2026-09-26: slice 5; there are no `ws:<user>` chains, `[AD 8, IP 7, plan]`)*
+  - Files: `packages/api/src/xcube/overlays.ts` (+ test; `PUT`/`DELETE /v1/semantic/overlays/{id}`), `packages/api/src/server.ts` (a workspace item's queries name its overlay), `e2e/security/workspace-overlay.spec.ts`
+  - Failing test: `overlays.test.ts` and `workspace-overlay.spec.ts`, against xcube's slice 5:
+    - a workspace dashboard uses the workspace's `sales` over its origin folder's;
+    - a copied item resolves along its origin's path, and a new one along its target's;
+    - every model, data source, dashboard and chart the user may see can be used there, and none they may not (AC-281, AC-283);
+    - the overlay answers only its owner, and expires (AC-323).
+  - ~~Files: `packages/api/src/model/chain.ts` (`ws:<user>` chains), `packages/api/src/model/workspace-chain.test.ts`~~
+  - Depends on: T344, T426, T437
 - [ ] T348 (AC-278) Show the workspace band, each item's origin and target, and "Edit in my workspace" / "Open my copy"
   - Files: `packages/web/src/workspaces/explore/{WorkspaceBand,OriginLine,EditInWorkspaceDialog}.tsx` (+ tests), `packages/web/src/dashboard/DashboardView.tsx`, `e2e/security/workspace.spec.ts`
   - Failing test: `workspace.spec.ts`: a shared dashboard offers "Edit in my workspace" and no edit; its dialog lists models and data sources unchecked; the copy opens under "My workspace · only you can see this" with "Copied from _path_ · version _n_" and its target; the shared item then offers "Open my copy" (AC-278; rules 71–73).
@@ -5416,17 +5456,21 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Failing test: `proposals.test.ts`: a proposal records the item snapshot, the folder, the author, the time and the description; 1,001 characters answer 400; the folder serves its current version until approval (AC-284).
   - Depends on: T344
 - [ ] T350 (AC-285) Put the workspace-only models a proposed dashboard needs into the same proposal
-  - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/model/chain.ts`, `packages/api/src/routes/proposal-bundle.test.ts`
-  - Failing test: `proposal-bundle.test.ts`: a dashboard whose cubes resolve only through the author's workspace models is proposed with them, and approving or rejecting applies to all together (AC-285).
+  - Files: `packages/api/src/routes/proposals.ts`, ~~`packages/api/src/model/chain.ts`~~ `packages/api/src/xcube/overlays.ts` (2026-09-26), `packages/api/src/routes/proposal-bundle.test.ts`
+  - Failing test: `proposal-bundle.test.ts`: a dashboard whose cubes resolve only through the author's workspace models is proposed with them, and approving or rejecting applies to all together, as one changeset (AC-285).
   - Depends on: T349, T347
 - [ ] T351 (AC-286) Let only the author, the target folder's read-write members and Super-Admins decide a proposal
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/proposal-deciders.test.ts`
   - Failing test: `proposal-deciders.test.ts`: the author (with security on and off), a read-write member of the target and a Super-Admin may approve or reject; a read-only member and an outsider get 403; nothing reaches the folder except through an approval (AC-286, AC-254).
   - Depends on: T349
-- [ ] T352 (AC-288, AC-275, AC-298) Land an approved item in its folder, keeping the replaced version in history
+- [ ] T352 (AC-288, AC-298) Land an approved item in its folder, keeping the replaced version in history *(rewritten 2026-09-26: an approved model lands through xcube's changeset, T426; "the served files of that folder's chains" are gone, `[IP 1, IP 5]`)*
   - Files: a migration `…_item-versions.cjs`, `packages/api/src/repos/versions.ts` (+ test), `packages/api/src/routes/proposals.ts`
-  - Failing test: `versions.test.ts`: approving replaces the same-kind, same-name item and stores the replaced version with its author, approver, time and description; an approved model changes the served files of that folder's chains (AC-288, AC-275).
-  - Depends on: T351
+  - Failing test: `versions.test.ts`:
+    - approving replaces the same-kind, same-name item, and stores the replaced version with its author, approver, time and description;
+    - an approved model lands only when the stub xcube accepts its changeset, and a refused one leaves the folder and its history as they were (AC-288);
+    - a data source's version keeps its ciphertext unopened (AC-298).
+  - ~~an approved model changes the served files of that folder's chains (AC-288, AC-275).~~
+  - Depends on: T351, T426
 - [ ] T353 (AC-290) Return a rejected proposal to its author with the approver's reason
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/proposal-reject.test.ts`
   - Failing test: `proposal-reject.test.ts`: rejecting leaves the folder unchanged and the work in the author's workspace, with the reason (at most 1,000 characters; 1,001 answer 400) shown on the item (AC-290).
@@ -5475,10 +5519,14 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - T361/T363 require Oracle's connect string *or* host, and turn TLS on for a PostgreSQL client certificate;
       - T361 checks values, not only keys, for file paths (JDBC properties, Oracle wallet settings).
     - AC-160 stays open until the form renders them (T363, which now cites it).
-- [ ] T361 (AC-159) Have Cube run a connection test with its own driver, at wechart's request, and show each check
-  - Files: the Cube fork, through the Cube-expert agent only: a `connection-test` scope and `POST /v1/introspection/connection-tests` in the `cube-introspection` package (explicit config, no path fields, a timeout per check, error text redacted, body kept out of Cube's logs; research `connection-testing.md` §3); the fork image rebuilt under a new tag. wechart: `packages/api/src/cube/client.ts`, `packages/api/src/routes/data-sources.ts` (`POST /api/data-sources/:id/test`), `docker-compose.yml`, `deploy/helm/values/docker-desktop.yaml` (the new image)
-  - Failing test: `data-source-test.test.ts`, against the rebuilt Cube: a PostgreSQL source with a wrong password reports the checks Cube ran, the failing one with the driver's error text (SQLSTATE 28P01) and no secret in it; a correct one passes every check; the request never comes from the browser (AC-159).
-  - Depends on: T333, T335, T360
+- [ ] T361 (AC-159) Have Cube run a connection test with its own driver, at wechart's request, and show each check *(rewritten 2026-09-26: slice 6; the test is xcube's `POST /v1/semantic/connections/test`, taking the ciphertext, `[IP 1, plan]`)*
+  - Files: xcube's route comes from the Cube side, in its slice 6. wechart: `packages/api/src/xcube/connections.ts` (+ test), `packages/api/src/routes/data-sources.ts` (`POST /api/data-sources/:id/test`), and the image bump in `docker-compose.yml` and `deploy/helm/values/docker-desktop.yaml`.
+  - Failing test: `data-source-test.test.ts`, against compose's xcube:
+    - a PostgreSQL source with a wrong password reports the checks Cube ran, and the failing one with the driver's error text (SQLSTATE 28P01) and no secret in it;
+    - a correct one passes every check;
+    - the request carries only the ciphertext, and never comes from the browser (AC-159).
+  - ~~Files: the Cube fork, through the Cube-expert agent only: a `connection-test` scope and `POST /v1/introspection/connection-tests` in the `cube-introspection` package (…); the fork image rebuilt under a new tag.~~
+  - Depends on: T333, T335, T360, T420, T441
 - [ ] T362 (AC-163, AC-298) Record each connection test and show a source's test history
   - Files: a migration `…_connection-tests.cjs`, `packages/api/src/repos/connection-tests.ts` (+ test), `packages/web/src/workspaces/data-sources/TestHistory.tsx`
   - Failing test: `connection-tests.test.ts`: every test run is stored with its time, checks and outcome, and the source's history lists them newest first (AC-163).
@@ -5490,11 +5538,15 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [ ] T364 (AC-157, AC-233, AC-001) List every visible data source with its folder, driver, health and the cubes that use it
   - Files: `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (replacing the deferred page), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`), `e2e/security/data-sources.spec.ts`
   - Failing test: `data-sources.spec.ts`: the page shows its title and note, lists every source the user may see with folder path, driver, health from the last test and the cubes using it, and none they may not; `/sources` opens it; `reader` has no Data sources entry (AC-157, AC-233, AC-001).
-  - Depends on: T335, T338, T362
-- [ ] T365 (AC-161) After an approved change to a source, say whether Cube needs a restart and whether the running Cube uses it
-  - Files: `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources/:id/cube-state`, from the versioned name Cube's `/v1/sql` reports), `packages/web/src/workspaces/data-sources/CubeState.tsx` (+ test)
-  - Failing test: `cube-state.test.ts`: after an approved change, the source says no restart is needed and shows "Waiting for Cube to pick up the change" until Cube's SQL for one of its cubes names the new version, then "Cube uses these settings"; an environment-level source says a restart is needed (AC-161).
-  - Depends on: T339, T352
+  - Depends on: T335, ~~T338~~ T435 (2026-09-26), T362
+- [ ] T365 (AC-161) After an approved change to a source, show whether every running Cube instance uses it, with no restart *(rewritten 2026-09-26: slice 6; xcube swaps the driver and reports each instance's state, `[plan]`)*
+  - Files: `packages/api/src/xcube/connections.ts` (`PUT /v1/semantic/connections/{name}`, `GET …/{name}/health`), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources/:id/cube-state`), `packages/web/src/workspaces/data-sources/CubeState.tsx` (+ test)
+  - Failing test: `cube-state.test.ts`:
+    - after an approved change, the source shows "Waiting for Cube to pick up the change" until xcube reports every instance on the new settings, then "Cube uses these settings";
+    - nothing asks for a restart;
+    - a change of database type goes through the publish check instead (AC-161).
+  - ~~Failing test: … an environment-level source says a restart is needed (AC-161).~~
+  - Depends on: T352, T442
 
 ## P2.8 Bookmarks (F31)
 
@@ -5526,16 +5578,20 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 - [ ] T371 (AC-297) Scope Jobs and Schedules to the models of the user's read-write folders
   - Files: `packages/api/src/jobs/{build,schedules}.ts`, `packages/api/src/server.ts` (query log), `packages/web/src/workspaces/jobs/JobsPage.tsx`, `packages/api/src/jobs/scope.test.ts`
-  - Failing test: `scope.test.ts`: a read-write member of /A who isn't a Super-Admin sees only /A's chains' pre-aggregations, builds, schedules and query records, may build only those, and gets 403 for another folder's (AC-297).
-  - Depends on: T339, T340
+  - Failing test: `scope.test.ts`: a read-write member of /A who isn't a Super-Admin sees only ~~/A's chains'~~ the pre-aggregations of cubes published in /A, and their builds, schedules and query records. They may build only those, and get 403 for another folder's (AC-297). *(2026-09-26: a pre-aggregation's folder is read from its prefixed cube name, `[IP 3]`.)*
+  - Depends on: ~~T339~~ T425 (2026-09-26), T340
 - [ ] T372 (AC-150) Record every build wechart starts and follow it to its end on the server
   - Files: a migration `…_build-history.cjs`, `packages/api/src/repos/build-history.ts` (+ test), `packages/api/src/jobs/{build,follow}.ts` (+ tests)
   - Failing test: as T156 (above): the build is stored with its pre-aggregation, "started from Jobs" and each partition's token; the API follows every open token to its end without a browser, and again after a restart; an expired token is "Cube's record expired"; the log keeps every reported state; a 101st record drops the oldest (AC-150).
+  - *2026-09-26:* with the API on two replicas (AC-319), exactly one replica follows each token, and every write is idempotent (research `cube/ha-topology.md`, table row 5). The test runs two followers against one database.
   - Depends on: T371
-- [ ] T373 (AC-150) Record the refresh worker's builds through Cube's `logger` option
-  - Files: as T261 (above)
-  - Failing test: as T261: a completed or failed build event is stored as "started by Cube's refresh worker"; a `* * * * *` rollup appears in Run history within one check period; the logger never throws (AC-150).
-  - Depends on: T372
+- [ ] T373 (AC-150) ~~Record the refresh worker's builds through Cube's `logger` option~~ Pull the refresh worker's builds from xcube into wechart's history *(rewritten 2026-09-26: Cube never calls wechart, so xcube records build events through Cube's `logger` option and wechart pulls them, `[AD 1, R27]`; research `cube/xcube-runtime.md`, finding 6)*
+  - Files: `packages/api/src/xcube/builds.ts` (+ test), `packages/api/src/repos/build-history.ts`. xcube's build-event record and its route come from the Cube side; the route is proposed on the plan's contract, which lists none yet.
+  - Failing test: `builds.test.ts`, against the stub xcube:
+    - a completed or failed refresh-worker build is stored once as "started by Cube's refresh worker", however many replicas pull;
+    - a `* * * * *` rollup appears in Run history within one check period (AC-150).
+  - ~~Files: as T261 (above). Failing test: as T261: … the logger never throws (AC-150).~~
+  - Depends on: T372, T420
 - [ ] T374 (AC-150) Show Run history in Jobs
   - Files: as T262 (above)
   - Failing test: as T262: Run history lists builds newest first with the prototype's columns and filters, opens a build's log, and still lists a build older than Cube's 24 hours (AC-150).
@@ -5545,12 +5601,12 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Failing test: as T151: every partition Cube lists is shown with its period, state and last build time, and a rebuild starts jobs for exactly the selected partitions (AC-145).
   - Depends on: T372
 - [ ] T376 (AC-151) Show the build queue and cancel a queued entry
-  - Files: the Cube fork, through the Cube-expert agent: a queue listing and cancel endpoint in the `cube-introspection` package; `packages/api/src/jobs/queue.ts` (+ test), `packages/web/src/workspaces/jobs/BuildQueue.tsx`
+  - Files: a queue listing and cancel endpoint in ~~the `cube-introspection` package~~ xcube, as an admin route under the service credential. It comes from the Cube side and is proposed on the plan's contract (2026-09-26). wechart: `packages/api/src/jobs/queue.ts` (+ test), `packages/web/src/workspaces/jobs/BuildQueue.tsx`
   - Failing test: `queue.test.ts`, against the rebuilt Cube: every queued build appears with its pre-aggregation, partition, state and token, and cancelling removes it (AC-151).
   - Depends on: T372
 - [ ] T377 (AC-153, AC-154) Fix what T258's, T159's and T160's reviews found, then tick AC-153 and AC-154 again
   - Files and failing tests: as T264 (above), each finding with a test that fails first
-  - Depends on: T339
+  - Depends on: ~~T339~~ T426 (2026-09-26: schedules are read from the published modules)
 - [ ] T378 (AC-234) Run a wechart-owned cron schedule through Cube's jobs API
   - Files: `packages/api/package.json` (pg-boss 12.33.2), `packages/api/src/scheduler/{schedules,worker}.ts` (+ tests), `packages/web/src/workspaces/schedules/ScheduleForm.tsx`
   - Failing test: `schedules.test.ts`: the next runs shown match the cron expression and time zone, and with a fake clock a due run starts a build through the jobs API (AC-234).
@@ -5569,10 +5625,10 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files and failing test: as T054 (above) (AC-049).
   - Depends on: T380
 - [ ] T382 (AC-048) Compute quick calculations in Cube as generated multi-stage measures, and label the measure
-  - Files: `packages/core/src/quickCalc.ts` (+ test), `packages/api/src/model/chain.ts` (only the companions charts use, added to the served files), `e2e/quick-calcs.spec.ts`
+  - Files: `packages/core/src/quickCalc.ts` (+ test), ~~`packages/api/src/model/chain.ts` (only the companions charts use, added to the served files)~~ the companions charts use, published to xcube as generated YAML items of the cube's folder through a changeset (2026-09-26: nothing is served from wechart, `[IP 1]`), `e2e/quick-calcs.spec.ts`
   - Failing test: `quickCalc.test.ts` and `quick-calcs.spec.ts`: each calculation queries a generated companion measure (the spike's shapes) rather than post-processing rows, and the tile labels the measure with the calculation (AC-048).
   - **Ask the user first:** does a running total count from the start of the data (Cube's `trailing: unbounded`, observed) or from the start of the chart's range (research spike, "Open for the user")?
-  - Depends on: T380, T337
+  - Depends on: T380, ~~T337~~ T426
 - [ ] T383 (AC-050) Record a calculation request and show it to the read-write members of the folder whose model defines the cube
   - Files: `packages/api/src/repos/calc-requests.ts` (+ test), `packages/web/src/editor/RequestCalcDialog.tsx`
   - Failing test: `calc-requests.test.ts`: the request holds the chart, the fields and the description, and is listed for that folder's read-write members and no one else (AC-050).
@@ -5714,10 +5770,11 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [ ] T408 (AC-268, AC-255, AC-261) Ask every route as users in and out of each group, and get nothing outside their folders
   - Files: `packages/api/src/access/route-matrix.test.ts` (fixtures for /A, /A/B, /A/B/C, /C and a workspace; the users `super`, `writer`, `reader`, `many`, `nobody`)
   - Failing test: `route-matrix.test.ts`: for every route the server registers, each user gets only items in folders they may see and can change only what they may change; the test fails for a route it has no case for (AC-268).
-  - Depends on: T340, T355, T364, T369, T371
+  - *2026-09-26:* the same users' tokens are also asked of Cube directly, and get nothing wechart refuses them (AC-320's folder check, T436).
+  - Depends on: T340, T355, T364, T369, T371, T436
 - [ ] T409 (AC-307) Render a 10-chart dashboard in a folder with its own models within 3 s at p95 with security on
   - Files: `e2e/perf/secure-dashboard-open.spec.ts`
-  - Failing test: `secure-dashboard-open.spec.ts`: 20 opens as `writer` of a 10-chart dashboard in /A/B, whose chain has its own models, render every tile with p95 ≤ 3,000 ms (AC-307).
+  - Failing test: `secure-dashboard-open.spec.ts`: 20 opens as `writer` of a 10-chart dashboard in /A/B, ~~whose chain has its own models~~ which has its own models (published as their own modules, 2026-09-26), render every tile with p95 ≤ 3,000 ms (AC-307).
   - Depends on: T341, T408
 - [ ] T410 (AC-308) End of phase 2: pass the phase-1 suite with security off, editing through the workspace and a self-approved proposal
   - Files: the phase-1 specs in `e2e/` whose steps edit shared content
@@ -5774,11 +5831,217 @@ The user's Cube fork moved the introspection API out of Cube's own packages into
     - **The research.** `docs/research/cube/xcube-rename.md` records the rename and these runs, as a sibling of `introspection-api.md`.
     - **Review.** It passed. On the review's word, the test also refuses the old build directory, and `docs/phase-2/backlog.md` and the P2.16 intro no longer name the old image as current.
 
+*The rest of slice 0, the image from a registry pinned by digest `[plan]`, waits on the Cube side's registry decision. Until then the image is built locally, as T417 does.*
+
+## P2.17 The integration plan, wechart's side, slice by slice (added 2026-09-26)
+
+These tasks carry out wechart's column of the plan's slices (`docs/inputs/2026-09-26-integration-plan.md`, "Slices"). Each depends on the xcube routes its slice brings, which the Cube side builds and the user brings over. Routes the plan's contract lacks are proposed on the plan doc's contract section first: the JWKS push, and the build-event record.
+
+The IDs T424, T434 and T439 are unused; no task carries them.
+
+Most tests here run against a **stub xcube** (`packages/api/src/xcube/fake.ts`), a server that records every call and answers as the contract says. Each slice's end-to-end test runs against compose's Cube once it runs xcube's slice.
+
+Slice 7 is optional in the plan and has no criterion, so it has no task. It would use Cube's own answers in place of the rules wechart re-implements. The plan's runbook (slice 8) has no criterion either; either can be proposed as a spec change when the user wants it.
+
+### Slice 2: foundation
+
+- [ ] T418 [P] (AC-319) Keep publish drafts in the metadata database, so any API replica answers Cube's read-back
+  - Why: the drafts `Map` in `model/publish.ts` breaks with two replicas: Cube's read-back can land on the other one (research `cube/ha-topology.md`, table row 1). This is interim until slice 3 removes the read-back (T431).
+  - Files: a migration `…_publish-drafts.cjs`, `packages/api/src/model/publish.ts`, `packages/api/src/model/publish-drafts.test.ts`
+  - Failing test: `publish-drafts.test.ts`: with two API instances on one database, a publish started through one has its draft read by Cube's callback through the other. No draft is held in a process's memory (AC-319).
+  - Depends on: none
+- [ ] T419 (AC-330, AC-327) Bring xcube's copy up to date when the API starts, with a full snapshot when it is missing or behind
+  - Files: `packages/api/src/xcube/client.ts` (+ test), `packages/api/src/xcube/snapshot.ts` (+ test), `packages/api/src/xcube/fake.ts`, `packages/api/src/main.ts`
+  - Failing test: `snapshot.test.ts`, against the stub xcube:
+    - an empty xcube gets one full snapshot at start: folders, their allowed groups, model items as written, and data sources with ciphertext only;
+    - an up-to-date one gets none.
+
+    Then, against xcube's slice 2 in compose, with every API process stopped, a published query still answers (AC-330), and no request from Cube reaches wechart (AC-327).
+  - Depends on: T420; xcube's slice 2 (`PUT /v1/semantic/snapshot`, `GET /v1/semantic/revision`)
+- [ ] T420 (AC-326, AC-250) Call Cube and xcube on wechart's own behalf with a service credential, never a user's token
+  - Files: `packages/api/src/cube/service-token.ts` (+ test), `packages/api/src/cube/client.ts`, `packages/api/src/model/introspection.ts`, `packages/api/src/jobs/*.ts`, `packages/api/src/cube/health.ts`
+  - Failing test: `service-token.test.ts`:
+    - every own-behalf call carries the service token (`role: service`; `aud: xcube-admin` for admin calls): introspection, builds and jobs, system partitions, health and every xcube admin call;
+    - no user's token is ever granted `introspection` (AC-250);
+    - no response to the browser contains the service credential (AC-326).
+
+    Research: `cube/tokens-and-service-credential.md`.
+  - Depends on: T322; xcube's slice 2 (service-credential auth on its admin routes)
+- [ ] T421 (AC-319) Let two API replicas agree: key the metadata cache by xcube's revision, and wait for the migration lock
+  - Files: `packages/api/src/cube/meta-cache.ts`, `packages/api/src/db/migrate.ts` (`advisoryLockMode: 'wait'`), `packages/api/src/cube/meta-cache-replicas.test.ts`, `packages/api/src/db/migrate-concurrent.test.ts`
+  - Failing test:
+    - two API instances on one database: a publish through one reaches the other's metadata as soon as the revision changes, not 60 s later;
+    - starting both at once migrates once, and neither exits (AC-319; research `cube/ha-topology.md`, table rows 3 and 6).
+  - Depends on: T418
+- [ ] T422 [P] (AC-319) Retry the web app's idempotent requests when an API replica or a Cube instance goes away
+  - Files: `packages/web/src/api/fetch.ts` (+ test), `packages/web/src/query/loadTile.ts`, `packages/api/src/server.ts` (a Cube transport failure answers 503, not 500)
+  - Failing test: `fetch.test.ts` and `loadTile.test.ts`:
+    - GETs and `/api/load` retry on a network error, 502, 503 or 504, within a budget covering a stalled query's release (research `cube/ha-topology.md` §5);
+    - a POST that creates something never retries;
+    - a tile whose poll loses its socket carries on and shows its data (AC-319).
+  - Depends on: none
+- [ ] T423 (AC-319) Run two Cube instances and two API replicas in the docker-desktop release, and survive stopping one of each
+  - Files:
+    - `deploy/helm/wechart/templates/{api,cube}.yaml`: replicas, RollingUpdate, a PodDisruptionBudget from two replicas, preStop, and graceful shutdown;
+    - `deploy/helm/wechart/values.yaml`, `deploy/helm/values/docker-desktop.yaml`: the plan's runtime settings, which are the Cube Store queue, a 5–10 s queue heartbeat, transpile threads and Node heap;
+    - `deploy/helm/verify.sh`: a stop-one step.
+  - Failing test: `verify.sh`'s new step, with sign-in on and a slow query in flight, deletes one Cube pod and one API pod.
+    - `/api/me` keeps answering 200 for the same user;
+    - the query returns its data;
+    - both Deployments return to full strength (AC-319).
+
+    The refresh worker stays at one (research `cube/ha-topology.md` §2).
+  - Depends on: T418, T421, T422
+
+### Slice 3: names and modules
+
+- [ ] T425 (AC-328) Push the folder tree to xcube, ids and parents, when the API starts and on every folder change
+  - Files: `packages/api/src/xcube/folders.ts` (+ test), `packages/api/src/server.ts` (folder create, rename, move, delete)
+  - Failing test: `folders.test.ts`: after each create, rename, move or delete, the stub xcube holds every folder with its id written as `f` plus its letters and digits (the root's `froot`) and its parent. A rename or a move changes no folder's id (AC-328).
+  - Depends on: T419; xcube's slice 3 (`PUT /v1/semantic/folders`)
+- [ ] T426 (AC-321, AC-136, AC-288, AC-291) Publish through xcube's changesets, checking every module a change affects
+  - Files: `packages/api/src/xcube/changesets.ts` (+ test), `packages/api/src/model/publish.ts`, `packages/api/src/routes/proposals.ts`, `packages/api/src/server.ts` (direct changes to models, data sources and folders holding them), `e2e/security/publish-check.spec.ts`
+  - Failing test: `changesets.test.ts` and `publish-check.spec.ts`, against xcube's slice 3:
+    - a proposal is checked (`dryRun`) when made, and applied at approval;
+    - a break refuses it and changes no folder, proposal or module;
+    - a direct delete of a model applies only if xcube accepts it;
+    - a stale base revision (`409`) is checked again (AC-321, AC-288, AC-291).
+
+    AC-136 is reworded and ticked again here (R28 Q9).
+  - Depends on: T420, T425
+- [ ] T427 (AC-322) Word a refused publish: breaks named in the folders the user may see, a count for the rest, all in the audit trail
+  - Files: `packages/api/src/xcube/refusal.ts` (+ test), `packages/web/src/workspaces/reviews/Refusal.tsx` (+ test)
+  - Failing test: `refusal.test.ts`:
+    - each break xcube reports is mapped to its item;
+    - those in folders the user may see are named with their error and item, and line and column where given;
+    - the rest are only counted ("_n_ items in folders you can't see would break");
+    - a Super-Admin sees all of them named;
+    - the audit trail records every one (AC-322).
+  - Depends on: T426, T368
+- [ ] T428 (AC-275) Keep published items bound until they are published again, and refuse to delete or rename a name still referenced
+  - Files: `packages/api/src/xcube/changesets.ts`, `e2e/security/binding.spec.ts`
+  - Failing test: `binding.spec.ts`, against xcube's slice 3:
+    - /A/B publishes its own `orders`, and a chart published earlier in /A/B/C keeps /A's until it is published again, then takes /A/B's;
+    - deleting /A's `orders` while that chart references it is refused, naming the chart (AC-275).
+  - Depends on: T426, T429
+- [ ] T429 (AC-272, AC-329) Bind a chart's and a dashboard's cubes at publish to their prefixed names, and pick cubes by title and folder path
+  - Files: `packages/api/src/model/bind.ts` (+ test), `packages/api/src/xcube/meta.ts` (`GET /v1/semantic/meta`), `packages/web/src/workspaces/builder/FieldList.tsx`, `e2e/security/picker.spec.ts`
+  - Failing test:
+    - `bind.test.ts`: a chart in /A/B binds /A/B's `sales` over /A's, never /A/B/C's or a sibling's, and stores `f…__sales`. A name found nowhere on its path is refused, naming it (AC-272).
+    - `picker.spec.ts`: the picker lists only the cubes on the item's path, each by its title with its folder path, never a prefixed name (AC-329).
+  - Depends on: T425, T426
+- [ ] T430 (AC-331) Migrate every stored member reference to its prefixed name, and show every dashboard as before
+  - Files: a migration `…_prefixed-references.cjs` (+ test), `e2e/security/migration.spec.ts`
+  - Failing test:
+    - `migration.spec.ts`: each seeded dashboard's tile data is recorded before the migration, and matches after it;
+    - no reference stored in a chart, dashboard, marking, bookmark or link names a short cube name any more (AC-331).
+  - Depends on: T429
+- [ ] T431 (AC-327, AC-251) Remove Cube's model callbacks: `/api/cube-model/*`, the `cube` access class, and the model logic in `cube.js`
+  - Files: `packages/api/src/model/publish.ts`, `packages/api/src/auth/guard.ts` (+ test), `infra/cube/cube.js`, `e2e/security/no-callbacks.spec.ts`
+  - Failing test:
+    - `guard.test.ts`: no route has the `cube` class, and every route but health and sign-in answers 401 without a session (AC-251);
+    - `no-callbacks.spec.ts`: publishing, querying and a refresh run with a recorder on wechart's port, which sees no request from Cube or xcube (AC-327).
+  - Depends on: T426, T429, T430
+- [ ] T432 (AC-009, AC-137) Serve metadata from xcube's merged field list, with a new revision seen within 60 s
+  - Files: `packages/api/src/cube/meta-cache.ts`, `packages/api/src/xcube/meta.ts` (+ test)
+  - Failing test: `meta.test.ts`: after a changeset lands, `/api/meta` from either replica returns its new members once xcube reports the revision active on every instance, within 60 s, and without restarting Cube. AC-009 and AC-137 are reworded and ticked again here (R28 Q9).
+  - Depends on: T421, T426
+- [ ] T433 [P] (AC-332) Refuse to publish a model item that isn't plain YAML
+  - Files: `packages/api/src/model/publish.ts`, `packages/api/src/model/yaml-only.test.ts`
+  - Failing test: `yaml-only.test.ts`:
+    - a `.js` or `.py` model file, or YAML generated with Jinja, is refused at publish, saying only YAML models can be published;
+    - a plain YAML file passes (AC-332).
+  - Depends on: none
+- [ ] T435 (AC-273, AC-310) Bind a model's data sources at publish, nearest first from its folder, and give a cube with none the nearest `default`
+  - Files: `e2e/security/data-source-binding.spec.ts`, `packages/api/src/xcube/changesets.ts`
+  - Failing test: `data-source-binding.spec.ts`, against xcube's slice 3:
+    - a model in /A/B naming `warehouse` binds /A's when /A has one, and never /A/B/C's or a sibling's;
+    - a name found nowhere on its path is refused, naming it (AC-273);
+    - a cube with no data source binds /A/B's `default`, else /A's, else the root's (AC-310).
+  - Depends on: T426
+
+### Slice 4: permissions and tokens
+
+- [ ] T436 (AC-320, AC-263) Push each folder's allowed groups to xcube, so Cube refuses what wechart refuses
+  - Files: `packages/core/src/access/allowed.ts` (+ test), `packages/api/src/xcube/folders.ts`, `e2e/security/cube-refuses.spec.ts`
+  - Failing test:
+    - `allowed.test.ts`: a folder's allowed groups are those granted on it, on an ancestor or on a descendant, plus the Super-Admin group.
+    - `cube-refuses.spec.ts`, against xcube's slice 4:
+      - a user's token asked of Cube directly gets nothing from a folder where none of its groups is allowed;
+      - a member of a group granted on /A/B gets the /A cube their chart is bound to;
+      - an authored row-level policy still filters;
+      - a permission change applies with no module compiled (AC-320);
+      - a read-only user's dashboards answer (AC-263).
+
+    Research: `cube/generated-policies.md`, option C.
+  - Depends on: T425, T437
+- [ ] T437 (AC-326, AC-008) Sign users' tokens RS256, carrying only the groups some policy names, and push the keys to xcube
+  - Files: `packages/api/package.json` (`jose` 6.2.12), `packages/api/vite.build.config.ts` (`jose` external), `packages/api/src/cube/signing.ts` (+ test), `packages/api/src/cube/client.ts`, `packages/api/src/xcube/keys.ts` (+ test), the signing key in `docker-compose.yml` and the chart's Secret
+  - Failing test:
+    - `signing.test.ts`: a user's token is RS256 with a `kid`. It carries their groups that some policy names (a folder's allowed groups or a model's own), `role: user`, `iss`, `aud` and `exp`, and no `sub` or other attribute of theirs.
+    - `keys.test.ts`: the JWKS is pushed to the stub xcube at start and on rotation, the new key before it signs anything, and a token signed after a rotation is accepted (AC-326, AC-008).
+
+    Research: `cube/tokens-and-service-credential.md`.
+  - Depends on: T420; xcube's slice 4 (verifying against the pushed JWKS, and the push route to be proposed)
+- [ ] T438 (AC-166) Preview a dashboard as the chosen groups, with a token carrying exactly those
+  - Files: `packages/api/src/server.ts` (the preview), `packages/web/src/workspaces/security/PreviewAs.tsx`, `e2e/security/preview-as.spec.ts`
+  - Failing test: `preview-as.spec.ts`:
+    - a Super-Admin previews a dashboard as two groups, and every query it makes carries exactly those groups and nothing else;
+    - a banner names them (AC-166).
+  - Depends on: T437
+
+### Slice 5: previews
+
+T347 (above) pushes workspace overlays.
+
+- [ ] T440 (AC-323) Let a proposal's overlay be queried only by its author, the target folder's read-write members and Super-Admins, and drop it once decided
+  - Files: `packages/api/src/xcube/overlays.ts`, `packages/api/src/routes/proposals.ts`, `e2e/security/proposal-overlay.spec.ts`
+  - Failing test: `proposal-overlay.spec.ts`, against xcube's slice 5:
+    - the author, a read-write member of the target folder and a Super-Admin get the proposal's data;
+    - a read-only member and anyone else are refused;
+    - after approval or rejection, a query against the overlay fails (AC-323).
+  - Depends on: T347, T352
+
+### Slice 6: connections
+
+T333, T346, T361 and T365 (above) are rewritten for this slice.
+
+- [ ] T441 (AC-325, AC-298) Seal a typed secret in the browser to xcube's public key, and store only the ciphertext
+  - Files: `packages/web/package.json` (`hpke` 1.1.7), `packages/web/src/workspaces/data-sources/seal.ts` (+ test), `packages/api/src/routes/data-sources.ts`, `packages/api/src/repos/data-source-secrets.ts` (the `pg_dump` canary test, from T332)
+  - Failing test:
+    - `seal.test.ts`: the browser seals with HPKE to the configured public key, and a test key pair opens it;
+    - a canary secret typed into the form appears in no request body to wechart, no stored row and no log line (AC-325);
+    - a `pg_dump` holds no plaintext, and wechart holds no private key (AC-298).
+
+    Research: `credential-sealing.md`.
+  - Depends on: T333, T335
+- [ ] T442 (AC-161, AC-327) Push each active connection to xcube: type, settings and ciphertext, never plaintext
+  - Files: `packages/api/src/xcube/connections.ts` (+ test)
+  - Failing test: `connections.test.ts`:
+    - on approval the stub xcube receives the connection's type, settings and ciphertext, with no plaintext secret anywhere in the call;
+    - a deleted source is removed;
+    - the API serves no route that hands a connection to Cube (AC-327, AC-161).
+  - Depends on: T420, T441, T352
+- [ ] T443 (AC-310) Seed the shared root's `default` data source from the Helm values, and manage it like any other
+  - Files: `deploy/helm/wechart/templates/api.yaml`, `packages/api/src/seed.ts`, `e2e/security/root-default.spec.ts`
+  - Failing test: `root-default.spec.ts`:
+    - on install the root holds a `default` data source from the values;
+    - it opens and changes in Data sources;
+    - a root cube with no data source binds it (AC-310).
+  - Depends on: T442, T435
+
+### Slice 8: hardening
+
+- [ ] T444 (AC-307, AC-319) Hold a 10-chart dashboard's p95 under 3 s on two Cube instances, with one stopped mid-run
+  - Files: `e2e/perf/ha-load.spec.ts`
+  - Failing test: `ha-load.spec.ts`: 20 opens of the 10-chart dashboard of T409, across two Cube instances with one deleted mid-run, render every tile with p95 ≤ 3,000 ms (AC-307, AC-319).
+  - Depends on: T409, T423
+
 ## Phase 2 coverage: acceptance criterion → task
 
 | AC | Tasks | AC | Tasks | AC | Tasks |
 |---|---|---|---|---|---|
-| AC-001 | T331, T364 | AC-008 | T322, T339 | AC-041 | T390 |
+| AC-001 | T331, T364 | AC-008 | T322, ~~T339~~ T437 | AC-041 | T390 |
 | AC-047 | T380 | AC-048 | T382 | AC-049 | T381 |
 | AC-050 | T383 | AC-051 | T384 | AC-052 | T385 |
 | AC-093 | T386 | AC-097 | T387 | AC-104 | T388 |
@@ -5786,32 +6049,40 @@ The user's Cube fork moved the introspection API out of Cube's own packages into
 | AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |
 | AC-154 | T377 | AC-155 | T379 | AC-157 | T364 |
 | AC-158 | T363 | AC-159 | T361 | AC-160 | T360, T363 |
-| AC-161 | T365 | AC-163 | T362 | AC-164 | T335 |
+| AC-161 | T365, T442 | AC-163 | T362 | AC-164 | T335 |
 | AC-176 | T405 | AC-180 | T407 | AC-187 | T406 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
 | AC-234 | T378 | AC-246 | T404 | AC-249 | T336 |
-| AC-251 | T318, T321, T324 | AC-252 | T316, T319, T320 | AC-253 | T317, T321 |
+| AC-251 | T318, T321, T324, T431 | AC-252 | T316, T319, T320 | AC-253 | T317, T321 |
 | AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323, T325, T326 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
 | AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327 |
-| AC-263 | T313, T326, T334, T335 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371 |
+| AC-263 | T313, T326, T334, T335, T436 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371 |
 | AC-266 | T326, T340 | AC-267 | T328 | AC-268 | T340, T408 |
 | AC-269 | T334, T335 | AC-270 | T336 | AC-271 | T336 |
-| AC-272 | T337, T339, T340 | AC-273 | T338 | AC-274 | T341 |
-| AC-275 | T337, T352 | AC-276 | T343 | AC-277 | T343 |
+| AC-272 | ~~T337, T339, T340~~ T429 | AC-273 | ~~T338~~ T435 | AC-274 | T341 |
+| AC-275 | ~~T337, T352~~ T428 | AC-276 | T343 | AC-277 | T343 |
 | AC-278 | T344, T348 | AC-279 | T344 | AC-280 | T346 |
 | AC-281 | T347 | AC-282 | T345 | AC-283 | T347 |
 | AC-284 | T349, T358 | AC-285 | T350 | AC-286 | T351 |
-| AC-287 | T355, T356 | AC-288 | T352 | AC-289 | T354, T357 |
-| AC-290 | T353 | AC-291 | T329 | AC-292 | T366 |
+| AC-287 | T355, T356 | AC-288 | T352, T426 | AC-289 | T354, T357 |
+| AC-290 | T353 | AC-291 | T329, T426 | AC-292 | T366 |
 | AC-293 | T367 | AC-294 | T368 | AC-295 | T369 |
-| AC-296 | T370 | AC-297 | T371 | AC-298 | T332, T333, T335, T346, T352, T362, T368 |
+| AC-296 | T370 | AC-297 | T371 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
-| AC-305 | T398 | AC-306 | T399 | AC-307 | T409 |
-| AC-308 | T410 | AC-309 | T337 | AC-310 | T338 |
-| AC-311 | T333 | AC-312 | T335 | AC-313 | T397, T398 |
+| AC-305 | T398 | AC-306 | T399 | AC-307 | T409, T444 |
+| AC-308 | T410 | ~~AC-309~~ | retired 2026-09-25 (was T337) | AC-310 | ~~T338~~ T435, T443 |
+| ~~AC-311~~ | retired 2026-09-25 (T333 now serves AC-324) | AC-312 | T335 | AC-313 | T397, T398 |
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
 | AC-317 | T412 | AC-318 | T416 | AC-139 | T413, T417 |
-| AC-248 | T414, T415, T417 | AC-250 | T413 | | |
+| AC-248 | T414, T415, T417 | AC-250 | T413, T420 | AC-009 | T432 |
+| AC-136 | T426 | AC-137 | T432 | AC-166 | T438 |
+| AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | T426 |
+| AC-322 | T427 | AC-323 | T347, T440 | AC-324 | T333 |
+| AC-325 | T441 | AC-326 | T420, T437 | AC-327 | T419, T431, T442 |
+| AC-328 | T341, T425 | AC-329 | T429 | AC-330 | T419 |
+| AC-331 | T430 | AC-332 | T433 | | |
+
+AC-009, AC-136 and AC-137 are ticked from phase 1. They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).
