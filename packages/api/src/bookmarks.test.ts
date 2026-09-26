@@ -27,7 +27,8 @@ function memoryBookmarks(): BookmarkStore & { saved: Bookmark[] } {
   const saved: Bookmark[] = [];
   return {
     saved,
-    list: async (dashboardId) => saved.filter((each) => each.dashboardId === dashboardId),
+    list: async (dashboardId, owner) =>
+      saved.filter((each) => each.dashboardId === dashboardId && each.owner === owner),
     save: async (bookmark) => {
       const kept = { id: `b${String(saved.length + 1)}`, ...bookmark };
       saved.push(kept);
@@ -65,7 +66,8 @@ describe('a dashboard’s bookmarks', () => {
     });
     const listed = await app.inject({ method: 'GET', url: '/api/dashboards/d1/bookmarks' });
 
-    const bookmark = { id: 'b1', dashboardId: 'd1', name: 'Shipped', state: STATE };
+    // Phase 1's one user's (T366, AC-292).
+    const bookmark = { id: 'b1', dashboardId: 'd1', name: 'Shipped', state: STATE, owner: 'admin' };
     expect([saved.statusCode, saved.json()]).toEqual([201, bookmark]);
     expect(listed.json()).toEqual({ bookmarks: [bookmark] });
     await app.close();
@@ -97,8 +99,8 @@ describe('a dashboard’s bookmarks', () => {
   it('go with their dashboard when it is deleted (T127’s review)', async () => {
     const bookmarks = memoryBookmarks();
     bookmarks.saved.push(
-      { id: 'b1', dashboardId: 'd1', name: 'x', state: STATE },
-      { id: 'b2', dashboardId: 'd2', name: 'y', state: STATE },
+      { id: 'b1', dashboardId: 'd1', name: 'x', state: STATE, owner: 'admin' },
+      { id: 'b2', dashboardId: 'd2', name: 'y', state: STATE, owner: 'admin' },
     );
     const app = buildServer({ config, bookmarks, documents: oneDashboard });
 

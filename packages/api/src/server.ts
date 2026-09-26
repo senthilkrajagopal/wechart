@@ -1356,7 +1356,8 @@ export function buildServer({
     // With security on, a dashboard they may open (T326, AC-266).
     if ((await itemFor(request, reply, 'dashboard', dashboardId, 'open')) === undefined)
       return reply;
-    return { bookmarks: await bookmarks.list(dashboardId) };
+    // Theirs alone (T366, AC-292).
+    return { bookmarks: await bookmarks.list(dashboardId, userOf(request).key) };
   });
 
   app.post('/api/dashboards/:dashboardId/bookmarks', USER, async (request, reply) => {
@@ -1380,7 +1381,9 @@ export function buildServer({
       return reply;
     if (docs?.get !== undefined && (await docs.get('dashboard', dashboardId)) === null)
       return reply.code(404).send({ error: 'No such dashboard.' });
-    return reply.code(201).send(await bookmarks.save({ dashboardId, name, state }));
+    return reply
+      .code(201)
+      .send(await bookmarks.save({ dashboardId, name, state, owner: userOf(request).key }));
   });
 
   app.get('/api/search', USER, async (request) => {

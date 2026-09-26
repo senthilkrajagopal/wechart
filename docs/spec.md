@@ -1058,7 +1058,7 @@ Traces to: §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
 Purpose: bookmarks belong to the person who saved them, until they share one.
 Traces to: §P2.6 F, `[R12]`.
 
-- [ ] AC-292 WHEN a user saves a bookmark, THE SYSTEM SHALL keep it theirs, listed on the dashboard for them alone.
+- [x] AC-292 WHEN a user saves a bookmark, THE SYSTEM SHALL keep it theirs, listed on the dashboard for them alone.
       Fails when: another user sees a bookmark its owner hasn't shared.
 - [ ] AC-293 WHEN a user shares a bookmark, THE SYSTEM SHALL list it for everyone who may see the dashboard, labelled with who shared it. Only its owner SHALL be able to change or unshare it.
       Fails when: someone who may see the dashboard doesn't see a shared bookmark, or someone other than its owner can change or unshare it.

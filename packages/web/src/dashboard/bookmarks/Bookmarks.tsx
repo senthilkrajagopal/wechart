@@ -228,8 +228,8 @@ function SaveBookmark({
             />
           </label>
           <p className="save-bookmark__keeps">
-            Keeps the page tab shown, the filters’ values and what is marked. A bookmark of the same
-            name on this dashboard is replaced.
+            Keeps the page tab shown, the filters’ values and what is marked, for you alone. One of
+            your bookmarks of the same name on this dashboard is replaced.
           </p>
           {run.kind === 'run' ? <StateLine kind="run">Saving…</StateLine> : null}
           {run.kind === 'err' ? <StateLine kind="err">{run.text}</StateLine> : null}

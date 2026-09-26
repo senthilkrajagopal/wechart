@@ -5656,10 +5656,25 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.8 Bookmarks (F31)
 
-- [ ] T366 (AC-292) Keep each bookmark its saver's own
-  - Files: `packages/api/src/repos/bookmarks.ts` (an owner), `packages/api/src/server.ts`, `packages/api/src/repos/bookmarks.test.ts`
+- [x] T366 (AC-292) Keep each bookmark its saver's own
+  - Files: `packages/api/src/repos/bookmarks.ts` (an owner), `packages/api/src/server.ts`, `packages/api/src/repos/bookmarks.test.ts`; also a migration `1758270000000_bookmark-owners.cjs`, `packages/api/src/access/bookmarks.test.ts`, `packages/api/src/bookmarks.test.ts`, the save dialog's copy in `Bookmarks.tsx`, and `e2e/security/bookmarks.spec.ts` (which T367 extends)
   - Failing test: `bookmarks.test.ts`: a bookmark `writer` saves is listed for `writer` and for nobody else, and names are unique per owner (AC-292).
   - Depends on: T316, T325
+  - **Done 2026-09-26.**
+    - **The owner.** A bookmark carries its saver's key as `body.owner`, which the generated `owner` column reads. It is listed for that owner alone, and a save replaces only its owner's bookmark of that name. A dashboard's delete still takes everyone's with it.
+    - **Phase 1's bookmarks.** They had no owner. A migration gives each to phase 1's one user, `admin`. With sign-in off they list as before; with sign-in on nobody's key is `admin`, so they are listed for no one.
+    - **What the tests show:**
+      - the store, by owner and by name per owner;
+      - the routes signed in, against the database: `writer`'s bookmark listed for `writer` and for neither `reader` nor `super`, and `reader`'s of the same name kept apart;
+      - the migration giving an ownerless bookmark to `admin` and leaving an owned one alone;
+      - `e2e/security/bookmarks.spec.ts` (Chrome): `writer` saves through the Bookmarks menu and has it listed. `reader` and `super`, on the same dashboard, see the menu say "No bookmarks yet".
+      - Sign-in off, the phase-1 bookmark e2e still passes.
+    - **The cold review (PASS)** led to:
+      - the e2e waiting for "No bookmarks yet" before checking the name is absent, since "Save bookmark…" shows before the list has come;
+      - the migration's guard tested;
+      - the save dialog saying the bookmark is "for you alone", and that one of your own of the same name is replaced.
+    - **For the user:** once sign-in is on, phase 1's bookmarks are listed for nobody, Super-Admins included. The reviewer reads AC-267 as about the shared tree, which bookmarks aren't in. Should they be kept like that, or shown to Super-Admins?
+    - AC-292 is ticked.
 - [ ] T367 (AC-293) Share a bookmark with everyone who may see the dashboard; only its owner changes it
   - Files: `packages/api/src/repos/bookmarks.ts`, `packages/web/src/dashboard/bookmarks/Bookmarks.tsx` (+ test), `e2e/security/bookmarks.spec.ts`
   - Failing test: `bookmarks.spec.ts`: a shared bookmark appears under "Shared" for `reader`, labelled with who shared it; `reader` can apply it and "Save a copy to mine" but not change or unshare it; Mine is listed before Shared, newest first (AC-293; rule 81).
