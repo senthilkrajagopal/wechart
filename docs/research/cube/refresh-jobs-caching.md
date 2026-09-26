@@ -34,6 +34,10 @@ sources:
 
 # Cube 1.7.42: refresh worker, jobs, orchestration and caching
 
+> **Stale in part, 2026-09-25** (architecture decisions 1 and 12, [docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)):
+> - `jobs` granted on a user token (:113–114) moves to the service credential;
+> - forwarding events to wechart's collector (:125) is replaced by xcube recording them for wechart to pull.
+
 ## Summary
 
 This document covers the part of Cube Core that builds and refreshes pre-aggregations (the **refresh worker**), triggers and tracks builds on demand (the **Orchestration API**, `POST /v1/pre-aggregations/jobs`), queues and caches queries (the **query orchestrator**, with the in-memory or Cube Store cache and queue), and reports health (`/readyz`, `/livez`). It also separates these from the Cube Cloud features with similar names: Query History, Performance Insights, the Pre-Aggregations console, Alerts, Monitoring Integrations, deployment warm-up, Scheduled Refreshes and Scheduled Tasks.

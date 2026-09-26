@@ -8,6 +8,8 @@ sources: [https://github.com/cube-js/cube/tree/v1.7.42/docs-mintlify, https://ra
 
 # Cube Cloud product features, docs tag v1.7.42 (plus @cube-dev/embed-sdk 0.0.13)
 
+> **Stale in one place, 2026-09-25** (architecture decision 4, [docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)): "client-reproducible if wechart reads model files" (:647) no longer covers everything. xcube's generated folder policies aren't in those files.
+
 ## Summary
 
 Cube Cloud is Cube's commercial platform. wechart runs on Cube Core (open source, self-hosted). This doc lists the Cloud product features documented at git tag `v1.7.42`, whose release was published 2026-09-18 ([release]). For each feature it marks whether a Cube Core API makes it reproducible in wechart, or whether it depends on Cloud backend services. It is a feature reference and a map of the boundary. It is not a recommendation to adopt Cloud.

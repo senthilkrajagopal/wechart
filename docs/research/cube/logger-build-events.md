@@ -35,6 +35,13 @@ sources:
 
 # Cube logger option (refresh-worker build events) 1.7.45
 
+> **Superseded in part, 2026-09-25**, by the user's architecture decision 1 ([docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)) and round R27.
+> - **Superseded:** the logger reaching wechart's store (:247–262), because Cube never calls wechart.
+> - **Now:** xcube records the events, and wechart pulls them.
+> - **Historical:** the probe recipe's HS256 token and `WECHART_MODEL_STORES` (:424, :438–444).
+> - **Still holds:** the facts about Cube's `logger` option.
+> - **See:** [xcube-runtime.md](./xcube-runtime.md).
+
 ## Summary
 
 This doc covers the refresh worker's half of **AC-150** ([docs/spec.md L536-L537](/Users/srajagopal/Work/wechart/docs/spec.md)), which is task **T261** ([docs/tasks.md L2632-L2638](/Users/srajagopal/Work/wechart/docs/tasks.md)). Cube Core has no API that lists the builds its refresh worker runs. wechart would add a `logger` function to [infra/cube/cube.js](/Users/srajagopal/Work/wechart/infra/cube/cube.js), which both Cube containers mount ([docker-compose.yml L104-L106, L127](/Users/srajagopal/Work/wechart/docker-compose.yml)). The logger would forward build events to wechart's API.

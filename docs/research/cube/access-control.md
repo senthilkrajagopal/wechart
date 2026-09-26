@@ -8,6 +8,16 @@ sources: [https://raw.githubusercontent.com/cube-js/cube/v1.7.42/docs-mintlify/d
 
 # Cube (Cube.js) 1.7.42: security and access control
 
+> **Superseded in part, 2026-09-25**, by the user's architecture decisions 1, 4, 10 and 12 ([docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)).
+> - **Superseded:**
+>   - the browser passing a JWT to Cube (:54–58, :91–103): only wechart's server calls Cube;
+>   - "Option A: HS256" (:71–73, :423–425): RS256, with the public keys pushed to xcube;
+>   - user attributes in the token (:55, :328): groups only;
+>   - admin scopes on user tokens (:78–80): the service credential;
+>   - previewing a draft policy on a Cube that loaded the draft (:360, :431): overlays.
+> - **Now to account for:** the policy editor and effective access (:323–329) must include the policies xcube generates from folder groups.
+> - **See:** [tokens-and-service-credential.md](./tokens-and-service-credential.md) and [generated-policies.md](./generated-policies.md).
+
 ## Summary
 
 Cube splits access control into two parts. **Authentication** decides whether a caller can reach Cube at all. **Authorization** decides which data the caller can see. [doc-ac-index]

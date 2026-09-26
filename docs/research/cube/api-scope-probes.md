@@ -7,6 +7,8 @@ sources: [https://github.com/cube-js/cube/blob/v1.7.42/packages/cubejs-api-gatew
 ---
 # Cube 1.7.42: API scope probes
 
+> **Historical in one place, 2026-09-25** (architecture decisions 1 and 12, [docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)): the token "naming a draft" (:112) no longer exists. Drafts become overlays, and wechart's own calls use the service credential.
+
 ## Summary
 
 This doc covers AC-170: show which API scopes wechart's configured context has, and mark a screen unavailable when its scope is missing. Cube has no endpoint that lists scopes. So wechart's API server sends one minimal request per scope with its own token and reads the answer.

@@ -26,6 +26,14 @@ sources:
 ---
 # Cube rollup join paths 1.7.45
 
+> **Superseded in part, 2026-09-25**, by the user's architecture decisions 1, 6 and 8 ([docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)).
+> - **Superseded:**
+>   - the gate run by wechart after a draft compiles, under `{wechartStore, wechartDraft}` (:56–63, :84–97, :234–258);
+>   - Gotcha 2's "refuse only new failures" (:293–297), which contradicts decision 6: a publish is refused if anything anywhere breaks.
+> - **Now:** the gate runs inside xcube's whole-model check.
+> - **Still holds:** the facts about Cube's join tree.
+> - **See:** [whole-model-publish.md](./whole-model-publish.md).
+
 ## Summary
 
 This doc covers how self-hosted Cube Core v1.7.45 builds a rollup's join tree, when it can't, where that failure shows up, and what wechart's publish can ask Cube in order to refuse such a rollup with Cube's own reason. It extends the model publish check: the draft compile (AC-136) and the check for names a rollup doesn't have (T207, AC-189), both in /Users/srajagopal/Work/wechart/packages/api/src/model/publish.ts (L51–L57, L145–L148, L222–L226).

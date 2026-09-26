@@ -25,6 +25,14 @@ sources:
 
 # Cube on Kubernetes (cubejs/cube, cubejs/cubestore) 1.7.45
 
+> **Superseded in part, 2026-09-25**, by the user's architecture decisions 1, 2, 11 and 12 ([docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)).
+> - **Superseded:**
+>   - `repositoryFactory` reading wechart's store (:109);
+>   - an address of wechart's API that Cube pods reach (:174): Cube never calls wechart;
+>   - `CUBEJS_API_SECRET` in the sketch (:167, :196): RS256 keys from xcube.
+> - **To re-verify:** the `/readyz` notes tied to `contextToAppId` (:39, :205, :357).
+> - **See:** [ha-topology.md](./ha-topology.md).
+
 ## Summary
 
 This doc covers how to run three components on Kubernetes from the official images:

@@ -8,6 +8,8 @@ sources: [https://node-postgres.com/apis/pool, https://node-postgres.com/feature
 
 # wechart metadata DB access: pg / kysely / drizzle-orm
 
+> **Superseded in one place, 2026-09-25** (architecture decision 7, [docs/inputs/2026-09-25-architecture-decisions.md](../inputs/2026-09-25-architecture-decisions.md)): credentials "must stay decryptable by the API" (:88–89, :120) no longer holds. wechart stores only ciphertext it can't decrypt. See [credential-sealing.md](./credential-sealing.md).
+
 ## Summary
 
 wechart's own Postgres holds dashboards and layout trees, chart specs, folders, bookmarks, settings, marking definitions, data-source settings with secrets, schedules, job history and query logs (AC-014, AC-015, AC-016, AC-150, AC-163, AC-164). All three candidates run on the same driver: Kysely's Postgres dialect takes a `pg` Pool and calls `pool.connect()` / `client.release()` ([postgres-driver.ts](https://github.com/kysely-org/kysely/blob/master/src/dialect/postgres/postgres-driver.ts)), and Drizzle's node-postgres migrator/driver is likewise `pg`-based ([migrator.ts](https://github.com/drizzle-team/drizzle-orm/blob/main/drizzle-orm/src/node-postgres/migrator.ts)). So the decision is (a) the typing layer over SQL and (b) the migration tool.

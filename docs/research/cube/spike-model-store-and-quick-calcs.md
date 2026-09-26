@@ -13,6 +13,14 @@ sources:
 
 # Spike: model files served by wechart, and quick calculations as generated multi-stage measures
 
+> **Superseded in part, 2026-09-25**, by the user's architecture decisions 1, 6 and 8 ([docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)).
+> - **Superseded:**
+>   - model files served by wechart through `repositoryFactory` (§1, :18, :28–66);
+>   - drafts under their own app id (:56);
+>   - companions added to wechart's served files (:113–116).
+> - **Now:** companion measures are published into xcube's model.
+> - **Still holds:** the observations, including "a bad publish breaks everything", which supports decision 6's whole-model check.
+
 **Why.** On 2026-09-21 the user took two recommendations, subject to a spike: "i will go with your recommendation for the two decisions.. before accepting .. run a spike if required".
 
 1. **Model files live in wechart's metadata database.** Cube reads them through `repositoryFactory` and picks up a publish through `schemaVersion`, with no restart. This is T137–T143, AC-131–AC-137.

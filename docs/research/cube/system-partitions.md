@@ -29,6 +29,8 @@ sources:
 
 # Cube system routes (pre-aggregation partitions) 1.7.45
 
+> **Stale in part, 2026-09-25** (architecture decisions 1, 2 and 12, [docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)): the token carrying `wechartStore` (:52, :99–101, :232, :345) is replaced by one flat model and the service credential.
+
 ## Summary
 
 This doc covers Cube Core's undocumented route `POST /cubejs-system/v1/pre-aggregations/partitions`: how to switch it on, how to authenticate to it, what it takes and returns, and how Cube derives the partitions it lists. It also covers the documented jobs API's `selector.dateRange`, which rebuilds one partition at a time. Together they serve **AC-145** (docs/spec.md, amended 2026-09-24) and task **T151** (docs/tasks.md).

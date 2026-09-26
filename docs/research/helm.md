@@ -35,6 +35,8 @@ chart_api_version: v2
 ---
 # Helm 3.17.2 (chart authoring and install on Docker Desktop Kubernetes v1.34.1)
 
+> **Stale in one place, 2026-09-25** (architecture decisions 11 and 12, [docs/inputs/2026-09-25-architecture-decisions.md](../inputs/2026-09-25-architecture-decisions.md)): the generated `cube-api-secret` (:219) gives way to an RS256 key pair, keys pushed to xcube, and a service credential. The chart also grows to 2+ Cube instances and 2+ API replicas (see `cube/ha-topology.md`).
+
 ## Summary
 
 Helm is the Kubernetes package manager. Charts with `apiVersion: v2` are Helm 3 charts ([helm-charts]). wechart uses it for **F24 / AC-248**: one chart at `deploy/helm/wechart` must run the web app (nginx serving the SPA), the Node API, the metadata Postgres, the Cube API, the Cube refresh worker and Cube Store. It must take Cube's data source from values, and it must serve the web app at the address the values name. The chart is installed with:

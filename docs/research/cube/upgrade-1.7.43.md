@@ -25,6 +25,8 @@ sources:
 
 # Cube upgrade: v1.7.42 to v1.7.43, with v1.7.44 and v1.7.45 assessed
 
+> **Historical in one place, 2026-09-25** (architecture decision 1, [docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)): "the compile path that wechart's draft check and `repositoryFactory` feed" (:59) is replaced by xcube's own store and whole-model check.
+
 ## Summary
 
 **Recommendation: pin v1.7.44.** That means `cubejs/cube:v1.7.44` for the API and the refresh worker, and `cubejs/cubestore:v1.7.44-arm64v8` for Cube Store on arm64 (`cubejs/cubestore:v1.7.44` on amd64). The user approved v1.7.43, so going one patch further needs their go-ahead. v1.7.43 alone is still a sound upgrade from v1.7.42, and it fixes the defect that prompted it.

@@ -22,6 +22,11 @@ sources:
 
 # Cube pre-aggregation job records (jobs API) 1.7.45
 
+> **Stale in part, 2026-09-25** (architecture decisions 1 and 12, [docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)):
+> - `jobs` on every token but a draft's, and HS256 (:55–56), move to the service credential;
+> - "each `get` calls back into wechart's API" (:183) no longer holds;
+> - the probe setup (:280–289) is historical.
+
 ## Summary
 
 This doc covers the records Cube Core keeps for builds started through `POST /cubejs-api/v1/pre-aggregations/jobs`. It says what `action: get` reports about them, how long they last, what the `table` string encodes, and how an `x-request-id` travels from the request into Cube's build log events. It serves the half of **AC-150** (docs/spec.md) that covers builds wechart starts, which is task **T156** (docs/tasks.md): wechart's API posts a build, stores the tokens, and follows each token with `action: get` until it finishes, even across its own restarts.

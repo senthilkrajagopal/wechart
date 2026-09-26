@@ -7,6 +7,15 @@ sources: [https://nodejs.org/docs/latest-v26.x/api/crypto.html, https://nodejs.o
 ---
 # node:crypto credential encryption (Node 26.10.0)
 
+> **Superseded in large part, 2026-09-25**, by the user's architecture decision 7 ([docs/inputs/2026-09-25-architecture-decisions.md](../inputs/2026-09-25-architecture-decisions.md); requirements §P2.4 "Credentials", round R27). Credentials are encrypted in the browser to xcube's public key, and wechart never decrypts. Superseded here:
+> - AES-256-GCM with a key in the API;
+> - the API decrypting and re-sealing on copy, landing and test;
+> - `loadKeyring` in the API;
+> - routes A–D, including "A. Pull … Preferred";
+> - the API refusing to start on a key that can't decrypt.
+>
+> Still useful: the threat model, the dump test, and the redaction points, which move to xcube. Replaced by [credential-sealing.md](./credential-sealing.md).
+
 ## Summary
 
 This covers application-level authenticated encryption of data-source credentials. The credentials are stored in wechart's Postgres metadata DB and sealed with Node's built-in `node:crypto`. The key comes from the deployment's Secret (requirements §P2.4, "with a key from the deployment's Secret"). That settles the Secret-versus-KMS question left open in `db-access.md`'s Open questions.

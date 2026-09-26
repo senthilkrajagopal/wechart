@@ -23,6 +23,8 @@ sources:
 
 # openid-client 6.8.8 + @fastify/cookie 11.1.2 + @fastify/session 11.1.3: wechart's API as its own OIDC client
 
+> **Stale in one place, 2026-09-25** (architecture decision 12, [docs/inputs/2026-09-25-architecture-decisions.md](../inputs/2026-09-25-architecture-decisions.md)): the API signing Cube JWTs itself (:42, :394) moves from HS256 to RS256, with the public keys pushed to xcube. See [tokens-and-service-credential.md](./cube/tokens-and-service-credential.md). Sign-in itself is unaffected.
+
 ## Summary
 
 **The design.** wechart's Fastify API (5.12.5, per `docs/research/api-framework.md`) is a confidential OIDC relying party:

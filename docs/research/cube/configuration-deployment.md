@@ -30,6 +30,15 @@ sources: [
 
 # Cube Core 1.7.42: configuration, deployment, multitenancy, and Core operations
 
+> **Superseded in part, 2026-09-25**, by the user's architecture decisions 1, 2, 6, 7, 10 and 12 ([docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)).
+> - Hooks reading wechart-owned state (connections, model files) are superseded (:40, :266, :684). Cube never calls wechart, and the hooks read xcube's state.
+> - Runtime model publish through `schemaVersion` and `repositoryFactory` served by wechart, and tenant model isolation (:700–703), are superseded by one flat model in xcube.
+> - Answered:
+>   - JWK signing (:683): RS256, with keys pushed to xcube;
+>   - "should the browser call Cube directly" (:801): no.
+> - Dev-only tests and validation (:686–687) are replaced by xcube's tests and its whole-model check.
+> - See [xcube-runtime.md](./xcube-runtime.md) and [tokens-and-service-credential.md](./tokens-and-service-credential.md).
+
 ## Summary
 
 This doc covers how Cube Core 1.7.42 is configured, deployed, split into tenants, and observed. It also marks which neighbouring capabilities are Cloud-only. The tag `v1.7.42` points to tag object `68eeb0e78a4392ac25d6a1b88398516f5502a0ec`, published 2026-09-18 and not a prerelease ([release]).

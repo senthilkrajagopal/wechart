@@ -25,6 +25,14 @@ sources:
 
 # Cube data sources and connection management 1.7.42
 
+> **Superseded in part, 2026-09-25**, by the user's architecture decisions 1 and 7 ([docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)).
+> - **Superseded:**
+>   - wechart's server importing Cube drivers and testing connections (:38, :52–56, :141–176, :370);
+>   - wechart-owned `loadConnection` and `connectionsVersion` lookups (:101–131).
+> - **Now:** xcube owns the connection lookup, decryption and tests.
+> - **Still holds:** Cube's driver reference.
+> - **See:** [xcube-runtime.md](./xcube-runtime.md) and [credential-sealing.md](../credential-sealing.md).
+
 ## Summary
 
 This doc covers how Cube Core v1.7.42 connects to data sources: the supported drivers, how connections are configured (env vars, `driverFactory`), multiple and per-tenant sources, TLS, OAuth, pooling and concurrency, how connections are validated, and what happens when credentials change at runtime. It contrasts Core with the Cube Cloud UI flows and briefly covers connecting external BI tools. The tag `v1.7.42` points at commit `919434f4`, and that commit matches the npm `gitHead` of the 1.7.42 driver packages ([tag ref][tagref], [commit][commit], [npm postgres-driver][npmpg]).

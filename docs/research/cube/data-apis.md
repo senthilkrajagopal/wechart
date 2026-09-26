@@ -8,6 +8,8 @@ sources: [https://github.com/cube-js/cube/blob/v1.7.42/docs-mintlify/reference/c
 
 # Cube data APIs and JavaScript SDK 1.7.42
 
+> **Superseded in one part, 2026-09-25** (architecture decision 10, [docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)): the browser client for Vite and React (:66–113) is superseded, because only wechart's server calls Cube. The REST reference still holds.
+
 ## Summary
 
 Cube exposes its semantic layer through several data APIs. The REST (JSON) API, GraphQL API, SQL API (Postgres wire protocol plus HTTP) and WebSocket transport are part of Cube Core. The MDX and DAX APIs are Cube Cloud Enterprise-plan features ([rest-index], [gql-index], [sql-index], [mdx], [dax]). The JavaScript SDK (`@cubejs-client/core`, `@cubejs-client/react`, `@cubejs-client/ws-transport`) wraps the REST and WebSocket transports. It also provides client-side pivoting (`ResultSet`), metadata helpers (`Meta`), and value formatting (`@cubejs-client/core/format`) ([sdk-core-ref]).

@@ -40,6 +40,14 @@ sources:
 
 # Cube data-source introspection API (fork package `cube-introspection`) 1.7.45 + 0b6eef90a9
 
+> **Amended in part, 2026-09-25**, by the user's architecture decisions ([docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)). The HTTP API described here stands. Changed around it:
+> - the package is being renamed **xcube**, and its role widens to the published model, rules, connections and the folder tree (decisions 1 and 5);
+> - introspection is an admin call, made with the service credential, not a 60-second user-style token (decision 12);
+> - drafts become overlays (decision 8);
+> - generated names are folder-prefixed, and xcube resolves them (decisions 2 and 5).
+>
+> See [xcube-runtime.md](./xcube-runtime.md), [tokens-and-service-credential.md](./tokens-and-service-credential.md) and [prefixed-names.md](./prefixed-names.md).
+
 **This revision.** This doc used to be pinned to fork commit `95ea166012` on branch `feat/data-source-introspection-api`. That branch edited Cube's own packages and overlaid them on `cubejs/cube:v1.7.45`. It now describes branch `feat/introspection-package` at `0b6eef90a969167b5dcd1ccaec3283567a1f914a` (`~/Work/bi/cube/.git/refs/heads/feat/introspection-package`). On that branch the API is a standalone package, `cube-introspection/`, on top of an unmodified Cube v1.7.45 (`docs/inputs/2026-09-25-cube-introspection-package.md` §1).
 
 - **Fixes folded in.** The fixes that `docs/research/cube/introspection-api-f6355de982.md` records at `f6355de982` are carried by the package and are part of this text: member numbering, a reserved `count`, time-typed keys, schema-bound joins, and "Continue wait" as 200 ([NOTICE][p-notice] L9–13; [queue.ts][p-queue] L82–88).

@@ -7,6 +7,16 @@ researched: 2026-09-19
 
 # Cube capability matrix
 
+> **Amended in part, 2026-09-25**, by the user's architecture decisions ([docs/inputs/2026-09-25-architecture-decisions.md](../inputs/2026-09-25-architecture-decisions.md)). Rows now superseded or stale:
+> - reading and publishing the model through `schemaVersion` and `repositoryFactory`, plus draft preview (:36): publishing now goes through xcube, and drafts become overlays;
+> - policies (:101): xcube also generates folder policies;
+> - named and per-tenant sources (:113), and connection tests run from wechart's server (:114, :156): xcube manages sources and runs the tests;
+> - the fork image's name (:119): now xcube;
+> - HA as Cloud-only (:135): the query path's HA is in scope, on Core, with 2+ Cube instances;
+> - "no write API for the model" (:157): xcube's admin API publishes after a whole-model check.
+>
+> See requirements §P2.4 "Architecture" and the new research in `cube/xcube-runtime.md`, `cube/generated-policies.md`, `cube/ha-topology.md` and `cube/whole-model-publish.md`.
+
 Every capability Cube exposes, whether Cube Core 1.7.42 has it, the API or configuration that drives it, and the wechart surface that would use it. Compiled from the per-area research in `docs/research/cube/`, which carries the upstream documentation and source links; the **Source** column names the area doc that holds them.
 
 **Legend.** _Core_ = available in Cube Core 1.7.42, which is what wechart runs. _Cloud_ = a Cube Cloud product feature, so **Core exposes no API for it**: wechart must build its own or drop it. _Phase 1_ records the scope decision from `docs/requirements.md` §6: **in** or **deferred**.

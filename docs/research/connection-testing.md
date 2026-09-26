@@ -29,6 +29,14 @@ sources:
 
 # Data-source connection testing: Cube 1.7.45's drivers through the fork (a) vs Node driver packages in wechart's API (b)
 
+> **Superseded in part, 2026-09-25**, by the user's architecture decisions 1, 7 and 12 ([docs/inputs/2026-09-25-architecture-decisions.md](../inputs/2026-09-25-architecture-decisions.md)).
+> - **Stands:** option (a). The test runs in the fork, now xcube, with Cube's own drivers.
+> - **Superseded:**
+>   - options (a′) and (b);
+>   - wechart decrypting credentials for the request;
+>   - a per-request `wechart`-claim token, replaced by the service credential ([tokens-and-service-credential.md](./cube/tokens-and-service-credential.md));
+>   - credentials crossing in the body. The body now carries only the ciphertext the browser made, which xcube decrypts and redacts ([credential-sealing.md](./credential-sealing.md)).
+
 ## Summary
 
 **What this covers.** How wechart's Test step checks a connection for PostgreSQL, Snowflake, Databricks, BigQuery, SQL Server and Oracle. Two options are compared:

@@ -24,6 +24,8 @@ sources:
 
 # Cube pre-aggregations and Cube Store 1.7.42
 
+> **Historical in one place, 2026-09-25** (architecture decision 1, [docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)): publishing "through wechart's publish endpoint, which has Cube compile it as a draft" (:300) becomes publishing through xcube.
+
 Pinned to Cube tag `v1.7.42` (released 2026-09-18) [rel-1742]. Doc links point at `docs-mintlify` at that tag. Source-code links point at the same tag. Anything marked **(source-only)** was read in the code at the tag but is not in the docs at the tag, so treat it as an unstable internal surface.
 
 ## Summary

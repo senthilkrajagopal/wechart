@@ -16,6 +16,14 @@ sources:
 
 # Cube data modeling 1.7.42
 
+> **Superseded in part, 2026-09-25**, by the user's architecture decisions 1, 2, 8, 10 and 12 ([docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)):
+> - reading the model from the React app (:66–80): only wechart's server calls Cube;
+> - HS256 JWTs (:87): RS256;
+> - `repositoryFactory` loading from wechart (:100–116): the model comes from xcube's store;
+> - per-tenant or per-draft models, and draft preview (:494–497, :1112–1114): one flat model, with overlays.
+>
+> Everything else here, Cube's modelling reference, still holds. See [xcube-runtime.md](./xcube-runtime.md).
+
 ## Summary
 
 This doc covers everything a user can define in the Cube data model at v1.7.42, which was released 2026-09-18 ([release]). It also covers how a UI outside Cube reads the compiled model and how it writes model files that Cube Core picks up. The npm packages (`@cubejs-client/core`, `@cubejs-backend/schema-compiler`, `cubejs-cli`) and the Docker image `cubejs/cube:v1.7.42` are all at 1.7.42 ([npm-client-latest], [npm-sc], [npm-cli], [hub]).

@@ -20,6 +20,8 @@ sources:
 ---
 # PostgreSQL official Docker image 18.6-alpine3.24
 
+> **Stale in one place, 2026-09-25** (architecture decision 1, [docs/inputs/2026-09-25-architecture-decisions.md](../inputs/2026-09-25-architecture-decisions.md)): "keeps … Cube model files in its own Postgres" (:25) changes. xcube holds the published model in its own schema; wechart keeps workspace content and its published versions' history.
+
 ## Summary
 
 `postgres:18.6-alpine3.24` is the Docker Official Image for PostgreSQL 18.6 on Alpine 3.24. wechart's API keeps dashboards, charts and Cube model files in its own Postgres, the "metadata DB". F24 / AC-248 need that DB to run in Kubernetes as a single-replica StatefulSet with a PersistentVolumeClaim, and to be Ready after `helm install --wait`. The existing persistence-across-restart constraint `[R5]` (AC-014, AC-015, AC-181) also applies.

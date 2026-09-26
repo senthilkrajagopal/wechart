@@ -12,6 +12,8 @@ sources:
 
 # Access-policy evaluation, as Cube 1.7.42 runs it
 
+> **Amended, 2026-09-25** (architecture decision 4, [docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)): the effective-access list built from the parsed YAML (:37–42) must also include the folder policies xcube generates. They aren't in the files wechart reads. See [generated-policies.md](./generated-policies.md).
+
 A sibling of `access-control.md`. That note gives the documented rules, and its "Observed locally" section gives what the seed view answered. This note reads the evaluation code in the compose container (`cubejs/cube:v1.7.42`, `/cube/node_modules/@cubejs-backend/server-core/dist/src/core/CompilerApi.js` and `…/schema-compiler/dist/src/compiler/CubeEvaluator.js`), to settle the questions T241's review raised. The Security workspace's effective-access list (AC-232) is written against it.
 
 ## Which policies apply (`getApplicablePolicies`)

@@ -27,6 +27,8 @@ sources:
 
 # Cube refresh_key schedules 1.7.42
 
+> **Historical in part, 2026-09-25** (architecture decisions 1 and 12, [docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md)): "the store's version for store contexts" (:308) and the HS256 probe token (:470–476) predate xcube's own store and RS256.
+
 ## Summary
 
 This doc covers a pre-aggregation's `refresh_key` schedule in self-hosted Cube Core 1.7.42: `every` as an interval or a cron, optionally with `timezone`. It explains how Cube turns that schedule into a refresh-key value, how the refresh worker notices when the value changes and rebuilds, and what the REST API shows about it. wechart imports no package for this. It writes YAML into the model and reads `/v1/meta?extended`.

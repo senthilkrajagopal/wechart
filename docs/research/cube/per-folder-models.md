@@ -21,6 +21,16 @@ sources: [
 
 # Cube per-folder models 1.7.45 (fork f6355de982)
 
+> **Superseded, 2026-09-25**, by the user's architecture decisions 1, 2, 3, 5 and 12 ([docs/inputs/2026-09-25-architecture-decisions.md](../../inputs/2026-09-25-architecture-decisions.md); requirements §P2.4 "Architecture", round R27).
+> - What this doc designs is replaced. Cube now serves one flat model under folder-prefixed names, owned by xcube, and xcube binds names at publish from each item's own folder. That replaces:
+>   - layout B, a compile per folder chain;
+>   - the `wechartModel` claim;
+>   - nearest-name serving by wechart;
+>   - binding from the viewer's folder;
+>   - connections served by wechart.
+> - Kept as the record, and still useful: its facts about Cube's own source (findings 4–5, §3's driver lifecycle, Gotchas 7–10 and 14).
+> - Replaced by [xcube-runtime.md](./xcube-runtime.md), [prefixed-names.md](./prefixed-names.md), [generated-policies.md](./generated-policies.md) and [whole-model-publish.md](./whole-model-publish.md).
+
 ## Summary
 
 **What this covers.** How wechart's phase-2 folder tree maps onto Cube's multitenancy hooks. Each folder path gets its own compiled model, resolved nearest name first. Pre-aggregations are kept apart and built for each path. Connections come from wechart's per-folder data sources rather than from Cube's environment.

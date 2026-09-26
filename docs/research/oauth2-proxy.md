@@ -25,6 +25,8 @@ sources: [
 ---
 # oauth2-proxy 7.15.4
 
+> **Stale in one place, 2026-09-25** (architecture decision 1, [docs/inputs/2026-09-25-architecture-decisions.md](../inputs/2026-09-25-architecture-decisions.md)): "Cube reads the model from the API Service" (:228) no longer holds. Cube never calls wechart.
+
 ## Summary
 
 oauth2-proxy is an MIT-licensed Go reverse proxy. It runs the OIDC authorization-code flow against a provider, keeps a session (an encrypted cookie or Redis), and passes the user's identity to the upstream in request headers ([repo][repo-api], [overview][ov]). wechart would run it as a container in front of the nginx-served SPA and the Fastify API. It can sit there as the edge reverse proxy, or behind nginx through `auth_request`. It is one of the two candidates in `docs/requirements.md` §P2.5 ("oauth2-proxy in front of wechart, or wechart's API as its own OIDC client"). This document covers only oauth2-proxy.
