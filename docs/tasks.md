@@ -6590,19 +6590,26 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
 
       All five are fixed as above. The review's point about stale state in Cube after the SQL reset is covered by the revision headers.
     - **AC-336 ticked** on `items-switch.spec.ts` (Chrome), run twice, and together with the cut-over spec (8 passed).
-- [ ] T426 (AC-321, AC-136, AC-288, AC-291, AC-009, AC-137) Publish through xcube's changesets, checking every module a change affects
-  - Files: `packages/api/src/xcube/changesets.ts` (+ test), `packages/api/src/model/publish.ts` (in place of T445's file-set dry run), `packages/api/src/routes/proposals.ts`, `packages/api/src/server.ts` (direct changes to models, data sources and folders holding them), `e2e/security/publish-check.spec.ts`
-  - Failing test: `changesets.test.ts` and `publish-check.spec.ts`, against xcube's slice 3:
-    - a proposal is checked (`dryRun`) when made, and applied at approval;
-    - a break refuses it and changes no folder, proposal or module;
-    - a direct delete of a model applies only if xcube accepts it;
-    - a stale base revision (`409`) is checked again (AC-321, AC-288, AC-291);
+- [ ] T426 (~~AC-321,~~ AC-136, ~~AC-288, AC-291,~~ AC-009, AC-137) Publish through xcube's changesets, checking every module a change affects *(split 2026-09-26: proposals don't exist yet (T343–T359), so their check and approval are T451; a direct delete comes with T428's deletes)*
+  - Files: `packages/api/src/xcube/changesets.ts` (+ test), `packages/api/src/xcube/client.ts` (+ test), `packages/api/src/xcube/check.ts` (+ test), `packages/api/src/model/publish.ts` (in place of T445's file-set dry run), ~~`packages/api/src/routes/proposals.ts`,~~ `packages/api/src/server.ts`, `e2e/publish-model.spec.ts`
+  - Failing test: `changesets.test.ts`, `check.test.ts` and `publish.test.ts`, against the stub, and `publish-model.spec.ts` against xcube's image:
+    - a direct publish is checked with the changeset's dry run, and applied as that changeset once committed to wechart's store;
+    - a break refuses it, on the item and its file, and changes nothing in xcube;
+    - ~~a direct delete of a model applies only if xcube accepts it;~~ *(T428)*
+    - a stale base revision (`409`) is read and sent again;
     - a retried changeset xcube already holds (`200`) is taken as done.
 
     AC-136 is reworded and ticked again here (R28 Q9); its error lands on the item, with no line from xcube's resolved copy (`[X3A]` §3). T433's refusal of anything that isn't YAML (AC-332) holds through the changeset publish, checked here.
 
     *Absorbs T432 (retired, 2026-09-26, `[R30]`):* xcube has no field-list route, so Cube's `/v1/meta`, merged across modules and keyed by `x-xcube-revision`, stays the field list. AC-009's and AC-137's tests are re-run here on items mode: after a changeset lands, `/api/meta` from either replica lists its new members within 60 s, without restarting Cube.
   - Depends on: ~~T420,~~ T419 (xcube's admin client, with the static admin token until slice 4), T445, T425, T449
+- [ ] T451 (AC-321, AC-288, AC-291) Check a proposal with a changeset's dry run when it is made, and apply that changeset at approval *(split from T426, 2026-09-26)*
+  - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/xcube/changesets.ts`, `e2e/security/publish-check.spec.ts`
+  - Failing test: `publish-check.spec.ts`, against xcube's image:
+    - a proposal is checked (`dryRun`) when made, and applied at approval;
+    - a break refuses it and changes no folder, proposal or module;
+    - a stale base revision (`409`) is checked again (AC-321, AC-288, AC-291).
+  - Depends on: T426, T349, T352
 - [ ] T427 (AC-322) Word a refused publish: breaks named in the folders the user may see, a count for the rest, all in the audit trail
   - Files: `packages/api/src/xcube/refusal.ts` (+ test), `packages/web/src/workspaces/reviews/Refusal.tsx` (+ test)
   - Failing test: `refusal.test.ts`:
@@ -6617,7 +6624,8 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
   - Failing test: `binding.spec.ts`, against xcube's slice 3:
     - /A/B publishes its own `orders`, and a chart published earlier in /A/B/C keeps /A's until it is published again, then takes /A/B's;
     - deleting /A's `orders` while that chart references it is refused, naming the chart;
-    - deleting it while another model item is bound to it is refused with xcube's naming of that item (AC-275).
+    - deleting it while another model item is bound to it is refused with xcube's naming of that item (AC-275);
+    - a direct delete of a model applies only if xcube accepts it *(from T426, 2026-09-26)*.
 
     wechart checks its own charts and dashboards against `GET …/items` before it sends a delete. xcube refuses a removal another item is bound to itself (`[X3]`; research 3a, "Removal and renames").
   - Depends on: T426, T429, T334
@@ -6806,8 +6814,8 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-278 | T344, T348 | AC-279 | T344 | AC-280 | T346 |
 | AC-281 | T347 | AC-282 | T345 | AC-283 | T347 |
 | AC-284 | T349, T358 | AC-285 | T350 | AC-286 | T351 |
-| AC-287 | T355, T356 | AC-288 | T352, T426 | AC-289 | T354, T357 |
-| AC-290 | T353 | AC-291 | T329, T426 | AC-292 | T366 |
+| AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357 |
+| AC-290 | T353 | AC-291 | T329, ~~T426~~ T451 | AC-292 | T366 |
 | AC-293 | T367 | AC-294 | T368 | AC-295 | T369 |
 | AC-296 | T370 | AC-297 | T371 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
@@ -6820,7 +6828,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-248 | T414, T415, T417 | AC-250 | T413, T420 | AC-009 | T447, T432 |
 | AC-136 | T445, T447, T426 | AC-137 | T447, ~~T432~~ T426 | AC-166 | T438 |
 | AC-332 (again) | T426 | AC-235 (again) | T445, T447 | AC-140 (again) | T446 |
-| AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | T426 |
+| AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | ~~T426~~ T451 |
 | AC-322 | T427 | AC-323 | T347, T440 | AC-324 | T333 |
 | AC-325 | T441 | AC-326 | T420, T437 | AC-327 | T431, T442 |
 | AC-328 | T341, T425, T449 | AC-329 | T429, T450 | AC-330 | T419, T447, T425, T449, T436, T442 |
