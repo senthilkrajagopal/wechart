@@ -5530,7 +5530,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - their rollups build into differently named tables, none over 63 bytes on Postgres;
     - renaming and moving /A changes neither published name, and rebuilds no rollup (AC-328).
   - **Watch (2026-09-26, `xcube-slice-3b.md` Gotchas 3 and 6):** this is the first task whose model has more than one module. A root cube that a folder item uses becomes shared, so `commons` and copies appear. A query spanning modules can wait for a union compile inside the request.
-  - *2026-09-26, from T334:* model files now sit in folders, but only the root's are sent to xcube (`modelFiles.list()` is the root's), and `POST /api/model/publish` refuses any other folder with 409. This task sends each folder's files as that folder's items (`xcube/items.ts` from the folder's stored xcube id; the sync's `files`, the check's `live` and the changeset), and lifts the 409. Names are then per folder (T336), so `redeclaredIn`, `pathsByName` and the check's placing of errors by name must look within the folder.
+  - *2026-09-26, from T334:* model files now sit in folders, but only the root's are sent to xcube (`modelFiles.list()` is the root's), and `POST /api/model/publish` refuses any other folder with 409. ~~This task sends each folder's files as that folder's items … and lifts the 409.~~ That is T452's now; this task keeps the isolation test.
   - ~~Files: `packages/api/src/model/chain.ts` (each served cube's `sql_alias` from its origin folder and resolved data source) … Failing test: `isolation.spec.ts`, against the real Cube: … the same query from each folder returns each one's own count …~~
   - Depends on: T425, T426, T429, T334, T449
 - [ ] T342 (AC-222, AC-131) Open a model in its folder, beside that folder's files, read-only when shared
@@ -6676,12 +6676,20 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
 
     wechart checks its own charts and dashboards against `GET …/items` before it sends a delete. xcube refuses a removal another item is bound to itself (`[X3]`; research 3a, "Removal and renames").
   - Depends on: T426, T429, T334
+- [ ] T452 (AC-328, AC-271) Publish model files into any folder, as that folder's items in xcube *(added 2026-09-26: after T334, only the root's files reached xcube, and T429's picker and T341's isolation both need a folder's cubes published)*
+  - Files: `packages/api/src/xcube/items.ts` (+ test), `packages/api/src/xcube/{snapshot,check,changesets}.ts`, `packages/api/src/repos/{model-files,folder-xcube-ids}.ts`, `packages/api/src/model/{publish,split}.ts`, `packages/api/src/main.ts`, `packages/api/src/xcube/fake.ts`, `packages/api/src/publish.test.ts`, `e2e/folder-models.spec.ts`
+  - Failing test:
+    - `items.test.ts`: a file in a folder is that folder's item, under its stored xcube id; a file in a folder xcube's tree doesn't hold (a workspace's, or one not given an id yet) is left out.
+    - `publish.test.ts`: a publish into /A is checked and applied as /A's item and stored in /A; /A and the root may each hold a `sales`, and a second `sales` in /A is refused, naming the file that declares it (AC-271, and AC-270's model-files half); a publish into a folder xcube's tree doesn't hold is refused.
+    - `folder-models.spec.ts`, against compose's xcube: a cube published into a new folder is served as `<folderId>__<shortName>`, and the root's stay bare (AC-328).
+  - This lifts T334's 409. Names in a folder, and a generated cube's clash, are checked against that folder's files; the other checks that read the model by name are T450's.
+  - Depends on: T334, T425, T426, T449
 - [ ] T429 (AC-272, AC-329) Bind a chart's and a dashboard's cubes at publish ~~to their prefixed names~~ through xcube's resolver, and pick cubes by title and folder path
   - Files: `packages/api/src/model/bind.ts` (+ test), ~~`packages/api/src/xcube/meta.ts` (`GET /v1/semantic/meta`)~~ `packages/api/src/xcube/client.ts` (`POST …/resolve`, `GET …/items`), `packages/web/src/workspaces/builder/FieldList.tsx`, `e2e/security/picker.spec.ts`
   - Failing test:
     - `bind.test.ts`: a chart in /A/B binds /A/B's `sales` over /A's, never /A/B/C's or a sibling's, and stores its published name: `f…__sales`, or `sales` for the root's. A name found nowhere on its path is refused, naming it. A second cube the chart uses is bound as its source cube's recorded bindings have it (AC-272).
     - `picker.spec.ts`: the picker lists only the cubes on the item's path, each by its title with its folder path (from `meta.xcube`), never a prefixed name (AC-329).
-  - Depends on: T425, T426, T334
+  - Depends on: T425, T426, T334, T452
 - [x] T431 (AC-327, AC-251) Remove Cube's model callbacks: `/api/cube-model/*`, the `cube` access class, and the model logic in `cube.js` *(moved into slice 2's cut-over, 2026-09-26, `[R29]`: it follows T447 there)*
   - Files: `packages/api/src/model/publish.ts` (the draft path), `packages/api/src/model/drafts.ts` and `publish-drafts.test.ts` (T418's, gone), a migration dropping `publish_drafts`, `packages/api/src/auth/guard.ts` (+ test), `packages/api/src/config.ts` (`WECHART_MODEL_KEY`, `WECHART_CUBE_STORE_URL`), `packages/api/src/cube/client.ts` (the draft-only `meta(context)` and `sqlUnder`), `infra/cube/cube.js` (the draft's scopes), the Playwright configs, `docker-compose.yml` (`WECHART_MODEL_STORES`, `WECHART_MODEL_KEY`, `extra_hosts`), the Helm chart's same settings and nginx's `/api/cube-model/` block, `deploy/helm/verify.sh`, ~~`e2e/security/no-callbacks.spec.ts`~~ `e2e/no-callbacks.spec.ts` and `e2e/api-process.ts` (as built)
   - Failing test:
@@ -6855,7 +6863,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327, T334, T335 |
 | AC-263 | T313, T326, T334, T335, T436 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371 |
 | AC-266 | T326, T340, T334 | AC-267 | T328, T334, T335, T343, T408 | AC-268 | T340, T408 |
-| AC-269 | T334, T335 | AC-270 | T336 | AC-271 | T336 |
+| AC-269 | T334, T335 | AC-270 | T336 | AC-271 | T336, T452 |
 | AC-272 | ~~T337, T339, T340~~ T429 | AC-273 | ~~T338~~ T435 | AC-274 | T341 |
 | AC-275 | ~~T337, T352~~ T428 | AC-276 | T343 | AC-277 | T343 |
 | AC-278 | T344, T348 | AC-279 | T344 | AC-280 | T346 |
@@ -6878,7 +6886,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | ~~T426~~ T451 |
 | AC-322 | T427 | AC-323 | T347, T440 | AC-324 | T333 |
 | AC-325 | T441 | AC-326 | T420, T437 | AC-327 | T431, T442 |
-| AC-328 | T341, T425, T449 | AC-329 | T429, T450 | AC-330 | T419, T447, T425, T449, T436, T442 |
+| AC-328 | T341, T425, T449, T452 | AC-329 | T429, T450 | AC-330 | T419, T447, T425, T449, T436, T442 |
 | ~~AC-331~~ (retired, `[R30]`) | ~~T430~~ | AC-332 | T433 | AC-333 | T419, T447, T449, T425 |
 | AC-334 | T421, T447 | AC-335 | T446, T447 | AC-336 | T430, T449 |
 | AC-337 | T448 | AC-009 (again) | T426 | AC-189, AC-249 (again, folder items) | T450 |
