@@ -66,7 +66,7 @@ A read-only role is enough for Cube's `rollup` pre-aggregations, which are built
 ```sh
 helm upgrade --install wechart deploy/helm/wechart \
   --kube-context docker-desktop -n wechart --create-namespace \
-  -f deploy/helm/values/docker-desktop.yaml --set images.tag=$TAG \
+  -f deploy/helm/values/docker-desktop.yaml --set-string images.tag=$TAG \
   --wait --timeout 10m
 ```
 
@@ -92,6 +92,27 @@ This is T274's test. It needs helm, kubectl, curl and jq, and it checks:
 5. A query from the web app reaches the data source the values name. The script publishes one cube on `public.orders` (`PROBE_TABLE`) through `/api/model/publish`, as the Model workspace does. It asks `/api/load` for the cube's count and expects more than zero. Then it removes the file again.
 
 The API publishes model files and never deletes them, so step 5 removes its file from the metadata database with `psql` in the `meta` pod. The official Postgres image trusts connections over its own socket (`docs/research/postgres-image.md`, "Log noise").
+
+## Sign-in
+
+Without it, wechart runs as phase 1 did: one user, a Super-Admin, and no sign-in (AC-254). `deploy/helm/values/docker-desktop-security.yaml`, laid over the Docker Desktop values, turns sign-in on with Dex, the development provider, running beside wechart (T324, AC-257):
+
+```sh
+helm upgrade --install wechart deploy/helm/wechart \
+  --kube-context docker-desktop -n wechart --create-namespace \
+  -f deploy/helm/values/docker-desktop.yaml \
+  -f deploy/helm/values/docker-desktop-security.yaml --set-string images.tag=$TAG \
+  --wait --timeout 10m
+EXTRA_VALUES=deploy/helm/values/docker-desktop-security.yaml IMAGE_TAG=$TAG deploy/helm/verify.sh
+```
+
+- **Dex** listens at **http://localhost:5557/dex**, its issuer. Compose's Dex has 5556. Its configuration is compose's (`infra/dex/config.yaml`, linked into the chart as `files/dex-config.yaml`), with the issuer moved to 5557: memory storage and the static test users, whose passwords are in `infra/dex/test-users.json`. Development only.
+- **The API** reaches that same Dex at its Service inside the cluster. `WECHART_OIDC_BACKCHANNEL_URL` rewrites only the origin, so the issuer the browser sees stays the token's `iss` (`docs/research/dex.md` §4, pattern B).
+- **nginx** asks the API's `/api/auth/check` before serving any page or file of the app, and sends a page nobody is signed in to `/api/auth/login` (T321).
+- **Generated**: the session cookie's secret and the client secret Dex and the API share, in the chart's Secret with the others (below).
+- **Another provider** (Entra ID at phase end, T411; not yet tried): set `security.oidc.issuer`, `security.oidc.clientSecret.name` (a Secret you create), `security.publicUrl` and `security.superAdminGroup`, and leave `security.dex.enabled` off. The provider must list `<publicUrl>/api/auth/callback` as a redirect URI, and `<publicUrl>/` as a post-logout one. **Limits today:** an `https` `publicUrl` makes the API require `WECHART_TRUST_PROXY`, which the chart doesn't set yet, and the chart's nginx forwards its own `$scheme`, so a TLS terminator in front of it must be handled too. T411 settles both.
+
+`verify.sh` then also checks that `/explore` without a session goes to sign-in and `/api/me` answers 401, signs `writer` in through Dex's form and finds them in `/api/me`, and runs its other checks signed in as `super`.
 
 ## The model
 
@@ -124,7 +145,7 @@ Only `type` is required. `host`, `port`, `database` and `user` are set only when
 
 ## What the chart generates
 
-At the first install the chart generates Cube's API secret, the key Cube reads the model store with, and the metadata database's password. It keeps them in the Secret `wechart-secrets`. Every upgrade reads them back, so they never change (`docs/research/helm.md`, "Pattern: generate-once Secret").
+At the first install the chart generates Cube's API secret, the key Cube reads the model store with, the metadata database's password, and for sign-in the session cookie's secret and the OIDC client secret its Dex shares with the API. It keeps them in the Secret `wechart-secrets`. Every upgrade reads them back, so they never change (`docs/research/helm.md`, "Pattern: generate-once Secret").
 
 The Secret is kept on uninstall (`helm.sh/resource-policy: keep`). The metadata database's volume outlives an uninstall too, and its password was set when the database was first initialised, so a new password would lock the API out. A reinstall with the same release name and namespace takes the kept Secret back.
 

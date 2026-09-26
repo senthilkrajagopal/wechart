@@ -8,7 +8,10 @@
 #   deploy/helm/verify.sh --no-install  check the release already installed
 #
 # Environment: KUBE_CONTEXT (docker-desktop), NAMESPACE (wechart), RELEASE
-# (wechart), VALUES (deploy/helm/values/docker-desktop.yaml), IMAGE_TAG (the
+# (wechart), VALUES (deploy/helm/values/docker-desktop.yaml), EXTRA_VALUES
+# (more values files over it, colon-separated; with
+# deploy/helm/values/docker-desktop-security.yaml, sign-in is on and checked
+# through Dex, T324), IMAGE_TAG (the
 # tag both wechart images were built with; the values' own when unset),
 # PROBE_TABLE (a table in the data source; public.orders, northwind's).
 #
@@ -52,7 +55,15 @@ done
 
 # Never empty, so "${values_args[@]}" is safe under `set -u` in macOS's bash 3.2.
 values_args=(-f "$values")
-if [[ -n "${IMAGE_TAG:-}" ]]; then values_args+=(--set "images.tag=$IMAGE_TAG"); fi
+# More values files laid over it, colon-separated: sign-in on Docker Desktop is
+# EXTRA_VALUES=deploy/helm/values/docker-desktop-security.yaml (T324).
+if [[ -n "${EXTRA_VALUES:-}" ]]; then
+  IFS=: read -r -a extra <<< "$EXTRA_VALUES"
+  for file in "${extra[@]}"; do values_args+=(-f "$file"); done
+fi
+# --set-string: a short commit hash of digits only (6141947) is otherwise a
+# number, and the image becomes `wechart-api:%!s(int64=6141947)`.
+if [[ -n "${IMAGE_TAG:-}" ]]; then values_args+=(--set-string "images.tag=$IMAGE_TAG"); fi
 
 # 1. The chart lints and renders.
 if helm lint "$chart" "${values_args[@]}" > /dev/null; then
@@ -106,8 +117,81 @@ url="http://${host:-localhost}:$port"
 echo "      web app: $url"
 
 body="$(mktemp)"
-trap 'rm -f "$body"' EXIT
-fetch() { curl -sS -o "$body" -w '%{http_code}' --max-time 30 "$@"; }
+jar="$(mktemp)"
+trap 'rm -f "$body" "$jar" "$jar".*' EXIT
+# With sign-in on, every check after the sign-in ones carries that session.
+fetch() { curl -sS -o "$body" -w '%{http_code}' --max-time 30 -b "$jar" "$@"; }
+
+# 3a. With sign-in on (T324, AC-251, AC-257): a page without a session goes
+# to sign-in and the API refuses it; the development provider beside wechart
+# signs a test user in through its own form, as a browser would.
+security="$(jq -r '.security.enabled // false' <<< "$release_values")"
+if [[ "$security" == true ]]; then
+  users_file="$here/../../infra/dex/test-users.json"
+  # Signs $1 (a test user) in through Dex's form into cookie jar $2.
+  sign_in() {
+    local email password dex page action
+    email="$(jq -r --arg u "$1" '.[$u].email' "$users_file")"
+    password="$(jq -r --arg u "$1" '.[$u].password' "$users_file")"
+    dex="$(curl -sS -c "$2" -b "$2" -o /dev/null -w '%{redirect_url}' --max-time 30 \
+      "$url/api/auth/login?returnTo=/explore")"
+    # Dex, with one connector, sends /auth on to its login form.
+    page="$(curl -sS -L -c "$2" -b "$2" -o "$body" -w '%{url_effective}' --max-time 30 "$dex")"
+    action="$(grep -oE '<form[^>]*method="post"[^>]*action="[^"]+"' "$body" | sed -E 's/.*action="([^"]+)".*/\1/; s/&amp;/\&/g')"
+    [[ -n "$action" ]] || return 1
+    # Posted, then through Dex's approval (skipped) and wechart's callback,
+    # which sets the session cookie, to /explore.
+    curl -sS -L -c "$2" -b "$2" -o /dev/null -w '%{url_effective}' --max-time 30 \
+      --data-urlencode "login=$email" --data-urlencode "password=$password" \
+      "$(sed -E 's#^(https?://[^/]+).*#\1#' <<< "$page")$action"
+  }
+
+  location="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 30 "$url/explore")"
+  if [[ "$location" == "302 $url/api/auth/login?returnTo=/explore" ]]; then
+    pass '3a. /explore without a session goes to sign-in'
+  else
+    fail "3a. /explore without a session answered $location"
+  fi
+  status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$url/api/me")"
+  if [[ "$status" == 401 ]]; then
+    pass '3a. /api/me without a session answers 401'
+  else
+    fail "3a. /api/me without a session answered $status"
+  fi
+  # Sign-in's next hop is the provider, at the issuer the values give it.
+  issuer="$(jq -r 'if (.security.oidc.issuer // "") != "" then .security.oidc.issuer
+    else "http://localhost:\(.security.dex.port)/dex" end' <<< "$release_values")"
+  hop="$(curl -sS -o /dev/null -w '%{redirect_url}' --max-time 30 "$url/api/auth/login?returnTo=/explore")"
+  if [[ "$hop" == "$issuer/auth?"* ]]; then
+    pass "3a. sign-in goes on to the provider at $issuer"
+  else
+    fail "3a. sign-in went on to $hop, not $issuer/auth"
+  fi
+  if [[ "$(jq -r '.security.dex.enabled // false' <<< "$release_values")" == true ]]; then
+    dex_state="$(k get deployments -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=dex" \
+      -o jsonpath='{.items[0].status.readyReplicas}/{.items[0].spec.replicas}')"
+    if [[ "$dex_state" == 1/1 ]]; then
+      pass '3a. dex Ready: 1/1'
+    else
+      fail "3a. dex not Ready: $dex_state"
+    fi
+  fi
+  landed="$(sign_in writer "$jar.writer")"
+  status="$(curl -sS -o "$body" -w '%{http_code}' --max-time 30 -b "$jar.writer" "$url/api/me")"
+  if [[ "$landed" == "$url/explore" && "$status" == 200 ]] &&
+    jq -e '.name == "Wren Writer" and .groups == ["sales-rw"] and .security == "oidc"' "$body" > /dev/null; then
+    pass "3a. writer signed in through Dex: $(jq -c '{name, groups}' "$body")"
+  else
+    fail "3a. writer's sign-in ended at $landed; /api/me answered $status: $(head -c 300 "$body")"
+  fi
+  # The checks below run signed in as super, the test user in the configured
+  # Super-Admin group (a Super-Admin once T323 reads that group).
+  if [[ "$(sign_in super "$jar")" == "$url/explore" ]]; then
+    pass '3a. signed in as super for the checks below'
+  else
+    fail '3a. super could not sign in; the checks below run without a session'
+  fi
+fi
 
 for path in / /explore /model/files/cubes/orders.yml; do
   status="$(fetch "$url$path")"
@@ -123,6 +207,18 @@ if [[ -n "$script" && "$status" == 200 ]]; then
   pass "3. the app's script loads ($script)"
 else
   fail "3. the app's script ($script) answered $status"
+fi
+# With sign-in on, every gated location refuses a request without a session,
+# not only the pages (T324's review): the page itself and the app's files too.
+if [[ "$security" == true ]]; then
+  for path in /index.html "$script"; do
+    status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$url$path")"
+    if [[ "$status" == 302 ]]; then
+      pass "3a. $path without a session goes to sign-in"
+    else
+      fail "3a. $path without a session answered $status"
+    fi
+  done
 fi
 status="$(fetch "$url/assets/no-such-file.js")"
 if [[ "$status" == 404 ]]; then

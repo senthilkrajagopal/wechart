@@ -1,0 +1,24 @@
+# Sign-in on Docker Desktop (T324, AC-257): laid over docker-desktop.yaml,
+#   helm upgrade --install wechart deploy/helm/wechart -n wechart \
+#     -f deploy/helm/values/docker-desktop.yaml \
+#     -f deploy/helm/values/docker-desktop-security.yaml
+# with Dex, the development provider, beside wechart and its test users
+# (infra/dex/test-users.json). Without this file the release stays as phase 1
+# left it: single-user mode, no sign-in. (A decision of T324's: the deployed
+# demo keeps phase 1's mode until the user chooses otherwise.)
+
+security:
+  enabled: true
+  # The web Service's address (docker-desktop.yaml's web.service.port).
+  publicUrl: http://localhost:8089
+  oidc:
+    # Dex sends groups only when asked for its `groups` scope (research/dex.md).
+    scopes: openid profile email groups
+    # Dex here speaks plain HTTP: development only.
+    allowHttp: true
+  # The test users' Super-Admin group (infra/dex/config.yaml).
+  superAdminGroup: wechart-super-admins
+  dex:
+    enabled: true
+    # http://localhost:5557/dex: compose's Dex has 5556.
+    port: 5557

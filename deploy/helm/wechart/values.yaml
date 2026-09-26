@@ -83,3 +83,40 @@ cubestore:
   # Anything else for Cube Store, e.g. CUBESTORE_LOG_LEVEL.
   env: {}
   resources: {}
+
+# Sign-in (phase 2, F25; T324). Off, wechart runs as phase 1's single user,
+# a Super-Admin, with no sign-in (AC-254).
+security:
+  enabled: false
+  # What the browser sees wechart as, e.g. http://localhost:8089: sign-in's
+  # callback and every return address are built from it.
+  publicUrl: ''
+  # The OIDC provider wechart signs people in with (research/openid-client.md).
+  oidc:
+    # Exactly the provider's `iss`, as the browser reaches it.
+    issuer: ''
+    clientId: wechart
+    # The Secret holding the client's secret. Empty with dex.enabled: the chart
+    # generates one for the Dex it runs and gives it to both.
+    clientSecret:
+      name: ''
+      key: client-secret
+    # The claim carrying AD groups.
+    groupsClaim: groups
+    scopes: openid profile email
+    # A plain-HTTP issuer: development only.
+    allowHttp: false
+    # Where the API reaches the provider when that differs from the issuer
+    # the browser uses (an in-cluster Service): only the origin is rewritten.
+    backchannelUrl: ''
+  # The group whose members are Super-Admins (AC-256), as the provider sends it.
+  superAdminGroup: ''
+  # The development provider, Dex 2.45.1, beside wechart with the test users
+  # of infra/dex (AC-257): never for production.
+  dex:
+    enabled: false
+    image: dexidp/dex:v2.45.1@sha256:8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462
+    # The port the browser reaches Dex at on the host (a LoadBalancer on
+    # Docker Desktop), which is also the issuer's. Compose's Dex has 5556.
+    port: 5557
+    resources: {}

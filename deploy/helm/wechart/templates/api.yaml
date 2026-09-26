@@ -105,6 +105,48 @@ spec:
             - name: WECHART_SEED
               value: "1"
             {{- end }}
+            {{- with .Values.security }}
+            {{- if .enabled }}
+            # Sign-in (T324; packages/api/src/config.ts): everyone signs in
+            # through the OIDC provider; the session lives in the metadata
+            # database, signed by a secret the chart generated.
+            - name: WECHART_SECURITY
+              value: oidc
+            - name: WECHART_PUBLIC_URL
+              value: {{ required "security.publicUrl is required when security.enabled, e.g. http://localhost:8089" .publicUrl | quote }}
+            - name: WECHART_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wechart.secretName" $ }}
+                  key: session-secret
+            - name: WECHART_OIDC_ISSUER
+              value: {{ include "wechart.oidcIssuer" $ | quote }}
+            - name: WECHART_OIDC_CLIENT_ID
+              value: {{ .oidc.clientId | quote }}
+            - name: WECHART_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  {{- include "wechart.oidcClientSecretRef" $ | nindent 18 }}
+            - name: WECHART_OIDC_GROUPS_CLAIM
+              value: {{ .oidc.groupsClaim | quote }}
+            - name: WECHART_OIDC_SCOPES
+              value: {{ .oidc.scopes | quote }}
+            {{- if .oidc.allowHttp }}
+            - name: WECHART_OIDC_ALLOW_HTTP
+              value: "true"
+            {{- end }}
+            {{- if or .oidc.backchannelUrl .dex.enabled }}
+            # The browser reaches the issuer on the host; this pod reaches the
+            # same provider at its Service (research/dex.md §4, pattern B).
+            - name: WECHART_OIDC_BACKCHANNEL_URL
+              value: {{ default (printf "http://%s:%d" (include "wechart.host" (list $ "dex")) (int .dex.port)) .oidc.backchannelUrl | quote }}
+            {{- end }}
+            {{- with .superAdminGroup }}
+            - name: WECHART_SUPER_ADMIN_GROUP
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /api/health

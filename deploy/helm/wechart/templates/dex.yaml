@@ -1,0 +1,124 @@
+{{- /*
+Dex 2.45.1, the development OIDC provider, beside wechart (T324, AC-257;
+docs/research/dex.md). Only with security.enabled and security.dex.enabled:
+never for production. Its configuration is docker-compose's own
+(infra/dex/config.yaml: memory storage, the static test users and their
+groups), with the issuer moved to the port the browser reaches this Dex at.
+*/ -}}
+{{- if and .Values.security.enabled .Values.security.dex.enabled }}
+{{- $name := include "wechart.component" (list . "dex") }}
+{{- $issuer := include "wechart.oidcIssuer" . }}
+{{- $composeConfig := .Files.Get "files/dex-config.yaml" }}
+{{- $composeIssuer := "issuer: http://localhost:5556/dex" }}
+{{- if not (contains $composeIssuer $composeConfig) }}
+{{- fail (printf "files/dex-config.yaml (infra/dex/config.yaml) is missing or no longer has %q, which the Helm Dex replaces" $composeIssuer) }}
+{{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}-config
+  labels:
+    {{- include "wechart.labels" (list . "dex") | nindent 4 }}
+type: Opaque
+stringData:
+  config.yaml: |
+    {{- $composeConfig | replace $composeIssuer (printf "issuer: %s" $issuer) | nindent 4 }}
+---
+# The browser reaches Dex on the host at the issuer's port (a LoadBalancer on
+# Docker Desktop); the API reaches it at this Service, inside the cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list . "dex") | nindent 4 }}
+spec:
+  type: LoadBalancer
+  selector:
+    {{- include "wechart.selectorLabels" (list . "dex") | nindent 4 }}
+  # One port only: a LoadBalancer on Docker Desktop publishes each port it
+  # lists on the host, where compose's Dex already has 5556.
+  ports:
+    - name: http
+      port: {{ .Values.security.dex.port }}
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list . "dex") | nindent 4 }}
+spec:
+  # Memory storage is per process (research §3).
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "wechart.selectorLabels" (list . "dex") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "wechart.labels" (list . "dex") | nindent 8 }}
+      annotations:
+        # A changed configuration restarts it: Dex reads it only as it starts.
+        checksum/config: {{ printf "%s%s" $issuer $composeConfig | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        # The image's own dex user (research §1).
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dex
+          image: {{ .Values.security.dex.image }}
+          imagePullPolicy: IfNotPresent
+          args: [dex, serve, /etc/dex/config.yaml]
+          env:
+            # The client secret the API holds too (secrets.yaml).
+            - name: WECHART_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  {{- include "wechart.oidcClientSecretRef" . | nindent 18 }}
+          ports:
+            - name: http
+              containerPort: 5556
+            - name: telemetry
+              containerPort: 5558
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: telemetry
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: telemetry
+            periodSeconds: 10
+            failureThreshold: 6
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/dex
+              readOnly: true
+            # The entrypoint writes the rendered config here (research Gotcha 5).
+            - name: tmp
+              mountPath: /tmp
+          {{- with .Values.security.dex.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: config
+          secret:
+            secretName: {{ $name }}-config
+        - name: tmp
+          emptyDir: {}
+{{- end }}

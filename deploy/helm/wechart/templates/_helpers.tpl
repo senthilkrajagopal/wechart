@@ -59,6 +59,25 @@ app.kubernetes.io/part-of: wechart
 {{- printf "%s:%s" (index . 1) (default $root.Chart.AppVersion $root.Values.images.tag) }}
 {{- end }}
 
+{{/*
+Sign-in (T324): the issuer wechart and the browser use — the values' own, or
+with the bundled Dex, Dex as the browser reaches it on the host.
+*/}}
+{{- define "wechart.oidcIssuer" -}}
+{{- $s := .Values.security -}}
+{{- if $s.oidc.issuer }}{{ $s.oidc.issuer }}
+{{- else if $s.dex.enabled }}{{ printf "http://localhost:%d/dex" (int $s.dex.port) }}
+{{- else }}{{ fail "security.oidc.issuer is required when security.enabled and not security.dex.enabled" }}
+{{- end }}
+{{- end }}
+
+{{/* The Secret and key holding the OIDC client's secret: the values' own, or the chart's for its Dex. */}}
+{{- define "wechart.oidcClientSecretRef" -}}
+{{- $ref := .Values.security.oidc.clientSecret -}}
+name: {{ default (include "wechart.secretName" .) $ref.name }}
+key: {{ if $ref.name }}{{ $ref.key | default "client-secret" }}{{ else }}oidc-client-secret{{ end }}
+{{- end }}
+
 {{/* Where Cube reads wechart's model store: the API, as Cube reaches it. */}}
 {{- define "wechart.modelStoreUrl" -}}
 {{- printf "http://%s:%d" (include "wechart.host" (list . "api")) (int .Values.api.port) }}

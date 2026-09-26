@@ -883,7 +883,7 @@ Phase 2's criteria start at AC-251. Its requirements are in [docs/requirements.m
 Purpose: nobody reaches wechart without signing in when security is on, and one user has everything when it's off.
 Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R14, R15, R18, R19]`.
 
-- [ ] AC-251 WHERE security is enabled, WHEN a request without a signed-in session reaches a wechart page or API route, THE SYSTEM SHALL send a page request to the configured OIDC provider's sign-in, and answer an API request with 401, returning no wechart content either way. Health routes are exempt.
+- [x] AC-251 WHERE security is enabled, WHEN a request without a signed-in session reaches a wechart page or API route, THE SYSTEM SHALL send a page request to the configured OIDC provider's sign-in, and answer an API request with 401, returning no wechart content either way. Health routes are exempt.
       Fails when: any page renders wechart content, or any API route other than health returns data, without a signed-in session.
 - [x] AC-252 WHERE security is enabled, WHEN a user signs in, THE SYSTEM SHALL take their identity and AD groups from the provider's token, as the configuration names them (issuer, client, groups claim), and show the user's name and a Sign out control in the top bar.
       Fails when: the groups wechart grants access by differ from the token's, or the top bar shows no name or no Sign out.
@@ -897,7 +897,7 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R14, R15, R18, R19]`.
       Fails when: a folder granted only to the last of a 20-group user's groups is refused to them.
 - [ ] AC-256 THE SYSTEM SHALL take the Super-Admin group's name from the deployment's configuration, and treat that group's members as Super-Admins (`[R18]`).
       Fails when: a member of the configured group lacks a Super-Admin permission, or someone outside it has one.
-- [ ] AC-257 WHERE security is enabled, THE SYSTEM SHALL sign users in through the development OIDC provider in docker-compose and in the Helm release on docker-desktop, with the provider running beside wechart (`[R14, R15]`).
+- [x] AC-257 WHERE security is enabled, THE SYSTEM SHALL sign users in through the development OIDC provider in docker-compose and in the Helm release on docker-desktop, with the provider running beside wechart (`[R14, R15]`).
       Fails when: signing in fails in either environment, or either environment needs a provider outside it.
 - [ ] AC-258 WHEN wechart is configured against Microsoft Entra ID, or against on-prem AD through an OIDC broker, THE SYSTEM SHALL sign users in and resolve their AD groups as it does with the development provider. Checked once, at the end of phase 2 (`[R14, R15]`).
       Fails when: signing in fails, or the groups wechart resolves differ from the directory's.

@@ -5148,11 +5148,29 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/config.ts` (`WECHART_SUPER_ADMIN_GROUP`), `packages/api/src/auth/user.ts`, `packages/api/src/auth/admin.test.ts`
   - Failing test: `admin.test.ts`: a member of the configured group gets `superAdmin: true` and reaches every folder and admin route; a user outside it gets 403 on the admin routes (AC-256, AC-265).
   - Depends on: T313, T316
-- [ ] T324 (AC-257, AC-251) Run Dex beside wechart in the Helm release on docker-desktop and sign in there
+- [x] T324 (AC-257, AC-251) Run Dex beside wechart in the Helm release on docker-desktop and sign in there
   - Files: `deploy/helm/wechart/templates/{dex.yaml,dex-config.yaml}`, `deploy/helm/wechart/values.yaml` (`security.enabled`, `security.oidc.*`, `security.dex.*`, `security.superAdminGroup`), `deploy/helm/wechart/templates/{api.yaml,secrets.yaml,_helpers.tpl}` (the OIDC client secret and the session secret, generated once), `deploy/helm/values/docker-desktop.yaml`, `deploy/helm/verify.sh`
   - Failing test: `verify.sh` with security on: `/explore` without a cookie is redirected to Dex; a scripted sign-in as `writer` through Dex's form makes `/api/me` answer with that user (AC-257, Helm half).
   - Depends on: T321, T317
   - Also (T321's review): signed in, a page and the app's script answer 200 through nginx's `auth_request`, so the subrequest is shown to carry the cookie (AC-251's page half in the deployment; research's open question).
+  - **Done 2026-09-25.**
+    - **Values:** `security.*` in the chart, off by default. `values/docker-desktop-security.yaml`, laid over the Docker Desktop values, turns sign-in on with Dex beside wechart.
+    - **Dex:** `templates/dex.yaml` runs compose's own config (linked as `files/dex-config.yaml`), with the issuer moved to `http://localhost:5557/dex`, since compose's Dex has 5556. It is published by a LoadBalancer on that port, runs as UID 1001 with a read-only root, and gets `/tmp` for its entrypoint. The render fails if compose's issuer line ever changes.
+    - **API:** it takes the issuer, the client secret, and a back channel to Dex's Service (only the origin rewritten), plus the session secret. Both secrets are generated once in the chart's Secret. The Super-Admin group is passed, and read from T323.
+    - **Decision (small):** the deployed demo stays single-user; sign-in is the overlay's. After verifying, the release was upgraded back without it and verified again. It now runs `wechart-api`/`wechart-web:6141947`.
+    - **`verify.sh`** takes `EXTRA_VALUES`. With sign-in on, it checks:
+      - that `/explore`, `/index.html` and the app's script without a session go to sign-in, and `/api/me` answers 401;
+      - that sign-in goes on to the issuer, and Dex is Ready;
+      - that `writer` signs in through Dex's form and `/api/me` names them;
+      - then every other check signed in as `super`, pages and script included, through `auth_request`.
+      All passed on docker-desktop, and again with sign-in off.
+    - **Found live:** a digits-only image tag (`6141947`) became `wechart-api:%!s(int64=6141947)` through `--set`; `verify.sh` and `docs/deploy.md` now use `--set-string`.
+    - **The cold review (PASS)** led to:
+      - the no-session checks for `/index.html` and the script, the Dex hop and Dex's readiness;
+      - the issuer guard;
+      - the limits of another provider stated in `docs/deploy.md` (an https `publicUrl` needs `WECHART_TRUST_PROXY`, which the chart doesn't set yet: T411);
+      - research marked verified: the cookie through `auth_request`, pattern B, and the localhost LoadBalancer.
+    - **Ticked:** AC-257 (compose T320, Helm here) and AC-251 (API T318, app T321, deployment here).
 
 ## P2.2 Folder permissions and roles (F26)
 

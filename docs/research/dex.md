@@ -402,6 +402,15 @@ const config = await client.discovery(
   - Measure with `docker stats` or `kubectl top`.
 - **Startup time:** UNVERIFIED. Gate readiness on `/healthz/ready` ([serve.go][serve-go]).
 
+## Observed at T315 and T324 (2026-09-25)
+
+Settled by running it, not by the sources above:
+- **The BusyBox `wget` healthcheck works** in compose (T315's review).
+- **§4 pattern B works with openid-client 6.8.8.** In the Helm release on docker-desktop, the issuer is `http://localhost:5557/dex` for the browser. The API reaches the same Dex at its Service through `customFetch`, rewriting only the origin (`packages/api/src/auth/oidc.ts`). `deploy/helm/verify.sh` signed `writer` in through Dex's form, and the token's `iss` was accepted.
+- **Docker Desktop publishes a LoadBalancer Service on the host's `localhost`** at its port: Dex at `localhost:5557`, beside wechart's web at 8089. A Service may list only ports free on the host: compose's Dex holds 5556, so the Helm Service has one port, 5557.
+- **Run as UID 1001, with `readOnlyRootFilesystem` and an `emptyDir` at `/tmp`** for the entrypoint's gomplate output (Gotcha 5): the pod was Ready and served sign-in.
+- Still unverified: the in-pod resolution of `host.docker.internal` (pattern C, unused), and the size of a 20-group token.
+
 ## Alternatives considered
 
 Not requested; this brief covers one candidate.
