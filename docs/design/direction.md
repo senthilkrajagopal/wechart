@@ -422,13 +422,13 @@ Two further changes made at the same time, neither of them a contrast failure:
 
 ## 7c. Phase 1 scope adjustments (user decision, 2026-09-19)
 
-- **Users and groups are phase 2.** Phase 1 assumes a single user. The Security surface is limited to listing access policies (authored in the model) and a **security-context preview**: the user edits a JWT payload and sees effective access, generated SQL and a dashboard preview. There are no user or group admin screens.
+- **Users and groups are phase 2.** Phase 1 assumes a single user. The Security surface is limited to listing access policies (authored in the model) and a **security-context preview**: the user edits a JWT payload and sees effective access, generated SQL and a dashboard preview. There are no user or group admin screens. *Phase 2 (amended 2026-09-25, decision 12, R27): the preview chooses groups rather than editing a payload, and the effective access includes the policies xcube generates from folder groups (AC-166, AC-320).*
 - **Schedules is a first-class surface.** It shows two schedulers side by side, each labelled:
   - **Cube's refresh worker** (`refresh_key`): read-only here and edited in the model.
   - **wechart's scheduler**: pre-aggregation builds through `POST /v1/pre-aggregations/jobs`, dashboard deliveries, and cache warm-ups.
   - Each schedule shows a cron expression with presets, its next runs, retry and suspend policy, and history.
 - **Jobs** adds Run history (wechart-owned, because Cube Core keeps none), a Queue view with job tokens, per-run logs, partition-level builds, and "Resume" for suspended schedules.
-- **Data sources** adds an add wizard (Type → Connection → Test → Name and assign), driver-specific fields, a health history recorded by wechart's periodic tests, and a Usage tab listing the cubes on each source.
+- **Data sources** adds an add wizard (Type → Connection → Test → Name and assign), driver-specific fields, a health history recorded by wechart's periodic tests, and a Usage tab listing the cubes on each source. *Amended 2026-09-25 (decisions 1 and 7): the tests run in xcube, at wechart's request, and the secret is encrypted in the browser. The prototype's data-source copy that says wechart serves connections through `driverFactory` and runs the tests itself (`prototype/admin-sources.js`, `schema.js`) is superseded, and is corrected when those screens are built (T363, T364).*
 
 ## 7d. Taken from the approved prototype (AC-187, user decision, 2026-09-21)
 
@@ -550,7 +550,7 @@ Nothing in §2–§7d changes. No new colour and no new type size is added: ever
 18. Loading states use a skeleton of the chart form. Error states offer Retry and a Details disclosure.
 19. Each chart's canvas shows whether its query hit a pre-aggregation and the age of its cache.
 20. Model objects offer Form and Code views that stay synchronized. Switching warns if information would be lost.
-21. Any dashboard can be previewed "as" a group or user (the security "view as" mode), and a persistent banner shows it is active.
+21. Any dashboard can be previewed "as" a group or user (the security "view as" mode), and a persistent banner shows it is active. *Amended 2026-09-25 (`docs/inputs/2026-09-25-architecture-decisions.md`, decision 12; requirements R27): tokens carry groups only, so the preview is "as" one or more groups, and "as a user" means as that user's groups (AC-166).*
 22. The jobs list shows name, status (icon + label), last success, duration against average, trigger, and model link.
 23. A data-source connection can't be saved until a Test step passes, or the user overrides it explicitly. The Test step shows each check's result.
 24. Light and dark themes are both complete. Neither is produced by automatically inverting the other.
