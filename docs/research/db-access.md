@@ -81,6 +81,7 @@ Pattern: `version integer not null`, and the save does
 ### Migrations — node-pg-migrate 9.0.0
 
 - Files export `up` and `down`, receiving a `MigrationBuilder` (`pgm`); "The down migration can be omitted" (reversal is inferred for supported operations) or set to `export const down = false` for irreversible ones; `pgm.noTransaction()` disables the transaction **for that one migration** ([writing migrations](https://salsita.github.io/node-pg-migrate/migrations/)). Arbitrary SQL (partitions, BRIN, extensions) goes through `pgm.sql`.
+  - `pgm.sql(sql, args)` replaces `{key}` in the text only for the keys of `args`; given none, the text is sent as written, braces and all (read in the pinned 9.0.0: `dist/bundle/index.js` L276–280, `createTransformer`, and L1238–1243, `sql`). T446's migration relies on this for a Jinja file's text, in dollar quotes (2026-09-26).
 - CLI: `create`, `up`, `down`, `redo`; `--single-transaction` defaults to `true` — "Combines all pending migrations into a single transaction so that if any migration fails, all will be rolled back"; there is a `--no-lock` flag and an `advisory-lock-mode` option ("fail, wait") for when another process holds the migration advisory lock; the migrations table defaults to `pgmigrations` ([CLI](https://salsita.github.io/node-pg-migrate/cli)). The `wait` mode matters when several wechart pods start at once.
 - Rollback is a real `down` run (`node-pg-migrate down`), unlike drizzle-kit (below).
 

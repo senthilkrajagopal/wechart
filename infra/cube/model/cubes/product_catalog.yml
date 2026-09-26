@@ -1,10 +1,8 @@
-# A dynamic model: Cube renders the Jinja below before it reads the YAML.
-# wechart shows such a file read-only, with the reason (AC-140), and publishes
-# none (T142): a template runs inside Cube.
-{%- set table = "public.products" %}
+# The product catalogue, in plain YAML: the only kind xcube serves (T446,
+# AC-335). `templated_example.yml` is the seed's Jinja template now (AC-140).
 cubes:
   - name: product_catalog
-    sql_table: {{ table }}
+    sql_table: public.products
 
     measures:
       - name: count

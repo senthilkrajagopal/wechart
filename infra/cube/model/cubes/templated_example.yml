@@ -1,0 +1,13 @@
+# A dynamic model: Cube renders the Jinja below before it reads the YAML.
+# wechart shows such a file read-only, with the reason (AC-140), and publishes
+# none (AC-332). It is never sent to xcube, which serves plain YAML alone
+# (T446, AC-335), so its cube is served only until xcube serves the model. No
+# dashboard uses it.
+{%- set table = "public.products" %}
+cubes:
+  - name: templated_example
+    sql_table: {{ table }}
+
+    measures:
+      - name: count
+        type: count

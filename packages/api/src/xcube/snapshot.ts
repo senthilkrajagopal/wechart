@@ -26,6 +26,18 @@ export function contentHashOf(files: readonly ModelFile[]): string {
     .digest('hex');
 }
 
+/**
+ * What of wechart's files xcube is sent (T446, AC-335): plain YAML only.
+ * xcube takes nothing else by default, refusing the whole set over one
+ * JavaScript, Python or `.jinja` file, or a YAML file with `{{`, `}}`, `{%` or
+ * `%}` anywhere, comments included (research, "Path rules"). Such a file stays
+ * in wechart's store, read-only with its reason (AC-140), and is never sent.
+ */
+const JINJA_TAG = /{%|%}|{{|}}/;
+export function plainYamlOf(files: readonly ModelFile[]): readonly ModelFile[] {
+  return files.filter((file) => /\.ya?ml$/.test(file.path) && !JINJA_TAG.test(file.content));
+}
+
 export type SyncResult =
   | { readonly kind: 'same' | 'sent'; readonly revision: number }
   | { readonly kind: 'refused'; readonly errors: readonly unknown[] }
@@ -88,7 +100,7 @@ export function modelSync({
             revision: holds,
             contentHash: head.current?.contentHash ?? '',
           });
-        const published = await files();
+        const published = plainYamlOf(await files());
         const hash = contentHashOf(published);
         if (head.current !== null && head.current.contentHash === hash) {
           await publications.put(model, {

@@ -361,17 +361,17 @@ test('a save that edits a member charts use lists them first, and saves only if 
  * why it cannot be edited as a form.
  * Fails when: such a file opens in an editable form, or gives no reason.
  *
- * On the seed model's own template, `cubes/product_catalog.yml`, which Cube
- * renders and compiles.
+ * On the seed model's own template, `cubes/templated_example.yml`, kept in
+ * wechart's store and never sent to xcube (T446, AC-335).
  */
 test('a Jinja template opens read-only in the code view, with the reason', async ({ page }) => {
-  await page.goto('/model/files/cubes%2Fproduct_catalog.yml');
+  await page.goto('/model/files/cubes%2Ftemplated_example.yml');
 
   await expect(page.getByRole('note')).toContainText(
     'Jinja template: Cube renders it before reading its cubes and views',
   );
   await expect(page.getByRole('note')).toContainText('It opens read-only here');
-  const code = page.getByRole('textbox', { name: 'cubes/product_catalog.yml, read-only' });
+  const code = page.getByRole('textbox', { name: 'cubes/templated_example.yml, read-only' });
   await expect(code).toContainText('{%- set table = "public.products" %}');
   await expect(code).toHaveAttribute('aria-readonly', 'true');
   await expect(code).not.toHaveAttribute('contenteditable', 'true');
@@ -382,11 +382,21 @@ test('a Jinja template opens read-only in the code view, with the reason', async
   await page.keyboard.type('xyz');
   await expect(code).not.toContainText('xyz');
 
-  // And Cube renders it: its cube is in the model.
+  // The catalogue that was the seed's template is plain YAML now (T446), in
+  // the model and answering queries.
   const meta = (await (await page.request.get('/api/meta')).json()) as {
     cubes: { name: string }[];
   };
   expect(meta.cubes.map((cube) => cube.name)).toContain('product_catalog');
+  await page.goto('/model/files/cubes%2Fproduct_catalog.yml');
+  await expect(page.getByRole('region', { name: 'Cube product_catalog' })).toBeVisible();
+  await expect(page.getByText('It opens read-only here')).toHaveCount(0);
+  const counted = await page.request.post('/api/load', {
+    data: { query: { measures: ['product_catalog.count'] } },
+  });
+  expect(counted.status()).toBe(200);
+  const rows = ((await counted.json()) as { data: Record<string, unknown>[] }).data;
+  expect(Number(rows[0]?.['product_catalog.count'])).toBeGreaterThan(0);
 });
 
 /**

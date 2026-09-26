@@ -37,6 +37,42 @@ describe('xcube’s answers (T419, AC-333)', () => {
     }
   });
 
+  /**
+   * A check's refusal of a file it names (T445's review): xcube's
+   * `invalid_file_type` message leads with the path (research, "Path rules").
+   */
+  it('places a check’s refusal on the file xcube names, and on none where it names none', async () => {
+    const files = [
+      { path: 'cubes/a.yml', content: 'cubes: []\n' },
+      { path: 'cubes/b.yml', content: 'cubes: []\n' },
+    ];
+    const check = (body: Record<string, unknown>, status = 400) =>
+      answering(status, body).check({ files, securityContext: {}, probes: [] });
+
+    expect(
+      await check({
+        error: 'cubes/b.yml: only plain YAML models are taken (no JavaScript, Python or Jinja)',
+        code: 'invalid_file_type',
+      }),
+    ).toEqual({
+      valid: false,
+      errors: [
+        {
+          path: 'cubes/b.yml',
+          kind: 'compile',
+          message: 'cubes/b.yml: only plain YAML models are taken (no JavaScript, Python or Jinja)',
+        },
+      ],
+      cubeMessage: null,
+      probes: [],
+    });
+    expect(await check({ error: 'Too many files', code: 'too_large' }, 413)).toMatchObject({
+      valid: false,
+      errors: [{ path: null, message: 'Too many files' }],
+    });
+    await expect(check({ error: 'Bad JSON', code: 'bad_request' })).rejects.toThrow(XcubeError);
+  });
+
   it('fails, to be tried again, on a busy or unavailable xcube, its own error, or a bad request', async () => {
     for (const [status, code] of [
       [503, 'busy'],

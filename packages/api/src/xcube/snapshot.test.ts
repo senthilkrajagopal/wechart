@@ -122,6 +122,42 @@ describe('pushing the published files to xcube (T419, AC-333)', () => {
     expect(stub.head('dev')?.contentHash).toBe(contentHashOf([ORDERS, VIEWS]));
   });
 
+  /**
+   * T446, AC-335: WHEN wechart sends its files to xcube (a snapshot, or a
+   * publish's check), THE SYSTEM SHALL send only plain YAML files. A
+   * JavaScript, Python or Jinja file already in wechart's store SHALL stay
+   * there, viewable read-only with its reason (AC-140), and SHALL never be
+   * sent (`[R29]`).
+   * `Fails when: a snapshot or a check sent to xcube holds such a file, or
+   * xcube refuses a snapshot as holding one; or such a file can no longer be
+   * opened read-only.` xcube refuses the whole snapshot over one such file
+   * (research, "Path rules": `{{`, `}}`, `{%` or `%}` anywhere).
+   */
+  it('sends only the plain YAML files, however many others the store holds', async () => {
+    const stub = fakeXcube();
+    const dev = deployment(stub);
+    const others: ModelFile[] = [
+      { path: 'cubes/dynamic.js', content: 'cube(`dynamic`, { sql_table: `t` });\n' },
+      { path: 'cubes/generated.py', content: 'from cube import TemplateContext\n' },
+      { path: 'cubes/macros.jinja', content: '{% macro m() %}{% endmacro %}\n' },
+      { path: 'cubes/templated.yml', content: 'cubes:\n  - name: {{ name }}\n' },
+      { path: 'cubes/opening.yaml', content: '# {%- set x = 1\ncubes: []\n' },
+      { path: 'cubes/closing.yml', content: '# a comment }}\ncubes: []\n' },
+    ];
+    dev.setFiles([...others, ORDERS, VIEWS]);
+
+    expect(await dev.sync.sync('start')).toMatchObject({ kind: 'sent', revision: 1 });
+
+    const puts = stub.calls.filter((call) => call.method === 'PUT');
+    expect(puts.map((call) => (call.body as { files: ModelFile[] }).files)).toEqual([
+      [ORDERS, VIEWS],
+    ]);
+    // What's recorded is what xcube holds: the plain YAML's hash.
+    expect((await dev.publications.get('dev'))?.contentHash).toBe(contentHashOf([ORDERS, VIEWS]));
+    // And the next reconcile holds it the same: nothing to send.
+    expect(await dev.sync.sync('reconcile')).toMatchObject({ kind: 'same', revision: 1 });
+  });
+
   it('reads again and sends again on a conflict, three times at most', async () => {
     const stub = fakeXcube();
     const dev = deployment(stub);
@@ -184,7 +220,10 @@ describe('pushing the published files to xcube (T419, AC-333)', () => {
   it('remembers a file xcube refuses to take, as it does a model that doesn’t compile', async () => {
     const stub = fakeXcube();
     const dev = deployment(stub);
-    dev.setFiles([ORDERS, { path: 'cubes/templated.yml', content: 'cubes: {{ x }}\n' }]);
+    // A path xcube won't take (a segment starting with `-`: research, "Path
+    // rules"), seeded from a directory before wechart's rule matched xcube's.
+    // A template is no longer sent at all (T446).
+    dev.setFiles([ORDERS, { path: 'cubes/-legacy.yml', content: 'cubes: []\n' }]);
 
     expect(await dev.sync.sync('start')).toMatchObject({ kind: 'refused' });
     dev.later(60_000);

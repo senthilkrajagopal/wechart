@@ -6130,11 +6130,33 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
       - A refused file was placed on every changed file; it is placed on the one xcube names.
       - The tests that were missing were added.
     - **Left:** AC-136 and AC-235 stay as they are until T447 runs this against xcube itself. The Jinja-tagged file in the refused-file test becomes T446's case, since T446 sends no such file.
-- [ ] T446 (AC-335, AC-140) Send only plain YAML to xcube, and keep other model files read-only in wechart's store
-  - Files: `packages/api/src/xcube/snapshot.ts`, `packages/api/src/xcube/check.ts`, `infra/cube/model/cubes/product_catalog.yml` (rewritten as plain YAML), a Jinja example that no dashboard uses, for AC-140, `e2e/model.spec.ts`
+- [x] T446 (AC-335, AC-140) Send only plain YAML to xcube, and keep other model files read-only in wechart's store
+  - Files: `packages/api/src/xcube/snapshot.ts` (`plainYamlOf`), `packages/api/src/xcube/check.ts`, `infra/cube/model/cubes/product_catalog.yml` (rewritten as plain YAML), `infra/cube/model/cubes/templated_example.yml` (a Jinja example that no dashboard uses, for AC-140), a migration `…_product-catalog-plain-yaml.cjs` (+ `db/product-catalog-yaml.test.ts`), `e2e/model.spec.ts`, `e2e/admin.spec.ts`, `docs/research/db-access.md`
   - Failing test: `snapshot.test.ts` and `check.test.ts`: no snapshot or check holds a `.js`, `.py`, `.jinja` or Jinja-tagged YAML file, however many the store holds (AC-335). `model.spec.ts`: the Jinja example still opens read-only with its reason (AC-140), and `product_catalog` still answers queries.
   - Depends on: T419, T445
-- [ ] T447 (AC-333, AC-334, AC-330) Cut over: xcube serves the model in compose and the docker-desktop release
+  - **Done 2026-09-26, against the stub.**
+    - **What is sent.** Only plain YAML goes to xcube: a `.yml` or `.yaml` path with no `{{`, `}}`, `{%` or `%}` in its content, xcube's own rule. That holds for the sync and for a publish's check. Any other file stays in wechart's store, read-only with its reason, and is never sent. It can't refuse a publish or a snapshot either.
+    - **The seed.** `product_catalog.yml` is plain YAML now. `templated_example.yml` is the seed's Jinja template, which no dashboard uses.
+    - **Stores seeded before.** Seeding writes no stored path again, so a migration rewrites `product_catalog.yml`, and only where it is still the seed's own template.
+    - **What the tests show:**
+      - `snapshot.test.ts`: the store holds six kinds of withheld file, and the snapshot and the recorded hash are the plain set's.
+      - `check.test.ts`: with five withheld files in the store, the check sends only the plain ones, the publish goes through, and the withheld files are kept.
+      - `client.test.ts`: a check's refusal lands on the file xcube names.
+      - `product-catalog-yaml.test.ts`: the migration rewrites the template, and leaves a changed catalogue alone.
+      - `model.spec.ts` (Chrome): the template opens read-only with its reason (AC-140), and `product_catalog` is in the model and answers a query.
+      - `model.spec.ts` and `admin.spec.ts` pass whole in Chrome (36).
+    - **T419's refusal test** used a Jinja file to make xcube refuse. That file isn't sent now, so the test uses a path xcube refuses instead (a segment starting with `-`), with the same assertions.
+    - **The cold review (PASS)** led to:
+      - AC-335 added to T447, which ticks it against xcube;
+      - AC-333 reworded, since its hash is the plain YAML's: a seeded template is never sent, so the whole store's hash never matches;
+      - the `pgm.sql` behaviour the migration relies on, sourced in `db-access.md`;
+      - a spec quote corrected;
+      - this Files line.
+    - **Left:**
+      - AC-335 stays open until T447 shows it against xcube. AC-140 stays ticked on the e2e above.
+      - The read-only reason still says Cube renders the file; T447 corrects it.
+      - A plain file under a path xcube refuses (only from a seed, or rows from before T419's path rule) still blocks every snapshot. So does a plain file that depends on a withheld one. Both are outside AC-335's file types, and the seed has neither.
+- [ ] T447 (AC-333, AC-334, AC-330, AC-335) Cut over: xcube serves the model in compose and the docker-desktop release
   - Files:
     - `docker-compose.yml`: the `xcube:v1.7.45-83cb9f0888` image, built locally from the fork (`deploy.md`); an `xcube-db-init` one-shot running `bootstrap.sql`; `XCUBE_DATABASE_URL` on both Cube services; `XCUBE_ADMIN_TOKENS` on the API instance only;
     - `infra/cube/cube.js`: `require('xcube').config(…)` as the research gives it, with no `contextToAppId`, `repositoryFactory`, `schemaVersion` or compiler-cache settings;
@@ -6144,6 +6166,8 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
   - Failing test:
     - both end-to-end suites pass in Chrome against xcube, including AC-009, AC-136, AC-137, AC-140 and AC-235's specs, whose ticks are kept or dropped by the result;
     - `e2e/xcube-cutover.spec.ts`: a member published through the phase-1 suite's API is queried and listed with every API process stopped and Cube restarted (the contract's D1; AC-330's model part). A publish through one API process is in the field list at once through another, started on the same database (D2; AC-334);
+    - the same spec, with `templated_example.yml` in the store: xcube's current content hash is that of the store's plain YAML, nothing is refused `invalid_file_type`, and `product_catalog` is in the field list (AC-335, added by T446's review);
+    - the read-only reason for a Jinja, JavaScript or Python file (`packages/web/src/workspaces/model/FileList.tsx`) says xcube never serves it, since Cube no longer renders it (T446's review);
     - `verify.sh` does the same in the release.
   - Depends on: T419, T421, T445, T446
 - [ ] T420 (AC-326, AC-250) Call Cube and xcube on wechart's own behalf with a service credential, never a user's token *(moved to slice 4, 2026-09-26: xcube's admin routes take its static admin token until then, `[X2, R29]`)*
@@ -6405,6 +6429,6 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-325 | T441 | AC-326 | T420, T437 | AC-327 | T431, T442 |
 | AC-328 | T341, T425 | AC-329 | T429 | AC-330 | T419, T447, T425, T436, T442 |
 | AC-331 | T430 | AC-332 | T433 | AC-333 | T419, T447 |
-| AC-334 | T421, T447 | AC-335 | T446 | | |
+| AC-334 | T421, T447 | AC-335 | T446, T447 | | |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.

@@ -344,23 +344,33 @@ describe('a publish checked by xcube’s dry run (T445)', () => {
     await app.close();
   });
 
-  it('puts a file xcube won’t take on that file, even one the change leaves alone', async () => {
-    const templated = { path: 'cubes/templated.yml', content: 'cubes: {{ x }}\n' };
-    const files = store([USER, templated]);
-    const { app } = serving(files);
+  /**
+   * T446, AC-335: only plain YAML is sent. A JavaScript, Python or Jinja file
+   * already in wechart's store stays there and is never sent, so it can't
+   * refuse a publish either (with it, xcube answered `400 invalid_file_type`
+   * on that file, and nothing could be published).
+   */
+  it('checks only the plain YAML in the store, so a template kept there refuses nothing', async () => {
+    const kept: ModelFile[] = [
+      { path: 'cubes/templated.yml', content: 'cubes: {{ x }}\n' },
+      { path: 'cubes/closing.yml', content: '# %}\ncubes: []\n' },
+      { path: 'cubes/dynamic.js', content: 'cube(`dynamic`, { sql_table: `t` });\n' },
+      { path: 'cubes/generated.py', content: 'from cube import TemplateContext\n' },
+      { path: 'cubes/macros.jinja', content: '{% macro m() %}{% endmacro %}\n' },
+    ];
+    const files = store([USER, ...kept]);
+    const { app, stub } = serving(files);
 
     const published = await publish(app, [rollupOn(true)]);
 
-    expect(published.statusCode).toBe(422);
-    expect(published.json()).toEqual({
-      errors: [
-        {
-          path: 'cubes/templated.yml',
-          message:
-            'cubes/templated.yml: only plain YAML models are taken (no JavaScript, Python or Jinja)',
-        },
-      ],
-    });
+    expect(published.statusCode).toBe(200);
+    const checks = stub.calls.filter((call) => call.path.endsWith('/snapshot?dryRun=true'));
+    expect(checks.map((call) => (call.body as { files: ModelFile[] }).files)).toEqual([
+      [rollupOn(true), USER],
+    ]);
+    // Kept in wechart's store as they were, beside the publish.
+    expect(files.files).toEqual(expect.arrayContaining([...kept, USER, rollupOn(true)]));
+    expect(files.files).toHaveLength(kept.length + 2);
     await app.close();
   });
 

@@ -2,6 +2,7 @@ import { joinRefusalsOf, rollupOwnersOf, type RollupOwner } from '../model/rollu
 import { compileErrorsOf, placeOf, type CompileError } from '../model/validate';
 import type { ModelFile } from '../server';
 import type { CheckAnswer, XcubeAdmin } from './client';
+import { plainYamlOf } from './snapshot';
 
 /**
  * A publish checked by xcube's dry run (T445; `docs/research/xcube-slice-2.md`,
@@ -52,14 +53,16 @@ export async function checkWithXcube({
   readonly securityContext: Record<string, unknown>;
   readonly log?: (error: unknown) => void;
 }): Promise<CheckResult> {
-  const owners = rollupOwnersOf(draft);
+  // Checked as it will be served: its plain YAML alone (T446, AC-335).
+  const served = plainYamlOf(draft);
+  const owners = rollupOwnersOf(served);
   const probes = owners.map((owner, at) => ({ id: `rollups-${String(at)}`, query: owner.probe }));
   const answers: CheckAnswer[] = [];
   try {
     // In batches past xcube's limit: each compiles the same files.
     for (let from = 0; from === 0 || from < probes.length; from += PROBES_PER_CHECK) {
       const answer = await xcube.check({
-        files: draft,
+        files: served,
         securityContext,
         probes: probes.slice(from, from + PROBES_PER_CHECK),
       });
