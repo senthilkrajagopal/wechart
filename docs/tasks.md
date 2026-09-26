@@ -5891,10 +5891,25 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **The cold review (FAIL)** led to:
       - A box plot's "Each point is" came after the measures; it is placed with the dimensions now.
       - The other tables, which kept Cube's order, follow the wells too, rather than the criterion being narrowed.
-- [ ] T394 [P] (AC-302) Edit a markdown tile's text in edit mode
-  - Files: `packages/web/src/dashboard/tiles/MarkdownTile.tsx` (+ test), `e2e/dashboard.spec.ts`
+- [x] T394 [P] (AC-302) Edit a markdown tile's text in edit mode
+  - Files: `packages/web/src/dashboard/edit/TileProperties.tsx` (+ `TileProperties.test.tsx`), `packages/web/src/shell/styles.ts`, `e2e/tiles.spec.ts` (as built; the plan named a `MarkdownTile.tsx` that doesn't exist, and `dashboard.spec.ts`)
   - Failing test: `dashboard.spec.ts`: selecting a markdown tile in edit mode lets the user change its text, and the tile renders the change (AC-302).
   - Depends on: none
+  - **Done 2026-09-26.**
+    - **The change.** A selected markdown tile's Properties hold its text, "Markdown text". The tile draws it as it is typed, in its markdown subset (AC-208), and it is saved with the dashboard. That holds for a tile in a section or tabs too.
+    - **What the tests show:**
+      - `TileProperties.test.tsx`: a tile in a section, typed key by key with Enter, draws its `h3` heading and bold run.
+      - `tiles.spec.ts` (Chrome): a markdown tile added, selected, typed into, drawn, saved and reloaded.
+    - **The cold review (PASS)** led to:
+      - the unit test, with the nested case;
+      - the e2e typing key by key;
+      - the label "Markdown text";
+      - the textarea at the inspector's 12 px;
+      - this Files line.
+    - **Left for the user:**
+      - Each keystroke is its own undo step and "change", as alt text and link labels already are.
+      - The delete toast's Undo undoes the latest change, which can be a keystroke typed since. That predates T394.
+      - A header tile's text still can't be edited: no criterion covers it.
 - [ ] T395 [P] (AC-303) Draw pie and donut labels whole, moving or hiding the ones that don't fit
   - Files: `packages/charts/src/series/pie.ts` (+ test)
   - Failing test: `pie.test.ts`: with data labels on, no label is truncated ("$…"); labels that don't fit move out or hide (AC-303).

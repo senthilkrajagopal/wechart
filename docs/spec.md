@@ -1109,7 +1109,7 @@ Traces to: §P2.6 H, `[R8, R16, R19, R21, R22]`, `[backlog]` §5. Rewritten phas
       Fails when: series stack alphabetically after another order was set, or the order changes on refresh.
 - [x] AC-301 THE SYSTEM SHALL order a table's columns as the wells order its fields: time and dimensions first, then measures in the Metrics well's order (gap 9).
       Fails when: a table's columns differ from the wells' order.
-- [ ] AC-302 WHEN the user selects a markdown tile in edit mode, THE SYSTEM SHALL let them edit its text, and render the change (gap 12).
+- [x] AC-302 WHEN the user selects a markdown tile in edit mode, THE SYSTEM SHALL let them edit its text, and render the change (gap 12).
       Fails when: a markdown tile's text can't be changed in the UI.
 - [ ] AC-303 WHEN data labels are on for a pie or donut, THE SYSTEM SHALL draw each label whole, moving or hiding the labels that don't fit (gap 3).
       Fails when: a slice's label shows a truncated value such as "$…".

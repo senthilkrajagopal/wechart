@@ -56,6 +56,8 @@ export function TileProperties({
         );
       case 'link':
         return <LinkProperties key={element.id} tile={element} onChange={change} />;
+      case 'markdown':
+        return <MarkdownProperties key={element.id} tile={element} onChange={change} />;
       case 'chart':
         return chartProperties?.(element) ?? <Note>This tile has no properties to set here.</Note>;
       default:
@@ -235,6 +237,36 @@ function useDashboardSearch(text: string): readonly Found[] {
     };
   }, [needle]);
   return found.needle === needle && needle !== '' ? found.items : [];
+}
+
+/**
+ * A markdown tile's text (T394, AC-302): edited here, and drawn on the tile
+ * as it is typed, in the tile's own subset of markdown (AC-208). Saved with
+ * the dashboard, as any change in edit mode is.
+ */
+function MarkdownProperties({
+  tile,
+  onChange,
+}: {
+  tile: Tile;
+  onChange: (patch: Partial<Tile>) => void;
+}) {
+  const id = useId();
+  return (
+    <div className="panel-section tile-properties">
+      <h3>Markdown</h3>
+      <Field id={id} label="Markdown text">
+        <textarea
+          id={id}
+          rows={10}
+          value={tile.text ?? ''}
+          onChange={(event) => {
+            onChange({ text: event.target.value });
+          }}
+        />
+      </Field>
+    </div>
+  );
 }
 
 /**

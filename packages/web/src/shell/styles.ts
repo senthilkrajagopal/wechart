@@ -2889,6 +2889,8 @@ details.panel-section { display: block; }
   padding: 0 4px 0 8px;
   font-size: 12px;
 }
+/* A markdown tile's text (T394) at the inspector's 12 px too, its height its own. */
+.panel-section .field textarea { font-size: 12px; line-height: 18px; }
 .field > label {
   font-size: 12px;
   line-height: 16px;

@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 /**
- * Image and link tiles, on the running app.
+ * Image, link and markdown tiles, on the running app.
  *
  * T069 / AC-063: WHEN an image tile has no alternative text, THE SYSTEM SHALL
  * show a warning on the tile in edit mode, and SHALL accept only PNG, JPEG,
@@ -293,4 +293,50 @@ test('a link tile refuses a web address that is not http(s)', async ({ page, req
     body: { pages: { items: { link?: unknown }[] }[] };
   };
   expect(stored.body.pages[0]?.items[0]?.link).toBeUndefined();
+});
+
+/**
+ * T394, AC-302: WHEN the user selects a markdown tile in edit mode, THE
+ * SYSTEM SHALL let them edit its text, and render the change (gap 12).
+ * `Fails when: a markdown tile's text can't be changed in the UI.`
+ */
+test('a markdown tile’s text is edited in Properties, drawn as it is typed, and kept', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await makeDashboard(request);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await editWithSidebar(page, 'Add');
+  await page.getByTestId('add-markdown').click();
+
+  const tile = page.locator('[data-tile]').filter({ has: page.getByText('New text') });
+  await expect(tile).toBeVisible();
+  await tile.click();
+  await editWithSidebar(page, 'Properties');
+  const text = sidebar(page).getByLabel('Markdown text', { exact: true });
+  await expect(text).toHaveValue(/^## New text\n/);
+  // Typed, key by key, Enter and all: nothing on the page takes the keys.
+  await text.fill('');
+  await text.pressSequentially('## Revenue');
+  await text.press('Enter');
+  await text.pressSequentially('Up **12%** on last quarter.');
+  await expect(text).toHaveValue('## Revenue\nUp **12%** on last quarter.');
+
+  // Drawn as typed: its heading, and the bold run.
+  const edited = page.locator('[data-tile]').filter({ has: page.getByText('Revenue') });
+  await expect(edited.getByRole('heading', { name: 'Revenue' })).toBeVisible();
+  await expect(edited.locator('strong')).toHaveText('12%');
+
+  await page
+    .getByRole('toolbar', { name: 'Dashboard editing' })
+    .getByRole('button', { name: 'Save', exact: true })
+    .click();
+  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeHidden();
+
+  // Kept: after a reload, the new text.
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Revenue' })).toBeVisible();
+  await expect(page.getByText('New text')).toHaveCount(0);
 });
