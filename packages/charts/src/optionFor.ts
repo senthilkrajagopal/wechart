@@ -16,7 +16,7 @@ import { barOption, DEFAULT_CANVAS, isBarType, type Canvas } from './series/bar'
 import { withHighlight } from './crossfilter/highlight';
 import { withKeyboardFocus } from './marking/focus';
 import { withMarks } from './marking/option';
-import { applyAxes } from './axis';
+import { applyAxes, thinValueLabels } from './axis';
 import { applyCustomize } from './customize';
 import { isTrellisType, trellisOption } from './layout/trellis';
 import { legendFor } from './legend';
@@ -71,9 +71,11 @@ export function optionFor(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
     // The Customize tab's legend, series, stacking and labels (AC-219) last:
     // they place and trim what the rest has drawn.
     ...applyCustomize(
-      applyAxes(
-        withLegend(withKeyboardFocus(withMarks(withHighlight(option, spec), spec), spec)),
-        spec,
+      thinValueLabels(
+        applyAxes(
+          withLegend(withKeyboardFocus(withMarks(withHighlight(option, spec), spec), spec)),
+          spec,
+        ),
       ),
       spec,
     ),
@@ -113,9 +115,10 @@ export function optionFor(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
   if (isTreemapType(spec.chartType)) return drawn(treemapOption(spec));
   if (isHeatmapType(spec.chartType)) return drawn(onGrid(heatmapOption(spec)));
   // Its own axes (an array, per panel, formatted by the layout), and no
-  // legend — but a tooltip like every other chart (AC-046, T195).
+  // legend — but a tooltip like every other chart (AC-046, T195), and each
+  // panel's value labels thinned like any other's (T391's review).
   if (isTrellisType(spec.chartType)) {
-    return { ...trellisOption(spec, canvas), ...tooltipFor(spec) };
+    return thinValueLabels({ ...trellisOption(spec, canvas), ...tooltipFor(spec) });
   }
   if (isComboType(spec.chartType)) return drawn(onGrid(comboOption(spec, canvas)));
   if (isBoxplotType(spec.chartType)) return drawn(onGrid(boxplotOption(spec)));

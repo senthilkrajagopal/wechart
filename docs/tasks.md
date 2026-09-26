@@ -5833,10 +5833,27 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - A pie's slice warning still counts N + 1 slices with "Leave out", and ignores the result limit, so it can warn one slice early. It is never missing when due (AC-218 holds).
       - A result limit at or under the top N cuts the "Other (_n_)" row too, since it applies last. That is what AC-041 says ("drops rows past it"), but nothing says so on the chart.
     - AC-041 is ticked.
-- [ ] T391 [P] (AC-299) Thin or abbreviate value-axis labels so none overlap
-  - Files: `packages/charts/src/axes.ts` (+ test)
-  - Failing test: `axes.test.ts`, with `renderToSvg`: at a narrow tile width no two value-axis labels overlap (AC-299).
+- [x] T391 [P] (AC-299) Thin or abbreviate value-axis labels so none overlap
+  - Files: `packages/charts/src/axis.ts` (`thinValueLabels`), `packages/charts/src/optionFor.ts`, `packages/charts/src/axisLabels.test.ts`, `docs/research/echarts-axis-labels.md`
+  - Failing test: `axisLabels.test.ts`, with `renderToSvg`: at a narrow tile width no two value-axis labels overlap (AC-299).
   - Depends on: none
+  - **Done 2026-09-26.**
+    - **The change.** Every value axis, linear or log, a trellis's panels included, sets ECharts' `axisLabel.hideOverlap`. ECharts lays the labels out and hides any that meets one it kept, so a narrow or short tile shows fewer numbers, never numbers over numbers. Category axes keep ECharts' own interval.
+    - **What the tests show.** `axisLabels.test.ts` (5), read off the drawn SVG:
+      - an hbar at 220, 360 and 640 px, and a bar 110 and 80 px high;
+      - a log axis at 220 px;
+      - every panel of a 20-panel trellis at 640 × 320;
+      - the axis editor's rotation and number format kept alongside, through the tile's `themed`;
+      - category axes untouched.
+
+      Each case fails without the change, except the 110 px bar. The trellis check allows ECharts' own 0.05 px touch (a tenth of a pixel).
+    - **Why AC-299 is ticked on this test.** Tiles draw with the SVG renderer (`echarts.ts`), through `ChartCanvas`, `themed` and `optionFor`, the path the test takes. The browser measures text itself where SSR uses a table.
+    - **The cold review (FAIL)** led to:
+      - trellis panels and log axes thinned (both drew labels over labels);
+      - the short-tile test made able to fail;
+      - the tests widened;
+      - the comments and the research note corrected.
+    - **Left.** Thinning can leave a sparse scale (one label at 220 px). Abbreviating ("1.2M") would keep more of it; the axis editor's Compact format does that today.
 - [ ] T392 [P] (AC-300) Draw, stack and list series in the order set in Customize
   - Files: `packages/core/src/compile.ts`, `packages/web/src/editor/customize/SeriesOrder.tsx` (+ tests)
   - Failing test: `seriesOrder.test.ts`: a set order draws, stacks and lists the series in that order, and holds after a refresh (AC-300).

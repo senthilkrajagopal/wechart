@@ -99,6 +99,34 @@ function axisFragment(settings: AxisSettings | undefined): Record<string, unknow
 }
 
 /**
+ * A value axis's labels thinned where they'd overlap (T391, AC-299): ECharts
+ * lays them out, then hides any tick label that meets one it has already kept
+ * (`axisLabel.hideOverlap`; research `echarts-axis-labels.md`), so a narrow
+ * tile shows fewer numbers, never numbers over numbers. Every value axis, a
+ * log one and a trellis's panels' included; a category axis keeps ECharts'
+ * own interval for its labels.
+ */
+export function thinValueLabels(option: EChartsOption): EChartsOption {
+  const thinned = (axes: unknown): unknown => {
+    if (Array.isArray(axes)) return axes.map(thinned);
+    if (typeof axes !== 'object' || axes === null) return axes;
+    const axis = axes as { type?: unknown; axisLabel?: object };
+    return axis.type === 'value' || axis.type === 'log'
+      ? { ...axis, axisLabel: { ...axis.axisLabel, hideOverlap: true } }
+      : axes;
+  };
+  return {
+    ...option,
+    ...(option.xAxis === undefined
+      ? {}
+      : { xAxis: thinned(option.xAxis) as EChartsOption['xAxis'] }),
+    ...(option.yAxis === undefined
+      ? {}
+      : { yAxis: thinned(option.yAxis) as EChartsOption['yAxis'] }),
+  };
+}
+
+/**
  * Apply the axis settings to a drawn option.
  *
  * Charts with no cartesian axes — pie, treemap, KPI — have nothing to apply

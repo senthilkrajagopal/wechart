@@ -1103,7 +1103,7 @@ Traces to: §P2.4, `[R14, R15, R21]`, `[AD 7, R27]`, `[IP 1, R28]`; F18's AC-164
 Purpose: the UI review's accepted chart gaps, and the two chart types from the Superset parity exercise.
 Traces to: §P2.6 H, `[R8, R16, R19, R21, R22]`, `[backlog]` §5. Rewritten phase-1 criteria: AC-041, AC-220.
 
-- [ ] AC-299 WHEN a chart's value-axis labels would overlap at the tile's width, THE SYSTEM SHALL thin or abbreviate them so no two overlap (the UI review's gap 4).
+- [x] AC-299 WHEN a chart's value-axis labels would overlap at the tile's width, THE SYSTEM SHALL thin or abbreviate them so no two overlap (the UI review's gap 4).
       Fails when: two value-axis labels overlap in a drawn tile.
 - [ ] AC-300 WHEN the user orders a chart's series in Customize, THE SYSTEM SHALL draw, stack and list the series in that order, and keep it after a refresh (gap 7).
       Fails when: series stack alphabetically after another order was set, or the order changes on refresh.
