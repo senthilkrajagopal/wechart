@@ -7,7 +7,7 @@ import {
   imageProblem,
   newDashboardBody,
 } from '@wechart/core';
-import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 
 import {
   CACHE_POLICIES,
@@ -358,7 +358,26 @@ export function buildServer({
       .map((member) => member.trim())
       .filter((member) => member !== '');
     if (members.length === 0) return { charts: [], dashboards: [] };
-    return referencesOf((await cat?.referenceDocuments?.()) ?? [], members);
+    const all = (await cat?.referenceDocuments?.()) ?? [];
+    // With security on, only what the user may see (T326's review): a dashboard
+    // in a folder they see, a chart local to one, a library chart where every
+    // kind is theirs.
+    const seen = await visibilityOf(request);
+    if (seen === undefined) return referencesOf(all, members);
+    const folderOf = (document: { body: unknown }) =>
+      folderIdOf((document.body ?? {}) as Record<string, unknown>);
+    const dashboards = new Map(
+      all.filter((each) => each.kind === 'dashboard').map((each) => [each.id, each]),
+    );
+    const visible = all.filter((document) => {
+      if (document.kind === 'dashboard') return seen.rights.has(folderOf(document) ?? '');
+      if (document.localToDashboardId !== null) {
+        const dashboard = dashboards.get(document.localToDashboardId);
+        return dashboard !== undefined && seen.rights.has(folderOf(dashboard) ?? '');
+      }
+      return seen.rights.get(folderOf(document) ?? '')?.kinds === 'all';
+    });
+    return referencesOf(visible, members);
   });
 
   /**
@@ -507,6 +526,142 @@ export function buildServer({
     };
   };
   /** Each visible folder's count of what the user may see in and beneath it (AC-194). */
+  type Stored = { readonly id: string; readonly body: Record<string, unknown> };
+  const folderIdOf = (body: Record<string, unknown>): string | null =>
+    typeof body['folderId'] === 'string' ? body['folderId'] : null;
+  /**
+   * The folder whose rights govern an item (T326): a folder's own; a chart
+   * local to a dashboard, its dashboard's (AC-126); any other item, the
+   * folder it sits in.
+   */
+  const governingFolder = async (kind: string, item: Stored): Promise<string | null> => {
+    if (kind === 'folder') return item.id;
+    const local = item.body['localToDashboardId'];
+    if (kind === 'chart' && typeof local === 'string') {
+      const dashboard = await docs?.get?.('dashboard', local);
+      return dashboard ? folderIdOf(dashboard.body) : null;
+    }
+    return folderIdOf(item.body);
+  };
+  /**
+   * Whether the user may open a stored item (T326, AC-263, AC-264): a folder
+   * they may see; a dashboard, or a chart local to one, in a folder they may
+   * see; a library chart in a folder whose every kind is theirs, or on a
+   * dashboard they may open — a read-only user sees the charts on their
+   * dashboards, wherever those charts are kept.
+   */
+  const mayOpen = async (seen: Visibility, kind: string, item: Stored): Promise<boolean> => {
+    const folder = await governingFolder(kind, item);
+    const right = folder === null ? undefined : seen.rights.get(folder);
+    const library = kind === 'chart' && typeof item.body['localToDashboardId'] !== 'string';
+    if (!library) return right !== undefined;
+    if (right?.kinds === 'all') return true;
+    const using = (cat?.dashboardsUsing ? await cat.dashboardsUsing(item.id) : []) as {
+      folderId: string | null;
+    }[];
+    return using.some(
+      (dashboard) => dashboard.folderId !== null && seen.rights.has(dashboard.folderId),
+    );
+  };
+  /** Whether the user may change what is in this folder (T326, T327; AC-266, AC-262). */
+  const mayWrite = (seen: Visibility, folderId: string | null): boolean =>
+    folderId !== null && seen.rights.get(folderId)?.write === true;
+  /**
+   * Whether a folder may move into another: one they may write in, and not
+   * the folder itself or anything beneath it, which would cut the subtree off
+   * from the root (T326's review).
+   */
+  const mayMoveFolder = (seen: Visibility, folderId: string, into: string | null): boolean => {
+    if (!mayWrite(seen, into)) return false;
+    const beneath = new Set([folderId]);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const folder of seen.tree) {
+        if (folder.parentId !== null && beneath.has(folder.parentId) && !beneath.has(folder.id)) {
+          beneath.add(folder.id);
+          grew = true;
+        }
+      }
+    }
+    return into !== null && !beneath.has(into);
+  };
+  /** The charts a dashboard's body shows: its `charts` list and every tile's `chartId` (as `dashboardsUsing` reads it). */
+  const chartIdsOf = (body: unknown): Set<string> => {
+    const found = new Set<string>();
+    const listed = (body as { charts?: unknown } | null)?.charts;
+    if (Array.isArray(listed)) for (const id of listed) if (typeof id === 'string') found.add(id);
+    const read = (value: unknown): void => {
+      if (Array.isArray(value)) value.forEach(read);
+      else if (value !== null && typeof value === 'object') {
+        for (const [key, each] of Object.entries(value)) {
+          if (key === 'chartId' && typeof each === 'string') found.add(each);
+          else read(each);
+        }
+      }
+    };
+    read(body);
+    return found;
+  };
+  /**
+   * Whether every chart a dashboard save adds is one the user may open: a
+   * chart on a dashboard they can see is theirs to open (AC-263), so adding a
+   * hidden one would open it (T326's review).
+   */
+  const addsOnlyOpenable = async (seen: Visibility, before: unknown, after: unknown) => {
+    const had = chartIdsOf(before);
+    for (const id of chartIdsOf(after)) {
+      if (had.has(id)) continue;
+      const chart = await docs?.get?.('chart', id);
+      if (!chart || !(await mayOpen(seen, 'chart', chart))) return false;
+    }
+    return true;
+  };
+  const NOT_THERE = { message: 'No such document' };
+  const READ_ONLY =
+    'You can view this, but not change it: only its folder’s read-write members can.';
+  /**
+   * With security on, a stored item the user must be able to open, and, for a
+   * change, to write: `undefined` when the reply has been sent — 404, as for
+   * an item that isn't there, when they can't open it; 403 when they can open
+   * it but not change it. With security off, the item, or 404.
+   */
+  const itemFor = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    kind: 'folder' | 'dashboard' | 'chart',
+    id: string,
+    need: 'open' | 'write',
+  ): Promise<{ stored: Stored | null; seen: Visibility | undefined } | undefined> => {
+    // Security off: nothing to check, and nothing read, as in phase 1.
+    if (security === 'off') return { stored: null, seen: undefined };
+    let stored;
+    try {
+      stored = await docs?.get?.(kind, id);
+    } catch (failure) {
+      // As the document GET answers it (AC-181): a known condition, with a reason.
+      if (failure instanceof ChartDocumentError) {
+        await reply.code(422).send({ error: failure.message });
+        return undefined;
+      }
+      throw failure;
+    }
+    if (!stored) {
+      await reply.code(404).send(NOT_THERE);
+      return undefined;
+    }
+    const seen = await visibilityOf(request);
+    if (seen === undefined) return { stored, seen };
+    if (!(await mayOpen(seen, kind, stored))) {
+      await reply.code(404).send(NOT_THERE);
+      return undefined;
+    }
+    if (need === 'write' && !mayWrite(seen, await governingFolder(kind, stored))) {
+      await reply.code(403).send({ error: READ_ONLY });
+      return undefined;
+    }
+    return { stored, seen };
+  };
+
   /** These visible folders' counts of what the user may see in and beneath them (AC-194). */
   const countsOf = async (seen: Visibility, only: readonly string[]) =>
     visibleCounts(seen, cat?.libraryCounts ? await cat.libraryCounts() : new Map(), only);
@@ -586,6 +741,17 @@ export function buildServer({
 
     const folderId = body?.folderId ?? 'root';
 
+    // With security on, only in a folder they may write in (T326, AC-266): one
+    // they can't see answers as one that isn't there. The two roots always are;
+    // My workspace becomes each user's own with T343.
+    const seen = await visibilityOf(request);
+    if (seen !== undefined && !mayWrite(seen, folderId)) {
+      const isRoot = folderId === ROOT_FOLDER_ID || folderId === MY_WORKSPACE_ID;
+      return !isRoot && !seen.rights.has(folderId)
+        ? reply.code(404).send(NOT_THERE)
+        : reply.code(403).send({ error: READ_ONLY });
+    }
+
     /**
      * A dashboard is created with its interaction mode and its default
      * marking already in it (AC-072, direction.md rule 57), not left to be
@@ -660,7 +826,20 @@ export function buildServer({
       }
       throw failure;
     }
-    if (found === null) return reply.code(404).send({ message: 'No such document' });
+    if (found === null) return reply.code(404).send(NOT_THERE);
+    // With security on, one they may not open answers as one that isn't there
+    // (T326, AC-263, AC-264).
+    const seen = await visibilityOf(request);
+    if (seen !== undefined && !(await mayOpen(seen, kind, found))) {
+      return reply.code(404).send(NOT_THERE);
+    }
+    // A folder's groups are its writers' to see, as its Access panel is (T314):
+    // not a reader's, through the document (T326's review).
+    if (seen !== undefined && kind === 'folder' && !mayWrite(seen, id)) {
+      const { access: _groups, ...body } = found.body;
+      void _groups;
+      return { ...found, body };
+    }
     return found;
   });
 
@@ -690,6 +869,28 @@ export function buildServer({
       throw new BadRequest('A version is required, so a stale save can be refused');
     }
 
+    // With security on, only an item they may change, and not into a folder
+    // they may not (T326, AC-266).
+    const found = await itemFor(request, reply, kind, id, 'write');
+    if (found === undefined) return reply;
+    if (found.seen !== undefined && found.stored !== null) {
+      const { seen, stored } = found;
+      // Where the item goes, by the folder that governs it — a local chart's
+      // dashboard's — must be theirs too (T326's review).
+      const moved =
+        kind === 'folder'
+          ? folderIdOf(body.body) !== folderIdOf(stored.body) &&
+            !mayMoveFolder(seen, id, folderIdOf(body.body))
+          : (await governingFolder(kind, { id, body: body.body })) !==
+              (await governingFolder(kind, stored)) &&
+            !mayWrite(seen, await governingFolder(kind, { id, body: body.body }));
+      if (moved) return reply.code(403).send({ error: READ_ONLY });
+      // A dashboard shows only charts they may open (T326's review).
+      if (kind === 'dashboard' && !(await addsOnlyOpenable(seen, stored.body, body.body))) {
+        return reply.code(403).send({ error: 'This dashboard can show only charts you may open.' });
+      }
+    }
+
     // A folder's AD groups are the access route's alone (T314's review): kept
     // as stored, whatever this body says or leaves out, so saving a folder
     // can neither grant access nor take it away.
@@ -697,7 +898,7 @@ export function buildServer({
     if (kind === 'folder') {
       const { access: _sent, ...rest } = body.body;
       void _sent;
-      const stored = await docs.get?.('folder', id);
+      const stored = found.stored ?? (await docs.get?.('folder', id));
       written =
         stored?.body['access'] === undefined ? rest : { ...rest, access: stored.body['access'] };
     }
@@ -764,6 +965,25 @@ export function buildServer({
     }
     if (!Array.isArray(payload?.charts)) throw new BadRequest('charts must be a list');
 
+    // With security on, a dashboard they may change (T326, AC-266); the charts
+    // saved with it are checked below.
+    const found = await itemFor(request, reply, 'dashboard', dashboardId, 'write');
+    if (found === undefined) return reply;
+    if (found.seen !== undefined && found.stored !== null) {
+      const { seen, stored } = found;
+      const into = folderIdOf(dashboard.body as Record<string, unknown>);
+      // Moved only into a folder they may write in, and showing only charts
+      // they may open (T326's review).
+      if (into !== folderIdOf(stored.body) && !mayWrite(seen, into)) {
+        return reply.code(403).send({ error: READ_ONLY });
+      }
+      if (!(await addsOnlyOpenable(seen, stored.body, dashboard.body))) {
+        return reply.code(403).send({ error: 'This dashboard can show only charts you may open.' });
+      }
+    }
+    /** Library charts' folders, as stored: saving one changes it everywhere it is used. */
+    const libraryFolders: (string | null)[] = [];
+
     const charts = payload.charts as { id?: unknown; body?: unknown; version?: unknown }[];
     for (const chart of charts) {
       if (
@@ -812,7 +1032,13 @@ export function buildServer({
         }
         throw failure;
       }
-      if (stored === null) return reply.code(404).send({ message: `No such chart: ${chart.id}` });
+      // One they may not open answers as one that isn't there, before its
+      // version or where it belongs can say otherwise (T326's review).
+      if (
+        stored === null ||
+        (found.seen !== undefined && !(await mayOpen(found.seen, 'chart', stored)))
+      )
+        return reply.code(404).send({ message: `No such chart: ${chart.id}` });
       /**
        * At the version the client read, or not at all. Where the chart
        * belongs is judged from this read, which is sound only for that
@@ -839,6 +1065,7 @@ export function buildServer({
           throw new BadRequest(
             'A shared chart stays shared: make a local copy of it for this dashboard instead.',
           );
+        libraryFolders.push(folderIdOf(stored.body));
         continue;
       }
       if (owner !== dashboardId) {
@@ -852,6 +1079,18 @@ export function buildServer({
       const sent = chart.body['localToDashboardId'];
       if (sent !== undefined && sent !== dashboardId) {
         throw new BadRequest('A dashboard save cannot move a chart to another dashboard.');
+      }
+    }
+
+    // A library chart saved with the dashboard, or a chart saved to a folder,
+    // changes that folder too: theirs to change, where it is and where it goes.
+    if (found.seen !== undefined) {
+      const seen = found.seen;
+      const into = checked
+        .filter((chart) => chart.body['localToDashboardId'] === undefined)
+        .map((chart) => folderIdOf(chart.body));
+      if (![...into, ...libraryFolders].every((folder) => mayWrite(seen, folder))) {
+        return reply.code(403).send({ error: READ_ONLY });
       }
     }
 
@@ -907,7 +1146,7 @@ export function buildServer({
     }
   });
 
-  app.patch('/api/documents/:kind/:id', USER, async (request) => {
+  app.patch('/api/documents/:kind/:id', USER, async (request, reply) => {
     const { kind, id } = request.params as { kind: string; id: string };
     const body = request.body as { title?: string; folderId?: string } | undefined;
 
@@ -918,6 +1157,20 @@ export function buildServer({
 
     const title = body?.title?.trim();
     if (title !== undefined && title === '') throw new BadRequest('A title cannot be blank');
+
+    // With security on, one they may change, moved only where they may write
+    // too (T326, AC-266).
+    const found = await itemFor(request, reply, kind, id, 'write');
+    if (found === undefined) return reply;
+    if (
+      found.seen !== undefined &&
+      body?.folderId !== undefined &&
+      !(kind === 'folder'
+        ? mayMoveFolder(found.seen, id, body.folderId)
+        : mayWrite(found.seen, body.folderId))
+    ) {
+      return reply.code(403).send({ error: READ_ONLY });
+    }
 
     return docs.relocate({
       kind,
@@ -930,7 +1183,15 @@ export function buildServer({
   /** The dashboards that use a library chart (AC-022). */
   app.get('/api/charts/:chartId/dashboards', USER, async (request) => {
     const { chartId } = request.params as { chartId: string };
-    return cat?.dashboardsUsing ? cat.dashboardsUsing(chartId) : [];
+    const using = (cat?.dashboardsUsing ? await cat.dashboardsUsing(chartId) : []) as {
+      folderId: string | null;
+    }[];
+    // With security on, only the dashboards they may see (T326, AC-264).
+    const seen = await visibilityOf(request);
+    if (seen === undefined) return using;
+    return using.filter(
+      (dashboard) => dashboard.folderId !== null && seen.rights.has(dashboard.folderId),
+    );
   });
 
   /**
@@ -952,8 +1213,18 @@ export function buildServer({
     }
     if (!docs?.remove) throw new BadRequest('Persistence is not configured');
 
+    // With security on, only one they may change (T326, AC-266).
+    const found = await itemFor(request, reply, kind, id, 'write');
+    if (found === undefined) return reply;
+
     if (kind === 'chart' && confirm !== 'true' && cat?.dashboardsUsing) {
-      const dashboards = await cat.dashboardsUsing(id);
+      // Named only where they may see them (T326's review).
+      const seen = found.seen;
+      const dashboards = ((await cat.dashboardsUsing(id)) as { folderId: string | null }[]).filter(
+        (dashboard) =>
+          seen === undefined ||
+          (dashboard.folderId !== null && seen.rights.has(dashboard.folderId)),
+      );
       if (dashboards.length > 0) {
         return reply.status(409).send({
           error: 'This chart is used by dashboards. Confirm to delete it.',
@@ -976,6 +1247,12 @@ export function buildServer({
 
     if (!body?.chartId) throw new BadRequest('A chartId is required');
     if (!docs?.attachChart) throw new BadRequest('Persistence is not configured');
+
+    // With security on, a dashboard they may change, and a chart they may open
+    // (T326, AC-266).
+    if ((await itemFor(request, reply, 'dashboard', dashboardId, 'write')) === undefined)
+      return reply;
+    if ((await itemFor(request, reply, 'chart', body.chartId, 'open')) === undefined) return reply;
 
     await docs.attachChart(dashboardId, body.chartId);
     return reply.status(204).send();
@@ -1000,6 +1277,9 @@ export function buildServer({
         return reply.code(400).send({ error: 'Send the image as { contentType, data }.' });
       if (images === undefined)
         return reply.code(503).send({ error: 'Images cannot be stored here.' });
+      // With security on, onto a dashboard they may change (T326's review).
+      if ((await itemFor(request, reply, 'dashboard', dashboardId, 'write')) === undefined)
+        return reply;
       const bytes = Buffer.from(body.data, 'base64');
       const problem = imageProblem(
         body.contentType,
@@ -1042,6 +1322,9 @@ export function buildServer({
     const { dashboardId } = request.params as { dashboardId: string };
     if (bookmarks === undefined)
       return reply.code(503).send({ error: 'Bookmarks cannot be kept here.' });
+    // With security on, a dashboard they may open (T326, AC-266).
+    if ((await itemFor(request, reply, 'dashboard', dashboardId, 'open')) === undefined)
+      return reply;
     return { bookmarks: await bookmarks.list(dashboardId) };
   });
 
@@ -1059,6 +1342,11 @@ export function buildServer({
       return reply
         .code(400)
         .send({ error: 'A bookmark holds a page tab, filter values and marks.' });
+    // With security on, a dashboard they may open: bookmarking changes nothing
+    // of it (T326, AC-266). Asked first, so a missing one and a hidden one
+    // answer alike (T326's review).
+    if ((await itemFor(request, reply, 'dashboard', dashboardId, 'open')) === undefined)
+      return reply;
     if (docs?.get !== undefined && (await docs.get('dashboard', dashboardId)) === null)
       return reply.code(404).send({ error: 'No such dashboard.' });
     return reply.code(201).send(await bookmarks.save({ dashboardId, name, state }));

@@ -299,7 +299,8 @@ describe('who may change a folder’s groups, with security on (T314, AC-259)', 
   });
 
   it('can’t be changed through the folder document itself (T314’s review)', async () => {
-    // The reader reads the folder, as they may, and saves it back with a grant.
+    // The reader reads the folder, as they may, and saves it back with a grant:
+    // refused, as every change of theirs is (T326).
     const before = (await get(app, a, cookies['super'])).json<{ setting: unknown }>().setting;
     const opened = await app.inject({
       method: 'GET',
@@ -307,19 +308,23 @@ describe('who may change a folder’s groups, with security on (T314, AC-259)', 
       headers: { cookie: cookies['reader']! },
     });
     const { body } = opened.json<{ body: Record<string, unknown> }>();
-    for (const access of [{ readOnly: null, readWrite: ['sales-ro'] }, undefined]) {
-      const current = (await docs().get('folder', a))!.version;
-      const saved = await app.inject({
+    const saveAs = async (who: string, access: unknown) =>
+      app.inject({
         method: 'PUT',
         url: `/api/documents/folder/${a}`,
-        headers: { cookie: cookies['reader']! },
+        headers: { cookie: cookies[who]! },
         payload: {
           body: access === undefined ? { ...body, access: undefined } : { ...body, access },
-          version: current,
+          version: (await docs().get('folder', a))!.version,
         },
       });
-      // The rest of the folder is saved; its groups are as they were.
-      expect(saved.statusCode).toBe(200);
+    expect((await saveAs('reader', { readOnly: null, readWrite: ['sales-ro'] })).statusCode).toBe(
+      403,
+    );
+    // A read-write member saves it: the rest of the folder is saved, and its
+    // groups are as they were, whatever the body said or left out.
+    for (const access of [{ readOnly: null, readWrite: ['sales-ro'] }, undefined]) {
+      expect((await saveAs('writer', access)).statusCode).toBe(200);
       expect((await get(app, a, cookies['super'])).json<{ setting: unknown }>().setting).toEqual(
         before,
       );

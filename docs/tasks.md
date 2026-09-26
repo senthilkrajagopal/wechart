@@ -5269,10 +5269,35 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - An empty search reads no tree.
     - **Left for later (performance, noted by the review):** every request reads the whole access tree (two queries) and aggregates `documents` for the counts. At 500+ users that wants a cached, versioned tree.
     - **Nothing ticked.** Each criterion's other half is another task's: AC-264 opening items (T326, T327), AC-194 the rendered pane (T331, T343), AC-261 opening and writing (T326–T329, T408).
-- [ ] T326 (AC-263, AC-266, AC-264) Read-only users read dashboards and change nothing
+- [x] T326 (AC-263, AC-266, AC-264) Read-only users read dashboards and change nothing
   - Files: `packages/api/src/server.ts` (write routes), `packages/api/src/access/readonly.test.ts`
   - Failing test: `readonly.test.ts`: a read-only user can open the folder's dashboards and their charts, load their data, export and bookmark; a model, data source or library chart answers 404; every create, change, move, delete, propose and access route answers 403 (AC-263, AC-266).
   - Depends on: T325
+  - **Done 2026-09-25, for dashboards, charts and folders.** With security on, one check governs every route that opens or changes one (`itemFor` in `server.ts`):
+    - **Opening needs sight of the item's governing folder.** That is its own folder, or a local chart's dashboard's. A library chart also opens where every kind is the user's, or when it's on a dashboard they may open (AC-263's "and the charts on them"). Otherwise the answer is 404, the same as for a missing item.
+    - **Changing needs write there; otherwise 403.** This covers:
+      - create; the document PUT, PATCH and DELETE;
+      - the dashboard save, including the library charts and folder charts saved with it;
+      - attaching a chart; adding an image.
+    - **Bookmarks** need only sight of the dashboard. A reader's view of a folder document leaves out its groups.
+    - **Security off:** nothing is checked or read.
+  - **The cold review failed the first version.** Its holes, all closed:
+    - a PUT, or the dashboard save, could move an item or a folder into a folder the user can't write; a folder could move into itself or beneath itself;
+    - a writer could open any library chart by adding its id to their own dashboard (a dashboard now adds only charts its saver may open);
+    - a local chart could become a library chart in a folder the user can't write (the governing folder is now compared);
+    - a delete's confirmation and `/api/model/references` named hidden dashboards and charts;
+    - image upload was unchecked;
+    - a missing item and a hidden one answered differently in the bookmark and dashboard-save routes.
+  - **The review's test gaps, closed.** A read-write member's side now shows their saves going through and every destination check refusing. A local chart kept apart from its dashboard's folder shows the governing rule. The root's groups are set aside for the test, and its bookmark removed.
+  - **Two existing tests changed, not weakened** (the review checked both):
+    - `cross-site.test.ts`'s let-through case runs as a Super-Admin, since the root isn't the writer's;
+    - `access.test.ts` shows the reader's 403 saving the folder document, and the writer's save keeping its groups.
+  - **Still open, and traced on:**
+    - models and data sources (T334, T335);
+    - loading a dashboard's data by the dashboard (T340);
+    - export, and propose routes, which don't exist yet.
+    - AC-263 and AC-266 stay unticked. A cached access tree would cut the queries each check costs (T325's note).
+  - **For the user:** AC-263 lets a read-only user open "the charts on" their dashboards, even one kept in a folder they can't see. AC-264 says nothing of a hidden folder may appear. T326 follows AC-263, and such a chart's `folderId` names the hidden folder.
 - [ ] T327 (AC-262) Read-write members see their folders' ancestors view-only
   - Files: `packages/api/src/access/ancestors.test.ts`
   - Failing test: `ancestors.test.ts`: a read-write member of /A/B lists and opens every dashboard, chart, model and data source in /A and the root, and every write there answers 403 (AC-262).
@@ -5753,8 +5778,8 @@ The user's Cube fork moved the introspection API out of Cube's own packages into
 | AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323, T325, T326 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
 | AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327 |
-| AC-263 | T313, T326 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371 |
-| AC-266 | T326 | AC-267 | T328 | AC-268 | T340, T408 |
+| AC-263 | T313, T326, T334, T335 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371 |
+| AC-266 | T326, T340 | AC-267 | T328 | AC-268 | T340, T408 |
 | AC-269 | T334, T335 | AC-270 | T336 | AC-271 | T336 |
 | AC-272 | T337, T339, T340 | AC-273 | T338 | AC-274 | T341 |
 | AC-275 | T337, T352 | AC-276 | T343 | AC-277 | T343 |

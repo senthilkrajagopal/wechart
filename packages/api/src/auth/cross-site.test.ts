@@ -31,6 +31,7 @@ const secured = {
   security: 'oidc' as const,
   publicUrl: PUBLIC_URL,
   sessionSecret: 'a-test-session-secret-at-least-32-characters',
+  superAdminGroup: 'wechart-super-admins',
   oidc: {
     issuer: 'http://localhost:5556/dex',
     clientId: 'wechart',
@@ -127,7 +128,9 @@ describe('a request from another site that would change something (T412, AC-317)
 
   it('lets the same request through from wechart’s own pages', async () => {
     const { app, created } = serving(secured);
-    const cookie = await signIn(app, USERS['writer']!);
+    // A Super-Admin, who may create in the root (T326); here only where the
+    // request comes from is in question.
+    const cookie = await signIn(app, USERS['super']!);
     for (const from of [
       { 'sec-fetch-site': 'same-origin', origin: PUBLIC_URL },
       { origin: PUBLIC_URL },
