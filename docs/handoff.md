@@ -15,10 +15,21 @@
 >   - an Entra ID tenant or AD broker for the end-of-phase check (T411).
 > - **The user's R13:** test phase 2 with security on (`playwright.security.config.ts`); run
 >   phase 1's suite with security off only at the end (T410).
-> - **Deployed:** wechart-api/web:6141947 on docker-desktop, single-user
->   (`deploy/helm/verify.sh` passed, with sign-in on through
->   `values/docker-desktop-security.yaml` and again without).
-> - **Pushing is the user's:** `git push origin main --tags`.
+> - **Branches (the user's decision, 2026-09-25):** the wechart ↔ Cube integration plan
+>   (Cube plus the fork's package, "xcube", owning published models and connections; the
+>   user's doc https://claude.ai/artifact/45CK5j3QQUasTtFgiC8eFq) is done on `feat/xcube`
+>   in wechart and in the Cube fork, so it can be rolled back. `main` was pushed at
+>   d844a7c (T314). `feat/xcube` holds slice 0's first step: the Cube image moved to
+>   the fork's package, `cube:v1.7.45-introspection-0b6eef90a9` (research re-pinned, T413–T415).
+>   Its complete test passed apart from load flakes; the user asked whether to merge it into
+>   `main` and tag it, and was offered `git merge --no-ff feat/xcube` plus a tag
+>   `cube-package-0b6eef90a9`, waiting for their yes.
+> - **Deployed:** the release on docker-desktop runs `feat/xcube`: wechart-api/web:abad2c2,
+>   Cube on the package's image, sign-in on through `values/docker-desktop-security.yaml`
+>   (Helm revision 12; revision 14 is a rollback to it after an accidental upgrade, below).
+>   The user tests it as `super@wechart.test`.
+> - **Pushing is the user's** (this session's push was refused by the permission classifier):
+>   `git push origin main feat/xcube --tags`.
 > - **Done since (2026-09-25, later):**
 >   - T399 box plot (AC-306 ticked), T317 sign-out, T319 account menu, T320 security e2e harness (AC-252 ticked);
 >   - T318 route guard, T321 page gate (AC-253, AC-316 ticked), T324 Dex in Helm (AC-251, AC-257 ticked);
@@ -27,8 +38,14 @@
 > - **The user's R25 (2026-09-25):** AC-251 reworded (the exemptions named), a cross-site
 >   check added (AC-317, task T412), AC-008 reworded to the requirement (queries made for a
 >   signed-in user carry their groups).
-> - **Still to ask the user (T323's review):** with security on and no Super-Admin group
->   configured, should the API refuse to start, as it does for other missing sign-in settings?
+> - **Done since (2026-09-25, latest):** T323, T412, T400 (box plot "Each point is", AC-314
+>   ticked), T314 (folder groups API; its review closed a hole where the generic folder PUT
+>   could write `access`), and on `feat/xcube` T413–T415. The user's R26: with sign-in on
+>   and no Super-Admin group, the API refuses to start and the chart to render (AC-318, T416).
+> - **Next:** T325 (list only what the user may see), paused when the user asked to stop at a
+>   logical point for the branch work. Also offered to the user: adding the gaps in their
+>   integration plan (per-folder layers and workspaces, refresh contexts, build history,
+>   scheduler locking) as comments on their doc.
 > - **Small decisions reported to the user, to confirm or change:**
 >   - With security off, phase 1's "AD" avatar stays at the far right after the Single-user mode chip (keeps AC-190).
 >   - The top bar's search field may narrow below 260 px so the bar fits 900 px.
@@ -44,7 +61,16 @@
 > - **Known flakes (phase 1 suite, under load):** the perf budgets, a markings tile, and
 >   `search-palette.spec.ts` "the arrows and Enter open one": its option ids are by
 >   position, so a result source that answers late shifts them between key presses.
->   All pass alone.
+>   All pass alone. Seen in the 2026-09-25 complete run, and passing alone too:
+>   `model-schedule.spec.ts` (a rebuild timed before the minute turned, Chrome),
+>   `acceleration.spec.ts` "a drilled tile says what served its own answer" (Firefox),
+>   `model.spec.ts` "the join diagram draws each declared join" (Safari), and the security
+>   suite's `page-gate.spec.ts` "signing in from there comes back" (Chrome).
+> - **`deploy/helm/verify.sh` installs by default.** Pass `--no-install` to check without
+>   touching the release: run bare from `main` on 2026-09-25, it upgraded the user's
+>   release with `main`'s values, the upgrade failed at its deadline, and
+>   `helm rollback wechart 12 -n wechart` put it back. Right after an upgrade that replaces
+>   the Cube pods, its step 4 can read Cube "down" once; run it again (T414's notes).
 > - **Landed with T322:** a previewed `context` on `/api/load` and `/api/sql` is refused (403)
 >   to anyone but a Super-Admin while security is on. T323 must add the test that a
 >   Super-Admin's preview still reaches Cube. For the user: T322 reads AC-008's "every
