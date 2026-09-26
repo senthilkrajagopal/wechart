@@ -9,12 +9,14 @@ import type { SecurityMode } from './user';
  * - `cube`: the model store Cube reads, which checks its own key, since Cube
  *   has no wechart session (research/cube/per-folder-models.md);
  * - `user`: everything else, which with security on answers 401 and nothing
- *   more to a request without a signed-in session.
+ *   more to a request without a signed-in session;
+ * - `admin`: a `user` route for Super-Admins alone, which answers anyone else
+ *   signed in 403 (T323, AC-256, AC-265): the Security workspace's.
  *
  * Every route declares its class. One that doesn't stops the server starting,
  * so a route added later can't be open by being forgotten.
  */
-export type Access = 'public' | 'cube' | 'user';
+export type Access = 'public' | 'cube' | 'user' | 'admin';
 
 declare module 'fastify' {
   interface FastifyContextConfig {
@@ -27,6 +29,7 @@ declare module 'fastify' {
 export const PUBLIC = { config: { access: 'public' } } as const;
 export const CUBE = { config: { access: 'cube' } } as const;
 export const USER = { config: { access: 'user' } } as const;
+export const ADMIN = { config: { access: 'admin' } } as const;
 
 export interface RouteAccess {
   readonly method: HTTPMethods;
@@ -51,9 +54,9 @@ export function registerRouteAccess(app: FastifyInstance): void {
   app.addHook('onRoute', (route) => {
     const access = route.config?.access;
     const methods = [route.method].flat();
-    if (access !== 'public' && access !== 'cube' && access !== 'user') {
+    if (access !== 'public' && access !== 'cube' && access !== 'user' && access !== 'admin') {
       throw new Error(
-        `${methods.join(',')} ${route.url} declares no access class (public, cube or user; T318)`,
+        `${methods.join(',')} ${route.url} declares no access class (public, cube, user or admin; T318)`,
       );
     }
     for (const method of methods) routes.push({ method, url: route.url, access });
@@ -74,6 +77,13 @@ export function registerGuard(app: FastifyInstance, security: SecurityMode): voi
     if (access === 'public' || access === 'cube') return;
     // Sent and awaited, the reply stops the chain: no body is read and no
     // handler runs (T318's review; Fastify's hook runner checks `reply.sent`).
-    if (request.wechartUser === null) await reply.code(401).send({ error: 'unauthenticated' });
+    if (request.wechartUser === null) {
+      await reply.code(401).send({ error: 'unauthenticated' });
+      return;
+    }
+    // An admin route: a Super-Admin's alone (T323).
+    if (access === 'admin' && !request.wechartUser.superAdmin) {
+      await reply.code(403).send({ error: 'Only a Super-Admin can use this.' });
+    }
   });
 }

@@ -65,6 +65,8 @@ export default defineConfig({
         // Dex sends groups only when asked for its `groups` scope (research/dex.md).
         WECHART_OIDC_SCOPES: 'openid profile email groups',
         WECHART_OIDC_ALLOW_HTTP: 'true',
+        // Dex's `super` test user is in it (infra/dex/config.yaml; T323).
+        WECHART_SUPER_ADMIN_GROUP: 'wechart-super-admins',
       },
     },
     {

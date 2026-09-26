@@ -185,11 +185,17 @@ if [[ "$security" == true ]]; then
     fail "3a. writer's sign-in ended at $landed; /api/me answered $status: $(head -c 300 "$body")"
   fi
   # The checks below run signed in as super, the test user in the configured
-  # Super-Admin group (a Super-Admin once T323 reads that group).
+  # Super-Admin group, which makes them a Super-Admin (T323, AC-256).
   if [[ "$(sign_in super "$jar")" == "$url/explore" ]]; then
     pass '3a. signed in as super for the checks below'
   else
     fail '3a. super could not sign in; the checks below run without a session'
+  fi
+  status="$(fetch "$url/api/me")"
+  if [[ "$status" == 200 ]] && jq -e '.superAdmin == true' "$body" > /dev/null; then
+    pass '3a. super is a Super-Admin, by the configured group'
+  else
+    fail "3a. super's /api/me answered $status: $(head -c 300 "$body")"
   fi
 fi
 

@@ -44,7 +44,7 @@ test.describe('signed in as writer, through Dex in docker-compose', () => {
  * exactly the groups Dex's token carries: AC-252's groups half, seen by the
  * browser. `nobody`'s token has no groups claim at all.
  */
-for (const role of ['super', 'writer', 'reader', 'many', 'nobody'] as const) {
+for (const role of ['super', 'writer', 'reader', 'many', 'nobody', 'manager'] as const) {
   test.describe(`signed in as ${role}`, () => {
     test.use({ role, viewport: { width: 1280, height: 800 } });
 
@@ -57,11 +57,14 @@ for (const role of ['super', 'writer', 'reader', 'many', 'nobody'] as const) {
         name: string;
         identity: string;
         groups: string[];
+        superAdmin: boolean;
         security: string;
       };
       expect(me.security).toBe('oidc');
       expect(me.identity).toBe(USERS[signedInAs!].email);
       expect(me.groups).toEqual(USERS[signedInAs!].groups);
+      // Only the configured group's member is a Super-Admin (T323, AC-256).
+      expect(me.superAdmin).toBe(signedInAs === 'super');
       await expect(
         page.getByRole('banner').getByRole('button', { name: `Account: ${me.name}` }),
       ).toBeVisible();

@@ -1,3 +1,4 @@
+import { isSuperAdmin } from '@wechart/core';
 import type { FastifyInstance } from 'fastify';
 
 /**
@@ -68,9 +69,15 @@ export function userOf(request: { wechartUser: WechartUser | null }): WechartUse
 /**
  * Gives every request its user, before any route sees it. With security on it
  * is read in `preParsing`, which runs after every `onRequest` hook, the
- * session plugin's included (research/openid-client.md, Gotcha 13).
+ * session plugin's included (research/openid-client.md, Gotcha 13). A
+ * Super-Admin is a member of the group the configuration names, and nobody
+ * where it names none (T323, AC-256).
  */
-export function registerUser(app: FastifyInstance, security: SecurityMode): void {
+export function registerUser(
+  app: FastifyInstance,
+  security: SecurityMode,
+  superAdminGroup?: string,
+): void {
   app.decorateRequest('wechartUser', null);
   if (security === 'off') {
     app.addHook('onRequest', async (request) => {
@@ -89,7 +96,7 @@ export function registerUser(app: FastifyInstance, security: SecurityMode): void
             name: user.name,
             ...(user.identity === undefined ? {} : { identity: user.identity }),
             groups: [...user.groups],
-            superAdmin: false,
+            superAdmin: isSuperAdmin(user.groups, superAdminGroup),
           };
   });
 }

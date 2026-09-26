@@ -22,7 +22,7 @@ import { MetaCache, MetaCachesByGroups } from './cube/meta-cache';
 import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
 import type { SessionStore } from '@fastify/session';
 
-import { PUBLIC, registerGuard, registerRouteAccess, USER } from './auth/guard';
+import { ADMIN, PUBLIC, registerGuard, registerRouteAccess, USER } from './auth/guard';
 import { registerSignIn, signInOptionsOf } from './auth/routes';
 import { Forbidden, registerUser, Unauthenticated, userOf } from './auth/user';
 import { registerBuilds } from './jobs/build';
@@ -180,7 +180,7 @@ export function buildServer({
   // Before any route: every route declares who may call it (T318, AC-251).
   registerRouteAccess(app);
   if (security === 'oidc') registerSignIn(app, signInOptionsOf(config, sessions));
-  registerUser(app, security);
+  registerUser(app, security, config.superAdminGroup);
   registerGuard(app, security);
 
   /**
@@ -211,7 +211,8 @@ export function buildServer({
    * anyone could ask it, with no token and with a bad one — never with
    * wechart's.
    */
-  app.get('/api/cube-auth', USER, async () => authCheckOf(config.cubeApiUrl, healthFetch));
+  // The Security workspace's: a Super-Admin's alone (T323, AC-265).
+  app.get('/api/cube-auth', ADMIN, async () => authCheckOf(config.cubeApiUrl, healthFetch));
   const client =
     cube ??
     new CubeClient({
@@ -292,6 +293,7 @@ export function buildServer({
    * with its token by the cheapest request past the scope's assertion
    * (`cube/scopes.ts`; research/cube/api-scope-probes.md).
    */
+  // Not admin (T323): Jobs' build panel asks it too, for read-write members.
   app.get('/api/cube-scopes', USER, async () => scopesOf((path, init) => client.ask(path, init)));
 
   /**

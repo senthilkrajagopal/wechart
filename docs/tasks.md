@@ -4977,7 +4977,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - **Workspaces are folder ids** of the form `ws:<userKey>`. The phase-1 pseudo-root `mine` resolves to the signed-in user's workspace, and phase-1 items in `mine` move to the workspace of the single user `admin`.
 - **The folder chain Cube compiles** is the list of model-bearing folder ids, nearest first, in a signed `wechartModel` claim that only the API mints after checking access (research `cube/per-folder-models.md`, layout B).
 - **The security-on end-to-end suite is separate.** It is `playwright.security.config.ts`, with its own API (port 4300), web preview (port 5373) and Dex, so the phase-1 suite (security off) stays as it is until AC-308's end-of-phase check (the user's R13).
-- **Every API route declares its access class**: `public` (health and `/api/auth/*`), `cube` (key-guarded model routes) or `user`. A test fails for any unclassified route (T318).
+- **Every API route declares its access class**: `public` (health and `/api/auth/*`), `cube` (key-guarded model routes), `user`, or `admin` (a Super-Admin's alone, T323). A test fails for any unclassified route (T318).
 
 ## P2.0 Foundations: the request's user and effective access
 
@@ -5155,10 +5155,23 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - `e2e/security/cube-groups.spec.ts`, in every browser: `manager` gets every status of the seeded `secured_orders` view; `writer` gets Cube's refusal (a hidden member) and no rows.
     - The cold review (PASS) led to the publish test, the exact calls and statuses, and the writer test asserting Cube's refusal rather than any failure.
     - AC-008 stays open: it is traced to T339 too.
-- [ ] T323 (AC-256, AC-265) Take the Super-Admin group from the deployment's configuration and open every admin surface to its members
+- [x] T323 (AC-256, AC-265) Take the Super-Admin group from the deployment's configuration and open every admin surface to its members
   - Files: `packages/api/src/config.ts` (`WECHART_SUPER_ADMIN_GROUP`), `packages/api/src/auth/user.ts`, `packages/api/src/auth/admin.test.ts`
   - Failing test: `admin.test.ts`: a member of the configured group gets `superAdmin: true` and reaches every folder and admin route; a user outside it gets 403 on the admin routes (AC-256, AC-265).
   - Depends on: T313, T316
+  - **Done 2026-09-25.**
+    - `WECHART_SUPER_ADMIN_GROUP` names the group. A signed-in user in it is a Super-Admin (core's `isSuperAdmin`), worked out on each request from the session's groups. Unset, nobody signed in is one; with security off the single user still is.
+    - **A fourth access class, `admin`**, for a Super-Admin's routes alone: no session gets 401, anyone else signed in gets 403. It holds `/api/cube-auth`, the Security workspace's check of whether Cube takes unsigned requests.
+    - **Decision:** `/api/cube-scopes` stays `user`, because Jobs' build panel asks it for read-write members too. T371 narrows it.
+    - A Super-Admin's previewed context now reaches Cube, asked exactly as the preview says (T322's gate).
+    - **Tests:**
+      - `admin.test.ts`: the configuration, who is a Super-Admin, the admin routes pinned, 403 for others, the preview, and security off.
+      - `e2e/security/sign-in.spec.ts`: each test role's `superAdmin` through the suite's own configured group.
+      - `deploy/helm/verify.sh` checks `super`'s at the next run with sign-in on.
+    - The cold review (PASS with conditions) led to:
+      - AC-256 and AC-265 left open, traced on to the tasks where others are actually refused (AC-256: T325, T326; AC-265: T328, T369, T371). "Reaches every folder" is shown there too, since no route checks folder access yet;
+      - stronger assertions and a stubbed Cube in the admin tests.
+    - **For the user:** with security on and no Super-Admin group configured, nobody is a Super-Admin, and nothing says so at startup. Every other missing sign-in setting stops startup.
 - [x] T324 (AC-257, AC-251) Run Dex beside wechart in the Helm release on docker-desktop and sign in there
   - Files: `deploy/helm/wechart/templates/{dex.yaml,dex-config.yaml}`, `deploy/helm/wechart/values.yaml` (`security.enabled`, `security.oidc.*`, `security.dex.*`, `security.superAdminGroup`), `deploy/helm/wechart/templates/{api.yaml,secrets.yaml,_helpers.tpl}` (the OIDC client secret and the session secret, generated once), `deploy/helm/values/docker-desktop.yaml`, `deploy/helm/verify.sh`
   - Failing test: `verify.sh` with security on: `/explore` without a cookie is redirected to Dex; a scripted sign-in as `writer` through Dex's form makes `/api/me` answer with that user (AC-257, Helm half).
@@ -5182,6 +5195,11 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - the limits of another provider stated in `docs/deploy.md` (an https `publicUrl` needs `WECHART_TRUST_PROXY`, which the chart doesn't set yet: T411);
       - research marked verified: the cookie through `auth_request`, pattern B, and the localhost LoadBalancer.
     - **Ticked:** AC-257 (compose T320, Helm here) and AC-251 (API T318, app T321, deployment here).
+
+- [ ] T412 (AC-317) Refuse a request from another site that would change something
+  - Files: `packages/api/src/auth/guard.ts` (with security on, every POST, PUT, PATCH and DELETE, sign-out included), `packages/api/src/auth/cross-site.test.ts`
+  - Failing test: `cross-site.test.ts`: with security on and a signed-in cookie, a POST with `Sec-Fetch-Site: cross-site`, or with an `Origin` other than the public address, answers 403 and changes nothing (a document create makes none; sign-out ends no session); the same request with wechart's own `Origin`, or `Sec-Fetch-Site: same-origin`, goes through; a GET from another site is untouched; with security off, nothing is refused (AC-317; research/openid-client.md, "SPA behaviour and CSRF"; the user's R25).
+  - Depends on: T318
 
 ## P2.2 Folder permissions and roles (F26)
 
@@ -5632,10 +5650,10 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
 | AC-234 | T378 | AC-246 | T404 | AC-249 | T336 |
 | AC-251 | T318, T321, T324 | AC-252 | T316, T319, T320 | AC-253 | T317, T321 |
-| AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323 |
+| AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323, T325, T326 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
 | AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327 |
-| AC-263 | T313, T326 | AC-264 | T313, T325 | AC-265 | T313, T323, T330 |
+| AC-263 | T313, T326 | AC-264 | T313, T325 | AC-265 | T313, T323, T328, T330, T369, T371 |
 | AC-266 | T326 | AC-267 | T328 | AC-268 | T340, T408 |
 | AC-269 | T334, T335 | AC-270 | T336 | AC-271 | T336 |
 | AC-272 | T337, T339, T340 | AC-273 | T338 | AC-274 | T341 |
@@ -5653,3 +5671,4 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 | AC-308 | T410 | AC-309 | T337 | AC-310 | T338 |
 | AC-311 | T333 | AC-312 | T335 | AC-313 | T397, T398 |
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
+| AC-317 | T412 | | | | |

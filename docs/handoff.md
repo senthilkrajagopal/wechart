@@ -15,21 +15,27 @@
 >   - an Entra ID tenant or AD broker for the end-of-phase check (T411).
 > - **The user's R13:** test phase 2 with security on (`playwright.security.config.ts`); run
 >   phase 1's suite with security off only at the end (T410).
-> - **Deployed:** wechart-api/web:40aa57e on docker-desktop (`deploy/helm/verify.sh`
->   passed).
+> - **Deployed:** wechart-api/web:6141947 on docker-desktop, single-user
+>   (`deploy/helm/verify.sh` passed, with sign-in on through
+>   `values/docker-desktop-security.yaml` and again without).
 > - **Pushing is the user's:** `git push origin main --tags`.
-> - **Done since (2026-09-25, later):** T399 box plot (AC-306 ticked), T317 sign-out, T319
->   account menu, T320 security e2e harness (AC-252 ticked), T318 the route guard; T321 (the
->   page gate) in progress.
-> - **For the user (T318's review):** AC-251 exempts only "health routes", but the plan also
->   exempts sign-in and Cube's key-guarded model routes: reword AC-251? And add a
->   cross-site check (`Sec-Fetch-Site`/`Origin`) for unsafe methods, which research
->   suggests and no task holds?
-> - **Small decisions to report to the user:**
->   - With security off, phase 1's "AD" avatar stays at the far right after the
->     Single-user mode chip (references.md says the button "becomes" the chip); this keeps
->     ticked AC-190 and the user's R13.
+> - **Done since (2026-09-25, later):**
+>   - T399 box plot (AC-306 ticked), T317 sign-out, T319 account menu, T320 security e2e harness (AC-252 ticked);
+>   - T318 route guard, T321 page gate (AC-253, AC-316 ticked), T324 Dex in Helm (AC-251, AC-257 ticked);
+>   - T322 groups into Cube, T397 ISO-3 detection;
+>   - T323 (Super-Admins) in review.
+> - **The user's R25 (2026-09-25):** AC-251 reworded (the exemptions named), a cross-site
+>   check added (AC-317, task T412), AC-008 reworded to the requirement (queries made for a
+>   signed-in user carry their groups).
+> - **Still to ask the user (T323's review):** with security on and no Super-Admin group
+>   configured, should the API refuse to start, as it does for other missing sign-in settings?
+> - **Small decisions reported to the user, to confirm or change:**
+>   - With security off, phase 1's "AD" avatar stays at the far right after the Single-user mode chip (keeps AC-190).
 >   - The top bar's search field may narrow below 260 px so the bar fits 900 px.
+>   - The deployed demo stays single-user; sign-in is the overlay values file's.
+>   - A model marks a country code in `meta.wechart.countryCode` (T397).
+>   - Only `/api/cube-auth` is admin-only; `/api/cube-scopes` stays for signed-in users (Jobs' build panel).
+>   - The phase-1 status-labels test lets `/api/me` through, now the shell's precondition (T321).
 > - **Test cadence (the user's proposal, adopted):** per task, its own tests, the full unit
 >   suite (`pnpm -r --filter './packages/*' test`, not `pnpm -r test`, which also runs the
 >   whole e2e suite) and the touched e2e specs in Chrome; every 10 tasks and at phase end,

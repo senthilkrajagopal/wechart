@@ -73,8 +73,8 @@ Traces to: `[R5]`, `[R4]`, `[research/cube/data-apis.md]`, `[research/cube/acces
 
 - [x] AC-007 WHEN the browser needs data or metadata, THE SYSTEM SHALL obtain it through the wechart API, and the browser SHALL make no request to the Cube API host.
       Fails when: a network request from the browser targets the Cube API host, or any response to the browser contains the Cube API secret.
-- [ ] AC-008 WHEN wechart queries Cube, THE SYSTEM SHALL attach the configured security context to every request. WHILE security is enabled, it SHALL also attach the signed-in user's AD groups, so the model's access policies apply by group (phase 2: `[R14]`).
-      Fails when: a request reaches Cube without the configured context; with security enabled, a request carries no groups or groups other than the user's; or a group's access policy doesn't apply to its members' queries.
+- [ ] AC-008 WHEN wechart queries Cube, THE SYSTEM SHALL attach the configured security context to every request. WHILE security is enabled, every query made for a signed-in user SHALL also carry that user's AD groups, so the model's access policies filter its rows and members by group; what wechart asks Cube for itself (compiling a model, builds, schedules, a data source's catalog, health) carries the configured context alone (phase 2: `[R14, R25]`).
+      Fails when: a request reaches Cube without the configured context; with security enabled, a query made for a signed-in user carries no groups or groups other than the user's; or a group's access policy doesn't apply to its members' queries.
 - [x] AC-009 WHEN Cube reports a new `schemaVersion`, THE SYSTEM SHALL serve metadata from the new model within 60 seconds without a restart.
       Fails when: 60 seconds after the change, a metadata request still returns members from the previous model.
 - [x] AC-010 WHILE Cube replies "Continue wait" for a query, THE SYSTEM SHALL keep the request open, show the tile in a loading state, and deliver the result when it arrives.
@@ -883,14 +883,16 @@ Phase 2's criteria start at AC-251. Its requirements are in [docs/requirements.m
 Purpose: nobody reaches wechart without signing in when security is on, and one user has everything when it's off.
 Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R14, R15, R18, R19]`.
 
-- [x] AC-251 WHERE security is enabled, WHEN a request without a signed-in session reaches a wechart page or API route, THE SYSTEM SHALL send a page request to the configured OIDC provider's sign-in, and answer an API request with 401, returning no wechart content either way. Health routes are exempt.
-      Fails when: any page renders wechart content, or any API route other than health returns data, without a signed-in session.
+- [x] AC-251 WHERE security is enabled, WHEN a request without a signed-in session reaches a wechart page or API route, THE SYSTEM SHALL send a page request to the configured OIDC provider's sign-in, and answer an API request with 401, returning no wechart content either way. Exempt are the health routes, sign-in's own routes, and the routes Cube reads the model through, which answer only to Cube's key (`[R25]`).
+      Fails when: any page renders wechart content, or any API route other than those exempt returns data, without a signed-in session; or a model route returns data without Cube's key.
 - [x] AC-252 WHERE security is enabled, WHEN a user signs in, THE SYSTEM SHALL take their identity and AD groups from the provider's token, as the configuration names them (issuer, client, groups claim), and show the user's name and a Sign out control in the top bar.
       Fails when: the groups wechart grants access by differ from the token's, or the top bar shows no name or no Sign out.
 - [x] AC-253 WHEN the user signs out, THE SYSTEM SHALL end the wechart session, so that the next request needs a new sign-in.
       Fails when: after signing out, a page or API route still answers as that user.
 - [x] AC-316 WHERE security is enabled, THE SYSTEM SHALL end a sign-in 12 hours after it began, whatever the activity, so that the next request needs a new sign-in (`[R24]`).
       Fails when: a session signed in more than 12 hours ago still answers as its user, or one signed in less than 12 hours ago is refused.
+- [ ] AC-317 WHERE security is enabled, IF a request that changes something (POST, PUT, PATCH or DELETE) comes from another site, as its `Sec-Fetch-Site: cross-site` header or an `Origin` other than wechart's public address says, THEN THE SYSTEM SHALL refuse it with 403 and change nothing, whatever session cookie it carries (`[R25]`).
+      Fails when: such a request from another site changes something or answers other than 403, or the same request from wechart's own pages is refused.
 - [ ] AC-254 WHILE security is disabled, THE SYSTEM SHALL run in single-user mode: no sign-in, and one user holding every permission, as a Super-Admin does. Workspaces and proposals SHALL work as with security on, and that user approves their own proposals (`[P2 input, R19]`).
       Fails when: a sign-in is asked for, or any permission is refused, while security is disabled.
 - [ ] AC-255 WHILE security is enabled, WHEN a user belongs to 20 AD groups, THE SYSTEM SHALL grant them access through every one of them (`[R12, R19]`).
@@ -1171,6 +1173,7 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 |---|---|
 | §P2.2 Sign-in for everyone when security is on `[R11]` | AC-251, AC-252, AC-253 |
 | §P2.4 A sign-in lasts 12 hours `[R24]` | AC-316 |
+| §P2.4 Requests from another site change nothing `[R25]` | AC-317 |
 | §P2.4 Security off is single-user mode, with phase 2's flows `[P2 input, R19]` | AC-254 |
 | §P2.2 Users in hundreds of groups; the test uses 20 `[R12, R19]` | AC-255 |
 | §P2.2 The Super-Admin group, named in the deployment's configuration `[R18]` | AC-256, AC-265 |

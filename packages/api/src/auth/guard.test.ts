@@ -16,7 +16,8 @@ import { pgSessionStore } from './session-store';
  *
  * Every route declares its access class (tasks.md, Phase 2 decisions):
  * `public` (health and sign-in), `cube` (the model store Cube reads, which
- * checks its own key) or `user`. The sweep asks every route the server has,
+ * checks its own key), `user`, or `admin` (a Super-Admin's alone, T323). The
+ * sweep asks every route the server has,
  * so a route added later is covered without anyone adding it here.
  */
 const config = {
@@ -67,7 +68,10 @@ describe('with security on and no session (T318, AC-251)', () => {
     const app = buildServer({ config: secured, sessions: pgSessionStore(getDb()) });
     servers.push(app);
     await app.ready();
-    const routes = routesOf(app).filter((route) => route.access === 'user');
+    // Admin routes too (T323): a Super-Admin's, so no one's without a session.
+    const routes = routesOf(app).filter(
+      (route) => route.access === 'user' || route.access === 'admin',
+    );
     // The API's own routes, not a handful: the sweep would pass vacuously on none.
     expect(routes.length).toBeGreaterThan(30);
 
@@ -90,7 +94,9 @@ describe('with security on and no session (T318, AC-251)', () => {
     servers.push(app);
     await app.ready();
     const open = routesOf(app)
-      .filter((route) => route.access !== 'user' && route.method !== 'HEAD')
+      .filter(
+        (route) => route.access !== 'user' && route.access !== 'admin' && route.method !== 'HEAD',
+      )
       .map((route) => `${route.access} ${route.method} ${route.url}`)
       .sort();
     expect(open).toEqual([

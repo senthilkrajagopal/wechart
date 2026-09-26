@@ -72,6 +72,12 @@ export interface Config {
    * Gotcha 3; T316's review).
    */
   readonly trustProxy?: boolean | readonly string[];
+  /**
+   * `WECHART_SUPER_ADMIN_GROUP`: the AD group whose members are Super-Admins,
+   * exactly as the provider's groups claim carries it (T323, AC-256). Unset,
+   * no one signed in is a Super-Admin; with security off the single user is.
+   */
+  readonly superAdminGroup?: string;
 }
 
 /** The OIDC provider wechart signs users in through (AC-252; research/openid-client.md). */
@@ -159,6 +165,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       ? { cubeStoreUrl: env['WECHART_CUBE_STORE_URL'].replace(/\/$/, '') }
       : {}),
     ...(env['CUBE_WORKER_URL'] ? { cubeWorkerUrl: env['CUBE_WORKER_URL'].replace(/\/$/, '') } : {}),
+    ...(env['WECHART_SUPER_ADMIN_GROUP']
+      ? { superAdminGroup: env['WECHART_SUPER_ADMIN_GROUP'] }
+      : {}),
   };
 }
 
