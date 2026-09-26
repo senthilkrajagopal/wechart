@@ -5668,6 +5668,23 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Depends on: T410
   - Also to check there (T317's review): the provider must accept wechart's public root as a post-logout redirect URI, which Entra requires to be registered; and a sign-out URL whose `id_token_hint` carries a token with up to 200 group GUIDs must fit the URL limits on the way.
 
+## P2.16 The Cube introspection package (branch `feat/xcube`)
+
+The user's Cube fork moved the introspection API out of Cube's own packages into a standalone package, `cube-introspection/`, on an unmodified Cube v1.7.45: branch `feat/introspection-package` at `0b6eef90a9` (`docs/inputs/2026-09-25-cube-introspection-package.md`; research `cube/introspection-api.md`, which found no difference over HTTP and seven below it, none reaching wechart). The user took the switch on 2026-09-25 as the first step of slice 0 of their wechart ↔ Cube integration plan, on branch `feat/xcube` in both repositories so it can be rolled back. The image is still built locally; the rename, registry and digest pin are the rest of slice 0.
+
+- [ ] T413 (AC-139, AC-250) Run the package's image in compose, for Cube and its refresh worker
+  - Files: `docker-compose.yml` (the `CUBE_IMAGE` default and the comment above it), `packages/api/src/deploy/cube-image.test.ts`
+  - Failing test: `cube-image.test.ts`: compose's `CUBE_IMAGE` default for `cube` and `cube-refresh-worker` is `cube:v1.7.45-introspection-0b6eef90a9`, and neither sets `command:` or `entrypoint:`, which would start Cube without the routes (research, "Don't override the container command"). Then compose up with the default, and `e2e/generate-cubes.spec.ts` passes against it (AC-139, AC-250).
+  - Depends on: none
+- [ ] T414 (AC-248) Run it in the docker-desktop Helm release
+  - Files: `deploy/helm/values/docker-desktop.yaml` (`cube.image`), `packages/api/src/deploy/cube-image.test.ts`
+  - Failing test: `cube-image.test.ts`: the values' `cube.image` is the tag, and the chart's Cube template gives its containers no `command` or `args`. Then `deploy/helm/verify.sh` passes against the upgraded release (AC-248).
+  - Depends on: T413
+- [ ] T415 (AC-248) Say how to build the image from the package
+  - Files: `docs/deploy.md`, `packages/api/src/model/introspection.ts` (a comment that describes the old image), `packages/api/src/deploy/cube-image.test.ts`
+  - Failing test: `cube-image.test.ts`: `docs/deploy.md` builds from `~/Work/bi/cube/cube-introspection` with `docker build -t cube:v1.7.45-introspection-$(git rev-parse --short=10 HEAD) .`, names the tag the release runs, and names no `overlay.Dockerfile` (AC-248).
+  - Depends on: T414
+
 ## Phase 2 coverage: acceptance criterion → task
 
 | AC | Tasks | AC | Tasks | AC | Tasks |
@@ -5707,4 +5724,5 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 | AC-308 | T410 | AC-309 | T337 | AC-310 | T338 |
 | AC-311 | T333 | AC-312 | T335 | AC-313 | T397, T398 |
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
-| AC-317 | T412 | | | | |
+| AC-317 | T412 | AC-139 | T413 | AC-248 | T414, T415 |
+| AC-250 | T413 | | | | |
