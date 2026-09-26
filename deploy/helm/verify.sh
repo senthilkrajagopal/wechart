@@ -24,6 +24,9 @@
 # Cube restarted, and with two API replicas. It signs one Cube token itself,
 # with openssl.
 #
+# Step 7 (T423) stops one Cube instance and one API replica with a slow query
+# in flight, and checks the query, the session and both Deployments.
+#
 # Needs helm, kubectl, curl, jq and openssl (docs/deploy.md).
 
 set -uo pipefail
@@ -134,13 +137,14 @@ echo "      web app: $url"
 body="$(mktemp)"
 jar="$(mktemp)"
 # Step 6 scales the API: an exit part-way, an interrupt included, puts it back
-# to one replica (T447's review).
+# to the release's replicas (T447's review).
+api_replicas="$(jq -r '.api.replicas // 1' <<< "$release_values")"
 api_scaled=0
 on_exit() {
   rm -f "$body" "$jar" "$jar".*
   if ((api_scaled)); then
     k scale "deployment/$(k get deployments -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=api" \
-      -o jsonpath='{.items[0].metadata.name}')" --replicas=1 > /dev/null 2>&1
+      -o jsonpath='{.items[0].metadata.name}')" --replicas="$api_replicas" > /dev/null 2>&1
   fi
 }
 trap on_exit EXIT
@@ -312,7 +316,7 @@ component_of() {
 scale_api() {
   local api_deploy ready pods
   api_deploy="$(component_of deployments api)"
-  if (($1 == 1)); then api_scaled=0; else api_scaled=1; fi
+  if (($1 == api_replicas)); then api_scaled=0; else api_scaled=1; fi
   k scale "deployment/$api_deploy" --replicas="$1" > /dev/null
   for _ in $(seq 1 150); do
     ready="$(k get "deployment/$api_deploy" -o jsonpath='{.status.readyReplicas}')"
@@ -396,7 +400,175 @@ xcube_checks() {
   else
     fail "6. publishing $replica_path answered $status: $(head -c 600 "$body")"
   fi
-  scale_api 1
+  scale_api "$api_replicas"
+}
+
+# 7. The query path survives losing one Cube instance and one API replica
+# (T423, AC-319). With two of each and a slow query in flight, the Cube pod
+# that took the query and the API pod that sent it are deleted. The query is
+# asked on as the web app asks it (packages/web/src/query/loadTile.ts): again
+# on "Continue wait", and through network errors, 502, 503 and 504 for up to
+# 90 s. It returns its data; the signed-in user is never asked to sign in
+# again; both Deployments come back to full strength; each keeps a
+# PodDisruptionBudget. Run between step 5's query and its removal.
+full_strength() {
+  local deploy ready want
+  deploy="$(component_of deployments "$1")"
+  for _ in $(seq 1 ${2:-150}); do
+    ready="$(k get "deployment/$deploy" -o jsonpath='{.status.readyReplicas}')"
+    want="$(k get "deployment/$deploy" -o jsonpath='{.spec.replicas}')"
+    [[ "${ready:-0}" == "$want" && "$(component_of pods "$1" | wc -w | tr -d ' ')" == "$want" ]] && return 0
+    sleep 2
+  done
+  return 1
+}
+stop_one_checks() {
+  local api_deploy cube_deploy want_api want_cube
+  api_deploy="$(component_of deployments api)"
+  cube_deploy="$(component_of deployments cube)"
+  want_api="$(k get "deployment/$api_deploy" -o jsonpath='{.spec.replicas}')"
+  want_cube="$(k get "deployment/$cube_deploy" -o jsonpath='{.spec.replicas}')"
+  if ((want_api < 2 || want_cube < 2)); then
+    fail "7. the query path runs $want_cube Cube instance(s) and $want_api API replica(s), not two of each"
+    return
+  fi
+  full_strength api && full_strength cube || fail '7. the API or Cube was not at full strength to begin with'
+
+  # A query that takes 60 s in the warehouse, on a cube of its own each run,
+  # so no cached answer stands in for it: longer than a stopped Cube instance
+  # lives on (a 5 s preStop, then up to 16 s of graceful shutdown), so the
+  # one that took it can't finish it.
+  local slow_path='wechart-verify/slow-probe.yml' slow_cube content request
+  slow_cube="wechart_verify_slow_$(date +%s)"
+  content="$(printf 'cubes:\n  - name: %s\n    sql: SELECT 1 AS id, pg_sleep(60) AS slept\n    measures:\n      - name: count\n        type: count\n' \
+    "$slow_cube")"
+  request="$(jq -n --arg path "$slow_path" --arg content "$content" '{files: [{path: $path, content: $content}]}')"
+  status="$(fetch -X POST -H 'content-type: application/json' --data "$request" "$url/api/model/publish")"
+  if [[ "$status" != 200 ]]; then
+    fail "7. publishing $slow_path answered $status: $(head -c 600 "$body")"
+    return
+  fi
+
+  local me_body who id query since
+  me_body="$(mktemp)"
+  who() {
+    local code
+    code="$(curl -sS -o "$me_body" -w '%{http_code}' --max-time 30 -b "$jar" "$url/api/me" 2> /dev/null)" || code=000
+    if [[ "$code" == 200 ]]; then jq -r '.name // .email // empty' "$me_body"; else echo "HTTP $code"; fi
+  }
+  local user
+  user="$(who)"
+  id="verify-stop-one-$(date +%s)"
+  query="$(jq -n --arg m "$slow_cube.count" '{query: {measures: [$m]}}')"
+  ask() {
+    local code
+    # curl writes 000 itself when it gets no answer; nothing is added to it.
+    code="$(curl -sS -o "$body" -w '%{http_code}' --max-time 60 -b "$jar" -X POST \
+      -H 'content-type: application/json' -H "x-request-id: $id" --data "$query" "$url/api/load" 2> /dev/null)" || code=000
+    echo "$code"
+  }
+  since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  status="$(ask)"
+  if [[ "$status" != 200 ]] || ! jq -e '.error == "Continue wait"' "$body" > /dev/null 2>&1; then
+    fail "7. the slow query answered $status before anything was stopped: $(head -c 300 "$body")"
+    remove_probe "$slow_path" || true
+    rm -f "$me_body"
+    return
+  fi
+
+  # The Cube pod that took it, by its log of the request, and the API pod
+  # that sent it, by the address that log gives.
+  local pod cube_pod='' api_ip='' api_pod=''
+  for pod in $(component_of pods cube); do
+    api_ip="$(k logs "$pod" -c cube --since-time="$since" 2> /dev/null | grep '^{' |
+      jq -r 'select(.message == "REST API Request" and (.path | endswith("/v1/load"))) | .ip' 2> /dev/null |
+      tail -1 | sed 's/^::ffff://')"
+    if [[ -n "$api_ip" ]]; then
+      cube_pod="$pod"
+      break
+    fi
+  done
+  for pod in $(component_of pods api); do
+    [[ "$(k get "pod/$pod" -o jsonpath='{.status.podIP}')" == "$api_ip" ]] && api_pod="$pod"
+  done
+  if [[ -z "$cube_pod" || -z "$api_pod" ]]; then
+    # Then the one stopped may not be the one running it: not the stop asked for.
+    fail "7. could not tell from Cube's log which Cube pod took the query (${cube_pod:-none}) or which API pod sent it (${api_pod:-none}); stopping the first of each"
+    cube_pod="${cube_pod:-$(component_of pods cube | awk '{print $1}')}"
+    api_pod="${api_pod:-$(component_of pods api | awk '{print $1}')}"
+  fi
+  k delete pod "$cube_pod" "$api_pod" --wait=false > /dev/null
+  echo "      stopped $cube_pod and $api_pod with the query in flight"
+
+  local asked_again=0 someone_else='' outage_since='' polls=0 answered='' seen='' stopped_at=$SECONDS statuses=''
+  while ((polls < 240)); do
+    polls=$((polls + 1))
+    status="$(ask)"
+    [[ " $statuses " == *" $status "* ]] || statuses="$statuses $status"
+    case "$status" in
+      200)
+        outage_since=''
+        if jq -e '.error == "Continue wait"' "$body" > /dev/null 2>&1; then
+          sleep 0.5
+        else
+          answered=1
+          break
+        fi
+        ;;
+      000 | 502 | 503 | 504)
+        outage_since="${outage_since:-$SECONDS}"
+        ((SECONDS - outage_since >= 90)) && break
+        sleep 1
+        ;;
+      *) break ;;
+    esac
+    # The web app sends its user to sign in on a 401 (AuthGate.tsx), and on
+    # nothing else; any other name is someone else's session.
+    seen="$(who)"
+    [[ "$seen" == 'HTTP 401' ]] && asked_again=1
+    [[ "$seen" != HTTP* && "$seen" != "$user" ]] && someone_else="$seen"
+  done
+  local count elapsed=$((SECONDS - stopped_at))
+  count="$(jq -r --arg m "$slow_cube.count" '.data[0][$m] // empty' "$body" 2> /dev/null)"
+  if [[ -n "$answered" && "$count" == 1 ]]; then
+    pass "7. with $cube_pod and $api_pod stopped mid-query, the query returned its data $elapsed s later, after $polls asks (answers:$statuses)"
+  else
+    fail "7. after $polls asks the query answered $status: $(head -c 300 "$body")"
+  fi
+  # Ran again elsewhere: the stopped instance couldn't have answered in under
+  # a minute from the stop. Let go within the 5 s heartbeat's stall of about
+  # 20 s, where Cube's default 30 s took two minutes before it ran again
+  # (research cube/ha-topology.md §1).
+  if [[ -n "$answered" ]] && ((elapsed >= 60 && elapsed <= 150)); then
+    pass "7. the query ran again on the other instance, let go within the queue heartbeat's stall ($elapsed s)"
+  elif [[ -n "$answered" ]]; then
+    fail "7. the answer came $elapsed s after the stop: under 60 s, the stopped instance ran it; over 150 s, the heartbeat didn't let it go"
+  fi
+  if [[ "$security" == true ]]; then
+    seen="$(who)"
+    if ((asked_again)) || [[ -n "$someone_else" || "$seen" != "$user" ]]; then
+      fail "7. the signed-in user was not kept: /api/me was '$user', then '$seen'$( ((asked_again)) && echo ', and 401 on the way')${someone_else:+, and '$someone_else' on the way}"
+    else
+      pass "7. /api/me named '$user' at every answer, never asking to sign in again"
+    fi
+  fi
+  if full_strength api && full_strength cube; then
+    pass "7. the API and Cube are back to $want_api and $want_cube Ready replicas"
+  else
+    fail '7. the API or Cube did not come back to full strength'
+  fi
+  local component allowed
+  for component in api cube; do
+    allowed="$(k get poddisruptionbudgets -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=$component" \
+      -o jsonpath='{.items[0].status.disruptionsAllowed}' 2> /dev/null)"
+    if [[ "${allowed:-0}" =~ ^[0-9]+$ ]] && ((allowed >= 1)); then
+      pass "7. $component's PodDisruptionBudget allows $allowed disruption(s)"
+    else
+      fail "7. $component has no PodDisruptionBudget allowing a disruption"
+    fi
+  done
+  remove_probe "$slow_path" || fail "7. could not remove $slow_path; delete it in the metadata database"
+  rm -f "$me_body"
 }
 
 status="$(fetch "$url/api/model/files")"
@@ -427,6 +599,7 @@ else
     if [[ "$status" == 200 && "$count" =~ ^[0-9]+$ ]] && ((count > 0)); then
       pass "5. /api/load counted $count rows of $probe_table in $source"
       xcube_checks
+      stop_one_checks
     else
       fail "5. /api/load answered $status: $(head -c 600 "$body")"
     fi

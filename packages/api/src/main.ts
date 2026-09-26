@@ -113,7 +113,11 @@ async function main(): Promise<void> {
   reconciling?.unref();
   void sync?.sync('start');
 
-  closeWithGrace({ delay: 5_000 }, async () => {
+  // Stopped, it finishes the requests under way, taking no new ones (Fastify's
+  // `close()`), for up to 15 s: past a query's 10 s long-poll on Cube, which
+  // 5 s cut off (T423, AC-319; research cube/ha-topology.md §4). The chart's
+  // grace period is longer.
+  closeWithGrace({ delay: 15_000 }, async () => {
     clearInterval(sweeping);
     if (reconciling !== undefined) clearInterval(reconciling);
     await app.close();

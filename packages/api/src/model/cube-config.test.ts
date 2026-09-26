@@ -70,7 +70,27 @@ describe('Cube’s configuration, xcube’s (T447)', () => {
       'updateCompilerCacheKeepAlive',
     ])
       expect(config, key).not.toHaveProperty(key);
-    expect(Object.keys(config).sort()).toEqual(['contextToApiScopes', 'contextToGroups']);
+    expect(Object.keys(config).sort()).toEqual([
+      'contextToApiScopes',
+      'contextToGroups',
+      'orchestratorOptions',
+    ]);
+  });
+
+  /**
+   * T423, AC-319: the plan's runtime settings, a queue heartbeat of 5–10 s. A
+   * query an instance was running when it stopped is let go after four
+   * heartbeats and runs again: at Cube's default of 30 s that took 127.6 s,
+   * at 5 s 29.0 s (research cube/ha-topology.md §1). Queries and builds
+   * alike; every other queue setting left at its default.
+   */
+  it('beats its queues’ heartbeat every 5 s, for queries and builds alike', () => {
+    const { config } = load();
+
+    expect(config['orchestratorOptions']).toEqual({
+      queryCacheOptions: { queueOptions: { heartBeatInterval: 5 } },
+      preAggregationsOptions: { queueOptions: { heartBeatInterval: 5 } },
+    });
   });
 
   it('matches access policies on the context’s own groups, each a string', () => {

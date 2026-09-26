@@ -23,12 +23,13 @@ metadata:
   labels:
     {{- include "wechart.labels" (list . "api") | nindent 4 }}
 spec:
-  # One instance, replaced rather than rolled, until T423 runs two with their
-  # readiness (AC-319). Nothing holds a publish in this process any more:
-  # xcube serves the model, and Cube calls nothing of the API's (T431).
-  replicas: 1
+  # Any replica serves any request: sessions, the model and the metadata live
+  # in the database or xcube, and Cube calls nothing of the API's (T418, T421,
+  # T431). Rolled one at a time, a new one Ready before an old one stops
+  # (T423, AC-319; Kubernetes' default RollingUpdate at two replicas).
+  replicas: {{ int .Values.api.replicas }}
   strategy:
-    type: Recreate
+    type: RollingUpdate
   selector:
     matchLabels:
       {{- include "wechart.selectorLabels" (list . "api") | nindent 6 }}
@@ -39,6 +40,9 @@ spec:
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
+      # Above the preStop sleep and the 15 s the API gives its requests under
+      # way to finish (packages/api/src/main.ts; T423).
+      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -163,6 +167,13 @@ spec:
               port: http
             periodSeconds: 10
             failureThreshold: 6
+          # Out of the Service's endpoints before it is told to stop: the two
+          # happen at once otherwise (T423; research cube/ha-topology.md,
+          # "Kubernetes pod termination").
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -172,3 +183,7 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+{{- if ge (int .Values.api.replicas) 2 }}
+---
+{{ include "wechart.disruptionBudget" (list . "api") }}
+{{- end }}

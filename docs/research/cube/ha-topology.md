@@ -341,7 +341,18 @@ A new step, with sign-in on (`EXTRA_VALUES=…docker-desktop-security.yaml`):
 ## Open questions / unverified
 
 - **Overlays and JWKS under 2+ Cube instances (AD 8, AD 12).** Both are pushed to "xcube". With ≥2 instances, each instance must be able to resolve an overlay or key pushed through any one of them, or the push must reach every instance. Pushing through the ClusterIP reaches only one. This is for the xcube research. Note that AC-319's Fails-when includes "work begun through one replica (a workspace edit, a proposal) can't be carried on through the other" (`spec.md:1128`).
-- **UNVERIFIED: what `core.shutdown()` → `orchestratorStorage.releaseConnections()` ([core] L994-1008) does to a query this instance is still executing during graceful shutdown.** It could wait, fail it (acking an error result to every waiter), or be cut by the N+1 s kill. Test it on docker-desktop.
+- ~~**UNVERIFIED: what `core.shutdown()` → `orchestratorStorage.releaseConnections()` ([core] L994-1008) does to a query this instance is still executing during graceful shutdown.** It could wait, fail it (acking an error result to every waiter), or be cut by the N+1 s kill. Test it on docker-desktop.~~
+  **Observed on docker-desktop, 2026-09-26 (T423, `deploy/helm/verify.sh` step 7).** The setup:
+  - xcube `v1.7.45-83cb9f0888`, two Cube API instances;
+  - `CUBEJS_GRACEFUL_SHUTDOWN=15`, a 5 s `preStop` sleep, and `heartBeatInterval: 5`;
+  - a 60 s `pg_sleep` query, with the Cube pod that took it deleted about 12 s in.
+
+  What happened:
+  - No error was acked to the waiters: every poll through the surviving instance answered `200` "Continue wait".
+  - The data came 102 s after the stop. That fits the item stalling after the process ended, being let go after four heartbeats, and running again in full on the survivor.
+  - The same run with a 40 s query answered 82 s after the stop.
+
+  Not shown: whether the stopped instance's warehouse query was cancelled or left to run out. Northwind's server is outside wechart's namespace and wasn't inspected.
 - **UNVERIFIED: queue payload compatibility between two Cube versions** sharing one Cube Store queue during a rolling upgrade.
 - **UNVERIFIED: whether nginx 1.30.5 keeps upstream keep-alive for a bare `proxy_pass`** (`docs/research/nginx.md` L346-347, L382). That decides whether an API pod's death breaks pooled nginx connections (one 502 each).
 - **For the user:**

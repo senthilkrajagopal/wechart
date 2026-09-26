@@ -29,9 +29,10 @@ metadata:
   labels:
     {{- include "wechart.labels" (list $ $component) | nindent 4 }}
 spec:
-  # The API instance could be more than one; the refresh worker must be one
-  # (docs/research/cube/configuration-deployment.md §8).
-  replicas: 1
+  # Cube's API instances, as many as the values give, share one queue in Cube
+  # Store (T423, AC-319); the refresh worker must be one
+  # (docs/research/cube/configuration-deployment.md §8; ha-topology.md §2).
+  replicas: {{ ternary (int $.Values.cube.replicas) 1 (eq $component "cube") }}
   selector:
     matchLabels:
       {{- include "wechart.selectorLabels" (list $ $component) | nindent 6 }}
@@ -44,6 +45,12 @@ spec:
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
+      {{- if eq $component "cube" }}
+      # Above the preStop sleep, the graceful shutdown's 15 s and the second
+      # after it that Cube's own timer ends the process at (T423; research
+      # cube/ha-topology.md §6).
+      terminationGracePeriodSeconds: 30
+      {{- end }}
       # The image runs as root; its node user, uid 1000, is enough for Cube
       # with wechart's configuration, which writes nothing to disk
       # (docs/research/cube/kubernetes.md, "Writable paths"; observed on
@@ -99,6 +106,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "wechart.secretName" $ }}
                   key: xcube-admin-token
+            # Stopped, it takes no new request (503, with Retry-After) and
+            # lets those under way finish for 15 s, past a long-poll's 10 s,
+            # where it would otherwise exit at once and cut them off (T423;
+            # research cube/ha-topology.md §1, "Graceful stop").
+            - name: CUBEJS_GRACEFUL_SHUTDOWN
+              value: "15"
             {{- end }}
           # With contextToAppId configured, as xcube's config() does,
           # /readyz answers once the server is up and tests nothing further;
@@ -131,6 +144,15 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 6
+          {{- if eq $component "cube" }}
+          # Out of the Service's endpoints before it is told to stop: the two
+          # happen at once otherwise (T423; research cube/ha-topology.md,
+          # "Kubernetes pod termination").
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
+          {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -153,4 +175,8 @@ spec:
             name: {{ include "wechart.component" (list $ "cube-config") }}
         - name: tmp
           emptyDir: {}
+{{- if and (eq $component "cube") (ge (int $.Values.cube.replicas) 2) }}
+---
+{{ include "wechart.disruptionBudget" (list $ $component) }}
+{{- end }}
 {{- end }}

@@ -6353,10 +6353,10 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
       - A caller that passes no abort signal waits out an outage too. That includes chart Save, which asks for the chart's data first and can now wait up to 90 s.
     - **For the user** (the review's point 9): should reads (GETs) be retried the same way? A dashboard's tile first GETs its chart, and that GET isn't retried, so a replica stopping at that moment shows the tile's error. AC-319 names only queries. Research's "minimum" listed GETs too. A follow-up task if so.
     - **Found, outside T422:** the web app's request id never reaches Cube's `/v1/load`, so the Cube-side cancel of AC-011 may name an id Cube never saw (T422's review). Worth its own check.
-- [ ] T423 (AC-319) Run two Cube instances and two API replicas in the docker-desktop release, and survive stopping one of each
+- [x] T423 (AC-319) Run two Cube instances and two API replicas in the docker-desktop release, and survive stopping one of each
   - Files:
     - `deploy/helm/wechart/templates/{api,cube}.yaml`: replicas, RollingUpdate, a PodDisruptionBudget from two replicas, preStop, and graceful shutdown;
-    - `deploy/helm/wechart/values.yaml`, `deploy/helm/values/docker-desktop.yaml`: the plan's runtime settings, which are the Cube Store queue, a 5–10 s queue heartbeat, transpile threads and Node heap;
+    - `deploy/helm/wechart/values.yaml`, ~~`deploy/helm/values/docker-desktop.yaml`~~: the plan's runtime settings, which are the Cube Store queue, a 5–10 s queue heartbeat, transpile threads and Node heap *(as built: the chart's defaults, which docker-desktop inherits; `_helpers.tpl`; the heartbeat in `infra/cube/cube.js`, since no environment variable sets it, with `cube-config.test.ts`; the API's drain in `packages/api/src/main.ts`)*;
     - `deploy/helm/verify.sh`: a stop-one step.
   - Failing test: `verify.sh`'s new step, with sign-in on and a slow query in flight, deletes one Cube pod and one API pod.
     - `/api/me` keeps answering 200 for the same user;
@@ -6365,6 +6365,36 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
 
     The refresh worker stays at one (research `cube/ha-topology.md` §2).
   - Depends on: T418, T421, T422, T447, T431
+  - **Done 2026-09-26.**
+    - **The chart:**
+      - two API replicas, rolled one at a time, and two Cube API instances, the refresh worker kept at one;
+      - a PodDisruptionBudget each from two replicas (`minAvailable: 1`, unhealthy pods evictable), rendered only from two;
+      - a 5 s `preStop` sleep and a 30 s grace period on both;
+      - Cube with `CUBEJS_GRACEFUL_SHUTDOWN=15`, and the API draining for 15 s (was 5 s), past a query's 10 s long-poll;
+      - every Cube process on the Cube Store queue (said outright), 4 transpile threads and a 4 GB heap. The xcube image sets no `NODE_OPTIONS` of its own (`docker inspect`).
+    - **The heartbeat:** `cube.js` sets `heartBeatInterval: 5` for queries and builds. That is the low end of the plan's 5–10 s, chosen for its "about 30 s" release (29.0 s in the research's spike, against 127.6 s at the default). Research ha-topology.md names the price: a pause of over 20 s cancels a live query.
+    - **What the tests show:**
+      - `cube-config.test.ts` pins the heartbeat.
+      - `deploy/helm/verify.sh` step 7, with sign-in on:
+        - it publishes a cube whose query sleeps 60 s;
+        - on the first "Continue wait", it deletes the Cube pod that took the query and the API pod that sent it, found from Cube's `REST API Request` log line and its caller address;
+        - it asks on as `loadTile` does.
+      - Step 7 failed on the one-replica release ("not two of each"). After the upgrade to `0e5bbfc-t423`, every check passed:
+        - the data came 102 s after the stop, with every answer 200. The query ran again on the other instance, after the heartbeat's stall; the check allows 60–150 s;
+        - `/api/me` named the same user at every answer, never 401;
+        - both Deployments came back to 2/2;
+        - both PDBs allow 1.
+      - API 544, the Chrome e2e on compose with the new `cube.js` (72).
+    - **The cold review (PASS)** led to:
+      - `ask()` turning a network error into `000000`, which ended the loop: fixed;
+      - a pod lookup that fell back silently: it now fails;
+      - the 60 s query and the timing bounds, so the step shows the stopped instance was running the query;
+      - `/api/me` checked at every answer, only with sign-in on;
+      - the answer to the research's open question on graceful stop, recorded in `ha-topology.md`.
+    - **AC-319 stays open.** Its "work begun through one replica can't be carried on through the other" (a workspace edit, a proposal) has no test in any task; T444 is its performance part.
+    - **Left for the user:**
+      - The first-start window T419 and T421 sent here isn't needed by AC-319, so it isn't handled. On a fresh install, queries answer `403 Unknown model` until the API's first push reaches xcube, and the web app doesn't retry a 403. A stop-one doesn't meet it: xcube keeps the model. It is in the handoff's questions.
+      - Only a process's loss is tested. Docker Desktop is one node, so there is no anti-affinity.
 
 ### Slice 3: names and modules
 

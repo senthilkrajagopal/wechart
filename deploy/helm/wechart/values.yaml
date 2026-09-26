@@ -42,6 +42,10 @@ api:
   # starting with a letter or digit. One per wechart deployment sharing an
   # xcube database; this chart gives xcube a database of its own.
   xcubeModel: wechart
+  # Replicas, any of which serves any request: sessions, the model and the
+  # metadata all live in the database or xcube (T423, AC-319). From two, a
+  # PodDisruptionBudget keeps one up through a drain.
+  replicas: 2
   resources: {}
 
 # wechart's metadata database: dashboards, charts, folders and the model.
@@ -65,6 +69,20 @@ cube:
   # and compile every model before it answers: its port stays closed until
   # then (research xcube-slice-2.md, "Start-up"; open question 11).
   startupSeconds: 300
+  # Cube's API instances, sharing one queue in Cube Store; the refresh worker
+  # stays at one (T423, AC-319; docs/research/cube/ha-topology.md §1, §2).
+  # From two, a PodDisruptionBudget keeps one up through a drain.
+  replicas: 2
+  # The integration plan's runtime settings, for every Cube process (T423):
+  # threads that transpile a model as it compiles, 4, or 2 where memory is
+  # tight (Cube's own default, one per CPU but one, peaked at 3–5 GB; the
+  # xcube image sets 2 when it is unset); and Node's heap in MB, 4 GB
+  # or more for the resident models and background compiles
+  # (docs/inputs/2026-09-26-integration-plan.md, "Runtime settings";
+  # research cube/xcube-runtime.md, Gotcha 6). The queue heartbeat is in
+  # cube.js.
+  transpileThreads: 4
+  heapMegabytes: 4096
   # The warehouse Cube reads: Cube's CUBEJS_DB_* settings.
   dataSource:
     # Cube's driver, e.g. postgres. Required.

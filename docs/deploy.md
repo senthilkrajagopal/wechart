@@ -7,9 +7,9 @@ F24, AC-248, task T274. The Helm chart at `deploy/helm/wechart` runs wechart, Cu
 | Component | Kind | Image | Service | Probes |
 | --- | --- | --- | --- | --- |
 | `web`: the built app, and `/api` passed to the API | Deployment | `wechart-web:<tag>` (nginx, unprivileged) | `LoadBalancer`, port `web.service.port` | `/healthz` |
-| `api`: wechart's API | Deployment, 1 replica, `Recreate` | `wechart-api:<tag>` | ClusterIP 4100 | `/api/health` |
+| `api`: wechart's API | Deployment, `api.replicas` (2), rolled one at a time, with a PodDisruptionBudget | `wechart-api:<tag>` | ClusterIP 4100 | `/api/health` |
 | `meta`: wechart's metadata database | StatefulSet with a volume | `postgres:18.6-alpine3.24` | headless 5432 | `pg_isready` over TCP |
-| `cube`: Cube's API | Deployment | `xcube:v1.7.45-83cb9f0888` | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
+| `cube`: Cube's API | Deployment, `cube.replicas` (2), with a PodDisruptionBudget | `xcube:v1.7.45-83cb9f0888` | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
 | `cube-refresh-worker`: Cube's refresh worker | Deployment, 1 replica | `xcube:v1.7.45-83cb9f0888` | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
 | `xcube-bootstrap-<hash>`: xcube's role and schema in the metadata database | Job, run once | `postgres:18.6-alpine3.24` | none | none |
 | `cubestore`: Cube Store, one node | StatefulSet with a volume | `cubejs/cubestore:v1.7.45` (`-arm64v8` on arm64) | headless 3030 | `:3031/readyz`, `:3031/livez` |
@@ -96,9 +96,21 @@ This is T274's test. It needs helm, kubectl, curl and jq, and it checks:
 5. A query from the web app reaches the data source the values name. The script publishes one cube on `public.orders` (`PROBE_TABLE`) through `/api/model/publish`, as the Model workspace does. It asks `/api/load` for the cube's count and expects more than zero. Then it removes the file again.
 6. xcube serves the model (T447), checked between step 5's query and its removal:
    - **No API (D1).** With the API scaled to 0 and Cube restarted, Cube still counts the probe cube. The script asks it from inside Cube's pod, with a token it signs itself with the release's Cube secret.
-   - **Two API replicas (D2).** With the API scaled to 2, a second probe cube published through the Service is in each replica's `/api/meta` at once. The script then removes that probe and scales the API back to 1.
+   - **Two API replicas (D2).** With the API at 2, a second probe cube published through the Service is in each replica's `/api/meta` at once. The script then removes that probe and returns the API to `api.replicas`.
 
    Step 6 needs `openssl` to sign the token.
+7. The query path survives losing one Cube instance and one API replica (T423, AC-319), with two of each. The script:
+   - publishes a cube whose query sleeps 60 s in the warehouse, and asks for it;
+   - on the first "Continue wait", deletes the Cube pod that took the query and the API pod that sent it. It finds them from Cube's log line for the request, which gives the caller's address. If it can't find them, the step fails;
+   - keeps asking as the web app does: again on "Continue wait", and through network errors, 502, 503 and 504 for up to 90 s.
+
+   It expects:
+   - the query to return its data, between 60 and 150 s after the stop. Sooner, and the stopped instance finished it. Later, and the queue heartbeat didn't let it go;
+   - with sign-in on, `/api/me` to name the same user at every answer, and never answer 401;
+   - both Deployments to come back to full strength;
+   - each to keep a PodDisruptionBudget that allows a disruption.
+
+   On docker-desktop the answer came 102 s after the stop. The query ran again on the other instance after a stall of about 20 s.
 
 The API publishes model files and never deletes them, so step 5 removes its file from the metadata database with `psql` in the `meta` pod. The official Postgres image trusts connections over its own socket (`docs/research/postgres-image.md`, "Log noise").
 
@@ -184,7 +196,13 @@ The following stay: the two volumes (`data-wechart-meta-0` and `data-wechart-cub
 
 ## Choices and limits
 
-- **One API instance, replaced rather than rolled**, until T423 runs two with their readiness (AC-319). No publish is held in the API process any more: xcube serves the model, and Cube calls nothing of the API's (T431).
+- **Two API replicas and two Cube instances** (T423, AC-319). Any API replica serves any request: sessions, the model and the metadata live in the database or xcube, and Cube calls nothing of the API's. Cube's instances share one queue in Cube Store; the refresh worker stays at one (`docs/research/cube/ha-topology.md` §1, §2). On a stop:
+  - **The preStop sleep.** Each sleeps 5 s before it is told to stop, so the Service stops sending it requests first.
+  - **The API** finishes its requests under way for up to 15 s.
+  - **Cube** refuses new requests with 503 (`CUBEJS_GRACEFUL_SHUTDOWN=15`) and finishes those under way.
+  - **A query a stopped Cube instance was running** runs again elsewhere after four missed queue heartbeats. The heartbeat is 5 s, in `cube.js`, the plan's 5–10 s.
+  - **Runtime settings.** Every Cube process has 4 transpile threads and a 4 GB heap (`cube.transpileThreads`, `cube.heapMegabytes`).
+  - **Only process loss is tested.** Docker Desktop is one node, so no anti-affinity is set, and a node's loss is not covered. Web, the metadata database, Cube Store and Dex stay single.
 - **Cube's probes.** With `contextToAppId` configured, `/readyz` answers as soon as Cube's server is up, and tests neither the data source nor Cube Store. `/livez` does test them, and a restart doesn't mend a data source outage. So both probes use `/readyz`, and step 5 of `verify.sh` checks the data path (`docs/research/cube/kubernetes.md`, Gotchas 1 and 2).
 - **Cube Store is one node.** Cube calls single-instance Cube Store "usually unsuitable for production"; production runs a router and workers. Its data (metastore, cache store and pre-aggregations) lives on its volume at `/cube/.cubestore/data`. Cube Store stops on SIGINT only, so a `preStop` hook sends it one.
 - **Cube Store has no authentication.** It is reachable only inside the cluster, on its HTTP port. The chart adds no NetworkPolicy.

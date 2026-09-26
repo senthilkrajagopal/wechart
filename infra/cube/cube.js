@@ -49,5 +49,18 @@ module.exports = require('xcube').config(
         return ['introspection'];
       return [...defaults, 'jobs'];
     },
+
+    // The integration plan's queue heartbeat, 5–10 s (T423, AC-319): a query
+    // an instance was running when it stopped is let go after four missed
+    // heartbeats, and runs again through another. At Cube's default of 30 s
+    // that took 127.6 s, at 5 s 29.0 s; the price is that a pause of over
+    // 20 s (an event-loop stall, a Cube Store hiccup) cancels a live query
+    // (docs/research/cube/ha-topology.md §1, "Tuning"). Every other queue
+    // setting keeps its default. xcube passes this through (research
+    // xcube-slice-2.md, "Passed through").
+    orchestratorOptions: {
+      queryCacheOptions: { queueOptions: { heartBeatInterval: 5 } },
+      preAggregationsOptions: { queueOptions: { heartBeatInterval: 5 } },
+    },
   },
 );

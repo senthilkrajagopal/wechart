@@ -48,6 +48,30 @@ app.kubernetes.io/managed-by: {{ $root.Release.Service }}
 app.kubernetes.io/part-of: wechart
 {{- end }}
 
+{{- /*
+A PodDisruptionBudget for a component run at two replicas or more (T423,
+AC-319): a drain leaves one of them up. Rendered only from two, since with one
+and `minAvailable: 1` no eviction is ever allowed. Deleting a pod bypasses it.
+Unhealthy pods may always be evicted, as Kubernetes recommends
+(docs/research/cube/ha-topology.md §6).
+*/ -}}
+{{- define "wechart.disruptionBudget" -}}
+{{- $root := index . 0 -}}
+{{- $component := index . 1 -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "wechart.component" (list $root $component) }}
+  labels:
+    {{- include "wechart.labels" (list $root $component) | nindent 4 }}
+spec:
+  minAvailable: 1
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      {{- include "wechart.selectorLabels" (list $root $component) | nindent 6 }}
+{{- end }}
+
 {{/* The Secret holding what the chart generates at install (templates/secrets.yaml). */}}
 {{- define "wechart.secretName" -}}
 {{- include "wechart.component" (list . "secrets") }}
@@ -130,6 +154,16 @@ Secret the values name, never from the values themselves.
   value: "false"
 - name: NODE_ENV
   value: production
+# The query queue in Cube Store, which every Cube process shares, said
+# outright rather than left to NODE_ENV (T423; research cube/ha-topology.md §1).
+- name: CUBEJS_CACHE_AND_QUEUE_DRIVER
+  value: cubestore
+# The plan's runtime settings (T423; values.yaml, cube.transpileThreads and
+# cube.heapMegabytes).
+- name: CUBEJS_TRANSPILATION_WORKER_THREADS_COUNT
+  value: {{ .Values.cube.transpileThreads | quote }}
+- name: NODE_OPTIONS
+  value: {{ printf "--max-old-space-size=%d" (int .Values.cube.heapMegabytes) | quote }}
 # xcube's schema in the metadata database, where the model this release's API
 # pushes is served from (T447, AC-333; infra/cube/cube.js). Cube never calls
 # the API.
