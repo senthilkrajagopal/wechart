@@ -7,10 +7,12 @@ import { CubeError, CubeUnreachable, type CubeClient } from '../cube/client';
 import type { MetaCache } from '../cube/meta-cache';
 import type { Config } from '../config';
 import type { ModelFile, ModelFileStore } from '../server';
+import { checkWithXcube } from '../xcube/check';
+import type { XcubeAdmin } from '../xcube/client';
 import { clashesOf, compiledIn } from './clashes';
 import type { PublishDraftStore } from './drafts';
 import { refreshKeyProblemsOf } from './refreshKeys';
-import { refusedRollupsOf, rollupOwnersOf, type RollupOwner } from './rollupJoins';
+import { joinRefusalsOf, rollupOwnersOf, type RollupOwner } from './rollupJoins';
 import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
 import { compileErrorsOf, type CompileError } from './validate';
 
@@ -154,6 +156,7 @@ export function registerModelPublishing(
     modelFiles,
     drafts,
     afterPublish,
+    xcube,
   }: {
     config: Config;
     client: CubeClient;
@@ -172,6 +175,12 @@ export function registerModelPublishing(
      * the publish stands for the next reconcile to send.
      */
     afterPublish?: () => Promise<unknown>;
+    /**
+     * xcube's admin routes, where the deployment names its model in xcube: a
+     * change is checked by xcube's dry run, not by Cube reading a draft back
+     * (T445). Absent, Cube reads it back from this store, as before.
+     */
+    xcube?: XcubeAdmin;
   },
 ): void {
   /** Cube, by the key it and this API share; with no key set, no one. */
@@ -239,10 +248,13 @@ export function registerModelPublishing(
       return reply.status(400).send({
         error: `Only YAML models can be published: ${template.path} is a Jinja template, which Cube would render with its own environment.`,
       });
-    if (config.cubeStoreUrl === undefined || modelFiles === undefined)
+    // xcube checks a change itself (T445); without it, Cube reads it back from this store.
+    if (modelFiles === undefined || (xcube === undefined && config.cubeStoreUrl === undefined))
       return reply.status(409).send({
         error:
-          'Cube is not reading this model store (WECHART_CUBE_STORE_URL), so a change could not be checked or seen.',
+          modelFiles === undefined
+            ? 'There is no model store here to publish to.'
+            : 'Cube is not reading this model store (WECHART_CUBE_STORE_URL), so a change could not be checked or seen.',
       });
 
     const live = await modelFiles.list();
@@ -267,6 +279,46 @@ export function registerModelPublishing(
     const draft = [...live.filter((file) => !paths.has(file.path)), ...changed].sort((a, b) =>
       a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
     );
+    /** The change, checked: written, sent to xcube, and seen at once. */
+    const commit = async () => {
+      await modelFiles.write(changed);
+      // Committed first, then sent: xcube is never ahead of wechart (T419).
+      await afterPublish?.().catch((error: unknown) => {
+        app.log.warn({ err: error }, 'could not send the published model to xcube');
+      });
+      // A model the user just published must not look stale to them (AC-137).
+      meta.invalidate();
+      return { version: versionOf(draft) };
+    };
+
+    /**
+     * Checked by xcube's dry run (T445): one call compiles the whole model with
+     * the change in it and plans each cube's rollups against it. Refused in
+     * the order Cube's own checks refused: the compile, names the model
+     * doesn't have, crons, then joins. Every break refuses it (R29).
+     */
+    if (xcube !== undefined) {
+      const checked = await checkWithXcube({
+        xcube,
+        draft,
+        changed,
+        securityContext: config.securityContext,
+        log: (error) => {
+          app.log.warn({ err: error }, 'could not ask xcube to check the model');
+        },
+      });
+      if (checked.kind === 'unreachable') return reply.status(502).send({ error: checked.error });
+      if (checked.kind === 'invalid') return reply.status(422).send({ errors: checked.errors });
+      const unknown = unknownInRollups(live, draft, paths);
+      if (unknown.length > 0) return reply.status(422).send({ errors: unknown });
+      const crons = refreshKeyProblemsOf(changed);
+      if (crons.length > 0) return reply.status(422).send({ errors: crons });
+      const rollups = checked.rollups();
+      if (rollups.kind === 'unasked') return reply.status(502).send({ error: rollups.error });
+      if (rollups.kind === 'unjoinable') return reply.status(422).send({ errors: rollups.errors });
+      return commit();
+    }
+
     const id = randomUUID();
     await drafts.put(id, draft);
     const unread = () =>
@@ -346,31 +398,14 @@ export function registerModelPublishing(
           error: `Cube could not be asked to check the rollups of ${unasked.owner.cube}, so nothing was published.`,
         });
       }
-      const unjoinable = asked.flatMap(({ owner, reason }) => {
-        if (typeof reason !== 'string') return [];
-        const said = reason.replace(/\.$/, '');
-        // Cube's refusal names cubes, not the rollup: put on those naming them.
-        return refusedRollupsOf(owner, said).map((rollup) => ({
-          path: owner.path,
-          ...(rollup.line === undefined ? {} : { line: rollup.line }),
-          message: /Can't find join path/.test(said)
-            ? `Pre-aggregation ${rollup.name} can't be built: Cube cannot join its cubes. ${said}.`
-            : `Pre-aggregation ${rollup.name} can't be built: ${said}.`,
-          preAggregation: { cube: owner.cube, name: rollup.name },
-        }));
-      });
+      const unjoinable = asked.flatMap(({ owner, reason }) =>
+        typeof reason === 'string' ? joinRefusalsOf(owner, reason) : [],
+      );
       if (unjoinable.length > 0) return reply.status(422).send({ errors: unjoinable });
     } finally {
       await drafts.remove(id);
     }
 
-    await modelFiles.write(changed);
-    // Committed first, then sent: xcube is never ahead of wechart (T419).
-    await afterPublish?.().catch((error: unknown) => {
-      app.log.warn({ err: error }, 'could not send the published model to xcube');
-    });
-    // A model the user just published must not look stale to them (AC-137).
-    meta.invalidate();
-    return { version: versionOf(draft) };
+    return commit();
   });
 }

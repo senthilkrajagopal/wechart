@@ -32,6 +32,7 @@ import { registerSchedules } from './jobs/schedules';
 import { registerIntrospection } from './model/introspection';
 import type { Config } from './config';
 import { memoryDraftStore, type PublishDraftStore } from './model/drafts';
+import type { XcubeAdmin } from './xcube/client';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, type ReferenceDocument } from './model/references';
 import { searchable, visibleCounts, type Visibility } from './access/visible';
@@ -71,6 +72,8 @@ export interface BuildOptions {
    * the next reconcile to send.
    */
   readonly afterPublish?: () => Promise<unknown>;
+  /** xcube's admin routes, for its check of a publish (T445), where xcube is configured. */
+  readonly xcube?: XcubeAdmin;
   /** Signed-in sessions, with security on (T316): the metadata database. */
   readonly sessions?: SessionStore;
   /** Each folder's AD groups (T314, AC-259, AC-260). */
@@ -193,6 +196,7 @@ export function buildServer({
   modelFiles,
   drafts = memoryDraftStore(),
   afterPublish,
+  xcube,
   folderAccess,
   healthFetch,
   logger = false,
@@ -351,6 +355,7 @@ export function buildServer({
     modelFiles,
     drafts,
     ...(afterPublish === undefined ? {} : { afterPublish }),
+    ...(xcube === undefined ? {} : { xcube }),
   });
   registerBuilds(app, client);
   // With the model's files: a key's SQL is read there (T273's review).

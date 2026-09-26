@@ -6078,14 +6078,41 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - **Left:**
       - AC-333 stays open until T447 runs this against xcube: the start push and the 60 s timer are wired in `main.ts` but tested only through `sync()`.
       - Until T445, a publish Cube's draft check accepts but xcube refuses leaves xcube a revision behind wechart (the refusal is logged).
-- [ ] T445 (AC-136, AC-235) Check a publish with xcube's dry run in place of the draft Cube compiles, refusing every break
-  - Files: `packages/api/src/xcube/check.ts` (+ test), `packages/api/src/model/publish.ts`, `packages/api/src/model/validate.ts` (`placeOf` exported, for errors xcube names no file for), `packages/api/src/xcube/fake.ts`
+- [x] T445 (AC-136, AC-235) Check a publish with xcube's dry run in place of the draft Cube compiles, refusing every break
+  - Files: `packages/api/src/xcube/check.ts` (+ test), `packages/api/src/xcube/client.ts` (`check()`), `packages/api/src/model/publish.ts`, `packages/api/src/model/validate.ts` (`placeOf` exported, for errors xcube names no file for; a column), `packages/api/src/model/rollupJoins.ts` (`joinRefusalsOf`, moved from `publish.ts`), `packages/api/src/xcube/fake.ts`, `packages/api/src/server.ts`, `packages/api/src/main.ts`
   - Failing test: `check.test.ts`, against the stub xcube:
     - a publish sends one `PUT …/snapshot?dryRun=true` with the merged files, wechart's base context, and one probe per cube with rollups, with no `compare`;
     - `valid: false` refuses it with each error on its file, line and column where given, and `path: null` errors placed by `placeOf` (AC-136);
     - a probe's refusal names the rollup, its file and Cube's reason, and refuses the publish even when the rollup's file is unchanged and it was refused before (AC-235, R29);
     - nothing is sent to xcube for a refused publish.
   - Depends on: T419
+  - **Done 2026-09-26, against the stub.**
+    - **Where xcube is configured**, a publish is checked by one `PUT …/snapshot?dryRun=true` per 1,000 probes in place of the draft Cube read back. Its order is the draft path's:
+      1. the model compiles;
+      2. no rollup names a member the model lacks (AC-189);
+      3. every refresh-key cron is one Cube runs;
+      4. every cube with rollups plans (AC-235).
+
+      Only then is it written, sent (T419), and the metadata cache cleared. Without xcube the draft path is unchanged, so both suites run as before until T447.
+    - **What is refused and what fails:**
+      - A model that doesn't compile is refused (422), each error on its file, line and column. An error xcube places on no file is placed by `placeOf`, and with no errors at all Cube's own text is parsed as before.
+      - A file xcube won't take is refused on that file.
+      - A probe's 400 refuses the publish, naming the rollup, its file and Cube's reason, whether or not the change touched it (R29: every break refuses).
+      - Any other probe answer, a probe with no answer, or xcube unreachable publishes nothing and says so (502).
+    - **What the tests show.** `check.test.ts` (11), through the publish route against the stub:
+      - the one call, its files, context and probes, with no `compare`;
+      - each kind of refusal above, with its message;
+      - the order (an unknown member is named before its probe's 500);
+      - that nothing reaches the store, `afterPublish` or the draft store for a refused publish.
+    - **The cold review (FAIL)** led to:
+      - An unknown member's 500 was answered 502 before AC-189's check; the checks now run in the draft path's order.
+      - A probe missing from xcube's answer passed; it now publishes nothing.
+      - Columns were dropped; they are kept.
+      - Failures to reach xcube weren't logged; they are.
+      - The probes had no cap; they go in batches of 1,000, xcube's limit.
+      - A refused file was placed on every changed file; it is placed on the one xcube names.
+      - The tests that were missing were added.
+    - **Left:** AC-136 and AC-235 stay as they are until T447 runs this against xcube itself. The Jinja-tagged file in the refused-file test becomes T446's case, since T446 sends no such file.
 - [ ] T446 (AC-335, AC-140) Send only plain YAML to xcube, and keep other model files read-only in wechart's store
   - Files: `packages/api/src/xcube/snapshot.ts`, `packages/api/src/xcube/check.ts`, `infra/cube/model/cubes/product_catalog.yml` (rewritten as plain YAML), a Jinja example that no dashboard uses, for AC-140, `e2e/model.spec.ts`
   - Failing test: `snapshot.test.ts` and `check.test.ts`: no snapshot or check holds a `.js`, `.py`, `.jinja` or Jinja-tagged YAML file, however many the store holds (AC-335). `model.spec.ts`: the Jinja example still opens read-only with its reason (AC-140), and `product_catalog` still answers queries.

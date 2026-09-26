@@ -16,6 +16,8 @@ export interface CompileError {
   readonly message: string;
   /** The line, where Cube gives one. */
   readonly line?: number;
+  /** The column, where xcube gives one (T445's review). */
+  readonly column?: number;
   /**
    * A rollup refused: which. With the names, for its row in the cube's
    * Pre-aggregations tab, when it names what the model doesn't have (T207,
@@ -34,8 +36,11 @@ const YAML_ERROR = /^YAMLException: .*\((\d+):(\d+)\)$/;
 /** "no_such_member is not defined": the name Cube could not resolve. */
 const UNDEFINED = /^([A-Za-z_][\w.]*) is not defined$/;
 
-/** The changed files an error names no file for belong to: the one holding its name, or all. */
-function placeOf(message: string, changed: readonly ModelFile[]): readonly ModelFile[] {
+/**
+ * The changed files an error names no file for belong to: the one holding its
+ * name, or all. xcube's check places its own on none this way too (T445).
+ */
+export function placeOf(message: string, changed: readonly ModelFile[]): readonly ModelFile[] {
   const name = UNDEFINED.exec(message)?.[1];
   if (name !== undefined) {
     const holding = changed.filter((file) => file.content.includes(name));

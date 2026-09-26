@@ -1,6 +1,7 @@
 import { isMap, isSeq, LineCounter, parseDocument } from 'yaml';
 
 import type { ModelFile } from '../server';
+import type { CompileError } from './validate';
 
 /**
  * The cubes whose rollups a publish asks Cube to build the joins of (T265,
@@ -213,4 +214,22 @@ export function refusedRollupsOf(
   if (naming.length > 0) return naming;
   const joining = owner.rollups.filter((rollup) => rollup.cubes.length > 0);
   return joining.length > 0 ? joining : [...owner.rollups];
+}
+
+/**
+ * Cube's refusal to plan a cube's rollups, on the rollups it is about (T265,
+ * AC-235): each on its line in its file, with Cube's reason, and said as a
+ * join Cube can't make where it is one. Asked of Cube under a draft, or of
+ * xcube's check (T445), the words are the same.
+ */
+export function joinRefusalsOf(owner: RollupOwner, reason: string): CompileError[] {
+  const said = reason.replace(/\.$/, '');
+  return refusedRollupsOf(owner, said).map((rollup) => ({
+    path: owner.path,
+    ...(rollup.line === undefined ? {} : { line: rollup.line }),
+    message: /Can't find join path/.test(said)
+      ? `Pre-aggregation ${rollup.name} can't be built: Cube cannot join its cubes. ${said}.`
+      : `Pre-aggregation ${rollup.name} can't be built: ${said}.`,
+    preAggregation: { cube: owner.cube, name: rollup.name },
+  }));
 }

@@ -31,8 +31,34 @@ export type SnapshotAnswer =
       readonly cubeMessage: unknown;
     };
 
+/** An error xcube places on a file, or on none (research, `ModelError`). */
+export interface ModelError {
+  readonly path: string | null;
+  readonly line?: number;
+  readonly column?: number;
+  readonly kind: 'yaml' | 'compile';
+  readonly message: string;
+}
+
+/** xcube's check of a set it doesn't store (research, "`PUT …/snapshot?dryRun=true`"). */
+export interface CheckAnswer {
+  readonly valid: boolean;
+  readonly errors: readonly ModelError[];
+  readonly cubeMessage: string | null;
+  readonly probes: readonly {
+    readonly id: string;
+    readonly candidate: { readonly status: number; readonly error?: string };
+  }[];
+}
+
 export interface XcubeAdmin {
   revision(): Promise<XcubeHead>;
+  /** Checks the files, and runs each probe's SQL planning against them, storing nothing. */
+  check(input: {
+    readonly files: readonly ModelFile[];
+    readonly securityContext: Record<string, unknown>;
+    readonly probes: readonly { readonly id: string; readonly query: Record<string, unknown> }[];
+  }): Promise<CheckAnswer>;
   snapshot(input: {
     readonly baseRevision: number | null;
     readonly files: readonly ModelFile[];
@@ -116,6 +142,36 @@ export function xcubeAdmin({
             ? null
             : { revision: current.revision, contentHash: current.contentHash },
       };
+    },
+
+    async check({ files, securityContext, probes }) {
+      const { status, answer } = await call('PUT', '/snapshot?dryRun=true', {
+        files: files.map(({ path, content }) => ({ path, content })),
+        securityContext,
+        probes,
+      });
+      if (status === 200)
+        return {
+          valid: answer['valid'] === true,
+          errors: Array.isArray(answer['errors']) ? (answer['errors'] as ModelError[]) : [],
+          cubeMessage: typeof answer['cubeMessage'] === 'string' ? answer['cubeMessage'] : null,
+          probes: Array.isArray(answer['probes'])
+            ? (answer['probes'] as CheckAnswer['probes'])
+            : [],
+        };
+      // A path, a file type or a size xcube won't take: the files are refused,
+      // on the file xcube names where it names one of them (T445's review).
+      if ((status === 400 || status === 413) && REFUSED_CODES.has(String(answer['code']))) {
+        const message = String(answer['error'] ?? answer['code']);
+        const named = files.find((file) => message.startsWith(`${file.path}: `));
+        return {
+          valid: false,
+          errors: [{ path: named?.path ?? null, kind: 'compile', message }],
+          cubeMessage: null,
+          probes: [],
+        };
+      }
+      throw failed(status, answer);
     },
 
     async snapshot({ baseRevision, files, source }) {

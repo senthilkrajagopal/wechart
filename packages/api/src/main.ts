@@ -49,18 +49,22 @@ async function main(): Promise<void> {
   /**
    * xcube's copy of the model (T419, AC-333): sent at start, after each
    * publish and every 60 s, where the deployment names its model in xcube.
+   * The same admin client checks each publish first (T445).
    */
-  const xcube = config.xcube;
+  const admin =
+    config.xcube === undefined
+      ? undefined
+      : xcubeAdmin({
+          cubeApiUrl: config.cubeApiUrl,
+          model: config.xcube.model,
+          token: config.xcube.adminToken,
+        });
   const sync =
-    xcube === undefined
+    admin === undefined || config.xcube === undefined
       ? undefined
       : modelSync({
-          model: xcube.model,
-          admin: xcubeAdmin({
-            cubeApiUrl: config.cubeApiUrl,
-            model: xcube.model,
-            token: xcube.adminToken,
-          }),
+          model: config.xcube.model,
+          admin,
           files: () => modelFiles.list(),
           publications: publicationStore(db),
           log: {
@@ -79,6 +83,7 @@ async function main(): Promise<void> {
     // Publish drafts, for whichever replica Cube's read-back reaches (T418).
     drafts: publishDraftStore(db),
     ...(sync === undefined ? {} : { afterPublish: () => sync.sync('publish') }),
+    ...(admin === undefined ? {} : { xcube: admin }),
     // Each folder's AD groups (T314).
     folderAccess: folderAccessStore(db),
     // Signed-in sessions, kept in the metadata database (T316).

@@ -51,8 +51,18 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
   const calls: FakeCall[] = [];
   let isDown = false;
   let hanging = false;
+  let dropping = false;
+  /** How the check's probes are answered: Cube's `/v1/sql` over the candidate. */
+  let probeAnswer:
+    | ((
+        probe: { id: string; query: Record<string, unknown> },
+        files: readonly ModelFile[],
+      ) => { status: number; error?: string } | undefined)
+    | undefined;
   let conflicts = 0;
   let refusal: readonly ModelError[] | undefined;
+  /** Cube's own text with a refusal, as `/v1/meta` would give it (research: `cubeMessage`). */
+  let refusalMessage: string | null = null;
 
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), {
@@ -108,6 +118,50 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
           revision: head?.revision ?? null,
           state: head === undefined ? 'none' : 'active',
         },
+      });
+    }
+
+    /**
+     * The check (T445; research §"`PUT …/snapshot?dryRun=true`"): the same
+     * path and type checks, then `valid` and its errors, then each probe run
+     * against the candidate only when it's valid. Nothing is stored.
+     */
+    if (route[2] === 'snapshot' && method === 'PUT' && url.searchParams.get('dryRun') === 'true') {
+      const { files, probes = [] } = body as {
+        files: readonly ModelFile[];
+        probes?: readonly { id: string; query: Record<string, unknown>; compare?: boolean }[];
+      };
+      const refusedPath = files.find(
+        (file) => !FILE_PATH.test(file.path) || file.path.length > 512,
+      );
+      if (refusedPath !== undefined)
+        return answer(400, {
+          error: `${refusedPath.path}: not a path xcube takes`,
+          code: 'invalid_path',
+        });
+      const code = files.find((file) => !/\.ya?ml$/.test(file.path) || JINJA.test(file.content));
+      if (code !== undefined)
+        return answer(400, {
+          error: `${code.path}: only plain YAML models are taken (no JavaScript, Python or Jinja)`,
+          code: 'invalid_file_type',
+        });
+      const valid = refusal === undefined;
+      return answer(200, {
+        model,
+        contentHash: contentHashOf(files),
+        currentRevision: head?.revision ?? null,
+        sameAsCurrent: head?.contentHash === contentHashOf(files),
+        valid,
+        errors: refusal ?? [],
+        cubeMessage: valid ? null : refusalMessage,
+        probes:
+          valid && !dropping
+            ? probes.map((probe) => ({
+                id: probe.id,
+                candidate: probeAnswer?.(probe, files) ?? { status: 200 },
+              }))
+            : [],
+        durationMs: 1,
       });
     }
 
@@ -185,6 +239,14 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
       const head = headOf(model);
       return head === undefined ? undefined : { ...head, generation };
     },
+    /** The check answers without its probes' results, as a garbled answer would. */
+    dropProbes: (on: boolean) => {
+      dropping = on;
+    },
+    /** How the check's probes answer; `undefined` from it is a 200. */
+    answerProbes: (answer: typeof probeAnswer) => {
+      probeAnswer = answer;
+    },
     /** Every call waits for ever, until its caller gives up (its signal aborts). */
     hang: (on: boolean) => {
       hanging = on;
@@ -198,8 +260,9 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
       conflicts = n;
     },
     /** Imports are refused with these errors, until cleared with `undefined`. */
-    refuse: (errors: readonly ModelError[] | undefined) => {
+    refuse: (errors: readonly ModelError[] | undefined, cubeMessage: string | null = null) => {
       refusal = errors;
+      refusalMessage = cubeMessage;
     },
     /** xcube's schema emptied and made again: a new generation, and no models. */
     recreate: () => {
