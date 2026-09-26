@@ -154,6 +154,12 @@ export interface RenderSpec {
    * export writes each one's raw number beside its formatted value.
    */
   readonly measures?: readonly string[];
+  /**
+   * The chart's fields in the wells' order (T393, AC-301): its time
+   * dimensions, its dimensions, then its measures as the Metrics well has
+   * them. What a table heads its columns by, and its CSV.
+   */
+  readonly fields?: readonly string[];
   /** The colour the chart is drawn on, used for the gap between marks. */
   readonly surface?: string;
   /**

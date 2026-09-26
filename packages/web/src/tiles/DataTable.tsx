@@ -125,8 +125,9 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
     );
   }
 
-  // The columns its CSV heads too (T177): one definition for both.
-  const columns = tableColumnsOf(rows);
+  // The columns its CSV heads too (T177): one definition for both, in the
+  // wells' order (T393, AC-301).
+  const columns = tableColumnsOf(rows, spec.fields);
   // A measure's figures are set right, as the prototype's `td.num` (T304).
   const measures = new Set(spec.measures ?? membersOn(spec.encoding, 'y'));
   const align = (column: string) => (measures.has(column) ? 'num' : undefined);

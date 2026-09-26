@@ -258,6 +258,43 @@ describe('compiling a saved document', () => {
     expect(compile(withStatusAndCount, { rows: ROWS, chartType: 'bar' }).granularities).toEqual({});
   });
 
+  /** T393, AC-301: a table heads its columns in the wells' order. */
+  it('carries the wells’ order: time, dimensions, then measures as the Metrics well has them', () => {
+    const document = documentFor((spec) => {
+      let next = addToWell(spec, 'measures', 'orders.total_amount');
+      next = addToWell(next, 'measures', 'orders.count');
+      next = addToWell(next, 'dimensions', 'orders.status');
+      next = addToWell(next, 'dimensions', 'orders.region');
+      return addToWell(next, 'timeDimensions', 'orders.ordered_at');
+    });
+
+    expect(compile(document, { rows: [], chartType: 'table' }).fields).toEqual([
+      'orders.ordered_at',
+      'orders.status',
+      'orders.region',
+      'orders.total_amount',
+      'orders.count',
+    ]);
+  });
+
+  /** T393's review: a box plot's "Each point is" is a dimension, before the measures. */
+  it('puts a box plot’s “Each point is” with the dimensions', () => {
+    const document = documentFor((spec) => ({
+      ...addToWell(
+        addToWell(spec, 'measures', 'orders.total_amount'),
+        'dimensions',
+        'orders.status',
+      ),
+      eachPointIs: 'orders.id',
+    }));
+
+    expect(compile(document, { rows: [], chartType: 'boxplot' }).fields).toEqual([
+      'orders.status',
+      'orders.id',
+      'orders.total_amount',
+    ]);
+  });
+
   it('names a grain chosen from the pill, the one its query asks for (AC-216)', () => {
     const document = documentFor((spec) => ({
       ...addToWell(spec, 'timeDimensions', 'orders.ordered_at'),

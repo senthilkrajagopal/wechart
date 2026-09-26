@@ -57,6 +57,29 @@ describe('table semantics', () => {
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['a', 'b', 'c']);
   });
 
+  /**
+   * T393, AC-301: THE SYSTEM SHALL order a table's columns as the wells order
+   * its fields: time and dimensions first, then measures in the Metrics
+   * well's order. `Fails when: a table's columns differ from the wells' order.`
+   */
+  it('heads its columns in the wells’ order, whatever order the rows carry them in', () => {
+    render(
+      <DataTable
+        spec={spec({
+          rows: [{ 'orders.amount': 9, [COUNT]: 1, [STATUS]: 'paid', 'orders.day.day': 'x' }],
+          fields: ['orders.day', STATUS, COUNT, 'orders.amount'],
+        })}
+      />,
+    );
+
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
+      'orders.day.day',
+      STATUS,
+      COUNT,
+      'orders.amount',
+    ]);
+  });
+
   it('says so when the query returned nothing', () => {
     render(<DataTable spec={spec({ rows: [] })} />);
 

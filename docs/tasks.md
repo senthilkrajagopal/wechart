@@ -5872,10 +5872,25 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - A series not drawn lost its place; it keeps it now.
       - The focus and message tests were added, and a test that couldn't fail was strengthened.
     - **Left.** A Top N "Other (n)" series is named by its count, so a saved place for it is lost when the count changes.
-- [ ] T393 [P] (AC-301) Order a table's columns as the wells order its fields
-  - Files: `packages/web/src/tiles/DataTable.tsx` (+ test)
+- [x] T393 [P] (AC-301) Order a table's columns as the wells order its fields
+  - Files: `packages/core/src/render-spec.ts` (`fields`), `packages/core/src/compile.ts`, `packages/core/src/export/csv.ts` (`tableColumnsOf(rows, fields)`), `packages/web/src/tiles/DataTable.tsx`, `packages/web/src/editor/ResultsDrawer.tsx`, `packages/web/src/dashboard/markings/MarkedRows.tsx`, `packages/web/src/dashboard/DashboardView.tsx` (+ tests), `e2e/table-columns.spec.ts`
   - Failing test: `DataTable.test.tsx`: time and dimensions come first, then measures in the Metrics well's order (AC-301).
   - Depends on: none
+  - **Done 2026-09-26.**
+    - **The order.** `compile` carries the wells' order as the spec's `fields`: time dimensions, dimensions (a box plot's "Each point is" among them), then measures as the Metrics well has them. `tableColumnsOf` heads a table's columns by it. A time column (`member.granularity`) goes with its member, and a key no well names comes after, each group as the rows carried it. Cube's own order puts a time dimension's plain key after the measures (observed 2026-09-26).
+    - **Where it applies:**
+      - a table chart and every chart's table view;
+      - their CSV;
+      - the editor's result and underlying tables, by their queries;
+      - the marked and underlying rows panel and its CSV.
+    - **What the tests show:**
+      - `csv.test.ts`: the ordering, and the CSV;
+      - `compile.test.ts`: `fields` from the wells, including "Each point is";
+      - `DataTable.test.tsx`, `ResultsDrawer.test.tsx`, `MarkedRows.test.tsx`: each surface.
+      - `table-columns.spec.ts` (Chrome): a table with a time dimension, on its page, both measure orders. It fails on Cube's order.
+    - **The cold review (FAIL)** led to:
+      - A box plot's "Each point is" came after the measures; it is placed with the dimensions now.
+      - The other tables, which kept Cube's order, follow the wells too, rather than the criterion being narrowed.
 - [ ] T394 [P] (AC-302) Edit a markdown tile's text in edit mode
   - Files: `packages/web/src/dashboard/tiles/MarkdownTile.tsx` (+ test), `e2e/dashboard.spec.ts`
   - Failing test: `dashboard.spec.ts`: selecting a markdown tile in edit mode lets the user change its text, and the tile renders the change (AC-302).

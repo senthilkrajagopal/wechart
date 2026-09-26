@@ -3682,6 +3682,8 @@ export function DashboardView({
       const spec = drawn.specs[chartId];
       return {
         text: rowsCsvOf(rows, {
+          // In the wells' order, as the chart's table (T393's review, AC-301).
+          fields: spec?.fields ?? [],
           measures: spec?.measures ?? [],
           formats: spec?.formats ?? {},
           titles: spec?.titles ?? {},
@@ -3970,6 +3972,7 @@ export function DashboardView({
       };
     },
     measures: drawn.specs[open.chartId]?.measures ?? [],
+    fields: drawn.specs[open.chartId]?.fields ?? [],
     formats: drawn.specs[open.chartId]?.formats ?? {},
     titles: drawn.specs[open.chartId]?.titles ?? {},
   });

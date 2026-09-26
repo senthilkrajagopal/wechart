@@ -140,6 +140,14 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
         // By the grain each was asked at, chosen or not (AC-188, AC-216).
         granularities: granularitiesOf(chart.wells.timeDimensions, chart.granularities),
         measures: [...chart.wells.measures],
+        // The wells' order, which a table heads its columns by (T393, AC-301).
+        fields: [
+          ...chart.wells.timeDimensions,
+          ...chart.wells.dimensions,
+          // A box plot's "Each point is" is a dimension too (T393's review).
+          ...(chart.wells.eachPointIs === undefined ? [] : [chart.wells.eachPointIs]),
+          ...chart.wells.measures,
+        ],
         ...(options.palette === undefined ? {} : { palette: options.palette }),
         ...(options.surface === undefined ? {} : { surface: options.surface }),
       }),

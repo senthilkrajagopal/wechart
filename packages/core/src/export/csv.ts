@@ -9,8 +9,24 @@ import type { RenderSpec } from '../render-spec';
  * dimension or a time member's bucket among them. One definition for the
  * table and its CSV, so the two cannot head different columns.
  */
-export function tableColumnsOf(rows: readonly Record<string, unknown>[]): string[] {
-  return [...new Set(rows.flatMap((row) => Object.keys(row)))];
+export function tableColumnsOf(
+  rows: readonly Record<string, unknown>[],
+  fields: readonly string[] = [],
+): string[] {
+  const keys = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  /**
+   * In the wells' order (T393, AC-301): each key by the field it is — a time
+   * dimension's `member.granularity` by its member — and a key no field names
+   * after those, each group as the rows carried it.
+   */
+  const rank = (key: string) => {
+    const at = fields.findIndex((field) => key === field || key.startsWith(`${field}.`));
+    return at === -1 ? fields.length : at;
+  };
+  return keys
+    .map((key, at) => ({ key, at }))
+    .sort((a, b) => rank(a.key) - rank(b.key) || a.at - b.at)
+    .map(({ key }) => key);
 }
 
 /**
@@ -62,6 +78,7 @@ function guarded(raw: unknown, written: string): string {
  */
 export function csvOf(spec: RenderSpec): string {
   return rowsCsvOf(spec.rows, {
+    ...(spec.fields === undefined ? {} : { fields: spec.fields }),
     ...(spec.measures === undefined ? {} : { measures: spec.measures }),
     ...(spec.formats === undefined ? {} : { formats: spec.formats }),
     ...(spec.granularities === undefined ? {} : { granularities: spec.granularities }),
@@ -77,18 +94,21 @@ export function csvOf(spec: RenderSpec): string {
 export function rowsCsvOf(
   rows: readonly Record<string, unknown>[],
   {
+    fields = [],
     measures: measured = [],
     formats = {},
     granularities = {},
     titles,
   }: {
+    /** The wells' order, which the columns follow (T393, AC-301). */
+    fields?: readonly string[];
     measures?: readonly string[];
     formats?: RenderSpec['formats'];
     granularities?: RenderSpec['granularities'];
     titles?: RenderSpec['titles'];
   },
 ): string {
-  const columns = tableColumnsOf(rows);
+  const columns = tableColumnsOf(rows, fields);
   const measures = new Set(measured);
   const write = columns.map((member) => formatterFor(member, formats ?? {}, granularities ?? {}));
   // A measure's raw number beside its formatted value (T179, AC-173).

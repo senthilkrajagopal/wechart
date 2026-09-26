@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -58,6 +58,38 @@ describe('the rows behind a tile', () => {
     );
     // The first page asked for, not every row.
     expect(load).toHaveBeenCalledWith(100, expect.any(AbortSignal));
+  });
+
+  /** T393's review, AC-301: headed in the chart's wells' order, in the table and its CSV. */
+  it('heads the rows in the chart’s wells’ order, and writes the CSV so', async () => {
+    const saved: { name: string; text: string }[] = [];
+    render(
+      <MarkedRows
+        title="By status"
+        heading="Marked rows"
+        load={vi.fn<Load>(async () => ({ rows: ROWS, total: 2 }))}
+        measures={['orders.amount']}
+        fields={['orders.status', 'orders.amount']}
+        onClose={vi.fn()}
+        save={(name: string, text: string) => {
+          saved.push({ name, text });
+        }}
+      />,
+    );
+
+    const table = await screen.findByRole('table');
+    expect([...table.querySelectorAll('th')].map((cell) => cell.textContent)).toEqual([
+      'orders.status',
+      'orders.amount',
+      'orders.id',
+    ]);
+    await userEvent.click(screen.getByRole('button', { name: /Download CSV/ }));
+    await waitFor(() => {
+      expect(saved).toHaveLength(1);
+    });
+    expect(saved[0]?.text.slice(BYTE_ORDER_MARK.length).split('\r\n')[0]).toBe(
+      'orders.status,orders.amount,orders.amount (raw),orders.id',
+    );
   });
 
   it('downloads the rows as CSV, asking for them all up to Cube’s limit', async () => {

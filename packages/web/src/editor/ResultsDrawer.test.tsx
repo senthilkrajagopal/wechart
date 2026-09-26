@@ -1,6 +1,6 @@
 import type { MemberGranularities } from '@wechart/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -166,6 +166,21 @@ describe('the three views', () => {
     // The result view must never issue a query: a second fetch is how the
     // drawer and the chart come to disagree.
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  /**
+   * T393's review, AC-301: the result table heads its columns as the chart's
+   * own table does, in the wells' order, which its query keeps: time and
+   * dimensions, then measures.
+   */
+  it('heads the result’s columns in the order its query names them', () => {
+    drawer({ rows: [{ 'orders.count': '3', 'orders.status': 'completed' }] });
+
+    expect(
+      within(screen.getByTestId('drawer-result-rows'))
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent),
+    ).toEqual(['orders.status', 'orders.count']);
   });
 
   it('shows the chart’s own query as JSON', () => {

@@ -43,6 +43,7 @@ export function MarkedRows({
   heading,
   load,
   measures = [],
+  fields = [],
   formats = {},
   titles,
   follow,
@@ -59,6 +60,8 @@ export function MarkedRows({
   /** The rows, at most `limit` of them, with the query's full count. */
   load: (limit: number, signal: AbortSignal) => Promise<RowsAnswer>;
   measures?: readonly string[];
+  /** The chart's fields in the wells' order, which the columns follow (T393's review, AC-301). */
+  fields?: readonly string[];
   formats?: MemberFormats;
   titles?: Readonly<Record<string, string>>;
   /**
@@ -173,6 +176,7 @@ export function MarkedRows({
       ({ rows, total }) => {
         if (aborted.signal.aborted) return;
         const csv = rowsCsvOf(rows, {
+          fields,
           measures,
           formats,
           ...(titles === undefined ? {} : { titles }),
@@ -192,7 +196,7 @@ export function MarkedRows({
   };
 
   const rows = answer.kind === 'rows' ? answer.value.rows : [];
-  const columns = tableColumnsOf(rows);
+  const columns = tableColumnsOf(rows, fields);
   const write = columns.map((member) => formatterFor(member, formats));
   const total = answer.kind === 'rows' ? answer.value.total : undefined;
 

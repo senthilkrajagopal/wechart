@@ -1107,7 +1107,7 @@ Traces to: §P2.6 H, `[R8, R16, R19, R21, R22]`, `[backlog]` §5. Rewritten phas
       Fails when: two value-axis labels overlap in a drawn tile.
 - [x] AC-300 WHEN the user orders a chart's series in Customize, THE SYSTEM SHALL draw, stack and list the series in that order, and keep it after a refresh (gap 7).
       Fails when: series stack alphabetically after another order was set, or the order changes on refresh.
-- [ ] AC-301 THE SYSTEM SHALL order a table's columns as the wells order its fields: time and dimensions first, then measures in the Metrics well's order (gap 9).
+- [x] AC-301 THE SYSTEM SHALL order a table's columns as the wells order its fields: time and dimensions first, then measures in the Metrics well's order (gap 9).
       Fails when: a table's columns differ from the wells' order.
 - [ ] AC-302 WHEN the user selects a markdown tile in edit mode, THE SYSTEM SHALL let them edit its text, and render the change (gap 12).
       Fails when: a markdown tile's text can't be changed in the UI.

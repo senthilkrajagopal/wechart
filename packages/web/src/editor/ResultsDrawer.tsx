@@ -2,6 +2,7 @@ import {
   columnTitleOf,
   formatValue,
   granularityOf,
+  tableColumnsOf,
   UNDERLYING_ROW_LIMIT,
   type MemberFormats,
   type MemberGranularities,
@@ -78,6 +79,27 @@ function ungrouped(granularities: MemberGranularities): MemberGranularities {
   return Object.fromEntries(Object.keys(granularities).map((member) => [member, 'second']));
 }
 
+/**
+ * A query's members in the wells' order it keeps (T393's review, AC-301):
+ * its time dimensions, its dimensions, then its measures, which a table heads
+ * its columns by, as the chart's own table does.
+ */
+function fieldsOf(query: Record<string, unknown>): string[] {
+  const names = (key: string) => {
+    const value = query[key];
+    return Array.isArray(value)
+      ? value.flatMap((entry: unknown) =>
+          typeof entry === 'string'
+            ? [entry]
+            : typeof entry === 'object' && entry !== null && 'dimension' in entry
+              ? [String((entry as { dimension: unknown }).dimension)]
+              : [],
+        )
+      : [];
+  };
+  return [...names('timeDimensions'), ...names('dimensions'), ...names('measures')];
+}
+
 /** The measures a query names: the columns that are numbers, set right (T257). */
 function measuresOf(query: Record<string, unknown>): string[] {
   const measures = query['measures'];
@@ -93,6 +115,7 @@ function RowTable({
   granularities,
   titles,
   numeric,
+  fields,
   capped = false,
 }: {
   rows: readonly Record<string, unknown>[];
@@ -103,6 +126,8 @@ function RowTable({
   titles: Readonly<Record<string, string>>;
   /** The measure columns, aligned right as figures are (the prototype's td.num). */
   numeric: ReadonlySet<string>;
+  /** The query's members in the wells' order, which the columns follow (AC-301). */
+  fields: readonly string[];
   /**
    * True when the rows came back from a capped query, so a full page is
    * evidence of more rows rather than of the total.
@@ -112,7 +137,7 @@ function RowTable({
 }) {
   if (rows.length === 0) return <p data-testid={`${testId}-empty`}>No rows.</p>;
 
-  const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  const columns = tableColumnsOf(rows, fields);
   const shown = rows.slice(0, VISIBLE_ROWS);
 
   // Silence is the one thing a data drawer must not do here: a table that
@@ -261,6 +286,7 @@ export function ResultsDrawer({
               granularities={granularities}
               titles={titles}
               numeric={numeric}
+              fields={fieldsOf(query)}
             />
           ) : null}
 
@@ -286,6 +312,7 @@ export function ResultsDrawer({
                   granularities={ungrouped(granularities)}
                   titles={titles}
                   numeric={numeric}
+                  fields={fieldsOf(underlyingQuery)}
                   capped
                 />
               )}

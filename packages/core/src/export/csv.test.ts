@@ -37,6 +37,56 @@ describe('the columns a tile’s table heads', () => {
       ]),
     ).toEqual(['orders.status', 'orders.ordered_at.day', 'orders.ordered_at', 'orders.id']);
   });
+
+  /**
+   * T393, AC-301: THE SYSTEM SHALL order a table's columns as the wells order
+   * its fields: time and dimensions first, then measures in the Metrics
+   * well's order (gap 9).
+   * `Fails when: a table's columns differ from the wells' order.`
+   *
+   * Cube's rows carry their keys in an order of its own: here measures
+   * first, and the second measure before the first.
+   */
+  it('follow the wells’ order: time, dimensions, then measures as the Metrics well has them', () => {
+    const rows = [
+      {
+        'orders.total_amount': '9',
+        'orders.status': 'shipped',
+        'orders.count': '1',
+        'orders.ordered_at.month': '2026-01-01T00:00:00.000',
+        'orders.ordered_at': '2026-01-01T00:00:00.000',
+        'orders.region': 'North',
+      },
+    ];
+    const fields = [
+      'orders.ordered_at',
+      'orders.region',
+      'orders.status',
+      'orders.count',
+      'orders.total_amount',
+    ];
+
+    expect(tableColumnsOf(rows, fields)).toEqual([
+      'orders.ordered_at.month',
+      'orders.ordered_at',
+      'orders.region',
+      'orders.status',
+      'orders.count',
+      'orders.total_amount',
+    ]);
+    // A key no well names keeps its place after those they do.
+    expect(tableColumnsOf([{ 'orders.id': '7', ...rows[0] }], fields).at(-1)).toBe('orders.id');
+  });
+
+  it('head the CSV in that order too (T177: one definition)', () => {
+    const spec: RenderSpec = {
+      chartType: 'table',
+      encoding: { x: ['orders.status'], y: ['orders.count'] },
+      rows: [{ 'orders.count': '1', 'orders.status': 'shipped' }],
+      fields: ['orders.status', 'orders.count'],
+    };
+    expect(lines(csvOf(spec))[0]).toBe('orders.status,orders.count');
+  });
 });
 
 /**
