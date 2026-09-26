@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ConfigError, loadConfig } from '../config';
 import { buildServer } from '../server';
+import { PUBLIC, USER } from './guard';
 
 /**
  * T311 (AC-254): WHILE security is disabled, THE SYSTEM SHALL run in
@@ -133,7 +134,8 @@ describe('with security off, every request is the single Super-Admin (AC-254)', 
 
   it('carries that user on every request, with no session asked for', async () => {
     const app = buildServer({ config: { ...config, security: 'off' as const } });
-    app.get('/probe', async (request) => request.wechartUser);
+    // A route of the test's own, declaring its class as every route must (T318).
+    app.get('/probe', USER, async (request) => request.wechartUser);
 
     const response = await app.inject({ method: 'GET', url: '/probe' });
 
@@ -147,7 +149,9 @@ describe('with security off, every request is the single Super-Admin (AC-254)', 
 describe('with security on and nobody signed in, no one is the Super-Admin (T311’s review)', () => {
   it('carries no user, and never falls back to the single user', async () => {
     const app = buildServer({ config: secured });
-    app.get('/probe', async (request) => ({ user: request.wechartUser }));
+    // Public, so it reaches its handler past the guard (T318) and shows what
+    // the request carries: no user at all.
+    app.get('/probe', PUBLIC, async (request) => ({ user: request.wechartUser }));
 
     const probe = await app.inject({ method: 'GET', url: '/probe' });
     expect(probe.json()).toEqual({ user: null });

@@ -2,6 +2,7 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
+import { CUBE, USER } from '../auth/guard';
 import { CubeError, type CubeClient } from '../cube/client';
 import type { MetaCache } from '../cube/meta-cache';
 import type { Config } from '../config';
@@ -154,19 +155,19 @@ export function registerModelPublishing(
     return a.length === b.length && timingSafeEqual(a, b);
   };
 
-  app.get('/api/cube-model/files', async (request, reply) => {
+  app.get('/api/cube-model/files', CUBE, async (request, reply) => {
     if (!fromCube(request)) return reply.status(401).send({ error: 'Not Cube.' });
     return { files: asCube(modelFiles ? await modelFiles.list() : []) };
   });
 
-  app.get('/api/cube-model/version', async (request, reply) => {
+  app.get('/api/cube-model/version', CUBE, async (request, reply) => {
     if (!fromCube(request)) return reply.status(401).send({ error: 'Not Cube.' });
     // From the store each time, not kept here: another instance of this API
     // may have published, and Cube must see what the store holds.
     return { version: versionOf(modelFiles ? await modelFiles.list() : []) };
   });
 
-  app.get('/api/cube-model/drafts/:id', async (request, reply) => {
+  app.get('/api/cube-model/drafts/:id', CUBE, async (request, reply) => {
     if (!fromCube(request)) return reply.status(401).send({ error: 'Not Cube.' });
     const draft = drafts.get((request.params as { id: string }).id);
     if (draft === undefined) return reply.status(404).send({ error: 'No such draft.' });
@@ -179,7 +180,7 @@ export function registerModelPublishing(
    * with them in it, and made live only if Cube compiles it (AC-136). Cube's
    * errors come back on the files they are about.
    */
-  app.post('/api/model/publish', async (request, reply) => {
+  app.post('/api/model/publish', USER, async (request, reply) => {
     const body = request.body as { files?: unknown; create?: unknown } | undefined;
     const files = Array.isArray(body?.files) ? (body.files as unknown[]) : [];
     const changed = files.filter(

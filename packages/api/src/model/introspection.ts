@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
+import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
 import { checkScaffold, type UnmappedColumn } from './scaffoldCheck';
 
@@ -120,11 +121,11 @@ export function registerIntrospection(
       ? reply.status(404).send({ error: `Unknown data source: '${source}'` })
       : undefined;
 
-  app.get('/api/introspection/sources', async (_request, reply) =>
+  app.get('/api/introspection/sources', USER, async (_request, reply) =>
     send(reply, await askCube(base)),
   );
 
-  app.get('/api/introspection/sources/:source/schemas', async (request, reply) => {
+  app.get('/api/introspection/sources/:source/schemas', USER, async (request, reply) => {
     const { source } = request.params as { source: string };
     return (
       unknownSource(reply, source) ??
@@ -132,7 +133,7 @@ export function registerIntrospection(
     );
   });
 
-  app.get('/api/introspection/sources/:source/tables', async (request, reply) => {
+  app.get('/api/introspection/sources/:source/tables', USER, async (request, reply) => {
     const { source } = request.params as { source: string };
     return (
       unknownSource(reply, source) ??
@@ -141,7 +142,7 @@ export function registerIntrospection(
   });
 
   for (const route of ['columns', 'scaffold'] as const)
-    app.post(`/api/introspection/sources/:source/${route}`, async (request, reply) => {
+    app.post(`/api/introspection/sources/:source/${route}`, USER, async (request, reply) => {
       const { source } = request.params as { source: string };
       const refused = unknownSource(reply, source);
       if (refused !== undefined) return refused;

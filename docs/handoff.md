@@ -18,6 +18,35 @@
 > - **Deployed:** wechart-api/web:40aa57e on docker-desktop (`deploy/helm/verify.sh`
 >   passed).
 > - **Pushing is the user's:** `git push origin main --tags`.
+> - **Done since (2026-09-25, later):** T399 box plot (AC-306 ticked), T317 sign-out, T319
+>   account menu, T320 security e2e harness (AC-252 ticked), T318 the route guard; T321 (the
+>   page gate) in progress.
+> - **For the user (T318's review):** AC-251 exempts only "health routes", but the plan also
+>   exempts sign-in and Cube's key-guarded model routes: reword AC-251? And add a
+>   cross-site check (`Sec-Fetch-Site`/`Origin`) for unsafe methods, which research
+>   suggests and no task holds?
+> - **Small decisions to report to the user:**
+>   - With security off, phase 1's "AD" avatar stays at the far right after the
+>     Single-user mode chip (references.md says the button "becomes" the chip); this keeps
+>     ticked AC-190 and the user's R13.
+>   - The top bar's search field may narrow below 260 px so the bar fits 900 px.
+> - **Test cadence (the user's proposal, adopted):** per task, its own tests, the full unit
+>   suite (`pnpm -r --filter './packages/*' test`, not `pnpm -r test`, which also runs the
+>   whole e2e suite) and the touched e2e specs in Chrome; every 10 tasks and at phase end,
+>   both e2e suites in every browser (`pnpm --filter @wechart/e2e test` and `… e2e:security`,
+>   under the e2e lock, never at once).
+> - **Known flakes (phase 1 suite, under load):** the perf budgets, a markings tile, and
+>   `search-palette.spec.ts` "the arrows and Enter open one": its option ids are by
+>   position, so a result source that answers late shifts them between key presses.
+>   All pass alone.
+> - **Must land with T322 (found while planning T323):** `/api/load` and `/api/sql` accept a
+>   previewed `context` (T172, AC-166) that *replaces* the Cube security context. With
+>   security on, anyone signed in could then ask as another group. While security is on,
+>   refuse a `context` with 403 to anyone who isn't a Super-Admin (everyone, until T323
+>   computes Super-Admins), and test it in T322's `client.test.ts`/`server.test.ts`.
+> - **Docker Desktop stopped once mid-session (2026-09-25).** After restarting it, bring
+>   the compose stack back with `docker compose --profile security up -d --wait`; the
+>   Helm release recovers by itself.
 
 > **Phase 1 closed on 2026-09-25, at the user's decision.** Start phase 2 from
 > `docs/phase-2/backlog.md`, not from §4 below. The backlog holds:

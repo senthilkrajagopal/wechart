@@ -6,6 +6,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import * as oidc from 'openid-client';
 
 import type { Config, OidcSettings } from '../config';
+import { PUBLIC } from './guard';
 import { displayNameFrom, groupsFrom, identityFrom, oidcConfig } from './oidc';
 
 /**
@@ -144,7 +145,7 @@ export function registerSignIn(app: FastifyInstance, options: SignInOptions): vo
     cookie: { ...cookie, maxAge: SIGNED_IN_MS },
   });
 
-  app.get('/api/auth/login', async (request, reply) => {
+  app.get('/api/auth/login', PUBLIC, async (request, reply) => {
     let config: oidc.Configuration;
     try {
       config = await oidcConfig(options.oidc);
@@ -183,7 +184,7 @@ export function registerSignIn(app: FastifyInstance, options: SignInOptions): vo
     return reply.redirect(url.href);
   });
 
-  app.get('/api/auth/callback', async (request, reply) => {
+  app.get('/api/auth/callback', PUBLIC, async (request, reply) => {
     // Built from the configured public address, never from the request's Host.
     const current = new URL(request.url, options.publicUrl);
     const state = current.searchParams.get('state') ?? '';
@@ -252,7 +253,7 @@ export function registerSignIn(app: FastifyInstance, options: SignInOptions): vo
    * embeds can sign anyone out; the Sign out control calls it and then goes to
    * `redirectTo`.
    */
-  app.post('/api/auth/logout', async (request, reply) => {
+  app.post('/api/auth/logout', PUBLIC, async (request, reply) => {
     const signedIn = request.session.user !== undefined;
     const idToken = request.session.idToken;
     await request.session.destroy();

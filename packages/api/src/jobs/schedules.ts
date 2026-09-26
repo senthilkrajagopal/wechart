@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
+import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
 import { refreshKeySqlOf } from '../model/refreshKeys';
 import type { ModelFile } from '../server';
@@ -144,7 +145,7 @@ export function registerSchedules(
   client: CubeClient,
   modelFiles?: { list(): Promise<readonly ModelFile[]> },
 ): void {
-  app.get('/api/schedules', async () =>
+  app.get('/api/schedules', USER, async () =>
     schedulesFrom(await client.metaExtended(), modelFiles ? await modelFiles.list() : []),
   );
 }

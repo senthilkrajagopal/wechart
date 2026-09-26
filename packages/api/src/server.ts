@@ -22,6 +22,7 @@ import { MetaCache } from './cube/meta-cache';
 import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
 import type { SessionStore } from '@fastify/session';
 
+import { PUBLIC, registerGuard, registerRouteAccess, USER } from './auth/guard';
 import { registerSignIn, signInOptionsOf } from './auth/routes';
 import { registerUser, Unauthenticated, userOf } from './auth/user';
 import { registerBuilds } from './jobs/build';
@@ -176,15 +177,18 @@ export function buildServer({
         }),
   });
   const security = config.security ?? 'off';
+  // Before any route: every route declares who may call it (T318, AC-251).
+  registerRouteAccess(app);
   if (security === 'oidc') registerSignIn(app, signInOptionsOf(config, sessions));
   registerUser(app, security);
+  registerGuard(app, security);
 
   /**
    * The Cube deployment's health and the refresh worker's state (T162,
    * AC-156), each from its own probes. Not `/api/health`, which is this API's
    * own, and which a deployment checks without asking Cube anything.
    */
-  app.get('/api/cube-health', async () =>
+  app.get('/api/cube-health', PUBLIC, async () =>
     healthOf(
       {
         cube: originOf(config.cubeApiUrl),
@@ -198,7 +202,7 @@ export function buildServer({
    * anyone could ask it, with no token and with a bad one — never with
    * wechart's.
    */
-  app.get('/api/cube-auth', async () => authCheckOf(config.cubeApiUrl, healthFetch));
+  app.get('/api/cube-auth', USER, async () => authCheckOf(config.cubeApiUrl, healthFetch));
   const client =
     cube ??
     new CubeClient({
@@ -225,16 +229,16 @@ export function buildServer({
     }
   };
 
-  app.get('/api/health', () => ({ status: 'ok' }));
+  app.get('/api/health', PUBLIC, () => ({ status: 'ok' }));
 
-  app.get('/api/meta', async () => meta.meta());
+  app.get('/api/meta', USER, async () => meta.meta());
 
   /**
    * Who is signed in (AC-190, AC-252, AC-254): the name the top bar shows,
    * whether they are a Super-Admin, and the security mode, so the top bar can
    * show "Single-user mode" in place of Sign out.
    */
-  app.get('/api/me', async (request) => {
+  app.get('/api/me', USER, async (request) => {
     const user = userOf(request);
     return {
       name: user.name,
@@ -250,14 +254,16 @@ export function buildServer({
    * with its token by the cheapest request past the scope's assertion
    * (`cube/scopes.ts`; research/cube/api-scope-probes.md).
    */
-  app.get('/api/cube-scopes', async () => scopesOf((path, init) => client.ask(path, init)));
+  app.get('/api/cube-scopes', USER, async () => scopesOf((path, init) => client.ask(path, init)));
 
   /**
    * The Cube model's files, each with its whole text (T137, AC-131). What a
    * file defines is read from the text in the Model workspace, by the parser
    * its editor uses, so the two cannot disagree.
    */
-  app.get('/api/model/files', async () => ({ files: modelFiles ? await modelFiles.list() : [] }));
+  app.get('/api/model/files', USER, async () => ({
+    files: modelFiles ? await modelFiles.list() : [],
+  }));
 
   registerModelPublishing(app, { config, client, meta, modelFiles });
   registerBuilds(app, client);
@@ -275,7 +281,7 @@ export function buildServer({
    * before it is saved (T147, AC-141): `{ members: ['orders.count', …] }`, in
    * the body, since a wide cube's names would outgrow a URL.
    */
-  app.post('/api/model/references', async (request) => {
+  app.post('/api/model/references', USER, async (request) => {
     const asked = (request.body as { members?: unknown } | undefined)?.members;
     const members = (Array.isArray(asked) ? (asked as unknown[]) : [])
       .filter((member): member is string => typeof member === 'string')
@@ -290,7 +296,7 @@ export function buildServer({
    * browser. Always answers 204: the tile that issued it is already gone, and
    * a failure to cancel is not something anyone can act on.
    */
-  app.delete('/api/running-query/:requestId', async (request, reply) => {
+  app.delete('/api/running-query/:requestId', USER, async (request, reply) => {
     const { requestId } = request.params as { requestId: string };
     try {
       await client.cancel(requestId);
@@ -306,7 +312,7 @@ export function buildServer({
    * four seconds and then errored is exactly what someone opens the Jobs
    * workspace to find.
    */
-  app.post('/api/load', async (request) => {
+  app.post('/api/load', USER, async (request) => {
     const body = request.body as
       { query?: Record<string, unknown>; cache?: unknown; context?: unknown } | undefined;
     if (!body?.query) throw new BadRequest();
@@ -352,7 +358,7 @@ export function buildServer({
    * never reports one Cube does not use; the reason is worked out from its
    * dry run against the rollups it compiled (`preaggMatch.ts`).
    */
-  app.post('/api/acceleration', async (request) => {
+  app.post('/api/acceleration', USER, async (request) => {
     const body = request.body as { query?: Record<string, unknown> } | undefined;
     if (!body?.query) throw new BadRequest();
     const query = body.query;
@@ -392,7 +398,7 @@ export function buildServer({
    * statement, for a query Cube runs as several: one left out would be SQL
    * the context runs that is not shown.
    */
-  app.post('/api/sql', async (request, reply) => {
+  app.post('/api/sql', USER, async (request, reply) => {
     const body = request.body as { query?: Record<string, unknown>; context?: unknown } | undefined;
     if (!body?.query) throw new BadRequest();
     const context = body.context === undefined ? undefined : previewClaimsOf(body.context);
@@ -409,11 +415,11 @@ export function buildServer({
   });
 
   // Explore's folder tree and contents (AC-017).
-  app.get('/api/folders', async () => (cat ? cat.folders() : []));
+  app.get('/api/folders', USER, async () => (cat ? cat.folders() : []));
   // The two roots' counts, which are no folder's (AC-194).
-  app.get('/api/folder-roots', async () => (cat?.rootCounts ? cat.rootCounts() : {}));
+  app.get('/api/folder-roots', USER, async () => (cat?.rootCounts ? cat.rootCounts() : {}));
 
-  app.get('/api/folders/:folderId/contents', async (request) => {
+  app.get('/api/folders/:folderId/contents', USER, async (request) => {
     const { folderId } = request.params as { folderId: string };
     return cat ? cat.contents(folderId) : [];
   });
@@ -423,7 +429,7 @@ export function buildServer({
    * here rather than accepted from the browser, so a client cannot choose to
    * overwrite an existing object by claiming its id.
    */
-  app.post('/api/documents', async (request, reply) => {
+  app.post('/api/documents', USER, async (request, reply) => {
     const owner = userOf(request).key;
     const body = request.body as { kind?: string; title?: string; folderId?: string } | undefined;
 
@@ -476,7 +482,7 @@ export function buildServer({
    * through the repository's migration on read, so the browser never sees an
    * older format.
    */
-  app.get('/api/documents/:kind/:id', async (request, reply) => {
+  app.get('/api/documents/:kind/:id', USER, async (request, reply) => {
     const { kind, id } = request.params as { kind: string; id: string };
 
     if (kind !== 'folder' && kind !== 'dashboard' && kind !== 'chart') {
@@ -529,7 +535,7 @@ export function buildServer({
    * refuses a write against a version that has moved. Two people editing one
    * dashboard would otherwise have the last save win silently.
    */
-  app.put('/api/documents/:kind/:id', async (request, reply) => {
+  app.put('/api/documents/:kind/:id', USER, async (request, reply) => {
     const { kind, id } = request.params as { kind: string; id: string };
     const body = request.body as { body?: Record<string, unknown>; version?: number } | undefined;
 
@@ -582,7 +588,7 @@ export function buildServer({
    * making it a library chart, moves its version, and the version-checked
    * write inside the transaction then refuses it.
    */
-  app.put('/api/dashboards/:id', async (request, reply) => {
+  app.put('/api/dashboards/:id', USER, async (request, reply) => {
     const { id: dashboardId } = request.params as { id: string };
     const payload = request.body as { dashboard?: unknown; charts?: unknown } | undefined;
 
@@ -747,7 +753,7 @@ export function buildServer({
     }
   });
 
-  app.patch('/api/documents/:kind/:id', async (request) => {
+  app.patch('/api/documents/:kind/:id', USER, async (request) => {
     const { kind, id } = request.params as { kind: string; id: string };
     const body = request.body as { title?: string; folderId?: string } | undefined;
 
@@ -768,7 +774,7 @@ export function buildServer({
   });
 
   /** The dashboards that use a library chart (AC-022). */
-  app.get('/api/charts/:chartId/dashboards', async (request) => {
+  app.get('/api/charts/:chartId/dashboards', USER, async (request) => {
     const { chartId } = request.params as { chartId: string };
     return cat?.dashboardsUsing ? cat.dashboardsUsing(chartId) : [];
   });
@@ -783,7 +789,7 @@ export function buildServer({
    * nothing about the request is malformed, it conflicts with the current
    * state.
    */
-  app.delete('/api/documents/:kind/:id', async (request, reply) => {
+  app.delete('/api/documents/:kind/:id', USER, async (request, reply) => {
     const { kind, id } = request.params as { kind: string; id: string };
     const { confirm } = request.query as { confirm?: string };
 
@@ -810,7 +816,7 @@ export function buildServer({
   });
 
   /** Add a library chart to another dashboard (AC-022). */
-  app.post('/api/dashboards/:dashboardId/charts', async (request, reply) => {
+  app.post('/api/dashboards/:dashboardId/charts', USER, async (request, reply) => {
     const { dashboardId } = request.params as { dashboardId: string };
     const body = request.body as { chartId?: string } | undefined;
 
@@ -832,7 +838,7 @@ export function buildServer({
    */
   app.post(
     '/api/dashboards/:dashboardId/images',
-    { bodyLimit: 3 * 1024 * 1024 },
+    { ...USER, bodyLimit: 3 * 1024 * 1024 },
     async (request, reply) => {
       const { dashboardId } = request.params as { dashboardId: string };
       const body = request.body as { contentType?: unknown; data?: unknown } | null;
@@ -860,7 +866,7 @@ export function buildServer({
    * never runs an SVG's script, but the image's own address could be opened
    * directly.
    */
-  app.get('/api/images/:id', async (request, reply) => {
+  app.get('/api/images/:id', USER, async (request, reply) => {
     const { id } = request.params as { id: string };
     const image = await images?.get(id);
     if (image === undefined) return reply.code(404).send({ error: 'No such image.' });
@@ -878,14 +884,14 @@ export function buildServer({
    * The state is the browser's to check as it applies it, as a URL is; here
    * only that it is one.
    */
-  app.get('/api/dashboards/:dashboardId/bookmarks', async (request, reply) => {
+  app.get('/api/dashboards/:dashboardId/bookmarks', USER, async (request, reply) => {
     const { dashboardId } = request.params as { dashboardId: string };
     if (bookmarks === undefined)
       return reply.code(503).send({ error: 'Bookmarks cannot be kept here.' });
     return { bookmarks: await bookmarks.list(dashboardId) };
   });
 
-  app.post('/api/dashboards/:dashboardId/bookmarks', async (request, reply) => {
+  app.post('/api/dashboards/:dashboardId/bookmarks', USER, async (request, reply) => {
     const { dashboardId } = request.params as { dashboardId: string };
     const body = request.body as { name?: unknown; state?: unknown } | undefined;
     if (bookmarks === undefined)
@@ -904,7 +910,7 @@ export function buildServer({
     return reply.code(201).send(await bookmarks.save({ dashboardId, name, state }));
   });
 
-  app.get('/api/search', async (request) => {
+  app.get('/api/search', USER, async (request) => {
     const { q, limit, kind } = request.query as { q?: string; limit?: string; kind?: string };
     // One kind alone, where a list is of it (T241): charts sorting first must
     // not crowd a dashboard out of the limit.
@@ -924,7 +930,7 @@ export function buildServer({
     return most === undefined ? cat.search(q ?? '') : cat.search(q ?? '', most);
   });
 
-  app.get('/api/jobs/queries', async (request) => {
+  app.get('/api/jobs/queries', USER, async (request) => {
     const { limit } = request.query as { limit?: string };
     return log ? log.recent(Number(limit) || 100) : [];
   });
@@ -934,7 +940,7 @@ export function buildServer({
    * database does it, so "Failed" finds a failure however many queries came
    * after it, and the count is the log's rather than a window's.
    */
-  app.get('/api/jobs/queries/page', async (request) => {
+  app.get('/api/jobs/queries/page', USER, async (request) => {
     const q = request.query as Record<string, string | undefined>;
     const oneOf = <T extends string>(key: string, allowed: readonly T[]): T | undefined => {
       const value = q[key];
@@ -972,7 +978,7 @@ export function buildServer({
    * queries' timings, whatever else was logged since. A body, not a query
    * string: a dashboard opened many times sends hundreds of ids.
    */
-  app.post('/api/jobs/queries/find', async (request) => {
+  app.post('/api/jobs/queries/find', USER, async (request) => {
     const requestIds = (request.body as { requestIds?: unknown } | undefined)?.requestIds;
     if (
       !Array.isArray(requestIds) ||

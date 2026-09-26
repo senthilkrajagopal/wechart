@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
+import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
 
 /**
@@ -124,9 +125,9 @@ export function buildablesFrom(meta: unknown): Buildable[] {
 }
 
 export function registerBuilds(app: FastifyInstance, client: CubeClient): void {
-  app.get('/api/preaggregations', async () => buildablesFrom(await client.metaExtended()));
+  app.get('/api/preaggregations', USER, async () => buildablesFrom(await client.metaExtended()));
 
-  app.post('/api/builds', async (request, reply) => {
+  app.post('/api/builds', USER, async (request, reply) => {
     const preAggregation = (request.body as { preAggregation?: unknown } | undefined)
       ?.preAggregation;
     if (typeof preAggregation !== 'string' || !PRE_AGGREGATION.test(preAggregation))
@@ -137,7 +138,7 @@ export function registerBuilds(app: FastifyInstance, client: CubeClient): void {
     };
   });
 
-  app.post('/api/builds/status', async (request, reply) => {
+  app.post('/api/builds/status', USER, async (request, reply) => {
     const tokens = (request.body as { tokens?: unknown } | undefined)?.tokens;
     if (
       !Array.isArray(tokens) ||

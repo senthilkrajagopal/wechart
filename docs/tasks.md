@@ -5073,10 +5073,17 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - tests for clearing the `__Host-` cookie over HTTPS and for the session row existing before sign-out.
     - Recorded, not fixed: a sign-in started in another tab at the same moment can save the session back (breadth over save edge cases); registering the post-logout address with Entra is checked in T411.
     - AC-253 stays open for its page half: T321 signs out through the account menu in the browser and finds `/explore` asks for a new sign-in.
-- [ ] T318 (AC-251) Refuse every API route without a session, except health and sign-in, and prove no route is unclassified
+- [x] T318 (AC-251) Refuse every API route without a session, except health and sign-in, and prove no route is unclassified
   - Files: `packages/api/src/auth/guard.ts` (+ test), `packages/api/src/server.ts` (each route's `config.access`), `packages/api/src/model/publish.ts`, `packages/api/src/model/introspection.ts`, `packages/api/src/jobs/*.ts`
   - Failing test: `guard.test.ts`: with security on and no session, every route registered on the server (collected with an `onRoute` hook) answers 401 `{ error: 'unauthenticated' }` and no data, except `/api/health`, `/api/cube-health`, `/api/auth/*` and the key-guarded `/api/cube-model/*`; with security off, no route answers 401 (T311's review); a route registered without an access class fails the test (AC-251).
   - Depends on: T316
+  - **Done 2026-09-25.**
+    - Every route declares its class with `PUBLIC`, `CUBE` or `USER` (`auth/guard.ts`). An `onRoute` hook, added before any route, stops the server starting with one that doesn't.
+    - With security on, a `preParsing` guard after the user hook answers 401 `{ error: 'unauthenticated' }` to every `user` route without a signed-in user, before the body is read. Unknown paths answer 401 too, since the 404 handler has no class; HEAD routes carry their GET's.
+    - `guard.test.ts` asks every route the server has: 42 routes plus their HEADs. The exempt list is pinned exactly; the model routes Cube reads answer to its key and no session; with security off nothing answers "unauthenticated".
+    - The cold review (PASS) led to that key test, a wider security-off sweep, and a plain return from the guard's hook.
+    - Not decided here, for the user: AC-251 exempts "health routes", while the plan also exempts sign-in (by necessity) and Cube's key-guarded model routes; and research's suggested cross-site check (`Sec-Fetch-Site`/`Origin`) has no task (SameSite=Lax already stops cross-site POSTs carrying the cookie).
+    - AC-251 stays open for its page half (T321).
 - [x] T319 (AC-252, AC-254) Show the account button and menu, or the single-user chip
   - Files: `packages/web/src/shell/AccountMenu.tsx` (+ test), `packages/web/src/shell/AppShell.tsx`
   - Failing test: `AccountMenu.test.tsx`: signed in, the top bar shows the name and a 28 px avatar, and the menu holds the identity, "Super-Admin" for Super-Admins and Sign out; with security off it shows "Single-user mode" with no Sign out (AC-252, AC-254; rule 59).
