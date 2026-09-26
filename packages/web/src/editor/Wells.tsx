@@ -1,7 +1,7 @@
 import type { ChartFilter, ChartSpec, TimeGranularity, WellName } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
 import { QUERY_GRANULARITY } from '@wechart/core';
-import { useId, useState, type ReactNode } from 'react';
+import { Fragment, useId, useState, type ReactNode } from 'react';
 
 import { loadTile } from '../query/loadTile';
 import { MenuButton, type MenuItem } from '../shell/MenuButton';
@@ -63,7 +63,8 @@ function pickerItems(
 }
 
 /** A pill's role tint: a measure's orange, or a dimension's blue (the prototype's .pill.measure / .pill.dim). */
-const pillClass = (well: WellName) => (well === 'measures' ? 'pill pill--measure' : 'pill pill--dimension');
+const pillClass = (well: WellName) =>
+  well === 'measures' ? 'pill pill--measure' : 'pill pill--dimension';
 
 /**
  * The grains a time field's pill offers (AC-216), coarsest last: Cube's own
@@ -133,6 +134,14 @@ export interface WellsProps {
    * Data tab has "Sort by" and "Top N (+ Other)" side by side (T257).
    */
   readonly sort?: ReactNode;
+  /**
+   * A box plot's "Each point is" (T400, AC-314): the field whose every value
+   * within a category is one point. Given for a box plot alone.
+   */
+  readonly eachPointIs?: {
+    readonly member: string | undefined;
+    readonly onChange: (member: string | undefined) => void;
+  };
 }
 
 export function Wells({
@@ -147,6 +156,7 @@ export function Wells({
   onTopN,
   titles = {},
   sort,
+  eachPointIs,
 }: WellsProps) {
   const ids = useId();
   /**
@@ -159,6 +169,18 @@ export function Wells({
     name;
   const filters = spec.filters ?? [];
   const filterable = available.filter((member) => member.kind === 'dimension');
+  // Any dimension but the category the boxes are drawn by (T400).
+  const pointWell =
+    eachPointIs === undefined ? null : (
+      <EachPointIs
+        member={eachPointIs.member}
+        onChange={eachPointIs.onChange}
+        title={eachPointIs.member === undefined ? '' : titleOf(eachPointIs.member)}
+        candidates={available.filter(
+          (member) => member.kind === 'dimension' && member.name !== spec.dimensions[0],
+        )}
+      />
+    );
 
   return (
     <div className="wells">
@@ -168,7 +190,7 @@ export function Wells({
         const refusal = rejectionReason(well, dragging);
         const legal = dragging !== null && refusal === null;
 
-        return (
+        const section = (
           // The prototype's .field: a 12/600 label over its dashed .well
           // (T257, editor.js 222).
           <section key={well.name} className="well-field">
@@ -198,7 +220,9 @@ export function Wells({
                   const title = titleOf(member);
                   const grain = spec.granularities?.[member] ?? QUERY_GRANULARITY;
                   // A grain saved finer than the pill offers is still shown as it is.
-                  const grains = PILL_GRAINS.includes(grain) ? PILL_GRAINS : [grain, ...PILL_GRAINS];
+                  const grains = PILL_GRAINS.includes(grain)
+                    ? PILL_GRAINS
+                    : [grain, ...PILL_GRAINS];
                   return (
                     <li
                       key={member}
@@ -265,6 +289,15 @@ export function Wells({
             ) : null}
           </section>
         );
+        // A box plot's "Each point is" sits below the value (direction.md §7, Box plot).
+        return well.name === 'measures' && pointWell !== null ? (
+          <Fragment key={well.name}>
+            {section}
+            {pointWell}
+          </Fragment>
+        ) : (
+          section
+        );
       })}
 
       {/* The chart's own filters (AC-216), the prototype's Filters well. */}
@@ -309,6 +342,62 @@ export function Wells({
         <TopN id={`${ids}-top`} topN={topN} onTopN={onTopN} />
       </div>
     </div>
+  );
+}
+
+/**
+ * A box plot's "Each point is" (T400, AC-314), a well that holds one field: a
+ * dimension other than the category, whose every value within a category is
+ * one point, Cube computing the measure once for it. Empty, each row is one.
+ */
+function EachPointIs({
+  member,
+  title,
+  candidates,
+  onChange,
+}: {
+  member: string | undefined;
+  title: string;
+  candidates: readonly Member[];
+  onChange: (member: string | undefined) => void;
+}) {
+  const label = 'Each point is';
+  return (
+    <section className="well-field">
+      <h3 id="well-eachPointIs-label" className="well-field__label">
+        {label}
+      </h3>
+      <div className="well" data-testid="well-eachPointIs">
+        {member === undefined ? (
+          <>
+            <span className="well__empty">Each row</span>
+            <MenuButton
+              label={`Choose what ${label.toLowerCase()}`}
+              className="addbtn"
+              align="start"
+              testId="add-eachPointIs"
+              items={pickerItems(candidates, (picked) => onChange(picked.name))}
+            >
+              + dimension
+            </MenuButton>
+          </>
+        ) : (
+          <ul aria-labelledby="well-eachPointIs-label" className="well__pills">
+            <li className={pillClass('dimensions')} data-testid={`in-eachPointIs-${member}`}>
+              <span className="pill__title">{title}</span>
+              <button
+                type="button"
+                className="pill__remove"
+                onClick={() => onChange(undefined)}
+                aria-label={`Remove ${title} from ${label}`}
+              >
+                ×
+              </button>
+            </li>
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }
 

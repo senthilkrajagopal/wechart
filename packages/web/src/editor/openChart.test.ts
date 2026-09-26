@@ -409,6 +409,43 @@ describe('writing the editor’s state back onto the chart', () => {
 
     expect('chartType' in written.chart).toBe(false);
   });
+
+  it('writes a box plot’s "Each point is", and none once it is cleared (T400, AC-314)', () => {
+    const boxplot = chartDocumentOf({
+      title: 'Amounts by status',
+      spec: {
+        ...emptySpec('orders'),
+        measures: ['orders.total_amount'],
+        dimensions: ['orders.status'],
+        chartType: 'boxplot',
+        eachPointIs: 'customers.name',
+      },
+    });
+    const opened = editorStateOf(boxplot);
+    // Opened, it is in the editor's spec, and written back as it was.
+    expect(opened.spec.eachPointIs).toBe('customers.name');
+    expect(chartDocumentWith(boxplot, opened)).toEqual(boxplot);
+
+    const changed = chartDocumentWith(boxplot, {
+      ...opened,
+      spec: { ...opened.spec, eachPointIs: 'orders.id' },
+    });
+    expect(changed.chart.wells.eachPointIs).toBe('orders.id');
+
+    // Made another type, it isn't written: a bar has no such well to show or clear it.
+    const bar = chartDocumentWith(boxplot, { ...opened, chartType: { manual: 'bar' } });
+    expect('eachPointIs' in bar.chart.wells).toBe(false);
+
+    // Cleared, it isn't brought back from the stored chart.
+    const { eachPointIs: _cleared, ...rest } = opened.spec;
+    void _cleared;
+    const written = chartDocumentWith(boxplot, { ...opened, spec: rest });
+    expect(written.chart.wells).toEqual({
+      measures: ['orders.total_amount'],
+      dimensions: ['orders.status'],
+      timeDimensions: [],
+    });
+  });
 });
 
 /**

@@ -341,3 +341,87 @@ describe('the wells’ pills, Filters and Top N (AC-216)', () => {
     expect(onTopN).toHaveBeenLastCalledWith(undefined);
   });
 });
+
+/**
+ * T400 (AC-314): WHEN the user sets a box plot's "Each point is" field (for
+ * example Order ID), THE SYSTEM SHALL compute the measure once per value of
+ * that field within each category, and draw the boxes from those values.
+ * The field itself: offered for a box plot, one dimension, set and cleared.
+ */
+describe('a box plot’s "Each point is" (AC-314)', () => {
+  const dimensionNamed = (name: string, title: string): Member => ({
+    name,
+    title,
+    shortTitle: title,
+    kind: 'dimension',
+    type: 'string',
+    cube: name.split('.')[0]!,
+  });
+  const status = dimensionNamed('orders.status', 'Orders Status');
+  const orderId = dimensionNamed('orders.id', 'Orders Id');
+  const customer = dimensionNamed('customers.name', 'Customers Name');
+  const boxSpec = {
+    ...emptySpec('orders'),
+    measures: ['orders.count'],
+    dimensions: ['orders.status'],
+    chartType: 'boxplot' as const,
+  };
+  const boxWells = (
+    eachPointIs:
+      { member: string | undefined; onChange: (member: string | undefined) => void } | undefined,
+  ) =>
+    render(
+      <Wells
+        spec={
+          eachPointIs?.member === undefined
+            ? boxSpec
+            : { ...boxSpec, eachPointIs: eachPointIs.member }
+        }
+        available={[measure, status, orderId, customer, timeDimension]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        {...(eachPointIs === undefined ? {} : { eachPointIs })}
+      />,
+    );
+
+  it('is not there for a chart that isn’t a box plot', () => {
+    boxWells(undefined);
+    expect(screen.queryByTestId('well-eachPointIs')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Each point is' })).toBeNull();
+  });
+
+  it('offers the dimensions not already the category, and sets the one picked', async () => {
+    const onChange = vi.fn();
+    boxWells({ member: undefined, onChange });
+    expect(screen.getByRole('heading', { name: 'Each point is' })).toBeTruthy();
+    // Unset, each row is a point, and the well says so.
+    expect(screen.getByTestId('well-eachPointIs').textContent).toContain('Each row');
+
+    await userEvent.click(screen.getByTestId('add-eachPointIs'));
+    const offered = screen.getAllByRole('menuitem').map((item) => item.getAttribute('data-testid'));
+    expect(offered).toEqual(['pick-orders.id', 'pick-customers.name']);
+    await userEvent.click(screen.getByTestId('pick-customers.name'));
+    expect(onChange).toHaveBeenCalledWith('customers.name');
+  });
+
+  it('sits below the value, before Dimensions (direction.md, Box plot)', () => {
+    boxWells({ member: undefined, onChange: vi.fn() });
+    const headings = screen.getAllByRole('heading').map((heading) => heading.textContent);
+    expect(headings.slice(0, 3)).toEqual(['Metrics', 'Each point is', 'Dimensions']);
+  });
+
+  it('holds one field, shown by its title, and clears to each row a point', async () => {
+    const onChange = vi.fn();
+    boxWells({ member: 'orders.id', onChange });
+    const well = screen.getByTestId('well-eachPointIs');
+    expect(screen.getByTestId('in-eachPointIs-orders.id').textContent).toContain('Orders Id');
+    // One field: no "+" while it holds one.
+    expect(screen.queryByTestId('add-eachPointIs')).toBeNull();
+    expect(well.textContent).not.toContain('Each row');
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Remove Orders Id from Each point is' }),
+    );
+    expect(onChange).toHaveBeenCalledWith(undefined);
+  });
+});

@@ -5587,10 +5587,20 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - a spurious "Colour carries 8 categories" warning (AC-218): a box plot colours by nothing;
       - Legend and Data labels offered for a box plot, which has neither.
     - Left as they are: sorting by value orders boxes by their most extreme value, and a category on the "many" side of a join repeats values (AC-314's field is the remedy).
-- [ ] T400 (AC-314) Compute a box plot's values once per "Each point is"
+- [x] T400 (AC-314) Compute a box plot's values once per "Each point is"
   - Files: `packages/core/src/compile.ts`, `packages/web/src/editor/wells/*`, `packages/core/src/stats/boxplot.test.ts`
   - Failing test: `boxplot.test.ts` and `e2e/boxplot.spec.ts`: with "Each point is" set to Order ID, the query groups by category and order, and each box holds one value per order (AC-314).
   - Depends on: T399
+  - **Done 2026-09-25.** The work landed in other files than planned:
+    - `packages/core/src/{chart-spec,chart-document}.ts` (+ tests): `ChartSpec.eachPointIs` and the chart's `wells.eachPointIs`, refused unless a member name. With it set, `toCubeQuery` asks for the box plot grouped by the category and that field, not ungrouped.
+    - `packages/web/src/editor/{Wells,ChartEditor,openChart}.tsx/.ts` (+ tests) and `shell/styles.ts`: the "Each point is" well sits below Metrics, for a box plot alone. It holds one dimension other than the category, reads "Each row" while empty, and is saved only on a box plot.
+    - `e2e/boxplot.spec.ts`: Order ID through the well gives a query grouped by order and status, and 80 points, one per order, in the editor and on the saved chart's page. A stored chart whose "Each point is" is Customers Name (a joined cube's member, which the editor's field list doesn't offer) draws four points, one per customer, with their totals $18,550–$19,900.
+    - The cold review found one real bug: every dimension in the well joined the grouping, so a second dimension split the points further. Now only the category and the field are grouped.
+    - The review's lesser findings, also fixed:
+      - the well's placement (direction.md: below the value);
+      - an e2e check that the well is absent before the chart is a box plot;
+      - no hidden "Each point is" written on other types;
+      - a wrong comment.
 - [ ] T401 (AC-315) Say "computed from _n_ of _N_ rows" when a box plot's data passes Cube's row limit
   - Files: `packages/web/src/tiles/ChartTile.tsx`, `packages/web/src/query/*` (`total: true` for box plots), `packages/web/src/tiles/RowLimitWarning.test.tsx`
   - Failing test: `RowLimitWarning.test.tsx`: a box plot whose query's total exceeds the rows returned shows "Computed from _n_ of _N_ rows" with the warning icon, and none when they're equal (AC-315; rule 89).

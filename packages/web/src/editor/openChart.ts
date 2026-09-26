@@ -211,15 +211,21 @@ async function reasonFrom(response: Response): Promise<string | undefined> {
 export function chartDocumentWith(loaded: ChartDocument, state: EditorState): ChartDocument {
   // Every field of the loaded chart first, known to this build or not — which
   // holds because `loadChart` keeps the unknown ones on what it loads.
+  const wells: Record<string, unknown> = {
+    ...loaded.chart.wells,
+    measures: [...state.spec.measures],
+    dimensions: [...state.spec.dimensions],
+    timeDimensions: [...state.spec.timeDimensions],
+  };
+  // A box plot's "Each point is" (T400): as the editor has it, and none once
+  // cleared — or on another type, which has no well to show or clear it in.
+  if (state.spec.eachPointIs === undefined || state.chartType.manual !== 'boxplot') {
+    delete wells['eachPointIs'];
+  } else wells['eachPointIs'] = state.spec.eachPointIs;
   const chart: Record<string, unknown> = {
     ...loaded.chart,
     source: { ...loaded.chart.source, cube: state.spec.cube },
-    wells: {
-      ...loaded.chart.wells,
-      measures: [...state.spec.measures],
-      dimensions: [...state.spec.dimensions],
-      timeDimensions: [...state.spec.timeDimensions],
-    },
+    wells,
     options: state.options,
   };
 

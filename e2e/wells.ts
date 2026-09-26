@@ -10,7 +10,7 @@ import type { Locator, Page } from '@playwright/test';
  */
 export function wellPicker(
   scope: Page | Locator,
-  well: 'measures' | 'dimensions' | 'timeDimensions' | 'filters',
+  well: 'measures' | 'dimensions' | 'timeDimensions' | 'filters' | 'eachPointIs',
 ) {
   return {
     async selectOption(member: string): Promise<void> {

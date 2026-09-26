@@ -1069,7 +1069,7 @@ Traces to: §P2.6 H, `[R8, R16, R19, R21, R22]`, `[backlog]` §5. Rewritten phas
       Fails when: the map is offered for a dimension marked "not a country code", withheld from one marked as a country code, or withheld from an unmarked dimension whose values are all ISO-3 codes.
 - [x] AC-306 WHEN the user draws a box plot of a numeric value by a category, THE SYSTEM SHALL draw one box per category with its median and quartiles, computed by linear interpolation (Hyndman–Fan type 7). Its whiskers follow a chart option: by default Tukey's, ending at the most extreme value within 1.5 × IQR of the box, with values beyond drawn as dots; or else the minimum and maximum (`[R8, R19]`).
       Fails when: a box's median or quartiles differ from type-7 quartiles of its values, or the whiskers don't follow the chosen option.
-- [ ] AC-314 WHEN the user sets a box plot's "Each point is" field (for example Order ID), THE SYSTEM SHALL compute the measure once per value of that field within each category, and draw the boxes from those values (`[R22]`).
+- [x] AC-314 WHEN the user sets a box plot's "Each point is" field (for example Order ID), THE SYSTEM SHALL compute the measure once per value of that field within each category, and draw the boxes from those values (`[R22]`).
       Fails when: with "Each point is" set to Order ID, a box's values are not one per order.
 - [ ] AC-315 IF a box plot's data has more rows than Cube returns in one query, THEN THE SYSTEM SHALL draw the boxes from the rows returned and show "computed from _n_ of _N_ rows" on the tile (`[R21]`).
       Fails when: a box plot drawn from fewer rows than the data holds shows no such warning, or its counts differ from the rows used and the query's total.

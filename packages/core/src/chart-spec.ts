@@ -23,6 +23,12 @@ export interface ChartSpec {
   readonly granularities?: Readonly<Record<string, TimeGranularity>>;
   /** The chart's own filters, from its Filters well (AC-216). */
   readonly filters?: readonly ChartFilter[];
+  /**
+   * A box plot's "Each point is" (T400, AC-314): the dimension whose every
+   * value within a category is one point, the measure computed once for it.
+   * Unset, each row is a point.
+   */
+  readonly eachPointIs?: string;
 }
 
 /**
@@ -120,10 +126,17 @@ export function toCubeQuery(spec: ChartSpec): Record<string, unknown> {
   // the limit the boxes would be drawn from one tail (research/box-plot.md).
   if (spec.chartType === 'boxplot') {
     const filters = cubeFiltersOf(spec.filters);
+    // "Each point is" (T400, AC-314): grouped by the category — the first
+    // dimension, which the boxes are drawn by (compile.ts) — and that field
+    // alone, so Cube computes the measure once per value of it within each
+    // category. Any other dimension in the well would split the points further.
+    const grain = spec.eachPointIs;
+    const category = spec.dimensions.slice(0, 1);
     return {
       ...query,
+      ...(grain === undefined ? {} : { dimensions: [...new Set([...category, grain])].sort() }),
       ...(filters.length > 0 ? { filters } : {}),
-      ungrouped: true,
+      ...(grain === undefined ? { ungrouped: true } : {}),
       order: [],
       limit: BOX_PLOT_ROW_LIMIT,
     };

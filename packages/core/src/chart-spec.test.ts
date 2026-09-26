@@ -131,6 +131,50 @@ describe('a box plot’s query', () => {
     });
     expect(BOX_PLOT_ROW_LIMIT).toBe(50_000);
   });
+
+  /**
+   * T400 (AC-314): WHEN the user sets a box plot's "Each point is" field (for
+   * example Order ID), THE SYSTEM SHALL compute the measure once per value of
+   * that field within each category, and draw the boxes from those values.
+   */
+  it('asks, with "Each point is" set, for the measure once per value of it within each category', () => {
+    let spec = addToWell(emptySpec('orders'), 'measures', 'orders.total_amount');
+    spec = addToWell(spec, 'dimensions', 'orders.status');
+    spec = { ...spec, chartType: 'boxplot', eachPointIs: 'customers.name' };
+
+    // Grouped, not ungrouped: Cube aggregates the measure per (category, point).
+    expect(toCubeQuery(spec)).toEqual({
+      measures: ['orders.total_amount'],
+      dimensions: ['customers.name', 'orders.status'],
+      order: [],
+      limit: BOX_PLOT_ROW_LIMIT,
+    });
+  });
+
+  it('groups by the category and "Each point is" alone, whatever else the wells hold', () => {
+    // A second dimension and a time field, kept when a bar became a box plot
+    // (T400's review): grouped by them too, the measure would be once per
+    // (point, order, day) — not once per point.
+    let spec = addToWell(emptySpec('orders'), 'measures', 'orders.total_amount');
+    spec = addToWell(spec, 'dimensions', 'orders.status');
+    spec = addToWell(spec, 'dimensions', 'orders.id');
+    spec = addToWell(spec, 'timeDimensions', 'orders.ordered_at');
+    spec = { ...spec, chartType: 'boxplot', eachPointIs: 'customers.name' };
+
+    expect(toCubeQuery(spec)).toEqual({
+      measures: ['orders.total_amount'],
+      dimensions: ['customers.name', 'orders.status'],
+      order: [],
+      limit: BOX_PLOT_ROW_LIMIT,
+    });
+  });
+
+  it('keeps "Each point is" to the box plot', () => {
+    let spec = addToWell(emptySpec('orders'), 'measures', 'orders.total_amount');
+    spec = addToWell(spec, 'dimensions', 'orders.status');
+    spec = { ...spec, chartType: 'bar', eachPointIs: 'customers.name' };
+    expect(toCubeQuery(spec)['dimensions']).toEqual(['orders.status']);
+  });
 });
 
 /**

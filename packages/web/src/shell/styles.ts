@@ -4186,6 +4186,8 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
    text-secondary holds (T257's review, AC-005). */
 .well[data-drop='legal'] .addbtn { color: var(--wc-text-secondary); }
 .well .menu-button__item .field-row__icon { flex: none; }
+/* An empty "Each point is" (T400): each row is a point, said in the .addbtn's ink. */
+.well__empty { padding: 0 6px; font-size: 12px; line-height: 16px; color: var(--wc-text-muted); }
 .wells__options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: end; }
 
 /* The chart editor opened over the dashboard from a tile (T032). Laid out

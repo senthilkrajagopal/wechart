@@ -38,8 +38,11 @@ test('a box plot of order amounts by status draws a box per status from the rows
       request.url().endsWith('/api/load') &&
       (request.postDataJSON() as { query?: { ungrouped?: boolean } }).query?.ungrouped === true,
   );
+  // "Each point is" is a box plot's alone (T400's review): not there before.
+  await expect(page.getByTestId('well-eachPointIs')).toHaveCount(0);
   await chooseChartType(page, 'boxplot');
   await expectChartType(page, 'boxplot');
+  await expect(page.getByTestId('well-eachPointIs')).toContainText('Each row');
   const query = (await asked).postDataJSON() as { query: Record<string, unknown> };
   // Unordered, so past the limit the rows are not one tail (T399's review).
   expect(query.query).toEqual({
@@ -58,8 +61,12 @@ test('a box plot of order amounts by status draws a box per status from the rows
   await expect(chart.locator('path[d*="Z"]').first()).toBeVisible();
 });
 
-/** A saved box plot of order amounts by status. */
-async function boxPlot(request: APIRequestContext, filters: unknown[]): Promise<string> {
+/** A saved box plot of order amounts by status, each point a row or `eachPointIs`. */
+async function boxPlot(
+  request: APIRequestContext,
+  filters: unknown[],
+  eachPointIs?: string,
+): Promise<string> {
   const created = await request.post(`${API}/api/documents`, {
     data: { kind: 'chart', title: `Box plot ${String(Date.now())}`, folderId: 'root' },
   });
@@ -80,6 +87,7 @@ async function boxPlot(request: APIRequestContext, filters: unknown[]): Promise<
             measures: ['orders.total_amount'],
             dimensions: ['orders.status'],
             timeDimensions: [],
+            ...(eachPointIs === undefined ? {} : { eachPointIs }),
           },
           chartType: 'boxplot',
           filters,
@@ -137,4 +145,90 @@ test('the whisker option decides whether a far value is a dot or the whisker’s
   // And back: the dot returns.
   await whiskers.getByRole('radio', { name: /1\.5 × IQR/ }).click();
   await expect(dotsIn(chart)).toHaveCount(1);
+});
+
+/**
+ * T400 / AC-314: WHEN the user sets a box plot's "Each point is" field (for
+ * example Order ID), THE SYSTEM SHALL compute the measure once per value of
+ * that field within each category, and draw the boxes from those values.
+ * `Fails when: with "Each point is" set to Order ID, a box's values are not one per order.`
+ *
+ * The seed has 80 completed orders, spread over four customers (customer
+ * 1 + id mod 4). Each point an order: 80 points. Each point a customer: 4, the
+ * sums of each one's completed orders — $18,550, $19,000, $19,450 and $19,900.
+ */
+test('"Each point is" computes the measure once per its value within each category', async ({
+  page,
+  request,
+}) => {
+  const id = await boxPlot(request, [
+    { member: 'orders.status', operator: 'equals', values: ['completed'] },
+  ]);
+  await page.goto(`/explore/charts/${id}/edit`);
+  await expectChartType(page, 'boxplot');
+  const result = page.getByTestId('editor-result');
+  const chart = result.locator('svg').first();
+  const box = chart.locator('path[fill="#fff"]').first();
+  const asked = (dimensions: string[]) =>
+    page.waitForRequest((request) => {
+      if (!request.url().endsWith('/api/load')) return false;
+      const { query } = request.postDataJSON() as { query?: { dimensions?: string[] } };
+      return JSON.stringify(query?.dimensions) === JSON.stringify(dimensions);
+    });
+
+  // Unset, each row is a point, ungrouped: the seed's rows are one per order,
+  // so the Order ID leg draws the same 80 — its grouping is the query's to show.
+  const well = page.getByTestId('well-eachPointIs');
+  await expect(well).toContainText('Each row');
+  await box.hover();
+  await expect(result).toContainText(/n: 80\s*Minimum: \$72\.50?/);
+
+  // Each point an order: Cube groups by status and order, one value per order.
+  const byOrder = asked(['orders.id', 'orders.status']);
+  await wellPicker(page, 'eachPointIs').selectOption('orders.id');
+  expect(((await byOrder).postDataJSON() as { query: Record<string, unknown> }).query).toEqual({
+    measures: ['orders.total_amount'],
+    dimensions: ['orders.id', 'orders.status'],
+    filters: [{ member: 'orders.status', operator: 'equals', values: ['completed'] }],
+    order: [],
+    limit: 50_000,
+  });
+  await expect(well.getByTestId('in-eachPointIs-orders.id')).toBeVisible();
+  await box.hover();
+  await expect(result).toContainText(/n: 80\s*Minimum: \$72\.50?\s*Q1/);
+
+  // Saved, the chart keeps it, and its own page asks and draws the same.
+  const onItsPage = asked(['orders.id', 'orders.status']);
+  await page.getByTestId('editor-bar').getByRole('button', { name: 'Save chart' }).click();
+  await expect(page).toHaveURL(new RegExp(`/explore/charts/${id}$`));
+  await onItsPage;
+  const stored = (await (await request.get(`${API}/api/documents/chart/${id}`)).json()) as {
+    body: { chart: { wells: Record<string, unknown> } };
+  };
+  expect(stored.body.chart.wells['eachPointIs']).toBe('orders.id');
+  const tile = page.locator('.chart-page__tile');
+  await tile.locator('svg path[fill="#fff"]').first().hover();
+  await expect(tile).toContainText(/n: 80\s*Minimum: \$72\.50?/);
+
+  // Each point a customer — a member of the cube the chart joins, as a stored
+  // chart may name (AC-220): the measure once per customer, four sums.
+  const byCustomer = await boxPlot(
+    request,
+    [{ member: 'orders.status', operator: 'equals', values: ['completed'] }],
+    'customers.name',
+  );
+  const perCustomer = asked(['customers.name', 'orders.status']);
+  await page.goto(`/explore/charts/${byCustomer}`);
+  await perCustomer;
+  await tile.locator('svg path[fill="#fff"]').first().hover();
+  await expect(tile).toContainText(
+    /n: 4\s*Minimum: \$18,550(\.00)?\s*Q1: \$18,887\.50?\s*Median: \$19,225(\.00)?\s*Q3: \$19,562\.50?\s*Maximum: \$19,900(\.00)?/,
+  );
+  // Its editor names it by its title, and can put it back to each row.
+  await page.goto(`/explore/charts/${byCustomer}/edit`);
+  await expect(well.getByTestId('in-eachPointIs-customers.name')).toContainText('Customers Name');
+  await well.getByRole('button', { name: 'Remove Customers Name from Each point is' }).click();
+  await expect(well).toContainText('Each row');
+  await box.hover();
+  await expect(result).toContainText(/n: 80\s*Minimum: \$72\.50?/);
 });

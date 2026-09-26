@@ -273,8 +273,12 @@ export function ChartEditor({
         ...spec.dimensions,
         ...spec.timeDimensions,
         ...(spec.filters ?? []).map((filter) => filter.member),
+        // A box plot's "Each point is" (T400), while it is a box plot.
+        ...(chartTypeState.manual === 'boxplot' && spec.eachPointIs !== undefined
+          ? [spec.eachPointIs]
+          : []),
       ]),
-    [spec],
+    [spec, chartTypeState.manual],
   );
 
   /**
@@ -772,6 +776,21 @@ export function ChartEditor({
                     return rest;
                   })
                 }
+                // A box plot's "Each point is" (T400, AC-314), for a box plot alone.
+                {...(shownType === 'boxplot'
+                  ? {
+                      eachPointIs: {
+                        member: spec.eachPointIs,
+                        onChange: (member: string | undefined) =>
+                          setSpec((current) => {
+                            if (member !== undefined) return { ...current, eachPointIs: member };
+                            const { eachPointIs: _gone, ...rest } = current;
+                            void _gone;
+                            return rest;
+                          }),
+                      },
+                    }
+                  : {})}
                 topN={topN}
                 onTopN={(n) =>
                   change((current) => {

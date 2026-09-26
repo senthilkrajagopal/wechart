@@ -63,6 +63,8 @@ export interface ChartDefinition {
     readonly measures: readonly string[];
     readonly dimensions: readonly string[];
     readonly timeDimensions: readonly string[];
+    /** A box plot's "Each point is" (T400, AC-314). */
+    readonly eachPointIs?: string;
   };
   /** Absent means the recommender's pick is followed. */
   readonly chartType?: ChartType;
@@ -191,6 +193,9 @@ export function readChartDocument(body: unknown): ChartDocument {
         measures: memberList(wells['measures'] ?? [], 'measures'),
         dimensions: memberList(wells['dimensions'] ?? [], 'dimensions'),
         timeDimensions: memberList(wells['timeDimensions'] ?? [], 'timeDimensions'),
+        ...(wells['eachPointIs'] === undefined
+          ? {}
+          : { eachPointIs: eachPointIsOf(wells['eachPointIs']) }),
       },
       ...(typeof definition['chartType'] === 'string'
         ? { chartType: definition['chartType'] as ChartType }
@@ -207,6 +212,14 @@ export function readChartDocument(body: unknown): ChartDocument {
       ...(definition['filters'] === undefined ? {} : { filters: filtersOf(definition['filters']) }),
     },
   };
+}
+
+/** A box plot's "Each point is": one member's name (T400), or a refusal. */
+function eachPointIsOf(value: unknown): string {
+  if (typeof value !== 'string' || value === '') {
+    throw new ChartDocumentError('The box plot’s "Each point is" is not a member name.');
+  }
+  return value;
 }
 
 /** A chart's chosen grains, each one Cube has (AC-216), or a refusal. */
@@ -270,6 +283,7 @@ export function chartDocumentOf(input: {
         measures: [...spec.measures],
         dimensions: [...spec.dimensions],
         timeDimensions: [...spec.timeDimensions],
+        ...(spec.eachPointIs === undefined ? {} : { eachPointIs: spec.eachPointIs }),
       },
       ...(spec.chartType === undefined ? {} : { chartType: spec.chartType }),
       ...(input.encoding === undefined ? {} : { encoding: input.encoding }),
@@ -292,5 +306,6 @@ export function toChartSpec(document: ChartDocument): ChartSpec {
     ...(chart.chartType === undefined ? {} : { chartType: chart.chartType }),
     ...(chart.granularities === undefined ? {} : { granularities: { ...chart.granularities } }),
     ...(chart.filters === undefined ? {} : { filters: [...chart.filters] }),
+    ...(chart.wells.eachPointIs === undefined ? {} : { eachPointIs: chart.wells.eachPointIs }),
   };
 }

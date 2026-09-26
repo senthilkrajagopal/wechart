@@ -138,6 +138,29 @@ describe('the document and the authoring shape agree', () => {
     expect(roundTrip(document)).toEqual(document);
   });
 
+  /** T400 / AC-314: a box plot's "Each point is" is saved with its wells. */
+  it('round-trips a box plot’s "Each point is", through storage too', () => {
+    const spec = {
+      ...addToWell(
+        addToWell(emptySpec('orders'), 'measures', 'orders.total_amount'),
+        'dimensions',
+        'orders.status',
+      ),
+      chartType: 'boxplot' as const,
+      eachPointIs: 'customers.name',
+    };
+    const document = chartDocumentOf({ title: 'x', spec });
+
+    expect(document.chart.wells.eachPointIs).toBe('customers.name');
+    expect(toChartSpec(document)).toEqual(spec);
+    expect(roundTrip(document)).toEqual(document);
+    const odd = {
+      ...full,
+      chart: { ...full.chart, wells: { ...full.chart.wells, eachPointIs: 7 } },
+    };
+    expect(() => readChartDocument(odd)).toThrow(/Each point is/);
+  });
+
   it('refuses a grain Cube does not have, and a filter that is not one', () => {
     const grain = {
       ...full,
