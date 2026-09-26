@@ -15,6 +15,11 @@ wechart is a browser BI tool on the Cube semantic layer, built to replace Spotfi
 - wechart is its client, and owns workflow, folders, permissions, dashboards and the UI.
 - Criteria the decisions overturn are reworded in place, or retired with their text kept and struck through. Their IDs are kept, never reused.
 
+**Amended again 2026-09-26** by the final integration plan (`docs/inputs/2026-09-26-integration-plan-decisions.md`, cited `[IP n]`; its shared doc, as a snapshot, `[plan]`) and round R28.
+- wechart is the system of record. xcube keeps a derived copy of what is published, and compiles it as **modules**, checking only the modules a change affects.
+- Every folder, the shared root included, publishes under `<folderId>__<shortName>`. A published item keeps its binding until it is next published.
+- The plan's slices order the work. Criteria are reworded in place in the same way, and three are added: AC-330 to AC-332.
+
 It also brings back everything phase 1 moved to its backlog. Its features are F25–F36, after F24. The phase-1 criteria it changes are rewritten in place, marked "phase 2", and unchecked until tests show them again. It traces to [docs/requirements.md](./requirements.md) Part 2.
 
 Acceptance criteria are global and sequential. A criterion is checked only when a passing test demonstrates it.
@@ -49,10 +54,13 @@ Acceptance criteria are global and sequential. A criterion is checked only when 
 | **Target folder**            | The shared folder a workspace item is meant for. Its path resolves the item's cubes after the workspace's own.                                                                    |
 | **Proposal**                 | A request to put a workspace item into its target folder. It lands only when approved by its author, a read-write member of the folder, or a Super-Admin.                      |
 | **Resolution**               | Finding what a short name inside an item means. The search runs when the item is published, nearest first from the item's own folder up to the root, and the full prefixed name is stored. xcube does it. ~~Cubes from the folder up to the root, nearest first; data sources the same way, then in the folder's descendants.~~ (Amended 2026-09-25.) |
-| **xcube**                    | The Cube-side package in the user's Cube fork (formerly `cube-introspection`). It owns the published model, Cube's validation and access policies, the connection runtime, overlays and name resolution, and knows the folder tree and each folder's allowed groups. |
-| **Prefixed name**            | The unique name a cube, view or data source is published under: its short name, prefixed by its folder's id. The shared root adds no prefix. |
-| **Allowed groups**           | The groups whose members may query a folder's cubes: those granted on the folder, an ancestor or a descendant, plus the Super-Admin group. xcube turns them into access policies. |
-| **Whole-model check**        | Compiling the entire published model with a change applied. The change is refused if anything, anywhere, breaks. |
+| **xcube**                    | The Cube-side package in the user's Cube fork (formerly `cube-introspection`). ~~It owns the published model, Cube's validation and access policies, the connection runtime, overlays and name resolution~~ It keeps a derived copy of what wechart publishes, in its own `xcube` schema, and runs names, modules, validation, the folder check, overlays and connections for Cube. It knows the folder tree and each folder's allowed groups (amended 2026-09-26, `[IP 1, IP 2]`). |
+| **Prefixed name**            | The unique name a cube, view or data source is published under: `<folderId>__<shortName>`, the folder id written as `f` plus its letters and digits. ~~The shared root adds no prefix.~~ The shared root is prefixed like any folder (amended 2026-09-26, `[IP 3, R28]`). |
+| **Allowed groups**           | The groups whose members may query a folder's cubes: those granted on the folder, an ancestor or a descendant, plus the Super-Admin group. ~~xcube turns them into access policies.~~ xcube checks a query's folders against them for each request (amended 2026-09-26, `[IP 6, R28]`). |
+| **Module**                   | A group of cubes and views that reference each other, which xcube compiles and versions on its own. A change recompiles only its modules. |
+| **Changeset**                | The items a publish upserts or deletes, sent to xcube together with the revision they were based on. |
+| **Revision**                 | xcube's number for the published state. Each publish that lands makes a new one. |
+| **Whole-model check**        | ~~Compiling the entire published model with a change applied. The change is refused if anything, anywhere, breaks.~~ Now the **publish check**: compiling each module a change affects, with the change applied, in a throwaway compile. The change is refused if any of them breaks (amended 2026-09-26, `[IP 5]`). |
 | **Overlay**                  | Unpublished workspace or proposal content that xcube holds for a short time, so it can be queried before it lands. |
 | **Service credential**       | The credential wechart uses for calls it makes on its own behalf (introspection, builds and jobs, system partitions, health, xcube's admin calls), separate from users' tokens. |
 | **Audit trail**              | wechart's record of sign-ins, permission changes, proposals, approvals, rejections, restores and data-source changes. Super-Admins can browse it.                                |
@@ -84,10 +92,11 @@ Traces to: `[R5]`, `[R4]`, `[research/cube/data-apis.md]`, `[research/cube/acces
 
 - [x] AC-007 WHEN the browser needs data or metadata, THE SYSTEM SHALL obtain it through the wechart API, and the browser SHALL make no request to the Cube API host.
       Fails when: a network request from the browser targets the Cube API host, or any response to the browser contains the Cube API secret.
-- [ ] AC-008 WHEN wechart queries Cube, THE SYSTEM SHALL attach the configured security context to every request. WHILE security is enabled, every query made for a signed-in user SHALL carry that user's AD groups and nothing else of theirs, so the model's access policies, and the policies xcube generates from folders, filter its rows and members by group. What wechart asks Cube or xcube for on its own behalf uses the service credential, never a user's token (phase 2: `[R14, R25; AD 1, AD 4, AD 12]`; ~~what wechart asks Cube for itself (compiling a model, builds, schedules, a data source's catalog, health) carries the configured context alone~~, superseded 2026-09-25).
-      Fails when: a request reaches Cube without the configured context; with security enabled, a query made for a signed-in user carries no groups, groups other than the user's, or any other attribute of theirs; a group's access policy doesn't apply to its members' queries; or an own-behalf call carries a user's token.
+- [ ] AC-008 WHEN wechart queries Cube, THE SYSTEM SHALL attach the configured security context to every request. WHILE security is enabled, every query made for a signed-in user SHALL carry ~~that user's AD groups~~ that user's AD groups that some access policy names (a folder's allowed groups or a model's own policies), and nothing else of theirs, so the model's access policies, and xcube's folder check, filter its rows and members by group. What wechart asks Cube or xcube for on its own behalf uses the service credential, never a user's token (phase 2: `[R14, R25; AD 1, AD 4, AD 12; IP 6, IP 8, R28]`; ~~what wechart asks Cube for itself (compiling a model, builds, schedules, a data source's catalog, health) carries the configured context alone~~, superseded 2026-09-25; the groups trimmed to those a policy names, 2026-09-26).
+      Fails when: a request reaches Cube without the configured context; with security enabled, a query made for a signed-in user carries no groups, groups other than the user's, a group of theirs that no policy names, or any other attribute of theirs; leaves out a group of theirs that some policy names; a group's access policy doesn't apply to its members' queries; or an own-behalf call carries a user's token.
 - [x] AC-009 WHEN Cube reports a new `schemaVersion`, THE SYSTEM SHALL serve metadata from the new model within 60 seconds without a restart.
       Fails when: 60 seconds after the change, a metadata request still returns members from the previous model.
+      Note (2026-09-26, `[IP 5, R28]`): from slice 3 the new model is a new xcube revision, and the metadata comes from xcube's merged field list. This criterion stays checked until then. Slice 3 rewords it and retests it.
 - [x] AC-010 WHILE Cube replies "Continue wait" for a query, THE SYSTEM SHALL keep the request open, show the tile in a loading state, and deliver the result when it arrives.
       Fails when: the tile shows an error, or the result never renders although Cube completed the query.
 - [x] AC-011 WHEN a query is superseded, because its filters, marks or dashboard changed, THE SYSTEM SHALL cancel the earlier query against Cube before rendering the newer result.
@@ -469,8 +478,10 @@ Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[researc
       Fails when: the form stays editable on unparseable YAML, or the problem names no line.
 - [x] AC-136 WHEN the user saves model changes, THE SYSTEM SHALL validate them against Cube before publishing and refuse to publish a model Cube rejects, showing Cube's error per file.
       Fails when: an invalid model is published, or the error is not attributed to a file.
+      Note (2026-09-26, `[IP 5, plan, R28]`): from slice 3, publishing is one changeset call to xcube. It validates the affected modules and activates them, with each error naming its item. This criterion stays checked until then. Slice 3 rewords it and retests it.
 - [x] AC-137 WHEN a valid model is published, THE SYSTEM SHALL make the new members available to the chart builder without restarting Cube.
       Fails when: a published member is missing from the field list while Cube reports the new schema version.
+      Note (2026-09-26, `[IP 5, R28]`): from slice 3, "Cube reports the new schema version" becomes "xcube reports the new revision active on every instance". This criterion stays checked until then. Slice 3 rewords it and retests it.
 - [x] AC-138 WHEN the user opens the join editor for a cube, THE SYSTEM SHALL show the join graph with each relationship's direction and let the user add a join by choosing the target cube, the relationship and the condition.
       Fails when: the diagram omits a declared join, or shows a direction the model does not declare.
 - [x] AC-139 WHEN the user generates cubes from a data source, THE SYSTEM SHALL browse that connection's schemas and tables and create a cube per selected table with its columns mapped to dimensions and a count measure (`[R7]`).
@@ -481,7 +492,7 @@ Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[researc
       Fails when: an existing model file changes; a clashing cube is saved into the same folder; a cube is refused for a name used only in another folder; or the refusal does not name what it clashes with.
 - [ ] AC-250 THE SYSTEM SHALL grant Cube's `introspection` scope only to wechart's service credential, used to browse a data source and generate cubes, never to a user's token, and never to the browser (`[R10]`; phase 2: `[AD 12, R27]`; ~~the short-lived tokens its API signs … never to a draft's token~~, amended 2026-09-25 and unticked until retested).
       Fails when: a user's token is granted `introspection`, or a response to the browser carries a credential that has it.
-- [x] AC-140 WHEN a model file uses Jinja, Python or JavaScript generation, THE SYSTEM SHALL open it read-only in the code view and say why it cannot be edited as a form.
+- [x] AC-140 WHEN a model file uses Jinja, Python or JavaScript generation, THE SYSTEM SHALL open it read-only in the code view and say why it cannot be edited as a form. (Phase 2: such a file can't be published into a folder, AC-332.)
       Fails when: such a file opens in an editable form, or gives no reason.
 - [x] AC-141 WHEN the user edits a member that charts use, THE SYSTEM SHALL list the charts and dashboards that reference it before saving.
       Fails when: a referencing chart is missing from that list.
@@ -644,6 +655,10 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
 > - A connection test runs in Cube, with Cube's own drivers, at wechart's
 >   request (`[R20]`, `research/connection-testing.md`). AC-159 is reworded
 >   to say so.
+> - **2026-09-26** `[plan]`: xcube runs the test through its admin route
+>   `POST /v1/semantic/connections/test`, and swaps a changed connection's
+>   driver with no restart. A change of database type lands as a publish
+>   (AC-161). This is slice 6 of the plan.
 
 - [ ] AC-157 THE SYSTEM SHALL list, in the Data sources workspace, every data source the user may see, each with its folder, its driver type, its health from the last test, and the cubes whose models use it (phase 2: `[R16, R19]`).
       Fails when: a data source the user may see is missing, one they may not see is listed, or a cube list disagrees with the models.
@@ -653,8 +668,8 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
       Fails when: the test runs in the browser or through a driver other than Cube's, or a failure shows no error text.
 - [ ] AC-160 THE SYSTEM SHALL offer PostgreSQL, Snowflake, Databricks, BigQuery, SQL Server and Oracle as driver types, with each driver's own authentication fields (`[R4]`).
       Fails when: a listed driver is absent, or its form omits an authentication method the driver requires.
-- [ ] AC-161 WHEN an approved change to a data source's settings lands in its folder, THE SYSTEM SHALL say whether Cube needs a restart before it takes effect, and show whether every running Cube instance uses the new settings (phase 2: `[R15, AD 11]`).
-      Fails when: the UI claims the change is live while any Cube instance still uses the previous settings.
+- [ ] AC-161 WHEN an approved change to a data source's settings lands in its folder, THE SYSTEM SHALL ~~say whether Cube needs a restart before it takes effect, and~~ put it into effect without restarting Cube, and show whether every running Cube instance uses the new settings. A change of database type SHALL land as a publish, through the publish check (AC-321) (phase 2: `[R15, AD 11]`; amended 2026-09-26, `[plan]`).
+      Fails when: the UI claims the change is live while any Cube instance still uses the previous settings; the change needs a Cube restart; or a change of database type lands without the publish check.
 - [ ] AC-163 THE SYSTEM SHALL record the result of each connection test over time and show that history per source.
       Fails when: a test result is missing from the history.
 - [ ] AC-164 THE SYSTEM SHALL never show a stored credential in plain text after it is saved, and SHALL never send it to the browser.
@@ -950,8 +965,8 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R17, R18, R19]`.
       Fails when: anyone but a Super-Admin sees phase-1 content before a group is assigned to it.
 - [ ] AC-268 THE SYSTEM SHALL enforce folder access on every API route, not only in the UI. An automated suite SHALL ask every route as users in and out of each group, and nothing outside their permitted folders SHALL come back (S1, `[R13]`).
       Fails when: any route returns, lists, counts or finds by search an item the asking user may not see, or accepts a change they may not make.
-- [ ] AC-320 WHERE security is enabled, THE SYSTEM SHALL have Cube itself refuse a query for a folder's cubes unless the token carries one of that folder's allowed groups: groups granted on it, on an ancestor or on a descendant, or the Super-Admin group. A folder no group reaches admits only Super-Admins. Row-level policies written in the model still apply within (`[AD 4, AD 5, R27]`).
-      Fails when: a user token asked directly of Cube, past wechart's own check, returns data from a folder's cube although none of its groups is allowed there; or a member of a group granted on /A/B is refused the /A cube that /A/B's chart is bound to.
+- [ ] AC-320 WHERE security is enabled, THE SYSTEM SHALL have Cube itself refuse a query for a folder's cubes unless the token carries one of that folder's allowed groups: groups granted on it, on an ancestor or on a descendant, or the Super-Admin group. A folder no group reaches admits only Super-Admins. Row-level policies written in the model still apply within. xcube SHALL make this folder check for each request, in addition to the model's own policies, so a change to a folder's groups takes effect in Cube without recompiling any module (`[AD 4, AD 5, R27; IP 6, R28]`; amended 2026-09-26).
+      Fails when: a user token asked directly of Cube, past wechart's own check, returns data from a folder's cube although none of its groups is allowed there; a member of a group granted on /A/B is refused the /A cube that /A/B's chart is bound to; an admitted user gets rows an authored row-level policy withholds from them; or a permission change recompiles a module.
 
 ## F27. Folders hold models and data sources
 
@@ -964,7 +979,7 @@ Traces to: §P2.6 C, `[P2 input]`, `[R19]`. Rewritten phase-1 criteria: AC-001, 
 ## F28. Names and resolution per folder
 
 Purpose: the same short name can mean different things in different folders. The whole deployment is one flat model under folder-prefixed names, and a short name inside an item is bound when the item is published, nearest first from the item's own folder.
-Traces to: §P2.6 D, `[P2 input]`, `[R17, R19, R22]`, `[AD 2, AD 3, AD 5, AD 6, R27]` (amended 2026-09-25; `[R20]` superseded). Rewritten phase-1 criterion: AC-249.
+Traces to: §P2.6 D, `[P2 input]`, `[R17, R19, R22]`, `[AD 2, AD 3, AD 5, AD 6, R27]` (amended 2026-09-25; `[R20]` superseded), `[IP 3, IP 5, plan, R28]` (amended 2026-09-26). Rewritten phase-1 criterion: AC-249.
 
 - [ ] AC-270 IF an item would take the name of an item of the same kind in the same folder (a cube, by cube name across the folder's models; a model file; a dashboard; or a data source), THEN THE SYSTEM SHALL refuse it and name the existing item (`[P2 input]`).
       Fails when: two items of one kind share a name in one folder, or the refusal doesn't name the existing item.
@@ -976,15 +991,17 @@ Traces to: §P2.6 D, `[P2 input]`, `[R17, R19, R22]`, `[AD 2, AD 3, AD 5, AD 6, 
       Fails when: a model in /A/B binds /A/B/C's `warehouse` or a sibling branch's; binds /A's while /A/B has one; or publishes with a name found nowhere on its path.
 - [ ] AC-274 WHEN two folders define cubes of the same short name, THE SYSTEM SHALL publish them under different prefixed names, answer each folder's items from the cube they were bound to, and keep their pre-aggregations apart (`[P2 input, AD 2]`).
       Fails when: one folder's answer, or pre-aggregation, comes from the other folder's cube, or the two publish under the same name.
-- [ ] AC-275 WHEN a change to a model lands in a folder (approved, or a direct rename, move or delete), THE SYSTEM SHALL rebind at that publish every item whose binding the change alters. A nearer definition takes over the items beneath it, and no item outside that folder's subtree changes. The whole model is checked (AC-321), so deleting something others are bound to is refused, naming what depends on it (`[AD 3, AD 6, R27]`; amended 2026-09-25).
-      Fails when: a dashboard outside that subtree changes; one inside it that doesn't define the name nearer keeps the old definition; or a delete leaves an item bound to something no longer there.
+- [ ] AC-275 WHEN a change to a model lands in a folder (approved, or a direct rename, move or delete), THE SYSTEM SHALL ~~rebind at that publish every item whose binding the change alters. A nearer definition takes over the items beneath it, and no item outside that folder's subtree changes. The whole model is checked (AC-321), so deleting something others are bound to is refused, naming what depends on it~~ leave every other published item bound as it was published. An item beneath a nearer new definition SHALL bind to it only when that item is next published. A delete or rename of a name that another published item still references SHALL be refused, naming those items (`[AD 3, AD 6, R27]`; amended 2026-09-25; amended 2026-09-26, `[IP 3, plan, R28]`: no rebinding).
+      Fails when: publishing a nearer definition changes what an already-published item queries before that item is published again; an item published after it doesn't bind to it; a delete or rename leaves an item bound to something no longer there; or the refusal doesn't name the items that reference it.
 - **AC-309 (retired 2026-09-25, superseded by decision 3 and R27; the ID stays and is never reused):** ~~WHEN a chart or dashboard uses a model defined in an ancestor of its folder, and that model names a cube (in a join, a view or an `extends`), THE SYSTEM SHALL resolve that name bottom-up from the chart's or dashboard's own folder, as AC-272 does (`[R20]`).~~ Names inside a model bind from the model's own folder when it is published. A child folder overrides by publishing its own item.
 - [ ] AC-310 WHEN a cube names no data source, THE SYSTEM SHALL bind it at publish to the data source named `default` nearest on its model's path: the model's folder, then each ancestor to the root. The deployment's own default connection is the shared root's `default` data source, stored and managed like any other and seeded by the Helm values on install (`[R22, AD 3, R27]`; amended 2026-09-25: ~~and only when that path has none, the deployment's own default connection~~).
       Fails when: such a cube in /A/B binds the root's `default` while /A has one, or /A's while /A/B has one; or the root's `default` can't be opened and changed in Data sources.
-- [ ] AC-328 WHEN a cube, view or data source is published in a folder other than the shared root, THE SYSTEM SHALL publish it under a unique name prefixed by the folder's id. The shared root's keep their short names, and renaming or moving a folder changes no published name (`[AD 2, R27]`).
-      Fails when: two folders' same-named cubes publish under one name; a root cube's published name differs from its short name, or a phase-1 chart stops resolving; or renaming or moving a folder changes a published name, breaks a stored reference, or rebuilds a pre-aggregation.
-- [ ] AC-329 WHEN the user picks a cube for a chart or dashboard, THE SYSTEM SHALL offer only the cubes found on the item's own folder path, each by its title, never by its prefixed name. For a workspace item, that path is the workspace, then its origin's or target's path, as AC-281 has it (`[R27]`).
-      Fails when: the picker lists a cube from a descendant or sibling folder, or shows a prefixed name.
+- [ ] AC-328 WHEN a cube, view or data source is published in ~~a folder other than the shared root~~ any folder, the shared root included, THE SYSTEM SHALL publish it as `<folderId>__<shortName>`, the folder id written as `f` plus its letters and digits (a UUID's 32 hex digits; the root's `froot`). Every cube and pre-aggregation gets a short, stable `sql_alias`, so the identifiers Cube builds in SQL stay within the database's limit. ~~The shared root's keep their short names, and renaming~~ Renaming or moving a folder changes no published name (`[AD 2, R27]`; amended 2026-09-26, `[IP 3, plan, R28]`).
+      Fails when: two folders' same-named cubes publish under one name; a published name, the root's included, isn't `<folderId>__<shortName>`; a table or column name Cube builds for it exceeds the database's identifier limit (63 bytes on Postgres); or renaming or moving a folder changes a published name, breaks a stored reference, or rebuilds a pre-aggregation.
+- [ ] AC-329 WHEN the user picks a cube for a chart or dashboard, THE SYSTEM SHALL offer only the cubes found on the item's own folder path, each by its title with its folder path beside it, never by its prefixed name. For a workspace item, that path is the workspace, then its origin's or target's path, as AC-281 has it (`[R27]`; the folder path, `[plan]`, 2026-09-26).
+      Fails when: the picker lists a cube from a descendant or sibling folder, shows a prefixed name, or shows a cube without its folder path.
+- [ ] AC-331 WHEN the prefixed names are introduced (slice 3), THE SYSTEM SHALL rewrite every stored reference to a member (in charts, dashboards, markings, bookmarks and links) to its prefixed name, and every existing dashboard SHALL render the same data as before (`[IP 3, plan, R28]`).
+      Fails when: after the migration a stored reference still names a short cube name; or an existing dashboard shows different data, or an error, compared with before it.
 
 ## F29. Workspaces
 
@@ -1021,18 +1038,18 @@ Traces to: §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
       Fails when: a read-only member, or someone without access, can approve; or a proposal lands unapproved.
 - [ ] AC-287 THE SYSTEM SHALL show each user, in the app, the proposals they may approve, each with its item, folder, author and description, and their number in the top bar. There are no notices outside the app (`[R12]`).
       Fails when: a proposal the user may approve is missing, the number differs from the list, or a proposal is shown to someone who may not approve it.
-- [ ] AC-288 WHEN a proposal is approved and the whole model still compiles with it (AC-321), THE SYSTEM SHALL put its item into the folder, replacing any item of the same kind and name, and keep the replaced version in the item's history, a copy wechart holds (`[R17, AD 6, R27]`; amended 2026-09-25).
+- [ ] AC-288 WHEN a proposal is approved and ~~the whole model still compiles~~ every module it affects still compiles with it (AC-321), THE SYSTEM SHALL put its item into the folder, replacing any item of the same kind and name, and keep the replaced version in the item's history, a copy wechart holds (`[R17, AD 6, R27]`; amended 2026-09-25; amended 2026-09-26, `[IP 5]`).
       Fails when: the folder shows the old version after an approval that passed the check; the replaced version is missing from history; or an approval that fails the check changes the folder.
 - [ ] AC-289 THE SYSTEM SHALL keep an item's last 10 versions, each with its author, approver, time and description, show them to the folder's read-write members and to Super-Admins only, and SHALL let a read-write member restore one through a proposal (`[R17, R23]`).
       Fails when: an item that has had more than 10 versions keeps other than its last 10, a read-only user can open its history, or a restore lands without an approval.
 - [ ] AC-290 WHEN a proposal is rejected, THE SYSTEM SHALL return it unchanged to the author's workspace, with the approver's reason of at most 1,000 characters, and leave the folder as it was (`[R18]`).
       Fails when: the folder changes, the author's workspace loses the work, or the author isn't shown the reason.
-- [ ] AC-291 WHEN a read-write member creates a subfolder, sets permissions, or renames, moves or deletes an item in a folder they may write, THE SYSTEM SHALL apply it at once, without a proposal. A move SHALL need read-write access to both folders. A rename, move or delete touching a model, a data source or a folder holding them SHALL apply only if the whole model still compiles (AC-321) (`[R17]`; amended 2026-09-25, `[AD 6, R27]`).
-      Fails when: one of these waits for an approval; is allowed without read-write access to the folders involved; or a change touching models or data sources applies although the whole model then fails to compile.
-- [ ] AC-321 WHEN a change would publish (a proposal made or approved, or a direct rename, move or delete touching a model, a data source or a folder holding them), THE SYSTEM SHALL compile the whole model with the change applied and refuse the change if anything anywhere breaks. A refused change leaves every folder and the proposal as they were. A proposal is checked when it is made, as an overlay, and again at approval (`[AD 6, R27]`).
-      Fails when: a proposal is made, an approval lands or a direct change applies although some item anywhere then fails to compile; or a refusal changes a folder or the proposal.
-- [ ] AC-322 WHEN the whole-model check refuses a change, THE SYSTEM SHALL name each break in the folders the user may see, with Cube's error and its file, and give only a count of the rest ("n items in folders you can't see would break"). A Super-Admin sees every break named, and the audit trail records every one (`[R27]`).
-      Fails when: a refusal names an item or folder the user can't see; omits a break they can see; gives a count other than the hidden breaks'; or a break is missing from the audit trail.
+- [ ] AC-291 WHEN a read-write member creates a subfolder, sets permissions, or renames, moves or deletes an item in a folder they may write, THE SYSTEM SHALL apply it at once, without a proposal. A move SHALL need read-write access to both folders. A rename, move or delete touching a model, a data source or a folder holding them SHALL apply only if ~~the whole model still compiles~~ every module it affects still compiles (AC-321) (`[R17]`; amended 2026-09-25, `[AD 6, R27]`; amended 2026-09-26, `[IP 5]`).
+      Fails when: one of these waits for an approval; is allowed without read-write access to the folders involved; or a change touching models or data sources applies although a module it affects then fails to compile.
+- [ ] AC-321 WHEN a change would publish (a proposal made or approved, or a direct rename, move or delete touching a model, a data source or a folder holding them), THE SYSTEM SHALL ~~compile the whole model with the change applied and refuse the change if anything anywhere breaks~~ have xcube compile each module the change affects, with the change applied, in a throwaway compile, and refuse the change if any of them breaks. A refused change leaves every folder and the proposal as they were, and no published module changes. A proposal is checked when it is made, as an overlay, and again at approval (`[AD 6, R27]`; amended 2026-09-26, `[IP 4, IP 5, plan]`).
+      Fails when: a proposal is made, an approval lands or a direct change applies although an item in a module it affects then fails to compile; a module the change doesn't affect is recompiled; or a refusal changes a folder, the proposal or a published module.
+- [ ] AC-322 WHEN the ~~whole-model~~ publish check refuses a change, THE SYSTEM SHALL name each break in the folders the user may see, with ~~Cube's error and its file~~ its error and its item, and the line and column where xcube gives them, and give only a count of the rest ("n items in folders you can't see would break"). A Super-Admin sees every break named, and the audit trail records every one (`[R27]`; amended 2026-09-26, `[plan]`).
+      Fails when: a refusal names an item or folder the user can't see; omits a break they can see; names a break without its item; gives a count other than the hidden breaks'; or a break is missing from the audit trail.
 - [ ] AC-323 WHILE an item is in a workspace or in a proposal, THE SYSTEM SHALL let it be queried through an xcube overlay only by the workspace's owner, or, for a proposal, by its author, the target folder's read-write members and Super-Admins. Names resolve in the overlay first, then along the target's or origin's folder path. A proposal's overlay is dropped once it is approved or rejected (`[AD 8, R27]`).
       Fails when: anyone else gets data from the overlay; a name resolves outside the overlay while the overlay defines it; or a query against a landed or rejected proposal's overlay succeeds.
 
@@ -1069,7 +1086,7 @@ Traces to: `[R18]`; F17.
 ## F34. Credentials
 
 Purpose: data-source credentials are readable only by xcube, which alone holds the private key; wechart keeps them, and their lifecycle, without ever decrypting them. ~~Data-source credentials are unreadable without the deployment's key.~~ (Amended 2026-09-25.)
-Traces to: §P2.4, `[R14, R15, R21]`, `[AD 7, R27]`; F18's AC-164.
+Traces to: §P2.4, `[R14, R15, R21]`, `[AD 7, R27]`, `[IP 1, R28]`; F18's AC-164.
 
 - [ ] AC-298 THE SYSTEM SHALL store data-source credentials in the metadata database encrypted to xcube's public key, so neither the database nor anything wechart holds can reveal them (amended 2026-09-25, `[AD 7]`: ~~encrypted with a key from the deployment's Secret, so the database alone can't reveal them~~).
       Fails when: a credential can be read from a dump of the metadata database, or from anything wechart holds, without xcube's private key.
@@ -1121,15 +1138,19 @@ Traces to: §P2.3, `[R13, R19]`.
 
 ## F37. The semantic service: Cube and xcube
 
-Purpose: Cube plus xcube own the published model, Cube's rules and the connection runtime. wechart is their only caller and never their server. The query path survives losing one instance of each service.
-Traces to: §P2.4 Architecture, `[AD 1, AD 10, AD 11, AD 12, R27]` (added 2026-09-25).
+Purpose: ~~Cube plus xcube own the published model, Cube's rules and the connection runtime.~~ wechart is the system of record, and xcube serves Cube a derived copy of what is published, compiled as modules (amended 2026-09-26, `[IP 1, IP 2, IP 4]`). wechart is their only caller and never their server. The query path survives losing one instance of each service.
+Traces to: §P2.4 Architecture, `[AD 1, AD 10, AD 11, AD 12, R27]` (added 2026-09-25), `[IP 1, IP 2, IP 8, IP 9, plan, R28]` (amended 2026-09-26).
 
 - [ ] AC-319 WHILE the query path runs 2 Cube instances on the Cube Store queue and 2 wechart API replicas, WHEN one Cube instance and one API replica stop during use, THE SYSTEM SHALL keep every signed-in session and answer every query the web app retries. Any API replica SHALL serve any request, keeping no work of its own in memory. Cube Store stays single-node (`[AD 1, AD 11, R27]`).
       Fails when: after one Cube instance and one API replica stop, a signed-in user is asked to sign in again, or a query the web app retries fails; or work begun through one replica (a workspace edit, a proposal) can't be carried on through the other.
-- [ ] AC-326 WHERE security is enabled, THE SYSTEM SHALL sign each token for a signed-in user's queries with RS256, carrying their groups and no other attribute of theirs. It SHALL push its public keys to xcube when it starts and whenever they rotate, and SHALL use the service credential for every call it makes on its own behalf (`[AD 12, R27]`).
-      Fails when: a user's token isn't RS256 or carries any attribute of theirs beyond their groups; a token signed with a new key is refused after a rotation; an own-behalf call (introspection, a build or job, system partitions, health, an xcube admin call) uses a user's token; or a response to the browser contains the signing key or the service credential.
+- [ ] AC-326 WHERE security is enabled, THE SYSTEM SHALL sign each token for a signed-in user's queries with RS256, carrying their groups ~~and no other attribute of theirs~~ that some access policy names (AC-008) and the token's own kind, issuer, audience and expiry, and no other attribute of theirs: no subject. It SHALL push its public keys to xcube, through xcube's admin API, when it starts and whenever they rotate, and SHALL use the service credential for every call it makes on its own behalf (`[AD 12, R27]`; amended 2026-09-26, `[IP 8, R28]`).
+      Fails when: a user's token isn't RS256, carries a subject or any other attribute of theirs beyond those groups, or leaves out a group of theirs that some policy names; a token signed with a new key is refused after a rotation; xcube gets a key by requesting it from wechart; an own-behalf call (introspection, a build or job, system partitions, health, an xcube admin call) uses a user's token; or a response to the browser contains the signing key or the service credential.
 - [ ] AC-327 THE SYSTEM SHALL publish, query, refresh and test connections with no request from Cube or xcube to wechart. Cube SHALL take its model and its connections from xcube, and only wechart's server SHALL call Cube or xcube (`[AD 1, AD 10]`).
       Fails when: any request from a Cube or xcube process reaches wechart during a publish, a query, a refresh or a connection test; wechart serves a route for Cube to read a model or a connection from; or the browser makes a request to Cube or xcube.
+- [ ] AC-330 WHEN wechart's API starts, THE SYSTEM SHALL bring xcube's copy up to what wechart has published (folders, their allowed groups, model items and data sources), sending a full snapshot when xcube's copy is missing or behind. Cube SHALL then answer queries on published items with every API replica stopped (`[IP 1, IP 2, plan]`).
+      Fails when: after xcube's copy is emptied and the API restarts, a published item can't be queried; or a query on a published item fails while every API replica is stopped.
+- [ ] AC-332 IF a model item is anything but YAML (a JavaScript or Python file, or YAML generated with Jinja), THEN THE SYSTEM SHALL refuse to publish it into a folder, saying that only YAML models can be published (`[R28]`).
+      Fails when: such an item is published, or the refusal doesn't say that only YAML can be.
 
 ## Non-goals (phase 1)
 
@@ -1162,7 +1183,7 @@ Copied from [requirements.md §P2.7](./requirements.md):
 - User attributes in Cube's security context: groups only, for now.
 - Notices outside the app, such as email or chat.
 - Testing more than one identity provider during development. Entra ID and brokers are checked once, at the end of phase 2 (AC-258).
-- Sharding the model: designed for 100–200 model-bearing folders; sharding is a later add-on `[AD 9]`.
+- ~~Sharding the model: designed for 100–200 model-bearing folders; sharding is a later add-on `[AD 9]`.~~ Superseded 2026-09-26 `[IP 4]`: modules split the compile, and nothing further is planned for scale.
 - Cube Store beyond one node `[AD 11]`.
 - Anything but wechart's server calling Cube or xcube, for now `[AD 10]`.
 
@@ -1238,14 +1259,15 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | §P2.3 S1 Zero access leaks `[R13]` | AC-268, AC-264, AC-276 |
 | §P2.6 C Folders hold models and data sources; no Model tab; a Data sources list `[P2 input, R19]` | AC-001, AC-131, AC-157, AC-192, AC-194, AC-222, AC-233, AC-269 |
 | §P2.6 D Names unique per folder `[P2 input]` | AC-249, AC-270, AC-271 |
-| §P2.6 D Names bound at publish from the item's own folder; rebinding; path-only; root `default` `[P2 input, R17, R19, R22, AD 3, AD 5, R27]` (`[R20]` superseded; AC-309 retired) | AC-272, AC-273, AC-274, AC-275, AC-310, AC-329 |
-| §P2.4, §P2.6 D One flat model, folder-id prefixes, root unprefixed `[AD 2, R27]` | AC-274, AC-328 |
-| §P2.4 Cube enforces folder access through generated policies `[AD 4, AD 5, R27]` | AC-320, AC-263 |
-| §P2.4 Whole-model check on every publish, with the refusal's wording `[AD 6, R27]` | AC-321, AC-322, AC-275, AC-288, AC-291 |
-| §P2.4 Workspace and proposal content as xcube overlays `[AD 8, R27]` | AC-323, AC-281 |
-| §P2.4 Cube and xcube own the model and connections; nobody but wechart's server calls them; Cube never calls wechart `[AD 1, AD 10]` | AC-327, AC-251 |
-| §P2.4 HA query path: 2+ Cube instances, 2+ stateless API replicas `[AD 11, R27]` | AC-319, AC-161 |
-| §P2.4 RS256 tokens carrying groups only, keys pushed to xcube, a service credential `[AD 12, R27]` | AC-326, AC-008, AC-166, AC-250 |
+| §P2.6 D Names bound at publish from the item's own folder; ~~rebinding~~ no rebinding, and deletes and renames of referenced names refused; path-only; root `default` `[P2 input, R17, R19, R22, AD 3, AD 5, R27; IP 3, plan, R28]` (`[R20]` superseded; AC-309 retired) | AC-272, AC-273, AC-274, AC-275, AC-310, AC-329 |
+| §P2.4, §P2.6 D One flat model, `<folderId>__<shortName>` for every folder, ~~root unprefixed~~ the root included, short `sql_alias`es; references migrated `[AD 2, R27; IP 3, plan, R28]` | AC-274, AC-328, AC-331 |
+| §P2.4 Cube enforces folder access, ~~through generated policies~~ with a per-request folder check in xcube alongside the model's own policies `[AD 4, AD 5, R27; IP 6, R28]` | AC-320, AC-263 |
+| §P2.4 ~~Whole-model check~~ Every affected module checked on every publish, with the refusal's wording `[AD 6, R27; IP 4, IP 5, plan]` | AC-321, AC-322, AC-275, AC-288, AC-291 |
+| §P2.4 Only YAML models are published `[R28]` | AC-332, AC-140 |
+| §P2.4 Workspace and proposal content as xcube overlays `[AD 8, R27; IP 7]` | AC-323, AC-281 |
+| §P2.4 ~~Cube and xcube own the model and connections~~ wechart is the system of record, and xcube keeps a derived copy, rebuilt from a snapshot; nobody but wechart's server calls them; Cube never calls wechart `[AD 1, AD 10; IP 1, IP 2, plan]` | AC-327, AC-330, AC-251 |
+| §P2.4 HA query path: 2+ Cube instances, 2+ stateless API replicas `[AD 11, R27; IP 9, plan]` | AC-319, AC-161 |
+| §P2.4 RS256 tokens carrying ~~groups only~~ the groups some policy names, and no subject; keys pushed to xcube; a service credential `[AD 12, R27; IP 8, R28]` | AC-326, AC-008, AC-166, AC-250 |
 | §P2.6 E Workspaces: private, copy in, resolution, target folders `[P2 input, R12, R17, R18]` | AC-276 … AC-283 |
 | §P2.6 E Proposals, approval, rejection, history, direct actions `[R12, R17, R18]` | AC-284 … AC-291 |
 | §P2.6 F Personal bookmarks, shareable `[R12]` | AC-292, AC-293 |

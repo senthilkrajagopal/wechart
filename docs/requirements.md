@@ -474,7 +474,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - Every cube, view and data source is published under a unique name, prefixed by its folder's id.
 - ~~The shared root adds no prefix, so phase-1 content and links resolve as they are.~~ **Superseded** `[IP 3, R28]`: the shared root is prefixed like any other folder, with no special handling.
   - A published name is `<folderId>__<shortName>`.
-  - The folder id is written as `f` plus the 32 hex digits of the folder's UUID, since Cube names can't hold a hyphen or start with a digit.
+  - The folder id is written as `f` plus the id's letters and digits, since Cube names can't hold a hyphen or start with a digit. A folder's UUID gives its 32 hex digits. The shared root, whose id is `root`, gives `froot`: one rule, with no special case.
   - xcube gives every cube and pre-aggregation a short, stable `sql_alias`, so database identifiers stay within the database's limits `[plan, R28]`.
   - Every stored reference to a member is migrated to the prefixed names in slice 3. That covers charts, dashboards, markings, bookmarks and links, the places R27 lists as naming members by short cube names. Every existing dashboard renders unchanged `[IP 3, plan, R27]`.
 
