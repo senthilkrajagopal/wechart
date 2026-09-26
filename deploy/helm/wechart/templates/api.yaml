@@ -23,10 +23,9 @@ metadata:
   labels:
     {{- include "wechart.labels" (list . "api") | nindent 4 }}
 spec:
-  # One instance, and never two at once: a publish holds its draft in this
-  # process while Cube reads it back through the Service
-  # (packages/api/src/model/publish.ts), so a second instance could be the
-  # one Cube asks and answer that it has no such draft.
+  # One instance, replaced rather than rolled, until T423 runs two with their
+  # readiness (AC-319). Nothing holds a publish in this process any more:
+  # xcube serves the model, and Cube calls nothing of the API's (T431).
   replicas: 1
   strategy:
     type: Recreate
@@ -101,12 +100,6 @@ spec:
                 secretKeyRef:
                   name: {{ include "wechart.secretName" . }}
                   key: xcube-admin-token
-            # Until T431 removes the model store's routes, their key.
-            - name: WECHART_MODEL_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "wechart.secretName" . }}
-                  key: model-key
             # xcube's public key, which credentials are encrypted to; the API
             # won't start without it (T333, AC-324). Public: no Secret needed.
             - name: WECHART_XCUBE_PUBLIC_KEY

@@ -72,7 +72,7 @@ describe('the API answers for Cube (AC-007)', () => {
    *
    * The preview is signed as itself, in place of the configured context —
    * whose other claims would otherwise apply unnamed (T172's review) — with
-   * wechart's own claims (its store, a draft) and the token's times kept
+   * wechart's own claims (the model Cube compiles) and the token's times kept
    * wechart's.
    */
   it('signs a load as a preview context, keeping only wechart’s own claims (T172)', async () => {
@@ -80,7 +80,7 @@ describe('the API answers for Cube (AC-007)', () => {
     const cube = new CubeClient({
       apiUrl: config.cubeApiUrl,
       apiSecret: SECRET,
-      securityContext: { tenant: 'acme', wechartStore: 'http://store' },
+      securityContext: { tenant: 'acme', wechartModel: 'dev' },
       fetchImpl: (async (_url: string, init: RequestInit) => {
         const token = new Headers(init.headers).get('authorization')?.replace('Bearer ', '') ?? '';
         payloads.push(
@@ -103,8 +103,8 @@ describe('the API answers for Cube (AC-007)', () => {
         groups: ['sales'],
         is_employee: true,
         sub: 'rep-7',
-        wechartStore: 'http://elsewhere',
-        wechartDraft: 'x',
+        wechartModel: 'elsewhere',
+        wechartRevision: 9,
         exp: 1,
         nbf: 9_999_999_999,
         iss: 'someone',
@@ -118,18 +118,18 @@ describe('the API answers for Cube (AC-007)', () => {
     );
 
     // The preview as itself: none of the configured context's claims (no
-    // `tenant`), wechart's own store, and the token's times wechart's.
+    // `tenant`), wechart's own model, and the token's times wechart's.
     const { iat, exp, ...claims } = payloads[0] ?? {};
     expect(claims).toEqual({
       groups: ['sales'],
       is_employee: true,
       sub: 'rep-7',
-      wechartStore: 'http://store',
+      wechartModel: 'dev',
     });
     expect(iat).toBeGreaterThanOrEqual(before);
     expect(exp).toBeGreaterThan(before);
     // Without a preview, wechart's own context and nothing more.
-    expect(payloads[1]).toMatchObject({ tenant: 'acme', wechartStore: 'http://store' });
+    expect(payloads[1]).toMatchObject({ tenant: 'acme', wechartModel: 'dev' });
     expect(payloads[1]?.['groups']).toBeUndefined();
     expect(refused.map((response) => response.statusCode)).toEqual([400, 400, 400]);
     expect(payloads).toHaveLength(2);
@@ -194,7 +194,7 @@ describe('the API answers for Cube (AC-007)', () => {
     const cube = new CubeClient({
       apiUrl: config.cubeApiUrl,
       apiSecret: SECRET,
-      securityContext: { tenant: 'acme', wechartStore: 'http://store' },
+      securityContext: { tenant: 'acme', wechartModel: 'dev' },
       fetchImpl: (async (url: string, init: RequestInit) => {
         const token = new Headers(init.headers).get('authorization')?.replace('Bearer ', '') ?? '';
         asked.push({
@@ -216,7 +216,7 @@ describe('the API answers for Cube (AC-007)', () => {
     const answered = await app.inject({
       method: 'POST',
       url: '/api/sql',
-      payload: { query, context: { groups: ['sales'], wechartDraft: 'x' } },
+      payload: { query, context: { groups: ['sales'], wechartModel: 'elsewhere' } },
     });
     const noQuery = await app.inject({ method: 'POST', url: '/api/sql', payload: {} });
     const badContext = await app.inject({
@@ -235,7 +235,7 @@ describe('the API answers for Cube (AC-007)', () => {
     );
     // As the preview, in place of the configured context (T172).
     const { iat, exp, ...claims } = asked[0]?.claims ?? {};
-    expect(claims).toEqual({ groups: ['sales'], wechartStore: 'http://store' });
+    expect(claims).toEqual({ groups: ['sales'], wechartModel: 'dev' });
     expect([typeof iat, typeof exp]).toEqual(['number', 'number']);
     expect([noQuery.statusCode, badContext.statusCode]).toEqual([400, 400]);
     await app.close();
@@ -1661,60 +1661,24 @@ describe('configuration', () => {
     expect(loadConfig({ CUBE_API_SECRET: 'x' }).modelDir).toMatch(/[/\\]infra[/\\]cube[/\\]model$/);
   });
 
-  it('reads the key Cube reads the model with, and this store’s address as Cube reaches it (T142)', () => {
+  /**
+   * T431, AC-327: Cube reads nothing from wechart (T447), so the model store's
+   * key and address are nobody's: set, they are ignored, and refused nothing.
+   */
+  it('reads no model store settings: nothing reads the store any more', () => {
     const loaded = loadConfig({
       CUBE_API_SECRET: 'x',
       WECHART_MODEL_KEY: 'k',
       WECHART_CUBE_STORE_URL: 'http://host.docker.internal:4100/',
     });
 
-    expect(loaded.modelKey).toBe('k');
-    expect(loaded.cubeStoreUrl).toBe('http://host.docker.internal:4100');
-    // A store with no key: Cube would be sent to read what it can't, and
-    // every request would fail on the version (T142's review).
-    expect(() =>
-      loadConfig({
-        CUBE_API_SECRET: 'x',
-        WECHART_CUBE_STORE_URL: 'http://host.docker.internal:4100',
-      }),
-    ).toThrow(ConfigError);
-    // Neither set: Cube reads its own directory, and nothing is published.
-    const plain = loadConfig({ CUBE_API_SECRET: 'x' });
-    expect('modelKey' in plain).toBe(false);
-    expect('cubeStoreUrl' in plain).toBe(false);
+    expect(Object.keys(loaded)).toEqual(Object.keys(loadConfig({ CUBE_API_SECRET: 'x' })));
+    expect(JSON.stringify(loaded)).not.toContain('host.docker.internal');
   });
 });
 
-describe('the store each Cube request names (T142)', () => {
-  it('is in every token, so Cube reads this wechart’s model', async () => {
-    const payloads: Record<string, unknown>[] = [];
-    const fetchImpl = (async (_url: string, init: RequestInit) => {
-      const token = String((init.headers as Record<string, string>)['authorization']).split(' ')[1];
-      payloads.push(JSON.parse(Buffer.from(token?.split('.')[1] ?? '', 'base64url').toString()));
-      return new Response('{"cubes":[]}');
-    }) as typeof fetch;
-    const cube = new CubeClient({
-      apiUrl: config.cubeApiUrl,
-      apiSecret: SECRET,
-      securityContext: { tenant: 'acme', wechartStore: 'http://host.docker.internal:4100' },
-      fetchImpl,
-    });
-
-    await cube.meta();
-    await cube.meta({ wechartDraft: 'd1' });
-
-    expect(payloads[0]).toMatchObject({
-      tenant: 'acme',
-      wechartStore: 'http://host.docker.internal:4100',
-    });
-    expect(payloads[1]).toMatchObject({
-      wechartStore: 'http://host.docker.internal:4100',
-      wechartDraft: 'd1',
-    });
-    expect(payloads[0]).not.toHaveProperty('wechartDraft');
-  });
-
-  it('is added by the server from its config', async () => {
+describe('the tokens Cube is sent (T431, AC-327)', () => {
+  it('name no model store: Cube has none to read from', async () => {
     const payloads: Record<string, unknown>[] = [];
     const original = globalThis.fetch;
     globalThis.fetch = (async (_url: string, init: RequestInit) => {
@@ -1723,18 +1687,16 @@ describe('the store each Cube request names (T142)', () => {
       return new Response('{"cubes":[]}');
     }) as typeof fetch;
     try {
-      const app = buildServer({
-        config: { ...config, cubeStoreUrl: 'http://host.docker.internal:4100' },
-      });
+      const app = buildServer({ config });
       await app.inject({ method: 'GET', url: '/api/meta' });
       await app.close();
     } finally {
       globalThis.fetch = original;
     }
 
-    expect(payloads[0]).toMatchObject({
-      tenant: 'acme',
-      wechartStore: 'http://host.docker.internal:4100',
-    });
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0]).toMatchObject({ tenant: 'acme' });
+    expect(payloads[0]).not.toHaveProperty('wechartStore');
+    expect(payloads[0]).not.toHaveProperty('wechartDraft');
   });
 });

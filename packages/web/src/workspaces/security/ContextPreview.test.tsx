@@ -26,8 +26,8 @@ describe('readContext', () => {
     expect(readContext('{"exp": 1, "groups": []}')).toEqual({
       problem: 'wechart sets exp itself when it signs the token: remove it.',
     });
-    expect(readContext('{"wechartDraft": "x"}')).toEqual({
-      problem: 'wechart sets wechartDraft itself when it signs the token: remove it.',
+    expect(readContext('{"wechartModel": "x"}')).toEqual({
+      problem: 'wechart sets wechartModel itself when it signs the token: remove it.',
     });
     // Claims a model may filter on are the context's own.
     expect(readContext('{"sub": "rep-7"}')).toEqual({ context: { sub: 'rep-7' } });

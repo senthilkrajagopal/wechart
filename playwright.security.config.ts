@@ -59,7 +59,6 @@ export default defineConfig({
         WECHART_XCUBE_PUBLIC_KEY: DEV_XCUBE_PUBLIC_KEY,
         WECHART_SEED: '1',
         WECHART_RESET_DATA: '1',
-        WECHART_MODEL_KEY: 'dev-model-key',
         // xcube serves this suite's model under a model id of its own, apart
         // from the phase-1 suite's (T447, AC-333): a publish through one
         // never reaches the other. A dev value, as compose's.

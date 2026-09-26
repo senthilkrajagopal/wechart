@@ -16,7 +16,7 @@ import { buildablesFrom, isFinished } from './build';
 const config = {
   cubeApiUrl: 'http://cube.invalid/cubejs-api',
   cubeApiSecret: 'secret',
-  securityContext: { tenant: 'acme', wechartStore: 'http://host.docker.internal:4100' },
+  securityContext: { tenant: 'acme' },
   port: 4100,
   modelDir: '',
 };

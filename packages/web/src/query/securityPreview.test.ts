@@ -14,8 +14,8 @@ describe('a previewed context as it runs', () => {
       previewClaimsOf({
         groups: ['sales'],
         sub: 'rep-7',
-        wechartDraft: 'x',
-        wechartStore: 'http://elsewhere',
+        wechartModel: 'x',
+        wechartRevision: 9,
         exp: 1,
         iat: 1,
         nbf: 1,

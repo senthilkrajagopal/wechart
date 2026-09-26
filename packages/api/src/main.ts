@@ -8,7 +8,6 @@ import { bookmarkStore } from './repos/bookmarks';
 import { catalog } from './repos/catalog';
 import { documents } from './repos/documents';
 import { folderAccessStore } from './repos/folder-access';
-import { publishDraftStore } from './model/drafts';
 import { readModelDir } from './model/read-dir';
 import { imageStore } from './repos/images';
 import { modelFileStore } from './repos/model-files';
@@ -82,8 +81,6 @@ async function main(): Promise<void> {
     images: imageStore(db),
     bookmarks: bookmarkStore(db),
     modelFiles,
-    // Publish drafts, for whichever replica Cube's read-back reaches (T418).
-    drafts: publishDraftStore(db),
     ...(sync === undefined ? {} : { afterPublish: () => sync.sync('publish') }),
     ...(admin === undefined ? {} : { xcube: admin }),
     publications,

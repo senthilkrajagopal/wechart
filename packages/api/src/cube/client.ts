@@ -120,12 +120,9 @@ export class CubeClient {
     });
   }
 
-  /**
-   * `/v1/meta`: the cubes, views and members the model exposes. `context`
-   * adds claims for this one request — a draft to compile (T142).
-   */
-  async meta(context?: Record<string, unknown>): Promise<unknown> {
-    return this.#request('/v1/meta', { method: 'GET' }, context);
+  /** `/v1/meta`: the cubes, views and members the model exposes. */
+  async meta(): Promise<unknown> {
+    return this.#request('/v1/meta', { method: 'GET' });
   }
 
   /**
@@ -166,22 +163,6 @@ export class CubeClient {
       { method: 'GET' },
       undefined,
       preview,
-    );
-  }
-
-  /**
-   * `/v1/sql` with claims of wechart's own for this one request — a draft to
-   * compile it under (T265): Cube builds every pre-aggregation's join of the
-   * query's cube, and runs nothing (research/cube/rollup-join-paths.md, Q5).
-   */
-  async sqlUnder(
-    query: Record<string, unknown>,
-    context: Record<string, unknown>,
-  ): Promise<unknown> {
-    return this.#request(
-      `/v1/sql?query=${encodeURIComponent(JSON.stringify(query))}`,
-      { method: 'GET' },
-      context,
     );
   }
 
@@ -416,7 +397,7 @@ const ASK_TIMEOUT_MS = 5000;
  */
 const TOKEN_CLAIMS = new Set(['iat', 'exp', 'nbf', 'iss', 'aud']);
 
-/** wechart's own claims: which model store and draft Cube compiles. */
+/** wechart's own claims: which model Cube compiles, and from which revision (T421). */
 const isWechartClaim = (key: string) => key.startsWith('wechart');
 
 /**

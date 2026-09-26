@@ -57,12 +57,6 @@ data:
         }
         {{- end }}
 
-        # Cube reads the model from the API's own Service, inside the
-        # cluster; the browser has no business there.
-        location /api/cube-model/ {
-            return 404;
-        }
-
         # With no URI part, /api/load reaches the API as /api/load. The
         # browser's own X-Request-Id passes through untouched: the API logs
         # each query by it, and a tile cancels its query by it. The API's

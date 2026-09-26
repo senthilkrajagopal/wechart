@@ -1,10 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CubeClient, CubeError } from './cube/client';
+import { CubeClient } from './cube/client';
 import { MetaCache } from './cube/meta-cache';
 import type { Config } from './config';
 import { buildServer, type ModelFile, type ModelFileStore } from './server';
+import { xcubeAdmin } from './xcube/client';
+import { fakeXcube, FAKE_ADMIN_TOKEN } from './xcube/fake';
 
 /**
  * T142 / AC-136: WHEN the user saves model changes, THE SYSTEM SHALL
@@ -13,29 +15,38 @@ import { buildServer, type ModelFile, type ModelFileStore } from './server';
  * Fails when: an invalid model is published, or the error is not attributed
  * to a file.
  *
- * Cube reads wechart's model through `infra/cube/cube.js`: the live files, a
- * version, and a draft named in the request's security context
- * (research/cube/spike-model-store-and-quick-calcs.md §1a). Here Cube is a
- * stub that reads the draft back through those same routes, as Cube does.
+ * Checked by xcube's dry run of the whole model with the change in it (T445),
+ * here a stub xcube that answers as the research records the fork's routes
+ * (`xcube/fake.ts`). Cube reads nothing from wechart (T431): no draft, and no
+ * route of the store's. What wechart checks itself — paths, templates, names
+ * a rollup lacks, crons, generated names — it checks as before.
  */
-const KEY = 'model-key';
-const STORE = 'http://host.docker.internal:4100';
 const config: Config = {
   port: 0,
   cubeApiUrl: 'http://cube.invalid/cubejs-api',
   cubeApiSecret: 'secret',
   securityContext: { tenant: 'acme' },
   modelDir: '',
-  modelKey: KEY,
-  cubeStoreUrl: STORE,
 };
 
-/** The config with one optional setting left out. */
-function without(key: 'modelKey' | 'cubeStoreUrl'): Config {
-  const copy = { ...config };
-  delete copy[key];
-  return copy;
+/** A server whose publishes xcube checks: the given stub, or one that passes everything. */
+function serve(options: Parameters<typeof buildServer>[0], stub = fakeXcube()) {
+  return buildServer({
+    xcube: xcubeAdmin({
+      cubeApiUrl: config.cubeApiUrl,
+      model: 'dev',
+      token: FAKE_ADMIN_TOKEN,
+      fetch: stub.fetch,
+    }),
+    ...options,
+  });
 }
+
+/** What a stub xcube was asked to check: each dry run's files. */
+const checkedFiles = (stub: ReturnType<typeof fakeXcube>) =>
+  stub.calls
+    .filter((call) => call.path.endsWith('?dryRun=true'))
+    .map((call) => (call.body as { files: ModelFile[] }).files);
 
 const ORDERS = { path: 'cubes/orders.yml', content: 'cubes:\n  - name: orders\n' };
 const VIEW = { path: 'views/summary.yml', content: 'views:\n  - name: summary\n' };
@@ -56,129 +67,52 @@ function memory(initial: readonly ModelFile[]): ModelFileStore & { files: ModelF
   return store;
 }
 
-/** A Cube whose `/v1/meta` reads the draft its context names, through wechart's own route. */
-function cubeReading(
-  /** The server, once built: Cube is made before the server that holds it. */
-  holder: { app?: FastifyInstance },
-  answer: (files: { fileName: string; content: string }[]) => unknown,
-) {
+/**
+ * A Cube that records when its model is read: a publish reads nothing of it
+ * but, for generated files, its compiled model's names (T276).
+ */
+function cubeReading() {
   const client = new CubeClient({
     apiUrl: config.cubeApiUrl,
     apiSecret: 'secret',
     securityContext: config.securityContext,
   });
-  const contexts: Record<string, unknown>[] = [];
-  const meta = async (context?: Record<string, unknown>) => {
-    contexts.push(context ?? {});
-    const draft = context?.['wechartDraft'];
-    if (holder.app === undefined) throw new Error('no server yet');
-    const response = await holder.app.inject({
-      method: 'GET',
-      url: `/api/cube-model/${typeof draft === 'string' ? `drafts/${draft}` : 'files'}`,
-      headers: { 'x-wechart-model-key': KEY },
-    });
-    return answer((response.json() as { files: { fileName: string; content: string }[] }).files);
-  };
+  const asked: string[] = [];
   return {
     cube: Object.create(client, {
-      meta: { value: meta },
-      // `/v1/sql` under a draft whose rollups Cube can join, as T265 asks it.
-      sqlUnder: { value: async () => ({ sql: {} }) },
+      meta: {
+        value: async () => {
+          asked.push('meta');
+          return { cubes: [] };
+        },
+      },
+      metaExtended: { value: async () => ({ cubes: [] }) },
     }) as CubeClient,
-    contexts,
+    asked,
   };
 }
 
 const publish = (app: FastifyInstance, files: readonly ModelFile[]) =>
   app.inject({ method: 'POST', url: '/api/model/publish', payload: { files } });
 
-describe('the model, as Cube reads it', () => {
-  it('is served to Cube only with the key', async () => {
-    const app = buildServer({ config, modelFiles: memory([ORDERS, VIEW]) });
-
-    const without = await app.inject({ method: 'GET', url: '/api/cube-model/files' });
-    const wrong = await app.inject({
-      method: 'GET',
-      url: '/api/cube-model/files',
-      headers: { 'x-wechart-model-key': 'guess' },
-    });
-    const right = await app.inject({
-      method: 'GET',
-      url: '/api/cube-model/files',
-      headers: { 'x-wechart-model-key': KEY },
-    });
-
-    expect(without.statusCode).toBe(401);
-    expect(wrong.statusCode).toBe(401);
-    // Named as Cube's FileRepository names them: `fileName`.
-    expect(right.json()).toEqual({
-      files: [
-        { fileName: 'cubes/orders.yml', content: ORDERS.content },
-        { fileName: 'views/summary.yml', content: VIEW.content },
-      ],
-    });
-    await app.close();
-  });
-
-  it('is not served at all where no key is set', async () => {
-    const app = buildServer({ config: without('modelKey'), modelFiles: memory([ORDERS]) });
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/api/cube-model/files',
-      headers: { 'x-wechart-model-key': '' },
-    });
-
-    expect(response.statusCode).toBe(401);
-    await app.close();
-  });
-
-  it('has a version that stays while the files do, and changes when they do', async () => {
-    const store = memory([ORDERS]);
-    const app = buildServer({ config, modelFiles: store });
-    const version = async () =>
-      (
-        await app.inject({
-          method: 'GET',
-          url: '/api/cube-model/version',
-          headers: { 'x-wechart-model-key': KEY },
-        })
-      ).json<{ version: string }>().version;
-
-    const first = await version();
-    expect(await version()).toBe(first);
-    await store.write([{ ...ORDERS, content: 'cubes:\n  - name: orders\n    title: O\n' }]);
-    expect(await version()).not.toBe(first);
-    await app.close();
-  });
-});
-
 describe('publishing model changes', () => {
   const edited = { ...ORDERS, content: 'cubes:\n  - name: orders\n    title: Orders\n' };
 
-  it('asks Cube to compile the changes as a draft first, then publishes them', async () => {
+  it('asks xcube to check the whole model with the changes first, then publishes them', async () => {
     const store = memory([ORDERS, VIEW]);
     const metaCache = new MetaCache({ fetchMeta: async () => ({}) });
     const invalidate = vi.spyOn(metaCache, 'invalidate');
-    const holder: { app?: FastifyInstance } = {};
-    let seen: { fileName: string; content: string }[] = [];
-    const { cube, contexts } = cubeReading(holder, (files) => {
-      seen = files;
-      return { cubes: [] };
-    });
-    const app = buildServer({ config, modelFiles: store, cube, metaCache });
-    holder.app = app;
+    const stub = fakeXcube();
+    const { cube, asked } = cubeReading();
+    const app = serve({ config, modelFiles: store, cube, metaCache }, stub);
 
     const response = await publish(app, [edited]);
 
     expect(response.statusCode).toBe(200);
-    // The draft Cube compiled: the live files, with the change.
-    expect(seen).toEqual([
-      { fileName: 'cubes/orders.yml', content: edited.content },
-      { fileName: 'views/summary.yml', content: VIEW.content },
-    ]);
-    // Named in the security context, alongside this wechart's store.
-    expect(contexts[0]).toEqual({ wechartStore: STORE, wechartDraft: expect.any(String) });
+    // What xcube checked: the live files, with the change.
+    expect(checkedFiles(stub)).toEqual([[edited, VIEW]]);
+    // Cube's model is not read: no draft to compile there (T431).
+    expect(asked).toEqual([]);
     // Then live, and the metadata cache let go of, so the new model is read at once (AC-137).
     expect(store.files).toEqual([edited, VIEW]);
     expect(invalidate).toHaveBeenCalledTimes(1);
@@ -186,14 +120,11 @@ describe('publishing model changes', () => {
     await app.close();
   });
 
-  it('refuses what Cube rejects, with Cube’s error on the file, and publishes nothing', async () => {
+  it('refuses what xcube rejects, with its error on the file, and publishes nothing', async () => {
     const store = memory([ORDERS, VIEW]);
-    const holder: { app?: FastifyInstance } = {};
-    const { cube, contexts } = cubeReading(holder, () => {
-      throw new CubeError('Error: Compile errors:\nErrors:\nno_such_member is not defined\n', 500);
-    });
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const stub = fakeXcube();
+    stub.refuse([{ path: null, kind: 'compile', message: 'no_such_member is not defined' }]);
+    const app = serve({ config, modelFiles: store }, stub);
     const broken = {
       ...ORDERS,
       content: 'cubes:\n  - name: orders\n    sql: "{no_such_member}"\n',
@@ -206,13 +137,8 @@ describe('publishing model changes', () => {
       errors: [{ path: 'cubes/orders.yml', message: 'no_such_member is not defined' }],
     });
     expect(store.files).toEqual([ORDERS, VIEW]);
-    // The draft is gone once it has been answered.
-    const draft = await app.inject({
-      method: 'GET',
-      url: `/api/cube-model/drafts/${String(contexts[0]?.['wechartDraft'])}`,
-      headers: { 'x-wechart-model-key': KEY },
-    });
-    expect(draft.statusCode).toBe(404);
+    // Nothing stored in xcube either: a dry run keeps nothing.
+    expect(stub.head('dev')).toBeUndefined();
     await app.close();
   });
 
@@ -229,10 +155,7 @@ describe('publishing model changes', () => {
     vi.spyOn(metaCache, 'invalidate').mockImplementation(() => {
       order.push('invalidate');
     });
-    const holder: { app?: FastifyInstance } = {};
-    const { cube } = cubeReading(holder, () => ({ cubes: [] }));
-    const app = buildServer({ config, modelFiles: store, cube, metaCache });
-    holder.app = app;
+    const app = serve({ config, modelFiles: store, metaCache });
 
     await publish(app, [edited]);
 
@@ -240,29 +163,33 @@ describe('publishing model changes', () => {
     await app.close();
   });
 
-  it('says Cube could not be asked, rather than publishing unchecked', async () => {
+  it('says xcube could not be asked, rather than publishing unchecked', async () => {
     const store = memory([ORDERS]);
-    const holder: { app?: FastifyInstance } = {};
-    const { cube } = cubeReading(holder, () => {
-      throw new Error('connect ECONNREFUSED');
-    });
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const stub = fakeXcube();
+    stub.down(true);
+    const app = serve({ config, modelFiles: store }, stub);
 
     const response = await publish(app, [edited]);
 
     expect(response.statusCode).toBe(502);
+    expect(response.json<{ error: string }>().error).toBe(
+      'xcube could not be asked to check the model, so nothing was published.',
+    );
     expect(store.files).toEqual([ORDERS]);
     await app.close();
   });
 
-  it('can’t publish where Cube isn’t reading this store', async () => {
+  /** T431: no one else checks a change, or serves it. */
+  it('can’t publish where xcube isn’t configured, and says which settings name it', async () => {
     const store = memory([ORDERS]);
-    const app = buildServer({ config: without('cubeStoreUrl'), modelFiles: store });
+    const app = buildServer({ config, modelFiles: store });
 
     const response = await publish(app, [edited]);
 
     expect(response.statusCode).toBe(409);
+    expect(response.json<{ error: string }>().error).toBe(
+      'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_XCUBE_ADMIN_TOKEN), so a change could not be checked or served.',
+    );
     expect(store.files).toEqual([ORDERS]);
     await app.close();
   });
@@ -327,7 +254,7 @@ describe('publishing model changes', () => {
         },
       },
     ) as CubeClient;
-    const app = buildServer({ config, modelFiles: store, cube });
+    const app = serve({ config, modelFiles: store, cube });
 
     // Cube's own test for a template: `{%`, `%}`, `{{` or `}}` (research/cube/data-modeling.md).
     for (const marker of ["{{ env_var('CUBEJS_API_SECRET') }}", '{% set x = 1 %}', 'a }} b']) {
@@ -350,10 +277,7 @@ describe('publishing model changes', () => {
 
   it('publishes a Jinja comment’s braces as the text they are: Cube renders none of it', async () => {
     const store = memory([ORDERS]);
-    const holder: { app?: FastifyInstance } = {};
-    const { cube } = cubeReading(holder, () => ({ cubes: [] }));
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const app = serve({ config, modelFiles: store });
     const commented = {
       ...ORDERS,
       content: 'cubes:\n  - name: orders\n    description: "{# not a tag #}"\n',
@@ -372,96 +296,20 @@ describe('publishing model changes', () => {
       content: 'cubes:\n{% for n in ["a"] %}\n  - name: {{ n }}\n{% endfor %}\n',
     };
     const store = memory([template]);
-    const app = buildServer({ config, modelFiles: store });
+    const stub = fakeXcube();
+    const app = serve({ config, modelFiles: store }, stub);
 
     const response = await publish(app, [
       { path: template.path, content: 'cubes:\n  - name: a\n' },
     ]);
 
     expect(response.statusCode).toBe(409);
-    expect(store.files).toEqual([template]);
-    await app.close();
-  });
-
-  it('publishes nothing that Cube answered without reading: its answer was of another model', async () => {
-    // Cube not told to read this store answers from its directory, 200 and all.
-    const store = memory([ORDERS]);
-    const cube = Object.create(
-      new CubeClient({ apiUrl: config.cubeApiUrl, apiSecret: 'secret', securityContext: {} }),
-      { meta: { value: async () => ({ cubes: [] }) } },
-    ) as CubeClient;
-    const app = buildServer({ config, modelFiles: store, cube });
-
-    const response = await publish(app, [edited]);
-
-    expect(response.statusCode).toBe(502);
-    expect(store.files).toEqual([ORDERS]);
-    await app.close();
-  });
-
-  it('says Cube refused the check for a missing scope, not that it reads another store (T176)', async () => {
-    const store = memory([ORDERS]);
-    const cube = Object.create(
-      new CubeClient({ apiUrl: config.cubeApiUrl, apiSecret: 'secret', securityContext: {} }),
-      {
-        meta: {
-          value: async () => {
-            throw new CubeError('API scope is missing: meta', 403);
-          },
-        },
-      },
-    ) as CubeClient;
-    const app = buildServer({ config, modelFiles: store, cube });
-
-    const response = await publish(app, [edited]);
-
-    expect(response.statusCode).toBe(502);
-    expect((response.json() as { error: string }).error).toContain('API scope is missing: meta');
-    expect((response.json() as { error: string }).error).not.toContain('WECHART_MODEL_STORES');
-    expect(store.files).toEqual([ORDERS]);
-    await app.close();
-  });
-
-  it('says Cube failed, not that it refused the file, when it failed without reading it', async () => {
-    const store = memory([ORDERS]);
-    const cube = Object.create(
-      new CubeClient({ apiUrl: config.cubeApiUrl, apiSecret: 'secret', securityContext: {} }),
-      {
-        meta: {
-          value: async () => {
-            throw new CubeError("Error: wechart's model store answered 401 to version", 500);
-          },
-        },
-      },
-    ) as CubeClient;
-    const app = buildServer({ config, modelFiles: store, cube });
-
-    const response = await publish(app, [edited]);
-
-    expect(response.statusCode).toBe(502);
-    expect(store.files).toEqual([ORDERS]);
-    await app.close();
-  });
-
-  // T422's review: Cube not reached is Cube not asked, not Cube answering
-  // without reading, which would send the operator to the store's settings.
-  it('says Cube could not be asked when Cube can’t be reached at all', async () => {
-    const store = memory([ORDERS]);
-    const cube = new CubeClient({
-      apiUrl: config.cubeApiUrl,
-      apiSecret: 'secret',
-      securityContext: {},
-      fetchImpl: () => Promise.reject(new TypeError('fetch failed')),
-    });
-    const app = buildServer({ config, modelFiles: store, cube });
-
-    const response = await publish(app, [edited]);
-
-    expect(response.statusCode).toBe(502);
     expect(response.json<{ error: string }>().error).toBe(
-      'Cube could not be asked to check the model, so nothing was published.',
+      'cubes/generated.yml is a Jinja template, and templates are read-only here.',
     );
-    expect(store.files).toEqual([ORDERS]);
+    expect(store.files).toEqual([template]);
+    // Refused before anything was checked.
+    expect(checkedFiles(stub)).toEqual([]);
     await app.close();
   });
 });
@@ -486,16 +334,11 @@ describe('publishing a rollup that names what the model doesn’t have', () => {
     path: 'cubes/orders.yml',
     content: `cubes:\n  - name: orders\n    sql_table: t\n    measures:\n      - name: count\n        type: count\n    pre_aggregations:\n      - name: by_country\n        measures: [CUBE.count]\n        dimensions: [${dimensions}]\n`,
   });
-  const compiling = () => {
-    const holder: { app?: FastifyInstance } = {};
-    return { holder, ...cubeReading(holder, () => ({ cubes: [] })) };
-  };
 
   it('is refused on the rollup, naming each unknown member, and nothing is published', async () => {
     const store = memory([CUSTOMERS, ORDERS]);
-    const { holder, cube } = compiling();
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const { cube } = cubeReading();
+    const app = serve({ config, modelFiles: store, cube });
 
     const response = await publish(app, [withRollup('customers.country, CUBE.no_such_member')]);
 
@@ -522,9 +365,8 @@ describe('publishing a rollup that names what the model doesn’t have', () => {
   it('is refused when the change takes away a member another file’s rollup names', async () => {
     const good = withRollup('customers.country');
     const store = memory([CUSTOMERS, good]);
-    const { holder, cube } = compiling();
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const { cube } = cubeReading();
+    const app = serve({ config, modelFiles: store, cube });
     const withoutCountry = {
       ...CUSTOMERS,
       content: 'cubes:\n  - name: customers\n    sql_table: t\n',
@@ -551,27 +393,43 @@ describe('publishing a rollup that names what the model doesn’t have', () => {
     await app.close();
   });
 
-  it('does not hold up a change to another file over a rollup already live and unchanged by it', async () => {
+  /**
+   * R29: every break refuses a publish, a rollup already refused before the
+   * change included. This let a change to another file through while a live
+   * rollup named what the model doesn't have; xcube's probe of that rollup
+   * then failed, and the publish answered 502 rather than naming it (T431's
+   * review).
+   */
+  it('refuses a change to another file while a live rollup it leaves alone names what the model doesn’t have (R29)', async () => {
     const broken = withRollup('CUBE.no_such_member');
     const store = memory([CUSTOMERS, broken]);
-    const { holder, cube } = compiling();
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const { cube } = cubeReading();
+    const app = serve({ config, modelFiles: store, cube });
     const titled = { ...CUSTOMERS, content: `${CUSTOMERS.content}    title: Customers\n` };
 
     const response = await publish(app, [titled]);
 
-    expect(response.statusCode).toBe(200);
-    expect(store.files).toEqual([titled, broken]);
+    expect(response.statusCode).toBe(422);
+    expect(
+      (response.json() as { errors: { preAggregation: unknown }[] }).errors.map(
+        ({ preAggregation }) => preAggregation,
+      ),
+    ).toEqual([
+      {
+        cube: 'orders',
+        name: 'by_country',
+        unknown: [{ list: 'dimensions', name: 'CUBE.no_such_member' }],
+      },
+    ]);
+    expect(store.files).toEqual([CUSTOMERS, broken]);
     await app.close();
   });
 
-  it('does not hold up a change that mends some of an untouched rollup’s names', async () => {
+  it('refuses a change that mends only some of an untouched rollup’s names, naming the rest (R29)', async () => {
     const broken = withRollup('customers.region, customers.segment');
     const store = memory([CUSTOMERS, broken]);
-    const { holder, cube } = compiling();
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const { cube } = cubeReading();
+    const app = serve({ config, modelFiles: store, cube });
     // `region` is added; `segment` was already missing and still is.
     const withRegion = {
       ...CUSTOMERS,
@@ -580,8 +438,13 @@ describe('publishing a rollup that names what the model doesn’t have', () => {
 
     const response = await publish(app, [withRegion]);
 
-    expect(response.statusCode).toBe(200);
-    expect(store.files).toEqual([withRegion, broken]);
+    expect(response.statusCode).toBe(422);
+    expect(
+      (response.json() as { errors: { preAggregation: { unknown: unknown } }[] }).errors.map(
+        ({ preAggregation }) => preAggregation.unknown,
+      ),
+    ).toEqual([[{ list: 'dimensions', name: 'customers.segment' }]]);
+    expect(store.files).toEqual([CUSTOMERS, broken]);
     await app.close();
   });
 });
@@ -597,16 +460,11 @@ describe('publishing a refresh key Cube can’t run', () => {
     path: 'cubes/orders.yml',
     content: `cubes:\n  - name: orders\n    sql_table: t\n    measures:\n      - name: count\n        type: count\n    pre_aggregations:\n      - name: main\n        measures: [CUBE.count]\n        refresh_key:\n          every: "${every}"\n          timezone: America/Los_Angeles\n`,
   });
-  const compiling = () => {
-    const holder: { app?: FastifyInstance } = {};
-    return { holder, ...cubeReading(holder, () => ({ cubes: [] })) };
-  };
 
   it('is refused on its line, saying why, and nothing is published', async () => {
     const store = memory([ORDERS]);
-    const { holder, cube } = compiling();
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const { cube } = cubeReading();
+    const app = serve({ config, modelFiles: store, cube });
 
     const response = await publish(app, [rollupEvery('55 7 * * 1-5')]);
 
@@ -626,9 +484,8 @@ describe('publishing a refresh key Cube can’t run', () => {
 
   it('refuses a cube’s own refresh key Cube can’t run too, which fails every query on the cube', async () => {
     const store = memory([ORDERS]);
-    const { holder, cube } = compiling();
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const { cube } = cubeReading();
+    const app = serve({ config, modelFiles: store, cube });
     const cubeKey = {
       path: 'cubes/orders.yml',
       content:
@@ -650,9 +507,8 @@ describe('publishing a refresh key Cube can’t run', () => {
   it('publishes a cron Cube runs as written, and an interval', async () => {
     for (const every of ['0 8 * * *', '1 hour']) {
       const store = memory([ORDERS]);
-      const { holder, cube } = compiling();
-      const app = buildServer({ config, modelFiles: store, cube });
-      holder.app = app;
+      const { cube } = cubeReading();
+      const app = serve({ config, modelFiles: store, cube });
       const response = await publish(app, [rollupEvery(every)]);
       expect(response.statusCode, every).toBe(200);
       await app.close();
@@ -672,10 +528,6 @@ describe('publishing a refresh key Cube can’t run', () => {
  * declare a cube or view the store already has.
  */
 describe('publishing generated cubes (AC-249)', () => {
-  const compiling = () => {
-    const holder: { app?: FastifyInstance } = {};
-    return { holder, ...cubeReading(holder, () => ({ cubes: [] })) };
-  };
   const create = (app: FastifyInstance, files: readonly ModelFile[]) =>
     app.inject({ method: 'POST', url: '/api/model/publish', payload: { files, create: true } });
   const generated = (path: string, cube: string) => ({
@@ -685,9 +537,9 @@ describe('publishing generated cubes (AC-249)', () => {
 
   it('refuses a file already stored, and a cube or view already declared, naming each', async () => {
     const store = memory([ORDERS, VIEW]);
-    const { holder, cube, contexts } = compiling();
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const stub = fakeXcube();
+    const { cube } = cubeReading();
+    const app = serve({ config, modelFiles: store, cube }, stub);
 
     const response = await create(app, [
       generated('cubes/orders.yml', 'public_orders'),
@@ -712,9 +564,9 @@ describe('publishing generated cubes (AC-249)', () => {
         ],
       },
     ]);
-    // Nothing is written, the clashing or the rest; and Cube is not asked.
+    // Nothing is written, the clashing or the rest; and xcube is not asked.
     expect(store.files).toEqual([ORDERS, VIEW]);
-    expect(contexts).toEqual([]);
+    expect(checkedFiles(stub)).toEqual([]);
     await app.close();
   });
 
@@ -729,7 +581,8 @@ describe('publishing generated cubes (AC-249)', () => {
       { path: 'cubes/orders.js', content: 'cube(`orders`, { sql_table: `public.orders` });\n' },
       { path: 'cubes/lines.yml', content: 'cubes:\n  - name: {{ "lines" }}\n' },
     ]);
-    const { holder, cube, contexts } = compiling();
+    const stub = fakeXcube();
+    const { cube } = cubeReading();
     const compiled = Object.create(cube, {
       metaExtended: {
         value: async () => ({
@@ -740,8 +593,7 @@ describe('publishing generated cubes (AC-249)', () => {
         }),
       },
     }) as CubeClient;
-    const app = buildServer({ config, modelFiles: store, cube: compiled });
-    holder.app = app;
+    const app = serve({ config, modelFiles: store, cube: compiled }, stub);
 
     const response = await create(app, [
       generated('cubes/public_orders.yml', 'orders'),
@@ -764,15 +616,14 @@ describe('publishing generated cubes (AC-249)', () => {
       },
     ]);
     expect(store.files.map((file) => file.path)).toEqual(['cubes/orders.js', 'cubes/lines.yml']);
-    expect(contexts).toEqual([]);
+    expect(checkedFiles(stub)).toEqual([]);
     await app.close();
   });
 
   it('names the cube once when its file and its name are the same stored file’s', async () => {
     const store = memory([ORDERS]);
-    const { holder, cube } = compiling();
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const { cube } = cubeReading();
+    const app = serve({ config, modelFiles: store, cube });
 
     const response = await create(app, [generated('cubes/orders.yml', 'orders')]);
 
@@ -790,9 +641,8 @@ describe('publishing generated cubes (AC-249)', () => {
 
   it('publishes generated files that clash with nothing', async () => {
     const store = memory([ORDERS]);
-    const { holder, cube } = compiling();
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const { cube } = cubeReading();
+    const app = serve({ config, modelFiles: store, cube });
 
     const response = await create(app, [generated('cubes/customers.yml', 'customers')]);
 
@@ -806,9 +656,8 @@ describe('publishing generated cubes (AC-249)', () => {
 
   it('still overwrites a stored file when an edit, not a generation, is published', async () => {
     const store = memory([ORDERS]);
-    const { holder, cube } = compiling();
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const { cube } = cubeReading();
+    const app = serve({ config, modelFiles: store, cube });
     const edited = {
       path: 'cubes/orders.yml',
       content: 'cubes:\n  - name: orders\n    title: O\n',
@@ -866,9 +715,9 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
       'cubes:\n  - name: user\n    sql_table: public.users\n    dimensions:\n      - name: city\n        sql: city\n        type: string\n',
   };
 
-  type Seen = { fileName: string; content: string }[];
+  type Seen = readonly ModelFile[];
   /** As the stub decides: the probed cube's rollups, over these files, joined — or Cube's refusal. */
-  type Refuses = (cube: string, files: Seen) => CubeError | undefined;
+  type Refuses = (cube: string, files: Seen) => { status: number; error: string } | undefined;
   /** By default, a rollup naming user.city in a file that declares no join. */
   const unjoined: Refuses = (cube, files) =>
     files.some(
@@ -877,50 +726,33 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
         file.content.includes('user.city') &&
         !file.content.includes('joins:'),
     )
-      ? new CubeError(REASON, 400)
+      ? { status: 400, error: REASON }
       : undefined;
 
   /**
-   * A Cube whose `/v1/sql` reads the model it's asked under — the draft, or
-   * the live model with no draft named — and answers for the probed cube.
+   * A stub xcube whose check plans each probed cube's rollups over the files
+   * it's asked to check, as `refuses` decides (T445): Cube's `/v1/sql` for one
+   * member of the cube, a 400 where it can't join them. Cube itself is asked
+   * nothing (`cube`, recording).
    */
-  function cubeProbing(holder: { app?: FastifyInstance }, refuses: Refuses = unjoined) {
-    const probed: { query: unknown; context: unknown }[] = [];
-    const { cube } = cubeReading(holder, () => ({ cubes: [] }));
-    const probing = Object.create(cube, {
-      sqlUnder: {
-        value: async (query: Record<string, unknown>, context?: Record<string, unknown>) => {
-          probed.push({ query, context });
-          const draft = context?.['wechartDraft'];
-          if (holder.app === undefined) throw new Error('no server');
-          const read = await holder.app.inject({
-            method: 'GET',
-            url:
-              typeof draft === 'string'
-                ? `/api/cube-model/drafts/${draft}`
-                : '/api/cube-model/files',
-            headers: { 'x-wechart-model-key': KEY },
-          });
-          const files = (read.json() as { files?: Seen }).files ?? [];
-          const member = [
-            ...((query['measures'] as string[] | undefined) ?? []),
-            ...((query['dimensions'] as string[] | undefined) ?? []),
-          ][0];
-          const refused = refuses((member ?? '').split('.')[0] ?? '', files);
-          if (refused !== undefined) throw refused;
-          return { sql: {} };
-        },
-      },
-    }) as CubeClient;
-    return { cube: probing, probed };
+  function cubeProbing(refuses: Refuses = unjoined) {
+    const probed: unknown[] = [];
+    const stub = fakeXcube();
+    stub.answerProbes((probe, files) => {
+      probed.push(probe.query);
+      const member = [
+        ...((probe.query['measures'] as string[] | undefined) ?? []),
+        ...((probe.query['dimensions'] as string[] | undefined) ?? []),
+      ][0];
+      return refuses((member ?? '').split('.')[0] ?? '', files);
+    });
+    return { ...cubeReading(), probed, stub };
   }
 
   it('is refused on the rollup, in its file, with Cube’s reason, and nothing is published', async () => {
     const store = memory([USER]);
-    const holder: { app?: FastifyInstance } = {};
-    const { cube, probed } = cubeProbing(holder);
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const { cube, probed, stub } = cubeProbing();
+    const app = serve({ config, modelFiles: store, cube }, stub);
 
     const response = await publish(app, [rollupOn(false)]);
 
@@ -939,22 +771,15 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
       },
     ]);
     expect(store.files).toEqual([USER]);
-    // One member of the rollup's cube, asked under the draft with the store.
-    expect(probed).toEqual([
-      {
-        query: { measures: ['base.count'] },
-        context: { wechartStore: STORE, wechartDraft: expect.any(String) },
-      },
-    ]);
+    // One member of the rollup's cube, asked of xcube's check.
+    expect(probed).toEqual([{ measures: ['base.count'] }]);
     await app.close();
   });
 
   it('publishes the same rollup once its cube declares the join', async () => {
     const store = memory([USER]);
-    const holder: { app?: FastifyInstance } = {};
-    const { cube } = cubeProbing(holder);
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const { cube, stub } = cubeProbing();
+    const app = serve({ config, modelFiles: store, cube }, stub);
 
     const response = await publish(app, [rollupOn(true)]);
 
@@ -965,10 +790,8 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
 
   it('asks nothing of a change with no rollup in it', async () => {
     const store = memory([USER]);
-    const holder: { app?: FastifyInstance } = {};
-    const { cube, probed } = cubeProbing(holder);
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
+    const { cube, probed, stub } = cubeProbing();
+    const app = serve({ config, modelFiles: store, cube }, stub);
 
     const response = await publish(app, [ORDERS]);
 
@@ -984,11 +807,9 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
   });
   const serving = (files: readonly ModelFile[], refuses?: Refuses) => {
     const store = memory(files);
-    const holder: { app?: FastifyInstance } = {};
-    const { cube, probed } = cubeProbing(holder, refuses);
-    const app = buildServer({ config, modelFiles: store, cube });
-    holder.app = app;
-    return { app, store, probed };
+    const { cube, probed, stub } = cubeProbing(refuses);
+    const app = serve({ config, modelFiles: store, cube }, stub);
+    return { app, store, probed: probed as Record<string, unknown>[] };
   };
   const joinRefusal = (path: string, line: number, cube: string, name: string, reason: string) => ({
     path,
@@ -1039,10 +860,8 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
     const unreached = "Can't find join path to join 'base', 'orders'";
     const { app, store } = serving([base, statuses, user(true)], (probed, files) =>
       probed === 'base' &&
-      !(
-        files.find((file) => file.fileName === 'cubes/user.yml')?.content.includes('joins:') ?? true
-      )
-        ? new CubeError(unreached, 400)
+      !(files.find((file) => file.path === 'cubes/user.yml')?.content.includes('joins:') ?? true)
+        ? { status: 400, error: unreached }
         : undefined,
     );
 
@@ -1057,25 +876,24 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
     await app.close();
   });
 
-  it('lets a change through that leaves a rollup, in a file it doesn’t touch, as broken as it was', async () => {
+  /**
+   * R29: every break refuses a publish, one the change leaves alone that was
+   * broken before it included. The draft check let this through (it asked
+   * the live model too, and let an old refusal pass); xcube's sends no
+   * `compare`, and refuses.
+   */
+  it('refuses a change that leaves a rollup, in a file it doesn’t touch, as broken as it was (R29)', async () => {
     const { app, store, probed } = serving([rollupOn(false), USER]);
 
     const response = await publish(app, [ORDERS]);
 
-    expect(response.statusCode).toBe(200);
-    expect(store.files.map((file) => file.path)).toEqual([
-      'cubes/base.yml',
-      'cubes/orders.yml',
-      'cubes/user.yml',
+    expect([response.statusCode, response.json()]).toEqual([
+      422,
+      { errors: [joinRefusal('cubes/base.yml', 8, 'base', 'by_city', REASON)] },
     ]);
-    // Asked under the draft, then of the model Cube serves now: broken there already.
-    expect(probed).toEqual([
-      {
-        query: { measures: ['base.count'] },
-        context: { wechartStore: STORE, wechartDraft: expect.any(String) },
-      },
-      { query: { measures: ['base.count'] }, context: { wechartStore: STORE } },
-    ]);
+    expect(store.files.map((file) => file.path)).toEqual(['cubes/base.yml', 'cubes/user.yml']);
+    // Asked once, of the model with the change in it: no second ask of the live one.
+    expect(probed).toEqual([{ measures: ['base.count'] }]);
     await app.close();
   });
 
@@ -1119,7 +937,7 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
       422,
       { errors: [joinRefusal('cubes/ext.yml', 5, 'ext', 'by_city', REASON)] },
     ]);
-    expect(probed.map((each) => each.query)).toEqual([{ measures: ['ext.count'] }]);
+    expect(probed).toEqual([{ measures: ['ext.count'] }]);
     expect(store.files).toEqual([plain, USER]);
     await app.close();
   });
@@ -1142,7 +960,7 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
 
     await publish(app, [reaching]);
 
-    expect(probed.map((each) => each.query)).toEqual([{ measures: ['base.count'] }]);
+    expect(probed).toEqual([{ measures: ['base.count'] }]);
     await app.close();
   });
 
@@ -1188,7 +1006,7 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
       '            granularity: day',
     ]);
     const { app } = serving([region, user], (probed) =>
-      probed === 'base' ? new CubeError(REASON, 400) : undefined,
+      probed === 'base' ? { status: 400, error: REASON } : undefined,
     );
 
     const response = await publish(app, [base]);
@@ -1205,14 +1023,17 @@ describe('publishing a rollup its cubes cannot be joined for (AC-235)', () => {
     await app.close();
   });
 
-  it('publishes nothing when Cube can’t be asked about the rollups', async () => {
-    const { app, store } = serving([USER], () => new CubeError('upstream timed out', 500));
+  it('publishes nothing when xcube can’t check the rollups', async () => {
+    const { app, store } = serving([USER], () => ({ status: 500, error: 'upstream timed out' }));
 
     const response = await publish(app, [rollupOn(true)]);
 
     expect([response.statusCode, response.json()]).toEqual([
       502,
-      { error: 'Cube could not be asked to check the rollups of base, so nothing was published.' },
+      {
+        error:
+          'xcube could not check the rollups of base (upstream timed out), so nothing was published.',
+      },
     ]);
     expect(store.files).toEqual([USER]);
     await app.close();

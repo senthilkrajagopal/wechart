@@ -4983,7 +4983,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - **Workspaces are folder ids** of the form `ws:<userKey>`. The phase-1 pseudo-root `mine` resolves to the signed-in user's workspace, and phase-1 items in `mine` move to the workspace of the single user `admin`.
 - ~~**The folder chain Cube compiles** is the list of model-bearing folder ids, nearest first, in a signed `wechartModel` claim that only the API mints after checking access (research `cube/per-folder-models.md`, layout B).~~ **Superseded 2026-09-25** by the user's architecture decisions 1–3 and 5 (`docs/inputs/2026-09-25-architecture-decisions.md`; requirements §P2.4 "Architecture", R27). Cube plus xcube serve one flat model under folder-id prefixes. xcube binds short names at publish, nearest first from each item's own folder. No chain is signed into tokens. **Then, 2026-09-26** `[IP 1–4]`: wechart publishes changesets and the folder tree to xcube, and xcube compiles the published items as modules.
 - **The security-on end-to-end suite is separate.** It is `playwright.security.config.ts`, with its own API (port 4300), web preview (port 5373) and Dex, so the phase-1 suite (security off) stays as it is until AC-308's end-of-phase check (the user's R13).
-- **Every API route declares its access class**: `public` (health and `/api/auth/*`), `cube` (key-guarded model routes), `user`, or `admin` (a Super-Admin's alone, T323). A test fails for any unclassified route (T318). *The `cube` class goes with the model routes (decision 1: Cube never calls wechart; AC-251, AC-327). That happens in slice 3 (T431).*
+- **Every API route declares its access class**: `public` (health and `/api/auth/*`), `cube` (key-guarded model routes), `user`, or `admin` (a Super-Admin's alone, T323). A test fails for any unclassified route (T318). *The `cube` class goes with the model routes (decision 1: Cube never calls wechart; AC-251, AC-327). That happens in ~~slice 3~~ slice 2's cut-over (T431, done 2026-09-26).*
 - **The service credential and xcube's admin routes (2026-09-26).** wechart calls xcube's admin API (`/v1/semantic/*`, `[plan]` "The contract") only from its server, with a service token of its own (`role: service`, `aud: xcube-admin`). The contract's paths are the plan's draft. A route the tasks need but the draft lacks, such as the JWKS push, is proposed on the plan doc's contract section before it is built.
 
 ## P2.0 Foundations: the request's user and effective access
@@ -6387,12 +6387,43 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - `migration.spec.ts`: each seeded dashboard's tile data is recorded before the migration, and matches after it;
     - no reference stored in a chart, dashboard, marking, bookmark or link names a short cube name any more (AC-331).
   - Depends on: T429
-- [ ] T431 (AC-327, AC-251) Remove Cube's model callbacks: `/api/cube-model/*`, the `cube` access class, and the model logic in `cube.js` *(moved into slice 2's cut-over, 2026-09-26, `[R29]`: it follows T447 there)*
-  - Files: `packages/api/src/model/publish.ts` (the draft path), `packages/api/src/model/drafts.ts` and `publish-drafts.test.ts` (T418's, gone), a migration dropping `publish_drafts`, `packages/api/src/auth/guard.ts` (+ test), `packages/api/src/config.ts` (`WECHART_MODEL_KEY`, `WECHART_CUBE_STORE_URL`), the Playwright configs, `docker-compose.yml` (`WECHART_MODEL_STORES`, `WECHART_MODEL_KEY`, `extra_hosts`), the Helm chart's same settings, `e2e/security/no-callbacks.spec.ts`
+- [x] T431 (AC-327, AC-251) Remove Cube's model callbacks: `/api/cube-model/*`, the `cube` access class, and the model logic in `cube.js` *(moved into slice 2's cut-over, 2026-09-26, `[R29]`: it follows T447 there)*
+  - Files: `packages/api/src/model/publish.ts` (the draft path), `packages/api/src/model/drafts.ts` and `publish-drafts.test.ts` (T418's, gone), a migration dropping `publish_drafts`, `packages/api/src/auth/guard.ts` (+ test), `packages/api/src/config.ts` (`WECHART_MODEL_KEY`, `WECHART_CUBE_STORE_URL`), `packages/api/src/cube/client.ts` (the draft-only `meta(context)` and `sqlUnder`), `infra/cube/cube.js` (the draft's scopes), the Playwright configs, `docker-compose.yml` (`WECHART_MODEL_STORES`, `WECHART_MODEL_KEY`, `extra_hosts`), the Helm chart's same settings and nginx's `/api/cube-model/` block, `deploy/helm/verify.sh`, ~~`e2e/security/no-callbacks.spec.ts`~~ `e2e/no-callbacks.spec.ts` and `e2e/api-process.ts` (as built)
   - Failing test:
     - `guard.test.ts`: no route has the `cube` class, and every route but health and sign-in answers 401 without a session (AC-251);
     - `no-callbacks.spec.ts`: publishing, querying and a refresh run with a recorder on wechart's port, which sees no request from Cube or xcube (AC-327).
   - Depends on: T447 ~~T426, T429, T430~~
+  - **Done 2026-09-26.**
+    - **Removed:**
+      - the model store's routes (`/api/cube-model/files`, `version`, `drafts/:id`) and the `cube` access class;
+      - the drafts, their table (a migration drops `publish_drafts`), and the draft path of a publish;
+      - the store settings (`WECHART_MODEL_KEY`, `WECHART_CUBE_STORE_URL`), which are now ignored;
+      - the store claim in every token, and `cube.js`'s draft scopes;
+      - the Cube client's draft-only `meta(context)` and `sqlUnder`;
+      - compose's `extra_hosts`, and the Helm chart's model key, its env and nginx's `/api/cube-model/` block.
+    - **Now:**
+      - Every publish is checked by xcube's dry run. With no xcube configured it answers 409, saying why.
+      - Every break refuses the publish (R29). T431's review found one exception: a live rollup naming what the model doesn't have, in a file the change leaves alone, was still let through by comparing against the live model. xcube's probe of that rollup then failed, so the user got a 502 instead of the rollup's names. That compare is gone, and the two tests that asserted it are turned round.
+    - **What the tests show:**
+      - `guard.test.ts` (security on): every route but health and sign-in answers 401 with nothing else, no `/api/cube-model` route exists, and the old key gets `401 unauthenticated`.
+      - `e2e/security/page-gate.spec.ts`: pages go to sign-in. Security suite, Chrome: 28/28.
+      - `e2e/no-callbacks.spec.ts` (Chrome) puts a recorder in front of an API of its own. The recorder is the address the old store setting would have given Cube. Through it, the test publishes, queries the new cube, builds the seed rollup to `done`, and reads the field list. The recorder sees only the test's own marked requests. A control request from inside the Cube container reaches it first, so a callback would have been seen. `/api/cube-model/*` answers 404, and the browser asks only wechart's origin.
+      - `deploy/helm/verify.sh` with sign-in on: all checks pass on `10c9797-t431`, and the Secret no longer holds `model-key`. The release's database and the dev database no longer have `publish_drafts`.
+      - Unit suite green (api 543, web 1,495, charts 440); the Chrome e2e for the touched and publishing specs pass (127).
+    - **Tests the test-integrity hook flags, and why:**
+      - `publish.test.ts` and `server.test.ts` lose the assertions on the store's routes and key, the draft read-back, the store settings and the draft/store claims. That behaviour was removed per R29.
+      - The "as broken as it was" cases are turned round, not dropped.
+      - `xcube-cutover.spec.ts`'s one assertion moved into `e2e/api-process.ts` with the helper it belongs to.
+    - **The cold review (PASS)** led to:
+      - the R29 compare above;
+      - the clash tests asserting that xcube was never asked, where they had asserted Cube's `meta`, which a publish no longer calls;
+      - `verify.sh` telling a 401 from the old route's by its body;
+      - `docs/deploy.md` and stale comments put right.
+    - **AC-251 ticked** on `guard.test.ts` and `page-gate.spec.ts`.
+    - **AC-327 stays open** for connection tests, which move into xcube in slice 4 (T420, T442).
+    - **Left:**
+      - The recorder watches the one address wechart ever gave Cube, not the API's own port.
+      - On Linux, the control request needs a host route that compose no longer adds.
 - [ ] T432 (AC-009, AC-137) Serve metadata from xcube's merged field list, with a new revision seen within 60 s
   - Files: `packages/api/src/cube/meta-cache.ts`, `packages/api/src/xcube/meta.ts` (+ test)
   - Failing test: `meta.test.ts`: after a changeset lands, `/api/meta` from either replica returns its new members once xcube reports the revision active on every instance, within 60 s, and without restarting Cube. ~~AC-009 and AC-137 are reworded and ticked again here (R28 Q9).~~ AC-009 and AC-137 keep their wording, and T447 re-runs their tests against xcube (2026-09-26, `[R29]`); here they are checked again against the merged field list.

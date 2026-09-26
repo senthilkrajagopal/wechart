@@ -1,9 +1,9 @@
-import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createHash, createHmac } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+import { ADMIN_TOKEN, CUBE, SECRET, startApi, stopApi, type ApiProcess } from './api-process';
 import { ownCubeFile } from './model-files';
 
 /**
@@ -31,9 +31,6 @@ import { ownCubeFile } from './model-files';
  * plain YAML's, the seed's Jinja template kept out.
  */
 const MODEL = 'e2e';
-const SECRET = 'dev-secret';
-const ADMIN_TOKEN = 'dev-xcube-admin-token-0123456789abcdef';
-const CUBE = 'http://localhost:54000/cubejs-api';
 
 const docker = (...args: string[]) =>
   execFileSync('docker', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -100,7 +97,8 @@ async function startCube(name: string): Promise<string> {
     'wechart_default',
     '--volumes-from',
     'wechart-cube:ro',
-    // The API runs on the host: this Cube's name for the host is itself.
+    // No API reachable from it, even were it to call one: its name for the
+    // host, where the APIs run, is itself (D1's isolation).
     '--add-host',
     'host.docker.internal:127.0.0.1',
     '-p',
@@ -120,60 +118,6 @@ async function startCube(name: string): Promise<string> {
     )
     .toBe(200);
   return `${url}/cubejs-api`;
-}
-
-/**
- * Another API process: the suite's built API with its settings, on its own
- * port; on this suite's database and model unless told otherwise.
- */
-async function startApi(
-  port: number,
-  { database, model = MODEL }: { database?: string; model?: string } = {},
-): Promise<{ url: string; process: ChildProcess }> {
-  const api = spawn('node', ['packages/api/dist/main.js'], {
-    cwd: new URL('..', import.meta.url).pathname,
-    // Its settings alone: a reset or another database from the shell
-    // running the suite must never reach it (T447's review).
-    env: {
-      PATH: process.env['PATH'] ?? '',
-      HOME: process.env['HOME'] ?? '',
-      WECHART_DB_URL: `postgres://wechart:wechart@localhost:55432/${database ?? 'wechart_meta'}`,
-      PORT: String(port),
-      CUBE_API_SECRET: SECRET,
-      CUBE_API_URL: CUBE,
-      WECHART_XCUBE_PUBLIC_KEY: readFileSync(
-        new URL('../infra/xcube/dev-credential-key.pub.jwk', import.meta.url),
-        'utf8',
-      ).trim(),
-      WECHART_MODEL_KEY: 'dev-model-key',
-      WECHART_XCUBE_MODEL: model,
-      WECHART_XCUBE_ADMIN_TOKEN: ADMIN_TOKEN,
-    },
-    stdio: 'ignore',
-  });
-  const url = `http://localhost:${String(port)}`;
-  try {
-    await expect
-      .poll(async () => (await fetch(`${url}/api/health`).catch(() => undefined))?.status, {
-        timeout: 60_000,
-        intervals: [500],
-      })
-      .toBe(200);
-    // Its own answer, not an older process's still on the port.
-    expect(api.exitCode, `the API on port ${String(port)} exited`).toBeNull();
-  } catch (failure) {
-    api.kill();
-    throw failure;
-  }
-  return { url, process: api };
-}
-
-/** An API process stopped, and gone: its sends ended with it. */
-async function stopApi(api: ChildProcess | undefined): Promise<void> {
-  if (api === undefined || api.exitCode !== null) return;
-  const exited = new Promise((resolve) => api.once('exit', resolve));
-  api.kill();
-  await exited;
 }
 
 /**
@@ -217,13 +161,13 @@ test.describe.serial('xcube serves the model (T447)', () => {
   test.setTimeout(300_000);
   let cube2 = '';
   let cubeName = '';
-  let api2: { url: string; process: ChildProcess } | undefined;
+  let api2: ApiProcess | undefined;
 
   test.beforeAll(async () => {
     const testInfo = test.info();
     testInfo.setTimeout(300_000);
     cubeName = `wechart-cube-cutover-${testInfo.project.name}`;
-    api2 = await startApi(4460 + testInfo.parallelIndex);
+    api2 = await startApi(4460 + testInfo.parallelIndex, { model: MODEL });
   });
 
   test.afterAll(async () => {
@@ -316,7 +260,7 @@ test.describe.serial('xcube and an API of its own (T447)', () => {
   let database = '';
   let model = '';
   let port = 0;
-  let api: { url: string; process: ChildProcess } | undefined;
+  let api: ApiProcess | undefined;
 
   test.beforeAll(async () => {
     const testInfo = test.info();

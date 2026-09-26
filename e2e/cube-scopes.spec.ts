@@ -62,12 +62,11 @@ test('the real Cube lets the API’s introspection token browse sources, and no 
     403,
     { error: 'API scope is missing: data' },
   ]);
-  // A query's token, a store's, a draft's — and a draft claiming it too.
+  // A query's token, one naming its model (T421), and a signed-in user's.
   for (const claims of [
     {},
-    { wechartStore: 'http://host.docker.internal:4100' },
-    { wechartDraft: 'd1' },
-    { wechartDraft: 'd1', wechartIntrospection: true },
+    { wechartModel: 'e2e', wechartRevision: 1 },
+    { wechartModel: 'e2e', wechartRevision: 1, groups: ['managers'] },
   ]) {
     const refused = await browse(claims);
     expect(refused.status(), JSON.stringify(claims)).toBe(403);

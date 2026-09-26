@@ -174,7 +174,7 @@ describe('the introspection token (AC-250)', () => {
     const cube = client();
     await cube.meta();
     await cube.load({ measures: ['orders.count'] });
-    await cube.meta({ wechartDraft: 'd1' });
+    await cube.load({ measures: ['orders.count'] }, undefined, { groups: ['sales'] });
 
     for (const request of received)
       expect(payloadOf(request)).not.toHaveProperty('wechartIntrospection');

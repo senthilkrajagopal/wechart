@@ -4,6 +4,8 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { CubeClient } from '../cube/client';
 import { closeDb, getDb } from '../db/client';
 import { buildServer } from '../server';
+import { xcubeAdmin } from '../xcube/client';
+import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 import { pgSessionStore } from './session-store';
 import { PUBLIC_URL, signIn, USERS } from './sign-in.fixture';
 
@@ -47,10 +49,8 @@ interface Asked {
 
 /**
  * A Cube that records each request's path and the claims its token carries.
- * Asked to compile a draft, it reads the draft back from the server, as Cube
- * does (publish.test.ts), once `holder.app` is set.
  */
-function recordingCube(holder: { app?: FastifyInstance } = {}): {
+function recordingCube(): {
   cube: CubeClient;
   asked: Asked[];
 } {
@@ -66,14 +66,6 @@ function recordingCube(holder: { app?: FastifyInstance } = {}): {
       ) as Record<string, unknown>;
       const path = new URL(String(url)).pathname;
       asked.push({ path, claims });
-      const draft = claims['wechartDraft'];
-      if (path.endsWith('/meta') && typeof draft === 'string' && holder.app !== undefined) {
-        await holder.app.inject({
-          method: 'GET',
-          url: `/api/cube-model/drafts/${draft}`,
-          headers: { 'x-wechart-model-key': 'model-key' },
-        });
-      }
       const body = path.endsWith('/sql')
         ? { sql: { sql: ['select 1', []] } }
         : path.endsWith('/meta')
@@ -152,11 +144,10 @@ describe('a signed-in user’s groups in every Cube request (T322, AC-008)', () 
   // T322's review: a publish must reach every set's metadata, not only the
   // configured context's, or a new member is missing for up to a minute.
   it('asks each set of groups afresh after a publish', async () => {
-    const holder: { app?: FastifyInstance } = {};
-    const { cube, asked } = recordingCube(holder);
+    const { cube, asked } = recordingCube();
     const files: { path: string; content: string }[] = [];
     const app = serve({
-      config: { ...secured, modelKey: 'model-key', cubeStoreUrl: 'http://store.invalid' },
+      config: secured,
       cube,
       sessions: pgSessionStore(getDb()),
       modelFiles: {
@@ -166,8 +157,14 @@ describe('a signed-in user’s groups in every Cube request (T322, AC-008)', () 
           files.push(...written);
         },
       },
+      // xcube checks the publish (T445, T431).
+      xcube: xcubeAdmin({
+        cubeApiUrl: config.cubeApiUrl,
+        model: 'dev',
+        token: FAKE_ADMIN_TOKEN,
+        fetch: fakeXcube().fetch,
+      }),
     });
-    holder.app = app;
     const cookie = await signIn(app, USERS['writer']!);
     const writersMeta = () =>
       asked.filter(

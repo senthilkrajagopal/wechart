@@ -90,8 +90,6 @@ export default defineConfig({
         // These tests create objects, so each run starts from the seed rather
         // than from whatever the last run left behind.
         WECHART_RESET_DATA: '1',
-        // Until T431 removes the model store's routes, their key.
-        WECHART_MODEL_KEY: 'dev-model-key',
         // xcube serves this suite's model (T447, AC-333): pushed by this API
         // under its own model id, with the admin token compose gives Cube's
         // API instance (docker-compose.yml, XCUBE_ADMIN_TOKENS). A dev value.

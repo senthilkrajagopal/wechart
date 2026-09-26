@@ -16,7 +16,6 @@ import { afterEach, describe, expect, it } from 'vitest';
  * is installed only in the image, at `/cube/node_modules/xcube`.
  */
 const CONFIG = fileURLToPath(new URL('../../../../infra/cube/cube.js', import.meta.url));
-const STORE = 'http://host.docker.internal:4100';
 
 interface CubeConfig {
   contextToGroups: (context: { securityContext?: unknown }) => string[];
@@ -88,9 +87,9 @@ describe('Cube’s configuration, xcube’s (T447)', () => {
   /**
    * T275 / AC-250: THE SYSTEM SHALL grant Cube's `introspection` scope only to
    * the short-lived tokens its API signs to browse a data source and generate
-   * cubes, never to a draft's token or to any other request's token.
+   * cubes, never to any other request's token.
    */
-  it('grants introspection to the API’s introspection token alone, and never with a draft', async () => {
+  it('grants introspection to the API’s introspection token alone', async () => {
     const { config } = load();
     const defaults = ['graphql', 'meta', 'data'];
 
@@ -102,20 +101,27 @@ describe('Cube’s configuration, xcube’s (T447)', () => {
     // Nor do the defaults carry it, should CUBEJS_DEFAULT_API_SCOPES name it.
     const named = [...defaults, 'introspection'];
     expect(await config.contextToApiScopes(undefined, named)).toEqual([...defaults, 'jobs']);
-    expect(await config.contextToApiScopes({ wechartDraft: 'd1' }, named)).toEqual(defaults);
-    // Every other token wechart signs: jobs as before, never introspection.
-    expect(await config.contextToApiScopes({ wechartStore: STORE }, defaults)).toEqual([
+    // A draft's claim means nothing since drafts went (T431, R29): scoped as
+    // any other token.
+    expect(await config.contextToApiScopes({ wechartDraft: 'd1' }, named)).toEqual([
       ...defaults,
       'jobs',
     ]);
+    // Every other token wechart signs: jobs as before, never introspection.
+    expect(
+      await config.contextToApiScopes({ tenant: 'acme', groups: ['sales'] }, defaults),
+    ).toEqual([...defaults, 'jobs']);
     expect(
       await config.contextToApiScopes({ wechartModel: 'dev', wechartRevision: 3 }, defaults),
     ).toEqual([...defaults, 'jobs']);
     expect(await config.contextToApiScopes(undefined, defaults)).toEqual([...defaults, 'jobs']);
-    // A draft, even one claiming it, is compiled to be checked and no more.
+    // Nor does a model's claim widen it past introspection.
     expect(
-      await config.contextToApiScopes({ wechartDraft: 'd1', wechartIntrospection: true }, defaults),
-    ).toEqual(defaults);
+      await config.contextToApiScopes(
+        { wechartModel: 'dev', wechartRevision: 3, wechartIntrospection: true },
+        defaults,
+      ),
+    ).toEqual(['introspection']);
     // Only the claim as the API sets it: `true`, not a string that says so.
     expect(
       await config.contextToApiScopes({ wechartIntrospection: 'true' }, defaults),

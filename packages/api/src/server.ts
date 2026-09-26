@@ -31,7 +31,6 @@ import { registerBuilds } from './jobs/build';
 import { registerSchedules } from './jobs/schedules';
 import { registerIntrospection } from './model/introspection';
 import type { Config } from './config';
-import { memoryDraftStore, type PublishDraftStore } from './model/drafts';
 import type { XcubeAdmin } from './xcube/client';
 import type { PublicationStore } from './xcube/publications';
 import { registerModelPublishing } from './model/publish';
@@ -61,12 +60,6 @@ export interface BuildOptions {
   readonly bookmarks?: BookmarkStore;
   /** The Cube model's files (T137, AC-131). */
   readonly modelFiles?: ModelFileStore;
-  /**
-   * Publish drafts while Cube compiles them: the metadata database, so any
-   * replica answers Cube's read-back (T418, AC-319). Left out, this process's
-   * memory.
-   */
-  readonly drafts?: PublishDraftStore;
   /**
    * After a publish is committed to the model's store: send the whole set to
    * xcube (T419, AC-333). A send that fails leaves the publish standing, for
@@ -200,7 +193,6 @@ export function buildServer({
   images,
   bookmarks,
   modelFiles,
-  drafts = memoryDraftStore(),
   afterPublish,
   xcube,
   publications,
@@ -285,12 +277,7 @@ export function buildServer({
     new CubeClient({
       apiUrl: config.cubeApiUrl,
       apiSecret: config.cubeApiSecret,
-      // Every request names this store, so Cube reads this wechart's model
-      // (infra/cube/cube.js); without one Cube reads its mounted directory.
-      securityContext: {
-        ...config.securityContext,
-        ...(config.cubeStoreUrl === undefined ? {} : { wechartStore: config.cubeStoreUrl }),
-      },
+      securityContext: config.securityContext,
       ...(model === undefined ? {} : { model }),
     });
 
@@ -386,7 +373,6 @@ export function buildServer({
       },
     },
     modelFiles,
-    drafts,
     ...(afterPublish === undefined ? {} : { afterPublish }),
     ...(xcube === undefined ? {} : { xcube }),
   });

@@ -1,30 +1,28 @@
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
 
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
-import { CUBE, USER } from '../auth/guard';
-import { CubeError, CubeUnreachable, type CubeClient } from '../cube/client';
+import { USER } from '../auth/guard';
+import type { CubeClient } from '../cube/client';
 import type { MetaCache } from '../cube/meta-cache';
 import type { Config } from '../config';
 import type { ModelFile, ModelFileStore } from '../server';
 import { checkWithXcube } from '../xcube/check';
 import type { XcubeAdmin } from '../xcube/client';
 import { clashesOf, compiledIn } from './clashes';
-import type { PublishDraftStore } from './drafts';
 import { refreshKeyProblemsOf } from './refreshKeys';
-import { joinRefusalsOf, rollupOwnersOf, type RollupOwner } from './rollupJoins';
-import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
-import { compileErrorsOf, type CompileError } from './validate';
+import { rollupProblemsOf } from './rollupReferences';
+import type { CompileError } from './validate';
 
 /**
- * The model, served to Cube and published through it (T142, AC-136).
+ * The model, published (T142, AC-136) and served by xcube (T447).
  *
- * Cube reads this store through `infra/cube/cube.js`: the live files, their
- * version — which Cube asks for on each request, and recompiles on a change —
- * and a draft, named in a request's security context. A publish is compiled
- * by Cube as a draft first; only a model Cube compiles goes live
- * (research/cube/spike-model-store-and-quick-calcs.md §1, §1a: a live model
- * that doesn't compile fails every request).
+ * wechart's store holds the published files. A change is checked by xcube's
+ * dry run, which compiles the whole model with it and plans each cube's
+ * rollups, storing nothing (T445); only a model that compiles is written,
+ * then sent to xcube as the model's next revision (T419). Cube reads nothing
+ * from wechart: the store's routes for it and the drafts it read are gone
+ * (T431, AC-327).
  */
 
 /**
@@ -76,32 +74,12 @@ const versionOf = (files: readonly ModelFile[]) =>
 /**
  * Rollups naming what the model doesn't have (T207, AC-189): Cube compiles
  * them, then fails queries on their cube (research/cube/pre-aggregations.md,
- * "Observed locally"). Those in a changed file are refused, and those
- * elsewhere that the change breaks; one already live in a file the change
- * leaves alone does not hold it up.
+ * "Observed locally"). Every one refuses the publish, one already live in a
+ * file the change leaves alone included (R29): xcube's probe of it fails, so
+ * it is named here rather than answered as a check xcube couldn't make.
  */
-function unknownInRollups(
-  live: readonly ModelFile[],
-  draft: readonly ModelFile[],
-  changed: ReadonlySet<string>,
-): CompileError[] {
-  // Name by name: a change that mends some of a rollup's names leaves the rest as they were.
-  const keyOf = (problem: RollupProblem, { list, name }: { list: string; name: string }) =>
-    JSON.stringify([problem.path, problem.cube, problem.preAggregation, list, name]);
-  const before = new Set(
-    rollupProblemsOf(live).flatMap((problem) =>
-      problem.unknown.map((unknown) => keyOf(problem, unknown)),
-    ),
-  );
+function unknownInRollups(draft: readonly ModelFile[]): CompileError[] {
   return rollupProblemsOf(draft)
-    .map((problem) =>
-      changed.has(problem.path)
-        ? problem
-        : {
-            ...problem,
-            unknown: problem.unknown.filter((each) => !before.has(keyOf(problem, each))),
-          },
-    )
     .filter((problem) => problem.unknown.length > 0)
     .map((problem) => ({
       path: problem.path,
@@ -117,36 +95,6 @@ function unknownInRollups(
     }));
 }
 
-/**
- * Whether Cube builds a cube's rollups' joins, asked under a context (T265):
- * nothing when it does, its reason when it refuses (a 400), and the error when
- * it couldn't be asked.
- */
-async function joinRefusalOf(
-  client: CubeClient,
-  probe: RollupOwner['probe'],
-  context: Record<string, unknown>,
-): Promise<string | Error | undefined> {
-  try {
-    await client.sqlUnder({ ...probe }, context);
-    return undefined;
-  } catch (error) {
-    if (error instanceof CubeError && error.status === 400) return error.message;
-    return error instanceof Error ? error : new Error(String(error));
-  }
-}
-
-/** Each item worked, a few at a time, its results in the items' order. */
-async function inTurn<T, R>(items: readonly T[], work: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = [];
-  let next = 0;
-  const worker = async () => {
-    for (let at = next++; at < items.length; at = next++) results[at] = await work(items[at] as T);
-  };
-  await Promise.all(Array.from({ length: Math.min(4, items.length) }, worker));
-  return results;
-}
-
 export function registerModelPublishing(
   app: FastifyInstance,
   {
@@ -154,7 +102,6 @@ export function registerModelPublishing(
     client,
     meta,
     modelFiles,
-    drafts,
     afterPublish,
     xcube,
   }: {
@@ -164,57 +111,23 @@ export function registerModelPublishing(
     meta: Pick<MetaCache, 'invalidate'>;
     modelFiles: ModelFileStore | undefined;
     /**
-     * Drafts Cube is compiling: kept only while wechart waits for its answer,
-     * and marked once Cube has read one — an answer given without reading it
-     * was of another model. In the database, for any replica to answer (T418).
-     */
-    drafts: PublishDraftStore;
-    /**
      * Once a publish is committed: xcube is sent the whole set (T419,
      * AC-333). It answers for itself: a send that fails is logged there, and
      * the publish stands for the next reconcile to send.
      */
     afterPublish?: () => Promise<unknown>;
     /**
-     * xcube's admin routes, where the deployment names its model in xcube: a
-     * change is checked by xcube's dry run, not by Cube reading a draft back
-     * (T445). Absent, Cube reads it back from this store, as before.
+     * xcube's admin routes, where the deployment names its model in xcube,
+     * which check a change (T445). Without them nothing can be published: no
+     * one else checks a change, or serves it (T431).
      */
     xcube?: XcubeAdmin;
   },
 ): void {
-  /** Cube, by the key it and this API share; with no key set, no one. */
-  const fromCube = (request: FastifyRequest) => {
-    const key = config.modelKey;
-    const given = request.headers['x-wechart-model-key'];
-    if (key === undefined || key === '' || typeof given !== 'string') return false;
-    const [a, b] = [Buffer.from(given), Buffer.from(key)];
-    return a.length === b.length && timingSafeEqual(a, b);
-  };
-
-  app.get('/api/cube-model/files', CUBE, async (request, reply) => {
-    if (!fromCube(request)) return reply.status(401).send({ error: 'Not Cube.' });
-    return { files: asCube(modelFiles ? await modelFiles.list() : []) };
-  });
-
-  app.get('/api/cube-model/version', CUBE, async (request, reply) => {
-    if (!fromCube(request)) return reply.status(401).send({ error: 'Not Cube.' });
-    // From the store each time, not kept here: another instance of this API
-    // may have published, and Cube must see what the store holds.
-    return { version: versionOf(modelFiles ? await modelFiles.list() : []) };
-  });
-
-  app.get('/api/cube-model/drafts/:id', CUBE, async (request, reply) => {
-    if (!fromCube(request)) return reply.status(401).send({ error: 'Not Cube.' });
-    const files = await drafts.take((request.params as { id: string }).id);
-    if (files === undefined) return reply.status(404).send({ error: 'No such draft.' });
-    return { files: asCube(files) };
-  });
-
   /**
-   * Publish changed files: compiled by Cube as a draft of the whole model
-   * with them in it, and made live only if Cube compiles it (AC-136). Cube's
-   * errors come back on the files they are about.
+   * Publish changed files: checked by xcube's dry run of the whole model with
+   * them in it, and written only if it compiles and plans (AC-136, AC-235).
+   * xcube's errors come back on the files they are about.
    */
   app.post('/api/model/publish', USER, async (request, reply) => {
     const body = request.body as { files?: unknown; create?: unknown } | undefined;
@@ -248,13 +161,13 @@ export function registerModelPublishing(
       return reply.status(400).send({
         error: `Only YAML models can be published: ${template.path} is a Jinja template, which Cube would render with its own environment.`,
       });
-    // xcube checks a change itself (T445); without it, Cube reads it back from this store.
-    if (modelFiles === undefined || (xcube === undefined && config.cubeStoreUrl === undefined))
+    // xcube checks a change and serves it (T445, T447); without it, neither happens.
+    if (modelFiles === undefined || xcube === undefined)
       return reply.status(409).send({
         error:
           modelFiles === undefined
             ? 'There is no model store here to publish to.'
-            : 'Cube is not reading this model store (WECHART_CUBE_STORE_URL), so a change could not be checked or seen.',
+            : 'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_XCUBE_ADMIN_TOKEN), so a change could not be checked or served.',
       });
 
     const live = await modelFiles.list();
@@ -297,115 +210,25 @@ export function registerModelPublishing(
      * the order Cube's own checks refused: the compile, names the model
      * doesn't have, crons, then joins. Every break refuses it (R29).
      */
-    if (xcube !== undefined) {
-      const checked = await checkWithXcube({
-        xcube,
-        draft,
-        changed,
-        securityContext: config.securityContext,
-        log: (error) => {
-          app.log.warn({ err: error }, 'could not ask xcube to check the model');
-        },
-      });
-      if (checked.kind === 'unreachable') return reply.status(502).send({ error: checked.error });
-      if (checked.kind === 'invalid') return reply.status(422).send({ errors: checked.errors });
-      const unknown = unknownInRollups(live, draft, paths);
-      if (unknown.length > 0) return reply.status(422).send({ errors: unknown });
-      const crons = refreshKeyProblemsOf(changed);
-      if (crons.length > 0) return reply.status(422).send({ errors: crons });
-      const rollups = checked.rollups();
-      if (rollups.kind === 'unasked') return reply.status(502).send({ error: rollups.error });
-      if (rollups.kind === 'unjoinable') return reply.status(422).send({ errors: rollups.errors });
-      return commit();
-    }
-
-    const id = randomUUID();
-    await drafts.put(id, draft);
-    const unread = () =>
-      reply.status(502).send({
-        error:
-          'Cube answered without reading the change, so it was not checked and nothing was published. Is Cube told to read this store (WECHART_MODEL_STORES)?',
-      });
-    // Held until every question about it is answered: its compile, and its rollups' joins (T265).
-    try {
-      try {
-        await client.meta({ wechartStore: config.cubeStoreUrl, wechartDraft: id });
-      } catch (error) {
-        // Cube's compiler refuses with a 500 and its errors — having read the
-        // draft. A 500 without reading it is Cube failing, not the file.
-        if (error instanceof CubeError && error.status === 500 && (await drafts.wasRead(id)))
-          return reply.status(422).send({ errors: compileErrorsOf(error.message, changed) });
-        /**
-         * Cube asserts the `meta` scope before it compiles anything, so a draft
-         * token refused it was never read: said as that, not as a store Cube
-         * was not told of (T176's review; research/cube/api-scope-probes.md).
-         */
-        if (
-          error instanceof CubeError &&
-          error.status === 403 &&
-          /API scope is missing/.test(error.message)
-        )
-          return reply.status(502).send({
-            error: `Cube refused to check the change — ${error.message} for the context wechart checks drafts as — so nothing was published.`,
-          });
-        app.log.warn({ err: error }, 'could not ask Cube to compile the model');
-        // Cube not reached is not Cube answering without reading (T422's review).
-        if (
-          error instanceof CubeError &&
-          !(error instanceof CubeUnreachable) &&
-          !(await drafts.wasRead(id))
-        )
-          return unread();
-        return reply
-          .status(502)
-          .send({ error: 'Cube could not be asked to check the model, so nothing was published.' });
-      }
-      if (!(await drafts.wasRead(id))) return unread();
-
-      const rollups = unknownInRollups(live, draft, paths);
-      if (rollups.length > 0) return reply.status(422).send({ errors: rollups });
-      // Crons Cube's refresh worker can't run, in the files being changed (T258, AC-153).
-      const schedules = refreshKeyProblemsOf(changed);
-      if (schedules.length > 0) return reply.status(422).send({ errors: schedules });
-
-      /**
-       * Rollups whose cubes Cube cannot join (T265, AC-235): compiled all the
-       * same, then failing every query on their cube and the refresh worker's
-       * whole run. `/v1/sql` for one member of each cube with pre-aggregations,
-       * under the draft, has Cube build every one of its rollups' joins,
-       * running nothing (research/cube/rollup-join-paths.md, Q5). Every such
-       * cube in the draft is asked — a change to one file can break the join a
-       * rollup in another needs — and, as with unknown names above, one in a
-       * file the change leaves alone that the model Cube serves now refuses
-       * alike doesn't hold it up (gotcha 2).
-       */
-      const asked = await inTurn(rollupOwnersOf(draft), async (owner) => {
-        const reason = await joinRefusalOf(client, owner.probe, {
-          wechartStore: config.cubeStoreUrl,
-          wechartDraft: id,
-        });
-        if (typeof reason !== 'string' || paths.has(owner.path)) return { owner, reason };
-        const before = await joinRefusalOf(client, owner.probe, {
-          wechartStore: config.cubeStoreUrl,
-        });
-        if (before instanceof Error) return { owner, reason: before };
-        return { owner, reason: before === reason ? undefined : reason };
-      });
-      const unasked = asked.find(({ reason }) => reason instanceof Error);
-      if (unasked !== undefined) {
-        app.log.warn({ err: unasked.reason }, 'could not ask Cube to build the rollups’ joins');
-        return reply.status(502).send({
-          error: `Cube could not be asked to check the rollups of ${unasked.owner.cube}, so nothing was published.`,
-        });
-      }
-      const unjoinable = asked.flatMap(({ owner, reason }) =>
-        typeof reason === 'string' ? joinRefusalsOf(owner, reason) : [],
-      );
-      if (unjoinable.length > 0) return reply.status(422).send({ errors: unjoinable });
-    } finally {
-      await drafts.remove(id);
-    }
-
+    const checked = await checkWithXcube({
+      xcube,
+      draft,
+      changed,
+      securityContext: config.securityContext,
+      log: (error) => {
+        app.log.warn({ err: error }, 'could not ask xcube to check the model');
+      },
+    });
+    if (checked.kind === 'unreachable') return reply.status(502).send({ error: checked.error });
+    if (checked.kind === 'invalid') return reply.status(422).send({ errors: checked.errors });
+    const unknown = unknownInRollups(draft);
+    if (unknown.length > 0) return reply.status(422).send({ errors: unknown });
+    // Crons Cube's refresh worker can't run, in the files being changed (T258, AC-153).
+    const crons = refreshKeyProblemsOf(changed);
+    if (crons.length > 0) return reply.status(422).send({ errors: crons });
+    const rollups = checked.rollups();
+    if (rollups.kind === 'unasked') return reply.status(502).send({ error: rollups.error });
+    if (rollups.kind === 'unjoinable') return reply.status(422).send({ errors: rollups.errors });
     return commit();
   });
 }

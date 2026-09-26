@@ -32,11 +32,6 @@ x-cube-environment: &cube-environment
   # (research xcube-slice-2.md, "Token claims").
   XCUBE_DATABASE_URL: postgres://xcube:${XCUBE_DB_PASSWORD:-dev-xcube-password}@wechart-meta:5432/wechart_meta
 
-x-cube-extra-hosts: &cube-extra-hosts
-  # The API runs on the host in development; Docker Desktop names it so
-  # already, and this does on Linux.
-  - 'host.docker.internal:host-gateway'
-
 x-cube-volumes: &cube-volumes
   - ./infra/cube/cube.js:/cube/conf/cube.js:ro
   - ./infra/cube/model:/cube/conf/model:ro
@@ -170,7 +165,9 @@ services:
       # API instance only, never the worker (research, "Environment"). A dev
       # value; each suite's API holds the same (playwright configs).
       XCUBE_ADMIN_TOKENS: ${XCUBE_ADMIN_TOKENS:-dev-xcube-admin-token-0123456789abcdef}
-    extra_hosts: *cube-extra-hosts
+    # Cube calls nothing of wechart's (T431, AC-327), so no host name is added
+    # for the API on the host (Docker Desktop resolves host.docker.internal
+    # regardless; e2e/no-callbacks.spec.ts watches for such a call).
     ports:
       - '54000:4000'
     volumes: *cube-volumes
@@ -189,7 +186,6 @@ services:
     environment:
       <<: *cube-environment
       CUBEJS_REFRESH_WORKER: 'true'
-    extra_hosts: *cube-extra-hosts
     # Its own /readyz and /livez, which say its state — wechart's
     # CUBE_WORKER_URL (T162, AC-156; research/cube/refresh-jobs-caching.md §F).
     # On this machine only: the API runs on the host, and the worker serves

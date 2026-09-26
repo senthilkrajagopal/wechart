@@ -18,7 +18,7 @@ Cube reads `infra/cube/cube.js`, the same file docker-compose mounts. The chart 
 
 That file is xcube's configuration (T447). xcube serves the model from its own schema, `xcube`, in the metadata database. The API pushes its published files there (see "The model"), and Cube never calls the API. The bootstrap Job runs the fork's `bootstrap.sql` (`infra/xcube/bootstrap.sql`, linked as `files/xcube-bootstrap.sql`) as the database's admin. It makes the role `xcube`, which owns the schema, with a password the chart generates. Each Cube pod's init container waits until it can connect as that role and the schema is there, because a Cube process started earlier exits (`docs/research/xcube-slice-2.md`, Gotcha 14). xcube then creates and migrates its tables itself. Until every model is compiled Cube's port stays closed, so a startup probe waits up to `cube.startupSeconds` (300) before the liveness probe applies.
 
-Only the web app is published outside the cluster. The API, Cube, Cube Store and the metadata database are ClusterIP or headless Services. nginx answers 404 to `/api/cube-model/`, the model store's routes, which nothing reads any more and T431 removes.
+Only the web app is published outside the cluster. The API, Cube, Cube Store and the metadata database are ClusterIP or headless Services. The API serves Cube nothing: the model store's routes went with T431. A request for `/api/cube-model/…` now reaches the API like any other, and is answered 404, or 401 with sign-in on.
 
 ## Before you start
 
@@ -167,7 +167,6 @@ Only `type` is required. `host`, `port`, `database` and `user` are set only when
 
 At the first install the chart generates these secrets:
 - Cube's API secret;
-- the model store's key, which T431 retires;
 - the metadata database's password;
 - xcube's role password, and the URL Cube connects to xcube's schema by;
 - xcube's admin token, which Cube's API instance and wechart's API share (static until slice 4, R29);
@@ -185,7 +184,7 @@ The following stay: the two volumes (`data-wechart-meta-0` and `data-wechart-cub
 
 ## Choices and limits
 
-- **One API instance, replaced rather than rolled.** A publish keeps its draft in the API process while Cube reads it back through the Service, so a second instance could be the one Cube asks.
+- **One API instance, replaced rather than rolled**, until T423 runs two with their readiness (AC-319). No publish is held in the API process any more: xcube serves the model, and Cube calls nothing of the API's (T431).
 - **Cube's probes.** With `contextToAppId` configured, `/readyz` answers as soon as Cube's server is up, and tests neither the data source nor Cube Store. `/livez` does test them, and a restart doesn't mend a data source outage. So both probes use `/readyz`, and step 5 of `verify.sh` checks the data path (`docs/research/cube/kubernetes.md`, Gotchas 1 and 2).
 - **Cube Store is one node.** Cube calls single-instance Cube Store "usually unsuitable for production"; production runs a router and workers. Its data (metastore, cache store and pre-aggregations) lives on its volume at `/cube/.cubestore/data`. Cube Store stops on SIGINT only, so a `preStop` hook sends it one.
 - **Cube Store has no authentication.** It is reachable only inside the cluster, on its HTTP port. The chart adds no NetworkPolicy.

@@ -83,14 +83,6 @@ export interface DataSourceSecretTable {
   updated_at: Generated<Date>;
 }
 
-/** A publish's draft while Cube compiles it (T418): see its migration. */
-export interface PublishDraftTable {
-  id: string;
-  files: JSONColumnType<{ path: string; content: string }[]>;
-  read: Generated<boolean>;
-  created_at: Generated<Date>;
-}
-
 /** A signed-in session (T316): the session as @fastify/session serialises it. */
 export interface SessionTable {
   id: string;
@@ -106,7 +98,6 @@ export interface Database {
   model_files: ModelFileTable;
   data_sources: DataSourceTable;
   data_source_secrets: DataSourceSecretTable;
-  publish_drafts: PublishDraftTable;
   model_publications: ModelPublicationTable;
 }
 

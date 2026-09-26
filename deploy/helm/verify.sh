@@ -258,11 +258,17 @@ if [[ "$status" == 404 ]]; then
 else
   fail "3. a missing asset answered $status"
 fi
+# Cube reads its model from xcube, and the API serves no route of the model
+# store's (T431, AC-327): not found, or asked to sign in when security is on
+# (the store's own route answered 401 too, but "Not Cube.").
 status="$(fetch "$url/api/cube-model/files")"
-if [[ "$status" == 404 ]]; then
-  pass "3. Cube's model routes are not served to the browser"
+if [[ "$status" == 404 ]] || {
+  [[ "$security" == true && "$status" == 401 ]] &&
+    jq -e '.error == "unauthenticated"' "$body" > /dev/null
+}; then
+  pass "3. the API serves no route for Cube to read the model through"
 else
-  fail "3. /api/cube-model/files answered $status from outside the cluster"
+  fail "3. /api/cube-model/files answered $status"
 fi
 
 # 4. The API is up, and says Cube and its refresh worker are healthy (their

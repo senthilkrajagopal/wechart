@@ -85,7 +85,7 @@ function cubeNotAsked() {
   const asked = vi.fn();
   const cube = Object.create(client, {
     meta: { value: async (...args: unknown[]) => asked('meta', ...args) },
-    sqlUnder: { value: async (...args: unknown[]) => asked('sqlUnder', ...args) },
+    sql: { value: async (...args: unknown[]) => asked('sql', ...args) },
   }) as CubeClient;
   return { cube, asked };
 }
@@ -94,18 +94,10 @@ function serving(files: ModelFileStore) {
   const stub = fakeXcube();
   const { cube, asked } = cubeNotAsked();
   const afterPublish = vi.fn(async () => undefined);
-  // The draft store Cube read back: xcube's check needs none of it.
-  const drafts = {
-    put: vi.fn(async () => undefined),
-    take: vi.fn(async () => undefined),
-    wasRead: vi.fn(async () => false),
-    remove: vi.fn(async () => undefined),
-  };
   const app = buildServer({
     config,
     modelFiles: files,
     cube,
-    drafts,
     xcube: xcubeAdmin({
       cubeApiUrl: config.cubeApiUrl,
       model: 'dev',
@@ -114,7 +106,7 @@ function serving(files: ModelFileStore) {
     }),
     afterPublish,
   });
-  return { app, stub, asked, afterPublish, drafts };
+  return { app, stub, asked, afterPublish };
 }
 
 const publish = (app: ReturnType<typeof buildServer>, files: readonly ModelFile[]) =>
@@ -158,7 +150,7 @@ describe('a publish checked by xcube’s dry run (T445)', () => {
 
   it('refuses a model xcube says doesn’t compile, each error on its file, and one it places on none by what it names', async () => {
     const files = store([USER]);
-    const { app, stub, afterPublish, drafts } = serving(files);
+    const { app, stub, afterPublish, asked } = serving(files);
     stub.refuse([
       {
         path: 'cubes/base.yml',
@@ -186,11 +178,11 @@ describe('a publish checked by xcube’s dry run (T445)', () => {
         ],
       },
     ]);
-    // Nothing published, and nothing sent to xcube as the model; and no
-    // draft held for Cube to read back (T445's review).
+    // Nothing published, and nothing sent to xcube as the model; and Cube
+    // asked nothing, a draft to read included (T445's review, T431).
     expect(files.files).toEqual([USER]);
     expect(afterPublish).not.toHaveBeenCalled();
-    expect(drafts.put).not.toHaveBeenCalled();
+    expect(asked).not.toHaveBeenCalled();
     await app.close();
   });
 

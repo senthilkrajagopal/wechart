@@ -30,16 +30,14 @@ module.exports = require('xcube').config(
     // wechart asks Cube to build pre-aggregations through the jobs API (T155,
     // AC-149), which answers 403 "API scope is missing: jobs" without this
     // scope. The defaults are kept (docs/research/cube/refresh-jobs-caching.md,
-    // "Auth and scope"; `contextToApiScopes`). Not for a draft's token: a
-    // draft is compiled to be checked, never built (T155's review), until
-    // T431 retires drafts.
+    // "Auth and scope"; `contextToApiScopes`).
     //
     // `introspection` — the fork's data-source browsing and cube scaffolding
     // (T275, AC-250; docs/research/cube/introspection-api.md) — goes only to
     // the short-lived token wechart's API signs for it, which carries
     // `wechartIntrospection: true`: the scope reads the warehouse's whole
-    // catalog. Never with a draft, and a previewed context can't claim it: the
-    // API strips every `wechart…` claim from one. That token gets nothing else
+    // catalog. A previewed context can't claim it: the API strips every
+    // `wechart…` claim from one. That token gets nothing else
     // — no model, no data — and the defaults never carry it, though
     // CUBEJS_DEFAULT_API_SCOPES is an unchecked list (research, "Two further
     // hardening steps"). xcube takes `introspection` out before Cube checks
@@ -47,7 +45,6 @@ module.exports = require('xcube').config(
     // through").
     contextToApiScopes: async (securityContext, defaultScopes) => {
       const defaults = defaultScopes.filter((scope) => scope !== 'introspection');
-      if (securityContext && securityContext.wechartDraft !== undefined) return defaults;
       if (securityContext && securityContext.wechartIntrospection === true)
         return ['introspection'];
       return [...defaults, 'jobs'];

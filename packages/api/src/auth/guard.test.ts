@@ -16,9 +16,9 @@ import { pgSessionStore } from './session-store';
  * signed-in session.`
  *
  * Every route declares its access class (tasks.md, Phase 2 decisions):
- * `public` (health and sign-in), `cube` (the model store Cube reads, which
- * checks its own key), `user`, or `admin` (a Super-Admin's alone, T323). The
- * sweep asks every route the server has,
+ * `public` (health and sign-in), `user`, or `admin` (a Super-Admin's alone,
+ * T323); the `cube` class went with the model store (T431). The sweep asks
+ * every route the server has,
  * so a route added later is covered without anyone adding it here.
  */
 const config = {
@@ -110,7 +110,7 @@ describe('with security on and no session (T318, AC-251)', () => {
     }
   });
 
-  it('exempts only health, sign-in and the model store Cube reads by its key', async () => {
+  it('exempts only health and sign-in', async () => {
     const app = everyRoute();
     await app.ready();
     const open = routesOf(app)
@@ -120,9 +120,6 @@ describe('with security on and no session (T318, AC-251)', () => {
       .map((route) => `${route.access} ${route.method} ${route.url}`)
       .sort();
     expect(open).toEqual([
-      'cube GET /api/cube-model/drafts/:id',
-      'cube GET /api/cube-model/files',
-      'cube GET /api/cube-model/version',
       'public GET /api/auth/callback',
       // Whether anyone is signed in, for the web server's page gate (T321).
       'public GET /api/auth/check',
@@ -135,24 +132,29 @@ describe('with security on and no session (T318, AC-251)', () => {
     expect(health.statusCode).toBe(200);
   });
 
-  // T318's review: the class alone was pinned, not what it lets through.
-  it('lets Cube read the model with its key and no session, and no one without it', async () => {
-    const app = buildServer({
-      config: { ...secured, modelKey: 'the-model-key' },
-      sessions: pgSessionStore(getDb()),
-    });
+  /**
+   * T431, AC-251 and AC-327: `Fails when: … wechart serves any route for
+   * Cube to read the model through.` xcube serves the model (T447), so the
+   * store's routes are gone, the key Cube read them with means nothing, and
+   * no route has a class of its own for Cube.
+   */
+  it('serves no route for Cube to read the model through', async () => {
+    const app = buildServer({ config: secured, sessions: pgSessionStore(getDb()) });
     servers.push(app);
-    const withKey = await app.inject({
-      method: 'GET',
-      url: '/api/cube-model/version',
-      headers: { 'x-wechart-model-key': 'the-model-key' },
-    });
-    expect(withKey.statusCode).toBe(200);
-    expect(withKey.json()).toHaveProperty('version');
-    // Refused by the route's own key check, not taken for a lapsed sign-in.
-    const without = await app.inject({ method: 'GET', url: '/api/cube-model/version' });
-    expect(without.statusCode).toBe(401);
-    expect(without.json()).toEqual({ error: 'Not Cube.' });
+    await app.ready();
+    const routes = routesOf(app);
+    expect(routes.filter((route) => route.url.startsWith('/api/cube-model'))).toEqual([]);
+    expect(routes.filter((route) => (route.access as string) === 'cube')).toEqual([]);
+    for (const path of ['files', 'version', 'drafts/d1']) {
+      const asked = await app.inject({
+        method: 'GET',
+        url: `/api/cube-model/${path}`,
+        headers: { 'x-wechart-model-key': 'dev-model-key' },
+      });
+      // Asked as Cube once asked it: refused, and nothing of the model.
+      expect(asked.statusCode, path).toBe(401);
+      expect(asked.json(), path).toEqual({ error: 'unauthenticated' });
+    }
   });
 
   it('refuses to start with a route that declares no access class', async () => {
@@ -183,10 +185,9 @@ describe('with security off (T311’s review, AC-254)', () => {
         ...(route.method === 'GET' ? {} : { payload: {} }),
       });
       const where = `${route.method} ${route.url}`;
-      // No route asks anyone to sign in…
+      // No route asks anyone to sign in, or refuses anyone at all.
       expect(errorOf(response.body), where).not.toBe('unauthenticated');
-      // …and only Cube's model routes, by their own key, refuse anyone at all.
-      if (route.access !== 'cube') expect(response.statusCode, where).not.toBe(401);
+      expect(response.statusCode, where).not.toBe(401);
     }
   });
 });
