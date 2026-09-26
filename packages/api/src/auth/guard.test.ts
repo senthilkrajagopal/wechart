@@ -2,6 +2,7 @@ import type { FastifyInstance, InjectOptions } from 'fastify';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getDb } from '../db/client';
+import { folderAccessStore } from '../repos/folder-access';
 import { buildServer } from '../server';
 import { routesOf } from './guard';
 import { pgSessionStore } from './session-store';
@@ -58,6 +59,20 @@ const errorOf = (body: string): unknown => {
   }
 };
 
+/**
+ * A server with every route: those registered only with their store too,
+ * the folder access routes (T314's review).
+ */
+function everyRoute(): FastifyInstance {
+  const app = buildServer({
+    config: secured,
+    sessions: pgSessionStore(getDb()),
+    folderAccess: folderAccessStore(getDb()),
+  });
+  servers.push(app);
+  return app;
+}
+
 /** A concrete address for a route's pattern: every parameter a made-up id. */
 const addressOf = (url: string) => url.replace(/:[A-Za-z]+/g, 'no-such-id').replace(/\*$/, 'x');
 
@@ -65,8 +80,7 @@ describe('with security on and no session (T318, AC-251)', () => {
   // That the handler doesn't run is user.test.ts's "creates nothing on behalf
   // of a user who isn't there".
   it('answers every user route 401 with nothing but the error', async () => {
-    const app = buildServer({ config: secured, sessions: pgSessionStore(getDb()) });
-    servers.push(app);
+    const app = everyRoute();
     await app.ready();
     // Admin routes too (T323): a Super-Admin's, so no one's without a session.
     const routes = routesOf(app).filter(
@@ -74,6 +88,13 @@ describe('with security on and no session (T318, AC-251)', () => {
     );
     // The API's own routes, not a handful: the sweep would pass vacuously on none.
     expect(routes.length).toBeGreaterThan(30);
+    // The routes registered only with their store are in it too (T314's review).
+    expect(routes.map((route) => `${route.method} ${route.url}`)).toEqual(
+      expect.arrayContaining([
+        'GET /api/folders/:folderId/access',
+        'PUT /api/folders/:folderId/access',
+      ]),
+    );
 
     for (const route of routes) {
       const response = await app.inject({
@@ -90,8 +111,7 @@ describe('with security on and no session (T318, AC-251)', () => {
   });
 
   it('exempts only health, sign-in and the model store Cube reads by its key', async () => {
-    const app = buildServer({ config: secured, sessions: pgSessionStore(getDb()) });
-    servers.push(app);
+    const app = everyRoute();
     await app.ready();
     const open = routesOf(app)
       .filter(

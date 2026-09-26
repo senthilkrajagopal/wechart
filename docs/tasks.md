@@ -5023,13 +5023,30 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - workspaces (`ws:` ids) never granted, Super-Admins included (AC-276).
     - Which *items* a read-only user sees (a library chart shown on their dashboard but not listed) is T326's.
     - The criteria stay open until a route uses the rule (T323, T325–T327).
-- [ ] T314 (AC-259, AC-260) Store each folder's groups and serve its effective access
+- [x] T314 (AC-259, AC-260) Store each folder's groups and serve its effective access
   - Files: `packages/api/src/repos/folder-access.ts` (+ test), `packages/api/src/routes/access.ts` (+ test), `packages/api/src/server.ts`
   - Failing test: `access.test.ts`:
     - `PUT /api/folders/:id/access` takes read-only and read-write group lists, each optional (`null` = unset), for the root too; a body naming users (`users`, `members`) is refused with 400 (AC-259);
     - someone who isn't a Super-Admin or a read-write member there gets 403 (AC-259);
     - `GET /api/folders/:id/access` returns set and inherited groups, each inherited one with its source folder (AC-260).
   - Depends on: T311, T313
+  - **Done 2026-09-25.**
+    - **The store.** `folderAccessStore` keeps each folder's setting on its body and the root's in the `root-access` setting. A setting it can't read counts as unset, never as a grant. `tree()` is the root plus every folder whose parents lead to it, so a workspace's folders and orphans are left out (AC-276).
+    - **The routes.** `GET` and `PUT /api/folders/:folderId/access` answer `{ folderId, setting, effective }`, with each effective group's `from` and `setHere`.
+      - A body with anything but `readOnly` and `readWrite` is refused 400, "never a person". Blank or non-string names are refused too; names are trimmed and deduplicated.
+      - A folder the user can't see answers 404 (AC-264).
+      - A lost save race answers 409.
+      - `main.ts` wires the store.
+    - **The cold review found one real hole: fixed.** `PUT /api/documents/folder/:id` stored whatever body it was sent, so anyone signed in could grant themselves access, or wipe a folder's grants. It now keeps a folder's stored `access`, so the access route is its only writer.
+    - **A decision the review asked for.** `GET` is a writer's alone, like `PUT` (403 for others), because direction.md gives the Access panel to read-write members and Super-Admins only (rule 68).
+    - **Other review fixes:**
+      - the tests remove the folders they make, and put the root's setting back;
+      - the AC-251 sweep builds the server with these routes and checks they're in it;
+      - the 403 test compares every folder's setting with what it was.
+    - **Noted, not changed:**
+      - A deleted folder's children fall out of the tree, so they answer 404 even to Super-Admins until deleting cascades or refuses (T329).
+      - A read-write member of /A/B can grant any group read-write there, and that group then sees /A view-only (AC-262): that's as the spec has it.
+    - **AC-259 and AC-260 stay unticked:** creating a subfolder with its groups is T329's, and showing inherited groups with their source is the panel's (T330).
 
 ## P2.1 Sign-in (F25)
 

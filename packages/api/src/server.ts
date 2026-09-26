@@ -32,6 +32,8 @@ import type { Config } from './config';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, type ReferenceDocument } from './model/references';
 import type { BookmarkStore } from './repos/bookmarks';
+import type { FolderAccessStore } from './repos/folder-access';
+import { registerFolderAccess } from './routes/access';
 import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
 
 /**
@@ -54,6 +56,8 @@ export interface BuildOptions {
   readonly modelFiles?: ModelFileStore;
   /** Signed-in sessions, with security on (T316): the metadata database. */
   readonly sessions?: SessionStore;
+  /** Each folder's AD groups (T314, AC-259, AC-260). */
+  readonly folderAccess?: FolderAccessStore;
   /**
    * How Cube's unauthenticated probes — its health (T162), whether it
    * enforces auth (T175) — are asked; `fetch` unless a test says.
@@ -161,6 +165,7 @@ export function buildServer({
   images,
   bookmarks,
   modelFiles,
+  folderAccess,
   healthFetch,
   logger = false,
   introspectionRetryMs,
@@ -326,6 +331,8 @@ export function buildServer({
     client,
     introspectionRetryMs === undefined ? {} : { retryMs: introspectionRetryMs },
   );
+  // Each folder's AD groups and its effective access (T314, AC-259, AC-260).
+  if (folderAccess !== undefined) registerFolderAccess(app, folderAccess);
 
   /**
    * The charts and dashboards that use the members an edit changes, listed
@@ -602,8 +609,20 @@ export function buildServer({
       throw new BadRequest('A version is required, so a stale save can be refused');
     }
 
+    // A folder's AD groups are the access route's alone (T314's review): kept
+    // as stored, whatever this body says or leaves out, so saving a folder
+    // can neither grant access nor take it away.
+    let written = body.body;
+    if (kind === 'folder') {
+      const { access: _sent, ...rest } = body.body;
+      void _sent;
+      const stored = await docs.get?.('folder', id);
+      written =
+        stored?.body['access'] === undefined ? rest : { ...rest, access: stored.body['access'] };
+    }
+
     try {
-      return await docs.update({ kind, id, body: body.body, expectedVersion: body.version });
+      return await docs.update({ kind, id, body: written, expectedVersion: body.version });
     } catch (failure) {
       // A save that lost a race is not a server fault; the browser has to
       // reload and decide what to do, which it cannot if this is a 500.

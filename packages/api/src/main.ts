@@ -7,6 +7,7 @@ import { migrateToLatest } from './db/migrate';
 import { bookmarkStore } from './repos/bookmarks';
 import { catalog } from './repos/catalog';
 import { documents } from './repos/documents';
+import { folderAccessStore } from './repos/folder-access';
 import { readModelDir } from './model/read-dir';
 import { imageStore } from './repos/images';
 import { modelFileStore } from './repos/model-files';
@@ -43,6 +44,8 @@ async function main(): Promise<void> {
     images: imageStore(db),
     bookmarks: bookmarkStore(db),
     modelFiles,
+    // Each folder's AD groups (T314).
+    folderAccess: folderAccessStore(db),
     // Signed-in sessions, kept in the metadata database (T316).
     sessions,
     logger: true,
