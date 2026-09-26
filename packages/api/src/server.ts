@@ -577,12 +577,18 @@ export function buildServer({
   const mayWrite = (seen: Visibility, folderId: string | null): boolean =>
     folderId !== null && seen.rights.get(folderId)?.write === true;
   /**
-   * Whether a folder may move into another: one they may write in, and not
-   * the folder itself or anything beneath it, which would cut the subtree off
-   * from the root (T326's review).
+   * Whether a folder may move from the folder that holds it into another: both
+   * theirs to write in, since a folder is an item of the one holding it
+   * (AC-291, T329's review), and not the folder itself or anything beneath it,
+   * which would cut the subtree off from the root (T326's review).
    */
-  const mayMoveFolder = (seen: Visibility, folderId: string, into: string | null): boolean => {
-    if (!mayWrite(seen, into)) return false;
+  const mayMoveFolder = (
+    seen: Visibility,
+    folderId: string,
+    from: string | null,
+    into: string | null,
+  ): boolean => {
+    if (!mayWrite(seen, from) || !mayWrite(seen, into)) return false;
     const beneath = new Set([folderId]);
     for (let grew = true; grew;) {
       grew = false;
@@ -890,7 +896,7 @@ export function buildServer({
       const moved =
         kind === 'folder'
           ? folderIdOf(body.body) !== folderIdOf(stored.body) &&
-            !mayMoveFolder(seen, id, folderIdOf(body.body))
+            !mayMoveFolder(seen, id, folderIdOf(stored.body), folderIdOf(body.body))
           : (await governingFolder(kind, { id, body: body.body })) !==
               (await governingFolder(kind, stored)) &&
             !mayWrite(seen, await governingFolder(kind, { id, body: body.body }));
@@ -1176,7 +1182,12 @@ export function buildServer({
       found.seen !== undefined &&
       body?.folderId !== undefined &&
       !(kind === 'folder'
-        ? mayMoveFolder(found.seen, id, body.folderId)
+        ? mayMoveFolder(
+            found.seen,
+            id,
+            found.stored === null ? null : folderIdOf(found.stored.body),
+            body.folderId,
+          )
         : mayWrite(found.seen, body.folderId))
     ) {
       return reply.code(403).send({ error: READ_ONLY });
@@ -1226,6 +1237,16 @@ export function buildServer({
     // With security on, only one they may change (T326, AC-266).
     const found = await itemFor(request, reply, kind, id, 'write');
     if (found === undefined) return reply;
+    // A folder goes from the folder holding it, which must be theirs to write
+    // in too (AC-291, T329's review).
+    if (
+      kind === 'folder' &&
+      found.seen !== undefined &&
+      found.stored !== null &&
+      !mayWrite(found.seen, folderIdOf(found.stored.body))
+    ) {
+      return reply.code(403).send({ error: READ_ONLY });
+    }
 
     if (kind === 'chart' && confirm !== 'true' && cat?.dashboardsUsing) {
       // Named only where they may see them (T326's review).

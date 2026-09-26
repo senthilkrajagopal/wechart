@@ -5351,11 +5351,25 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - **For the user:** with sign-in on, phase-1 items in "My workspace" (`mine`) are hidden from everyone, Super-Admins included. T343's plan moves them to `ws:admin`, a workspace no signed-in user can own, because users' keys come from the provider. Where should they go?
       - Items with no folder at all, which only the development seed writes, are hidden from Super-Admins too.
     - AC-267 stays open until those are settled, and T334 and T335 land.
-- [ ] T329 (AC-291) Apply subfolders, permissions, renames, moves and deletes at once for read-write members
+- [x] T329 (AC-291) Apply subfolders, permissions, renames, moves and deletes at once for read-write members
   - Files: `packages/api/src/server.ts` (`POST /api/documents` for folders, `PATCH`, `DELETE`), `packages/api/src/access/direct.test.ts`
   - Failing test: `direct.test.ts`: a read-write member creates a subfolder, sets its groups, renames, moves and deletes, each applied at once; a move needs read-write on both folders and answers 403 otherwise; a read-only member gets 403 for each (AC-291).
   - *2026-09-26:* the part of AC-291 about models, data sources and folders holding them is T426's: the publish check through xcube `[IP 5]`. The rest stands here.
   - Depends on: T314, T325
+  - **Done 2026-09-26.**
+    - **What the test shows.** `direct.test.ts`: `writer` (read-write on /W and /V, view-only on the root) does each of these at once, with the stored state checked right after:
+      - creates a subfolder of /W and sets its groups;
+      - renames a dashboard;
+      - moves a library chart from /W to /V, and a subfolder from /W to /V;
+      - deletes a dashboard and an empty subfolder.
+    - **What it refuses.** Moving a dashboard into /R, which they may only read, or out of /R, answers 403 and changes nothing. `reader` gets 403 for all five direct actions in /R.
+    - **Most of it passed at once**, since the behaviour came with T326. Its strength was shown by breaking the code on purpose: with a move's destination left unchecked, the move refusals failed. The change was then reverted.
+    - **The cold review (FAIL) found a real hole.** A folder's move or delete was checked against the folder itself, not the folder holding it, so `writer` could move /W out of the root, or delete it, though the root is only theirs to view.
+      - The new cases failed first: the move answered 200.
+      - Now a folder's move needs write on the folder it leaves and the folder it goes to (`mayMoveFolder`, in PUT and PATCH). A folder's delete needs write on the folder holding it.
+    - **For the user** (the review's H2): deleting a folder that isn't empty leaves its contents out of everyone's reach, Super-Admins' too, because they fall out of the tree (as T314's review found). Should such a delete be refused, naming what the folder holds, or remove everything in it?
+    - **For the user:** does renaming a folder need write on the folder holding it, as moving and deleting now do? AC-291 reads "an item in a folder they may write". Today a read-write member of /W may rename /W.
+    - AC-291 stays open: the models' and data sources' half is T426's.
 - [ ] T330 (AC-259, AC-260, AC-265) Edit a folder's groups in the Access panel
   - Files: `packages/web/src/workspaces/explore/access/{AccessPanel,GroupRow,GroupCombobox}.tsx` (+ tests), `packages/web/src/workspaces/explore/ExplorePage.tsx`, `e2e/security/access.spec.ts`
   - Failing test: `AccessPanel.test.tsx` and `access.spec.ts`: read-write groups come before read-only; each list shows "Set here" and "From ancestors", every inherited group with a lock and its source folder as a link; an unset list says "Not set here. Inherits from _folder_."; "Only Super-Admins can see this folder" when nothing reaches it; the picker is labelled "AD group"; Save counts changes; removing one's own read-write access asks first (AC-259, AC-260; rules 62–66).
