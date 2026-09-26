@@ -15,8 +15,15 @@ import { describe, expect, it } from 'vitest';
  *
  * T447: from `83cb9f0888` xcube serves the model too (slice 2;
  * docs/research/xcube-slice-2.md).
+ *
+ * T449, AC-333: from `c0610bb768` it serves the model as items, and the
+ * fork's CI publishes the image, pulled by digest: its moving tag isn't a
+ * version (research xcube-slice-3b.md, "Install", Gotcha 1).
  */
-const IMAGE = 'xcube:v1.7.45-83cb9f0888';
+const IMAGE =
+  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768@sha256:d787e67c23f567437e49e1ad1e3eab1802c143bd1bfab465ded9e9468c5e1ab8';
+/** Slice 2's image, built locally: only the way back names it. */
+const SLICE_2_IMAGE = 'xcube:v1.7.45-83cb9f0888';
 
 const fromRoot = (path: string) =>
   readFileSync(fileURLToPath(new URL(`../../../../${path}`, import.meta.url)), 'utf8');
@@ -31,22 +38,26 @@ function serviceBlock(compose: string, name: string): string {
   return rest.slice(0, end === -1 ? undefined : end).join('\n');
 }
 
-describe('docs/deploy.md builds it from the package (T415, T417, AC-248)', () => {
+describe('docs/deploy.md pulls the fork’s published image by digest (T449, AC-248)', () => {
   const deploy = fromRoot('docs/deploy.md');
 
-  it('builds from the package’s directory, tagged by the fork’s commit', () => {
-    expect(deploy).toContain('cd ~/Work/bi/cube/xcube');
+  it('pulls it by its digest, never its moving tag', () => {
+    expect(deploy).toContain(`docker pull ${IMAGE}`);
+    expect(deploy).not.toMatch(/xcube:v1\.7\.45-feat-xcube(?!`, )/);
     expect(deploy).not.toContain('cd ~/Work/bi/cube/cube-introspection');
-    expect(deploy).toContain('docker build -t xcube:v1.7.45-$(git rev-parse --short=10 HEAD) .');
     // The overlay build is gone with the branch it lived on.
     expect(deploy).not.toContain('overlay.Dockerfile');
   });
 
-  it('names the image the release runs, and no other', () => {
-    expect(deploy).toContain(`\`${IMAGE}\``);
+  it('names the image the release runs, and slice 2’s only for the way back, with how to build it', () => {
     // No other xcube tag, and no build of the package under its old name.
-    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!83cb9f0888|\$|<)/);
+    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!c0610bb768@|83cb9f0888|feat-xcube|\$|<)/);
     expect(deploy).not.toContain('cube:v1.7.45-introspection-');
+    // Slice 2's image was built locally and never published: the way back says how.
+    const back = deploy.slice(deploy.indexOf('### Items mode, and the way back'));
+    expect(back).toContain(`\`${SLICE_2_IMAGE}\``);
+    expect(back).toContain('git -C ~/Work/bi/cube worktree add');
+    expect(back).toContain(`docker build -t ${SLICE_2_IMAGE} .`);
   });
 });
 

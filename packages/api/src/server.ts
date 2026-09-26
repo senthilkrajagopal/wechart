@@ -66,6 +66,11 @@ export interface BuildOptions {
    * the next reconcile to send.
    */
   readonly afterPublish?: () => Promise<unknown>;
+  /**
+   * After a folder is made, changed, moved or removed: put the folder tree
+   * to xcube (T449, AC-333). It answers for itself; nothing waits for it.
+   */
+  readonly afterFolderChange?: () => Promise<unknown>;
   /** xcube's admin routes, for its check of a publish (T445), where xcube is configured. */
   readonly xcube?: XcubeAdmin;
   /**
@@ -194,6 +199,7 @@ export function buildServer({
   bookmarks,
   modelFiles,
   afterPublish,
+  afterFolderChange,
   xcube,
   publications,
   folderAccess,
@@ -212,6 +218,24 @@ export function buildServer({
             config.trustProxy === true ? true : [...(config.trustProxy as readonly string[])],
         }),
   });
+  /**
+   * A folder made, changed, moved or removed through any of the document
+   * routes: the tree is put to xcube once the answer is sent (T449, AC-333).
+   */
+  if (afterFolderChange !== undefined)
+    app.addHook('onResponse', async (request, reply) => {
+      // A write only: not a read, a HEAD included (T449's review).
+      if (reply.statusCode >= 300 || !['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method))
+        return;
+      if (!request.url.startsWith('/api/documents')) return;
+      const kind =
+        (request.params as { kind?: unknown } | undefined)?.kind ??
+        (request.body as { kind?: unknown } | undefined)?.kind;
+      if (kind !== 'folder') return;
+      void afterFolderChange().catch((error: unknown) => {
+        app.log.warn({ err: error }, 'could not put the folder tree to xcube');
+      });
+    });
   const security = config.security ?? 'off';
   // Before any route: every route declares who may call it (T318, AC-251).
   registerRouteAccess(app);
@@ -376,7 +400,8 @@ export function buildServer({
     ...(afterPublish === undefined ? {} : { afterPublish }),
     ...(xcube === undefined ? {} : { xcube }),
   });
-  registerBuilds(app, client);
+  // With the model's files: each rollup's link names its stored file (T449).
+  registerBuilds(app, client, modelFiles);
   // With the model's files: a key's SQL is read there (T273's review).
   registerSchedules(app, client, modelFiles);
   // A data source's catalog, through Cube's introspection API (T145, AC-139).

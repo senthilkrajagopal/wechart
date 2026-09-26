@@ -229,6 +229,35 @@ describe('what can be built (AC-149)', () => {
  * pre-aggregation's `refreshKey` and `scheduledRefresh`, and its cube's
  * `fileName` (docs/research/cube/meta-extended-pre-aggregations.md).
  */
+describe('where a pre-aggregation is defined, in items mode (T449)', () => {
+  /**
+   * From the move to xcube's items mode, Cube's `fileName` is xcube's
+   * resolved file (`monthly_orders.yml`), not wechart's (`cubes/…`): the
+   * link to Model names the file in wechart's store that declares the cube.
+   */
+  it('names the stored file that declares its cube, whatever Cube calls the file', () => {
+    const listed = buildablesFrom(
+      {
+        cubes: [
+          {
+            name: 'monthly_orders',
+            fileName: 'monthly_orders.yml',
+            preAggregations: [{ name: 'hourly', type: 'rollup' }],
+          },
+          { name: 'elsewhere', fileName: 'elsewhere.yml', preAggregations: [{ name: 'r' }] },
+        ],
+      },
+      [{ path: 'cubes/monthly_orders.yml', content: 'cubes:\n  - name: monthly_orders\n' }],
+    );
+
+    expect(listed.map((each) => each.fileName)).toEqual([
+      'cubes/monthly_orders.yml',
+      // No stored file declares it: Cube's name, as before.
+      'elsewhere.yml',
+    ]);
+  });
+});
+
 describe('what triggers a pre-aggregation, and where it is defined (AC-229)', () => {
   it('says its refresh key in words, Cube’s default where it declares none, and names its file', () => {
     const listed = buildablesFrom({

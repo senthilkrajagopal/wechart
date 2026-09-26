@@ -13,6 +13,25 @@ const meta = (preAggregations: Record<string, unknown>[], cube: Record<string, u
   cubes: [{ name: 'orders', fileName: 'cubes/orders.yml', preAggregations, ...cube }],
 });
 
+describe('schedulesFrom, in items mode (T449)', () => {
+  it('names the stored file that declares the cube, not xcube’s resolved file', () => {
+    const [schedule] = schedulesFrom(
+      {
+        cubes: [
+          {
+            name: 'orders',
+            fileName: 'orders.yml',
+            preAggregations: [{ name: 'hourly', type: 'rollup', refreshKey: { every: '1 hour' } }],
+          },
+        ],
+      },
+      [{ path: 'cubes/orders.yml', content: 'cubes:\n  - name: orders\n' }],
+    );
+
+    expect(schedule?.fileName).toBe('cubes/orders.yml');
+  });
+});
+
 describe('schedulesFrom', () => {
   it('says a cron with its zone, and a cron with none in UTC, as Cube runs it', () => {
     const [zoned, bare] = schedulesFrom(

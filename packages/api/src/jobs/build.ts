@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 
 import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
+import { fileOf, pathsByName } from '../model/split';
+import type { ModelFile, ModelFileStore } from '../server';
 
 /**
  * Pre-aggregation builds (T155, AC-149), through Cube's documented jobs API:
@@ -97,9 +99,11 @@ export function triggerOf(each: Record<string, unknown>): string {
  * outside dev mode (research/cube/access-control.md) — its rollups are built
  * by the refresh worker, and cannot be started from here.
  */
-export function buildablesFrom(meta: unknown): Buildable[] {
+export function buildablesFrom(meta: unknown, files: readonly ModelFile[] = []): Buildable[] {
   const cubes = (meta as { cubes?: unknown } | null)?.cubes;
   if (!Array.isArray(cubes)) return [];
+  // The stored file declaring each cube, over Cube's `fileName` (T449).
+  const stored = pathsByName(files);
   return (cubes as { name?: unknown; fileName?: unknown; preAggregations?: unknown }[]).flatMap(
     (cube) =>
       typeof cube.name === 'string' && Array.isArray(cube.preAggregations)
@@ -118,14 +122,20 @@ export function buildablesFrom(meta: unknown): Buildable[] {
                 ? { partitionGranularity: each['partitionGranularity'] }
                 : {}),
               trigger: triggerOf(each),
-              ...(typeof cube.fileName === 'string' ? { fileName: cube.fileName } : {}),
+              ...fileOf(stored, String(cube.name), cube.fileName),
             }))
         : [],
   );
 }
 
-export function registerBuilds(app: FastifyInstance, client: CubeClient): void {
-  app.get('/api/preaggregations', USER, async () => buildablesFrom(await client.metaExtended()));
+export function registerBuilds(
+  app: FastifyInstance,
+  client: CubeClient,
+  modelFiles?: ModelFileStore,
+): void {
+  app.get('/api/preaggregations', USER, async () =>
+    buildablesFrom(await client.metaExtended(), modelFiles ? await modelFiles.list() : []),
+  );
 
   app.post('/api/builds', USER, async (request, reply) => {
     const preAggregation = (request.body as { preAggregation?: unknown } | undefined)

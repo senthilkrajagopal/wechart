@@ -9,8 +9,8 @@ F24, AC-248, task T274. The Helm chart at `deploy/helm/wechart` runs wechart, Cu
 | `web`: the built app, and `/api` passed to the API | Deployment | `wechart-web:<tag>` (nginx, unprivileged) | `LoadBalancer`, port `web.service.port` | `/healthz` |
 | `api`: wechart's API | Deployment, `api.replicas` (2), rolled one at a time, with a PodDisruptionBudget | `wechart-api:<tag>` | ClusterIP 4100 | `/api/health` |
 | `meta`: wechart's metadata database | StatefulSet with a volume | `postgres:18.6-alpine3.24` | headless 5432 | `pg_isready` over TCP |
-| `cube`: Cube's API | Deployment, `cube.replicas` (2), with a PodDisruptionBudget | `xcube:v1.7.45-83cb9f0888` | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
-| `cube-refresh-worker`: Cube's refresh worker | Deployment, 1 replica | `xcube:v1.7.45-83cb9f0888` | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
+| `cube`: Cube's API | Deployment, `cube.replicas` (2), with a PodDisruptionBudget | `ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768@sha256:d787e67c…` | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
+| `cube-refresh-worker`: Cube's refresh worker | Deployment, 1 replica | the same | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
 | `xcube-bootstrap-<hash>`: xcube's role and schema in the metadata database | Job, run once | `postgres:18.6-alpine3.24` | none | none |
 | `cubestore`: Cube Store, one node | StatefulSet with a volume | `cubejs/cubestore:v1.7.45` (`-arm64v8` on arm64) | headless 3030 | `:3031/readyz`, `:3031/livez` |
 
@@ -36,16 +36,17 @@ docker build -f deploy/Dockerfile --target api -t wechart-api:$TAG .
 docker build -f deploy/Dockerfile --target web -t wechart-web:$TAG .
 ```
 
-Cube runs v1.7.45, unmodified, with the user's fork's package xcube. xcube adds the data-source introspection API that wechart generates cubes with (T275, T413–T415, T417; `docs/research/cube/introspection-api.md`). From the fork's commit `83cb9f0888` it also serves the model (T447; `docs/research/xcube-slice-2.md`). xcube is the package that was `cube-introspection/`, renamed at the fork's commit `a13b9cff43` with its HTTP API unchanged. Build it from the package's directory in the fork's checkout (`~/Work/bi/cube`, branch `feat/xcube`):
+Cube runs v1.7.45, unmodified, with the user's fork's package xcube. xcube adds the data-source introspection API that wechart generates cubes with (T275, T413–T415, T417; `docs/research/cube/introspection-api.md`). From the fork's commit `83cb9f0888` it also serves the model (T447; `docs/research/xcube-slice-2.md`), and from `c0610bb768` it serves it as items: names resolved in folders, compiled in modules (T449; `docs/research/xcube-slice-3a.md`, `xcube-slice-3b.md`). xcube is the package that was `cube-introspection/`, renamed at the fork's commit `a13b9cff43` with its HTTP API unchanged.
+
+The fork's CI publishes the image for amd64 and arm64, and it is pulled by digest, never by its moving tag `v1.7.45-feat-xcube`:
 
 ```sh
-cd ~/Work/bi/cube/xcube
-docker build -t xcube:v1.7.45-$(git rev-parse --short=10 HEAD) .
+docker pull ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768@sha256:d787e67c23f567437e49e1ad1e3eab1802c143bd1bfab465ded9e9468c5e1ab8
 ```
 
-Tag it by the fork's commit, as with wechart's own images: a rebuild under the same tag doesn't restart the pods. The release runs `xcube:v1.7.45-83cb9f0888`, which is the chart's default too; a plain `cubejs/cube` image won't start with xcube's `cube.js`. `deploy/helm/values/docker-desktop.yaml` sets `cube.image` to it, for Cube and its refresh worker alike, and docker-compose uses the same image. The image's own command starts the package's server, so give Cube no `command` or `args`: `cubejs server` would start it without the introspection routes.
+That is the chart's default `cube.image` and docker-compose's, for Cube and its refresh worker alike; a plain `cubejs/cube` image won't start with xcube's `cube.js`. The image's own command starts the package's server, so give Cube no `command` or `args`: `cubejs server` would start it without the introspection routes.
 
-Nothing is pushed. This cluster's node runs on the Docker engine (`kubectl get nodes -o wide` shows `docker://`), and its pods used the locally built images; Docker's own docs don't say so (`docs/research/helm.md`, "Open questions"). The chart pulls a wechart image only if it isn't there (`images.pullPolicy: IfNotPresent`). Give each build its own tag: an upgrade to the same tag doesn't restart the pods.
+wechart's own images are not pushed. This cluster's node runs on the Docker engine (`kubectl get nodes -o wide` shows `docker://`), and its pods used the locally built images; Docker's own docs don't say so (`docs/research/helm.md`, "Open questions"). The chart pulls a wechart image only if it isn't there (`images.pullPolicy: IfNotPresent`). Give each build its own tag: an upgrade to the same tag doesn't restart the pods.
 
 ## 2. The data source's Secret
 
@@ -142,9 +143,27 @@ This release's model starts empty. The API seeds its model store from `WECHART_M
 
 Build the model in the browser's **Model** workspace, then the dashboards.
 - **Checking a publish.** xcube's dry run compiles the change and plans each cube's rollups without storing anything, and it refuses any break (T445).
-- **Sending it.** Once committed to wechart's store, the API sends the whole set of plain YAML files to xcube as the model's next revision (T419, T446). It also sends it when it starts and every 60 seconds, if xcube's copy differs. The model's id is `api.xcubeModel` (`wechart`), and the admin token is the one the chart generates.
+- **Sending it.** Once committed to wechart's store, the API sends the whole model to xcube as items, each plain YAML file one root item, with the folder tree (T419, T446, T449). It also sends it when it starts and every 60 seconds, if xcube's items hash differs from wechart's. The tree is put again when the API starts and after every folder change. The model's id is `api.xcubeModel` (`wechart`), and the admin token is the one the chart generates.
 - **Every query token** names that model and the revision last recorded, so an answer never comes from an older one (T421).
 - **With the API stopped**, Cube still serves the published model.
+
+### Items mode, and the way back
+
+The first API to start against the `c0610bb768` image moves the model from slice 2's file set to items mode with one items snapshot (T449). Nothing stored in wechart changes, and the root's cubes keep their names (AC-336).
+- **Rollback in place is not possible.** From then on xcube refuses a file set for the model (`409 mode`), and the slice-2 image refuses to start on the schema (`needs xcube schema version 2 or later to read it`), which the new image migrates on its first start (`docs/research/xcube-slice-3b.md`, "Rollback").
+- **The way back** to the slice-2 release, as the user decided in R30:
+  1. Stop Cube and its refresh worker.
+  2. Drop xcube's schema: `DROP SCHEMA xcube CASCADE` in the metadata database, as its owner.
+  3. Re-run the bootstrap (`infra/xcube/bootstrap.sql`; in the chart, the `xcube-bootstrap-<hash>` Job).
+  4. Deploy the slice-2 release: Cube on `xcube:v1.7.45-83cb9f0888`, and the API built before T449. That image was built locally and never published (the fork's CI publishes from `20bf014bb1` on), so build it from the fork at that commit:
+
+     ```sh
+     git -C ~/Work/bi/cube worktree add /tmp/xcube-83cb9f0888 83cb9f0888
+     cd /tmp/xcube-83cb9f0888/xcube
+     docker build -t xcube:v1.7.45-83cb9f0888 .
+     ```
+
+  xcube starts with a new generation and no models. The slice-2 API sends its file set at start, after each publish and on its 60 s reconcile, and a query token naming a revision the new generation lacks is answered from its current one (`xcube-slice-3b.md`, "The ways back").
 
 ## xcube's public key
 

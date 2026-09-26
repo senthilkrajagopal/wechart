@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
 import { refreshKeySqlOf } from '../model/refreshKeys';
+import { fileOf, pathsByName } from '../model/split';
 import type { ModelFile } from '../server';
 
 /**
@@ -65,7 +66,11 @@ function keyInWords(key: Value): string {
   return text;
 }
 
-function scheduleOf(cube: Value, each: Value): Schedule | undefined {
+function scheduleOf(
+  cube: Value,
+  each: Value,
+  stored: ReadonlyMap<string, string>,
+): Schedule | undefined {
   const cubeName = cube['name'];
   const name = each['name'];
   if (typeof cubeName !== 'string' || typeof name !== 'string') return undefined;
@@ -76,7 +81,7 @@ function scheduleOf(cube: Value, each: Value): Schedule | undefined {
     cube: cubeName,
     name,
     type,
-    ...(typeof cube['fileName'] === 'string' ? { fileName: cube['fileName'] } : {}),
+    ...fileOf(stored, cubeName, cube['fileName']),
     owner: 'cube' as const,
   };
   // A lambda or a rollup join has no table of its own to refresh (research, "For Schedules").
@@ -116,13 +121,15 @@ export function schedulesFrom(meta: unknown, files: readonly ModelFile[] = []): 
   const cubes = asValue(meta)?.['cubes'];
   if (!Array.isArray(cubes)) return [];
   const sqlOf = refreshKeySqlOf(files);
+  // The stored file declaring each cube, over Cube's `fileName` (T449).
+  const stored = pathsByName(files);
   return cubes.flatMap((cube: unknown) => {
     const value = asValue(cube);
     const all = value?.['preAggregations'];
     if (value === undefined || !Array.isArray(all)) return [];
     return all.flatMap((each: unknown) => {
       const found = asValue(each);
-      const schedule = found === undefined ? undefined : scheduleOf(value, found);
+      const schedule = found === undefined ? undefined : scheduleOf(value, found, stored);
       if (schedule === undefined) return [];
       const sql = sqlOf.get(schedule.id);
       if (sql === undefined || !schedule.scheduled) return [schedule];

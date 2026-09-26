@@ -4,8 +4,12 @@ import type { Config } from '../config';
 import { buildServer, type ModelFile, type ModelFileStore } from '../server';
 import { xcubeAdmin } from './client';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from './fake';
+import { itemsHashOf, itemsOf } from './items';
 import { memoryPublications } from './publications';
-import { contentHashOf, modelSync } from './snapshot';
+import { modelSync } from './snapshot';
+
+/** What xcube holds of these files, as items (T449). */
+const itemsHash = (files: readonly ModelFile[]) => itemsHashOf(itemsOf(files));
 
 /**
  * T419, AC-333, through the publish route: a publish is committed to wechart's
@@ -51,6 +55,7 @@ function serving(
       lost.on ? Promise.reject(new TypeError('fetch failed')) : stub.fetch(input, init),
     ),
     files: () => files.list(),
+    tree: async () => [{ id: 'froot', parentId: null }],
     publications: memoryPublications(),
     log: { warn: vi.fn(), info: vi.fn() },
   });
@@ -78,7 +83,7 @@ describe('a publish, sent to xcube after it is committed (T419, AC-333)', () => 
     });
 
     expect(published.statusCode).toBe(200);
-    expect(stub.head('dev')?.contentHash).toBe(contentHashOf([edited]));
+    expect(stub.head('dev')?.itemsHash).toBe(itemsHash([edited]));
     await app.close();
   });
 
@@ -101,7 +106,7 @@ describe('a publish, sent to xcube after it is committed (T419, AC-333)', () => 
 
     lost.on = false;
     await sync.sync('reconcile');
-    expect(stub.head('dev')?.contentHash).toBe(contentHashOf([edited]));
+    expect(stub.head('dev')?.itemsHash).toBe(itemsHash([edited]));
     await app.close();
   });
 });

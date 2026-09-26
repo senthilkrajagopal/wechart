@@ -12,7 +12,7 @@ import type { XcubeAdmin } from '../xcube/client';
 import { clashesOf, compiledIn } from './clashes';
 import { refreshKeyProblemsOf } from './refreshKeys';
 import { rollupProblemsOf } from './rollupReferences';
-import { severalIn } from './split';
+import { misnamedIn, severalIn } from './split';
 import type { CompileError } from './validate';
 
 /**
@@ -165,6 +165,9 @@ export function registerModelPublishing(
     // One cube or view per file: each file is one xcube item (T448, AC-337).
     const several = changed.map(severalIn).filter((each) => each !== undefined);
     if (several.length > 0) return reply.status(422).send({ errors: several });
+    // Names xcube's items refuse, which the files dry run would pass (T449's review).
+    const misnamed = changed.flatMap(misnamedIn);
+    if (misnamed.length > 0) return reply.status(422).send({ errors: misnamed });
     // xcube checks a change and serves it (T445, T447); without it, neither happens.
     if (modelFiles === undefined || xcube === undefined)
       return reply.status(409).send({

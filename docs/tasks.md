@@ -6516,7 +6516,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
       - a folder whose parent has no id could reach the tree two levels down. Now nothing is kept under a folder that isn't;
       - the retry on a taken id was untested. It is tested now: one UUID in two cases.
     - **AC-328 stays unticked**, for T341: its names aren't published yet.
-- [ ] T449 (AC-333) Move the model to xcube's items mode with one items snapshot, and reconcile on the items hash, on xcube's published image
+- [x] T449 (AC-333) Move the model to xcube's items mode with one items snapshot, and reconcile on the items hash, on xcube's published image
   - Files:
     - `packages/api/src/xcube/items.ts` (+ test: each file one item, and the items hash);
     - `packages/api/src/xcube/sync.ts` (+ test) and `packages/api/src/xcube/client.ts` (the items snapshot, `PUT …/folders`, `mode` and `itemsHash` from `GET …/revision`);
@@ -6533,6 +6533,36 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
       - a folder change pushes the tree, and a tree hash that differs from xcube's answer is pushed again (AC-333).
     - The cut-over e2e and `verify.sh` run on the new image.
   - Depends on: T448, T425; T419, T447 (slice 2's sync and cut-over)
+  - **As built:**
+    - The sync stayed in `xcube/snapshot.ts` (+ `snapshot.test.ts`), which is what `sync.ts` meant; the client and the stub (`fake.ts`) moved to items.
+    - Also: `jobs/build.ts` and `jobs/schedules.ts` (+ tests), `model/split.ts` and `model/publish.ts` (+ `publish.test.ts`), `server.ts` (+ test), `deploy/helm/values/docker-desktop.yaml`, `packages/api/src/deploy/cube-image.test.ts`, and a verification note in `docs/research/xcube-slice-3b.md`.
+  - **Done 2026-09-26.**
+    - **The switch.** When an API starts, it puts the folder tree, then compares xcube's head with its own items: each plain-YAML file is one root item, named for the one cube or view it declares (`items.ts`).
+      - A model xcube holds as slice 2's file set, or not at all, gets one items snapshot, with the tree. From then on the model is in items mode.
+      - No file set is sent again: the files `snapshot()` is gone from the client.
+      - A start, a publish and the 60 s reconcile then send only when xcube's `current.itemsHash` differs from wechart's.
+      - The record's `content_hash` column holds the items hash. Nothing reads it but the sync.
+    - **The tree** is put at start, after every folder made, changed, moved or removed through the document routes (an `onResponse` hook on writes only), and on the reconcile.
+      - Pushes are made one at a time, with at most one waiting, which reads the tree as it then is.
+      - A hash xcube answers that isn't the tree's is put again, then logged.
+    - **The image.** Compose and Helm pin `ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768@sha256:d787e67c…`. `docs/deploy.md` pulls it by digest, and gives the way back: drop the `xcube` schema, re-run the bootstrap, deploy the slice-2 release, whose image it says how to build.
+      - In the image, xcube and Cube share one copy of `camelcase` and `inflection`, which settles the 3b research's open question 4 (noted there).
+    - **Found by the full Chrome run.** Cube's `fileName` is now xcube's resolved file (`monthly_orders.yml`), so the Jobs and Schedules links to Model named the wrong file. Each now names the stored file declaring the cube (`pathsByName`), with Cube's as a fallback.
+    - **The cold review (FAIL) found, all fixed:**
+      - the image test (`cube-image.test.ts`) still pinned slice 2's image;
+      - a name xcube's items refuse (`lineItems`, `Orders`, `a__b`, a Python keyword, over 40 characters) passed the files dry run, was committed, and was never served. The publish route now refuses it in xcube's words (`misnamedIn`), as T448 does for two per file;
+      - tree pushes could land out of order, and a lost one was never retried;
+      - the tree half had little testing;
+      - the way back named an image that can't be pulled;
+      - a HEAD request pushed the tree;
+      - a Joi `bad_request` was resent every 60 s rather than held as a refusal;
+      - `409 mode` wasn't shown to be a failure.
+    - **Still for the user:** a name xcube refuses that is **already stored** would make the switch's snapshot be refused, leaving the model in files mode (logged, held back 10 minutes, retried). No deployment has one: compose's and the docker-desktop release's names all fit xcube's rule. Renaming a stored cube would change stored charts, which AC-336 forbids, so what to do if one appears is the user's call.
+    - **AC-333 ticked** on:
+      - `snapshot.test.ts` (21), `items.test.ts` (the golden vector), `client.test.ts`, `publish-push.test.ts` and `server.test.ts` (folder create and delete);
+      - `xcube-cutover.spec.ts` (7, Chrome) on compose's Cube running the image: xcube's `mode` and `itemsHash` against a hash computed apart, and a folder made or removed through the API in or out of xcube's tree, shown through `POST …/resolve`;
+      - `verify.sh` on the docker-desktop release running the image: all checks passed, and its model is in items mode (revision 33, 12 items, one module).
+    - **The full main suite in Chrome:** 617 of 621 passed. Three were the Model links, since fixed and passing. The fourth is "Data as of", which fails at HEAD too (T403's note).
 - [ ] T430 (~~AC-331~~ AC-336) ~~Migrate every stored member reference to its prefixed name, and show every dashboard as before~~ Show every existing dashboard as before across the move to items mode, with nothing stored changed
   - Files: ~~a migration `…_prefixed-references.cjs` (+ test),~~ ~~`e2e/security/migration.spec.ts`~~ `e2e/items-switch.spec.ts`
   - Failing test: ~~`migration.spec.ts`: each seeded dashboard's tile data is recorded before the migration, and matches after it; no reference stored in a chart, dashboard, marking, bookmark or link names a short cube name any more (AC-331).~~ `items-switch.spec.ts`:

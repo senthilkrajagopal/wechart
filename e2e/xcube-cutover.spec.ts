@@ -237,6 +237,41 @@ test.describe.serial('xcube serves the model (T447)', () => {
     expect(names).toContain('product_catalog');
     expect(names).not.toContain('templated_example');
   });
+
+  /**
+   * T449, AC-333: "It SHALL push its folder tree … when it starts and after
+   * every folder change". Against the image itself: a folder made through the
+   * API is in xcube's tree, so xcube resolves names from it (nearest first,
+   * up to the root, `xcube-slice-3a.md`, "POST …/resolve"); once removed, it
+   * isn't (`400 invalid_folders`).
+   */
+  test('a folder made or removed through the API is in xcube’s tree, or out of it, at once (AC-333)', async ({
+    request,
+  }) => {
+    const made = await request.post('/api/documents', {
+      data: { kind: 'folder', title: `Tree ${String(Date.now())}`, folderId: 'root' },
+    });
+    expect(made.status()).toBe(201);
+    const { id } = (await made.json()) as { id: string };
+    // A UUID folder's xcube id is `f` and its hex digits (T425).
+    const folderId = `f${id.replaceAll('-', '').toLowerCase()}`;
+    const resolve = async () => {
+      const answer = await fetch(`${CUBE}/v1/semantic/models/${MODEL}/resolve`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${ADMIN_TOKEN}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ folderId, names: ['orders'] }),
+      });
+      const body = (await answer.json()) as { names?: Record<string, string | null> };
+      return { status: answer.status, orders: body.names?.['orders'] ?? null };
+    };
+
+    // In the tree: a root cube resolves from it by its bare name.
+    await expect.poll(resolve, { timeout: 30_000 }).toEqual({ status: 200, orders: 'orders' });
+
+    const removed = await request.delete(`/api/documents/folder/${id}`);
+    expect(removed.status()).toBeLessThan(300);
+    await expect.poll(async () => (await resolve()).status, { timeout: 30_000 }).toBe(400);
+  });
 });
 
 /**
@@ -428,21 +463,41 @@ const filesOf = async (request: APIRequestContext) =>
 const plainYaml = (files: readonly File[]) =>
   files.filter((file) => /\.ya?ml$/.test(file.path) && !/{%|%}|{{|}}/.test(file.content));
 
-/** xcube's content hash (research, "Input claims checked" rows 27–29). */
+/**
+ * xcube's items hash of the files, as wechart sends them from T449: each file
+ * one root item, named for the one cube or view it declares
+ * (`xcube-slice-3a.md`, "The items hash"; `packages/api/src/xcube/items.ts`).
+ */
 const hashOf = (files: readonly File[]) =>
   createHash('sha256')
     .update(
       JSON.stringify(
-        [...files]
-          .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
-          .map(({ path, content }) => ({ fileName: path, content })),
+        files
+          .flatMap(({ content }) => {
+            const found = /^(cubes|views):\s*\n(?:\s*#.*\n)*\s*- name:\s*(\S+)/m.exec(content);
+            return found === null
+              ? []
+              : [
+                  {
+                    folderId: 'froot',
+                    name: found[2]!,
+                    kind: found[1] === 'cubes' ? 'cube' : 'view',
+                    yaml: content,
+                  },
+                ];
+          })
+          .sort((a, b) => (`${a.folderId}/${a.name}` < `${b.folderId}/${b.name}` ? -1 : 1)),
       ),
+      'utf8',
     )
     .digest('hex');
 
+/** xcube's head of a model: its items hash, and its mode (T449). */
 async function xcubeHead(model = MODEL): Promise<string | undefined> {
   const response = await fetch(`${CUBE}/v1/semantic/models/${model}/revision`, {
     headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
   });
-  return ((await response.json()) as { current?: { contentHash?: string } }).current?.contentHash;
+  const head = (await response.json()) as { mode?: string; current?: { itemsHash?: string } };
+  // Only an items-mode head is wechart's from T449; a file set never is.
+  return head.mode === 'items' ? head.current?.itemsHash : undefined;
 }

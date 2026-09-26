@@ -141,16 +141,15 @@ services:
   # from a source's tables (docs/research/cube/introspection-api.md), and,
   # from the fork's commit 83cb9f0888, the model served from xcube's own
   # schema in the metadata database, which wechart's API pushes to (T447,
-  # AC-333; docs/research/xcube-slice-2.md). Built locally from the package's
-  # directory and pushed nowhere; tagged by the fork's commit, so a rebuild is
-  # a new tag:
-  #   cd ~/Work/bi/cube/xcube
-  #   docker build -t xcube:v1.7.45-$(git rev-parse --short=10 HEAD) .
+  # AC-333; docs/research/xcube-slice-2.md). From c0610bb768 it serves the
+  # model as items, names resolved in folders and compiled in modules (T449;
+  # xcube-slice-3a.md, xcube-slice-3b.md). The fork's CI publishes the image
+  # for amd64 and arm64, pulled here by digest: its moving tag isn't a version.
   # The image's own CMD starts the package's server: give neither service a
   # `command`, or Cube starts without the routes. Cube and its refresh worker
   # run the same image.
   cube:
-    image: ${CUBE_IMAGE:-xcube:v1.7.45-83cb9f0888}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768@sha256:d787e67c23f567437e49e1ad1e3eab1802c143bd1bfab465ded9e9468c5e1ab8}
     container_name: wechart-cube
     depends_on: &cube-depends-on
       sample-db:
@@ -180,7 +179,7 @@ services:
   # "Topology"; pre-aggregations.md, "Observed locally"). A build asked for
   # through the jobs API runs in the API instance, though (upgrade-1.7.43.md).
   cube-refresh-worker:
-    image: ${CUBE_IMAGE:-xcube:v1.7.45-83cb9f0888}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768@sha256:d787e67c23f567437e49e1ad1e3eab1802c143bd1bfab465ded9e9468c5e1ab8}
     container_name: wechart-cube-refresh-worker
     depends_on: *cube-depends-on
     environment:

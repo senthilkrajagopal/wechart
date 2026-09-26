@@ -105,6 +105,65 @@ export function splitFile(file: ModelFile, taken: ReadonlySet<string>): ModelFil
   });
 }
 
+/**
+ * xcube's rule for an item's name (research `xcube-slice-3a.md`, "Names"):
+ * lower-case letters, digits and single underscores, starting with a letter,
+ * at most 40 characters, and none of Python's 33 keywords.
+ */
+const ITEM_NAME = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+const RESERVED = new Set(
+  (
+    'and as assert async await break class continue def del elif else except finally for ' +
+    'from global if import in is lambda nonlocal not or pass raise return try while with yield'
+  ).split(' '),
+);
+
+/**
+ * Why xcube would refuse the names a file declares, in xcube's own words
+ * (T449's review): each is one item from the move to items mode, and the
+ * publish check, a files dry run, doesn't apply the rule.
+ */
+export function misnamedIn(file: ModelFile): { path: string; message: string }[] {
+  return declaredIn(file.content).flatMap(({ name }) =>
+    RESERVED.has(name)
+      ? [{ path: file.path, message: `"${name}" is a reserved word and can't be a name` }]
+      : ITEM_NAME.test(name) && name.length <= 40
+        ? []
+        : [
+            {
+              path: file.path,
+              message: `"${name}" is not a valid name: lower-case letters, digits and single underscores, starting with a letter, at most 40 characters`,
+            },
+          ],
+  );
+}
+
+/**
+ * Each cube's and view's file in wechart's store, by its name (T449). From
+ * the move to items mode, Cube's `fileName` is xcube's resolved file
+ * (`<fullName>.yml`), so a link to Model names the stored file instead.
+ */
+export function pathsByName(files: readonly ModelFile[]): Map<string, string> {
+  const paths = new Map<string, string>();
+  for (const file of files)
+    for (const { name } of declaredIn(file.content))
+      if (name !== '' && !paths.has(name)) paths.set(name, file.path);
+  return paths;
+}
+
+/**
+ * A cube's file as a link to Model names it: the stored file declaring it,
+ * else Cube's `fileName`, else none.
+ */
+export function fileOf(
+  stored: ReadonlyMap<string, string>,
+  cube: string,
+  fromCube: unknown,
+): { fileName: string } | Record<string, never> {
+  const fileName = stored.get(cube) ?? (typeof fromCube === 'string' ? fromCube : undefined);
+  return fileName === undefined ? {} : { fileName };
+}
+
 /** "a", "a and b", "a, b and c". */
 const listed = (names: readonly string[]) =>
   names.length < 2

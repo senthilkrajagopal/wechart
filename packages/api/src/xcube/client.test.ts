@@ -20,21 +20,63 @@ const answering = (status: number, body: Record<string, unknown>) =>
       }),
   });
 const send = (status: number, body: Record<string, unknown>) =>
-  answering(status, body).snapshot({ baseRevision: null, files: [] });
+  answering(status, body).itemsSnapshot({ baseRevision: null, folders: [], items: [] });
 
 describe('xcube’s answers (T419, AC-333)', () => {
-  it('reads a path, a file type, a duplicate or a size xcube won’t take as a refusal', async () => {
+  /**
+   * An items snapshot (T449; research `xcube-slice-3a.md`, "PUT …/snapshot
+   * with items"): a tree or a size xcube won't take is refused as surely as
+   * items that don't compile, every time for the same set.
+   */
+  it('reads a tree or a size xcube won’t take, or items it refuses, as a refusal', async () => {
     for (const [status, code] of [
-      [400, 'invalid_path'],
-      [400, 'invalid_file_type'],
-      [400, 'duplicate_path'],
+      [400, 'invalid_folders'],
       [413, 'too_large'],
+      // Joi's refusal of the same body, every time (T449's review): a name
+      // past its 64 characters, say. Not sent again every 60 s.
+      [400, 'bad_request'],
     ] as const) {
       expect(await send(status, { error: `${code}!`, code }), code).toMatchObject({
         kind: 'refused',
-        errors: [{ path: null, message: `${code}!` }],
+        errors: [{ folderId: null, name: null, message: `${code}!` }],
       });
     }
+    expect(
+      await send(422, {
+        error: 'The items do not compile',
+        code: 'invalid_items',
+        errors: [{ folderId: 'froot', name: 'orders', kind: 'compile', message: 'no' }],
+        cubeMessage: 'Cube said no',
+      }),
+    ).toEqual({
+      kind: 'refused',
+      errors: [{ folderId: 'froot', name: 'orders', kind: 'compile', message: 'no' }],
+      cubeMessage: 'Cube said no',
+    });
+  });
+
+  it('reads a stored items snapshot, and a conflict with the head’s revision', async () => {
+    expect(
+      await send(201, {
+        model: 'dev',
+        generation: 'g1',
+        revision: 4,
+        created: true,
+        contentHash: 'c'.repeat(64),
+        itemsHash: 'i'.repeat(64),
+        items: [],
+      }),
+    ).toEqual({
+      kind: 'stored',
+      generation: 'g1',
+      revision: 4,
+      itemsHash: 'i'.repeat(64),
+      created: true,
+    });
+    expect(await send(409, { error: 'stale', code: 'conflict', currentRevision: 5 })).toEqual({
+      kind: 'conflict',
+      currentRevision: 5,
+    });
   });
 
   /**
@@ -73,13 +115,14 @@ describe('xcube’s answers (T419, AC-333)', () => {
     await expect(check({ error: 'Bad JSON', code: 'bad_request' })).rejects.toThrow(XcubeError);
   });
 
-  it('fails, to be tried again, on a busy or unavailable xcube, its own error, or a bad request', async () => {
+  it('fails, to be tried again, on a busy or unavailable xcube, its own error, or a mode it won’t take', async () => {
     for (const [status, code] of [
       [503, 'busy'],
       [503, 'unavailable'],
       [500, 'internal'],
-      [400, 'bad_request'],
       [401, 'unauthorized'],
+      // Never a conflict to read again and retry (T449's review).
+      [409, 'mode'],
     ] as const) {
       const failed = await send(status, { error: 'no', code }).catch((error: unknown) => error);
       expect(failed, code).toBeInstanceOf(XcubeError);
@@ -88,10 +131,41 @@ describe('xcube’s answers (T419, AC-333)', () => {
     }
   });
 
+  it('reads the head’s mode and items hash, null for a files-mode revision (T449)', async () => {
+    const head = (current: Record<string, unknown> | null, mode = 'items') =>
+      answering(200, { model: 'dev', generation: 'g1', mode, current }).revision();
+
+    expect(
+      await head({ revision: 3, contentHash: 'c'.repeat(64), itemsHash: 'i'.repeat(64) }),
+    ).toEqual({
+      generation: 'g1',
+      mode: 'items',
+      current: { revision: 3, itemsHash: 'i'.repeat(64) },
+    });
+    expect(
+      await head({ revision: 2, contentHash: 'c'.repeat(64), itemsHash: null }, 'files'),
+    ).toEqual({ generation: 'g1', mode: 'files', current: { revision: 2, itemsHash: null } });
+    // A model whose tree was put but holds no revision yet.
+    expect(await head(null, 'files')).toEqual({ generation: 'g1', mode: 'files', current: null });
+  });
+
+  it('puts the folder tree, and reads the tree hash xcube answers (T449)', async () => {
+    const tree = [{ id: 'froot', parentId: null }];
+    expect(await answering(200, { model: 'dev', hash: 'h'.repeat(64) }).folders(tree)).toEqual({
+      hash: 'h'.repeat(64),
+    });
+    await expect(
+      answering(400, {
+        error: 'The tree has no root folder froot',
+        code: 'invalid_folders',
+      }).folders([]),
+    ).rejects.toBeInstanceOf(XcubeError);
+  });
+
   it('reads a model never imported as no base, and a 404 of anything else as a failure', async () => {
     expect(
       await answering(404, { error: 'Unknown model "dev"', code: 'unknown_model' }).revision(),
-    ).toEqual({ generation: '', current: null });
+    ).toEqual({ generation: '', mode: 'files', current: null });
     // The admin routes off (a refresh worker, or no token set): not "no base".
     await expect(answering(404, { error: 'Not found' }).revision()).rejects.toBeInstanceOf(
       XcubeError,

@@ -7,6 +7,7 @@ import { migrateToLatest } from './db/migrate';
 import { bookmarkStore } from './repos/bookmarks';
 import { catalog } from './repos/catalog';
 import { documents } from './repos/documents';
+import { folderXcubeIds } from './repos/folder-xcube-ids';
 import { folderAccessStore } from './repos/folder-access';
 import { readModelDir } from './model/read-dir';
 import { startModel } from './model/split';
@@ -67,6 +68,8 @@ async function main(): Promise<void> {
         });
   // What xcube acknowledged: recorded by the sync, and read for every token (T421).
   const publications = publicationStore(db);
+  // Each folder's stored xcube id, and the tree they make (T425).
+  const folderIds = folderXcubeIds(db);
   const sync =
     admin === undefined || config.xcube === undefined
       ? undefined
@@ -74,6 +77,7 @@ async function main(): Promise<void> {
           model: config.xcube.model,
           admin,
           files: () => modelFiles.list(),
+          tree: () => folderIds.tree(),
           publications,
           log: {
             warn: (details, message) => app.log.warn(details, message),
@@ -88,7 +92,13 @@ async function main(): Promise<void> {
     images: imageStore(db),
     bookmarks: bookmarkStore(db),
     modelFiles,
-    ...(sync === undefined ? {} : { afterPublish: () => sync.sync('publish') }),
+    ...(sync === undefined
+      ? {}
+      : {
+          afterPublish: () => sync.sync('publish'),
+          // The tree put after every folder change (T449, AC-333).
+          afterFolderChange: () => sync.pushTree('folder'),
+        }),
     ...(admin === undefined ? {} : { xcube: admin }),
     publications,
     // Each folder's AD groups (T314).
@@ -116,10 +126,13 @@ async function main(): Promise<void> {
     sync === undefined
       ? undefined
       : setInterval(() => {
-          void sync.sync('reconcile');
+          // The tree too, so a push lost with xcube away is made (T449's review).
+          void sync.pushTree('reconcile').then(() => sync.sync('reconcile'));
         }, 60_000);
   reconciling?.unref();
-  void sync?.sync('start');
+  // The tree first, then the items (T449): a model xcube holds as a file set
+  // is moved to items mode by this first send.
+  void sync?.pushTree('start').then(() => sync.sync('start'));
 
   // Stopped, it finishes the requests under way, taking no new ones (Fastify's
   // `close()`), for up to 15 s: past a query's 10 s long-poll on Cube, which

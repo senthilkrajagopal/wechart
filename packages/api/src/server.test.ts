@@ -1,5 +1,5 @@
 import { ChartDocumentError } from '@wechart/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CubeClient, CubeError } from './cube/client';
 import { ConfigError, loadConfig } from './config';
@@ -597,6 +597,44 @@ describe('creating catalog objects (AC-020)', () => {
     await app.close();
   });
 
+  /**
+   * T449, AC-333: "It SHALL push its folder tree … after every folder
+   * change". A folder made through the API puts the tree; a dashboard made,
+   * or a refused request, doesn't.
+   */
+  it('puts the folder tree to xcube after a folder is made, and after nothing else', async () => {
+    const documents = recordingDocuments();
+    const afterFolderChange = vi.fn(async () => undefined);
+    const app = buildServer({
+      config,
+      documents,
+      cube: stubCube(() => ({})),
+      afterFolderChange,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind: 'dashboard', title: 'Not a folder' },
+    });
+    await app.inject({ method: 'POST', url: '/api/documents', payload: { kind: 'folder' } });
+    expect(afterFolderChange).not.toHaveBeenCalled();
+
+    const made = await app.inject({
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind: 'folder', title: 'Sales' },
+    });
+    expect(made.statusCode).toBe(201);
+    await vi.waitFor(() => {
+      expect(afterFolderChange).toHaveBeenCalledTimes(1);
+    });
+    // Settled (T449's review): the dashboard and the refused request never called it.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(afterFolderChange).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
   it('defaults to the root folder when none is given', async () => {
     const documents = recordingDocuments();
     const app = buildServer({ config, documents, cube: stubCube(() => ({})) });
@@ -706,6 +744,26 @@ describe('deleting a library chart (AC-023)', () => {
       },
     };
   }
+
+  // T449's review, AC-333: a folder removed through its :kind route puts the tree too.
+  it('puts the folder tree after a folder is removed, and not after a chart is', async () => {
+    const f = fixture([]);
+    const afterFolderChange = vi.fn(async () => undefined);
+    const app = buildServer({ config, ...f, cube: stubCube(() => ({})), afterFolderChange });
+
+    const chart = await app.inject({ method: 'DELETE', url: '/api/documents/chart/c9' });
+    expect(chart.statusCode).toBeLessThan(300);
+    const folder = await app.inject({ method: 'DELETE', url: '/api/documents/folder/f9' });
+    expect(folder.statusCode).toBeLessThan(300);
+
+    await vi.waitFor(() => {
+      expect(afterFolderChange).toHaveBeenCalledTimes(1);
+    });
+    // Settled: the chart's delete never called it.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(afterFolderChange).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
 
   it('refuses an unconfirmed delete and names the dashboards', async () => {
     const f = fixture([

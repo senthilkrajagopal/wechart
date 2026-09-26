@@ -437,6 +437,7 @@ Everything else in [x3a] about names, resolution, bindings, the items hash, remo
    - `prod_pre_aggregations` is Cube's non-dev default ([c-opts] L300-303).
    - `20260101` is the month partition suffix by Cube's rule ([c-prl] L605-624). Not observed.
 4. **UNVERIFIED: titles in the image.** In the image, xcube's `camelcase`/`inflection` resolve from `/cube/node_modules`. Whether that is the copy Cube's schema-compiler uses there was not checked. The CI image checks don't look at titles ([dockerfile] L34-35; [ci] L115-132).
+   - **Verified 2026-09-26 (T449), in the image by digest `d787e67c…`.** `require.resolve` from `/cube/node_modules/xcube` and from `/cube/node_modules/@cubejs-backend/schema-compiler` gives the same file for each: `/cube/node_modules/camelcase/index.js` (6.2.1) and `/cube/node_modules/inflection/lib/inflection.js` (1.13.1). The versions differ from the dev tree's (6.3.0, 1.13.4), but xcube and Cube share one copy of each. Run with `docker run --entrypoint node <image> -e …`.
 5. **UNVERIFIED: the content of the CI step summary.** The digest was taken from the package page ([ghcr]).
 6. **UNVERIFIED (design intent):** overlays (slice 5), the slice-4 folder check and the slice-4 admin meta route.
    - No overlay code exists (grep of `xcube/src` for "overlay": 0).
