@@ -65,6 +65,12 @@ export interface BuildOptions {
    * memory.
    */
   readonly drafts?: PublishDraftStore;
+  /**
+   * After a publish is committed to the model's store: send the whole set to
+   * xcube (T419, AC-333). A send that fails leaves the publish standing, for
+   * the next reconcile to send.
+   */
+  readonly afterPublish?: () => Promise<unknown>;
   /** Signed-in sessions, with security on (T316): the metadata database. */
   readonly sessions?: SessionStore;
   /** Each folder's AD groups (T314, AC-259, AC-260). */
@@ -186,6 +192,7 @@ export function buildServer({
   bookmarks,
   modelFiles,
   drafts = memoryDraftStore(),
+  afterPublish,
   folderAccess,
   healthFetch,
   logger = false,
@@ -343,6 +350,7 @@ export function buildServer({
     },
     modelFiles,
     drafts,
+    ...(afterPublish === undefined ? {} : { afterPublish }),
   });
   registerBuilds(app, client);
   // With the model's files: a key's SQL is read there (T273's review).

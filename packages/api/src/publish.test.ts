@@ -284,6 +284,11 @@ describe('publishing model changes', () => {
       'cubes//x.yml',
       'cubes/./x.yml',
       'cubes/x\ny.yml',
+      // Nothing xcube wouldn't take (T419's review; research, "Path rules"): a
+      // segment starting with "-", or a path past 512 characters. Published
+      // here, it would stop every send to xcube after it.
+      'cubes/-orders.yml',
+      `cubes/${'x'.repeat(510)}.yml`,
     ]) {
       const response = await publish(app, [{ path, content: 'cubes: []\n' }]);
       expect({ path, status: response.statusCode }).toEqual({ path, status: 400 });

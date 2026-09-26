@@ -27,10 +27,17 @@ import { compileErrorsOf, type CompileError } from './validate';
 
 /**
  * What may be published: YAML files, by plain paths — segments of name
- * characters, one name to a file. Not JavaScript, Python or Jinja: they run
+ * characters, each starting with a letter, a digit or "_" (so never "." or
+ * ".."), one name to a file. Not JavaScript, Python or Jinja: they run
  * inside Cube (spec Non-goals: dynamic models are read-only, AC-140).
  */
-const MODEL_PATH = /^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.ya?ml$/;
+const MODEL_PATH = /^(?:[A-Za-z0-9_][A-Za-z0-9_.-]*\/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\.ya?ml$/;
+/**
+ * And nothing xcube wouldn't take: its rule is the one above, of up to 512
+ * characters (T419's review; research `xcube-slice-2.md`, "Path rules"). A
+ * file published past it would stop every send to xcube after it.
+ */
+const MAX_PATH_LENGTH = 512;
 
 /**
  * What a file that isn't YAML is, by its extension, for saying why it isn't
@@ -146,6 +153,7 @@ export function registerModelPublishing(
     meta,
     modelFiles,
     drafts,
+    afterPublish,
   }: {
     config: Config;
     client: CubeClient;
@@ -158,6 +166,12 @@ export function registerModelPublishing(
      * was of another model. In the database, for any replica to answer (T418).
      */
     drafts: PublishDraftStore;
+    /**
+     * Once a publish is committed: xcube is sent the whole set (T419,
+     * AC-333). It answers for itself: a send that fails is logged there, and
+     * the publish stands for the next reconcile to send.
+     */
+    afterPublish?: () => Promise<unknown>;
   },
 ): void {
   /** Cube, by the key it and this API share; with no key set, no one. */
@@ -200,7 +214,8 @@ export function registerModelPublishing(
       (file): file is ModelFile =>
         typeof (file as ModelFile | null)?.path === 'string' &&
         typeof (file as ModelFile).content === 'string' &&
-        MODEL_PATH.test((file as ModelFile).path),
+        MODEL_PATH.test((file as ModelFile).path) &&
+        (file as ModelFile).path.length <= MAX_PATH_LENGTH,
     );
     // Only YAML models are published: code in any other form runs where
     // Cube's secrets are (R28; AC-332).
@@ -350,6 +365,10 @@ export function registerModelPublishing(
     }
 
     await modelFiles.write(changed);
+    // Committed first, then sent: xcube is never ahead of wechart (T419).
+    await afterPublish?.().catch((error: unknown) => {
+      app.log.warn({ err: error }, 'could not send the published model to xcube');
+    });
     // A model the user just published must not look stale to them (AC-137).
     meta.invalidate();
     return { version: versionOf(draft) };

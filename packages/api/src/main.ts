@@ -14,6 +14,9 @@ import { imageStore } from './repos/images';
 import { modelFileStore } from './repos/model-files';
 import { queryLog } from './repos/query-log';
 import { xcubePublicKeyOf } from './secrets/xcube-key';
+import { xcubeAdmin } from './xcube/client';
+import { publicationStore } from './xcube/publications';
+import { modelSync } from './xcube/snapshot';
 import { seedDevData } from './seed';
 import { buildServer } from './server';
 
@@ -43,6 +46,28 @@ async function main(): Promise<void> {
   await modelFiles.seed(await readModelDir(config.modelDir));
 
   const sessions = pgSessionStore(db);
+  /**
+   * xcube's copy of the model (T419, AC-333): sent at start, after each
+   * publish and every 60 s, where the deployment names its model in xcube.
+   */
+  const xcube = config.xcube;
+  const sync =
+    xcube === undefined
+      ? undefined
+      : modelSync({
+          model: xcube.model,
+          admin: xcubeAdmin({
+            cubeApiUrl: config.cubeApiUrl,
+            model: xcube.model,
+            token: xcube.adminToken,
+          }),
+          files: () => modelFiles.list(),
+          publications: publicationStore(db),
+          log: {
+            warn: (details, message) => app.log.warn(details, message),
+            info: (details, message) => app.log.info(details, message),
+          },
+        });
   const app = buildServer({
     config,
     queryLog: queryLog(db),
@@ -53,6 +78,7 @@ async function main(): Promise<void> {
     modelFiles,
     // Publish drafts, for whichever replica Cube's read-back reaches (T418).
     drafts: publishDraftStore(db),
+    ...(sync === undefined ? {} : { afterPublish: () => sync.sync('publish') }),
     // Each folder's AD groups (T314).
     folderAccess: folderAccessStore(db),
     // Signed-in sessions, kept in the metadata database (T316).
@@ -71,8 +97,20 @@ async function main(): Promise<void> {
   );
   sweeping.unref();
 
+  // Sent at start, and reconciled every 60 s: a send lost between wechart's
+  // commit and xcube is made then (T419, AC-333). Neither holds up the start.
+  const reconciling =
+    sync === undefined
+      ? undefined
+      : setInterval(() => {
+          void sync.sync('reconcile');
+        }, 60_000);
+  reconciling?.unref();
+  void sync?.sync('start');
+
   closeWithGrace({ delay: 5_000 }, async () => {
     clearInterval(sweeping);
+    if (reconciling !== undefined) clearInterval(reconciling);
     await app.close();
     await closeDb();
   });

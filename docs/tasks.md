@@ -6048,6 +6048,36 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - two deployments' model ids never touch each other's model; every admin call carries the admin token and never a user's token (AC-333).
     - ~~an empty xcube gets one full snapshot at start: folders, their allowed groups, model items as written, and data sources with ciphertext only;~~ Folders, their groups and data sources are sent by their own slices (T425, T436, T442), so AC-330 stays open for them.
   - Depends on: none (the stub); T447 runs it against xcube
+  - **Done 2026-09-26, against the stub.**
+    - **The pieces:**
+      - `xcube/client.ts`, the admin routes with the static admin token;
+      - `xcube/snapshot.ts`, xcube's content hash and the sync;
+      - `xcube/publications.ts` with the `model_publications` table, what xcube acknowledged;
+      - `xcube/fake.ts`, a stub xcube answering as the research records the fork.
+    - **The settings.** `WECHART_XCUBE_MODEL` and `WECHART_XCUBE_ADMIN_TOKEN` are given both or neither, and checked at start against xcube's rules; the token is never repeated. Without them nothing is sent, so both suites run as before until T447.
+    - **When it sends.** At start, not holding it up; after each publish, once the store is written; and every 60 s.
+    - **How it sends.** It reads xcube's head, then the files. It sends only when the content differs. A conflict is read and sent again up to three times more. A refusal of that content is remembered for 10 minutes.
+    - **What the tests show.**
+      - `snapshot.test.ts` (15) covers:
+        - xcube's own golden hash vector, which the research couldn't recompute, now checked;
+        - an unknown model sent whole from no base, and the same content not sent;
+        - a real conflict read again;
+        - a refusal remembered for its content only, and a file xcube won't take remembered like one;
+        - a new store, dropped from the record even when the next send fails;
+        - merged sends, and a hung xcube given up;
+        - a lost send made by the next reconcile;
+        - two models kept apart, and the token on every call.
+      - `publish-push.test.ts`: through the publish route, the set is sent once written, and a publish whose send fails still stands.
+      - `client.test.ts`: each of xcube's answers.
+      - `config.test.ts`, `publications.test.ts`: the settings and the record.
+    - **The cold review (PASS)** led to:
+      - **A real bug:** nothing bounded a publish's wait on xcube. Each call now gives up after 120 s, xcube's own compile wait, and sends asked for while one runs merge into one more rather than queuing.
+      - **Tests that couldn't fail:** the stub now really imports between read and send, and the files' read is timed against xcube's calls.
+      - **Stub fidelity:** the stub now checks paths and file types as xcube does. wechart's publish path rule now matches xcube's (no segment starting with `-`, dots allowed inside one, 512 characters at most), so no file wechart takes can stop the sends. A 400 or 413 for the files is remembered like a 422.
+    - **The test-integrity hook** flagged two edits to `snapshot.test.ts` as swapping a strict matcher for a weaker one. Both only added assertions (the files' read order, and that calls were made); none was removed or loosened.
+    - **Left:**
+      - AC-333 stays open until T447 runs this against xcube: the start push and the 60 s timer are wired in `main.ts` but tested only through `sync()`.
+      - Until T445, a publish Cube's draft check accepts but xcube refuses leaves xcube a revision behind wechart (the refusal is logged).
 - [ ] T445 (AC-136, AC-235) Check a publish with xcube's dry run in place of the draft Cube compiles, refusing every break
   - Files: `packages/api/src/xcube/check.ts` (+ test), `packages/api/src/model/publish.ts`, `packages/api/src/model/validate.ts` (`placeOf` exported, for errors xcube names no file for), `packages/api/src/xcube/fake.ts`
   - Failing test: `check.test.ts`, against the stub xcube:

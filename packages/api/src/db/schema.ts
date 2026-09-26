@@ -107,4 +107,14 @@ export interface Database {
   data_sources: DataSourceTable;
   data_source_secrets: DataSourceSecretTable;
   publish_drafts: PublishDraftTable;
+  model_publications: ModelPublicationTable;
+}
+
+/** What xcube last acknowledged of each model (T419, AC-333). */
+export interface ModelPublicationTable {
+  model_id: string;
+  xcube_generation: string;
+  xcube_revision: number;
+  content_hash: string;
+  synced_at: Generated<Date>;
 }

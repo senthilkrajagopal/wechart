@@ -87,6 +87,13 @@ export interface Config {
    * decrypts them (AC-298).
    */
   readonly xcubePublicKey?: XcubePublicKey;
+  /**
+   * The deployment's model in xcube, and the token xcube's admin routes take
+   * (T419, AC-333; R29): `WECHART_XCUBE_MODEL` and `WECHART_XCUBE_ADMIN_TOKEN`,
+   * both or neither. Without them wechart sends xcube nothing, as before the
+   * cut-over (T447).
+   */
+  readonly xcube?: { readonly model: string; readonly adminToken: string };
 }
 
 /** The OIDC provider wechart signs users in through (AC-252; research/openid-client.md). */
@@ -177,7 +184,42 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ...(env['WECHART_SUPER_ADMIN_GROUP']
       ? { superAdminGroup: env['WECHART_SUPER_ADMIN_GROUP'] }
       : {}),
+    ...xcubeOf(env, cubeApiSecret),
   };
+}
+
+/** xcube's model id (research: `MODEL_ID` in its `snapshot.ts`). */
+const MODEL_ID = /^[a-z0-9][a-z0-9_-]{0,62}$/;
+/** What xcube takes as an admin token (research, "Admin authentication"). */
+const ADMIN_TOKEN = /^[A-Za-z0-9._~-]{32,}$/;
+
+/** The deployment's model and xcube's admin token, both or neither (T419). */
+function xcubeOf(env: NodeJS.ProcessEnv, cubeApiSecret: string): Pick<Config, 'xcube'> {
+  const model = env['WECHART_XCUBE_MODEL'] ?? '';
+  const adminToken = env['WECHART_XCUBE_ADMIN_TOKEN'] ?? '';
+  if (model === '' && adminToken === '') return {};
+  if (model === '')
+    throw new ConfigError(
+      'WECHART_XCUBE_MODEL is required with WECHART_XCUBE_ADMIN_TOKEN: it names this deployment’s model in xcube.',
+    );
+  if (adminToken === '')
+    throw new ConfigError(
+      'WECHART_XCUBE_ADMIN_TOKEN is required with WECHART_XCUBE_MODEL: xcube’s admin routes take it.',
+    );
+  if (!MODEL_ID.test(model))
+    throw new ConfigError(
+      `WECHART_XCUBE_MODEL "${model}" isn’t a model id xcube takes: 1–63 lower-case letters, digits, "_" and "-", starting with a letter or digit.`,
+    );
+  // The token itself is never repeated.
+  if (!ADMIN_TOKEN.test(adminToken))
+    throw new ConfigError(
+      'WECHART_XCUBE_ADMIN_TOKEN isn’t a token xcube takes: 32 or more of A–Z, a–z, 0–9, ".", "_", "~" and "-".',
+    );
+  if (adminToken === cubeApiSecret)
+    throw new ConfigError(
+      'WECHART_XCUBE_ADMIN_TOKEN is the same as CUBE_API_SECRET, which xcube refuses: give it a token of its own.',
+    );
+  return { xcube: { model, adminToken } };
 }
 
 /** With security on, everything sign-in needs is required: a missing piece is a startup error. */
