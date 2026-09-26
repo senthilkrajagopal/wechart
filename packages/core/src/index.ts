@@ -193,3 +193,13 @@ export {
 } from './access/effective';
 
 export { folderRights, isSuperAdmin, type FolderRight, type Viewer } from './access/visibility';
+
+export {
+  DRIVER_TYPES,
+  DRIVERS,
+  targetKeysOf,
+  type AuthMethod,
+  type DriverField,
+  type DriverSpec,
+  type DriverType,
+} from './data-sources/drivers';

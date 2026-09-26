@@ -5250,10 +5250,22 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.7 Data sources and connections (F18, returned)
 
-- [ ] T360 [P] (AC-160) Define the six driver types' connection and authentication fields
+- [x] T360 [P] (AC-160) Define the six driver types' connection and authentication fields
   - Files: `packages/core/src/data-sources/drivers.ts` (+ test)
   - Failing test: `drivers.test.ts`: PostgreSQL (password, client certificate), Snowflake (key pair, OAuth token, password), Databricks (personal access token, OAuth machine-to-machine), BigQuery (service-account JSON), SQL Server (SQL login, NTLM, Entra ID service principal) and Oracle (password), each with the fields `docs/research/connection-testing.md` §2 lists, and no field that names a file path (AC-160).
   - Depends on: none
+  - **Done 2026-09-25.**
+    - The six drivers, each with its connection fields and authentication methods. Every credential is marked secret, and each is required except key passphrases, so Cube never falls back to its own. There are no path fields, and the connection-target fields carry the `target` flag (AC-312).
+    - The cold review (FAIL) found Databricks offering a schema field Cube's driver overwrites from its own environment. It is removed.
+    - Also from the review:
+      - `database` is no longer a target field, since AC-312 doesn't list it;
+      - defaults follow the approved prototype (PostgreSQL TLS on and verified) and Cube (SQL Server encryption off);
+      - the credentials' `required` is now tested.
+    - Handed on:
+      - T335 refuses `UID`/`PWD` in a Databricks URL, because Cube reads a token from there and the URL isn't sealed;
+      - T361/T363 require Oracle's connect string *or* host, and turn TLS on for a PostgreSQL client certificate;
+      - T361 checks values, not only keys, for file paths (JDBC properties, Oracle wallet settings).
+    - AC-160 stays open until the form renders them (T363, which now cites it).
 - [ ] T361 (AC-159) Have Cube run a connection test with its own driver, at wechart's request, and show each check
   - Files: the Cube fork, through the Cube-expert agent only: a `connection-test` scope and `POST /v1/introspection/connection-tests` in the `cube-introspection` package (explicit config, no path fields, a timeout per check, error text redacted, body kept out of Cube's logs; research `connection-testing.md` §3); the fork image rebuilt under a new tag. wechart: `packages/api/src/cube/client.ts`, `packages/api/src/routes/data-sources.ts` (`POST /api/data-sources/:id/test`), `docker-compose.yml`, `deploy/helm/values/docker-desktop.yaml` (the new image)
   - Failing test: `data-source-test.test.ts`, against the rebuilt Cube: a PostgreSQL source with a wrong password reports the checks Cube ran, the failing one with the driver's error text (SQLSTATE 28P01) and no secret in it; a correct one passes every check; the request never comes from the browser (AC-159).
@@ -5262,7 +5274,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: a migration `…_connection-tests.cjs`, `packages/api/src/repos/connection-tests.ts` (+ test), `packages/web/src/workspaces/data-sources/TestHistory.tsx`
   - Failing test: `connection-tests.test.ts`: every test run is stored with its time, checks and outcome, and the source's history lists them newest first (AC-163).
   - Depends on: T361
-- [ ] T363 (AC-158) Add a data source in the workspace through Type → Connection → Test → Name, refusing a failing test without an override
+- [ ] T363 (AC-158, AC-160) Add a data source in the workspace through Type → Connection → Test → Name, refusing a failing test without an override
   - Files: `packages/web/src/workspaces/data-sources/{NewSourceWizard,ConnectionForm}.tsx` (+ tests), `packages/api/src/routes/data-sources.ts`, `e2e/security/data-sources.spec.ts`
   - Failing test: `data-sources.spec.ts`: the wizard takes a name, a driver, that driver's fields and a Test step; Create stays disabled until the test passes or "Create anyway" is chosen; the API refuses a create with no passing test and no override (AC-158).
   - Depends on: T360, T361, T345
@@ -5488,7 +5500,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 | AC-116 | T389 | AC-131 | T334, T342 | AC-145 | T375 |
 | AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |
 | AC-154 | T377 | AC-155 | T379 | AC-157 | T364 |
-| AC-158 | T363 | AC-159 | T361 | AC-160 | T360 |
+| AC-158 | T363 | AC-159 | T361 | AC-160 | T360, T363 |
 | AC-161 | T365 | AC-163 | T362 | AC-164 | T335 |
 | AC-176 | T405 | AC-180 | T407 | AC-187 | T406 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
