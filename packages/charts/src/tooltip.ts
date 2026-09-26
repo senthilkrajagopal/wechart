@@ -197,7 +197,12 @@ export function tooltipFor(spec: RenderSpec): EChartsOption {
     const heading = rows[0]?.name ?? '';
 
     const lines = rows.map((row) => {
-      const format = split ? fallback : (formatters[row.seriesIndex ?? 0] ?? fallback);
+      // By the series' measure, found by its name: its place moves with the
+      // order set in Customize, or a series hidden before it (T392's review).
+      const named = measures.indexOf(String(row.seriesName ?? ''));
+      const format = split
+        ? fallback
+        : (formatters[named === -1 ? (row.seriesIndex ?? 0) : named] ?? fallback);
       const raw = Array.isArray(row.value) ? row.value[1] : row.value;
       return `${escapeHtml(seriesName(row.seriesName))}: ${escapeHtml(format(raw))}`;
     });

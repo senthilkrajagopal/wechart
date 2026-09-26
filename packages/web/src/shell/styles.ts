@@ -4575,6 +4575,10 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 }
 .customize-tab__series { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .customize-tab__series li { display: flex; align-items: center; gap: 8px; }
+/* Each series' place in the order (T392), at the row's end, as the index
+   editor's moves are. */
+.customize-tab__move { display: inline-flex; gap: 4px; margin-left: auto; }
+.customize-tab__reset { justify-self: start; }
 .customize-tab__series input[type='color'] { width: 28px; height: 20px; padding: 0; border: 1px solid var(--wc-border-subtle); border-radius: 4px; background: none; }
 .axis-panel { display: grid; gap: 4px; margin: 0 0 8px; padding: 8px; border: 1px solid var(--wc-border-subtle); border-radius: 6px; }
 .axis-panel > legend { padding: 0 4px; font-size: 12px; font-weight: 600; color: var(--wc-text-secondary); }

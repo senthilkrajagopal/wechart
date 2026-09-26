@@ -5854,10 +5854,24 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - the tests widened;
       - the comments and the research note corrected.
     - **Left.** Thinning can leave a sparse scale (one label at 220 px). Abbreviating ("1.2M") would keep more of it; the axis editor's Compact format does that today.
-- [ ] T392 [P] (AC-300) Draw, stack and list series in the order set in Customize
-  - Files: `packages/core/src/compile.ts`, `packages/web/src/editor/customize/SeriesOrder.tsx` (+ tests)
+- [x] T392 [P] (AC-300) Draw, stack and list series in the order set in Customize
+  - Files: `packages/charts/src/customize.ts` (`seriesOrderOf`, `inSeriesOrder`), `packages/charts/src/series/bar.ts` (a stack's rounded end), `packages/charts/src/tooltip.ts` (formats by name), `packages/charts/src/seriesOrder.test.ts`, `packages/web/src/editor/CustomizeTab.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/series-order.spec.ts`
   - Failing test: `seriesOrder.test.ts`: a set order draws, stacks and lists the series in that order, and holds after a refresh (AC-300).
   - Depends on: none
+  - **Done 2026-09-26.**
+    - **The order.** It is saved with the chart as `options.seriesOrder`, the series' names. `applyCustomize` puts the chart's series in it, overlays left in place. ECharts draws, stacks (from the baseline up) and lists its legend in the series' order, so that one order is all three. Rows that come back in another order don't move it.
+    - **The Customize tab.** The Series list is that order (`Series order`), with Move up and Move down on each series. Focus follows the series moved, and each move is said. Once set, the whole order is kept, even where it matches today's data, since the data's order can change on a refresh. Reset order puts it back. A series not drawn today keeps its saved place.
+    - **What the tests show:**
+      - `seriesOrder.test.ts` (6), read off the drawn SVG: the stack bottom to top and the legend in the order set; the order held with the rows reversed; unnamed series after named ones; the data's order with none set; the stack's rounded end on the series drawn last; each tooltip value in its own measure's format.
+      - `CustomizeTab.test.tsx`: the moves, the order kept, Reset, a series not drawn, and focus with the message.
+      - `series-order.spec.ts` (Chrome): the legend in the order set, in the editor, on the chart's page and after a reload, and stored.
+    - **The cold review (FAIL)** led to:
+      - Tooltip formats were picked by a series' position, so a reorder gave the wrong measure's format (AC-046). They are found by the series' name now.
+      - A stack's rounded end stayed on the data's last series; it is on the one drawn last now.
+      - An order matching the data's was dropped, and could change on a refresh; it is kept until Reset now.
+      - A series not drawn lost its place; it keeps it now.
+      - The focus and message tests were added, and a test that couldn't fail was strengthened.
+    - **Left.** A Top N "Other (n)" series is named by its count, so a saved place for it is lost when the count changes.
 - [ ] T393 [P] (AC-301) Order a table's columns as the wells order its fields
   - Files: `packages/web/src/tiles/DataTable.tsx` (+ test)
   - Failing test: `DataTable.test.tsx`: time and dimensions come first, then measures in the Metrics well's order (AC-301).

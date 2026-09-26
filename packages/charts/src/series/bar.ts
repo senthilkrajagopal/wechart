@@ -9,7 +9,7 @@
 import { seriesOf, type RenderSpec } from '@wechart/core';
 
 import { colourFor } from '../colours';
-import { plotEdgesOf } from '../customize';
+import { inSeriesOrder, plotEdgesOf, seriesOrderOf } from '../customize';
 import { PROTOTYPE_GRID } from '../layout/grid';
 import { DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 
@@ -98,9 +98,16 @@ export function barOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
     ),
   );
 
+  // Outermost in the order drawn: the order set in Customize, which
+  // `applyCustomize` puts the series in (T392's review), else the data's.
+  const drawn = inSeriesOrder(
+    series.map((one, index) => ({ name: one.name, index })),
+    seriesOrderOf(spec),
+  ).map(({ index }) => index);
   const outermostAt = (categoryIndex: number) => {
-    if (!stacked) return series.length - 1;
-    for (let index = series.length - 1; index >= 0; index -= 1) {
+    if (!stacked) return drawn.at(-1) ?? -1;
+    for (let at = drawn.length - 1; at >= 0; at -= 1) {
+      const index = drawn[at]!;
       if (series[index]?.values[categoryIndex] != null) return index;
     }
     return -1;

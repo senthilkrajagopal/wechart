@@ -42,6 +42,35 @@ export function seriesSettingsOf(spec: RenderSpec): Readonly<Record<string, Seri
   return record(spec.options?.['series']) as Record<string, SeriesSettings>;
 }
 
+/** The series' names in the order set in Customize (T392, AC-300): none set, none. */
+export function seriesOrderOf(spec: RenderSpec): readonly string[] {
+  const order = spec.options?.['seriesOrder'];
+  return Array.isArray(order)
+    ? order.filter((name): name is string => typeof name === 'string')
+    : [];
+}
+
+/**
+ * Series in the order set (T392, AC-300): those it names first, as it names
+ * them, then the rest in the order they came. ECharts draws, stacks (from the
+ * baseline up) and lists its legend in the series' own order, so this one
+ * order is all three; and it is the chart's, saved with it, so rows that come
+ * back in another order on a refresh don't move it.
+ */
+export function inSeriesOrder<T extends { name?: unknown }>(
+  series: readonly T[],
+  order: readonly string[],
+): T[] {
+  const rank = (one: T) => {
+    const at = typeof one.name === 'string' ? order.indexOf(one.name) : -1;
+    return at === -1 ? order.length : at;
+  };
+  return series
+    .map((one, at) => ({ one, at }))
+    .sort((a, b) => rank(a.one) - rank(b.one) || a.at - b.at)
+    .map(({ one }) => one);
+}
+
 /** A side legend's room, as the plot leaves it. */
 const SIDE_ROOM_PX = 120;
 
@@ -156,13 +185,17 @@ export function applyCustomize(option: EChartsOption, spec: RenderSpec): ECharts
     // chart's: it is neither stacked nor labelled.
     const isOverlay = (one: Series) => one['barGap'] === '-100%';
     const own = drawnSeries.filter((one) => !isOverlay(one));
+    // The chart's own series in the order set, each overlay left where it was.
+    const ordered = inSeriesOrder(own, seriesOrderOf(spec));
+    let slot = 0;
+    const placed = drawnSeries.map((one) => (isOverlay(one) ? one : ordered[slot++]!));
     // Stacked only where the tab offers it, and where there is more than one
     // series to stack (T231's review).
     const stacking = stacked && STACKABLE_TYPES.includes(spec.chartType) && own.length > 1;
     const inside = stacking || spec.chartType === 'stackedBar' || spec.chartType === 'stackedArea';
     next = {
       ...next,
-      series: drawnSeries.map((one) =>
+      series: placed.map((one) =>
         isOverlay(one)
           ? one
           : {

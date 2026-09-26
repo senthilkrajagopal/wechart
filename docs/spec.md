@@ -1105,7 +1105,7 @@ Traces to: §P2.6 H, `[R8, R16, R19, R21, R22]`, `[backlog]` §5. Rewritten phas
 
 - [x] AC-299 WHEN a chart's value-axis labels would overlap at the tile's width, THE SYSTEM SHALL thin or abbreviate them so no two overlap (the UI review's gap 4).
       Fails when: two value-axis labels overlap in a drawn tile.
-- [ ] AC-300 WHEN the user orders a chart's series in Customize, THE SYSTEM SHALL draw, stack and list the series in that order, and keep it after a refresh (gap 7).
+- [x] AC-300 WHEN the user orders a chart's series in Customize, THE SYSTEM SHALL draw, stack and list the series in that order, and keep it after a refresh (gap 7).
       Fails when: series stack alphabetically after another order was set, or the order changes on refresh.
 - [ ] AC-301 THE SYSTEM SHALL order a table's columns as the wells order its fields: time and dimensions first, then measures in the Metrics well's order (gap 9).
       Fails when: a table's columns differ from the wells' order.

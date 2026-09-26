@@ -15,7 +15,9 @@ export { themed, type ChartTheme } from './themed';
 export { applyAxes, axesOf, type AxesSettings, type AxisSettings, type NumberFormat } from './axis';
 export {
   applyCustomize,
+  inSeriesOrder,
   legendSettingsOf,
+  seriesOrderOf,
   seriesSettingsOf,
   STACKABLE_TYPES,
   type LegendPosition,

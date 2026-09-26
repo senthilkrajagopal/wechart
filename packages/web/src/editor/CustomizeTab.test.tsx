@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CustomizeTab } from './CustomizeTab';
@@ -136,6 +137,91 @@ describe('the Customize tab (AC-219)', () => {
     await userEvent.click(screen.getByLabelText('Data labels'));
     expect(onOptions).toHaveBeenLastCalledWith({ dataLabels: true });
     expect(screen.getByLabelText('Colour of Orders Amount')).toBeTruthy();
+  });
+
+  /**
+   * T392, AC-300: the series' order, set here, is saved with the chart as the
+   * whole list of their names; the drawing follows it (`seriesOrder.test.ts`).
+   */
+  it('orders the series, and lists them in the order set', async () => {
+    const onOptions = tab();
+    const listed = () =>
+      within(screen.getByRole('list', { name: 'Series order' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent?.match(/Orders (Count|Amount)/)?.[0]);
+    expect(listed()).toEqual(['Orders Count', 'Orders Amount']);
+    // The first can't go up, nor the last down.
+    expect(
+      (screen.getByRole('button', { name: 'Move Orders Count up' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'Move Orders Amount down' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Move Orders Amount up' }));
+    expect(onOptions).toHaveBeenLastCalledWith({ seriesOrder: ['orders.amount', 'orders.count'] });
+  });
+
+  it('shows an order set before, and puts it back to the data’s own', async () => {
+    const onOptions = tab({ seriesOrder: ['orders.amount', 'orders.count'] });
+    const items = within(screen.getByRole('list', { name: 'Series order' })).getAllByRole(
+      'listitem',
+    );
+    expect(items.map((item) => item.textContent?.match(/Orders (Count|Amount)/)?.[0])).toEqual([
+      'Orders Amount',
+      'Orders Count',
+    ]);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Move Orders Amount down' }));
+    // Kept, even where it matches the data's order today: the data's order
+    // can change on a refresh, and the order set must not (T392's review).
+    expect(onOptions).toHaveBeenLastCalledWith({ seriesOrder: ['orders.count', 'orders.amount'] });
+
+    // Only Reset puts it back to the data's own.
+    await userEvent.click(screen.getByRole('button', { name: 'Reset the series order' }));
+    expect(onOptions).toHaveBeenLastCalledWith({ seriesOrder: undefined });
+  });
+
+  it('offers no reset while no order is set', () => {
+    tab();
+    expect(screen.queryByRole('button', { name: 'Reset the series order' })).toBeNull();
+  });
+
+  it('keeps the place of a series not drawn today', async () => {
+    const onOptions = tab({ seriesOrder: ['orders.region', 'orders.amount', 'orders.count'] });
+    await userEvent.click(screen.getByRole('button', { name: 'Move Orders Count up' }));
+    expect(onOptions).toHaveBeenLastCalledWith({
+      seriesOrder: ['orders.region', 'orders.count', 'orders.amount'],
+    });
+  });
+
+  it('follows the series moved with focus, and says where it went', async () => {
+    function Stateful() {
+      const [options, setOptions] = useState<Record<string, unknown>>({});
+      return (
+        <CustomizeTab
+          options={options}
+          onOptions={(patch) => {
+            setOptions((current) => ({ ...current, ...patch }));
+          }}
+          cartesian
+          valueAxes={['y']}
+          drawn
+          stackable
+          series={series}
+          colourOf={() => '#123456'}
+        />
+      );
+    }
+    render(<Stateful />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Move Orders Amount up' }));
+    // At the top now: its Up is closed, so focus goes to its Down.
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Move Orders Amount down' }),
+    );
+    expect(screen.getByRole('status').textContent).toBe('Orders Amount moved to position 1 of 2.');
   });
 });
 

@@ -1,5 +1,11 @@
-import type { AxesSettings, AxisSettings, LegendPosition, SeriesSettings } from '@wechart/charts';
-import { useId, useState } from 'react';
+import {
+  inSeriesOrder,
+  type AxesSettings,
+  type AxisSettings,
+  type LegendPosition,
+  type SeriesSettings,
+} from '@wechart/charts';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { AxisPanel } from './AxisPanel';
 
@@ -85,6 +91,69 @@ export function CustomizeTab({
       series: sparse({ ...perSeries, [name]: sparse({ ...perSeries[name], ...patch }) }),
     });
 
+  /**
+   * The series in the order set (T392, AC-300), as the chart draws, stacks
+   * and lists them, and saved as the whole list of their names; back in the
+   * data's own order, nothing is kept. Focus follows the series moved, and
+   * the move is said, as the index editor's columns are (T152's review).
+   */
+  const setOrder = Array.isArray(options['seriesOrder'])
+    ? (options['seriesOrder'] as unknown[]).filter(
+        (name): name is string => typeof name === 'string',
+      )
+    : [];
+  const ordered = inSeriesOrder(series, setOrder);
+  const moveButtons = useRef(new Map<string, HTMLButtonElement>());
+  const following = useRef<{ at: number; way: 'up' | 'down' } | null>(null);
+  const [said, setSaid] = useState('');
+  useEffect(() => {
+    const target = following.current;
+    if (target === null) return;
+    following.current = null;
+    const there = moveButtons.current.get(`${String(target.at)}:${target.way}`);
+    const other = moveButtons.current.get(
+      `${String(target.at)}:${target.way === 'up' ? 'down' : 'up'}`,
+    );
+    (there !== undefined && !there.disabled ? there : other)?.focus();
+  });
+  const moveSeries = (from: number, to: number) => {
+    const next = [...ordered];
+    const [moved] = next.splice(from, 1);
+    if (moved === undefined) return;
+    next.splice(to, 0, moved);
+    /**
+     * The whole order is kept once set, even where it matches the data's
+     * today: that can change on a refresh, and the order set must not. A
+     * series not drawn today (filtered out, say) keeps its saved place; the
+     * ones drawn fill theirs in their new order (T392's review).
+     */
+    const drawnNames = next.map((one) => one.name);
+    const drawnSet = new Set(drawnNames);
+    let filled = 0;
+    const kept = setOrder.map((name) => (drawnSet.has(name) ? drawnNames[filled++]! : name));
+    onOptions({ seriesOrder: [...kept, ...drawnNames.slice(filled)] });
+    following.current = { at: to, way: to < from ? 'up' : 'down' };
+    setSaid(`${moved.title} moved to position ${String(to + 1)} of ${String(next.length)}.`);
+  };
+  const moveButton = (index: number, way: 'up' | 'down', title: string) => (
+    <button
+      type="button"
+      className="btn-sm"
+      aria-label={`Move ${title} ${way}`}
+      disabled={way === 'up' ? index === 0 : index === ordered.length - 1}
+      ref={(node) => {
+        const key = `${String(index)}:${way}`;
+        if (node === null) moveButtons.current.delete(key);
+        else moveButtons.current.set(key, node);
+      }}
+      onClick={() => {
+        moveSeries(index, way === 'up' ? index - 1 : index + 1);
+      }}
+    >
+      {way === 'up' ? '↑' : '↓'}
+    </button>
+  );
+
   if (!drawn && !cartesian && !whiskers) {
     return <p className="panel-section__note">This chart type has nothing to customize here.</p>;
   }
@@ -151,8 +220,8 @@ export function CustomizeTab({
       {series.length === 0 ? null : (
         <section className="customize-tab__section" aria-labelledby={`${ids}-series`}>
           <h3 id={`${ids}-series`}>Series</h3>
-          <ul className="customize-tab__series">
-            {series.map(({ name, title }) => (
+          <ol className="customize-tab__series" aria-label="Series order">
+            {ordered.map(({ name, title }, index) => (
               <li key={name}>
                 <ColourSetting
                   title={title}
@@ -170,9 +239,33 @@ export function CustomizeTab({
                   />
                   {title}
                 </label>
+                {ordered.length > 1 ? (
+                  <span className="customize-tab__move">
+                    {moveButton(index, 'up', title)}
+                    {moveButton(index, 'down', title)}
+                  </span>
+                ) : null}
               </li>
             ))}
-          </ul>
+          </ol>
+          <span className="visually-hidden" role="status">
+            {said}
+          </span>
+          {setOrder.length > 0 ? (
+            // Back to the order the data comes in, said so rather than
+            // guessed from a move that happens to match it.
+            <button
+              type="button"
+              className="btn-sm customize-tab__reset"
+              aria-label="Reset the series order"
+              onClick={() => {
+                onOptions({ seriesOrder: undefined });
+                setSaid('The series are in the data’s order again.');
+              }}
+            >
+              Reset order
+            </button>
+          ) : null}
           {stackable && series.length > 1 ? (
             <label className="customize-tab__check">
               <input
