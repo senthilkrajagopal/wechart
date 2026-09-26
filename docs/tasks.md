@@ -6037,7 +6037,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - AC-319 stays open (T421–T423, T444).
 *Rewritten 2026-09-26 for xcube's slice 2 as built (`[X2, R29]`; `docs/research/xcube-slice-2.md`). xcube's side is done at the fork's `83cb9f0888`. wechart's side cuts over in one step, T447: xcube serves the model from then on, with no switch back but the previous image and release. Until T447, the code below runs only where the xcube settings are given (the model id and the admin token), so each commit leaves both suites passing on today's Cube. T431 then removes the old path. The service credential moves to slice 4 (T420): until then, xcube's admin routes take its static admin token (R29).*
 
-- [ ] T419 (AC-333, AC-330) ~~Bring xcube's copy up to date when the API starts, with a full snapshot when it is missing or behind~~ Push the whole published file set to xcube at start, after each publish and every 60 s, recording what xcube acknowledged
+- [x] T419 (AC-333, AC-330) ~~Bring xcube's copy up to date when the API starts, with a full snapshot when it is missing or behind~~ Push the whole published file set to xcube at start, after each publish and every 60 s, recording what xcube acknowledged
   - Files: `packages/api/src/xcube/client.ts` (+ test), `packages/api/src/xcube/snapshot.ts` (+ test), `packages/api/src/xcube/fake.ts`, a migration `…_model-publications.cjs`, `packages/api/src/config.ts` (`WECHART_XCUBE_MODEL`, `WECHART_XCUBE_ADMIN_TOKEN`), `packages/api/src/main.ts`, `packages/api/src/model/publish.ts` (after a commit)
   - Failing test: `snapshot.test.ts`, against the stub xcube (research §"API surface"):
     - a model xcube doesn't know (`404 unknown_model`) gets the whole set with `baseRevision: null`;
