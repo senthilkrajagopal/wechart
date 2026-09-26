@@ -99,6 +99,14 @@ export interface Database {
   data_sources: DataSourceTable;
   data_source_secrets: DataSourceSecretTable;
   model_publications: ModelPublicationTable;
+  folder_xcube_ids: FolderXcubeIdTable;
+}
+
+/** Each folder's id in xcube, stored and never reused (T425, AC-328). */
+export interface FolderXcubeIdTable {
+  folder_id: string;
+  xcube_id: string;
+  created_at: Generated<Date>;
 }
 
 /** What xcube last acknowledged of each model (T419, AC-333). */

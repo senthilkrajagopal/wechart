@@ -6495,14 +6495,27 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
       - a two-cube row put into the store was split on restart, logged, and not split again;
       - the upgrade path above left each cube declared once, in the store's edited copy.
     - **The model e2e specs pass in Chrome** (35, then 7 after the fixes).
-- [ ] T425 [P] (AC-328) ~~Push the folder tree to xcube, ids and parents, when the API starts and on every folder change~~ Give each folder a stored xcube id, never reused, and build the published folder tree
-  - Files: a migration `…_folder-xcube-id.cjs` (a unique `xcube_id` column, filled for every folder), `packages/api/src/xcube/folders.ts` (+ test), `packages/api/src/repos/folders.ts` (allocate on create)
+- [x] T425 [P] (AC-328) ~~Push the folder tree to xcube, ids and parents, when the API starts and on every folder change~~ Give each folder a stored xcube id, never reused, and build the published folder tree
+  - Files: a migration `…_folder-xcube-id.cjs` (a unique `xcube_id` column, filled for every folder), `packages/api/src/xcube/folders.ts` (+ test), `packages/api/src/repos/folders.ts` (allocate on create). **As built:** `db/migrations/1758310000000_folder-xcube-ids.cjs` (a table, not a column), `db/schema.ts`, `xcube/folders.ts` (+ test), `repos/folder-xcube-ids.ts` (+ test, which shows the first three bullets against Postgres).
   - Failing test: `folders.test.ts`:
     - a folder with a UUID gets `f` plus its 32 hex digits, the root `froot`, and any other folder (a seed's, `ws:…`) a new id of the same form;
     - no two folders share one, and a deleted folder's id is never given to another;
     - a rename or a move changes no id;
     - the tree holds each published folder's id and its parent's, and no workspace (AC-328; `[X3A, R30]`).
   - ~~Depends on: T419; xcube's slice 3 (`PUT /v1/semantic/folders`)~~ Depends on: none. T449 pushes the tree.
+  - **Done 2026-09-26.**
+    - **The ids.** Each folder's xcube id is a row in `folder_xcube_ids`, unique and checked against xcube's rule `^f[a-z0-9]{1,40}$`:
+      - the shared root is `froot`;
+      - a folder named by a UUID (every folder the app makes) is `f` and its hex digits, in lower case;
+      - any other folder (a seed's) gets a random id of the same form, as does one whose own is taken.
+    - **Never reused.** A row outlives its folder. Deleting a folder hard-deletes its document, so a column on `documents` would have lost the id; hence a table. No code deletes from it.
+    - **Given when first asked.** The migration filled every folder there was (all 19,702 in the test database, the root included). A later folder is given its id when one is first asked of it: as the tree is built, which T449 does at start and on every folder change, before anything in the folder can be published. For a UUID folder that is the same value it would get at creation. AC-328's "allocated when the folder is made" is met in effect; nothing observable differs.
+    - **The tree** (`publishedTree`) holds the root and each folder reaching it, by xcube id, with its parent's. A folder under My workspace is left out, and so is one cut off from the root or caught in a cycle. `treeHashOf` is xcube's folder-tree hash, for T449's comparison.
+    - **The cold review (PASS) found:**
+      - building the tree put every folder into one `IN` list, which Postgres refuses past 65,535 parameters. Missing ids are now found by a join, and ids are read whole or a chunk at a time;
+      - a folder whose parent has no id could reach the tree two levels down. Now nothing is kept under a folder that isn't;
+      - the retry on a taken id was untested. It is tested now: one UUID in two cases.
+    - **AC-328 stays unticked**, for T341: its names aren't published yet.
 - [ ] T449 (AC-333) Move the model to xcube's items mode with one items snapshot, and reconcile on the items hash, on xcube's published image
   - Files:
     - `packages/api/src/xcube/items.ts` (+ test: each file one item, and the items hash);
