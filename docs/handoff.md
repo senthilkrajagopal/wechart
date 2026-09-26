@@ -139,8 +139,13 @@
 >     answers as before), T426 (publishes through changesets; T451 carries proposals' check),
 >     **T334** (model files in folders, listed in Explore; only the root's are sent to xcube, and a
 >     publish into another folder answers 409 until T341). Next: T429, T428, T450, T341.
->     - **Deployed:** the docker-desktop release runs wechart `a3abc06-t449` on the 3b image, the
->       model in items mode; `verify.sh` passes.
+>     - **Deployed:** the docker-desktop release (Helm revision 22) runs wechart `714b152-t429`
+>       (through T429) on the 3b image, the model in items mode, sign-in on; `verify.sh --no-install`
+>       passes. Since: T452 (a folder's model files published as its items) and T429 (charts and
+>       dashboards bound at publish; the picker by folder path).
+>     - **Asked with T429:** 25. With xcube unreachable, a chart or dashboard save in a folder xcube
+>       serves is refused (502), as a model publish is. Keep that, or store it unbound and bind it at
+>       the next save?
 >     - **Researched, not yet planned:** slice 4 (`xcube-slice-4.md`), slice 5
 >       (`xcube-slice-5.md`, overlays). Slice 6 (connections) was researched, but its doc
 >       couldn't be written here; the report is in the session's tool results (see the session's
