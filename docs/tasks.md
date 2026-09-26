@@ -6563,13 +6563,33 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
       - `xcube-cutover.spec.ts` (7, Chrome) on compose's Cube running the image: xcube's `mode` and `itemsHash` against a hash computed apart, and a folder made or removed through the API in or out of xcube's tree, shown through `POST …/resolve`;
       - `verify.sh` on the docker-desktop release running the image: all checks passed, and its model is in items mode (revision 33, 12 items, one module).
     - **The full main suite in Chrome:** 617 of 621 passed. Three were the Model links, since fixed and passing. The fourth is "Data as of", which fails at HEAD too (T403's note).
-- [ ] T430 (~~AC-331~~ AC-336) ~~Migrate every stored member reference to its prefixed name, and show every dashboard as before~~ Show every existing dashboard as before across the move to items mode, with nothing stored changed
+- [x] T430 (~~AC-331~~ AC-336) ~~Migrate every stored member reference to its prefixed name, and show every dashboard as before~~ Show every existing dashboard as before across the move to items mode, with nothing stored changed
   - Files: ~~a migration `…_prefixed-references.cjs` (+ test),~~ ~~`e2e/security/migration.spec.ts`~~ `e2e/items-switch.spec.ts`
   - Failing test: ~~`migration.spec.ts`: each seeded dashboard's tile data is recorded before the migration, and matches after it; no reference stored in a chart, dashboard, marking, bookmark or link names a short cube name any more (AC-331).~~ `items-switch.spec.ts`:
     - a model is put to xcube in files mode, as slice 2 left it, and each seeded dashboard's tile data is recorded;
     - an API of its own then moves it to items mode;
-    - each tile's data matches, every stored chart, dashboard, marking, bookmark and link is as it was, and the seed rollup's table name is unchanged (AC-336).
+    - each tile's data matches, every stored chart, dashboard, marking, bookmark and link is as it was, and the seed rollup's ~~table name is unchanged~~ plan is unchanged and its answer comes from the table built before the move (AC-336; T430's review: a table's stem doesn't show a rebuild).
   - Depends on: ~~T429~~ T449
+  - **Done 2026-09-26.**
+    - **The spec's own model.** `e2e/items-switch.spec.ts` puts its own model to compose's xcube as a file set, with the files the store seeds from. It resets the model beforehand and afterwards by SQL on xcube's schema, in the order its foreign keys allow, since xcube has no route that deletes a model.
+    - **Before the move.** An API that can't reach xcube's admin routes (a wrong admin token) serves the model seeded, without moving it. The spec then:
+      - stores a bookmark whose filters and marks name members, and a dashboard with its markings;
+      - asks each seeded chart's query, built as its tile builds it (`toCubeQuery(toChartSpec(readChartDocument(migrateChartDocument(body))))`), pinned to the file set's revision;
+      - builds the seed rollup through the API's builds route and reads when its table was built;
+      - reads the rollup's plan (`/v1/sql`: table, `loadSql`, `indexesSql`);
+      - records every `documents` row: body, version and `updated_at`.
+    - **After the move.** The same API, restarted with the right token, moves the model to items mode. Everything is asked again, pinned to the items revision.
+      - Every answer's `x-xcube-revision` header is checked, before and after, polled past "Continue wait" and catch-up `503`s. Every answer before the move holds rows.
+    - **Compared:** each chart's rows, every stored document, the rollup's plan, and the rollup answer's `lastUpdatedAt`. This Cube's `/v1/load` gives no `targetTableName`, so the build time is what shows the answer came from the table built before the move.
+    - **The cold review (FAIL) found:**
+      - the answers after the move weren't pinned to the items revision, so a failed compile could pass;
+      - a table's stem can't show a rebuild;
+      - "Continue wait" read as an empty answer;
+      - queries were rebuilt from the wells rather than as a tile builds them;
+      - nothing stored named a marking.
+
+      All five are fixed as above. The review's point about stale state in Cube after the SQL reset is covered by the revision headers.
+    - **AC-336 ticked** on `items-switch.spec.ts` (Chrome), run twice, and together with the cut-over spec (8 passed).
 - [ ] T426 (AC-321, AC-136, AC-288, AC-291, AC-009, AC-137) Publish through xcube's changesets, checking every module a change affects
   - Files: `packages/api/src/xcube/changesets.ts` (+ test), `packages/api/src/model/publish.ts` (in place of T445's file-set dry run), `packages/api/src/routes/proposals.ts`, `packages/api/src/server.ts` (direct changes to models, data sources and folders holding them), `e2e/security/publish-check.spec.ts`
   - Failing test: `changesets.test.ts` and `publish-check.spec.ts`, against xcube's slice 3:
