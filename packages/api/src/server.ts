@@ -30,6 +30,7 @@ import { registerBuilds } from './jobs/build';
 import { registerSchedules } from './jobs/schedules';
 import { registerIntrospection } from './model/introspection';
 import type { Config } from './config';
+import { memoryDraftStore, type PublishDraftStore } from './model/drafts';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, type ReferenceDocument } from './model/references';
 import { searchable, visibleCounts, type Visibility } from './access/visible';
@@ -57,6 +58,12 @@ export interface BuildOptions {
   readonly bookmarks?: BookmarkStore;
   /** The Cube model's files (T137, AC-131). */
   readonly modelFiles?: ModelFileStore;
+  /**
+   * Publish drafts while Cube compiles them: the metadata database, so any
+   * replica answers Cube's read-back (T418, AC-319). Left out, this process's
+   * memory.
+   */
+  readonly drafts?: PublishDraftStore;
   /** Signed-in sessions, with security on (T316): the metadata database. */
   readonly sessions?: SessionStore;
   /** Each folder's AD groups (T314, AC-259, AC-260). */
@@ -177,6 +184,7 @@ export function buildServer({
   images,
   bookmarks,
   modelFiles,
+  drafts = memoryDraftStore(),
   folderAccess,
   healthFetch,
   logger = false,
@@ -333,6 +341,7 @@ export function buildServer({
       },
     },
     modelFiles,
+    drafts,
   });
   registerBuilds(app, client);
   // With the model's files: a key's SQL is read there (T273's review).

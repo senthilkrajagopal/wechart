@@ -8,6 +8,7 @@ import type { MetaCache } from '../cube/meta-cache';
 import type { Config } from '../config';
 import type { ModelFile, ModelFileStore } from '../server';
 import { clashesOf, compiledIn } from './clashes';
+import type { PublishDraftStore } from './drafts';
 import { refreshKeyProblemsOf } from './refreshKeys';
 import { refusedRollupsOf, rollupOwnersOf, type RollupOwner } from './rollupJoins';
 import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
@@ -144,21 +145,21 @@ export function registerModelPublishing(
     client,
     meta,
     modelFiles,
+    drafts,
   }: {
     config: Config;
     client: CubeClient;
     /** What a publish makes stale: every cache of Cube's metadata (T322). */
     meta: Pick<MetaCache, 'invalidate'>;
     modelFiles: ModelFileStore | undefined;
+    /**
+     * Drafts Cube is compiling: kept only while wechart waits for its answer,
+     * and marked once Cube has read one — an answer given without reading it
+     * was of another model. In the database, for any replica to answer (T418).
+     */
+    drafts: PublishDraftStore;
   },
 ): void {
-  /**
-   * Drafts Cube is compiling: kept only while wechart waits for its answer,
-   * and marked once Cube has read one — an answer given without reading it
-   * was of another model.
-   */
-  const drafts = new Map<string, { files: readonly ModelFile[]; read: boolean }>();
-
   /** Cube, by the key it and this API share; with no key set, no one. */
   const fromCube = (request: FastifyRequest) => {
     const key = config.modelKey;
@@ -182,10 +183,9 @@ export function registerModelPublishing(
 
   app.get('/api/cube-model/drafts/:id', CUBE, async (request, reply) => {
     if (!fromCube(request)) return reply.status(401).send({ error: 'Not Cube.' });
-    const draft = drafts.get((request.params as { id: string }).id);
-    if (draft === undefined) return reply.status(404).send({ error: 'No such draft.' });
-    draft.read = true;
-    return { files: asCube(draft.files) };
+    const files = await drafts.take((request.params as { id: string }).id);
+    if (files === undefined) return reply.status(404).send({ error: 'No such draft.' });
+    return { files: asCube(files) };
   });
 
   /**
@@ -253,8 +253,7 @@ export function registerModelPublishing(
       a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
     );
     const id = randomUUID();
-    const held = { files: draft, read: false };
-    drafts.set(id, held);
+    await drafts.put(id, draft);
     const unread = () =>
       reply.status(502).send({
         error:
@@ -267,7 +266,7 @@ export function registerModelPublishing(
       } catch (error) {
         // Cube's compiler refuses with a 500 and its errors — having read the
         // draft. A 500 without reading it is Cube failing, not the file.
-        if (error instanceof CubeError && error.status === 500 && held.read)
+        if (error instanceof CubeError && error.status === 500 && (await drafts.wasRead(id)))
           return reply.status(422).send({ errors: compileErrorsOf(error.message, changed) });
         /**
          * Cube asserts the `meta` scope before it compiles anything, so a draft
@@ -283,12 +282,12 @@ export function registerModelPublishing(
             error: `Cube refused to check the change — ${error.message} for the context wechart checks drafts as — so nothing was published.`,
           });
         app.log.warn({ err: error }, 'could not ask Cube to compile the model');
-        if (!held.read && error instanceof CubeError) return unread();
+        if (error instanceof CubeError && !(await drafts.wasRead(id))) return unread();
         return reply
           .status(502)
           .send({ error: 'Cube could not be asked to check the model, so nothing was published.' });
       }
-      if (!held.read) return unread();
+      if (!(await drafts.wasRead(id))) return unread();
 
       const rollups = unknownInRollups(live, draft, paths);
       if (rollups.length > 0) return reply.status(422).send({ errors: rollups });
@@ -341,7 +340,7 @@ export function registerModelPublishing(
       });
       if (unjoinable.length > 0) return reply.status(422).send({ errors: unjoinable });
     } finally {
-      drafts.delete(id);
+      await drafts.remove(id);
     }
 
     await modelFiles.write(changed);

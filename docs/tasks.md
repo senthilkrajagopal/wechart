@@ -5883,9 +5883,25 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
 
 - [ ] T418 [P] (AC-319) Keep publish drafts in the metadata database, so any API replica answers Cube's read-back
   - Why: the drafts `Map` in `model/publish.ts` breaks with two replicas: Cube's read-back can land on the other one (research `cube/ha-topology.md`, table row 1). This is interim until slice 3 removes the read-back (T431).
-  - Files: a migration `…_publish-drafts.cjs`, `packages/api/src/model/publish.ts`, `packages/api/src/model/publish-drafts.test.ts`
+  - Files: a migration `…_publish-drafts.cjs`, `packages/api/src/db/schema.ts`, `packages/api/src/model/drafts.ts` (the store), `packages/api/src/model/publish.ts`, `packages/api/src/server.ts` and `packages/api/src/main.ts` (wiring), `packages/api/src/model/publish-drafts.test.ts`
   - Failing test: `publish-drafts.test.ts`: with two API instances on one database, a publish started through one has its draft read by Cube's callback through the other. No draft is held in a process's memory (AC-319).
   - Depends on: none
+  - **Done 2026-09-26.**
+    - **The store.** Drafts are in a `publish_drafts` table: a text id, the files as jsonb, a read flag and a timestamp. The id is text because it arrives in a URL, and a malformed one is a draft that isn't there. `main.ts` wires the database store; `buildServer` keeps an in-memory one for tests without a database.
+    - **The test failed first on the behaviour.** With the store wired but publishing still on its own map, it gave 502: the other replica didn't have the draft. It then passed.
+      - Cube's read-back through the other replica answers 200, the publish lands, and that draft's row is gone.
+      - A Cube that answers without reading the draft is still refused with 502, and leaves no row.
+      - A malformed or missing draft id is a 404.
+    - **Runs.** The publishing specs passed in Chrome against compose's Cube: `publish-model`, `generate-cubes`, `data-source` and `save-to-folder`.
+    - **The cold review (PASS)** led to:
+      - the not-read case against the database store;
+      - asserting the read-back's status in the test, rather than inside the fake Cube, where a failure was swallowed;
+      - checking this draft's own row rather than the whole table, which outlives a run;
+      - the malformed-id case.
+    - **Left as is:**
+      - a process that dies mid-publish leaves its draft row behind, unread, until slice 3 removes drafts (T431);
+      - the chart's `replicas: 1` comment in `api.yaml` names the draft map, and T423 rewrites it.
+    - AC-319 stays open (T421–T423, T444).
 - [ ] T419 (AC-330, AC-327) Bring xcube's copy up to date when the API starts, with a full snapshot when it is missing or behind
   - Files: `packages/api/src/xcube/client.ts` (+ test), `packages/api/src/xcube/snapshot.ts` (+ test), `packages/api/src/xcube/fake.ts`, `packages/api/src/main.ts`
   - Failing test: `snapshot.test.ts`, against the stub xcube:
