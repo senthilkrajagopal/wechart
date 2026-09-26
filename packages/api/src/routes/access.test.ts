@@ -128,6 +128,8 @@ describe('setting a folder’s groups (T314, AC-259)', () => {
         ],
         readWrite: [],
       },
+      inherited: { readOnly: [], readWrite: [] },
+      onlySuperAdmins: false,
     });
 
     // A setting left out is unset; an empty list sets none.
@@ -218,6 +220,15 @@ describe('a folder’s effective groups (T314, AC-260)', () => {
           { group: 'a-rw', from: a, setHere: false },
         ],
       },
+      // C sets nothing, so all it has is B's.
+      inherited: {
+        readOnly: [{ group: 'a-ro', from: a, setHere: false }],
+        readWrite: [
+          { group: 'b-rw', from: b, setHere: false },
+          { group: 'a-rw', from: a, setHere: false },
+        ],
+      },
+      onlySuperAdmins: false,
     });
 
     // B's own: its read-write set here, its read-only inherited from A.
@@ -231,7 +242,78 @@ describe('a folder’s effective groups (T314, AC-260)', () => {
           { group: 'a-rw', from: a, setHere: false },
         ],
       },
+      inherited: {
+        readOnly: [{ group: 'a-ro', from: a, setHere: false }],
+        readWrite: [{ group: 'a-rw', from: a, setHere: false }],
+      },
+      onlySuperAdmins: false,
     });
+  });
+
+  /**
+   * T330 (AC-260; direction.md rule 63): "When nothing reaches a folder, its
+   * header and Access panel both say 'Only Super-Admins can see this folder'".
+   * A grant reaches a folder from it, from above (AC-261) and from beneath
+   * (AC-262, AC-263), so only a folder none of those name is Super-Admins' alone.
+   */
+  it('says when only Super-Admins can see a folder: no grant on it, above it or beneath it', async () => {
+    const app = serving(base);
+    const lone = await folder('root');
+    expect((await get(app, lone)).json()).toMatchObject({ onlySuperAdmins: true });
+
+    const a = await folder('root');
+    const b = await folder(a);
+    const c = await folder(b);
+    expect((await get(app, a)).json()).toMatchObject({ onlySuperAdmins: true });
+    await put(app, b, { readOnly: ['b-ro'] });
+    // From beneath, on it, and from above.
+    expect((await get(app, a)).json()).toMatchObject({ onlySuperAdmins: false });
+    expect((await get(app, b)).json()).toMatchObject({ onlySuperAdmins: false });
+    expect((await get(app, c)).json()).toMatchObject({ onlySuperAdmins: false });
+    // A sibling's grant reaches none of them.
+    expect((await get(app, lone)).json()).toMatchObject({ onlySuperAdmins: true });
+  });
+
+  /**
+   * T330's review: a group set here and on an ancestor too is shown once in
+   * the effective lists, as set here. The panel needs what the ancestors give
+   * on their own — what stays if this folder's setting goes — so it doesn't
+   * warn of losing access an ancestor still gives, or hide that grant.
+   */
+  it('gives what the ancestors grant on their own, a group set here too included', async () => {
+    const app = serving(base);
+    const a = await folder('root');
+    const b = await folder(a);
+    await put(app, a, { readWrite: ['shared-rw'], readOnly: ['a-ro'] });
+    await put(app, b, { readWrite: ['shared-rw', 'b-rw'] });
+
+    expect((await get(app, b)).json()).toMatchObject({
+      inherited: {
+        readOnly: [{ group: 'a-ro', from: a, setHere: false }],
+        readWrite: [{ group: 'shared-rw', from: a, setHere: false }],
+      },
+    });
+    // The root inherits nothing.
+    expect((await get(app, 'root')).json()).toMatchObject({
+      inherited: { readOnly: [], readWrite: [] },
+    });
+  });
+
+  /**
+   * T330's review (direction.md rule 64): the picker suggests groups already
+   * set on folders the editor may see, and no others.
+   */
+  it('names the groups set on folders the caller may see, for the picker', async () => {
+    const app = serving(base);
+    const a = await folder('root');
+    const c = await folder('root');
+    await put(app, a, { readOnly: ['seen-here'] });
+    await put(app, c, { readWrite: ['seen-there'] });
+
+    const known = (await app.inject({ method: 'GET', url: '/api/access/known-groups' })).json<{
+      groups: string[];
+    }>().groups;
+    expect(known).toEqual(expect.arrayContaining(['seen-here', 'seen-there']));
   });
 });
 
@@ -269,6 +351,31 @@ describe('who may change a folder’s groups, with security on (T314, AC-259)', 
       ).statusCode,
     ).toBe(200);
     expect((await put(app, b, { readOnly: ['b-ro'] }, cookies['writer'])).statusCode).toBe(200);
+  });
+
+  // T330's review (rule 64): only groups set on folders the caller may see.
+  it('suggests no group from a folder the caller can’t see', async () => {
+    const hidden = await folder('root');
+    await put(app, hidden, { readOnly: ['hidden-group'] }, cookies['super']);
+    const knownTo = async (who: string) =>
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/api/access/known-groups',
+          headers: { cookie: cookies[who]! },
+        })
+      ).json<{ groups: string[] }>().groups;
+    const writers = await knownTo('writer');
+    expect(writers).toContain('sales-rw');
+    expect(writers).not.toContain('hidden-group');
+    expect(await knownTo('super')).toContain('hidden-group');
+    // No editor, no suggestions: a folder's groups are a writer's to see.
+    const asReader = await app.inject({
+      method: 'GET',
+      url: '/api/access/known-groups',
+      headers: { cookie: cookies['reader']! },
+    });
+    expect(asReader.statusCode).toBe(403);
   });
 
   it('refuses anyone else who can see it with 403, and changes nothing', async () => {

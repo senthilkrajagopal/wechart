@@ -1,14 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useRouterState } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { META_QUERY } from '../../query/meta';
+import type { Me } from '../../shell/AccountMenu';
 import { StateLine } from '../../shell/StatusIcon';
+import { AccessPanel, folderAccessQuery, refreshFolderAccess } from './access/AccessPanel';
 import { CreateMenu, DEFAULT_TITLES, type CreatableKind } from './CreateMenu';
 import { FolderContents, type CatalogItem } from './FolderContents';
 import { FolderTree } from './FolderTree';
 import { exploreHref, folderChain, FOLDERS_QUERY } from './folders';
-import { ROOT_FOLDERS, SHARED_ROOT, rootTitleOf } from './roots';
+import { MY_WORKSPACE, ROOT_FOLDERS, SHARED_ROOT, rootTitleOf } from './roots';
 
 /**
  * Explore: the folder tree and the open folder (AC-017), laid out as the
@@ -21,6 +23,8 @@ import { ROOT_FOLDERS, SHARED_ROOT, rootTitleOf } from './roots';
 const ROOT = SHARED_ROOT.id;
 /** What a folder renamed to nothing is called — the prototype's fallback. */
 const UNTITLED_FOLDER = 'Untitled folder';
+/** The Access panel, for its button's `aria-controls`. */
+const ACCESS_PANEL_ID = 'explore-access-panel';
 /**
  * How many search results the box lists. Past this a list stops being read
  * and the search wants narrowing, which the box then says (AC-019).
@@ -157,8 +161,10 @@ export function ExplorePage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
       await queryClient.invalidateQueries({ queryKey: ['folders'] });
-      // A move can change a root's count as well as its folders' (AC-194).
+      // A move can change a root's count as well as its folders' (AC-194),
+      // and what a moved folder, and those beneath it, inherit (T330).
       await queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+      await refreshFolderAccess(queryClient);
     },
   });
 
@@ -182,6 +188,26 @@ export function ExplorePage() {
     ...root,
     ...(rootCounts.data?.[root.id] === undefined ? {} : { itemCount: rootCounts.data[root.id] }),
   }));
+
+  /**
+   * The open folder's Access panel (T330, AC-259, AC-260): with sign-in on,
+   * for whoever the folder's access answers (a Super-Admin or a read-write
+   * member, rule 68). With sign-in off there is one user and no groups, and
+   * Explore stays as phase 1 had it.
+   */
+  const me = useQuery({ queryKey: ['me'], queryFn: () => getJson<Me>('/api/me') });
+  const signedIn = me.data?.security === 'oidc';
+  const access = useQuery({
+    ...folderAccessQuery(folderId),
+    enabled: signedIn && !searching && folderId !== MY_WORKSPACE.id,
+    retry: false,
+  });
+  const mayEditAccess = signedIn && !searching && known && access.isSuccess;
+  const [accessOf, setAccessOf] = useState<string | null>(null);
+  const accessButton = useRef<HTMLButtonElement>(null);
+  const accessOpen = mayEditAccess && accessOf === folderId;
+  const titleOf = (id: string) =>
+    rootTitleOf(id) ?? (folders.data ?? []).find((folder) => folder.id === id)?.title ?? id;
 
   /** Open a folder: the tree, a breadcrumb or a folder's row. */
   const openFolder = (id: string) => {
@@ -216,7 +242,7 @@ export function ExplorePage() {
   );
 
   return (
-    <div className="explore">
+    <div className={accessOpen ? 'explore explore--access' : 'explore'}>
       {/* The prototype's docked Folders pane (AC-194), kept in view as the
           contents scroll. */}
       <aside className="explore__tree" aria-labelledby="explore-folders-heading">
@@ -299,6 +325,21 @@ export function ExplorePage() {
               Rename
             </button>
           ) : null}
+          {mayEditAccess && access.data?.onlySuperAdmins ? (
+            <span className="explore__alone">Only Super-Admins can see this folder</span>
+          ) : null}
+          {mayEditAccess ? (
+            <button
+              type="button"
+              className="btn-ghost btn-sm"
+              ref={accessButton}
+              aria-expanded={accessOpen}
+              aria-controls={accessOpen ? ACCESS_PANEL_ID : undefined}
+              onClick={() => setAccessOf(accessOpen ? null : folderId)}
+            >
+              Access
+            </button>
+          ) : null}
           <span className="explore__spacer" />
           <input
             type="search"
@@ -374,6 +415,23 @@ export function ExplorePage() {
           </div>
         ) : null}
       </section>
+      {accessOpen ? (
+        <AccessPanel
+          folderId={folderId}
+          folderTitle={folderTitle}
+          parentTitle={chain.length > 1 ? chain.at(-2)?.title : undefined}
+          titleOf={titleOf}
+          myGroups={me.data?.groups ?? []}
+          superAdmin={me.data?.superAdmin === true}
+          onOpenFolder={openFolder}
+          onClose={() => {
+            setAccessOf(null);
+            // Back where the panel was opened from.
+            accessButton.current?.focus();
+          }}
+          id={ACCESS_PANEL_ID}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import {
   effectiveGroups,
   folderRights,
+  type AccessFolder,
   type FolderAccessSetting,
   type GroupList,
 } from '@wechart/core';
@@ -56,6 +57,23 @@ function settingFrom(body: unknown): FolderAccessSetting {
   return { readOnly: listFrom(readOnly, 'readOnly'), readWrite: listFrom(readWrite, 'readWrite') };
 }
 
+/** Whether any folder beneath this one names a group, read-only or read-write. */
+function grantedBeneath(tree: readonly AccessFolder[], folderId: string): boolean {
+  const beneath = new Set([folderId]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const folder of tree) {
+      if (folder.parentId !== null && beneath.has(folder.parentId) && !beneath.has(folder.id)) {
+        beneath.add(folder.id);
+        grew = true;
+        const { readOnly, readWrite } = folder.access ?? { readOnly: null, readWrite: null };
+        if ((readOnly?.length ?? 0) > 0 || (readWrite?.length ?? 0) > 0) return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function registerFolderAccess(app: FastifyInstance, store: FolderAccessStore): void {
   /** What this user may do in the folder: undefined when they can't see it. */
   const lookUp = async (request: FastifyRequest) => {
@@ -71,10 +89,25 @@ export function registerFolderAccess(app: FastifyInstance, store: FolderAccessSt
   const answer = async (reply: FastifyReply, folderId: string) => {
     const tree = await store.tree();
     const folder = tree.find((each) => each.id === folderId);
+    const effective = effectiveGroups(tree, folderId);
+    // What the ancestors give on their own, a group set here too included:
+    // what stays if this folder's setting goes (T330's review).
+    const parentId = folder?.parentId ?? null;
+    const above =
+      parentId === null ? { readOnly: [], readWrite: [] } : effectiveGroups(tree, parentId);
+    const notHere = (grants: typeof above.readOnly) =>
+      grants.map((grant) => ({ ...grant, setHere: false }));
     return reply.send({
       folderId,
       setting: folder?.access ?? { readOnly: null, readWrite: null },
-      effective: effectiveGroups(tree, folderId),
+      effective,
+      inherited: { readOnly: notHere(above.readOnly), readWrite: notHere(above.readWrite) },
+      // Seen by no group at all: no grant on it or above it, and none beneath
+      // it reaching up (T330; direction.md rule 63).
+      onlySuperAdmins:
+        effective.readOnly.length === 0 &&
+        effective.readWrite.length === 0 &&
+        !grantedBeneath(tree, folderId),
     });
   };
 
@@ -92,6 +125,31 @@ export function registerFolderAccess(app: FastifyInstance, store: FolderAccessSt
       );
     }
     return answer(reply, folderId);
+  });
+
+  // The Access panel's picker suggestions: the groups set on folders the
+  // caller may see (direction.md rule 64), for an editor, one who may write
+  // somewhere, alone.
+  app.get('/api/access/known-groups', USER, async (request, reply) => {
+    const user = userOf(request);
+    const tree = await store.tree();
+    const rights = folderRights(tree, { groups: user.groups, superAdmin: user.superAdmin });
+    if (![...rights.values()].some((right) => right.write)) {
+      throw new Forbidden(
+        'Only a Super-Admin or a read-write member of a folder can see its groups.',
+      );
+    }
+    const groups = new Set<string>();
+    for (const folder of tree) {
+      if (!rights.has(folder.id)) continue;
+      for (const group of [
+        ...(folder.access?.readOnly ?? []),
+        ...(folder.access?.readWrite ?? []),
+      ]) {
+        groups.add(group);
+      }
+    }
+    return reply.send({ groups: [...groups].sort() });
   });
 
   app.put('/api/folders/:folderId/access', USER, async (request, reply) => {

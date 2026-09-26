@@ -5370,10 +5370,33 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **For the user** (the review's H2): deleting a folder that isn't empty leaves its contents out of everyone's reach, Super-Admins' too, because they fall out of the tree (as T314's review found). Should such a delete be refused, naming what the folder holds, or remove everything in it?
     - **For the user:** does renaming a folder need write on the folder holding it, as moving and deleting now do? AC-291 reads "an item in a folder they may write". Today a read-write member of /W may rename /W.
     - AC-291 stays open: the models' and data sources' half is T426's.
-- [ ] T330 (AC-259, AC-260, AC-265) Edit a folder's groups in the Access panel
+- [x] T330 (AC-259, AC-260, AC-265) Edit a folder's groups in the Access panel
   - Files: `packages/web/src/workspaces/explore/access/{AccessPanel,GroupRow,GroupCombobox}.tsx` (+ tests), `packages/web/src/workspaces/explore/ExplorePage.tsx`, `e2e/security/access.spec.ts`
   - Failing test: `AccessPanel.test.tsx` and `access.spec.ts`: read-write groups come before read-only; each list shows "Set here" and "From ancestors", every inherited group with a lock and its source folder as a link; an unset list says "Not set here. Inherits from _folder_."; "Only Super-Admins can see this folder" when nothing reaches it; the picker is labelled "AD group"; Save counts changes; removing one's own read-write access asks first (AC-259, AC-260; rules 62–66).
   - Depends on: T314, T320
+  - **Done 2026-09-26.**
+    - **The panel.** An Access button in the open folder's header opens the panel as a third column of Explore, for whoever the folder's access answers: a Super-Admin or a read-write member (rule 68). It shows:
+      - read-write groups before read-only, each split into "Set here" and "From ancestors";
+      - each inherited group locked, with its source folder as a link;
+      - "Not set here. Inherits from _parent_." for an unset list;
+      - "Only Super-Admins can see this folder" in the panel and the header when no grant reaches it from on, above or beneath it (rule 63);
+      - an "AD group" picker with an Access select, and a Save that counts the changes;
+      - a confirmation before a save that removes the editor's own read-write access (focus moves into it; Escape keeps the access);
+      - "Access saved." with Undo, which isn't offered after the editor removed their own access.
+    - **The API gained** `inherited` (what the ancestors give on their own, a group set here too included) and `onlySuperAdmins` on the access answer, and `GET /api/access/known-groups` for the picker: the groups set on folders the caller may see (rule 64). It answers 403 to a caller who may write no folder, since a folder's groups are a writer's to see.
+    - **What the tests show.**
+      - `routes/access.test.ts` (15): the new fields, and the known groups, a writer's without a hidden folder's group, and a reader's refused.
+      - `AccessPanel.test.tsx` (14): the layout, the picker, the count, the ask, focus, Undo, and a refresh of every folder's cached access after a save.
+      - `e2e/security/access.spec.ts` (8, Chrome): a Super-Admin sees inherited groups with their source, adds a group, and sees "Only Super-Admins"; a writer is asked before removing their own access, and sets three groups on a subfolder they made; a reader gets 403 from the API and has no Access button.
+    - **The cold review (FAIL) found six things, all fixed.**
+      1. A save refreshed only that folder's cached answer; now every folder's is refreshed, after a move too.
+      2. A group set here and on an ancestor was shown once, as set here, so removing it here warned of losing access the ancestor still gave. This is fixed by the API's `inherited`.
+      3. The picker suggested only groups on this folder's chain.
+      4. Focus wasn't handled. It now goes into the panel on open, into the ask, and back to Save and to the Access button on close, which has `aria-controls`.
+      5. The reader e2e didn't wait for the API's answer.
+      6. Undo had no test, and was offered after self-removal.
+    - **Decided here, small:** with sign-in off, Explore has no Access button, since there is one user and no groups, and phase 1 stays as it was.
+    - AC-259 and AC-260 are ticked. The subfolder half of AC-259 is T329's API test plus the writer e2e here. AC-265 stays open: Super-Admins on every admin surface is T369's and T371's.
 - [ ] T331 (AC-001, AC-192, AC-194) Shape Explore and the top bar by role
   - Files: `packages/web/src/shell/WorkspaceSwitcher.tsx`, `packages/web/src/workspaces/explore/{ExplorePage,CreateMenu,FolderTree,AccessChip}.tsx` (+ tests), `e2e/security/explore-roles.spec.ts`
   - Failing test: `explore-roles.spec.ts`, for each role:

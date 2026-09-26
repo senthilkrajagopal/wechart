@@ -945,9 +945,9 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R14, R15, R18, R19]`.
 Purpose: AD groups decide who sees and changes each folder, through inheritance down the tree and visibility up it.
 Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R17, R18, R19]`.
 
-- [ ] AC-259 WHEN a Super-Admin, or a read-write member of a folder, creates a subfolder or edits a folder's permissions, THE SYSTEM SHALL let them set any number of AD groups with read-only access and any number with read-write access, each setting optional, and never an individual user (`[R11, R12]`).
+- [x] AC-259 WHEN a Super-Admin, or a read-write member of a folder, creates a subfolder or edits a folder's permissions, THE SYSTEM SHALL let them set any number of AD groups with read-only access and any number with read-write access, each setting optional, and never an individual user (`[R11, R12]`).
       Fails when: a permission can name an individual user, or someone who isn't a Super-Admin or read-write member there can change it.
-- [ ] AC-260 WHILE a folder leaves its read-only or its read-write setting unset, THE SYSTEM SHALL use the parent's effective setting for it, each setting inherited on its own, and show the inherited groups with the folder they come from (`[R11]`).
+- [x] AC-260 WHILE a folder leaves its read-only or its read-write setting unset, THE SYSTEM SHALL use the parent's effective setting for it, each setting inherited on its own, and show the inherited groups with the folder they come from (`[R11]`).
       Fails when: an unset setting grants groups other than the parent's, or the inherited groups are shown without their source folder.
 - [ ] AC-261 WHEN an AD group has access to a folder, set or inherited, THE SYSTEM SHALL give its members the same access to every descendant folder, whatever groups the descendant sets (`[P2 input, R12]`).
       Fails when: a member of a group granted on /A is refused in /A/B/C, or given less access there, where /A/B sets a different group.
