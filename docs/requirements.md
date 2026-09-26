@@ -104,7 +104,7 @@ Not chosen as metrics, and so not tracked: retiring Spotfire seats on a deadline
 | Charts                    | Apache ECharts, with engine-neutral chart specs saved as data                                                                                                                                                                   | `[CLAUDE.md]`              |
 | Semantic layer            | Cube Core + Cube Store                                                                                                                                                                                                          | `[CLAUDE.md]`              |
 | Local dev                 | docker-compose: Cube, Cube Store, sample Postgres, wechart metadata DB                                                                                                                                                          | `[CLAUDE.md]`              |
-| **Backend**               | **A wechart Node/TypeScript API with Postgres**: stores dashboards, charts, folders and settings; proxies Cube with a security context; tests connections; runs the scheduler. The browser never holds Cube credentials.        | `[R5]`                     |
+| **Backend**               | **A wechart Node/TypeScript API with Postgres**: stores dashboards, charts, folders and settings; proxies Cube with a security context; tests connections; runs the scheduler. The browser never holds Cube credentials. *Phase 2: connection tests run in xcube, and wechart is Cube and xcube's client `[AD 1, AD 7]`.* | `[R5]`                     |
 | **Recommender**           | **TypeScript hard rules plus weighted scoring.** Legality rules (channel capacity, mark and type compatibility) then weights ported from Draco's soft constraints. Runs in-process, explainable, no Python in the request path. | `[R5]`, `[docs/inputs §3]` |
 | **UI primitives**         | **Built in-house and modular**, so dialogs, menus, comboboxes and chart types can be added over time. No third-party component library.                                                                                         | `[R5]`                     |
 | **Third-party libraries** | **Permissively licensed open source only.** No paid licences (rules out AG Grid Enterprise and similar).                                                                                                                        | `[R5]`                     |
@@ -198,7 +198,7 @@ From `docs/research/cube/` (Cube Core 1.7.42). **In** = phase 1. **Deferred** = 
 **Data sources and connections**
 
 - **In:** the default and named data sources; an add-connection wizard with a Test step; assigning a cube to a data source; driver authentication and TLS settings; concurrency, pool and timeout settings; build connection and export bucket; schema and table browsing; a health history recorded by wechart's own periodic tests.
-- Constraint: Cube Core has no production connection-test API, so wechart's server runs the test itself `[research/cube/data-sources.md]`.
+- Constraint: Cube Core has no production connection-test API, so wechart's server runs the test itself `[research/cube/data-sources.md]`. *Superseded in phase 2: the test runs in xcube, at wechart's request (R20; decisions 1 and 7, `docs/inputs/2026-09-25-architecture-decisions.md`).*
 
 **Configuration and deployment**
 
@@ -371,6 +371,11 @@ Written from the phase-2 interview, rounds R11–R17. Its inputs:
 
 As in Part 1, every statement traces to a round or an input. Anything undecided is in §P2.8.
 
+**Amended 2026-09-25 by the user's architecture decisions** (`docs/inputs/2026-09-25-architecture-decisions.md`), cited as `[AD n]` for decision n, and by round R27, which settled what they left open.
+- Cube plus **xcube**, the Cube-side package in the user's fork (formerly `cube-introspection`), is the semantic service. wechart is its client.
+- The architecture is set out in §P2.4, "Architecture".
+- Passages the decisions overturn are kept, marked **Superseded** with the decision that replaces them, and followed by what now holds.
+
 ## P2.1 Problem
 
 Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in and one trusted user. It has one Cube model and one data source for everything, and a change to shared content is live at once `[Part 1 §4]`. Phase 2 adds:
@@ -379,7 +384,7 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 - **Folder access by AD group**, inherited down the tree, with three roles: Super-Admin, Admin and User `[P2 input]`.
 - **Models and data sources as folder items**, under the same access rules. The Model tab goes `[P2 input]`.
 - **A private workspace per user.** Creating and editing happen there, and work reaches shared folders only by being copied in and approved `[P2 input, R12]`.
-- **Names unique within a folder, not across the whole app.** A cube name resolves from the nearest folder upwards `[P2 input]`.
+- **Names unique within a folder, not across the whole app.** ~~A cube name resolves from the nearest folder upwards `[P2 input]`.~~ **Superseded** `[AD 2, AD 3]`: short names are unique within a folder. The model is one flat namespace, in which each name is prefixed by its folder. A short name inside an item is bound when the item is published, nearest first from the item's own folder (§P2.6 D).
 - **Everything in the phase-2 backlog** `[R16]`.
 
 ## P2.2 Users and roles
@@ -393,7 +398,8 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 **How far a grant reaches** `[P2 input, R12]`:
 - **Down:** a grant on a folder reaches every descendant, read and write alike, even where a descendant sets its own groups. A descendant's own groups are added alongside, never in place.
 - **Up:** members of a group granted anywhere see everything in every ancestor folder up to the root (dashboards, charts, models and data sources), view-only.
-- **Read-only users see dashboards only**, and the charts on them. That holds in their folder, its descendants and its ancestors. Models, data sources and library charts are hidden from them, while the dashboards they open still resolve cubes through the folder's path `[P2 input, R19]`. The "everything in ancestors" above therefore applies to read-write members.
+- **Read-only users see dashboards only**, and the charts on them. That holds in their folder, its descendants and its ancestors. Models, data sources and library charts are hidden from them, while the dashboards they open ~~still resolve cubes through the folder's path~~ `[P2 input, R19]` query the cubes their charts were bound to at publish, which Cube's generated policies admit them to `[AD 3, AD 4]`. The "everything in ancestors" above therefore applies to read-write members.
+- **A chart on a dashboard they can see opens for them even when it's kept in a folder they can't see.** Nothing names or links that folder `[R27]`.
 
 **Roles** `[P2 input, R12]`:
 
@@ -434,27 +440,67 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 
 **Security off.** wechart runs in single-user mode, as in phase 1 `[P2 input]`. Workspaces and approval work as they do with security on, and the one user approves their own copies `[R17]`.
 
-**Data inside cubes.** The signed-in user's AD groups go into Cube's security context, so the model's access policies can filter rows and members by group. For now it's groups only; user attributes come later `[R14]`. That is every query made for a signed-in user; what wechart asks Cube for itself (compiling a model, builds, schedules, a data source's catalog, health) carries the configured context alone `[R25]`.
+**Data inside cubes.** The signed-in user's AD groups go into Cube's security context, so the model's access policies can filter rows and members by group. For now it's groups only; user attributes come later `[R14]`. That is every query made for a signed-in user; ~~what wechart asks Cube for itself (compiling a model, builds, schedules, a data source's catalog, health) carries the configured context alone `[R25]`~~.
+- **Superseded** `[AD 1, AD 4, AD 12]`. A signed-in user's queries carry an RS256 token holding their groups only, signed by wechart.
+- What wechart asks Cube or xcube for on its own behalf uses a separate **service credential**: introspection, builds and jobs, system partitions, health, and every xcube admin call `[AD 12, R27]`.
+- Compiling belongs to xcube, at publish `[AD 1, AD 6]`.
+- Cube enforces access too: xcube generates access policies from each folder's allowed groups (below) `[AD 4]`.
+- The Security workspace's "Preview as" chooses groups, and previews exactly those `[R27]`.
 
-**Credentials.** Data-source credentials are encrypted in wechart's metadata database, with a key from the deployment's Secret. They are never shown again, and never sent to the browser. This holds in development and in production `[R14, R15]`.
-- Every API pod mounts the same Secret, so every pod can decrypt every data source `[R21]`.
-- Development (docker-compose on a laptop) uses one fixed development key written in the repository's compose file `[R21]`.
-- An API pod that starts without the key, or with a key that can't decrypt the stored credentials, refuses to start and says why `[R21]`.
+**Credentials.** Data-source credentials are ~~encrypted in wechart's metadata database, with a key from the deployment's Secret~~ stored in wechart's metadata database, encrypted to xcube's public key; wechart can never decrypt them, only xcube can `[AD 7]`. They are never shown again, and never sent to the browser. This holds in development and in production `[R14, R15]`.
+- ~~Every API pod mounts the same Secret, so every pod can decrypt every data source `[R21]`.~~ **Superseded** `[AD 7]`: no wechart pod holds a decryption key. xcube holds the private key.
+- ~~Development (docker-compose on a laptop) uses one fixed development key written in the repository's compose file `[R21]`.~~ **Superseded** `[AD 7]`: development uses a fixed xcube key pair. Its private half is in xcube's compose environment only, and wechart is given the public half.
+- ~~An API pod that starts without the key, or with a key that can't decrypt the stored credentials, refuses to start and says why `[R21]`.~~ **Superseded** `[AD 7, R27]`: wechart's API refuses to start without xcube's public key. xcube refuses to start without its private key, or with one that can't decrypt a sample credential. Each says which key is missing.
+- **A newly typed secret is encrypted in the browser**, before it is sent, so wechart never sees the plaintext, not even for a connection test `[R27]`.
+- wechart keeps a credential's lifecycle without decrypting it: copied into a workspace, cleared when the target changes `[AD 7]`.
 - Changing where a data source connects (host, account, warehouse and the like) clears its stored secret, so it must be entered again `[R21]`.
 
 **Audit.** wechart records sign-ins, permission changes, copies proposed, approved and rejected, and data-source changes. Super-Admins can browse the record `[R14]`. How long records are kept is a deployment setting, one year by default `[R18]`.
 
 **Phase 1's content.** When security is first turned on, everything phase 1 created stays in place as the shared tree, with no groups set. Only Super-Admins see it until they assign groups `[R17]`.
 
-**Cube.** The user's Cube fork may be changed where Cube's own configuration can't meet these requirements. Changes go through the Cube-expert agent, on the fork's branch `[R15]`.
+**Cube.** The user's Cube fork may be changed where Cube's own configuration can't meet these requirements. Changes go through the Cube-expert agent, on the fork's branch `[R15]`. They live in xcube's package, and Cube's own code stays unmodified `[AD 1]`.
 
-**Relaxed from phase 1.** A cube's name no longer has to be unique across the whole model. Cubes, models, dashboards and data sources must be unique **within a folder** `[P2 input]`.
+**Relaxed from phase 1.** ~~A cube's name no longer has to be unique across the whole model.~~ Cubes, models, dashboards and data sources must be unique **within a folder** `[P2 input]`.
+- **Superseded in part** `[AD 2, R27]`. The whole deployment is one flat model.
+- Every cube, view and data source is published under a unique name, prefixed by its folder's id.
+- The shared root adds no prefix, so phase-1 content and links resolve as they are.
+
+**Architecture** `[AD 1–12, R27]`
+- **Who owns what** `[AD 1]`:
+  - Cube plus xcube own the published model, Cube's rules (validation and access policies) and the connection runtime.
+  - wechart owns workflow, folders, permissions, users and groups, dashboards and the UI.
+  - Cube never calls wechart at runtime. There are no model callbacks to wechart, and no drafts held in the API's memory.
+- **xcube knows the folder tree:** ids and parents, plus each folder's allowed groups. xcube resolves names `[AD 5]`.
+- **Each folder's allowed groups** are those granted on the folder, on any ancestor, or on any descendant (whose items use its cubes), plus the Super-Admin group.
+  - wechart works the set out and sends it with the tree.
+  - A folder no group reaches admits only Super-Admins.
+  - With security off, no policies are generated.
+  - Row-level policies written in the model still apply inside `[R27]`.
+- **Every publish compiles the whole model**, and is refused if anything anywhere breaks `[AD 6]`.
+  - A proposal is checked when proposed, as an overlay, and again at approval `[R27]`.
+  - Renames, moves and deletes that touch models, data sources or folders holding them are checked the same way, and refused when something would break `[R27]`.
+  - A refusal names what broke in folders the publisher can see, with Cube's error per file. For the rest it says "_n_ items in folders you can't see would break". A Super-Admin sees everything named, and the audit trail records all of it `[R27]`.
+- **Unpublished workspace and proposal content** is pushed to xcube as short-lived overlays `[AD 8]`.
+  - A workspace overlay is its owner's alone.
+  - A proposal overlay may be queried by its author, the target folder's read-write members and Super-Admins until it is approved or rejected, then dropped.
+  - Names resolve in the overlay first, then along the target's or origin's folder path `[R27]`.
+- **wechart keeps each published version** of its model items, for history, compare and restore. xcube holds only what is published now `[R27]`.
+- **Build history:** xcube records the refresh worker's builds, and wechart pulls them into its own history `[R27]`.
+- **Scale:** designed for 100–200 model-bearing folders. Sharding is a later add-on `[AD 9]`.
+- **Callers:** only wechart's server calls Cube or xcube, for now `[AD 10]`.
+- **High availability of the query path:** 2 or more Cube instances with the Cube Store queue, and a stateless wechart API on 2 or more replicas. Cube Store stays single-node for now `[AD 11]`. It is tested: stopping one Cube instance and one API replica during use loses no signed-in session and fails no query the web app retries `[R27]`.
+- **Tokens** carry groups only, for now `[AD 12]`.
+  - wechart signs them RS256 and pushes its public keys (JWKS) to xcube when it starts and when keys rotate, so Cube verifies them without calling wechart `[AD 12, R27]`.
+  - Admin calls use the separate service credential `[AD 12]`.
 
 ## P2.5 Stack
 
 **Decided.** Phase 1's stack stands `[Part 1 §5]`. To it phase 2 adds:
-- credentials encrypted in the metadata database `[R14, R15]`;
-- changes to the Cube fork where needed, through the Cube-expert agent `[R15]`.
+- credentials encrypted in the metadata database `[R14, R15]`, to xcube's public key `[AD 7]`;
+- changes to the Cube fork where needed, through the Cube-expert agent `[R15]`, in xcube's package `[AD 1]`;
+- Cube plus xcube as the semantic service, with wechart as its client `[AD 1]`;
+- RS256 user tokens with their public keys pushed to xcube, and a separate service credential for admin calls `[AD 12, R27]`.
 
 **Decided after research** (these were the open items; the user chose on 2026-09-25, rounds R20–R22)
 
@@ -462,9 +508,9 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 |---|---|---|
 | **How sign-in is built** | **wechart's API is its own OIDC client** (openid-client 6.8.8), with a server-side session in the metadata database (@fastify/session 11.1.3 with @fastify/cookie 11.1.2). Not oauth2-proxy `[R20]`. | `docs/research/openid-client.md`; compared with `docs/research/oauth2-proxy.md` |
 | **Development OIDC provider** | **Dex 2.45.1**, with users and groups from its config file `[R20]`. | `docs/research/dex.md`; compared with `docs/research/keycloak.md` and `docs/research/authelia.md` |
-| **Per-folder models in Cube** | One compile per folder chain, nearest file first, and connections served by wechart `[R20]`. | `docs/research/cube/per-folder-models.md` |
-| **How credentials are encrypted** | AES-256-GCM through `node:crypto`, key from the deployment's Secret. | `docs/research/credential-encryption.md` |
-| **Where a connection test runs** | **In Cube, at wechart's request:** a fork endpoint runs Cube's own drivers, so a pass means the Cube that will use the source can connect. wechart starts it and shows each check `[R20]`. | `docs/research/connection-testing.md` |
+| **Per-folder models in Cube** | ~~One compile per folder chain, nearest file first, and connections served by wechart `[R20]`.~~ **Superseded** `[AD 1, AD 2, AD 5]`: one flat model owned by Cube and xcube, under folder-prefixed names. xcube resolves names and runs connections. | `docs/research/cube/per-folder-models.md` (superseded); new research on xcube's admin API and the naming scheme |
+| **How credentials are encrypted** | ~~AES-256-GCM through `node:crypto`, key from the deployment's Secret.~~ **Superseded** `[AD 7]`: encrypted to xcube's public key, in the browser `[R27]`. | `docs/research/credential-encryption.md` (superseded); new research on public-key encryption |
+| **Where a connection test runs** | **In Cube, at wechart's request:** ~~a fork endpoint~~ an xcube route runs Cube's own drivers, so a pass means the Cube that will use the source can connect. wechart starts it and shows each check `[R20, AD 1]`. wechart sends only the ciphertext, and xcube decrypts `[AD 7]`. | `docs/research/connection-testing.md` |
 
 ## P2.6 Scope
 
@@ -486,11 +532,23 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 
 **D. Names and resolution** `[P2 input, R17]`
 - Cube, model, dashboard and data-source names are unique within a folder.
-- A dashboard's cubes resolve bottom-up, from its folder to the root, and the nearest definition wins. Children's cubes aren't used.
-- Models can use any data source in their folder's path and in all its children `[P2 input]`.
-- **A data-source name resolves bottom-up from the model's own folder:** first the model's folder, then each ancestor up to the root. A descendant's data source is used only when no folder on that path has the name `[R19]`.
-- **Names inside an inherited model resolve from the viewer's folder.** When a chart or dashboard in /A/B uses a model defined in /A, a cube that model names resolves bottom-up from /A/B, so /A/B's own cube of that name wins `[R20]`.
-- **A cube that names no data source** uses a data source called `default`, resolved like any other name. If no folder on the path has one, it uses the deployment's own default connection `[R22]`.
+- ~~A dashboard's cubes resolve bottom-up, from its folder to the root, and the nearest definition wins. Children's cubes aren't used.~~
+- ~~Models can use any data source in their folder's path and in all its children `[P2 input]`.~~
+- ~~**A data-source name resolves bottom-up from the model's own folder:** first the model's folder, then each ancestor up to the root. A descendant's data source is used only when no folder on that path has the name `[R19]`.~~
+- ~~**Names inside an inherited model resolve from the viewer's folder.** When a chart or dashboard in /A/B uses a model defined in /A, a cube that model names resolves bottom-up from /A/B, so /A/B's own cube of that name wins `[R20]`.~~
+- ~~**A cube that names no data source** uses a data source called `default`, resolved like any other name. If no folder on the path has one, it uses the deployment's own default connection `[R22]`.~~
+
+**Superseded** `[AD 2, AD 3, R27]`. Names and resolution now:
+- **Bound at publish.** A short name inside an item (a cube a chart or dashboard uses, a join target, a `data_source`) is resolved when the item is published. The search runs nearest first, from the item's **own** folder up to the root, and the full prefixed name is stored `[AD 3]`.
+  - xcube does the resolving `[AD 5]`.
+  - A name found nowhere on that path is refused at publish, naming it `[R27]`.
+  - Children's items are never used, and there is no fallback to descendant folders `[R27]`.
+- **Overriding.** A child folder overrides a name by publishing its own item. Binding from the viewer's folder is dropped `[AD 3]`.
+- **Rebinding.** When a nearer definition is published, the items whose binding changes are re-resolved at that publish, and the whole-model compile checks the result. Deleting something others are bound to fails that compile, so the delete is refused, naming what depends on it `[R27]`.
+- **Path only.** An item uses only the cubes found on its own folder path, and the chart editor lists only those. A cube elsewhere is reached by publishing an item in a folder beneath it `[R27]`.
+- **Prefixes are built from folder ids**, so renaming or moving a folder keeps names, references, pre-aggregations and links. People see titles in the UI; the prefixed name shows only in YAML and SQL `[R27]`.
+- **The shared root has no prefix**, so phase-1 content and links resolve as they are, with nothing migrated `[R27]`.
+- **A cube that names no data source** uses one called `default`, bound at publish like any other name `[R22, AD 3]`. The deployment's own default connection is a data source named `default` in the shared root, stored and managed like any other; the Helm values seed it on install `[R27]`.
 
 **E. Workspaces, copying and approval** `[P2 input, R12, R17]`
 
@@ -499,6 +557,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - A copied dashboard brings the folder charts it uses with it (library charts) `[R18]`.
 - A copied data source keeps its credentials, encrypted and never shown.
 - A workspace item resolves cubes in the workspace first, then along the path of the folder it was copied from. A new item names its target folder when it's created.
+- Workspace and proposal content reaches Cube as xcube overlays, which only the people in §P2.4's Architecture may query `[AD 8, R27]`.
 
 *Getting work back out:*
 - Copying into a shared folder is a **proposal**, with an optional description of up to 1,000 characters.
@@ -509,7 +568,9 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - While a proposal waits, the folder's readers see the old version. The folder's read-write members see a Reviews list with a count in the app, and that is the only notice `[R12]`.
 - An approved item replaces a same-named item in the folder. The **last 10 versions** are kept and can be restored `[R17]`.
 
-*What needs no approval:* creating subfolders, setting permissions, renaming, moving and deleting are direct for read-write members `[R17]`.
+*What needs no approval:* creating subfolders, setting permissions, renaming, moving and deleting are direct for read-write members `[R17]`. Where they touch models, data sources or folders holding them, they apply only if the whole model still compiles `[R27]`.
+
+*Every proposal* is checked against the whole model when it is proposed, and again at approval. An approval that would break anything is refused `[AD 6, R27]`.
 
 **F. Bookmarks** `[R12]`
 - Personal to each user by default.
@@ -517,9 +578,9 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 
 **G. Data sources: all of backlog F18, per folder** `[R16]`
 - A list per folder, with each source's health.
-- Adding a source with a connection test, run by Cube's own drivers at wechart's request `[R20]`.
+- Adding a source with a connection test, run by Cube's own drivers at wechart's request `[R20]`, in xcube, which alone decrypts the credential `[AD 1, AD 7]`.
 - The six driver types, each with its own authentication.
-- The restart note and whether Cube has picked the change up.
+- The restart note, and whether ~~Cube has~~ every Cube instance has picked the change up `[AD 11]`.
 - Test history.
 - Credentials never shown.
 
@@ -541,6 +602,9 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - **User attributes in Cube's security context.** Groups only, for now `[R14, R16]`.
 - **Notices outside the app.** No email or chat `[R12, R16]`.
 - **Testing more than one identity provider during development.** Entra ID and brokers are checked at the end of phase 2 `[R14, R15, R16]`.
+- **Sharding the model.** Designed for 100–200 model-bearing folders; sharding is a later add-on `[AD 9]`.
+- **Cube Store beyond one node** `[AD 11]`.
+- **Anything but wechart's server calling Cube or xcube**, for now `[AD 10]`.
 
 Phase 1's non-goals still stand, except two that phase 2 brings into scope:
 - **Users, groups, roles and SSO** (§P2.6 A–B).
@@ -550,7 +614,7 @@ The rest still apply: AI and chat authoring, scheduled delivery and alerts, embe
 
 ## P2.8 Open questions
 
-**None.** All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9.
+**None.** All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections.
 
 | # | Question | Decision |
 |---|---|---|
@@ -641,11 +705,14 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which development identity provider should docker-compose and the docker-desktop Helm release use? A: "Dex 2.45.1 (Recommended)"
 - Q: Where should a data source's connection test run (AC-159 says 'from the wechart service')? A: "In Cube, at wechart's request (Recommended)"
 - Q: A model defined in /A is used from /A/B; a join inside it names cube `orders`, and /A/B has its own `orders`. Which is used? A: "The viewer's folder (Recommended)"
+  - *Superseded 2026-09-25 by decision 3 (`docs/inputs/2026-09-25-architecture-decisions.md`): names bind at publish from the item's own folder.*
 
 **R21 — credentials and the box plot's row limit**
 - Q (first wording, about a "gitignored" development key file): *(The user asked to clarify.)* "I did not understand this question.. what git are we talking about is it the user workspace? if we are using per user git folder, how will multi pod deployment work?" Claude explained that "gitignored" referred to wechart's own source repository, that wechart uses no git at runtime, and that every pod shares the key from the deployment's Secret; the question was about developer laptops only.
 - Q: For a developer running wechart on their laptop with docker-compose, where should the encryption key come from? A: "One fixed key in the repo"
+  - *Superseded 2026-09-25 by decision 7: wechart holds no decryption key; development uses a fixed xcube key pair (R27).*
 - Q: What should a wechart API pod do if it starts without the encryption key, or with the wrong one? A: "Refuse to start (Recommended)"
+  - *Superseded 2026-09-25 by decision 7 and R27: wechart refuses without xcube's public key, xcube without its private key.*
 - Q: A read-write member changes where a data source connects. Must they type the password again? A: "Yes, re-enter it (Recommended)"
 - Q: What should a box plot do when the data has more rows than Cube returns? A: "Use part, with a warning"
 
@@ -655,13 +722,38 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R27 — the questions the 2026-09-25 architecture decisions left open** (`docs/inputs/2026-09-25-architecture-decisions.md`; the user confirmed the list of places they contradict, then answered)
+- Q: Rebinding (decision 3): when a nearer cube, data source or `default` is published after other items already bound a farther one, or a bound item is deleted, what happens to the items already bound? A: "Rebind at that publish (Recommended)"
+- Q: Prefix (decision 2): what is a published cube's, view's or data source's prefix built from? A: "Folder ids (Recommended)"
+- Q: AC-309 (decision 3 drops binding from the viewer's folder): what should the criterion become? A: "Retire it (Recommended)"
+- Q: Descendants (AC-273, R19): today a data source can come from a descendant folder when no folder on the path up has the name, and a name found in two descendants is refused. Keep that? A: "Drop it (Recommended)"
+- Q: Default connection (AC-310, R22): where does the deployment's own `default` data source live? A: "A root data source (Recommended)"
+- Q: Crossing folders (AC-025, AC-283): may an item use a cube outside its own folder path by naming the cube's full prefixed name? A: "No: its path only (Recommended)"
+- Q: Phase-1 names: charts, dashboards, markings, bookmarks and links from phase 1 name members by short cube names. How do they keep working? A: "The root has no prefix (Recommended)"
+- Q: Model history (AC-289): does wechart keep copies of the model files it publishes? A: "Yes, per version (Recommended)"
+- Q: Generated policies (decisions 4, 5): which groups does xcube's generated access policy admit to a folder's cubes? Items in /A/B bind cubes from /A, so /A's cubes are queried for /A/B's members too. A: "Reaching it or beneath (Recommended)"
+- Q: Preview (AC-166, rule 21): with tokens carrying groups only, what does a Super-Admin's "Preview as" set? A: "Groups only (Recommended)"
+- Q: Keys (decisions 1 and 12): Cube must verify wechart's RS256 tokens, but never calls wechart at runtime. How does it get wechart's public keys? A: "Pushed to xcube (Recommended)"
+- Q: Hidden folders (AC-263 against AC-264): may a read-only user open a chart that is kept in a folder they can't see, when it's on a dashboard they can? A: "Yes, via the dashboard (Recommended)"
+- Q: Credentials (decision 7): where is a newly typed secret encrypted to xcube's public key? A: "In the browser (Recommended)"
+- Q: Start-up checks (AC-311 is retired): what should the services check about keys when they start? A: "Both refuse (Recommended)"
+- Q: Whole-model refusals (decision 6): when a publish breaks something in a folder the publisher can't see, what does the refusal tell them? A: "Count elsewhere (Recommended)"
+- Q: When is the whole-model check run for a proposal? A: "At propose and approve (Recommended)"
+- Q: Overlays (decision 8): who may query a workspace's or a proposal's overlay, and how long does it live? A: "Owner, then deciders (Recommended)"
+- Q: Build history (AC-150): Cube's refresh worker can no longer post its builds to wechart. How does wechart learn of the builds it starts? A: "Pull from xcube (Recommended)"
+- Q: Direct changes (AC-291): do renaming, moving and deleting models, data sources, or folders holding them count as publishes, compiled whole and refused if anything breaks? A: "Yes (Recommended)"
+- Q: HA (decision 11): should the query path's high availability get its own acceptance criterion? A: "Yes, testable (Recommended)"
+- Claude's reading of decision 12, stated to the user before writing: the service credential covers every call wechart makes on its own behalf rather than for a signed-in user (introspection, builds and jobs, system partitions, health, and every xcube admin call).
+
 **R26 — asked after T323** (its cold review raised it)
 - Q: With sign-in on and no Super-Admin group configured, should the API refuse to start? A: "yes"
 
 **R25 — asked while implementing T318–T322** (the cold reviews raised them)
 - Q: AC-251 exempts only "health routes", but sign-in's own routes and the model routes Cube reads with its key are exempt too. Reword AC-251? A: "yes go ahead and change it"
+  - *The model routes go with decision 1 (2026-09-25): Cube never calls wechart.*
 - Q: Add a cross-site check (`Sec-Fetch-Site` / `Origin`) on requests that change something, which the research suggests and no task holds? A: "yes"
 - Q: T322 reads AC-008's "every request" as every request made for a signed-in user, wechart's own requests keeping the configured context. Confirm, or reword AC-008? A: "reword to match with the requirements provided"
+  - *wechart's own requests use the service credential from decision 12 (2026-09-25).*
 
 **R24 — asked while implementing T316** (the research left it open, and the spec set none)
 - Q: With security on, how long should a sign-in last before wechart asks the user to sign in again? A: "12 hours, no idle limit"
