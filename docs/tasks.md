@@ -5910,10 +5910,32 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - Each keystroke is its own undo step and "change", as alt text and link labels already are.
       - The delete toast's Undo undoes the latest change, which can be a keystroke typed since. That predates T394.
       - A header tile's text still can't be edited: no criterion covers it.
-- [ ] T395 [P] (AC-303) Draw pie and donut labels whole, moving or hiding the ones that don't fit
-  - Files: `packages/charts/src/series/pie.ts` (+ test)
+- [x] T395 [P] (AC-303) Draw pie and donut labels whole, moving or hiding the ones that don't fit
+  - Files: `packages/charts/src/series/pie.ts` (+ test), `packages/charts/src/optionFor.ts`, `e2e/pie-labels.spec.ts`, `docs/research/echarts-pie-labels.md` (as built)
   - Failing test: `pie.test.ts`: with data labels on, no label is truncated ("$…"); labels that don't fit move out or hide (AC-303).
   - Depends on: none
+  - **Done 2026-09-26.**
+    - **Before:** ECharts cut an outer label to the room left to the tile's edge ("$1,2...", "$..." at 260 px). That is its default `overflow: 'truncate'` (research `echarts-pie-labels.md`).
+    - **Now:** labels are never cut (`overflow: 'none'`). They are aligned to the pie's box edges, and one that meets another is hidden (`hideOverlap`). `fitPieLabels` then lays them out for the canvas:
+      - beside the ring where the widest formatted label has room between the ring and the box's edge;
+      - otherwise beside a smaller ring, down to half its size, which leaves them that room;
+      - otherwise, on a pie, inside the slices, where they stay within the box (a donut's band is too thin);
+      - otherwise not drawn, and the tooltip still gives each value.
+    - **What the tests show:**
+      - `pie.test.ts` renders the real `optionFor` to SVG, with four money slices up to "$1,234,567":
+        - pie and donut at 200, 260 and 420 px with no legend; and at 170–420 px with the legend at the right or the left;
+        - every drawn label is one of the whole values, inside the tile, and clear of a side legend's 120 px;
+        - a pie draws its values at every width;
+        - a donut at 300 and 340 px has its ring shrunk (under 70 %, at least 35 %) and every label clear of it.
+      - `e2e/pie-labels.spec.ts` (Chrome) measures real text on a dashboard:
+        - a pie and a donut in 3-column tiles, legend at the top, draw "$76,900"-style values whole, beside the ring and inside the tile;
+        - in 2-column tiles with the legend at the right or left (a 158 px chart), no label is cut or runs past the box. Those labels aren't drawn, since the pie is about 40 px across.
+      - Charts 441, web 1,495. `dashboard.spec.ts`'s drag test failed once in the run and passed 3/3 alone: a flake.
+    - **The cold review (FAIL)** found two things:
+      - With a side legend on a 2-column tile, the widest label ran past the chart's edge or back over the legend: fixed as above, with the side-legend and whole-value tests.
+      - Labels that didn't fit beside the ring were drawn over it: they no longer are. The ring shrinks, or the labels move inside or hide.
+    - **For the user:** shrinking the ring to keep labels beside it is a choice made here. The alternatives were labels over the ring, or inside a donut's band. See the handoff.
+    - **AC-303 ticked** on `pie.test.ts` and `pie-labels.spec.ts`.
 - [ ] T396 [P] (AC-304) Fold the app bar into a menu below 1,024 pixels
   - Files: `packages/web/src/shell/AppShell.tsx`, `e2e/shell.spec.ts`
   - Failing test: `shell.spec.ts`: at 390 pixels wide no page scrolls sideways, and navigation and search are in a menu (AC-304).

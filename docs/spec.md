@@ -1111,7 +1111,7 @@ Traces to: §P2.6 H, `[R8, R16, R19, R21, R22]`, `[backlog]` §5. Rewritten phas
       Fails when: a table's columns differ from the wells' order.
 - [x] AC-302 WHEN the user selects a markdown tile in edit mode, THE SYSTEM SHALL let them edit its text, and render the change (gap 12).
       Fails when: a markdown tile's text can't be changed in the UI.
-- [ ] AC-303 WHEN data labels are on for a pie or donut, THE SYSTEM SHALL draw each label whole, moving or hiding the labels that don't fit (gap 3).
+- [x] AC-303 WHEN data labels are on for a pie or donut, THE SYSTEM SHALL draw each label whole, moving or hiding the labels that don't fit (gap 3).
       Fails when: a slice's label shows a truncated value such as "$…".
 - [ ] AC-304 WHILE the window is narrower than 1,024 pixels, THE SYSTEM SHALL fit the app bar within it, folding navigation and search into a menu (the UI review's narrow-shell change).
       Fails when: a page scrolls sideways at 390 pixels wide.

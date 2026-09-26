@@ -25,7 +25,7 @@ import { boxplotOption, isBoxplotType } from './series/boxplot';
 import { comboOption, isComboType } from './series/combo';
 import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { lineOption, isLineType } from './series/line';
-import { pieOption, isPieType } from './series/pie';
+import { fitPieLabels, pieOption, isPieType } from './series/pie';
 import { scatterOption, isScatterType } from './series/scatter';
 import { isTreemapType, treemapOption } from './series/treemap';
 import { PROTOTYPE_GRID } from './layout/grid';
@@ -111,7 +111,8 @@ export function optionFor(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
   if (isBarType(spec.chartType)) return drawn(onGrid(barOption(spec, canvas)));
   if (isLineType(spec.chartType)) return drawn(onGrid(lineOption(spec)));
   if (isScatterType(spec.chartType)) return drawn(onGrid(scatterOption(spec)));
-  if (isPieType(spec.chartType)) return drawn(pieOption(spec));
+  // Its labels laid out last, for the box Customize's legend leaves it (T395).
+  if (isPieType(spec.chartType)) return fitPieLabels(drawn(pieOption(spec)), canvas);
   if (isTreemapType(spec.chartType)) return drawn(treemapOption(spec));
   if (isHeatmapType(spec.chartType)) return drawn(onGrid(heatmapOption(spec)));
   // Its own axes (an array, per panel, formatted by the layout), and no

@@ -187,3 +187,136 @@ describe('a pie with a blank category (T232’s review)', () => {
     expect(slicesOf(blank).at(-1)).toEqual({ name: NO_VALUE, value: 20, category: '' });
   });
 });
+
+/**
+ * T395, AC-303: WHEN data labels are on for a pie or donut, THE SYSTEM SHALL
+ * draw each label whole, moving or hiding the labels that don't fit (gap 3).
+ * `Fails when: a slice's label shows a truncated value such as "$…".`
+ *
+ * ECharts' own default cuts an outer label to the room left to the tile's
+ * edge, "$1,2..." at 260 px (research `echarts-pie-labels.md`). Read off the
+ * drawn SVG: each value label whole, and all of it inside the tile, its
+ * extent by its anchor and its characters at 12 px, 0.6 em apiece (generous
+ * for digits).
+ */
+describe('data labels on a narrow tile (T395, AC-303)', () => {
+  const AMOUNT = 'orders.amount';
+  const values = [1_234_567, 234_567, 34_567, 4_567];
+  const money = (chartType: 'pie' | 'donut'): RenderSpec => ({
+    chartType,
+    encoding: { x: [STATUS], y: [AMOUNT] },
+    rows: values.map((value, at) => ({ [STATUS]: `s${String(at)}`, [AMOUNT]: value })),
+    palette: PALETTE,
+    formats: { [AMOUNT]: 'currency' },
+    options: { dataLabels: true, legend: { show: false } },
+  });
+  const valueLabels = (svg: string) =>
+    [...svg.matchAll(/<text\b([^>]*)>([^<]*)<\/text>/g)]
+      .map((match) => ({
+        text: match[2] ?? '',
+        x: Number(/translate\((-?[\d.]+)/.exec(match[1] ?? '')?.[1]),
+        anchor: /text-anchor="(\w+)"/.exec(match[1] ?? '')?.[1] ?? 'start',
+      }))
+      .filter((label) => label.text.startsWith('$'));
+  /** A label's left and right, by its anchor. */
+  const extentOf = (label: { text: string; x: number; anchor: string }): [number, number] => {
+    const w = label.text.length * 12 * 0.6;
+    return label.anchor === 'end'
+      ? [label.x - w, label.x]
+      : label.anchor === 'middle'
+        ? [label.x - w / 2, label.x + w / 2]
+        : [label.x, label.x + w];
+  };
+  /** Each value as the currency format writes it, whole. */
+  const WHOLE = ['$1,234,567', '$234,567', '$34,567', '$4,567'];
+
+  it('draws each value whole, and inside the tile, at any width', () => {
+    for (const chartType of ['pie', 'donut'] as const)
+      for (const width of [200, 260, 420]) {
+        const size = { width, height: 220 };
+        const labels = valueLabels(renderToSvg(optionFor(money(chartType), size), size));
+        const said = `${chartType} at ${String(width)} px: ${labels.map((l) => l.text).join(' | ')}`;
+
+        expect(
+          labels.every((label) => !/…|\.\.\./.test(label.text)),
+          said,
+        ).toBe(true);
+        // Drawn wherever they fit: a pie's at every width, inside its slices
+        // where need be; a donut's, whose band can't hold "$1,234,567", only
+        // where a ring of half its size or more leaves them room beside it.
+        expect(labels.length > 0, said).toBe(chartType === 'pie' || width >= 420);
+        for (const label of labels) {
+          expect(WHOLE, said).toContain(label.text);
+          const [from, to] = extentOf(label);
+          expect(from, `${said}: ${label.text}`).toBeGreaterThanOrEqual(0);
+          expect(to, `${said}: ${label.text}`).toBeLessThanOrEqual(width);
+        }
+      }
+  });
+
+  /** A ring's outer radius, as drawn: the largest arc of its slices. */
+  const ringOf = (svg: string) =>
+    Math.max(
+      ...[...svg.matchAll(/<path d="([^"]*)"[^>]*\bfill="([^"]*)"/g)]
+        .filter((match) => PALETTE.includes(match[2] ?? ''))
+        .flatMap((match) => [...(match[1] ?? '').matchAll(/A\s*([\d.]+)/g)])
+        .map((arc) => Number(arc[1])),
+    );
+
+  it('shrinks a ring, down to half its size, to keep each label beside it and clear of it', () => {
+    for (const width of [300, 340]) {
+      const size = { width, height: 220 };
+      const svg = renderToSvg(optionFor(money('donut'), size), size);
+      const labels = valueLabels(svg);
+      const ring = ringOf(svg);
+      const said = `donut at ${String(width)} px, ring ${String(ring)}: ${labels.map((l) => l.text).join(' | ')}`;
+
+      // Smaller than its own 70 % of the box's half-height (110 px), and no
+      // smaller than half that.
+      expect(ring, said).toBeLessThan(0.7 * 110);
+      expect(ring, said).toBeGreaterThanOrEqual(0.35 * 110 - 0.5);
+      expect(labels.length, said).toBeGreaterThan(0);
+      for (const label of labels) {
+        expect(WHOLE, said).toContain(label.text);
+        const [from, to] = extentOf(label);
+        expect(to <= width / 2 - ring || from >= width / 2 + ring, `${said}: ${label.text}`).toBe(
+          true,
+        );
+      }
+    }
+  });
+
+  /**
+   * T395's review: with the legend at the side, which takes 120 px of the
+   * pie's box, a 2-column tile (about 185 px) left the labels no room, and
+   * the widest ran past the tile's edge or back over the legend. Each label
+   * is whole and within the pie's own box, the legend's room left clear —
+   * moved inside the slices where they have the room, else not drawn.
+   */
+  it('keeps each value whole and clear of a side legend, moving or hiding what doesn’t fit', () => {
+    const SIDE_PX = 120;
+    const drawnAt = (chartType: 'pie' | 'donut', position: 'right' | 'left', width: number) => {
+      const size = { width, height: 260 };
+      const spec: RenderSpec = {
+        ...money(chartType),
+        options: { dataLabels: true, legend: { show: true, position } },
+      };
+      return valueLabels(renderToSvg(optionFor(spec, size), size));
+    };
+    for (const chartType of ['pie', 'donut'] as const)
+      for (const position of ['right', 'left'] as const)
+        for (const width of [170, 185, 200, 240, 300, 420]) {
+          const labels = drawnAt(chartType, position, width);
+          const said = `${chartType}, legend ${position}, ${String(width)} px: ${labels.map((l) => l.text).join(' | ')}`;
+          const [left, right] = position === 'right' ? [0, width - SIDE_PX] : [SIDE_PX, width];
+          for (const label of labels) {
+            expect(WHOLE, said).toContain(label.text);
+            const [from, to] = extentOf(label);
+            expect(from, `${said}: ${label.text}`).toBeGreaterThanOrEqual(left);
+            expect(to, `${said}: ${label.text}`).toBeLessThanOrEqual(right);
+          }
+        }
+    // Moved, not only hidden: a 3-column tile's pie still writes its values.
+    expect(drawnAt('pie', 'right', 300).length).toBeGreaterThan(0);
+  });
+});

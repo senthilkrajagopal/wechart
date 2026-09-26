@@ -12,6 +12,7 @@ import { memberOn, membersOn, tableColumnsOf, type RenderSpec } from '@wechart/c
 import { colourFor } from '../colours';
 import { nameWriter } from '../modelWriter';
 import { DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
+import type { Canvas } from './bar';
 
 /** A slice's value that is blank, as its legend entry writes it (AC-221). */
 export const NO_VALUE = '(no value)';
@@ -42,6 +43,16 @@ export function isPieType(chartType: string): chartType is PieType {
 }
 
 const OUTER_RADIUS = '70%';
+/** How far an outer data label keeps from its box's edge: two of direction.md's 4 px steps. */
+const EDGE_PX = 8;
+/**
+ * A data label's width, estimated: ECharts' 12 px text, at 0.6 em a
+ * character, generous for digits (0.556 em in Helvetica) and wider than a
+ * comma or a point.
+ */
+const LABEL_CHAR_PX = 12 * 0.6;
+/** An outer label's line leaves the ring for 15 px, ECharts' `labelLine.length`, before it turns. */
+const LABEL_LINE_PX = 15;
 
 /** The member a pie's slices are also split by — its second dimension — if any. */
 export function pieSplitOf(spec: RenderSpec): string | undefined {
@@ -138,7 +149,15 @@ export function pieOption(spec: RenderSpec): EChartsOption {
       {
         type: 'pie' as const,
         radius: [LAYOUT[spec.chartType].innerRadius, OUTER_RADIUS],
-        label: { show: false },
+        /**
+         * Its data labels, where Customize turns them on (T395, AC-303):
+         * each whole, never cut to the room left ("$1,2..."): aligned to the
+         * edges of the pie's box, and one that meets another hidden
+         * (research `echarts-pie-labels.md`). `fitPieLabels` moves them
+         * inside, or hides them, where the box leaves them no room.
+         */
+        label: { show: false, overflow: 'none', alignTo: 'edge', edgeDistance: EDGE_PX },
+        labelLayout: { hideOverlap: true },
         data: slices.map((slice, index) => ({
           ...slice,
           itemStyle: {
@@ -154,4 +173,68 @@ export function pieOption(spec: RenderSpec): EChartsOption {
       },
     ],
   };
+}
+
+/**
+ * A pie's data labels laid out for the canvas it is drawn in (T395, AC-303),
+ * each whole and clear of the ring:
+ * - beside the ring, aligned to the box's edge, where the widest has room
+ *   between the ring and that edge;
+ * - else beside a smaller ring, down to half its size, which leaves them
+ *   that room;
+ * - else, on a pie, inside the slices, where the widest stays within the
+ *   box (a donut's band is too thin to hold them);
+ * - else not drawn, the tooltip still giving each value.
+ * Left to ECharts, an edge-aligned label wider than its room grows inward
+ * from the edge, over the ring and out past the box's far side — past the
+ * tile's edge, or over a side legend (T395's review).
+ *
+ * The box is the canvas less the room the series leaves a legend (a side
+ * legend's 120 px, `customize.ts`); the ring's radii are shares of half the
+ * box's shorter side, as ECharts lays them out (research
+ * `echarts-pie-labels.md`).
+ */
+export function fitPieLabels(option: EChartsOption, canvas: Canvas): EChartsOption {
+  const series = option['series'];
+  if (!Array.isArray(series)) return option;
+  return {
+    ...option,
+    series: (series as Record<string, unknown>[]).map((one) => {
+      const label = one['label'] as Record<string, unknown> | undefined;
+      if (one['type'] !== 'pie' || label?.['show'] !== true || !Array.isArray(one['radius']))
+        return one;
+      const px = (edge: string) => (typeof one[edge] === 'number' ? (one[edge] as number) : 0);
+      const width = canvas.width - px('left') - px('right');
+      const half = Math.min(width, canvas.height - px('top') - px('bottom')) / 2;
+      const [inner = 0, outer = 0] = (one['radius'] as unknown[]).map(
+        (radius) => (parseFloat(String(radius)) / 100) * half,
+      );
+      const widest = Math.max(
+        0,
+        ...labelTextsOf(one, label).map((text) => text.length * LABEL_CHAR_PX),
+      );
+
+      // The largest ring that leaves the widest label its room beside it.
+      const room = width / 2 - widest - LABEL_LINE_PX - EDGE_PX;
+      if (room >= outer) return one;
+      if (room >= outer / 2) {
+        const share = (px: number) => `${String((px / half) * 100)}%`;
+        return { ...one, radius: [share((inner / outer) * room), share(room)] };
+      }
+      // Inside, a label is centred halfway between the ring's two edges.
+      if (inner === 0 && widest / 2 <= width / 2 - outer / 2)
+        return { ...one, label: { ...label, position: 'inside' } };
+      return { ...one, label: { ...label, show: false } };
+    }),
+  };
+}
+
+/** Each slice's label as its formatter writes it. */
+function labelTextsOf(one: Record<string, unknown>, label: Record<string, unknown>): string[] {
+  const write = label['formatter'];
+  return (Array.isArray(one['data']) ? (one['data'] as { value?: unknown }[]) : []).map((item) =>
+    typeof write === 'function'
+      ? String((write as (params: object) => unknown)({ ...item, data: item }))
+      : String(item.value),
+  );
 }
