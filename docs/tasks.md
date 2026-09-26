@@ -5331,10 +5331,26 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - `POST /api/model/publish` checks no folder right, so with security on any signed-in user can change the model. T334's test now covers it.
       - `GET /api/images/:id` checks no access. T408's route matrix, which fails for any route it has no case for, covers it.
     - AC-262 stays open for its models' and data sources' half (T334, T335).
-- [ ] T328 (AC-267) When security is first turned on, keep phase-1 content as the shared tree, visible only to Super-Admins
-  - Files: a migration `…_root-access.cjs` (the root and phase-1 folders with both settings unset), `packages/api/src/access/phase1-content.test.ts`
+- [x] T328 (AC-267) When security is first turned on, keep phase-1 content as the shared tree, visible only to Super-Admins
+  - Files: ~~a migration `…_root-access.cjs` (the root and phase-1 folders with both settings unset)~~, `packages/api/src/access/phase1-content.test.ts`
   - Failing test: `phase1-content.test.ts`: with no groups assigned, `super` sees the seeded tree and `writer`, `reader` and `nobody` see none of it; after a group is set on Finance, its members see Finance (AC-267).
   - Depends on: T325
+  - **Done 2026-09-26.**
+    - **No migration.** Phase 1 never stored a folder's `access` or a `root-access` setting, and a missing one reads as unset (`repos/folder-access.ts`), so phase-1 content needs no change.
+      - The review confirmed it: no code before T314 writes either, and the four local databases hold none.
+      - A migration runs on every deploy, whatever the security mode. So it couldn't tell "security first turned on", and "unset both" would wipe groups set since T314.
+    - **The test builds its own phase-1 tree.** The test database is never seeded (`seedDevData` stops when any folder exists).
+      - The tree: folders at the root with a dashboard, a library chart and a local chart, and a dashboard and a library chart at the root itself, none carrying groups.
+      - `super` lists, opens and finds all of it.
+      - `writer`, `reader` and `nobody` get none of it: no listing, an empty root, root counts of 0, 404 on each item, and nothing found.
+      - Once a Super-Admin sets `sales-ro` on Finance, its members see Finance and nothing of Operations.
+    - **Its strength.** The test passed at once, since the behaviour came with T325 and T326. With an unset folder read as granting `sales-ro`, 2 of its 3 tests failed; that change was then reverted.
+    - **The cold review** (FAIL, on coverage) led to the root-level items, the local chart, the root counts and a sturdier cleanup. It also raised four gaps outside this test:
+      - `GET /api/model/files` gives every model file to anyone signed in (T334's test covers it). Data sources are the same (T335), and so are images (T408).
+      - **For the user:** assigning a group to a folder shows its members that folder's ancestors (R12), which includes the phase-1 items at the root itself. Does a grant reaching up count as "assigned" for AC-267, or must Super-Admins first move the root's phase-1 items into folders?
+      - **For the user:** with sign-in on, phase-1 items in "My workspace" (`mine`) are hidden from everyone, Super-Admins included. T343's plan moves them to `ws:admin`, a workspace no signed-in user can own, because users' keys come from the provider. Where should they go?
+      - Items with no folder at all, which only the development seed writes, are hidden from Super-Admins too.
+    - AC-267 stays open until those are settled, and T334 and T335 land.
 - [ ] T329 (AC-291) Apply subfolders, permissions, renames, moves and deletes at once for read-write members
   - Files: `packages/api/src/server.ts` (`POST /api/documents` for folders, `PATCH`, `DELETE`), `packages/api/src/access/direct.test.ts`
   - Failing test: `direct.test.ts`: a read-write member creates a subfolder, sets its groups, renames, moves and deletes, each applied at once; a move needs read-write on both folders and answers 403 otherwise; a read-only member gets 403 for each (AC-291).
@@ -5434,6 +5450,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [ ] T343 (AC-276, AC-277) Give each Super-Admin and read-write member a private workspace, and read-only users none
   - Files: `packages/api/src/repos/workspaces.ts` (+ test), `packages/api/src/repos/catalog.ts`, a migration `…_workspaces.cjs` (phase-1 items in `mine` move to `ws:admin`)
   - Failing test: `workspaces.test.ts`: `writer` and `super` each list, open and search their own `ws:` folder; neither can list, open, search or load the other's, Super-Admins included; `reader` has no workspace and every create route answers 403 (AC-276, AC-277).
+  - *2026-09-26, T328's review:* with sign-in on, no user's key is `admin`, because keys come from the provider (`auth/routes.ts`). Items moved to `ws:admin` would be nobody's, contrary to R17 ("everything phase 1 created stays in place … only Super-Admins see it"). Where phase-1 items in `mine` go is asked of the user; this migration waits for the answer (AC-267).
   - Depends on: T325, T313
 - [ ] T344 (AC-278, AC-279) Copy a dashboard into the workspace with its charts, never editing shared items in place
   - Files: `packages/api/src/routes/workspace-copy.ts` (+ test), `packages/api/src/server.ts` (a write to a shared item answers 409 "Edit in my workspace"), `packages/api/src/repos/documents.ts`
@@ -6078,7 +6095,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
 | AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327, T334, T335 |
 | AC-263 | T313, T326, T334, T335, T436 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371 |
-| AC-266 | T326, T340, T334 | AC-267 | T328 | AC-268 | T340, T408 |
+| AC-266 | T326, T340, T334 | AC-267 | T328, T334, T335, T343, T408 | AC-268 | T340, T408 |
 | AC-269 | T334, T335 | AC-270 | T336 | AC-271 | T336 |
 | AC-272 | ~~T337, T339, T340~~ T429 | AC-273 | ~~T338~~ T435 | AC-274 | T341 |
 | AC-275 | ~~T337, T352~~ T428 | AC-276 | T343 | AC-277 | T343 |
