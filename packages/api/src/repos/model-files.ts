@@ -29,6 +29,7 @@ export function modelFileStore(db: Kysely<Database>): ModelFileStore & {
    * file, and the root's files, unless a folder is named.
    */
   replace(path: string, files: readonly ModelFile[], folderId?: string): Promise<unknown>;
+  all(): Promise<readonly ModelFile[]>;
 } {
   return {
     async replace(path, files, folderId = ROOT_FOLDER_ID) {
@@ -55,6 +56,16 @@ export function modelFileStore(db: Kysely<Database>): ModelFileStore & {
         .selectFrom('model_files')
         .select(['folder_id', 'path', 'content'])
         .where('folder_id', '=', folderId)
+        .orderBy(sql`path collate "C"`)
+        .execute();
+      return rows.map((row) => ({ folderId: row.folder_id, path: row.path, content: row.content }));
+    },
+    /** Every folder's files, by folder then path: the whole model xcube is sent (T452). */
+    async all() {
+      const rows = await db
+        .selectFrom('model_files')
+        .select(['folder_id', 'path', 'content'])
+        .orderBy(sql`folder_id collate "C"`)
         .orderBy(sql`path collate "C"`)
         .execute();
       return rows.map((row) => ({ folderId: row.folder_id, path: row.path, content: row.content }));

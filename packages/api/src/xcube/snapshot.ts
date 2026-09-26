@@ -70,6 +70,7 @@ export function modelSync({
   admin,
   files,
   tree,
+  folderIds,
   publications,
   log,
   now = Date.now,
@@ -80,6 +81,11 @@ export function modelSync({
   readonly files: () => Promise<readonly ModelFile[]>;
   /** The folder tree wechart publishes, by xcube id (T425). */
   readonly tree: () => Promise<readonly TreeFolder[]>;
+  /**
+   * Each served folder's xcube id, by wechart's (T452): a file is its
+   * folder's item. The root alone where not given.
+   */
+  readonly folderIds?: () => Promise<ReadonlyMap<string, string>>;
   readonly publications: PublicationStore;
   readonly log: {
     warn: (details: Record<string, unknown>, message: string) => void;
@@ -115,7 +121,7 @@ export function modelSync({
             revision: head.current?.revision ?? 0,
             contentHash: head.current?.itemsHash ?? '',
           });
-        const items = itemsOf(await files());
+        const items = itemsOf(await files(), await folderIds?.());
         const hash = itemsHashOf(items);
         // Only an items-mode head is the same: a file set is moved over, whatever it holds.
         if (head.mode === 'items' && head.current !== null && head.current.itemsHash === hash) {

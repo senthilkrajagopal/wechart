@@ -9,6 +9,7 @@ import { closeDb, getDb } from '../db/client';
 import { catalog } from '../repos/catalog';
 import { documents, type DocumentKind, type StoredDocument } from '../repos/documents';
 import { folderAccessStore, ROOT_ACCESS_ID } from '../repos/folder-access';
+import { folderXcubeIds } from '../repos/folder-xcube-ids';
 import { modelFileStore } from '../repos/model-files';
 import { buildServer } from '../server';
 
@@ -122,6 +123,8 @@ beforeAll(async () => {
     catalog: catalog(getDb()),
     folderAccess: folderAccessStore(getDb()),
     modelFiles: files(),
+    // Where each folder's models are published (T452).
+    folders: () => folderXcubeIds(getDb()).published(),
   });
   for (const who of ['writer', 'reader', 'nobody']) cookies[who] = await signIn(app, USERS[who]!);
 });
@@ -248,16 +251,15 @@ describe('only a folder’s read-write members change its models (T334, AC-266, 
   });
 
   /**
-   * Publishing into a folder, which names its items `<folderId>__<name>` in
-   * xcube, is T341's: until then a folder's own members get to the check,
-   * and are told, rather than having their file sent as the root's.
+   * A folder's own read-write members publish into it (T452): past every
+   * folder check, to xcube's, which isn't configured here.
    */
-  it('refuses, for now, a publish into a folder other than the root, storing nothing', async () => {
+  it('lets a folder’s read-write member publish into it, as far as xcube’s check', async () => {
     const answer = await publish('writer', ids.b, paths.b);
 
     expect(answer.statusCode).toBe(409);
     expect(answer.json<{ error: string }>().error).toBe(
-      'Models in a folder other than the root can’t be published yet: only the root’s are.',
+      'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_XCUBE_ADMIN_TOKEN), so a change could not be checked or served.',
     );
     expect((await files().list(ids.b)).map((file) => file.content)).toEqual([ORDERS]);
   });

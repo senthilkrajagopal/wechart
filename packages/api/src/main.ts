@@ -76,8 +76,10 @@ async function main(): Promise<void> {
       : modelSync({
           model: config.xcube.model,
           admin,
-          files: () => modelFiles.list(),
+          // Every folder's files, each its folder's item (T452).
+          files: () => modelFiles.all(),
           tree: () => folderIds.tree(),
+          folderIds: async () => (await folderIds.published()).ids,
           publications,
           log: {
             warn: (details, message) => app.log.warn(details, message),
@@ -99,7 +101,15 @@ async function main(): Promise<void> {
           afterPublish: (changeset) => sync.publish(changeset),
           // The tree put after every folder change (T449, AC-333).
           afterFolderChange: () => sync.pushTree('folder'),
+          // And before a publish into a folder, which xcube's tree must hold
+          // (T452). A push that failed is said, and the check then says why.
+          beforeFolderPublish: async () => {
+            if ((await sync.pushTree('publish')).kind === 'failed')
+              throw new Error('xcube’s folder tree could not be put before a publish');
+          },
         }),
+    // Where each folder's model files are published (T452).
+    folders: () => folderIds.published(),
     ...(admin === undefined ? {} : { xcube: admin }),
     publications,
     // Each folder's AD groups (T314).

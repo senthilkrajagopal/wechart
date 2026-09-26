@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Kysely } from 'kysely';
 
 import type { Database } from '../db/schema';
-import { publishedTree, xcubeIdOf, type TreeFolder } from '../xcube/folders';
+import { publishedTree, xcubeIdOf, type PublishedFolders, type TreeFolder } from '../xcube/folders';
 import { ROOT_FOLDER_ID } from './catalog';
 
 /**
@@ -67,33 +67,56 @@ export function folderXcubeIds(db: Kysely<Database>) {
   return {
     /** Each folder's xcube id, given it now if it has none yet. */
     of,
-    /**
-     * The tree wechart publishes: the root and every folder reaching it, by
-     * xcube id. A folder with no id yet is found by a join and given one;
-     * then every id is read whole, with no list of folders in the statement.
-     */
+    /** The tree wechart publishes: the root and every folder reaching it, by xcube id. */
     async tree(): Promise<TreeFolder[]> {
-      const missing = await db
-        .selectFrom('documents')
-        .leftJoin('folder_xcube_ids', 'folder_xcube_ids.folder_id', 'documents.id')
-        .select('documents.id')
-        .where('documents.kind', '=', 'folder')
-        .where('folder_xcube_ids.folder_id', 'is', null)
-        .execute();
-      for (const folderId of [ROOT_FOLDER_ID, ...missing.map((row) => row.id)])
-        if ((await stored([folderId])).length === 0) await give(folderId);
-      const [folders, all] = await Promise.all([
-        db
-          .selectFrom('documents')
-          .select(['id', 'folder_id'])
-          .where('kind', '=', 'folder')
-          .execute(),
-        db.selectFrom('folder_xcube_ids').select(['folder_id', 'xcube_id']).execute(),
-      ]);
-      return publishedTree(
-        folders.map((folder) => ({ id: folder.id, parentId: folder.folder_id })),
-        new Map(all.map((row) => [row.folder_id, row.xcube_id])),
-      );
+      return (await publishedNow()).tree;
+    },
+
+    /**
+     * Each folder the published tree holds, by wechart's id, with its xcube
+     * id and the folder holding it (T452): where its model files are
+     * published, and the path its names are looked for along.
+     */
+    async published(): Promise<PublishedFolders> {
+      const { tree, ids, parents } = await publishedNow();
+      const inTree = new Set(tree.map((folder) => folder.id));
+      return {
+        ids: new Map([...ids].filter(([, xcubeId]) => inTree.has(xcubeId))),
+        parents,
+      };
     },
   };
+
+  /**
+   * The published tree, every stored id and each folder's parent. A folder
+   * with no id yet is found by a join and given one; then every id is read
+   * whole, with no list of folders in the statement.
+   */
+  async function publishedNow() {
+    const missing = await db
+      .selectFrom('documents')
+      .leftJoin('folder_xcube_ids', 'folder_xcube_ids.folder_id', 'documents.id')
+      .select('documents.id')
+      .where('documents.kind', '=', 'folder')
+      .where('folder_xcube_ids.folder_id', 'is', null)
+      .execute();
+    for (const folderId of [ROOT_FOLDER_ID, ...missing.map((row) => row.id)])
+      if ((await stored([folderId])).length === 0) await give(folderId);
+    const [folders, all] = await Promise.all([
+      db.selectFrom('documents').select(['id', 'folder_id']).where('kind', '=', 'folder').execute(),
+      db.selectFrom('folder_xcube_ids').select(['folder_id', 'xcube_id']).execute(),
+    ]);
+    const ids = new Map(all.map((row) => [row.folder_id, row.xcube_id]));
+    return {
+      tree: publishedTree(
+        folders.map((folder) => ({ id: folder.id, parentId: folder.folder_id })),
+        ids,
+      ),
+      ids,
+      parents: new Map<string, string | null>([
+        [ROOT_FOLDER_ID, null],
+        ...folders.map((folder) => [folder.id, folder.folder_id] as const),
+      ]),
+    };
+  }
 }

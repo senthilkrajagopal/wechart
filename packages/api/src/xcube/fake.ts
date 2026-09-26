@@ -202,6 +202,25 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
         deletes?: readonly { folderId: string; name: string }[];
         probes?: readonly { id: string; query: Record<string, unknown> }[];
       };
+      // No tree yet: refused before the dry-run branch. An upsert into a
+      // folder the tree doesn't hold is the item's error, kind `folder`
+      // (research 3a, "POST …/changesets" and "Item content").
+      if (held.tree === undefined)
+        return answer(400, {
+          error: `Model "${model}" has no folder tree yet: put its folders first`,
+          code: 'invalid_folders',
+        });
+      const inTree = new Set(held.tree.map((folder) => folder.id));
+      const folderErrors: ItemError[] = (change.upserts ?? [])
+        .filter((item) => !inTree.has(item.folderId))
+        .map((item) => ({
+          folderId: item.folderId,
+          name: item.name,
+          kind: 'folder',
+          message: `Folder ${item.folderId} is not in the folder tree`,
+        }));
+      const refused: readonly (ModelError | ItemError)[] | undefined =
+        folderErrors.length > 0 ? [...folderErrors, ...(refusal ?? [])] : refusal;
       const keyOf = (item: { folderId: string; name: string }) => `${item.folderId}/${item.name}`;
       const applied = (items: readonly Item[]) => {
         const gone = new Set((change.deletes ?? []).map(keyOf));
@@ -214,12 +233,12 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
       const current = headOf(model);
       const result = applied(current?.items ?? []);
       if (url.searchParams.get('dryRun') === 'true') {
-        const valid = refusal === undefined;
+        const valid = refused === undefined;
         const asFiles = result.map((item) => ({ path: `${item.name}.yml`, content: item.yaml }));
         return answer(200, {
           model,
           valid,
-          errors: refusal ?? [],
+          errors: refused ?? [],
           cubeMessage: valid ? null : refusalMessage,
           probes:
             valid && !dropping
@@ -270,11 +289,11 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
           currentRevision: head?.revision ?? null,
           currentItemsHash: head?.itemsHash ?? null,
         });
-      if (refusal !== undefined)
+      if (refused !== undefined)
         return answer(422, {
           error: 'The items do not compile',
           code: 'invalid_items',
-          errors: refusal,
+          errors: refused,
           cubeMessage: refusalMessage,
         });
       const revision = (head?.revision ?? 0) + 1;

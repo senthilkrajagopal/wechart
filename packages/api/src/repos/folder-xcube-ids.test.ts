@@ -101,4 +101,23 @@ describe('folders’ xcube ids', () => {
     expect(tree.map((each) => each.id)).not.toContain(idOf.get(mine));
     for (const each of tree) expect(each.id).toMatch(/^f[a-z0-9]{1,40}$/);
   });
+
+  // T452: where each folder's model files are published, and the path its
+  // names are looked for along.
+  it('gives each published folder by wechart’s id, with its xcube id and parent, and no workspace', async () => {
+    const a = await folder(randomUUID(), 'root');
+    const b = await folder(randomUUID(), a);
+    const mine = await folder(randomUUID(), 'mine');
+
+    const published = await ids().published();
+    const idOf = await ids().of([a, b]);
+
+    expect(published.ids.get('root')).toBe('froot');
+    expect(published.ids.get(a)).toBe(idOf.get(a));
+    expect(published.ids.get(b)).toBe(idOf.get(b));
+    expect(published.ids.has(mine)).toBe(false);
+    expect(published.parents.get(b)).toBe(a);
+    expect(published.parents.get(a)).toBe('root');
+    expect(published.parents.get('root')).toBeNull();
+  });
 });

@@ -238,9 +238,10 @@ test.describe.serial('xcube serves the model (T447)', () => {
     // The seed's template is in wechart's store, read-only (AC-140)…
     expect(stored.map((file) => file.path)).toContain('cubes/templated_example.yml');
     // …and never in xcube's: its hash is the plain YAML's, and nothing refused.
-    // A quiet moment between the suite's other publishes.
+    // Every folder's, which xcube holds too (T452). A quiet moment between
+    // the suite's other publishes.
     await expect
-      .poll(async () => (await xcubeHead()) === hashOf(plainYaml(await filesOf(request))), {
+      .poll(async () => (await xcubeHead()) === hashOf(plainYaml(everyFolderIn('wechart_meta'))), {
         timeout: 60_000,
       })
       .toBe(true);
@@ -329,7 +330,7 @@ test.describe.serial('xcube and an API of its own (T447)', () => {
     const cube = 'e2e_lost_send';
     // Its first start sent the seed: xcube holds the store's plain YAML.
     const filesOf = async () =>
-      ((await (await fetch(`${api!.url}/api/model/files`)).json()) as { files: File[] }).files;
+      rootFilesIn(await (await fetch(`${api!.url}/api/model/files`)).json());
     await expect
       .poll(async () => (await xcubeHead(model)) === hashOf(plainYaml(await filesOf())), {
         timeout: 60_000,
@@ -370,7 +371,7 @@ test.describe.serial('xcube and an API of its own (T447)', () => {
     test.setTimeout(180_000);
     const cube = 'e2e_reconciled';
     const filesOf = async () =>
-      ((await (await fetch(`${api!.url}/api/model/files`)).json()) as { files: File[] }).files;
+      rootFilesIn(await (await fetch(`${api!.url}/api/model/files`)).json());
     psql(
       database,
       `INSERT INTO model_files (path, content) VALUES ('cubes/${cube}.yml', :'content')`,
@@ -465,10 +466,35 @@ async function filesInStore(database: string): Promise<File[]> {
   ) as File[];
 }
 
-type File = { path: string; content: string };
+/** A model file; `folderId` is its folder's xcube id, the root's (`froot`) where absent. */
+type File = { path: string; content: string; folderId?: string };
+
+/**
+ * Every folder's model files in a database, each with its folder's xcube id:
+ * what wechart sends xcube from T452.
+ */
+function everyFolderIn(database: string): File[] {
+  return JSON.parse(
+    psql(
+      database,
+      // A folder's id outlives it: only the root's and existing folders' files.
+      `SELECT coalesce(json_agg(json_build_object('path', m.path, 'content', m.content, 'folderId', f.xcube_id)), '[]')
+         FROM model_files m JOIN folder_xcube_ids f ON f.folder_id = m.folder_id
+        WHERE m.folder_id = 'root'
+           OR EXISTS (SELECT 1 FROM documents d WHERE d.id = m.folder_id AND d.kind = 'folder')`,
+    ),
+  ) as File[];
+}
 
 const filesOf = async (request: APIRequestContext) =>
-  ((await (await request.get('/api/model/files')).json()) as { files: File[] }).files;
+  rootFilesIn(await (await request.get('/api/model/files')).json());
+
+/**
+ * The root's files as the API lists them, by path and text: the folder it
+ * names is wechart's id (T334), where `File`'s is xcube's.
+ */
+const rootFilesIn = (answer: unknown): File[] =>
+  (answer as { files: File[] }).files.map(({ path, content }) => ({ path, content }));
 
 /** xcube's rule, as T446 applies it (research xcube-slice-2.md, "Path rules"). */
 const plainYaml = (files: readonly File[]) =>
@@ -476,21 +502,22 @@ const plainYaml = (files: readonly File[]) =>
 
 /**
  * xcube's items hash of the files, as wechart sends them from T449: each file
- * one root item, named for the one cube or view it declares
- * (`xcube-slice-3a.md`, "The items hash"; `packages/api/src/xcube/items.ts`).
+ * one item of its folder (the root's where it names none, T452), named for
+ * the one cube or view it declares (`xcube-slice-3a.md`, "The items hash";
+ * `packages/api/src/xcube/items.ts`).
  */
 const hashOf = (files: readonly File[]) =>
   createHash('sha256')
     .update(
       JSON.stringify(
         files
-          .flatMap(({ content }) => {
+          .flatMap(({ content, folderId = 'froot' }) => {
             const found = /^(cubes|views):\s*\n(?:\s*#.*\n)*\s*- name:\s*(\S+)/m.exec(content);
             return found === null
               ? []
               : [
                   {
-                    folderId: 'froot',
+                    folderId,
                     name: found[2]!,
                     kind: found[1] === 'cubes' ? 'cube' : 'view',
                     yaml: content,

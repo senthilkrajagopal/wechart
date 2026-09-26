@@ -88,6 +88,37 @@ export function publishedTree(
 }
 
 /**
+ * The folders xcube's tree holds, by wechart's id (T452): each one's xcube
+ * id, and the folder holding it. A folder missing from `ids` isn't served
+ * (a workspace's, until slice 5), and neither are its models.
+ */
+export interface PublishedFolders {
+  readonly ids: ReadonlyMap<string, string>;
+  readonly parents: ReadonlyMap<string, string | null>;
+}
+
+/** The root alone: where every model file was before folders held them. */
+export const ROOT_ONLY: PublishedFolders = {
+  ids: new Map([[ROOT_FOLDER_ID, XCUBE_ROOT]]),
+  parents: new Map([[ROOT_FOLDER_ID, null]]),
+};
+
+/**
+ * A folder and each one above it to the root, nearest first: where a name
+ * used in it is looked for, as xcube resolves it (research 3a, `Scope.resolve`).
+ */
+export function chainOf(folderId: string, parents: ReadonlyMap<string, string | null>): string[] {
+  const chain: string[] = [];
+  for (
+    let at: string | null | undefined = folderId;
+    at !== null && at !== undefined && !chain.includes(at);
+    at = parents.get(at)
+  )
+    chain.push(at);
+  return chain;
+}
+
+/**
  * The tree's hash as xcube answers it: SHA-256 of the folders sorted by id,
  * each as `{ id, parentId }` (`xcube-slice-3a.md`, "Folder-tree hash").
  */

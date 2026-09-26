@@ -16,9 +16,14 @@ export interface Changeset {
 
 const keyOf = (item: Pick<Item, 'folderId' | 'name'>) => `${item.folderId}/${item.name}`;
 
-export function changesetOf(live: readonly ModelFile[], draft: readonly ModelFile[]): Changeset {
-  const before = new Map(itemsOf(live).map((item) => [keyOf(item), item]));
-  const after = itemsOf(draft);
+export function changesetOf(
+  live: readonly ModelFile[],
+  draft: readonly ModelFile[],
+  /** Each served folder's xcube id (T452); the root alone where none are given. */
+  folders?: ReadonlyMap<string, string>,
+): Changeset {
+  const before = new Map(itemsOf(live, folders).map((item) => [keyOf(item), item]));
+  const after = itemsOf(draft, folders);
   const kept = new Set(after.map(keyOf));
   return {
     upserts: after.filter((item) => {

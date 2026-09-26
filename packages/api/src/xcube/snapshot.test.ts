@@ -528,4 +528,40 @@ describe('the folder tree (T449, AC-333)', () => {
 
     expect((snapshots(stub)[0]?.body as { folders: TreeFolder[] }).folders).toEqual(TREE);
   });
+
+  // T452, AC-328: a folder's files are its items, under its xcube id.
+  it('sends each folder’s files as that folder’s items, under its xcube id', async () => {
+    const stub = fakeXcube();
+    const tree = [
+      { id: 'froot', parentId: null },
+      { id: 'fsales', parentId: 'froot' },
+    ];
+    const ids = new Map([
+      ['root', 'froot'],
+      ['sales', 'fsales'],
+    ]);
+    const inSales = { ...ORDERS, folderId: 'sales' };
+    const sync = modelSync({
+      model: 'dev',
+      admin: xcubeAdmin({
+        cubeApiUrl: CUBE_API_URL,
+        model: 'dev',
+        token: FAKE_ADMIN_TOKEN,
+        fetch: stub.fetch,
+      }),
+      files: async () => [ORDERS, inSales],
+      tree: async () => tree,
+      folderIds: async () => ids,
+      publications: memoryPublications(),
+      log: { warn: vi.fn(), info: vi.fn() },
+    });
+
+    expect(await sync.sync('start')).toEqual({ kind: 'sent', revision: 1 });
+    expect((snapshots(stub)[0]?.body as { items: unknown }).items).toEqual([
+      { folderId: 'froot', name: 'orders', kind: 'cube', yaml: ORDERS.content },
+      { folderId: 'fsales', name: 'orders', kind: 'cube', yaml: ORDERS.content },
+    ]);
+    // And nothing more once xcube holds them: the hash is taken the same way.
+    expect(await sync.sync('reconcile')).toEqual({ kind: 'same', revision: 1 });
+  });
 });

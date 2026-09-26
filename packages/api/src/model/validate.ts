@@ -13,6 +13,11 @@ import type { ModelFile } from '../server';
  */
 export interface CompileError {
   readonly path: string;
+  /**
+   * The folder holding the file, where it isn't the shared root (T452): a
+   * path can be one in each folder.
+   */
+  readonly folderId?: string;
   readonly message: string;
   /** The line, where Cube gives one. */
   readonly line?: number;

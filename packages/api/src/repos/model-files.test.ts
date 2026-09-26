@@ -111,7 +111,9 @@ describe('model files in folders', () => {
     `cubes:\n  - name: ${name}\n    sql_table: public.${name}\n    measures:\n      - name: count\n        type: count\n`;
 
   it('keeps each file in its folder, and a folder lists only its own', async () => {
-    const [a, b] = [`folder-${randomUUID()}`, `folder-${randomUUID()}`];
+    // One random part, so `a` sorts before `b` (T452's `all()` orders by folder).
+    const unique = randomUUID();
+    const [a, b] = [`folder-${unique}-a`, `folder-${unique}-b`];
     const file = path('sales');
     await store().seed([
       { folderId: a, path: file, content: 'in a\n' },
@@ -123,6 +125,11 @@ describe('model files in folders', () => {
     expect(await store().list(b)).toEqual([{ folderId: b, path: file, content: 'b, changed\n' }]);
     // The root's are the root's alone.
     expect((await store().list()).some((each) => each.path === file)).toBe(false);
+    // And every folder's, for the whole model xcube is sent (T452).
+    expect((await store().all()).filter((each) => each.path === file)).toEqual([
+      { folderId: a, path: file, content: 'in a\n' },
+      { folderId: b, path: file, content: 'b, changed\n' },
+    ]);
   });
 
   it('lists a folder’s model files in its contents, each a model with the cubes and views it declares', async () => {

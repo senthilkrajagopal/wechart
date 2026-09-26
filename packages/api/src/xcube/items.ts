@@ -1,18 +1,19 @@
 import { createHash } from 'node:crypto';
 
 import { declaredIn } from '../model/split';
+import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile } from '../server';
-import { XCUBE_ROOT } from './folders';
+import { ROOT_ONLY } from './folders';
 import { plainYamlOf } from './snapshot';
 
 /**
  * wechart's published model as xcube's items (T449, AC-333; research
  * `xcube-slice-3a.md`, "PUT …/snapshot with items", "The items hash").
  *
- * An item is one cube or one view, in one folder, as YAML (AC-337). Models
- * don't live in folders yet, so every file is a root item, named for what it
- * declares, its YAML exactly as stored. What is never sent stays out: a
- * template or a file that isn't YAML (AC-335), and a file declaring nothing.
+ * An item is one cube or one view, in one folder, as YAML (AC-337): each
+ * file is an item of its folder (T452), named for what it declares, its YAML
+ * exactly as stored. What is never sent stays out: a template or a file that
+ * isn't YAML (AC-335), and a file declaring nothing.
  */
 
 export interface Item {
@@ -22,12 +23,21 @@ export interface Item {
   readonly yaml: string;
 }
 
-export function itemsOf(files: readonly ModelFile[]): Item[] {
+export function itemsOf(
+  files: readonly ModelFile[],
+  /**
+   * Each served folder's xcube id, by wechart's id (T452, AC-328): a file is
+   * its folder's item, and one in a folder not listed is left out, as xcube
+   * would refuse it. The root alone where none are given.
+   */
+  folders: ReadonlyMap<string, string> = ROOT_ONLY.ids,
+): Item[] {
   return plainYamlOf(files).flatMap((file) => {
     const [declared] = declaredIn(file.content);
-    return declared === undefined
+    const folderId = folders.get(file.folderId ?? ROOT_FOLDER_ID);
+    return declared === undefined || folderId === undefined
       ? []
-      : [{ folderId: XCUBE_ROOT, name: declared.name, kind: declared.kind, yaml: file.content }];
+      : [{ folderId, name: declared.name, kind: declared.kind, yaml: file.content }];
   });
 }
 

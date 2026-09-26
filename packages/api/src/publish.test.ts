@@ -1216,3 +1216,287 @@ describe('one cube or view per model file (T448, AC-337)', () => {
     await app.close();
   });
 });
+
+/**
+ * T452, AC-328, AC-271: a publish into a folder is checked and applied as
+ * that folder's items, under the xcube id stored with the folder, and
+ * stored there. Names are a folder's own: the root and /Sales may each hold
+ * an `orders`, and /Sales two of them may not.
+ */
+describe('publishing into a folder (T452)', () => {
+  /** A store of files in folders, as wechart's is from T334. */
+  function inFolders(initial: readonly ModelFile[]) {
+    const key = (file: ModelFile) => `${file.folderId ?? 'root'}/${file.path}`;
+    const store = {
+      files: [...initial],
+      list: async (folderId = 'root') =>
+        store.files.filter((file) => (file.folderId ?? 'root') === folderId),
+      all: async () => store.files,
+      seed: async () => undefined,
+      write: async (files: readonly ModelFile[]) => {
+        for (const file of files)
+          store.files = [...store.files.filter((each) => key(each) !== key(file)), file];
+      },
+    };
+    return store;
+  }
+  /** The folders xcube's tree holds: the root, and /Sales beneath it. */
+  const folders = async () => ({
+    ids: new Map([
+      ['root', 'froot'],
+      ['sales', 'fsales'],
+    ]),
+    parents: new Map<string, string | null>([
+      ['root', null],
+      ['sales', 'root'],
+    ]),
+  });
+  const ROOT_ORDERS: ModelFile = {
+    path: 'cubes/orders.yml',
+    content: 'cubes:\n  - name: orders\n    sql_table: public.orders\n',
+  };
+  const salesOrders = (path: string): ModelFile => ({
+    path,
+    content: [
+      'cubes:',
+      '  - name: orders',
+      '    sql_table: sales.orders',
+      '    measures:',
+      '      - name: count',
+      '        type: count',
+      '    pre_aggregations:',
+      '      - name: total',
+      '        measures: [count]',
+      '',
+    ].join('\n'),
+  });
+
+  /** A stub xcube in items mode, holding the root's `orders`, with /Sales in its tree. */
+  async function xcubeWithSales() {
+    const stub = fakeXcube();
+    const admin = xcubeAdmin({
+      cubeApiUrl: config.cubeApiUrl,
+      model: 'dev',
+      token: FAKE_ADMIN_TOKEN,
+      fetch: stub.fetch,
+    });
+    await admin.folders([
+      { id: 'froot', parentId: null },
+      { id: 'fsales', parentId: 'froot' },
+    ]);
+    stub.holdItems('dev', [
+      { folderId: 'froot', name: 'orders', kind: 'cube', yaml: ROOT_ORDERS.content },
+    ]);
+    return stub;
+  }
+  const publishIn = (app: FastifyInstance, folderId: string, files: readonly ModelFile[]) =>
+    app.inject({ method: 'POST', url: '/api/model/publish', payload: { folderId, files } });
+
+  it('checks and applies it as that folder’s item, stores it there, and probes its rollups by full name', async () => {
+    const store = inFolders([ROOT_ORDERS]);
+    const stub = await xcubeWithSales();
+    const sent: unknown[] = [];
+    const app = serve(
+      {
+        config,
+        modelFiles: store,
+        folders,
+        afterPublish: async (changeset) => {
+          sent.push(changeset);
+        },
+      },
+      stub,
+    );
+    const file = salesOrders('cubes/orders.yml');
+
+    const response = await publishIn(app, 'sales', [file]);
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(store.files).toEqual([ROOT_ORDERS, { ...file, folderId: 'sales' }]);
+    expect(sent).toEqual([
+      {
+        upserts: [{ folderId: 'fsales', name: 'orders', kind: 'cube', yaml: file.content }],
+        deletes: [],
+      },
+    ]);
+    const checked = stub.calls.filter((call) => call.path.endsWith('/changesets?dryRun=true'));
+    expect(
+      checked.map((call) => (call.body as { probes: { query: unknown }[] }).probes[0]?.query),
+    ).toEqual([{ measures: ['fsales__orders.count'] }]);
+    await app.close();
+  });
+
+  it('refuses a second cube of a name in one folder, naming the file that declares it', async () => {
+    const first = { ...salesOrders('cubes/orders.yml'), folderId: 'sales' };
+    const store = inFolders([ROOT_ORDERS, first]);
+    const app = serve({ config, modelFiles: store, folders }, await xcubeWithSales());
+
+    const response = await publishIn(app, 'sales', [salesOrders('cubes/more_orders.yml')]);
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toEqual({
+      errors: [
+        {
+          path: 'cubes/more_orders.yml',
+          message: '`orders` is already a cube in cubes/orders.yml.',
+        },
+      ],
+    });
+    expect(store.files).toEqual([ROOT_ORDERS, first]);
+    await app.close();
+  });
+
+  it('places xcube’s error on the file in the folder it names, not on a file of that name elsewhere', async () => {
+    const store = inFolders([ROOT_ORDERS]);
+    const stub = await xcubeWithSales();
+    stub.refuse([
+      { folderId: 'fsales', name: 'orders', kind: 'compile', message: 'no such table' },
+    ]);
+    const app = serve({ config, modelFiles: store, folders }, stub);
+
+    const response = await publishIn(app, 'sales', [salesOrders('cubes/sales_orders.yml')]);
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toEqual({
+      errors: [{ path: 'cubes/sales_orders.yml', folderId: 'sales', message: 'no such table' }],
+    });
+    await app.close();
+  });
+
+  /** The root's `orders`, with a `total` a rollup elsewhere names. */
+  const ordersWithTotal = (withTotal: boolean): ModelFile => ({
+    path: 'cubes/orders.yml',
+    content: [
+      'cubes:',
+      '  - name: orders',
+      '    sql_table: public.orders',
+      '    measures:',
+      '      - name: count',
+      '        type: count',
+      ...(withTotal ? ['      - name: total', '        sql: amount', '        type: sum'] : []),
+      '',
+    ].join('\n'),
+  });
+  /** A cube whose rollup names `orders.total`: whichever `orders` its folder's path reaches first. */
+  const spending = (name: string, path: string): ModelFile => ({
+    path,
+    content: [
+      'cubes:',
+      `  - name: ${name}`,
+      `    sql_table: public.${name}`,
+      '    measures:',
+      '      - name: count',
+      '        type: count',
+      '    pre_aggregations:',
+      '      - name: spend',
+      '        measures: [orders.total]',
+      '',
+    ].join('\n'),
+  });
+
+  // T452's review: a folder's rollups are checked along its own path, so a
+  // nearer `orders` in /Sales never stands in for the root's.
+  it('checks each folder’s rollups along its own path: an override in /Sales leaves the root’s alone', async () => {
+    const store = inFolders([ordersWithTotal(true), spending('customers', 'cubes/customers.yml')]);
+    const app = serve({ config, modelFiles: store, folders }, await xcubeWithSales());
+
+    // /Sales's own `orders`, with no `total`: the root's `customers` still
+    // binds the root's `orders`, which has one.
+    const response = await publishIn(app, 'sales', [salesOrders('cubes/orders.yml')]);
+
+    expect(response.statusCode, response.body).toBe(200);
+    await app.close();
+  });
+
+  it('names a rollup in another folder that a change at the root breaks, with its folder', async () => {
+    const summary = { ...spending('summary', 'cubes/summary.yml'), folderId: 'sales' };
+    const store = inFolders([ordersWithTotal(true), summary]);
+    const app = serve({ config, modelFiles: store, folders }, await xcubeWithSales());
+
+    // The root's `orders` loses `total`, which /Sales's `summary` rolls up.
+    const response = await publishIn(app, 'root', [ordersWithTotal(false)]);
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toEqual({
+      errors: [
+        {
+          path: 'cubes/summary.yml',
+          folderId: 'sales',
+          line: 8,
+          message:
+            'Pre-aggregation spend names what the model doesn’t have: orders.total (measures). Cube compiles it, then fails queries on summary.',
+          preAggregation: {
+            cube: 'summary',
+            name: 'spend',
+            unknown: [{ list: 'measures', name: 'orders.total' }],
+          },
+        },
+      ],
+    });
+    await app.close();
+  });
+
+  it('puts the tree to xcube before it checks a publish into a folder, and not for the root', async () => {
+    const stub = await xcubeWithSales();
+    const checks = () =>
+      stub.calls.filter((call) => call.path.endsWith('/changesets?dryRun=true')).length;
+    const pushed: number[] = [];
+    const app = serve(
+      {
+        config,
+        modelFiles: inFolders([ROOT_ORDERS]),
+        folders,
+        beforeFolderPublish: async () => {
+          pushed.push(checks());
+        },
+      },
+      stub,
+    );
+
+    expect((await publishIn(app, 'sales', [salesOrders('cubes/orders.yml')])).statusCode).toBe(200);
+    expect(pushed).toEqual([0]);
+    expect((await publishIn(app, 'root', [ordersWithTotal(true)])).statusCode).toBe(200);
+    expect(pushed).toEqual([0]);
+    await app.close();
+  });
+
+  it('checks a generated cube against the folder’s own files: free beside the root’s, refused beside the folder’s', async () => {
+    const store = inFolders([ROOT_ORDERS]);
+    const app = serve({ config, modelFiles: store, folders }, await xcubeWithSales());
+    const generate = (file: ModelFile) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/model/publish',
+        payload: { folderId: 'sales', create: true, files: [file] },
+      });
+
+    expect((await generate(salesOrders('cubes/orders.yml'))).statusCode).toBe(200);
+    const again = await generate(salesOrders('cubes/orders_again.yml'));
+
+    expect(again.statusCode).toBe(422);
+    expect(again.json()).toEqual({
+      errors: [
+        {
+          path: 'cubes/orders_again.yml',
+          message: '`orders` is already a cube in cubes/orders.yml.',
+        },
+      ],
+    });
+    await app.close();
+  });
+
+  it('refuses a publish into a folder xcube’s tree doesn’t hold, storing nothing', async () => {
+    const store = inFolders([ROOT_ORDERS]);
+    const app = serve({ config, modelFiles: store, folders }, await xcubeWithSales());
+
+    const response = await publishIn(app, 'mine', [salesOrders('cubes/mine.yml')]);
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error:
+        'This folder isn’t one xcube serves (a workspace’s, say), so its models can’t be published.',
+    });
+    expect(store.files).toEqual([ROOT_ORDERS]);
+    await app.close();
+  });
+});

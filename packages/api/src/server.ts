@@ -34,6 +34,7 @@ import { registerIntrospection } from './model/introspection';
 import type { Config } from './config';
 import type { Changeset } from './xcube/changesets';
 import type { XcubeAdmin } from './xcube/client';
+import type { PublishedFolders } from './xcube/folders';
 import type { PublicationStore } from './xcube/publications';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, type ReferenceDocument } from './model/references';
@@ -73,6 +74,17 @@ export interface BuildOptions {
    * to xcube (T449, AC-333). It answers for itself; nothing waits for it.
    */
   readonly afterFolderChange?: () => Promise<unknown>;
+  /**
+   * The folders xcube's tree holds, each with its xcube id and parent
+   * (T452): where a folder's model files are published. The root alone
+   * where not given.
+   */
+  readonly folders?: () => Promise<PublishedFolders>;
+  /**
+   * Before a publish into a folder other than the root: the tree put to
+   * xcube, so a folder made a moment ago is one it holds (T452).
+   */
+  readonly beforeFolderPublish?: () => Promise<unknown>;
   /** xcube's admin routes, for its check of a publish (T445), where xcube is configured. */
   readonly xcube?: XcubeAdmin;
   /**
@@ -109,6 +121,8 @@ export interface ModelFile {
 export interface ModelFileStore {
   /** One folder's files, the shared root's where none is named (T334). */
   list(folderId?: string): Promise<readonly ModelFile[]>;
+  /** Every folder's files: the whole model xcube is sent (T452). The root's where absent. */
+  all?(): Promise<readonly ModelFile[]>;
   /** Stores each file whose path is not stored yet; never writes over one that is. */
   seed(files: readonly ModelFile[]): Promise<unknown>;
   /** Stores each file, over the one at its path if there is one: a publish (T142). */
@@ -208,6 +222,8 @@ export function buildServer({
   modelFiles,
   afterPublish,
   afterFolderChange,
+  folders,
+  beforeFolderPublish,
   xcube,
   publications,
   folderAccess,
@@ -438,6 +454,8 @@ export function buildServer({
     },
     ...(afterPublish === undefined ? {} : { afterPublish }),
     ...(xcube === undefined ? {} : { xcube }),
+    ...(folders === undefined ? {} : { folders }),
+    ...(beforeFolderPublish === undefined ? {} : { beforeFolderPublish }),
   });
   // With the model's files: each rollup's link names its stored file (T449).
   registerBuilds(app, client, modelFiles);

@@ -12,9 +12,10 @@ import { checkWithXcube } from '../xcube/check';
 import type { XcubeAdmin } from '../xcube/client';
 import { clashesOf, compiledIn } from './clashes';
 import { refreshKeyProblemsOf } from './refreshKeys';
-import { rollupProblemsOf } from './rollupReferences';
+import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
 import type { Changeset } from '../xcube/changesets';
-import { misnamedIn, redeclaredIn, severalIn, unreadableIn } from './split';
+import { chainOf, ROOT_ONLY, type PublishedFolders } from '../xcube/folders';
+import { declaredIn, misnamedIn, redeclaredIn, severalIn, unreadableIn } from './split';
 import type { CompileError } from './validate';
 
 /**
@@ -75,27 +76,66 @@ const versionOf = (files: readonly ModelFile[]) =>
     .slice(0, 16);
 
 /**
+ * The files a folder's names reach (T452): its own, then each folder's above
+ * it, nearest first, a file declaring a name a nearer one does left out, as
+ * xcube binds names (research 3a, `Scope.resolve`).
+ */
+function onPath(files: readonly ModelFile[], chain: readonly string[]): ModelFile[] {
+  const taken = new Set<string>();
+  return chain.flatMap((folderId) =>
+    files
+      .filter((file) => (file.folderId ?? ROOT_FOLDER_ID) === folderId)
+      .filter((file) => {
+        const names = declaredIn(file.content).map((declared) => declared.name);
+        if (names.some((name) => taken.has(name))) return false;
+        for (const name of names) taken.add(name);
+        return true;
+      }),
+  );
+}
+
+/**
  * Rollups naming what the model doesn't have (T207, AC-189): Cube compiles
  * them, then fails queries on their cube (research/cube/pre-aggregations.md,
  * "Observed locally"). Every one refuses the publish, one already live in a
- * file the change leaves alone included (R29): xcube's probe of it fails, so
- * it is named here rather than answered as a check xcube couldn't make.
+ * file the change leaves alone included, in any folder (R29): xcube's probe
+ * of it fails, so it is named here rather than answered as a check xcube
+ * couldn't make.
+ *
+ * Each folder's cubes are read along that folder's own path (T452's review):
+ * a nearer name in one folder never stands in for the one an ancestor's
+ * cube binds. An error outside the root names its folder, as paths repeat.
  */
-function unknownInRollups(draft: readonly ModelFile[]): CompileError[] {
-  return rollupProblemsOf(draft)
-    .filter((problem) => problem.unknown.length > 0)
-    .map((problem) => ({
-      path: problem.path,
-      ...(problem.line === undefined ? {} : { line: problem.line }),
-      message: `Pre-aggregation ${problem.preAggregation} names what the model doesn’t have: ${problem.unknown
-        .map(({ list, name }) => `${name} (${list})`)
-        .join(', ')}. Cube compiles it, then fails queries on ${problem.cube}.`,
-      preAggregation: {
-        cube: problem.cube,
-        name: problem.preAggregation,
-        unknown: problem.unknown,
-      },
-    }));
+function unknownInRollups(draft: readonly ModelFile[], served: PublishedFolders): CompileError[] {
+  return [...served.ids.keys()].flatMap((folderId) => {
+    const own = new Set(
+      draft
+        .filter((file) => (file.folderId ?? ROOT_FOLDER_ID) === folderId)
+        .flatMap((file) => declaredIn(file.content).map((declared) => declared.name)),
+    );
+    if (own.size === 0) return [];
+    // Its own cubes come first on its path, so a problem on one of their
+    // names is on its own file.
+    return rollupProblemsOf(onPath(draft, chainOf(folderId, served.parents)))
+      .filter((problem) => problem.unknown.length > 0 && own.has(problem.cube))
+      .map((problem) => unknownIn(problem, folderId));
+  });
+}
+
+function unknownIn(problem: RollupProblem, folderId: string): CompileError {
+  return {
+    path: problem.path,
+    ...(folderId === ROOT_FOLDER_ID ? {} : { folderId }),
+    ...(problem.line === undefined ? {} : { line: problem.line }),
+    message: `Pre-aggregation ${problem.preAggregation} names what the model doesn’t have: ${problem.unknown
+      .map(({ list, name }) => `${name} (${list})`)
+      .join(', ')}. Cube compiles it, then fails queries on ${problem.cube}.`,
+    preAggregation: {
+      cube: problem.cube,
+      name: problem.preAggregation,
+      unknown: problem.unknown,
+    },
+  };
 }
 
 export function registerModelPublishing(
@@ -108,6 +148,8 @@ export function registerModelPublishing(
     afterPublish,
     xcube,
     refusalIn,
+    folders,
+    beforeFolderPublish,
   }: {
     config: Config;
     client: CubeClient;
@@ -136,6 +178,10 @@ export function registerModelPublishing(
       request: FastifyRequest,
       folderId: string,
     ) => Promise<{ status: number; body: unknown } | undefined>;
+    /** The folders xcube's tree holds (T452); the root alone where not given. */
+    folders?: () => Promise<PublishedFolders>;
+    /** The tree put to xcube, before a publish into a folder other than the root (T452). */
+    beforeFolderPublish?: () => Promise<unknown>;
   },
 ): void {
   /**
@@ -151,13 +197,14 @@ export function registerModelPublishing(
       typeof body?.folderId === 'string' && body.folderId !== '' ? body.folderId : ROOT_FOLDER_ID;
     const refusal = await refusalIn?.(request, folderId);
     if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
-    // Each item in a folder is named `<folderId>__<name>` in xcube (AC-328), and
-    // sending one there is T341's. Until then only the root's are published:
-    // another folder's file sent as the root's would take a root name.
-    if (folderId !== ROOT_FOLDER_ID)
+    // Published as the folder's items, under its xcube id (T452, AC-328). A
+    // folder xcube's tree doesn't hold (a workspace's, until slice 5) is
+    // served by none, so nothing is published into it.
+    const served = (await folders?.()) ?? ROOT_ONLY;
+    if (!served.ids.has(folderId))
       return reply.status(409).send({
         error:
-          'Models in a folder other than the root can’t be published yet: only the root’s are.',
+          'This folder isn’t one xcube serves (a workspace’s, say), so its models can’t be published.',
       });
     const files = Array.isArray(body?.files) ? (body.files as unknown[]) : [];
     const changed = files
@@ -170,7 +217,10 @@ export function registerModelPublishing(
       )
       // Each in the folder checked above, whatever a file says of its own
       // (T334's review): its path and text, and nothing else it was sent with.
-      .map(({ path, content }): ModelFile => ({ path, content }));
+      // In the folder published to (T452); a root file names none, as before.
+      .map(({ path, content }): ModelFile =>
+        folderId === ROOT_FOLDER_ID ? { path, content } : { folderId, path, content },
+      );
     // Only YAML models are published: code in any other form runs where
     // Cube's secrets are (R28; AC-332).
     for (const file of files) {
@@ -211,31 +261,46 @@ export function registerModelPublishing(
             : 'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_XCUBE_ADMIN_TOKEN), so a change could not be checked or served.',
       });
 
-    const live = await modelFiles.list();
+    // The whole model, every folder's files (T452), and this folder's own.
+    const live = (await modelFiles.all?.()) ?? (await modelFiles.list());
+    const inFolder = live.filter((file) => (file.folderId ?? ROOT_FOLDER_ID) === folderId);
     // Files generated from a data source are new ones: never over what the
-    // store has, file or name (T276, AC-249), whatever the browser checked.
+    // folder has, file or name (T276, AC-249), whatever the browser checked.
     if (body?.create === true) {
-      // Cube's model names the cubes of files not read here as YAML; asked
-      // as wechart asks it everything, and without it the files alone decide.
-      const compiled = await client.metaExtended().then(compiledIn, (error: unknown) => {
-        app.log.warn({ err: error }, 'could not read Cube’s model to check generated names');
-        return [];
-      });
-      const clashes = clashesOf(changed, live, compiled);
+      // Cube's model names the cubes of files not read here as YAML, which
+      // only the root holds; asked as wechart asks it everything, and
+      // without it the files alone decide.
+      const compiled =
+        folderId === ROOT_FOLDER_ID
+          ? await client.metaExtended().then(compiledIn, (error: unknown) => {
+              app.log.warn({ err: error }, 'could not read Cube’s model to check generated names');
+              return [];
+            })
+          : [];
+      const clashes = clashesOf(changed, inFolder, compiled);
       if (clashes.length > 0) return reply.status(422).send({ errors: clashes });
     }
-    // A name another file declares: one item each (T426's review).
-    const redeclared = redeclaredIn(changed, live);
+    // A name another file in the folder declares: one item each (T426's
+    // review), and free in another folder (AC-271, T452).
+    const redeclared = redeclaredIn(changed, inFolder);
     if (redeclared.length > 0) return reply.status(422).send({ errors: redeclared });
     const paths = new Set(changed.map((file) => file.path));
-    const overTemplate = live.find((file) => paths.has(file.path) && JINJA.test(file.content));
+    const overTemplate = inFolder.find((file) => paths.has(file.path) && JINJA.test(file.content));
     if (overTemplate !== undefined)
       return reply.status(409).send({
         error: `${overTemplate.path} is a Jinja template, and templates are read-only here.`,
       });
-    const draft = [...live.filter((file) => !paths.has(file.path)), ...changed].sort((a, b) =>
+    const replaced = (file: ModelFile) =>
+      (file.folderId ?? ROOT_FOLDER_ID) === folderId && paths.has(file.path);
+    const draft = [...live.filter((file) => !replaced(file)), ...changed].sort((a, b) =>
       a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
     );
+    // A folder's cubes join cubes in the folders above it: xcube needs the
+    // tree it holds to have this folder, made a moment ago or not.
+    if (folderId !== ROOT_FOLDER_ID)
+      await beforeFolderPublish?.().catch((error: unknown) => {
+        app.log.warn({ err: error }, 'could not put the folder tree to xcube before a publish');
+      });
     /** The change, checked: written, sent to xcube, and seen at once. */
     const commit = async (changeset?: Changeset) => {
       await modelFiles.write(changed);
@@ -259,6 +324,7 @@ export function registerModelPublishing(
       draft,
       changed,
       live,
+      folders: served.ids,
       securityContext: config.securityContext,
       log: (error) => {
         app.log.warn({ err: error }, 'could not ask xcube to check the model');
@@ -266,7 +332,7 @@ export function registerModelPublishing(
     });
     if (checked.kind === 'unreachable') return reply.status(502).send({ error: checked.error });
     if (checked.kind === 'invalid') return reply.status(422).send({ errors: checked.errors });
-    const unknown = unknownInRollups(draft);
+    const unknown = unknownInRollups(draft, served);
     if (unknown.length > 0) return reply.status(422).send({ errors: unknown });
     // Crons Cube's refresh worker can't run, in the files being changed (T258, AC-153).
     const crons = refreshKeyProblemsOf(changed);
