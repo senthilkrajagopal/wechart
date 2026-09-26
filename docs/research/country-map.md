@@ -291,6 +291,7 @@ visualMap: {
   - `getAlpha3Codes(): { [alpha3Key: string]: string }` and `isValid(alpha2orAlpha3orNumeric)` ([index.d.ts](https://unpkg.com/i18n-iso-countries@7.14.0/index.d.ts)). `isValid` also accepts alpha-2 and numeric, so test `^[A-Z]{3}$` plus membership in `getAlpha3Codes()`, not `isValid`.
   - Browsers must `registerLocale()` a locale file for names (`langs/en.json` is 6,734 B) ([README](https://github.com/michaelwittig/node-i18n-iso-countries); [unpkg meta](https://unpkg.com/i18n-iso-countries@7.14.0/?meta)).
   - `codes.json` is 10,253 B (same meta). UNVERIFIED: its exact entry count; a WebFetch summary said 249, with a Kosovo entry appended.
+  - *VERIFIED at T397 (2026-09-25):* fetched from unpkg, it has 250 entries, each `[alpha2, alpha3, numeric, subdivision]`: the 249 ISO codes plus Kosovo's user-assigned `XK`/`XKK`. `packages/core/src/geo/iso3.ts` vendors the 249 alpha-3 codes as a literal set (no dependency), and T397's review checked them against the official ISO list.
 - **Alternative: UN M49.** The UNSD page lists every area with its "ISO-alpha3 code" ([UNSD M49](https://unstats.un.org/unsd/methodology/m49/)). It could be vendored instead.
 - **User-assigned ranges.** "AAA to AAZ, QMA to QZZ, XAA to XZZ, and ZZA to ZZZ" (secondary: [Wikipedia](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-3)).
 
@@ -361,6 +362,7 @@ const unplaced = codes.filter((c) => !(typeof c === 'string' && placeable.has(c)
 2. **Visibility of tiny polygons.** Are sub-pixel polygons at the smallest tile size "coloured" for AC-305's Fails-when? This needs a rendered check, and possibly a marker rule.
 3. **Projection.** Equal-area (Equal Earth via d3-geo 3.1.1) or ECharts' default lon/lat with `aspectScale` 0.75. This is a design decision for ui-design.
 4. **How "holds ISO-3 codes" is decided.** Options: a `meta` key and its name, a value-check threshold, and whether name heuristics count. For the user and the spec.
+   - *Settled:* the user's R22 chose "values, plus a model override" (AC-313). T397 took, as a small decision for the user to confirm, the key `meta.wechart.countryCode` (true / false / absent) under a `wechart` namespace, every non-empty value an exact, upper-case code, and no name heuristics.
 5. **Normalisation and aliases.** Whether lower-case or padded codes are normalised. Whether Kosovo aliases (`XKX`/`XKK`/`KOS`) are placed. How null or empty codes are named.
 6. **Scale design.** Continuous vs classed (equal-interval or quantile). Whether the extent comes from placed rows only or all rows. What to do with negative values (a diverging scale; direction.md has one).
 7. **The "no data" colour and legend.** direction.md's null neutral is `#b3b1ab` light / `#5c5b57` dark ([direction.md §5](/Users/srajagopal/Work/wechart/docs/design/direction.md)). Its distinguishability from the pale ramp end `#cde2fb` is not measured. Does the legend need a "No data" swatch? The visualMap has none.

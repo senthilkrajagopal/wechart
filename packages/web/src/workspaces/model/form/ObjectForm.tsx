@@ -1,3 +1,4 @@
+import { countryCodeMarkingOf } from '@wechart/core';
 import { useContext, useId, useState, type ReactNode } from 'react';
 import { parse, stringify } from 'yaml';
 
@@ -471,6 +472,44 @@ function FieldRow({
   );
 }
 
+/**
+ * Whether a string dimension holds ISO-3 country codes (T397, AC-313): by its
+ * values unless the model says, which it does in `meta.wechart.countryCode`,
+ * a key of wechart's that Cube passes through untouched. Set here so the
+ * author needn't write the YAML; everything else in `meta` is kept.
+ */
+function CountryCodeRow({ value, onChange }: { value: Value; onChange: (next: Value) => void }) {
+  const id = useId();
+  const marking = countryCodeMarkingOf(value['meta']);
+  const mark = (next: boolean | undefined) => {
+    const meta: Value = isPlain(value['meta']) ? { ...value['meta'] } : {};
+    const wechart: Value = isPlain(meta['wechart']) ? { ...meta['wechart'] } : {};
+    if (next === undefined) delete wechart['countryCode'];
+    else wechart['countryCode'] = next;
+    if (Object.keys(wechart).length === 0) delete meta['wechart'];
+    else meta['wechart'] = wechart;
+    onChange(write(value, 'meta', Object.keys(meta).length === 0 ? undefined : meta));
+  };
+  return (
+    // wechart's own setting, not a key of Cube's: marked apart from `data-key`.
+    <div className="field model-field" data-setting="country-code">
+      <label htmlFor={id}>Country code</label>
+      <select
+        id={id}
+        value={marking === undefined ? '' : String(marking)}
+        onChange={(event) => {
+          const chosen = event.target.value;
+          mark(chosen === '' ? undefined : chosen === 'true');
+        }}
+      >
+        <option value="">Decided by its values (ISO-3 codes)</option>
+        <option value="true">A country code</option>
+        <option value="false">Not a country code</option>
+      </select>
+    </div>
+  );
+}
+
 /** Every field of an object, its legacy keys set apart in a group of their own. */
 export function ObjectForm({
   schema,
@@ -496,13 +535,20 @@ export function ObjectForm({
     if (field.group !== undefined)
       groups.set(field.group, [...(groups.get(field.group) ?? []), field]);
   const ungrouped = current.filter((field) => field.group === undefined);
+  // A string dimension's country-code marking sits in Geography (T397).
+  const countryCode = schema === SCHEMA['Y.6'] && value['type'] === 'string' && only === undefined;
+  // Groups in the order the schema names them, Geography included for that.
+  const shown = [...new Set(schema.fields.map((field) => field.group))]
+    .filter((name): name is string => name !== undefined)
+    .filter((name) => groups.has(name) || (name === 'Geography' && countryCode))
+    .map((name) => [name, groups.get(name) ?? []] as const);
   const id = useId();
   return (
     <div className="model-form__fields">
       {ungrouped.map((field) => (
         <FieldRow key={field.key} field={field} value={value} onChange={onChange} />
       ))}
-      {[...groups.entries()].map(([name, inside]) => (
+      {shown.map(([name, inside]) => (
         // Named by its title, said once; not a heading, in a pane headed by the file.
         <section
           key={name}
@@ -517,6 +563,9 @@ export function ObjectForm({
             {inside.map((field) => (
               <FieldRow key={field.key} field={field} value={value} onChange={onChange} />
             ))}
+            {name === 'Geography' && countryCode ? (
+              <CountryCodeRow value={value} onChange={onChange} />
+            ) : null}
           </div>
         </section>
       ))}

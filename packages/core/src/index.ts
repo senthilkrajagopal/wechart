@@ -195,6 +195,7 @@ export {
 export { folderRights, isSuperAdmin, type FolderRight, type Viewer } from './access/visibility';
 
 export { boxStats, quantile7, type BoxStats, type WhiskerRule } from './stats/boxplot';
+export { countryCodeMarkingOf, holdsCountryCodes, ISO_3166_ALPHA_3 } from './geo/iso3';
 
 export {
   DRIVER_TYPES,

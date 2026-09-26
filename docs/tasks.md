@@ -5528,11 +5528,19 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/web/src/shell/AppShell.tsx`, `e2e/shell.spec.ts`
   - Failing test: `shell.spec.ts`: at 390 pixels wide no page scrolls sideways, and navigation and search are in a menu (AC-304).
   - Depends on: none
-- [ ] T397 [P] (AC-313) Detect ISO-3 country codes, with the model's marking overriding
+- [x] T397 [P] (AC-313) Detect ISO-3 country codes, with the model's marking overriding
   - Files: `packages/core/src/geo/iso3.ts` (+ test; the ISO 3166-1 alpha-3 list, per `research/country-map.md`), `packages/web/src/workspaces/model/form/*` (a "Country code" setting on a dimension, written as its `meta`)
   - Failing test: `iso3.test.ts`: a dimension whose non-empty values are all ISO-3 codes counts; one marked as a country code counts whatever its values; one marked "not a country code" never does (AC-313).
   - Depends on: none
-- [ ] T398 (AC-305) Draw a country map on Natural Earth 1:50m boundaries, with a legend, and name the codes it can't place
+  - **Done 2026-09-25.**
+    - `core/geo/iso3.ts` holds the 249 ISO 3166-1 alpha-3 codes: i18n-iso-countries 7.14.0's list, fetched and vendored, less Kosovo's user-assigned `XKK`.
+    - `holdsCountryCodes(values, marking)`: the model's marking wins; unmarked, every non-empty value must be an exact, upper-case code, and there must be one.
+    - **Decision (small, for the user to confirm):** the marking lives in the dimension's `meta` as `wechart.countryCode`, true or false; absent means decided by the values. research/country-map.md left the key's name open.
+    - The model form offers it on a string dimension, under Geography, as "Country code" with three choices. It keeps the rest of `meta` and removes what it empties. It is marked `data-setting`, not `data-key`: it isn't one of Cube's keys.
+    - The cold review (PASS) led to more form tests, a check of the list against ISO's user-assigned ranges, the research's count verified, and AC-313 moved to T398.
+    - For T398: whether a marking left on a dimension whose type changed from string still counts; whether lower-case or padded codes are normalised (research open question 5).
+    - AC-313 stays open: its failing state is about the map being offered, which is T398's.
+- [ ] T398 (AC-305, AC-313) Draw a country map on Natural Earth 1:50m boundaries, with a legend, and name the codes it can't place
   - Files: `packages/charts/src/geo/{countries-50m.geo.json,countryMap.ts}` (the slim file derived from Natural Earth v5.1.2, keyed `ISO_A3`, then `ISO_A3_EH`), `packages/charts/package.json` (d3-geo 3.1.1), `packages/charts/src/series/map.ts` (+ test), `packages/charts/src/echarts.ts` (`MapChart`), `packages/core/src/render-spec.ts` (`map`), `packages/core/src/topN.ts` (the map is excluded), `packages/recommender/src/*` (offered per AC-313), `packages/web/src/tiles/UnplacedCodes.tsx`, `e2e/country-map.spec.ts`
   - Failing test: `map.test.ts`: every code in the data, SGP, FRA and NOR included, is filled from the sequential ramp; the legend shows the range and "No data"; `country-map.spec.ts`: an unplaced code is named under the map (AC-305; rules 86–87).
   - Depends on: T397
@@ -5643,5 +5651,5 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
 | AC-305 | T398 | AC-306 | T399 | AC-307 | T409 |
 | AC-308 | T410 | AC-309 | T337 | AC-310 | T338 |
-| AC-311 | T333 | AC-312 | T335 | AC-313 | T397 |
+| AC-311 | T333 | AC-312 | T335 | AC-313 | T397, T398 |
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
