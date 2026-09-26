@@ -209,8 +209,8 @@ describe('browsing a data source through wechart (AC-139)', () => {
     await app.close();
   });
 
-  /** Research, "Errors": the fork lets the queue's wait escape as a 500, not the documented 200. */
-  it('asks again when the wait comes back as the 500 the fork answers it with', async () => {
+  /** Research, "Errors": an earlier build of the fork let the queue's wait escape as a 500, not the documented 200. */
+  it('asks again when the wait comes back as the 500 an earlier fork build answered it with', async () => {
     let asked = 0;
     const { app } = cubeAnswering(() => {
       asked += 1;

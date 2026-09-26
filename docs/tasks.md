@@ -5683,7 +5683,10 @@ The user's Cube fork moved the introspection API out of Cube's own packages into
   - Depends on: T413
   - **Done 2026-09-25.** The test failed on the old tag, then passed.
     - **The upgrade.** `IMAGE_TAG=0a798d3 deploy/helm/verify.sh` upgraded the release (security off, as it was) to wechart's images at 0a798d3 and Cube at the new tag, with no command set, as uid 1000 on a read-only root filesystem.
-    - **A race on the first run.** Every check passed but step 4: `/api/cube-health` said `"cube":"down"`, because the new Cube pod was still starting after the rollout (the events show its first readiness probe refused). Run again on the settled release, every check passed, the 830-row count of northwind's `orders` included. Recorded as a known flake of `verify.sh` right after an upgrade that replaces the Cube pods.
+    - **A flake on the first run.** Every check passed but step 4: `/api/cube-health` said `"cube":"down"`. Run again on the settled release, every check passed, the 830-row count of northwind's `orders` included.
+      - The cause is unconfirmed. It wasn't readiness: `helm upgrade --wait` had already seen the new pod Ready.
+      - `/api/cube-health` asks both `/readyz` and `/livez`, each with a 3 s deadline (`cube/health.ts`). A fresh instance's first `/livez` outlasting that is a guess, not shown.
+      - Recorded as a known flake of `verify.sh` right after an upgrade that replaces the Cube pods (T414's review).
     - **The introspection routes on the cluster.** Through the release's API at http://localhost:8089, northwind's data source, its schemas (`analytics`, `public`) and its tables listed. A scaffold of `categories` and `products` returned both cubes, with `products`' six unmapped columns named. This is the first Helm release on the package's image, which the research listed as unverified (its open question 5).
 - [x] T415 (AC-248) Say how to build the image from the package
   - Files: `docs/deploy.md`, `packages/api/src/model/introspection.ts` (a comment that describes the old image), `packages/api/src/deploy/cube-image.test.ts`
