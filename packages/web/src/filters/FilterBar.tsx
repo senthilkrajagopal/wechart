@@ -3,6 +3,8 @@ import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from
 
 import type { DashboardDocument } from '../dashboard/model/document';
 import { cubesFrom, membersOf, type Member } from '../editor/fields';
+import { cubesOnPath } from '../editor/pathCubes';
+import { FOLDERS_QUERY } from '../workspaces/explore/folders';
 import { loadTile } from '../query/loadTile';
 import { META_QUERY } from '../query/meta';
 import { SecurityPreview } from '../query/securityPreview';
@@ -192,6 +194,17 @@ function Filters({
 }: FilterBarProps) {
   const meta = useQuery(META_QUERY);
   const members = useMemo(() => allMembers(meta.data), [meta.data]);
+  // What a filter picks from: the members of the cubes on the dashboard's
+  // folder path, by cube, each cube with its folder path (T429, AC-329).
+  const folders = useQuery({ ...FOLDERS_QUERY, enabled: dashboard.folderId !== undefined });
+  const pickable = useMemo(
+    () =>
+      cubesOnPath(cubesFrom(meta.data), dashboard.folderId, folders.data ?? []).map((cube) => ({
+        label: cube.folderPath === undefined ? cube.title : `${cube.title} · ${cube.folderPath}`,
+        members: membersOf(meta.data, cube.name),
+      })),
+    [meta.data, dashboard.folderId, folders.data],
+  );
 
   /**
    * Which filter's popover is open. Unset, the newest filter still without a
@@ -355,11 +368,18 @@ function Filters({
                       }}
                     >
                       <option value="">{kind?.label ?? 'Filter'}: choose a field…</option>
-                      {membersFor(filter.widget, members).map((candidate) => (
-                        <option key={candidate.name} value={candidate.name}>
-                          {candidate.title}
-                        </option>
-                      ))}
+                      {pickable.map(({ label, members: ofCube }) => {
+                        const fitting = membersFor(filter.widget, ofCube);
+                        return fitting.length === 0 ? null : (
+                          <optgroup key={label} label={label}>
+                            {fitting.map((candidate) => (
+                              <option key={candidate.name} value={candidate.name}>
+                                {candidate.title}
+                              </option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
                     </select>
                     <ScopeEditor
                       filter={filter}

@@ -23,6 +23,8 @@ export interface ChartEditorOverlayProps {
   readonly dashboardTitle: string;
   /** The dashboard it is opened over, counted among a shared chart's users (T134). */
   readonly dashboardId?: string | undefined;
+  /** The dashboard's folder: a local chart's, whose cubes the picker offers by (T429). */
+  readonly dashboardFolderId?: string | undefined;
   /** The tile it was opened from, as measured on the dashboard. */
   readonly tile: TileSize | undefined;
   /** This chart's draft from earlier in the session, if it has one. */
@@ -87,6 +89,7 @@ export function ChartEditorOverlay({
   chartId,
   dashboardTitle,
   dashboardId = '',
+  dashboardFolderId,
   tile,
   draft,
   onBack,
@@ -417,6 +420,12 @@ export function ChartEditorOverlay({
             onChange={onChange}
             busy={applying}
             head={{ start: backControl, badges: ownership, end: saveControls }}
+            // A library chart's own folder; a local chart's, its dashboard's (T429).
+            folderId={
+              opened?.document.localToDashboardId === undefined
+                ? opened?.document.folderId
+                : dashboardFolderId
+            }
           />
         </div>
       ) : (

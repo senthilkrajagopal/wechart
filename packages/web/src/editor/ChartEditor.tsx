@@ -167,6 +167,11 @@ export interface ChartEditorProps {
    * while the header — what says so, and the way out — stays live.
    */
   readonly busy?: boolean;
+  /**
+   * The folder the chart is kept in (a local chart's, its dashboard's): the
+   * picker offers the cubes on its path (T429, AC-329).
+   */
+  readonly folderId?: string | undefined;
 }
 
 /** The inspector's tabs (AC-214, the prototype's Data and Customize). */
@@ -182,6 +187,7 @@ export function ChartEditor({
   onChange,
   head,
   busy = false,
+  folderId,
 }: ChartEditorProps = {}) {
   const [history, setHistory] = useState(() => historyOf(initial));
   const { cubeName, spec, chartType: chartTypeState, options, title } = history.present;
@@ -572,6 +578,7 @@ export function ChartEditor({
       <aside className="chart-editor__fields" aria-label="Fields" inert={busy} aria-busy={busy}>
         <FieldList
           cubeName={cubeName}
+          folderId={folderId}
           onDragStateChange={setDragging}
           used={used}
           // Into the well its role belongs in (AC-215).

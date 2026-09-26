@@ -342,6 +342,18 @@ function ChartEditorSurface() {
 
   const owner = chart.data?.document.localToDashboardId;
   const local = owner !== undefined;
+  // A dashboard's own chart is kept in its dashboard's folder: the picker
+  // offers the cubes on that folder's path (T429's review, AC-329).
+  const ownerFolder = useQuery({
+    queryKey: ['documents', 'dashboard', owner, 'folder'],
+    queryFn: async () => {
+      const response = await fetch(`/api/documents/dashboard/${encodeURIComponent(owner ?? '')}`);
+      if (!response.ok) throw new Error(`Request failed: ${String(response.status)}`);
+      const { body } = (await response.json()) as { body?: { folderId?: unknown } };
+      return typeof body?.folderId === 'string' ? body.folderId : null;
+    },
+    enabled: local,
+  });
   // New only as New › Chart opens it (T256's review): a saved chart with no
   // fields yet is not new, and may already be on dashboards.
   const fresh = chartEditorRoute.useSearch().new === true && !local;
@@ -394,6 +406,9 @@ function ChartEditorSurface() {
           key={chartId}
           initial={view.initial}
           onChange={setEdited}
+          // Its folder's path, for the picker (T429, AC-329): a local chart's
+          // is its dashboard's.
+          folderId={local ? (ownerFolder.data ?? undefined) : folderId}
           // An edit made while it is written would be lost as the page goes.
           busy={leaving}
           head={{

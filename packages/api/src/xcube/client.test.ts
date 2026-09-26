@@ -261,4 +261,67 @@ describe('xcube’s answers (T419, AC-333)', () => {
       XcubeError,
     );
   });
+
+  // T429, AC-272 (research 3a, "POST …/resolve", "GET …/items").
+  it('resolves names nearest first from a folder, each to its full name or none', async () => {
+    const asked: unknown[] = [];
+    const admin = xcubeAdmin({
+      cubeApiUrl: 'http://cube.invalid/cubejs-api',
+      model: 'dev',
+      token: 'x'.repeat(40),
+      fetch: async (_input, init) => {
+        asked.push(JSON.parse(String(init?.body)));
+        return new Response(
+          JSON.stringify({
+            model: 'dev',
+            revision: 4,
+            folderId: 'fsales',
+            names: { sales: 'fsales__sales', orders: 'orders', nothing: null },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      },
+    });
+
+    expect(await admin.resolve('fsales', ['sales', 'orders', 'nothing'])).toEqual(
+      new Map([
+        ['sales', 'fsales__sales'],
+        ['orders', 'orders'],
+        ['nothing', null],
+      ]),
+    );
+    expect(asked).toEqual([{ folderId: 'fsales', names: ['sales', 'orders', 'nothing'] }]);
+    await expect(
+      answering(400, {
+        error: 'Folder fnope is not in the folder tree',
+        code: 'invalid_folders',
+      }).resolve('fnope', ['sales']),
+    ).rejects.toBeInstanceOf(XcubeError);
+  });
+
+  it('reads each item with its full name and the bindings it was published with', async () => {
+    const items = await answering(200, {
+      model: 'dev',
+      revision: 4,
+      mode: 'items',
+      items: [
+        {
+          folderId: 'fsales',
+          name: 'sales',
+          kind: 'cube',
+          fullName: 'fsales__sales',
+          bindings: { sales: 'fsales__sales', customers: 'customers' },
+        },
+      ],
+    }).items();
+
+    expect(items).toEqual([
+      {
+        folderId: 'fsales',
+        name: 'sales',
+        fullName: 'fsales__sales',
+        bindings: { sales: 'fsales__sales', customers: 'customers' },
+      },
+    ]);
+  });
 });

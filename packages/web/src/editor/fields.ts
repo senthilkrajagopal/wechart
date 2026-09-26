@@ -32,6 +32,14 @@ export interface CubeSummary {
   /** Cube distinguishes a cube from a view; the editor shows both. */
   readonly isView: boolean;
   readonly description?: string;
+  /**
+   * Where xcube published it, and its name there (`meta.xcube`, research
+   * `xcube-slice-3a.md`): its folder's xcube id, and its short name. Absent
+   * where the model says nothing of folders.
+   */
+  readonly xcube?: { readonly folderId: string; readonly shortName: string };
+  /** The folders from the root to its own, for the picker (T429, AC-329). */
+  readonly folderPath?: string;
 }
 
 interface RawMember {
@@ -52,6 +60,7 @@ interface RawCube {
   isVisible?: boolean;
   public?: boolean;
   description?: string;
+  meta?: { xcube?: { folderId?: unknown; shortName?: unknown } };
   measures?: RawMember[];
   dimensions?: RawMember[];
   segments?: RawMember[];
@@ -69,12 +78,18 @@ function isShown(member: RawMember | RawCube): boolean {
 export function cubesFrom(meta: unknown): CubeSummary[] {
   const cubes = (meta as { cubes?: RawCube[] } | null)?.cubes ?? [];
 
-  return cubes.filter(isShown).map((cube) => ({
-    name: cube.name ?? '',
-    title: cube.title ?? cube.name ?? '',
-    isView: cube.type === 'view',
-    ...(cube.description === undefined ? {} : { description: cube.description }),
-  }));
+  return cubes.filter(isShown).map((cube) => {
+    const xcube = cube.meta?.xcube;
+    return {
+      name: cube.name ?? '',
+      title: cube.title ?? cube.name ?? '',
+      isView: cube.type === 'view',
+      ...(cube.description === undefined ? {} : { description: cube.description }),
+      ...(typeof xcube?.folderId === 'string' && typeof xcube.shortName === 'string'
+        ? { xcube: { folderId: xcube.folderId, shortName: xcube.shortName } }
+        : {}),
+    };
+  });
 }
 
 export function membersOf(meta: unknown, cubeName: string): Member[] {

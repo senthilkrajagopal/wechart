@@ -55,6 +55,8 @@ export interface FolderNode {
   readonly parentId: string | null;
   /** Its dashboards and charts, including those in its subfolders (AC-194). */
   readonly itemCount: number;
+  /** Its id in xcube (T425), which names its items; none until it has one (T429, AC-329). */
+  readonly xcubeId: string | null;
 }
 
 /** The folder a document sits in when it sits at the top of the shared tree. */
@@ -129,9 +131,15 @@ export function catalog(db: Kysely<Database>) {
     async folders({ counted = true }: { counted?: boolean } = {}): Promise<FolderNode[]> {
       const rows = await db
         .selectFrom('documents')
-        .select(['id', 'title', 'folder_id'])
-        .where('kind', '=', 'folder')
-        .orderBy('title', 'asc')
+        .leftJoin('folder_xcube_ids', 'folder_xcube_ids.folder_id', 'documents.id')
+        .select([
+          'documents.id',
+          'documents.title',
+          'documents.folder_id',
+          'folder_xcube_ids.xcube_id',
+        ])
+        .where('documents.kind', '=', 'folder')
+        .orderBy('documents.title', 'asc')
         .execute();
 
       // Each with its items, its subfolders' included (AC-194).
@@ -143,6 +151,7 @@ export function catalog(db: Kysely<Database>) {
         title: row.title ?? '(untitled)',
         parentId: row.folder_id,
         itemCount: counts.get(row.id) ?? 0,
+        xcubeId: row.xcube_id,
       }));
     },
 

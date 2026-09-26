@@ -4705,6 +4705,7 @@ export function DashboardView({
               chartId={editingChart.chartId}
               dashboardTitle={session.document.title}
               dashboardId={dashboardId}
+              dashboardFolderId={document.folderId}
               tile={editingChart.tile}
               draft={session.document.chartDrafts?.[editingChart.chartId]}
               // The browser's Back takes the tile out of the URL; the editor

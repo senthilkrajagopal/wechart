@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { META_QUERY } from '../query/meta';
+import { FOLDERS_QUERY } from '../workspaces/explore/folders';
+import { cubesOnPath } from './pathCubes';
 import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
 import { StateLine } from '../shell/StatusIcon';
 import {
@@ -11,6 +13,7 @@ import {
   groupByCube,
   matchesSearch,
   membersOf,
+  type CubeSummary,
   type Member,
 } from './fields';
 
@@ -79,9 +82,40 @@ export interface FieldListProps {
   readonly used?: ReadonlySet<string>;
   /** A field clicked, or chosen with Enter or Space: into its role's well (AC-215). */
   readonly onAdd?: (member: Member) => void;
+  /**
+   * The folder the chart is kept in (a local chart's, its dashboard's): the
+   * cubes offered are those on its path, each with its folder path (T429,
+   * AC-329). Every cube where it isn't known.
+   */
+  readonly folderId?: string | undefined;
 }
 
 const NONE_USED: ReadonlySet<string> = new Set();
+
+/** A cube in the picker: its title, and "(view)" for a view. */
+const optionOf = (cube: CubeSummary) => (
+  <option key={cube.name} value={cube.name}>
+    {cube.title}
+    {cube.isView ? ' (view)' : ''}
+  </option>
+);
+
+/**
+ * The picker's cubes by their folder path (T429, AC-329): the root's first,
+ * then each folder down the path; those with no path, as they come.
+ */
+function groupedByPath(
+  cubes: readonly CubeSummary[],
+): { path: string | undefined; cubes: CubeSummary[] }[] {
+  const groups: { path: string | undefined; cubes: CubeSummary[] }[] = [];
+  for (const cube of cubes) {
+    const group = groups.find((each) => each.path === cube.folderPath);
+    if (group === undefined) groups.push({ path: cube.folderPath, cubes: [cube] });
+    else group.cubes.push(cube);
+  }
+  const depth = (path: string | undefined) => (path === undefined ? -1 : path.split(' / ').length);
+  return groups.sort((a, b) => depth(a.path) - depth(b.path));
+}
 
 export function FieldList({
   cubeName: controlled,
@@ -89,6 +123,7 @@ export function FieldList({
   onDragStateChange,
   used = NONE_USED,
   onAdd,
+  folderId,
 }: FieldListProps = {}) {
   const [search, setSearch] = useState('');
   const [own, setOwn] = useState('');
@@ -105,6 +140,8 @@ export function FieldList({
   // this tab or another — is in its field list (AC-137; research/
   // data-layer.md, "Refetch on mount"). wechart's own cache answers it.
   const meta = useQuery({ ...META_QUERY, refetchOnMount: 'always' });
+  // The folders, for the path the picker offers (T429, AC-329).
+  const folders = useQuery({ ...FOLDERS_QUERY, enabled: folderId !== undefined });
 
   if (meta.isPending) return <StateLine kind="run">Loading the model…</StateLine>;
   if (meta.isError) {
@@ -118,6 +155,12 @@ export function FieldList({
   }
 
   const cubes = cubesFrom(meta.data);
+  // Only those on the chart's folder path, each name's nearest (AC-329); the
+  // chart's own cube too, so the picker still says what it is built on.
+  const onPath = cubesOnPath(cubes, folderId, folders.data ?? []);
+  const offered = onPath.some((cube) => cube.name === cubeName)
+    ? onPath
+    : [...onPath, ...cubes.filter((cube) => cube.name === cubeName)];
   /**
    * A cube as a reader knows it: its title, or — for one the model does not
    * publish, whose members a view shows — its name written as words, never
@@ -141,12 +184,17 @@ export function FieldList({
           onChange={(event) => setCubeName(event.target.value)}
         >
           <option value="">Choose a cube or view…</option>
-          {cubes.map((cube) => (
-            <option key={cube.name} value={cube.name}>
-              {cube.title}
-              {cube.isView ? ' (view)' : ''}
-            </option>
-          ))}
+          {/* Each by its title under its folder path, never its prefixed
+              name (AC-329): the root's first, then down the path. */}
+          {groupedByPath(offered).map(({ path, cubes: inPath }) =>
+            path === undefined ? (
+              inPath.map((cube) => optionOf(cube))
+            ) : (
+              <optgroup key={path} label={path}>
+                {inPath.map((cube) => optionOf(cube))}
+              </optgroup>
+            ),
+          )}
         </select>
       </div>
 

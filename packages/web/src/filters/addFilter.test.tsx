@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -292,4 +292,78 @@ it('a value stays with the field it was chosen on, through Undo', async () => {
       .getAllByRole('checkbox')
       .filter((box) => box.matches(':checked')),
   ).toHaveLength(0);
+});
+
+/**
+ * T429, AC-329, a dashboard's half: a filter picks from the cubes on the
+ * dashboard's folder path alone, each cube's members under its title and
+ * folder path — never a sibling folder's cube.
+ */
+describe('a filter’s fields on a dashboard in a folder (T429)', () => {
+  const xcubeCube = (folderId: string, shortName: string, title: string) => ({
+    name: folderId === 'froot' ? shortName : `${folderId}__${shortName}`,
+    title,
+    meta: { xcube: { folderId, shortName } },
+    measures: [],
+    dimensions: [
+      {
+        name: `${folderId === 'froot' ? shortName : `${folderId}__${shortName}`}.status`,
+        title: 'Status',
+        type: 'string',
+      },
+    ],
+  });
+
+  it('offers the members of the cubes on the dashboard’s path, by cube and folder path', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === '/api/meta')
+          return new Response(
+            JSON.stringify({
+              cubes: [
+                xcubeCube('froot', 'orders', 'Orders'),
+                xcubeCube('fa', 'sales', 'Sales'),
+                xcubeCube('fb', 'widgets', 'Widgets'),
+              ],
+            }),
+          );
+        if (url === '/api/folders')
+          return new Response(
+            JSON.stringify([
+              { id: 'a', title: 'A', parentId: 'root', xcubeId: 'fa' },
+              { id: 'b', title: 'B', parentId: 'root', xcubeId: 'fb' },
+            ]),
+          );
+        return new Response('{}', { status: 404 });
+      }),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <DashboardView
+          dashboardId="d1"
+          document={{ ...DOC, folderId: 'a' }}
+          specs={{}}
+          onSave={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await addFilter('List with search');
+
+    const select = within(bar()).getByLabelText('Filter on');
+    await waitFor(() => expect(select.querySelectorAll('optgroup')).toHaveLength(2));
+    expect(
+      [...select.querySelectorAll('optgroup')].map((group) => ({
+        label: group.label,
+        options: [...group.querySelectorAll('option')].map((option) => option.value),
+      })),
+    ).toEqual([
+      { label: 'Orders · Shared', options: ['orders.status'] },
+      { label: 'Sales · Shared / A', options: ['fa__sales.status'] },
+    ]);
+  });
 });

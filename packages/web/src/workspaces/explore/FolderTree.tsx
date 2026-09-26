@@ -16,6 +16,8 @@ export interface FolderNode {
   readonly parentId: string | null;
   /** Its dashboards and charts, including its subfolders' (AC-194). */
   readonly itemCount?: number;
+  /** Its id in xcube, which names its items (T429, AC-328); none until it has one. */
+  readonly xcubeId?: string | null;
 }
 
 export interface FolderTreeProps {

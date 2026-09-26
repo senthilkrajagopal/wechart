@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import { parse as parseYaml } from 'yaml';
+
 import type { ModelFile } from '../server';
 import type { ItemError } from './client';
 import { treeHashOf, type TreeFolder } from './folders';
@@ -101,6 +103,58 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     return made;
   };
   const headOf = (model: string) => models.get(model)?.revisions.at(-1);
+  /** Bindings held as recorded, by `<model>/<fullName>` (`holdItems`). */
+  const recorded = new Map<string, Record<string, string>>();
+
+  /** An item's full name: its own in the root, else `<folderId>__<name>` (research 3a, "Names"). */
+  const fullNameOf = (item: { folderId: string; name: string }) =>
+    item.folderId === 'froot' ? item.name : `${item.folderId}__${item.name}`;
+  /**
+   * A name resolved nearest first from a folder, over these items: the
+   * folder's own, then each parent's to `froot` (research 3a, `Scope.resolve`).
+   */
+  const resolveIn = (
+    items: readonly Item[],
+    tree: readonly TreeFolder[],
+    folderId: string,
+    name: string,
+  ): string | null => {
+    const parents = new Map(tree.map((folder) => [folder.id, folder.parentId]));
+    const seen = new Set<string>();
+    for (
+      let at: string | null | undefined = folderId;
+      at != null && !seen.has(at);
+      at = parents.get(at)
+    ) {
+      seen.add(at);
+      const found = items.find((item) => item.folderId === at && item.name === name);
+      if (found !== undefined) return fullNameOf(found);
+    }
+    return null;
+  };
+  /**
+   * What an item bound at its publish (research 3a, "Bindings"): its own
+   * name, and each cube its joins name, nearest first from its folder.
+   */
+  const bindingsOf = (
+    model: string,
+    item: Item,
+    items: readonly Item[],
+    tree: readonly TreeFolder[],
+  ) => {
+    const held = recorded.get(`${model}/${fullNameOf(item)}`);
+    if (held !== undefined) return held;
+    const parsed = (parseYaml(item.yaml) ?? {}) as Record<string, unknown>;
+    const declared = (parsed['cubes'] ?? parsed['views']) as Record<string, unknown>[] | undefined;
+    const joins = (declared?.[0]?.['joins'] ?? []) as { name?: unknown }[];
+    const bindings: Record<string, string> = { [item.name]: fullNameOf(item) };
+    for (const join of joins)
+      if (typeof join.name === 'string') {
+        const bound = resolveIn(items, tree, item.folderId, join.name);
+        if (bound !== null) bindings[join.name] = bound;
+      }
+    return bindings;
+  };
 
   const fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     if (isDown) throw new TypeError('fetch failed');
@@ -130,7 +184,7 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
       return answer(401, { error: 'A valid xcube admin token is required', code: 'unauthorized' });
 
     const route =
-      /\/v1\/semantic\/models\/([^/]+)\/(revision|snapshot|folders|changesets|items)$/.exec(
+      /\/v1\/semantic\/models\/([^/]+)\/(revision|snapshot|folders|changesets|items|resolve)$/.exec(
         url.pathname,
       );
     if (route === null) return answer(404, { error: 'Not found', code: 'not_found' });
@@ -178,13 +232,44 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
         model,
         revision: head.revision,
         mode: known.mode,
-        items: head.items.map(({ folderId, name, kind }) => ({
-          folderId,
-          name,
-          kind,
-          fullName: folderId === 'froot' ? name : `${folderId}__${name}`,
-          bindings: {},
+        items: head.items.map((item) => ({
+          folderId: item.folderId,
+          name: item.name,
+          kind: item.kind,
+          fullName: fullNameOf(item),
+          bindings: bindingsOf(
+            model,
+            item,
+            head.items,
+            known.tree ?? [{ id: 'froot', parentId: null }],
+          ),
         })),
+      });
+    }
+
+    /** Names resolved nearest first from a folder (research 3a, "POST …/resolve"). */
+    if (route[2] === 'resolve' && method === 'POST') {
+      const known = models.get(model);
+      const { folderId, names } = body as { folderId: string; names: string[] };
+      const tree = known?.tree ?? [];
+      // A model with no revision is answered as an unknown one (research 3a).
+      if (
+        known === undefined ||
+        head === undefined ||
+        !tree.some((folder) => folder.id === folderId)
+      )
+        return answer(400, {
+          error: `Folder ${folderId} is not in the folder tree`,
+          code: 'invalid_folders',
+        });
+      const items = head?.items ?? [];
+      return answer(200, {
+        model,
+        revision: head?.revision ?? null,
+        folderId,
+        names: Object.fromEntries(
+          names.map((name) => [name, resolveIn(items, tree, folderId, name)]),
+        ),
       });
     }
 
@@ -296,6 +381,9 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
           errors: refused,
           cubeMessage: refusalMessage,
         });
+      // An item published again binds afresh: what was recorded for it goes.
+      for (const upserted of change.upserts ?? [])
+        recorded.delete(`${model}/${fullNameOf(upserted)}`);
       const revision = (head?.revision ?? 0) + 1;
       held.revisions.push({
         revision,
@@ -526,7 +614,17 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
       });
     },
     /** A model moved to items mode, holding these items (T426's changesets start from this). */
-    holdItems: (model: string, items: readonly Item[]) => {
+    holdItems: (
+      model: string,
+      items: readonly Item[],
+      /**
+       * Bindings recorded at an item's publish, by its full name, where they
+       * aren't what its joins resolve to now: xcube never rebinds (T429).
+       */
+      bindings: Readonly<Record<string, Record<string, string>>> = {},
+    ) => {
+      for (const [fullName, bound] of Object.entries(bindings))
+        recorded.set(`${model}/${fullName}`, bound);
       const held = modelOf(model);
       held.mode = 'items';
       held.tree ??= [{ id: 'froot', parentId: null }];

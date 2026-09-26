@@ -7,6 +7,7 @@ import {
   imageProblem,
   newDashboardBody,
   objectsOf,
+  type ChartDefinition,
 } from '@wechart/core';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 
@@ -30,10 +31,11 @@ import { registerSignIn, signInOptionsOf } from './auth/routes';
 import { Forbidden, registerUser, Unauthenticated, userOf } from './auth/user';
 import { registerBuilds } from './jobs/build';
 import { registerSchedules } from './jobs/schedules';
+import { bindChart, bindNames, chartRenamed, dashboardRenamed } from './model/bind';
 import { registerIntrospection } from './model/introspection';
 import type { Config } from './config';
 import type { Changeset } from './xcube/changesets';
-import type { XcubeAdmin } from './xcube/client';
+import { XcubeError, type XcubeAdmin } from './xcube/client';
 import type { PublishedFolders } from './xcube/folders';
 import type { PublicationStore } from './xcube/publications';
 import { registerModelPublishing } from './model/publish';
@@ -691,6 +693,83 @@ export function buildServer({
       (dashboard) => dashboard.folderId !== null && seen.rights.has(dashboard.folderId),
     );
   };
+  /**
+   * A chart's or a dashboard's cubes bound in the folder it is published
+   * into (T429, AC-272; `model/bind.ts`): its body with each name stored as
+   * bound, or the names no folder on its path holds. Stored as it is where
+   * xcube isn't configured or holds no items yet, and in a folder xcube
+   * doesn't serve (a workspace's, until slice 5).
+   */
+  type Bound =
+    | { readonly kind: 'ok'; readonly body: Record<string, unknown> }
+    | { readonly kind: 'refused'; readonly names: readonly string[] }
+    | { readonly kind: 'unreachable' };
+  const boundIn = async (
+    kind: 'chart' | 'dashboard',
+    folderId: string | null,
+    body: Record<string, unknown>,
+  ): Promise<Bound> => {
+    if (xcube === undefined || folders === undefined || folderId === null)
+      return { kind: 'ok', body };
+    const chart = body['chart'] as ChartDefinition | undefined;
+    const filterCubes =
+      kind === 'dashboard'
+        ? (Array.isArray(body['filters']) ? (body['filters'] as { member?: unknown }[]) : [])
+            .map((filter) => filter.member)
+            .filter(
+              (member): member is string => typeof member === 'string' && member.includes('.'),
+            )
+            .map((member) => member.slice(0, member.indexOf('.')))
+        : [];
+    // A chart with no fields yet names no cube: nothing to bind.
+    if (kind === 'chart' && (typeof chart?.source?.cube !== 'string' || chart.source.cube === ''))
+      return { kind: 'ok', body };
+    if (kind === 'dashboard' && filterCubes.length === 0) return { kind: 'ok', body };
+    try {
+      const xcubeId = (await folders()).ids.get(folderId);
+      if (xcubeId === undefined || (await xcube.revision()).mode !== 'items')
+        return { kind: 'ok', body };
+      const bind = () =>
+        kind === 'chart'
+          ? bindChart(xcube, xcubeId, chart!)
+          : bindNames(xcube, xcubeId, filterCubes);
+      // A folder made a moment ago may not be in xcube's tree yet, its push
+      // made after the answer: put it, and ask again (T429's review).
+      const binding = await bind().catch(async (error: unknown) => {
+        if (
+          !(error instanceof XcubeError && error.code === 'invalid_folders') ||
+          !beforeFolderPublish
+        )
+          throw error;
+        await beforeFolderPublish();
+        return bind();
+      });
+      if (binding.kind === 'refused') return binding;
+      return {
+        kind: 'ok',
+        body:
+          kind === 'chart'
+            ? { ...body, chart: chartRenamed(chart!, binding.renames) }
+            : dashboardRenamed(body, binding.renames),
+      };
+    } catch (error) {
+      app.log.warn({ err: error }, 'could not ask xcube to bind an item’s cubes');
+      return { kind: 'unreachable' };
+    }
+  };
+  /** A refused or unasked binding, answered. */
+  const bindingRefused = (reply: FastifyReply, kind: string, bound: Bound) =>
+    bound.kind === 'refused'
+      ? reply.code(422).send({
+          error: `No folder on this ${kind}’s path holds ${bound.names
+            .map((name) => `“${name}”`)
+            .join(', ')}.`,
+          names: bound.names,
+        })
+      : reply.code(502).send({
+          error: `xcube could not be asked where this ${kind}’s cubes are, so it was not saved.`,
+        });
+
   /** Whether the user may change what is in this folder (T326, T327; AC-266, AC-262). */
   const mayWrite = (seen: Visibility, folderId: string | null): boolean =>
     folderId !== null && seen.rights.get(folderId)?.write === true;
@@ -1037,6 +1116,17 @@ export function buildServer({
         stored?.body['access'] === undefined ? rest : { ...rest, access: stored.body['access'] };
     }
 
+    // Published into its folder: each cube it names bound there (T429, AC-272).
+    if (kind !== 'folder') {
+      const bound = await boundIn(
+        kind,
+        await governingFolder(kind, { id, body: written }),
+        written,
+      );
+      if (bound.kind !== 'ok') return bindingRefused(reply, kind, bound);
+      written = bound.body;
+    }
+
     try {
       return await docs.update({ kind, id, body: written, expectedVersion: body.version });
     } catch (failure) {
@@ -1228,18 +1318,39 @@ export function buildServer({
       }
     }
 
+    // Published into their folders: each cube a chart names bound in its own
+    // (a local chart's, its dashboard's), and each the dashboard's filters
+    // name in the dashboard's (T429, AC-272).
+    const dashboardFolder = folderIdOf(dashboard.body as Record<string, unknown>);
+    const boundCharts: Record<string, unknown>[] = [];
+    for (const chart of checked) {
+      const bound = await boundIn(
+        'chart',
+        chart.body['localToDashboardId'] === undefined ? folderIdOf(chart.body) : dashboardFolder,
+        chart.body,
+      );
+      if (bound.kind !== 'ok') return bindingRefused(reply, 'chart', bound);
+      boundCharts.push(bound.body);
+    }
+    const boundDashboard = await boundIn(
+      'dashboard',
+      dashboardFolder,
+      dashboard.body as Record<string, unknown>,
+    );
+    if (boundDashboard.kind !== 'ok') return bindingRefused(reply, 'dashboard', boundDashboard);
+
     try {
       const written = await docs.updateTogether([
-        ...checked.map((chart) => ({
+        ...checked.map((chart, index) => ({
           kind: 'chart' as const,
           id: chart.id,
-          body: chart.body,
+          body: boundCharts[index]!,
           expectedVersion: chart.version,
         })),
         {
           kind: 'dashboard' as const,
           id: dashboardId,
-          body: dashboard.body as Record<string, unknown>,
+          body: boundDashboard.body,
           expectedVersion: dashboard.version,
         },
       ]);
@@ -1309,6 +1420,53 @@ export function buildServer({
         : mayWrite(found.seen, body.folderId))
     ) {
       return reply.code(403).send({ error: READ_ONLY });
+    }
+
+    // Moved into a folder, a chart or a dashboard is published there: each
+    // cube it names bound on its new path, and a dashboard's own charts with
+    // it (T429's review, AC-272). Written together where any binding changes.
+    if (kind !== 'folder' && body?.folderId !== undefined && docs.get && docs.updateTogether) {
+      const stored = await docs.get(kind, id);
+      if (stored !== null && folderIdOf(stored.body) !== body.folderId) {
+        const moved = {
+          ...stored.body,
+          folderId: body.folderId,
+          ...(title === undefined ? {} : { title }),
+        };
+        const self = await boundIn(kind, body.folderId, moved);
+        if (self.kind !== 'ok') return bindingRefused(reply, kind, self);
+        const writes: {
+          kind: 'chart';
+          id: string;
+          body: Record<string, unknown>;
+          expectedVersion: number;
+        }[] = [];
+        if (kind === 'dashboard') {
+          const own = ((await cat?.referenceDocuments?.()) ?? []).filter(
+            (each) => each.kind === 'chart' && each.localToDashboardId === id,
+          );
+          for (const { id: chartId } of own) {
+            const chart = await docs.get('chart', chartId);
+            if (chart === null) continue;
+            const bound = await boundIn('chart', body.folderId, chart.body);
+            if (bound.kind !== 'ok') return bindingRefused(reply, 'chart', bound);
+            if (JSON.stringify(bound.body) !== JSON.stringify(chart.body))
+              writes.push({
+                kind: 'chart',
+                id: chartId,
+                body: bound.body,
+                expectedVersion: chart.version ?? 0,
+              });
+          }
+        }
+        if (writes.length > 0 || JSON.stringify(self.body) !== JSON.stringify(moved)) {
+          const written = await docs.updateTogether([
+            ...writes,
+            { kind, id, body: self.body, expectedVersion: stored.version ?? 0 },
+          ]);
+          return written.at(-1);
+        }
+      }
     }
 
     return docs.relocate({

@@ -6,6 +6,7 @@ import { closeDb, getDb } from '../db/client';
 import { referencesOf } from '../model/references';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID, catalog } from './catalog';
 import { documents } from './documents';
+import { folderXcubeIds } from './folder-xcube-ids';
 
 /**
  * AC-017: WHEN the user opens Explore, THE SYSTEM SHALL show a folder tree and
@@ -720,5 +721,20 @@ describe('the tree’s counts and roots (AC-194)', () => {
     expect((await cat().folders()).find((node) => node.id === mine)?.parentId).toBe(
       MY_WORKSPACE_ID,
     );
+  });
+});
+
+// T429, AC-329: the picker names a cube's folder from `meta.xcube`, by the
+// folder's id in xcube.
+describe('each folder’s xcube id (T429)', () => {
+  it('lists a folder with the xcube id it was given, and none before it has one', async () => {
+    const given = await folder('Given');
+    const fresh = await folder('Fresh');
+    const ids = await folderXcubeIds(getDb()).of([given]);
+
+    const listed = await cat().folders();
+
+    expect(listed.find((node) => node.id === given)?.xcubeId).toBe(ids.get(given));
+    expect(listed.find((node) => node.id === fresh)?.xcubeId).toBeNull();
   });
 });

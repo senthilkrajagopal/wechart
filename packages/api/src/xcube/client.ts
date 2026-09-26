@@ -94,8 +94,18 @@ export interface XcubeAdmin {
     readonly securityContext: Record<string, unknown>;
     readonly probes: readonly { readonly id: string; readonly query: Record<string, unknown> }[];
   }): Promise<ItemsCheckAnswer>;
-  /** The head's items, by folder and name (research 3a, "GET …/items"); none for a model never imported. */
-  items(): Promise<readonly { readonly folderId: string; readonly name: string }[]>;
+  /**
+   * The head's items, by folder and name, each with its full name and the
+   * bindings it was published with (research 3a, "GET …/items"); none for a
+   * model never imported.
+   */
+  items(): Promise<readonly HeldItem[]>;
+  /**
+   * Names resolved nearest first from a folder, as xcube binds them at
+   * publish: each one's full name, or `null` where no folder on the path
+   * holds it (T429, AC-272; research 3a, "POST …/resolve").
+   */
+  resolve(folderId: string, names: readonly string[]): Promise<Map<string, string | null>>;
   /** A changeset applied on a base revision (T426; research 3a, "POST …/changesets"). */
   applyChangeset(input: {
     readonly baseRevision: number | null;
@@ -103,6 +113,15 @@ export interface XcubeAdmin {
     readonly deletes: readonly { readonly folderId: string; readonly name: string }[];
     readonly source?: Record<string, unknown>;
   }): Promise<SnapshotAnswer>;
+}
+
+/** An item xcube holds (research 3a, "GET …/items"). */
+export interface HeldItem {
+  readonly folderId: string;
+  readonly name: string;
+  readonly fullName: string;
+  /** Every name it bound when it was published, to the full name bound: its own included. */
+  readonly bindings: Readonly<Record<string, string>>;
 }
 
 /** An error xcube places on an item, or on none (research 3a, `ItemError`). */
@@ -290,7 +309,37 @@ export function xcubeAdmin({
       if (status !== 200) throw failed(status, answer);
       return (Array.isArray(answer['items']) ? (answer['items'] as Record<string, unknown>[]) : [])
         .filter((item) => typeof item['folderId'] === 'string' && typeof item['name'] === 'string')
-        .map((item) => ({ folderId: String(item['folderId']), name: String(item['name']) }));
+        .map((item) => {
+          const folderId = String(item['folderId']);
+          const name = String(item['name']);
+          const bindings = item['bindings'];
+          return {
+            folderId,
+            name,
+            fullName:
+              typeof item['fullName'] === 'string'
+                ? item['fullName']
+                : folderId === 'froot'
+                  ? name
+                  : `${folderId}__${name}`,
+            bindings: Object.fromEntries(
+              Object.entries(
+                bindings !== null && typeof bindings === 'object'
+                  ? (bindings as Record<string, unknown>)
+                  : {},
+              ).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+            ),
+          };
+        });
+    },
+
+    async resolve(folderId, names) {
+      const { status, answer } = await call('POST', '/resolve', { folderId, names });
+      if (status !== 200) throw failed(status, answer);
+      const found = (answer['names'] ?? {}) as Record<string, unknown>;
+      return new Map(
+        names.map((name) => [name, typeof found[name] === 'string' ? found[name] : null]),
+      );
     },
 
     async applyChangeset({ baseRevision, upserts, deletes, source }) {
