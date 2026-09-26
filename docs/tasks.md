@@ -5925,13 +5925,34 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - two API instances on one database: a publish through one reaches the other's metadata as soon as the revision changes, not 60 s later;
     - starting both at once migrates once, and neither exits (AC-319; research `cube/ha-topology.md`, table rows 3 and 6).
   - Depends on: T418
-- [ ] T422 [P] (AC-319) Retry the web app's idempotent requests when an API replica or a Cube instance goes away
-  - Files: `packages/web/src/api/fetch.ts` (+ test), `packages/web/src/query/loadTile.ts`, `packages/api/src/server.ts` (a Cube transport failure answers 503, not 500)
-  - Failing test: `fetch.test.ts` and `loadTile.test.ts`:
-    - GETs and `/api/load` retry on a network error, 502, 503 or 504, within a budget covering a stalled query's release (research `cube/ha-topology.md` §5);
-    - a POST that creates something never retries;
-    - a tile whose poll loses its socket carries on and shows its data (AC-319).
+- [x] T422 [P] (AC-319) Retry the web app's ~~idempotent requests~~ queries when an API replica or a Cube instance goes away
+  - Files: ~~`packages/web/src/api/fetch.ts` (+ test),~~ `packages/web/src/query/loadTile.ts` (+ test), ~~`packages/api/src/server.ts`~~ `packages/api/src/cube/client.ts` (+ test) (a Cube transport failure answers 503, not 500)
+  - Failing test: ~~`fetch.test.ts` and~~ `loadTile.test.ts` and `client.test.ts`:
+    - ~~GETs and~~ `/api/load` retries on a network error, 502, 503 or 504, within a budget covering a stalled query's release (research `cube/ha-topology.md` §5), with the same request id;
+    - anything else is reported at once, and an abort stops it;
+    - a tile whose poll loses its socket carries on and shows its data (AC-319);
+    - a Cube the API can't reach is a 503, "Cube could not be reached. Try again.", not a 500.
+  - *Narrowed 2026-09-26 (Claude's call, under the standing instruction):* AC-319 asks that "every query the web app retries" be answered, so the retry is the query's. Retrying every GET in the app-wide fetch wrapper would change every request's failure, with no criterion asking for it.
   - Depends on: none
+  - **Done 2026-09-26, for the queries.**
+    - **The tile loader.** A lost socket, or a 502, 503 or 504, is waited out and the same query asked again, a second apart, until something answers or 90 s pass from the outage's start. Then it reports the last failure. Anything else is reported at once. Continue-wait polls are counted apart from these asks, and an abort stops it.
+    - **The API.** A Cube it can't reach, or whose answer is lost on the way, is a `CubeUnreachable` (503, "Cube could not be reached. Try again."), logged with its cause. A publish says "Cube could not be asked to check the model" rather than blaming the store's settings. A token that can't be signed stays wechart's own 500.
+    - **Red first.** The new tests failed on the old behaviour: the tile errored at the first lost socket, and the client threw a bare `fetch failed`.
+    - **Tests.**
+      - `loadTile.test.ts`: fake timers show asks continue until the budget runs out, the budget runs from the outage's start, and an answer in between gives the next outage a fresh budget. Dropping that reset fails a test.
+      - `client.test.ts` and `publish.test.ts` cover the API's side.
+      - The full unit suite passed, and in Chrome `tiles.spec.ts` and the specs that mock failures passed (182).
+    - **The cold review (FAIL)** led to:
+      - the publish message;
+      - the cause kept and logged;
+      - signing moved out of the retried path, and the body read moved in;
+      - the budget tests and truer comments.
+    - **Left as is, noted:**
+      - Introspection and the scope probe (`introspect`, `ask`) still turn a lost socket into a 500.
+      - Each retried ask writes a query-log row, as each Continue-wait poll already does.
+      - A caller that passes no abort signal waits out an outage too. That includes chart Save, which asks for the chart's data first and can now wait up to 90 s.
+    - **For the user** (the review's point 9): should reads (GETs) be retried the same way? A dashboard's tile first GETs its chart, and that GET isn't retried, so a replica stopping at that moment shows the tile's error. AC-319 names only queries. Research's "minimum" listed GETs too. A follow-up task if so.
+    - **Found, outside T422:** the web app's request id never reaches Cube's `/v1/load`, so the Cube-side cancel of AC-011 may name an id Cube never saw (T422's review). Worth its own check.
 - [ ] T423 (AC-319) Run two Cube instances and two API replicas in the docker-desktop release, and survive stopping one of each
   - Files:
     - `deploy/helm/wechart/templates/{api,cube}.yaml`: replicas, RollingUpdate, a PodDisruptionBudget from two replicas, preStop, and graceful shutdown;

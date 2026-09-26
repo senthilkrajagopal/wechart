@@ -252,6 +252,48 @@ describe('the secret never leaves the service (AC-007)', () => {
   });
 });
 
+/**
+ * T422, AC-319: a Cube instance stopping mid-request drops the socket. That is
+ * Cube being away, not wechart failing: 503, which the web app waits out and
+ * asks again, where a 500 would be reported at once (research/cube/ha-topology.md §5).
+ */
+describe('a Cube that can’t be reached (T422, AC-319)', () => {
+  it('is a CubeError with status 503, saying Cube could not be reached', async () => {
+    const gone = new CubeClient({
+      // Nothing listens on port 1.
+      apiUrl: 'http://127.0.0.1:1/cubejs-api',
+      apiSecret: 'test-secret-do-not-leak',
+      securityContext: {},
+    });
+
+    const error = await gone.load({ measures: ['Orders.count'] }).then(
+      () => null,
+      (e: unknown) => e,
+    );
+
+    expect(error).toBeInstanceOf(CubeError);
+    expect((error as CubeError).status).toBe(503);
+    expect((error as CubeError).message).toBe('Cube could not be reached. Try again.');
+  });
+
+  it('stays a cancellation when the caller aborted', async () => {
+    const cube = new CubeClient({
+      apiUrl: baseUrl,
+      apiSecret: 'test-secret-do-not-leak',
+      securityContext: {},
+      fetchImpl: () => Promise.reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+    });
+
+    const error = await cube.load({ measures: ['Orders.count'] }).then(
+      () => null,
+      (e: unknown) => e,
+    );
+
+    expect(error).not.toBeInstanceOf(CubeError);
+    expect((error as Error).name).toBe('AbortError');
+  });
+});
+
 function bearerOf(request: RecordedRequest): string {
   const header = request.headers['authorization'];
   expect(header, 'every Cube request carries an Authorization header').toBeTruthy();

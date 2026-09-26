@@ -13,6 +13,7 @@ import {
   CACHE_POLICIES,
   CubeClient,
   CubeError,
+  CubeUnreachable,
   previewClaimsOf,
   type CachePolicy,
 } from './cube/client';
@@ -1464,6 +1465,8 @@ export function buildServer({
     }
 
     if (error instanceof CubeError) {
+      // Logged with its cause: a bad address or certificate reads as Cube away too (T422).
+      if (error instanceof CubeUnreachable) app.log.warn({ err: error.cause }, error.message);
       return reply.status(error.status >= 400 && error.status < 600 ? error.status : 502).send({
         error: error.message,
         source: 'cube',

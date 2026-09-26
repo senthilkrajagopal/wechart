@@ -122,6 +122,191 @@ describe('long-polling a slow query (AC-010)', () => {
 });
 
 /**
+ * T422, AC-319: WHILE the query path runs 2 Cube instances and 2 API replicas,
+ * WHEN one of each stops during use, THE SYSTEM SHALL answer every query the
+ * web app retries.
+ *
+ * A stopped replica drops the request on its socket; a closing one answers
+ * 503; a Cube instance gone mid-query answers, through the API, 502 or 503.
+ * Each is retried, with the same request id, and Cube's queue joins the query
+ * asked again to the one already running, by the query's own key
+ * (research/cube/ha-topology.md §1).
+ * Anything else is reported at once, as before.
+ */
+function fetchSteps(...steps: ({ status?: number; body: unknown } | Error)[]) {
+  const calls: RequestInit[] = [];
+  const impl = vi.fn(async (_url: string, init?: RequestInit) => {
+    calls.push(init ?? {});
+    const next = steps.shift() ?? { body: { data: [] } };
+    if (next instanceof Error) throw next;
+    return new Response(JSON.stringify(next.body), {
+      status: next.status ?? 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  });
+  return { impl: impl as unknown as typeof fetch, calls };
+}
+
+const idsOf = (calls: RequestInit[]) =>
+  calls.map((call) => new Headers(call.headers).get('x-request-id'));
+
+describe('carrying on when an API replica or a Cube instance goes away (T422, AC-319)', () => {
+  it('carries on after its socket is lost mid-poll, as the same query', async () => {
+    const { impl, calls } = fetchSteps(
+      { body: { error: CONTINUE_WAIT } },
+      new TypeError('Failed to fetch'),
+      { body: { error: CONTINUE_WAIT } },
+      { body: { data: [{ 'Orders.count': '42' }] } },
+    );
+
+    const result = await loadTile({ query, fetchImpl: impl, retryDelayMs: 0, outageDelayMs: 0 });
+
+    expect(result).toEqual({ data: [{ 'Orders.count': '42' }] });
+    expect(calls).toHaveLength(4);
+    expect(new Set(idsOf(calls)).size).toBe(1);
+  });
+
+  it.each([502, 503, 504])('carries on after a %i', async (status) => {
+    const { impl, calls } = fetchSteps(
+      { status, body: { error: 'Server unavailable' } },
+      { body: { data: [] } },
+    );
+
+    await expect(
+      loadTile({ query, fetchImpl: impl, retryDelayMs: 0, outageDelayMs: 0 }),
+    ).resolves.toEqual({ data: [] });
+    expect(calls).toHaveLength(2);
+  });
+
+  it('still reports any other failure at once', async () => {
+    const { impl, calls } = fetchSteps({ status: 500, body: { error: 'Internal error' } });
+
+    await expect(
+      loadTile({ query, fetchImpl: impl, retryDelayMs: 0, outageDelayMs: 0 }),
+    ).rejects.toThrow('Internal error');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('gives up once the outage outlasts its budget, saying so', async () => {
+    const lost = fetchSteps(...Array.from({ length: 5 }, () => new TypeError('Failed to fetch')));
+    await expect(
+      loadTile({
+        query,
+        fetchImpl: lost.impl,
+        retryDelayMs: 0,
+        outageDelayMs: 0,
+        outageBudgetMs: 0,
+      }),
+    ).rejects.toThrow('Could not reach the server. Check the connection, then retry.');
+    expect(lost.calls).toHaveLength(1);
+
+    const down = fetchSteps(
+      ...Array.from({ length: 5 }, () => ({ status: 503, body: { error: 'Server unavailable' } })),
+    );
+    await expect(
+      loadTile({
+        query,
+        fetchImpl: down.impl,
+        retryDelayMs: 0,
+        outageDelayMs: 0,
+        outageBudgetMs: 0,
+      }),
+    ).rejects.toThrow('Server unavailable');
+    expect(down.calls).toHaveLength(1);
+  });
+
+  /** Runs `promise` on fake timers, a step at a time, until it settles or the steps run out. */
+  async function settle(promise: Promise<unknown>, stepMs: number, maxSteps: number) {
+    const outcome: { done: boolean; error?: unknown } = { done: false };
+    promise.then(
+      () => {
+        outcome.done = true;
+      },
+      (error: unknown) => {
+        outcome.done = true;
+        outcome.error = error;
+      },
+    );
+    for (let step = 0; step < maxSteps && !outcome.done; step += 1) {
+      await vi.advanceTimersByTimeAsync(stepMs);
+    }
+    return outcome;
+  }
+
+  it('asks again, a delay apart, until the outage outlasts its budget, then reports it', async () => {
+    vi.useFakeTimers();
+    try {
+      const lost = fetchSteps(
+        ...Array.from({ length: 20 }, () => new TypeError('Failed to fetch')),
+      );
+      const outcome = await settle(
+        loadTile({
+          query,
+          fetchImpl: lost.impl,
+          retryDelayMs: 0,
+          outageDelayMs: 1_000,
+          outageBudgetMs: 3_000,
+        }),
+        500,
+        40,
+      );
+      expect(outcome.done).toBe(true);
+      expect(String(outcome.error)).toContain('Could not reach the server');
+      // Asked at 0, 1, 2 and 3 s: the budget runs from the outage's first failure.
+      expect(lost.calls).toHaveLength(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives a new outage the whole budget after an answer in between', async () => {
+    vi.useFakeTimers();
+    try {
+      const { impl, calls } = fetchSteps(
+        new TypeError('Failed to fetch'),
+        new TypeError('Failed to fetch'),
+        new TypeError('Failed to fetch'),
+        { body: { error: CONTINUE_WAIT } },
+        ...Array.from({ length: 20 }, () => new TypeError('Failed to fetch')),
+      );
+      const outcome = await settle(
+        loadTile({
+          query,
+          fetchImpl: impl,
+          retryDelayMs: 0,
+          outageDelayMs: 1_000,
+          outageBudgetMs: 2_500,
+        }),
+        500,
+        40,
+      );
+      expect(outcome.done).toBe(true);
+      // Three failures and the answer, then a fresh outage asked at 0, 1, 2 and 3 s of its own.
+      expect(calls).toHaveLength(8);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops carrying on when the caller aborts while it waits to ask again', async () => {
+    const controller = new AbortController();
+    const { impl, calls } = fetchSteps(new TypeError('Failed to fetch'), { body: { data: [] } });
+
+    const pending = loadTile({
+      query,
+      fetchImpl: impl,
+      retryDelayMs: 0,
+      outageDelayMs: 1_000,
+      signal: controller.signal,
+    });
+    setTimeout(() => controller.abort(), 10);
+
+    await expect(pending).rejects.toThrow(/abort/i);
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1);
+  });
+});
+
+/**
  * T154 / AC-148: WHEN the user asks to refresh a chart's data, THE SYSTEM
  * SHALL re-query Cube bypassing wechart's cached result and show the new
  * data-as-of time.

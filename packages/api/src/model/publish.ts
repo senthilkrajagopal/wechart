@@ -3,7 +3,7 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { CUBE, USER } from '../auth/guard';
-import { CubeError, type CubeClient } from '../cube/client';
+import { CubeError, CubeUnreachable, type CubeClient } from '../cube/client';
 import type { MetaCache } from '../cube/meta-cache';
 import type { Config } from '../config';
 import type { ModelFile, ModelFileStore } from '../server';
@@ -282,7 +282,13 @@ export function registerModelPublishing(
             error: `Cube refused to check the change — ${error.message} for the context wechart checks drafts as — so nothing was published.`,
           });
         app.log.warn({ err: error }, 'could not ask Cube to compile the model');
-        if (error instanceof CubeError && !(await drafts.wasRead(id))) return unread();
+        // Cube not reached is not Cube answering without reading (T422's review).
+        if (
+          error instanceof CubeError &&
+          !(error instanceof CubeUnreachable) &&
+          !(await drafts.wasRead(id))
+        )
+          return unread();
         return reply
           .status(502)
           .send({ error: 'Cube could not be asked to check the model, so nothing was published.' });

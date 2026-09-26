@@ -28,9 +28,22 @@ export class CubeError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
     this.name = 'CubeError';
+  }
+}
+
+/**
+ * Cube not reached at all: the request or its answer lost on the way (T422,
+ * AC-319). A 503, which the web app waits out, keeping what went wrong as its
+ * `cause` for the log, since a bad address or certificate reads the same.
+ */
+export class CubeUnreachable extends CubeError {
+  constructor(cause: unknown) {
+    super('Cube could not be reached. Try again.', 503, { cause });
+    this.name = 'CubeUnreachable';
   }
 }
 
@@ -248,16 +261,24 @@ export class CubeClient {
     context?: Record<string, unknown>,
     preview?: Record<string, unknown>,
   ): Promise<unknown> {
-    const response = await this.#fetch(`${this.#apiUrl}${path}`, {
-      ...init,
-      headers: {
-        ...init.headers,
-        // AC-008: every request, not only the first.
-        authorization: `Bearer ${this.#token(context, preview)}`,
-      },
-    });
-
-    const text = await response.text();
+    // Signed before asking: a token that can't be made is wechart's fault, not Cube away.
+    const headers = {
+      ...init.headers,
+      // AC-008: every request, not only the first.
+      authorization: `Bearer ${this.#token(context, preview)}`,
+    };
+    let response: Response;
+    let text: string;
+    try {
+      response = await this.#fetch(`${this.#apiUrl}${path}`, { ...init, headers });
+      text = await response.text();
+    } catch (failure) {
+      // A cancellation stays one: the caller asked for it.
+      if ((failure as { name?: unknown } | null)?.name === 'AbortError') throw failure;
+      // Cube gone mid-request, or not there: Cube away, not wechart failing,
+      // so the web app waits it out and asks again (T422, AC-319).
+      throw new CubeUnreachable(failure);
+    }
     const parsed: unknown = text ? safeJson(text) : null;
 
     if (!response.ok) {

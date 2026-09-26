@@ -19,6 +19,20 @@ const DEFAULT_RETRY_DELAY_MS = 500;
 /** Enough for a slow warehouse query; short of hanging a tile forever. */
 const DEFAULT_MAX_POLLS = 240;
 
+/**
+ * An API replica or a Cube instance going away (T422, AC-319): a lost socket,
+ * or 502, 503 or 504 from the API. The same query is asked again until one
+ * answers or the outage outlasts its budget; Cube's queue joins it to the one
+ * already running, by the query's own key (research/cube/ha-topology.md §1).
+ * While a stalled query waits to be released, the surviving instance answers
+ * "Continue wait", which the poll limit bounds, so the budget only covers the
+ * spell when nothing answers at all: a replica's endpoints moving, a pod
+ * restarting.
+ */
+const OUTAGE_STATUSES = new Set([502, 503, 504]);
+const DEFAULT_OUTAGE_DELAY_MS = 1_000;
+const DEFAULT_OUTAGE_BUDGET_MS = 90_000;
+
 export class TileLoadError extends Error {
   constructor(
     message: string,
@@ -36,6 +50,10 @@ export interface LoadTileOptions {
   readonly fetchImpl?: typeof fetch;
   readonly retryDelayMs?: number;
   readonly maxPolls?: number;
+  /** Between asks while the API or Cube is away (T422). */
+  readonly outageDelayMs?: number;
+  /** How long an outage is waited out before the tile reports it (T422). */
+  readonly outageBudgetMs?: number;
   /** Test seam: called after each "Continue wait", before the next request. */
   readonly onPoll?: (attempt: number) => void;
   readonly requestId?: string;
@@ -58,6 +76,8 @@ export async function loadTile({
   fetchImpl = fetch,
   retryDelayMs = DEFAULT_RETRY_DELAY_MS,
   maxPolls = DEFAULT_MAX_POLLS,
+  outageDelayMs = DEFAULT_OUTAGE_DELAY_MS,
+  outageBudgetMs = DEFAULT_OUTAGE_BUDGET_MS,
   onPoll,
   requestId = newRequestId(),
   cache,
@@ -91,7 +111,10 @@ export async function loadTile({
   }
 
   async function poll(): Promise<unknown> {
-    for (let attempt = 1; attempt <= maxPolls; attempt += 1) {
+    let polls = 0;
+    /** When the current outage began, if one is under way. */
+    let outageSince: number | undefined;
+    for (;;) {
       signal?.throwIfAborted();
       started = true;
 
@@ -116,13 +139,21 @@ export async function loadTile({
          * "error details") — a bare TypeError("Failed to fetch") left the
          * error state with a message and nothing else to look at.
          */
-        throw new TileLoadError(
-          'Could not reach the server. Check the connection, then retry.',
-          query,
+        await waitOutOutage(
+          new TileLoadError('Could not reach the server. Check the connection, then retry.', query),
         );
+        continue;
       }
 
       const body: unknown = await response.json().catch(() => null);
+
+      if (OUTAGE_STATUSES.has(response.status)) {
+        await waitOutOutage(
+          new TileLoadError(errorMessage(body, response.status), query, response.status),
+        );
+        continue;
+      }
+      outageSince = undefined;
 
       if (!response.ok) {
         throw new TileLoadError(errorMessage(body, response.status), query, response.status);
@@ -130,15 +161,25 @@ export async function loadTile({
 
       if (!isContinueWait(body)) return body;
 
-      onPoll?.(attempt);
+      polls += 1;
+      onPoll?.(polls);
       signal?.throwIfAborted();
+      if (polls >= maxPolls) {
+        throw new TileLoadError(
+          `Cube is still running this query after ${String(maxPolls)} checks.`,
+          query,
+        );
+      }
       if (retryDelayMs > 0) await delay(retryDelayMs, signal);
     }
 
-    throw new TileLoadError(
-      `Cube is still running this query after ${String(maxPolls)} checks.`,
-      query,
-    );
+    /** Waits to ask again, or throws what the outage left once it outlasts its budget. */
+    async function waitOutOutage(failure: TileLoadError): Promise<void> {
+      outageSince ??= Date.now();
+      if (Date.now() - outageSince >= outageBudgetMs) throw failure;
+      signal?.throwIfAborted();
+      if (outageDelayMs > 0) await delay(outageDelayMs, signal);
+    }
   }
 }
 

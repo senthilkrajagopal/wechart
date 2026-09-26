@@ -437,6 +437,28 @@ describe('publishing model changes', () => {
     expect(store.files).toEqual([ORDERS]);
     await app.close();
   });
+
+  // T422's review: Cube not reached is Cube not asked, not Cube answering
+  // without reading, which would send the operator to the store's settings.
+  it('says Cube could not be asked when Cube can’t be reached at all', async () => {
+    const store = memory([ORDERS]);
+    const cube = new CubeClient({
+      apiUrl: config.cubeApiUrl,
+      apiSecret: 'secret',
+      securityContext: {},
+      fetchImpl: () => Promise.reject(new TypeError('fetch failed')),
+    });
+    const app = buildServer({ config, modelFiles: store, cube });
+
+    const response = await publish(app, [edited]);
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json<{ error: string }>().error).toBe(
+      'Cube could not be asked to check the model, so nothing was published.',
+    );
+    expect(store.files).toEqual([ORDERS]);
+    await app.close();
+  });
 });
 
 /**
