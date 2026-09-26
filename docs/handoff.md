@@ -52,9 +52,25 @@
 >     - AC-009, AC-136 and AC-137 stay ticked until slice 3.
 >   - **Next:** wechart's slice 2 tasks in P2.17 (T418, T422 and T433 can start now; the rest wait on
 >     xcube's routes). The paused access tasks T327 onward are still open.
->   - **Asked, not yet answered:** may the contract points (JWKS push route, the gate instead of
->     written policies, YAML only, the `f…` folder-id form, the build-event record) be posted as
->     comments on the plan doc's contract section?
+>   - **Done since the pass (2026-09-26, on `feat/xcube`):**
+>     - T327: ancestors, view-only;
+>     - T328: phase-1 content Super-Admins only;
+>     - T433: YAML only, **AC-332 ticked**;
+>     - T418: drafts in the database;
+>     - T422: tile queries wait out an outage, and an unreachable Cube is a 503;
+>     - T329: direct changes; a folder's move or delete now needs write on the folder holding it.
+>   - **Asked, not yet answered:**
+>     1. May the contract points (JWKS push route, the gate instead of written policies, YAML only,
+>        the `f…` folder-id form, the build-event record) be posted as comments on the plan doc's
+>        contract section?
+>     2. AC-267: does a group given one folder, which then sees the root's own phase-1 items
+>        view-only (R12), count as "assigned"? Or must Super-Admins move those items into folders?
+>     3. Phase-1 items in `mine`: with sign-in on nobody can reach them, and T343's `ws:admin` is no
+>        one's. Where should they go?
+>     4. T422: should reads (GETs) be retried through an outage, as tile queries now are?
+>     5. Deleting a non-empty folder leaves its contents unreachable to everyone. Refuse it, or
+>        delete everything inside?
+>     6. Does renaming a folder need write on the folder holding it, as moving and deleting do?
 > - **Pushing is the user's** (this session's push was refused by the permission classifier):
 >   `git push origin main feat/xcube --tags`.
 > - **Done since (2026-09-25, later):**
