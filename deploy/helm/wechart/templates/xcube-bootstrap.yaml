@@ -1,0 +1,97 @@
+{{- /*
+xcube's role and schema in the metadata database (T447; docs/research/
+xcube-slice-2.md, "Database bootstrap"): the fork's bootstrap.sql, run once
+with psql as the database's admin, which substitutes the role's password.
+Running it again changes nothing but the password. xcube creates and migrates
+its own tables, as that role, when Cube starts; each Cube pod waits for the
+schema first (cube.yaml).
+
+A plain Job. A Job's pod template can't be changed, so the Job is named by its
+whole rendered pod template: a new chart version, image, database or script
+(through the ConfigMap's name, which is the script's) is a new Job, not an
+edit Kubernetes refuses (T447's review). files/xcube-bootstrap.sql is a link to
+infra/xcube/bootstrap.sql, so the chart and compose run the same one.
+*/ -}}
+{{- $script := .Files.Get "files/xcube-bootstrap.sql" | required "files/xcube-bootstrap.sql is missing from the chart (a link to infra/xcube/bootstrap.sql)" }}
+{{- $component := include "wechart.component" (list . "xcube-bootstrap") }}
+{{- $config := printf "%s-%s" $component (sha256sum $script | trunc 8) }}
+{{- $pod := include "wechart.xcubeBootstrapPod" (list . $config) }}
+{{- $job := printf "%s-%s" $component (sha256sum $pod | trunc 8) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $config }}
+  labels:
+    {{- include "wechart.labels" (list . "xcube-bootstrap") | nindent 4 }}
+data:
+  bootstrap.sql: |-
+    {{- $script | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $job }}
+  labels:
+    {{- include "wechart.labels" (list . "xcube-bootstrap") | nindent 4 }}
+spec:
+  backoffLimit: 10
+  template:
+    {{- $pod | nindent 4 }}
+
+{{- define "wechart.xcubeBootstrapPod" }}
+{{- $ := index . 0 }}
+{{- $config := index . 1 }}
+metadata:
+  labels:
+    {{- include "wechart.labels" (list $ "xcube-bootstrap") | nindent 4 }}
+spec:
+  restartPolicy: OnFailure
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: bootstrap
+      image: {{ $.Values.meta.image }}
+      imagePullPolicy: IfNotPresent
+      command:
+        - sh
+        - -c
+        - >-
+          until pg_isready -h "$HOST" -U "$PGUSER" -d "$PGDATABASE"; do sleep 2; done;
+          psql -v ON_ERROR_STOP=1 -v xcube_password="$XCUBE_PASSWORD"
+          -h "$HOST" -f /bootstrap/bootstrap.sql
+      env:
+        - name: HOST
+          value: {{ include "wechart.host" (list $ "meta") | quote }}
+        - name: PGUSER
+          value: {{ $.Values.meta.user | quote }}
+        - name: PGDATABASE
+          value: {{ $.Values.meta.database | quote }}
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "wechart.secretName" $ }}
+              key: meta-password
+        - name: XCUBE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "wechart.secretName" $ }}
+              key: xcube-db-password
+      securityContext:
+        runAsUser: 70
+        runAsGroup: 70
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+      volumeMounts:
+        - name: script
+          mountPath: /bootstrap
+          readOnly: true
+  volumes:
+    - name: script
+      configMap:
+        name: {{ $config }}
+{{- end }}

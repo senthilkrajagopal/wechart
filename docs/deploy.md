@@ -9,13 +9,16 @@ F24, AC-248, task T274. The Helm chart at `deploy/helm/wechart` runs wechart, Cu
 | `web`: the built app, and `/api` passed to the API | Deployment | `wechart-web:<tag>` (nginx, unprivileged) | `LoadBalancer`, port `web.service.port` | `/healthz` |
 | `api`: wechart's API | Deployment, 1 replica, `Recreate` | `wechart-api:<tag>` | ClusterIP 4100 | `/api/health` |
 | `meta`: wechart's metadata database | StatefulSet with a volume | `postgres:18.6-alpine3.24` | headless 5432 | `pg_isready` over TCP |
-| `cube`: Cube's API | Deployment | `cubejs/cube:v1.7.45` | ClusterIP 4000 | `/readyz` |
-| `cube-refresh-worker`: Cube's refresh worker | Deployment, 1 replica | `cubejs/cube:v1.7.45` | ClusterIP 4000 | `/readyz` |
+| `cube`: Cube's API | Deployment | `xcube:v1.7.45-83cb9f0888` | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
+| `cube-refresh-worker`: Cube's refresh worker | Deployment, 1 replica | `xcube:v1.7.45-83cb9f0888` | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
+| `xcube-bootstrap-<hash>`: xcube's role and schema in the metadata database | Job, run once | `postgres:18.6-alpine3.24` | none | none |
 | `cubestore`: Cube Store, one node | StatefulSet with a volume | `cubejs/cubestore:v1.7.45` (`-arm64v8` on arm64) | headless 3030 | `:3031/readyz`, `:3031/livez` |
 
 Cube reads `infra/cube/cube.js`, the same file docker-compose mounts. The chart reaches it through the link `deploy/helm/wechart/files/cube.js`. Helm follows the link and prints a "found symbolic link" line each time it loads the chart (`docs/research/helm.md`, "Symlinks in 3.17.2").
 
-Only the web app is published outside the cluster. The API, Cube, Cube Store and the metadata database are ClusterIP or headless Services. nginx answers 404 to `/api/cube-model/`, the routes Cube reads the model through; Cube reaches them through the API's own Service.
+That file is xcube's configuration (T447). xcube serves the model from its own schema, `xcube`, in the metadata database. The API pushes its published files there (see "The model"), and Cube never calls the API. The bootstrap Job runs the fork's `bootstrap.sql` (`infra/xcube/bootstrap.sql`, linked as `files/xcube-bootstrap.sql`) as the database's admin. It makes the role `xcube`, which owns the schema, with a password the chart generates. Each Cube pod's init container waits until it can connect as that role and the schema is there, because a Cube process started earlier exits (`docs/research/xcube-slice-2.md`, Gotcha 14). xcube then creates and migrates its tables itself. Until every model is compiled Cube's port stays closed, so a startup probe waits up to `cube.startupSeconds` (300) before the liveness probe applies.
+
+Only the web app is published outside the cluster. The API, Cube, Cube Store and the metadata database are ClusterIP or headless Services. nginx answers 404 to `/api/cube-model/`, the model store's routes, which nothing reads any more and T431 removes.
 
 ## Before you start
 
@@ -33,14 +36,14 @@ docker build -f deploy/Dockerfile --target api -t wechart-api:$TAG .
 docker build -f deploy/Dockerfile --target web -t wechart-web:$TAG .
 ```
 
-Cube runs v1.7.45, unmodified, with the user's fork's package xcube, which adds the data-source introspection API wechart generates cubes with (T275, T413–T415, T417; `docs/research/cube/introspection-api.md`). xcube is the package that was `cube-introspection/`, renamed at the fork's commit `a13b9cff43` with its HTTP API unchanged. Build it from the package's directory in the fork's checkout (`~/Work/bi/cube`, branch `feat/xcube`):
+Cube runs v1.7.45, unmodified, with the user's fork's package xcube. xcube adds the data-source introspection API that wechart generates cubes with (T275, T413–T415, T417; `docs/research/cube/introspection-api.md`). From the fork's commit `83cb9f0888` it also serves the model (T447; `docs/research/xcube-slice-2.md`). xcube is the package that was `cube-introspection/`, renamed at the fork's commit `a13b9cff43` with its HTTP API unchanged. Build it from the package's directory in the fork's checkout (`~/Work/bi/cube`, branch `feat/xcube`):
 
 ```sh
 cd ~/Work/bi/cube/xcube
 docker build -t xcube:v1.7.45-$(git rev-parse --short=10 HEAD) .
 ```
 
-Tag it by the fork's commit, as with wechart's own images: a rebuild under the same tag doesn't restart the pods. The release runs `xcube:v1.7.45-a13b9cff43`. `deploy/helm/values/docker-desktop.yaml` sets `cube.image` to it, for Cube and its refresh worker alike, and docker-compose uses the same image. The image's own command starts the package's server, so give Cube no `command` or `args`: `cubejs server` would start it without the introspection routes.
+Tag it by the fork's commit, as with wechart's own images: a rebuild under the same tag doesn't restart the pods. The release runs `xcube:v1.7.45-83cb9f0888`, which is the chart's default too; a plain `cubejs/cube` image won't start with xcube's `cube.js`. `deploy/helm/values/docker-desktop.yaml` sets `cube.image` to it, for Cube and its refresh worker alike, and docker-compose uses the same image. The image's own command starts the package's server, so give Cube no `command` or `args`: `cubejs server` would start it without the introspection routes.
 
 Nothing is pushed. This cluster's node runs on the Docker engine (`kubectl get nodes -o wide` shows `docker://`), and its pods used the locally built images; Docker's own docs don't say so (`docs/research/helm.md`, "Open questions"). The chart pulls a wechart image only if it isn't there (`images.pullPolicy: IfNotPresent`). Give each build its own tag: an upgrade to the same tag doesn't restart the pods.
 
@@ -91,6 +94,11 @@ This is T274's test. It needs helm, kubectl, curl and jq, and it checks:
 3. The address the values name serves the app for `/`, `/explore` and a Model workspace deep link, and the app's script loads. A missing asset is a 404, and `/api/cube-model/files` is not served.
 4. `/api/health` is ok, and `/api/cube-health` says Cube and its refresh worker are healthy.
 5. A query from the web app reaches the data source the values name. The script publishes one cube on `public.orders` (`PROBE_TABLE`) through `/api/model/publish`, as the Model workspace does. It asks `/api/load` for the cube's count and expects more than zero. Then it removes the file again.
+6. xcube serves the model (T447), checked between step 5's query and its removal:
+   - **No API (D1).** With the API scaled to 0 and Cube restarted, Cube still counts the probe cube. The script asks it from inside Cube's pod, with a token it signs itself with the release's Cube secret.
+   - **Two API replicas (D2).** With the API scaled to 2, a second probe cube published through the Service is in each replica's `/api/meta` at once. The script then removes that probe and scales the API back to 1.
+
+   Step 6 needs `openssl` to sign the token.
 
 The API publishes model files and never deletes them, so step 5 removes its file from the metadata database with `psql` in the `meta` pod. The official Postgres image trusts connections over its own socket (`docs/research/postgres-image.md`, "Log noise").
 
@@ -120,7 +128,11 @@ EXTRA_VALUES=deploy/helm/values/docker-desktop-security.yaml IMAGE_TAG=$TAG depl
 
 This release's model starts empty. The API seeds its model store from `WECHART_MODEL_DIR`, which the API image sets to an empty directory. The Cube pods have no model directory of their own, and the sample database's cubes are not shipped. wechart's sample dashboards stay off (`api.seed: false`), because they name those cubes. With an empty model, Cube answers `/v1/meta` with no cubes.
 
-Build the model in the browser's **Model** workspace, then the dashboards. A publish goes from the API to Cube as a draft to compile. Cube reads the draft back from the API through `WECHART_MODEL_STORES`, and the chart sets it to the API's in-cluster address.
+Build the model in the browser's **Model** workspace, then the dashboards.
+- **Checking a publish.** xcube's dry run compiles the change and plans each cube's rollups without storing anything, and it refuses any break (T445).
+- **Sending it.** Once committed to wechart's store, the API sends the whole set of plain YAML files to xcube as the model's next revision (T419, T446). It also sends it when it starts and every 60 seconds, if xcube's copy differs. The model's id is `api.xcubeModel` (`wechart`), and the admin token is the one the chart generates.
+- **Every query token** names that model and the revision last recorded, so an answer never comes from an older one (T421).
+- **With the API stopped**, Cube still serves the published model.
 
 ## xcube's public key
 
@@ -153,7 +165,13 @@ Only `type` is required. `host`, `port`, `database` and `user` are set only when
 
 ## What the chart generates
 
-At the first install the chart generates Cube's API secret, the key Cube reads the model store with, the metadata database's password, and for sign-in the session cookie's secret and the OIDC client secret its Dex shares with the API. It keeps them in the Secret `wechart-secrets`. Every upgrade reads them back, so they never change (`docs/research/helm.md`, "Pattern: generate-once Secret").
+At the first install the chart generates these secrets:
+- Cube's API secret;
+- the model store's key, which T431 retires;
+- the metadata database's password;
+- xcube's role password, and the URL Cube connects to xcube's schema by;
+- xcube's admin token, which Cube's API instance and wechart's API share (static until slice 4, R29);
+- for sign-in, the session cookie's secret and the OIDC client secret its Dex shares with the API. It keeps them in the Secret `wechart-secrets`. Every upgrade reads them back, so they never change (`docs/research/helm.md`, "Pattern: generate-once Secret").
 
 The Secret is kept on uninstall (`helm.sh/resource-policy: keep`). The metadata database's volume outlives an uninstall too, and its password was set when the database was first initialised, so a new password would lock the API out. A reinstall with the same release name and namespace takes the kept Secret back.
 

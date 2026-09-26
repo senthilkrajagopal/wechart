@@ -1,119 +1,88 @@
-import { createRequire } from 'node:module';
+import Module, { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 /**
- * T142: infra/cube/cube.js, the configuration Cube loads — which store it
- * reads the model from, a draft, and its fallback to the mounted directory.
- * Its checks are the ones that keep Cube reading only what wechart signed
- * for, from a store it trusts (T142's review, M4).
+ * T447, AC-333: infra/cube/cube.js, the configuration Cube loads, is xcube's:
+ * `require('xcube').config(options, cube)` names the claims wechart's tokens
+ * carry, and xcube serves each model from its own schema, compiling and
+ * switching revisions itself (docs/research/xcube-slice-2.md, "cube.js").
+ * Cube no longer reads wechart's model store (T142's `contextToAppId`,
+ * `repositoryFactory` and `schemaVersion`), and those keys belong to xcube:
+ * its `config()` throws on them.
  *
- * Loaded as Cube loads it — CommonJS, with its environment — and its fetch
- * answered here.
+ * Loaded as Cube loads it, CommonJS, with `xcube` answered here: the package
+ * is installed only in the image, at `/cube/node_modules/xcube`.
  */
 const CONFIG = fileURLToPath(new URL('../../../../infra/cube/cube.js', import.meta.url));
 const STORE = 'http://host.docker.internal:4100';
 
 interface CubeConfig {
-  contextToAppId: (context: unknown) => string;
-  repositoryFactory: (context: unknown) => {
-    localPath: () => string;
-    dataSchemaFiles: () => Promise<{ fileName: string; content: string }[]>;
-  };
-  schemaVersion: (context: unknown) => Promise<string>;
+  contextToGroups: (context: { securityContext?: unknown }) => string[];
   contextToApiScopes: (context: unknown, defaultScopes: string[]) => Promise<string[]>;
-  maxCompilerCacheKeepAlive?: number;
-  updateCompilerCacheKeepAlive?: boolean;
+  [key: string]: unknown;
 }
 
-const requested: { url: string; key: string | undefined }[] = [];
+type Load = (request: string, parent: unknown, isMain: boolean) => unknown;
+const loader = Module as unknown as { _load: Load };
+const realLoad = loader._load;
 
-function load(): CubeConfig {
+/** cube.js, with what it gave xcube's `config()`. */
+function load(): { options: unknown; config: CubeConfig } {
+  const given: { options?: unknown } = {};
+  loader._load = (request, parent, isMain) =>
+    request === 'xcube'
+      ? {
+          config: (options: unknown, cube: CubeConfig) => {
+            given.options = options;
+            return cube;
+          },
+        }
+      : realLoad(request, parent, isMain);
   const require = createRequire(import.meta.url);
   delete require.cache[CONFIG];
-  return require(CONFIG) as CubeConfig;
+  const config = require(CONFIG) as CubeConfig;
+  return { options: given.options, config };
 }
 
-beforeEach(() => {
-  requested.length = 0;
-  vi.stubEnv('WECHART_MODEL_STORES', `${STORE}, http://other.invalid:4200/`);
-  vi.stubEnv('WECHART_MODEL_KEY', 'k');
-  vi.stubGlobal('fetch', async (url: string, init?: { headers?: Record<string, string> }) => {
-    requested.push({ url, key: init?.headers?.['x-wechart-model-key'] });
-    const body = url.endsWith('/version')
-      ? { version: 'v7' }
-      : { files: [{ fileName: 'cubes/a.yml', content: `from ${url}` }] };
-    return new Response(JSON.stringify(body));
-  });
-});
-
 afterEach(() => {
-  vi.unstubAllEnvs();
-  vi.unstubAllGlobals();
+  loader._load = realLoad;
 });
 
-const as = (securityContext: Record<string, unknown>) => ({ securityContext });
+describe('Cube’s configuration, xcube’s (T447)', () => {
+  it('names the claims wechart’s tokens carry for the model and its revision', () => {
+    const { options } = load();
 
-describe('Cube’s configuration', () => {
-  it('reads the live model from a store it trusts, with the key', async () => {
-    const config = load();
-    const context = as({ wechartStore: STORE });
+    expect(options).toEqual({ modelClaim: 'wechartModel', revisionClaim: 'wechartRevision' });
+  });
 
-    expect(config.contextToAppId(context)).toBe('CUBE_APP_http_host_docker_internal_4100');
-    expect(await config.schemaVersion(context)).toBe('v7');
-    expect(await config.repositoryFactory(context).dataSchemaFiles()).toEqual([
-      { fileName: 'cubes/a.yml', content: `from ${STORE}/api/cube-model/files` },
+  it('leaves the model to xcube: no store, no draft, no version, no compiler-cache settings', () => {
+    const { config } = load();
+
+    // xcube's own; its config() refuses them (research, "Keys xcube owns"),
+    // and the cache TTL isn't enforced under it (Gotcha 12).
+    for (const key of [
+      'contextToAppId',
+      'repositoryFactory',
+      'schemaVersion',
+      'scheduledRefreshContexts',
+      'maxCompilerCacheKeepAlive',
+      'updateCompilerCacheKeepAlive',
+    ])
+      expect(config, key).not.toHaveProperty(key);
+    expect(Object.keys(config).sort()).toEqual(['contextToApiScopes', 'contextToGroups']);
+  });
+
+  it('matches access policies on the context’s own groups, each a string', () => {
+    const { config } = load();
+
+    expect(config.contextToGroups({ securityContext: { groups: ['sales', 7, 'ops'] } })).toEqual([
+      'sales',
+      'ops',
     ]);
-    expect(requested.every((request) => request.key === 'k')).toBe(true);
-  });
-
-  it('reads a draft under an app id of its own, and never keeps a version', async () => {
-    const config = load();
-    const context = as({ wechartStore: STORE, wechartDraft: 'b2c3-d4' });
-
-    expect(config.contextToAppId(context)).toBe(
-      'CUBE_APP_http_host_docker_internal_4100_draft_b2c3_d4',
-    );
-    expect(await config.schemaVersion(context)).toBe('draft_b2c3-d4');
-    expect(await config.repositoryFactory(context).dataSchemaFiles()).toEqual([
-      { fileName: 'cubes/a.yml', content: `from ${STORE}/api/cube-model/drafts/b2c3-d4` },
-    ]);
-    // The live version is asked each time: a publish must be seen at once (T143).
-    await config.schemaVersion(as({ wechartStore: STORE }));
-    await config.schemaVersion(as({ wechartStore: STORE }));
-    expect(requested.filter((request) => request.url.endsWith('/version'))).toHaveLength(2);
-  });
-
-  it('reads the mounted directory for a store it doesn’t trust, and asks it nothing', async () => {
-    const config = load();
-
-    for (const context of [
-      as({}),
-      as({ wechartStore: 'http://evil.invalid' }),
-      as({ wechartStore: `${STORE}/extra` }),
-      {},
-    ]) {
-      expect(config.contextToAppId(context)).toBe('CUBE_APP_disk');
-      expect(await config.schemaVersion(context)).toBe('disk');
-      expect(config.repositoryFactory(context).localPath()).toMatch(/infra[/\\]cube[/\\]model$/);
-      const files = await config.repositoryFactory(context).dataSchemaFiles();
-      expect(files.map((file) => file.fileName)).toContain('cubes/orders.yml');
-    }
-    expect(requested).toEqual([]);
-  });
-
-  it('takes a draft name only of name characters, so it can’t reach another route', async () => {
-    const config = load();
-
-    for (const draft of ['../files', 'a/b', 'x'.repeat(65), '', 42]) {
-      const context = as({ wechartStore: STORE, wechartDraft: draft });
-      expect(config.contextToAppId(context)).toBe('CUBE_APP_http_host_docker_internal_4100');
-      await config.repositoryFactory(context).dataSchemaFiles();
-    }
-    expect(requested.map((request) => request.url)).toEqual(
-      Array.from({ length: 5 }, () => `${STORE}/api/cube-model/files`),
-    );
+    expect(config.contextToGroups({ securityContext: {} })).toEqual([]);
+    expect(config.contextToGroups({})).toEqual([]);
   });
 
   /**
@@ -122,7 +91,7 @@ describe('Cube’s configuration', () => {
    * cubes, never to a draft's token or to any other request's token.
    */
   it('grants introspection to the API’s introspection token alone, and never with a draft', async () => {
-    const config = load();
+    const { config } = load();
     const defaults = ['graphql', 'meta', 'data'];
 
     // Introspection and nothing else: the token reads no model and loads no
@@ -139,6 +108,9 @@ describe('Cube’s configuration', () => {
       ...defaults,
       'jobs',
     ]);
+    expect(
+      await config.contextToApiScopes({ wechartModel: 'dev', wechartRevision: 3 }, defaults),
+    ).toEqual([...defaults, 'jobs']);
     expect(await config.contextToApiScopes(undefined, defaults)).toEqual([...defaults, 'jobs']);
     // A draft, even one claiming it, is compiled to be checked and no more.
     expect(
@@ -148,13 +120,5 @@ describe('Cube’s configuration', () => {
     expect(
       await config.contextToApiScopes({ wechartIntrospection: 'true' }, defaults),
     ).not.toContain('introspection');
-  });
-
-  it('lets idle compiled models go, so the drafts Cube compiles do not pile up', () => {
-    const config = load();
-
-    // research/cube/configuration-deployment.md: TTL for compiled models, reset on each access.
-    expect(config.maxCompilerCacheKeepAlive).toBe(10 * 60 * 1000);
-    expect(config.updateCompilerCacheKeepAlive).toBe(true);
   });
 });

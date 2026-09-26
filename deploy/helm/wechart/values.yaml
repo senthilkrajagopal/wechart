@@ -4,7 +4,8 @@
 #
 # No secret goes in here: the data source's password is read from a Secret
 # this names, and what wechart generates for itself (Cube's API secret, the
-# model store's key, the metadata database's password) is made at install.
+# metadata database's password, xcube's role password and admin token) is
+# made at install.
 
 nameOverride: ''
 fullnameOverride: ''
@@ -37,6 +38,10 @@ api:
   # to (AC-298, AC-324). Required: the API won't start without it. Only the
   # public key: wechart never holds the private one.
   xcubePublicKey: ''
+  # This release's model id in xcube (T447): 1–63 of a–z, 0–9, "_" and "-",
+  # starting with a letter or digit. One per wechart deployment sharing an
+  # xcube database; this chart gives xcube a database of its own.
+  xcubeModel: wechart
   resources: {}
 
 # wechart's metadata database: dashboards, charts, folders and the model.
@@ -51,8 +56,15 @@ meta:
 
 # Cube's API and its refresh worker.
 cube:
-  image: cubejs/cube:v1.7.45
+  # Cube v1.7.45 with the user's fork's package xcube, which serves the model
+  # (T447; infra/cube/cube.js requires it). Built locally and pushed nowhere
+  # (docs/deploy.md); a plain cubejs/cube image won't start with this cube.js.
+  image: xcube:v1.7.45-83cb9f0888
   port: 4000
+  # How long a Cube process may take to connect to xcube's schema, migrate it
+  # and compile every model before it answers: its port stays closed until
+  # then (research xcube-slice-2.md, "Start-up"; open question 11).
+  startupSeconds: 300
   # The warehouse Cube reads: Cube's CUBEJS_DB_* settings.
   dataSource:
     # Cube's driver, e.g. postgres. Required.

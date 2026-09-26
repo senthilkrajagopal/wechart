@@ -8,9 +8,9 @@ import { ownCubeFile, PUBLISHED } from './model-files';
  * Fails when: a published member is missing from the field list while Cube
  * reports the new schema version.
  *
- * On the real Cube, which reads this API's model store through
- * infra/cube/cube.js and recompiles when the store's version changes
- * (`schemaVersion`); nothing restarts it here.
+ * On the real Cube, under xcube (T447): the publish is sent to xcube as the
+ * model's next revision (T419), and every token names that revision (T421),
+ * so Cube answers from it at once; nothing restarts it here.
  */
 test('a measure published in the Model workspace is in the chart builder’s field list', async ({
   page,

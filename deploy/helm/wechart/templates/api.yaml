@@ -91,10 +91,17 @@ spec:
             # The refresh worker's own /readyz and /livez (T162, AC-156).
             - name: CUBE_WORKER_URL
               value: {{ printf "http://%s:%d" (include "wechart.host" (list . "cube-refresh-worker")) (int .Values.cube.port) | quote }}
-            # Named in every token, so Cube reads this API's model; it must be
-            # one of Cube's WECHART_MODEL_STORES, which the same helper names.
-            - name: WECHART_CUBE_STORE_URL
-              value: {{ include "wechart.modelStoreUrl" . | quote }}
+            # This release's model in xcube, which the API pushes its published
+            # files to and names in every token, and the admin token xcube's
+            # routes take (T447, AC-333, AC-334; R29: static until slice 4).
+            - name: WECHART_XCUBE_MODEL
+              value: {{ required "api.xcubeModel is required: this release's model id in xcube" .Values.api.xcubeModel | quote }}
+            - name: WECHART_XCUBE_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wechart.secretName" . }}
+                  key: xcube-admin-token
+            # Until T431 removes the model store's routes, their key.
             - name: WECHART_MODEL_KEY
               valueFrom:
                 secretKeyRef:

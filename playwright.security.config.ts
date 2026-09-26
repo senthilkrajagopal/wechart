@@ -60,10 +60,11 @@ export default defineConfig({
         WECHART_SEED: '1',
         WECHART_RESET_DATA: '1',
         WECHART_MODEL_KEY: 'dev-model-key',
-        // No WECHART_CUBE_STORE_URL: this API names no model store, so Cube
-        // answers it from its mounted model directory. A security-suite task
-        // that publishes models needs :4300 added to compose's
-        // WECHART_MODEL_STORES and the store URL set here.
+        // xcube serves this suite's model under a model id of its own, apart
+        // from the phase-1 suite's (T447, AC-333): a publish through one
+        // never reaches the other. A dev value, as compose's.
+        WECHART_XCUBE_MODEL: 'e2e-security',
+        WECHART_XCUBE_ADMIN_TOKEN: 'dev-xcube-admin-token-0123456789abcdef',
         CUBE_WORKER_URL: 'http://localhost:54001',
         WECHART_SECURITY: 'oidc',
         WECHART_PUBLIC_URL: baseURL,

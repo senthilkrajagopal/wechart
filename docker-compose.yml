@@ -5,6 +5,51 @@
 # runs the whole stack. Ports are deliberately not the defaults, so an existing
 # local Postgres or Cube is never touched.
 
+# What both Cube processes, the API instance and the refresh worker, are given:
+# extension fields, which Compose itself ignores.
+x-cube-environment: &cube-environment
+  CUBEJS_DB_TYPE: postgres
+  CUBEJS_DB_HOST: sample-db
+  CUBEJS_DB_PORT: '5432'
+  CUBEJS_DB_NAME: sample
+  CUBEJS_DB_USER: sample
+  CUBEJS_DB_PASS: sample
+  # wechart signs every request with this and is the only holder of it
+  # (AC-007, AC-008).
+  CUBEJS_API_SECRET: ${CUBE_API_SECRET:-dev-secret}
+  CUBEJS_CUBESTORE_HOST: cubestore
+  # 3030 is Cube Store's HTTP port, which is what Cube speaks to. 3306 is
+  # its MySQL interface, and pointing Cube at it fails with
+  # "Parse Error: Expected HTTP/" (research/cube/configuration-deployment.md).
+  CUBEJS_CUBESTORE_PORT: '3030'
+  # Production mode: no Playground, authentication enforced, so local
+  # development stays faithful to how it is deployed.
+  CUBEJS_DEV_MODE: 'false'
+  NODE_ENV: production
+  # xcube's schema in the metadata database (T447, AC-333): the models wechart's
+  # APIs push, each named by its model id, which Cube serves whether or not any
+  # API is running. A token naming no model reads the mounted directory
+  # (research xcube-slice-2.md, "Token claims").
+  XCUBE_DATABASE_URL: postgres://xcube:${XCUBE_DB_PASSWORD:-dev-xcube-password}@wechart-meta:5432/wechart_meta
+
+x-cube-extra-hosts: &cube-extra-hosts
+  # The API runs on the host in development; Docker Desktop names it so
+  # already, and this does on Linux.
+  - 'host.docker.internal:host-gateway'
+
+x-cube-volumes: &cube-volumes
+  - ./infra/cube/cube.js:/cube/conf/cube.js:ro
+  - ./infra/cube/model:/cube/conf/model:ro
+
+# xcube's development private key, which opens data-source credentials:
+# mounted into the containers that run Cube's drivers and nowhere else,
+# since wechart is given only the public half (T333, AC-298, AC-324;
+# infra/xcube/README.md). A file named by its key id, as the research
+# lays out xcube's keys (credential-sealing.md, "Key management").
+x-cube-secrets: &cube-secrets
+  - source: xcube_credential_key
+    target: /run/secrets/xcube-credential-keys/uYWeMx6i173fsiolFp1xi-qiav50k52AGinM56Y8JEw.pem
+
 services:
   wechart-meta:
     image: postgres:18-alpine
@@ -52,6 +97,35 @@ services:
       retries: 30
       start_period: 5s
 
+  # xcube's role and schema in the metadata database (T447; research
+  # xcube-slice-2.md, "Database bootstrap"), made once before either Cube
+  # process starts: a Cube process whose schema is missing exits rather than
+  # retrying (Gotcha 14). Running it again changes nothing but the password.
+  xcube-db-init:
+    image: postgres:18-alpine
+    container_name: wechart-xcube-db-init
+    depends_on:
+      wechart-meta:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: wechart
+    command:
+      - psql
+      - -v
+      - ON_ERROR_STOP=1
+      - -v
+      - xcube_password=${XCUBE_DB_PASSWORD:-dev-xcube-password}
+      - -h
+      - wechart-meta
+      - -U
+      - wechart
+      - -d
+      - wechart_meta
+      - -f
+      - /bootstrap.sql
+    volumes:
+      - ./infra/xcube/bootstrap.sql:/bootstrap.sql:ro
+
   # Cube Store backs the query queue and cache; the cache driver defaults to
   # cubestore in production mode (research/cube/configuration-deployment.md).
   #
@@ -68,67 +142,39 @@ services:
       - wechart-cubestore-data:/cube/data
 
   # Cube v1.7.45, unmodified, with the user's fork's package xcube (T275,
-  # T413, T417, R10), which was cube-introspection until the fork's commit
-  # a13b9cff43: a data-source introspection API for generating cubes from a
-  # source's tables (docs/research/cube/introspection-api.md). Built locally
-  # from the package's directory and pushed nowhere; tagged by the fork's
-  # commit, so a rebuild is a new tag:
+  # T413, T417, R10): a data-source introspection API for generating cubes
+  # from a source's tables (docs/research/cube/introspection-api.md), and,
+  # from the fork's commit 83cb9f0888, the model served from xcube's own
+  # schema in the metadata database, which wechart's API pushes to (T447,
+  # AC-333; docs/research/xcube-slice-2.md). Built locally from the package's
+  # directory and pushed nowhere; tagged by the fork's commit, so a rebuild is
+  # a new tag:
   #   cd ~/Work/bi/cube/xcube
   #   docker build -t xcube:v1.7.45-$(git rev-parse --short=10 HEAD) .
   # The image's own CMD starts the package's server: give neither service a
   # `command`, or Cube starts without the routes. Cube and its refresh worker
   # run the same image.
   cube:
-    image: ${CUBE_IMAGE:-xcube:v1.7.45-a13b9cff43}
+    image: ${CUBE_IMAGE:-xcube:v1.7.45-83cb9f0888}
     container_name: wechart-cube
     depends_on: &cube-depends-on
       sample-db:
         condition: service_healthy
       cubestore:
         condition: service_started
-    environment: &cube-environment
-      CUBEJS_DB_TYPE: postgres
-      CUBEJS_DB_HOST: sample-db
-      CUBEJS_DB_PORT: '5432'
-      CUBEJS_DB_NAME: sample
-      CUBEJS_DB_USER: sample
-      CUBEJS_DB_PASS: sample
-      # wechart signs every request with this and is the only holder of it
-      # (AC-007, AC-008).
-      CUBEJS_API_SECRET: ${CUBE_API_SECRET:-dev-secret}
-      CUBEJS_CUBESTORE_HOST: cubestore
-      # 3030 is Cube Store's HTTP port, which is what Cube speaks to. 3306 is
-      # its MySQL interface, and pointing Cube at it fails with
-      # "Parse Error: Expected HTTP/" (research/cube/configuration-deployment.md).
-      CUBEJS_CUBESTORE_PORT: '3030'
-      # Production mode: no Playground, authentication enforced, so local
-      # development stays faithful to how it is deployed.
-      CUBEJS_DEV_MODE: 'false'
-      NODE_ENV: production
-      # The model is read from wechart's store, named in each request's signed
-      # security context, when it is one of these; otherwise from the mounted
-      # directory (infra/cube/cube.js, T142). 4100 is the dev and browser-test
-      # API, 4200 the local demo's.
-      WECHART_MODEL_STORES: ${WECHART_MODEL_STORES:-http://host.docker.internal:4100,http://host.docker.internal:4200}
-      # Presented to wechart's store to read the model; the API holds the same.
-      WECHART_MODEL_KEY: ${WECHART_MODEL_KEY:-dev-model-key}
-    extra_hosts: &cube-extra-hosts
-      # The API runs on the host in development; Docker Desktop names it so
-      # already, and this does on Linux.
-      - 'host.docker.internal:host-gateway'
+      xcube-db-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *cube-environment
+      # xcube's admin routes, which wechart's APIs push the model to: on the
+      # API instance only, never the worker (research, "Environment"). A dev
+      # value; each suite's API holds the same (playwright configs).
+      XCUBE_ADMIN_TOKENS: ${XCUBE_ADMIN_TOKENS:-dev-xcube-admin-token-0123456789abcdef}
+    extra_hosts: *cube-extra-hosts
     ports:
       - '54000:4000'
-    volumes: &cube-volumes
-      - ./infra/cube/cube.js:/cube/conf/cube.js:ro
-      - ./infra/cube/model:/cube/conf/model:ro
-    # xcube's development private key, which opens data-source credentials:
-    # mounted into the containers that run Cube's drivers and nowhere else,
-    # since wechart is given only the public half (T333, AC-298, AC-324;
-    # infra/xcube/README.md). A file named by its key id, as the research
-    # lays out xcube's keys (credential-sealing.md, "Key management").
-    secrets: &cube-secrets
-      - source: xcube_credential_key
-        target: /run/secrets/xcube-credential-keys/uYWeMx6i173fsiolFp1xi-qiav50k52AGinM56Y8JEw.pem
+    volumes: *cube-volumes
+    secrets: *cube-secrets
 
   # Cube's refresh worker: the same image and configuration, told only to
   # build and refresh pre-aggregations. The API instance above is in
@@ -137,7 +183,7 @@ services:
   # "Topology"; pre-aggregations.md, "Observed locally"). A build asked for
   # through the jobs API runs in the API instance, though (upgrade-1.7.43.md).
   cube-refresh-worker:
-    image: ${CUBE_IMAGE:-xcube:v1.7.45-a13b9cff43}
+    image: ${CUBE_IMAGE:-xcube:v1.7.45-83cb9f0888}
     container_name: wechart-cube-refresh-worker
     depends_on: *cube-depends-on
     environment:

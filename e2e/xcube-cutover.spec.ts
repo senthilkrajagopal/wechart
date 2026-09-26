@@ -1,0 +1,504 @@
+import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
+import { createHash, createHmac } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+
+import { expect, test, type APIRequestContext } from '@playwright/test';
+
+import { ownCubeFile } from './model-files';
+
+/**
+ * T447: the cut-over. xcube serves wechart's model from its own schema in the
+ * metadata database; each API pushes its published files there (T419) and
+ * signs every token with its model and revision (T421).
+ *
+ * AC-330 (its model part): Cube SHALL answer queries on published items with
+ * every API replica stopped. `Fails when: … a query on a published item fails
+ * while every API replica is stopped.` Shown on a second Cube process, started
+ * after the publish on the same image, settings and database, with no route
+ * to any API: its host name for the API is itself.
+ *
+ * AC-334: WHEN a change is published through any API replica, THE SYSTEM
+ * SHALL answer every later query for that model, through any replica and on
+ * any Cube instance, from that revision or a newer one. `Fails when: after a
+ * publish is acknowledged, a query or the field list, through the other
+ * replica or on the other Cube instance, answers from the previous revision
+ * (a new member missing, or a removed one still listed); …` Shown with a
+ * second API process on this suite's database, and the second Cube process.
+ *
+ * AC-335: only plain YAML is sent. `Fails when: a snapshot or a check sent to
+ * xcube holds such a file, or xcube refuses a snapshot as holding one; …`
+ * Shown on xcube's own record of the model: its content hash is the store's
+ * plain YAML's, the seed's Jinja template kept out.
+ */
+const MODEL = 'e2e';
+const SECRET = 'dev-secret';
+const ADMIN_TOKEN = 'dev-xcube-admin-token-0123456789abcdef';
+const CUBE = 'http://localhost:54000/cubejs-api';
+
+const docker = (...args: string[]) =>
+  execFileSync('docker', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+
+/** A token as wechart's API signs one: HS256 with Cube's secret (research, "Query tokens"). */
+function tokenFor(claims: Record<string, unknown>): string {
+  const now = Math.floor(Date.now() / 1000);
+  const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const unsigned = `${part({ alg: 'HS256', typ: 'JWT' })}.${part({ ...claims, iat: now, exp: now + 300 })}`;
+  return `${unsigned}.${createHmac('sha256', SECRET).update(unsigned).digest('base64url')}`;
+}
+
+/**
+ * SQL in the metadata Postgres, as its admin. `psql -v` variables (`:'name'`)
+ * keep text out of the statement; psql substitutes them only in SQL it reads,
+ * not in `-c`, so the statement goes on stdin.
+ */
+const psql = (database: string, sql: string, variables: Record<string, string> = {}) =>
+  execFileSync(
+    'docker',
+    [
+      'exec',
+      '-i',
+      'wechart-meta',
+      'psql',
+      '-U',
+      'wechart',
+      '-d',
+      database,
+      '-v',
+      'ON_ERROR_STOP=1',
+      ...Object.entries(variables).flatMap(([name, value]) => ['-v', `${name}=${value}`]),
+      '-At',
+      '-f',
+      '-',
+    ],
+    { encoding: 'utf8', input: sql, stdio: ['pipe', 'pipe', 'pipe'] },
+  ).trim();
+
+/** The revision this suite's API last recorded as xcube's (T419's `model_publications`). */
+const recordedRevision = () =>
+  Number(
+    psql(
+      'wechart_meta',
+      `SELECT xcube_revision FROM model_publications WHERE model_id = '${MODEL}'`,
+    ),
+  );
+
+/** A second Cube process: the running one's image, settings and mounts, with no admin routes and no route to an API. */
+async function startCube(name: string): Promise<string> {
+  docker('rm', '-f', name);
+  const image = docker('inspect', '-f', '{{.Config.Image}}', 'wechart-cube');
+  const env = (
+    JSON.parse(docker('inspect', '-f', '{{json .Config.Env}}', 'wechart-cube')) as string[]
+  )
+    // Not an admin: this process only answers.
+    .filter((entry) => !entry.startsWith('XCUBE_ADMIN_TOKENS='));
+  docker(
+    'run',
+    '-d',
+    '--name',
+    name,
+    '--network',
+    'wechart_default',
+    '--volumes-from',
+    'wechart-cube:ro',
+    // The API runs on the host: this Cube's name for the host is itself.
+    '--add-host',
+    'host.docker.internal:127.0.0.1',
+    '-p',
+    '127.0.0.1::4000',
+    ...env.flatMap((entry) => ['-e', entry]),
+    image,
+  );
+  const port = docker('port', name, '4000/tcp').split(':').at(-1) ?? '';
+  const url = `http://127.0.0.1:${port}`;
+  await expect
+    .poll(
+      async () => {
+        const ready = await fetch(`${url}/readyz`).catch(() => undefined);
+        return ready?.status;
+      },
+      { timeout: 180_000, intervals: [1000] },
+    )
+    .toBe(200);
+  return `${url}/cubejs-api`;
+}
+
+/**
+ * Another API process: the suite's built API with its settings, on its own
+ * port; on this suite's database and model unless told otherwise.
+ */
+async function startApi(
+  port: number,
+  { database, model = MODEL }: { database?: string; model?: string } = {},
+): Promise<{ url: string; process: ChildProcess }> {
+  const api = spawn('node', ['packages/api/dist/main.js'], {
+    cwd: new URL('..', import.meta.url).pathname,
+    // Its settings alone: a reset or another database from the shell
+    // running the suite must never reach it (T447's review).
+    env: {
+      PATH: process.env['PATH'] ?? '',
+      HOME: process.env['HOME'] ?? '',
+      WECHART_DB_URL: `postgres://wechart:wechart@localhost:55432/${database ?? 'wechart_meta'}`,
+      PORT: String(port),
+      CUBE_API_SECRET: SECRET,
+      CUBE_API_URL: CUBE,
+      WECHART_XCUBE_PUBLIC_KEY: readFileSync(
+        new URL('../infra/xcube/dev-credential-key.pub.jwk', import.meta.url),
+        'utf8',
+      ).trim(),
+      WECHART_MODEL_KEY: 'dev-model-key',
+      WECHART_XCUBE_MODEL: model,
+      WECHART_XCUBE_ADMIN_TOKEN: ADMIN_TOKEN,
+    },
+    stdio: 'ignore',
+  });
+  const url = `http://localhost:${String(port)}`;
+  try {
+    await expect
+      .poll(async () => (await fetch(`${url}/api/health`).catch(() => undefined))?.status, {
+        timeout: 60_000,
+        intervals: [500],
+      })
+      .toBe(200);
+    // Its own answer, not an older process's still on the port.
+    expect(api.exitCode, `the API on port ${String(port)} exited`).toBeNull();
+  } catch (failure) {
+    api.kill();
+    throw failure;
+  }
+  return { url, process: api };
+}
+
+/** An API process stopped, and gone: its sends ended with it. */
+async function stopApi(api: ChildProcess | undefined): Promise<void> {
+  if (api === undefined || api.exitCode !== null) return;
+  const exited = new Promise((resolve) => api.once('exit', resolve));
+  api.kill();
+  await exited;
+}
+
+/**
+ * Cube asked as wechart asks it: a Cube instance catching up to the revision
+ * named answers 503 with `Retry-After: 2`, and a query Cube is still working
+ * on answers "Continue wait"; both are asked again, as wechart does (T421,
+ * T447's review). What comes back is the first real answer.
+ */
+async function askCube(
+  url: string,
+  claims: Record<string, unknown>,
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  for (let ask = 0; ; ask += 1) {
+    const response = await fetch(url, { headers: { authorization: `Bearer ${tokenFor(claims)}` } });
+    const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const again =
+      response.status === 503 || (response.status === 200 && body['error'] === 'Continue wait');
+    if (!again || ask >= 20) return { status: response.status, body };
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+}
+
+const namesIn = (meta: unknown) =>
+  ((meta as { cubes?: { name: string; measures?: { name: string }[] }[] }).cubes ?? []).flatMap(
+    (cube) => [cube.name, ...(cube.measures ?? []).map((measure) => measure.name)],
+  );
+
+async function cubeMeta(cube: string, claims: Record<string, unknown>) {
+  const { status, body } = await askCube(`${cube}/v1/meta`, claims);
+  return { status, names: namesIn(body) };
+}
+
+async function cubeCount(cube: string, member: string, claims: Record<string, unknown>) {
+  const query = encodeURIComponent(JSON.stringify({ measures: [`${member}.count`] }));
+  const { status, body } = await askCube(`${cube}/v1/load?query=${query}`, claims);
+  const data = body['data'] as Record<string, unknown>[] | undefined;
+  return { status, count: Number(data?.[0]?.[`${member}.count`]) };
+}
+
+test.describe.serial('xcube serves the model (T447)', () => {
+  test.setTimeout(300_000);
+  let cube2 = '';
+  let cubeName = '';
+  let api2: { url: string; process: ChildProcess } | undefined;
+
+  test.beforeAll(async () => {
+    const testInfo = test.info();
+    testInfo.setTimeout(300_000);
+    cubeName = `wechart-cube-cutover-${testInfo.project.name}`;
+    api2 = await startApi(4460 + testInfo.parallelIndex);
+  });
+
+  test.afterAll(async () => {
+    await stopApi(api2?.process);
+    if (cubeName !== '') docker('rm', '-f', cubeName);
+  });
+
+  test('a published cube is queried and listed on a Cube that no API can reach (D1, AC-330)', async ({
+    request,
+  }, testInfo) => {
+    const cube = `e2e_cutover_${testInfo.project.name}`;
+    await ownCubeFile(request, cube);
+    // A Cube process started after the publish, which no API can reach.
+    cube2 = await startCube(cubeName);
+
+    // Asked as wechart asks, at the revision just recorded: it has it from
+    // the database alone.
+    const at = { wechartModel: MODEL, wechartRevision: recordedRevision() };
+    const meta = await cubeMeta(cube2, at);
+    expect(meta.status).toBe(200);
+    expect(meta.names).toContain(cube);
+    const counted = await cubeCount(cube2, cube, at);
+    expect(counted.status).toBe(200);
+    expect(counted.count).toBeGreaterThan(0);
+  });
+
+  test('a publish through one API process is in the field list at once through another (D2, AC-334)', async ({
+    request,
+  }, testInfo) => {
+    const other = api2!.url;
+    // Its field list cached before the publish.
+    await (await fetch(`${other}/api/meta`)).json();
+    const cube = `e2e_cutover_d2_${testInfo.project.name}_${String(Date.now())}`;
+
+    await ownCubeFile(request, cube);
+
+    // At once: no wait, and not 60 s later.
+    expect(namesIn(await (await fetch(`${other}/api/meta`)).json())).toContain(cube);
+    const loaded = await fetch(`${other}/api/load`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query: { measures: [`${cube}.count`] } }),
+    });
+    expect(loaded.status).toBe(200);
+    // And on the other Cube instance, at the revision recorded: a 503 while
+    // it catches up is waited out; an answer is never the older revision's.
+    const at = { wechartModel: MODEL, wechartRevision: recordedRevision() };
+    const meta = await cubeMeta(cube2, at);
+    expect(meta.status).toBe(200);
+    expect(meta.names).toContain(cube);
+  });
+
+  test('xcube holds the store’s plain YAML, and the template stays in wechart (AC-335)', async ({
+    request,
+  }) => {
+    const stored = await filesOf(request);
+    // The seed's template is in wechart's store, read-only (AC-140)…
+    expect(stored.map((file) => file.path)).toContain('cubes/templated_example.yml');
+    // …and never in xcube's: its hash is the plain YAML's, and nothing refused.
+    // A quiet moment between the suite's other publishes.
+    await expect
+      .poll(async () => (await xcubeHead()) === hashOf(plainYaml(await filesOf(request))), {
+        timeout: 60_000,
+      })
+      .toBe(true);
+    const names = namesIn(await (await request.get('/api/meta')).json());
+    expect(names).toContain('product_catalog');
+    expect(names).not.toContain('templated_example');
+  });
+});
+
+/**
+ * What needs a row in the store that no publish could make: an API of its own,
+ * on a database and a model of its own, so the suite's `e2e` model is never
+ * broken or behind while other specs publish.
+ *
+ * AC-333: `Fails when: 60 seconds after a publish, or after a send lost between
+ * wechart's commit and xcube (the API stopped, or xcube unreachable), xcube's
+ * current content hash differs from that of wechart's published plain YAML
+ * files; …` A row written to the store with no API running is a commit whose
+ * send was lost: the next API to start sends it.
+ *
+ * AC-235 (R29): a rollup Cube can't join `includes a rollup in a file the
+ * change leaves alone that Cube already refused before it`: every break
+ * refuses. A row the old draft check let through, written straight to the
+ * store, is such a file.
+ */
+test.describe.serial('xcube and an API of its own (T447)', () => {
+  test.setTimeout(300_000);
+  let database = '';
+  let model = '';
+  let port = 0;
+  let api: { url: string; process: ChildProcess } | undefined;
+
+  test.beforeAll(async () => {
+    const testInfo = test.info();
+    testInfo.setTimeout(300_000);
+    database = `wechart_cutover_${testInfo.project.name}`;
+    model = `e2e-cutover-${testInfo.project.name}`;
+    port = 4480 + testInfo.parallelIndex;
+    // A new database each run: migrated and seeded by the API's first start.
+    psql('wechart_meta', `DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
+    psql('wechart_meta', `CREATE DATABASE ${database}`);
+    api = await startApi(port, { database, model });
+  });
+
+  test.afterAll(async () => {
+    await stopApi(api?.process);
+    if (database !== '') psql('wechart_meta', `DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
+  });
+
+  test('a commit whose send was lost is sent by the next API to start (AC-333)', async () => {
+    const cube = 'e2e_lost_send';
+    // Its first start sent the seed: xcube holds the store's plain YAML.
+    const filesOf = async () =>
+      ((await (await fetch(`${api!.url}/api/model/files`)).json()) as { files: File[] }).files;
+    await expect
+      .poll(async () => (await xcubeHead(model)) === hashOf(plainYaml(await filesOf())), {
+        timeout: 60_000,
+      })
+      .toBe(true);
+
+    // Stopped, gone, and a file committed that no API sent.
+    await stopApi(api!.process);
+    psql(
+      database,
+      `INSERT INTO model_files (path, content) VALUES ('cubes/${cube}.yml', :'content')`,
+      {
+        content: `cubes:\n  - name: ${cube}\n    sql_table: public.products\n    measures:\n      - name: count\n        type: count\n`,
+      },
+    );
+    const behind = await xcubeHead(model);
+    expect(behind).not.toBe(hashOf(plainYaml(await filesInStore(database))));
+
+    // The next start sends it: xcube's hash is the store's again, and Cube serves the cube.
+    api = await startApi(port, { database, model });
+    await expect
+      .poll(async () => (await xcubeHead(model)) === hashOf(plainYaml(await filesOf())), {
+        timeout: 60_000,
+      })
+      .toBe(true);
+    // Cube switches to an import after answering it (research, Gotcha 3).
+    await expect
+      .poll(async () => (await cubeMeta(CUBE, { wechartModel: model })).names, { timeout: 30_000 })
+      .toContain(cube);
+  });
+
+  /**
+   * AC-333's "60 seconds after … a send lost": a commit whose send failed
+   * while the API ran on (xcube unreachable, say) is sent by its reconcile,
+   * every 60 s, with no publish and no restart.
+   */
+  test('a commit the running API didn’t send is sent by its reconcile within 60 s (AC-333)', async () => {
+    test.setTimeout(180_000);
+    const cube = 'e2e_reconciled';
+    const filesOf = async () =>
+      ((await (await fetch(`${api!.url}/api/model/files`)).json()) as { files: File[] }).files;
+    psql(
+      database,
+      `INSERT INTO model_files (path, content) VALUES ('cubes/${cube}.yml', :'content')`,
+      {
+        content: `cubes:\n  - name: ${cube}\n    sql_table: public.products\n    measures:\n      - name: count\n        type: count\n`,
+      },
+    );
+    const committedAt = Date.now();
+    expect(await xcubeHead(model)).not.toBe(hashOf(plainYaml(await filesOf())));
+
+    await expect
+      .poll(async () => (await xcubeHead(model)) === hashOf(plainYaml(await filesOf())), {
+        timeout: 90_000,
+        intervals: [2000],
+      })
+      .toBe(true);
+    // Within the 60 s, plus the compile xcube finishes before it answers a
+    // snapshot (research, Gotcha 10), plus the poll's step.
+    expect(Date.now() - committedAt).toBeLessThan(70_000);
+  });
+
+  test('a rollup its cubes can’t be joined for, in a file the change leaves alone, refuses the publish (AC-235)', async () => {
+    const legacy = 'cubes/e2e_legacy_unjoinable.yml';
+    // A cube on customers whose rollup names products, which it doesn't
+    // join: the draft check let such a file through once it was refused.
+    psql(database, `INSERT INTO model_files (path, content) VALUES (:'path', :'content')`, {
+      path: legacy,
+      content: [
+        'cubes:',
+        '  - name: e2e_legacy_unjoinable',
+        '    sql_table: public.customers',
+        '    dimensions:',
+        '      - name: id',
+        '        sql: id',
+        '        type: number',
+        '        primary_key: true',
+        '    measures:',
+        '      - name: count',
+        '        type: count',
+        '    pre_aggregations:',
+        '      - name: by_category',
+        '        measures: [count]',
+        '        dimensions: [products.category]',
+        '',
+      ].join('\n'),
+    });
+
+    // A change to another file altogether.
+    const published = await fetch(`${api!.url}/api/model/publish`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        files: [
+          {
+            path: 'cubes/e2e_unrelated.yml',
+            content:
+              'cubes:\n  - name: e2e_unrelated\n    sql_table: public.products\n    measures:\n      - name: count\n        type: count\n',
+          },
+        ],
+      }),
+    });
+    const { errors } = (await published.json()) as {
+      errors?: { path: string; message: string; preAggregation?: { cube: string; name: string } }[];
+    };
+    expect(published.status).toBe(422);
+    expect(errors).toEqual([
+      expect.objectContaining({
+        path: legacy,
+        preAggregation: expect.objectContaining({
+          cube: 'e2e_legacy_unjoinable',
+          name: 'by_category',
+        }),
+        message: expect.stringMatching(
+          /^Pre-aggregation by_category can't be built: Cube cannot join its cubes\. Can't find join path to join .*'products'.*\.$/,
+        ),
+      }),
+    ]);
+    // Nothing published.
+    expect((await filesInStore(database)).map((file) => file.path)).not.toContain(
+      'cubes/e2e_unrelated.yml',
+    );
+  });
+});
+
+/** The model files in a database, read there rather than through an API. */
+async function filesInStore(database: string): Promise<File[]> {
+  return JSON.parse(
+    psql(
+      database,
+      `SELECT coalesce(json_agg(json_build_object('path', path, 'content', content)), '[]') FROM model_files`,
+    ),
+  ) as File[];
+}
+
+type File = { path: string; content: string };
+
+const filesOf = async (request: APIRequestContext) =>
+  ((await (await request.get('/api/model/files')).json()) as { files: File[] }).files;
+
+/** xcube's rule, as T446 applies it (research xcube-slice-2.md, "Path rules"). */
+const plainYaml = (files: readonly File[]) =>
+  files.filter((file) => /\.ya?ml$/.test(file.path) && !/{%|%}|{{|}}/.test(file.content));
+
+/** xcube's content hash (research, "Input claims checked" rows 27–29). */
+const hashOf = (files: readonly File[]) =>
+  createHash('sha256')
+    .update(
+      JSON.stringify(
+        [...files]
+          .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+          .map(({ path, content }) => ({ fileName: path, content })),
+      ),
+    )
+    .digest('hex');
+
+async function xcubeHead(model = MODEL): Promise<string | undefined> {
+  const response = await fetch(`${CUBE}/v1/semantic/models/${model}/revision`, {
+    headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+  });
+  return ((await response.json()) as { current?: { contentHash?: string } }).current?.contentHash;
+}

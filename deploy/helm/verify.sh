@@ -20,7 +20,11 @@
 # file again from wechart's metadata database: the API publishes and never
 # deletes a model file, so that is the only way to leave the model as it was.
 #
-# Needs helm, kubectl, curl and jq (docs/deploy.md).
+# Step 6 (T447) checks that xcube serves the model: with no API replica and
+# Cube restarted, and with two API replicas. It signs one Cube token itself,
+# with openssl.
+#
+# Needs helm, kubectl, curl, jq and openssl (docs/deploy.md).
 
 set -uo pipefail
 
@@ -46,7 +50,7 @@ fail() {
 k() { kubectl --context "$context" -n "$namespace" "$@"; }
 h() { helm --kube-context "$context" -n "$namespace" "$@"; }
 
-for tool in helm kubectl curl jq; do
+for tool in helm kubectl curl jq openssl; do
   command -v "$tool" > /dev/null || {
     echo "verify.sh needs $tool on the PATH" >&2
     exit 2
@@ -129,7 +133,18 @@ echo "      web app: $url"
 
 body="$(mktemp)"
 jar="$(mktemp)"
-trap 'rm -f "$body" "$jar" "$jar".*' EXIT
+# Step 6 scales the API: an exit part-way, an interrupt included, puts it back
+# to one replica (T447's review).
+api_scaled=0
+on_exit() {
+  rm -f "$body" "$jar" "$jar".*
+  if ((api_scaled)); then
+    k scale "deployment/$(k get deployments -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=api" \
+      -o jsonpath='{.items[0].metadata.name}')" --replicas=1 > /dev/null 2>&1
+  fi
+}
+trap on_exit EXIT
+trap 'exit 130' INT TERM
 # With sign-in on, every check after the sign-in ones carries that session.
 fetch() { curl -sS -o "$body" -w '%{http_code}' --max-time 30 -b "$jar" "$@"; }
 
@@ -273,7 +288,109 @@ meta_db="$(jq -r '.meta.database' <<< "$release_values")"
 remove_probe() {
   # The official image trusts connections over its own socket (docs/research/postgres-image.md).
   k exec "$meta_pod" -c postgres -- psql -U "$meta_user" -d "$meta_db" -v ON_ERROR_STOP=1 -qAt \
-    -c "delete from model_files where path = '$probe_path' returning path" | grep -q .
+    -c "delete from model_files where path = '${1:-$probe_path}' returning path" | grep -q .
+}
+
+# 6. xcube serves the model (T447). With every API replica stopped and Cube
+# restarted, Cube still answers the probe cube, asked with a token signed as
+# the API signs one (the contract's D1; AC-330's model part). With two API
+# replicas, a publish through the Service is in both replicas' field lists at
+# once (D2; AC-334). Run between step 5's query and its removal.
+b64url() { base64 | tr -d '=\n' | tr '/+' '_-'; }
+component_of() {
+  k get "$1" -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=$2" \
+    -o jsonpath='{.items[*].metadata.name}'
+}
+# The API at $1 replicas, each Ready, none older left, and reached through the
+# web app again. `rollout status` can answer before a scale from 0 has begun.
+scale_api() {
+  local api_deploy ready pods
+  api_deploy="$(component_of deployments api)"
+  if (($1 == 1)); then api_scaled=0; else api_scaled=1; fi
+  k scale "deployment/$api_deploy" --replicas="$1" > /dev/null
+  for _ in $(seq 1 150); do
+    ready="$(k get "deployment/$api_deploy" -o jsonpath='{.status.readyReplicas}')"
+    pods="$(component_of pods api | wc -w | tr -d ' ')"
+    if [[ "${ready:-0}" == "$1" && "$pods" == "$1" ]]; then
+      (($1 == 0)) && return 0
+      [[ "$(fetch "$url/api/health")" == 200 ]] && return 0
+    fi
+    sleep 2
+  done
+  fail "6. the API didn't come to $1 Ready replicas"
+}
+xcube_checks() {
+  local api_deploy cube_deploy model secret token old answer code cube_count pods pod cookie names
+  api_deploy="$(component_of deployments api)"
+  cube_deploy="$(component_of deployments cube)"
+  model="$(jq -r '.api.xcubeModel' <<< "$release_values")"
+  secret="$(k get secret "$(component_of secrets secrets)" -o jsonpath='{.data.cube-api-secret}' | base64 -d)"
+  local now header payload signature
+  now="$(date +%s)"
+  header="$(printf '{"alg":"HS256","typ":"JWT"}' | b64url)"
+  payload="$(jq -cn --arg m "$model" --argjson t "$now" '{wechartModel: $m, iat: $t, exp: ($t + 600)}' | b64url)"
+  signature="$(printf '%s.%s' "$header" "$payload" | openssl dgst -sha256 -hmac "$secret" -binary | b64url)"
+  token="$header.$payload.$signature"
+
+  # D1: no API replica, and a Cube process started after them.
+  scale_api 0
+  old="$(component_of pods cube)"
+  k rollout restart "deployment/$cube_deploy" > /dev/null
+  k rollout status "deployment/$cube_deploy" --timeout=10m > /dev/null
+  for pod in $old; do k wait --for=delete "pod/$pod" --timeout=120s > /dev/null 2>&1; done
+  local query
+  query="$(jq -rn --arg m "$probe_cube.count" '{measures: [$m]} | tojson | @uri')"
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    # From inside Cube's pod: node is there, and Cube's port is not published.
+    answer="$(k exec "deployment/$cube_deploy" -c cube -- node -e '
+      fetch("http://localhost:4000/cubejs-api/v1/load?query=" + process.argv[1], {
+        headers: { authorization: "Bearer " + process.argv[2] },
+      }).then(async (r) => console.log(JSON.stringify({ status: r.status, body: await r.text() })));
+    ' "$query" "$token" 2> /dev/null)"
+    jq -e '.body | contains("Continue wait")' <<< "$answer" > /dev/null 2>&1 || break
+    sleep 2
+  done
+  code="$(jq -r '.status // empty' <<< "$answer" 2> /dev/null)"
+  cube_count="$(jq -r --arg m "$probe_cube.count" '.body | fromjson | .data[0][$m] // empty' <<< "$answer" 2> /dev/null)"
+  if [[ "$code" == 200 && "$cube_count" =~ ^[0-9]+$ ]] && ((cube_count > 0)); then
+    pass "6. with no API replica and Cube restarted, Cube counted $cube_count rows (D1)"
+  else
+    fail "6. with no API replica, Cube answered: $(head -c 600 <<< "$answer")"
+  fi
+
+  # D2: two API replicas, each asked directly.
+  scale_api 2
+  pods="$(component_of pods api)"
+  # The session, with sign-in on: curl's jar, HttpOnly lines included.
+  cookie="$(awk -F'\t' 'NF >= 7 && $1 !~ /^# / { print $6 "=" $7 }' "$jar" | paste -sd';' -)"
+  replica_meta() {
+    k exec "$1" -c api -- node -e '
+      fetch("http://localhost:" + process.argv[1] + "/api/meta", { headers: { cookie: process.argv[2] } })
+        .then((r) => r.text()).then((t) => console.log(t));
+    ' "$(jq -r '.api.port' <<< "$release_values")" "$cookie" 2> /dev/null
+  }
+  # Each replica's field list cached before the publish.
+  for pod in $pods; do replica_meta "$pod" > /dev/null; done
+  local replica_path='wechart-verify/replica-probe.yml' replica_cube='wechart_verify_replica'
+  local content request
+  content="$(printf 'cubes:\n  - name: %s\n    sql_table: %s\n    measures:\n      - name: count\n        type: count\n' \
+    "$replica_cube" "$probe_table")"
+  request="$(jq -n --arg path "$replica_path" --arg content "$content" '{files: [{path: $path, content: $content}]}')"
+  status="$(fetch -X POST -H 'content-type: application/json' --data "$request" "$url/api/model/publish")"
+  if [[ "$status" == 200 ]]; then
+    for pod in $pods; do
+      names="$(replica_meta "$pod" | jq -r '[.cubes[].name] | join(" ")' 2> /dev/null)"
+      if [[ " $names " == *" $replica_cube "* ]]; then
+        pass "6. $pod lists $replica_cube at once (D2)"
+      else
+        fail "6. $pod doesn't list $replica_cube after the publish: $names"
+      fi
+    done
+    remove_probe "$replica_path" || fail "6. could not remove $replica_path; delete it in the metadata database"
+  else
+    fail "6. publishing $replica_path answered $status: $(head -c 600 "$body")"
+  fi
+  scale_api 1
 }
 
 status="$(fetch "$url/api/model/files")"
@@ -303,6 +420,7 @@ else
     count="$(jq -r --arg m "$probe_cube.count" '.data[0][$m] // empty' "$body" 2> /dev/null)"
     if [[ "$status" == 200 && "$count" =~ ^[0-9]+$ ]] && ((count > 0)); then
       pass "5. /api/load counted $count rows of $probe_table in $source"
+      xcube_checks
     else
       fail "5. /api/load answered $status: $(head -c 600 "$body")"
     fi

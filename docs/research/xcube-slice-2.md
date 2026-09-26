@@ -1,6 +1,6 @@
 ---
 library: xcube slice 2 (the user's Cube fork)
-packages: []
+packages: [xcube]
 version: 'xcube at 83cb9f0888 on Cube v1.7.45'
 researched: 2026-09-26
 sources:
@@ -86,7 +86,7 @@ What the contract requires of wechart, in order. The user's open decisions are m
 
 ## Install
 
-There is no npm package for wechart: `packages: []`. wechart talks to xcube over HTTP and through Cube's JWT claims.
+wechart installs no npm package: it talks to xcube over HTTP and through Cube's JWT claims. The one import is `require('xcube')` in `infra/cube/cube.js`, which runs inside the image, where the package is `/cube/node_modules/xcube` ([df] L26-31); hence `packages: [xcube]` (T447, 2026-09-26).
 
 **Image.**
 - Build from `~/Work/bi/cube/xcube` with `docker build -t xcube:v1.7.45-$(git rev-parse --short=10 HEAD) .` ([df] L5-7; [readme] L48).

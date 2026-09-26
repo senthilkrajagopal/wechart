@@ -90,11 +90,13 @@ export default defineConfig({
         // These tests create objects, so each run starts from the seed rather
         // than from whatever the last run left behind.
         WECHART_RESET_DATA: '1',
-        // Cube reads this API's model store (infra/cube/cube.js, T142): the
-        // key the compose Cube holds, and this API as the Cube container
-        // reaches it — one of the stores it is told to trust.
+        // Until T431 removes the model store's routes, their key.
         WECHART_MODEL_KEY: 'dev-model-key',
-        WECHART_CUBE_STORE_URL: 'http://host.docker.internal:4100',
+        // xcube serves this suite's model (T447, AC-333): pushed by this API
+        // under its own model id, with the admin token compose gives Cube's
+        // API instance (docker-compose.yml, XCUBE_ADMIN_TOKENS). A dev value.
+        WECHART_XCUBE_MODEL: 'e2e',
+        WECHART_XCUBE_ADMIN_TOKEN: 'dev-xcube-admin-token-0123456789abcdef',
         // The compose refresh worker's own health probes (T162, AC-156).
         CUBE_WORKER_URL: 'http://localhost:54001',
       },

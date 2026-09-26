@@ -1,7 +1,7 @@
 # wechart's Cube configuration, infra/cube/cube.js, as docker-compose mounts
-# it: the model is read from wechart's model store (the API), named in each
-# request's signed security context. files/cube.js is a link to that file, so
-# the chart and local development run the same one.
+# it: xcube's, which serves the model this release's API pushes, named in each
+# request's signed security context (T447). files/cube.js is a link to that
+# file, so the chart and local development run the same one.
 apiVersion: v1
 kind: ConfigMap
 metadata:

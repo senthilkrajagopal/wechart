@@ -15,8 +15,10 @@ describe('a model file that is code or a template', () => {
   it('shows its text, read-only, and says why it isn’t a form', () => {
     render(<ReadOnlyFile path="cubes/generated.yml" content={TEMPLATE} code="Jinja" />);
 
+    // xcube serves plain YAML alone (T447, AC-335, R29): the template stays
+    // in wechart, and Cube never renders it.
     expect(screen.getByRole('note').textContent).toBe(
-      'Jinja template: Cube renders it before reading its cubes and views, so they aren’t listed from its text. It opens read-only here: the form edits plain YAML only.',
+      'Jinja template: xcube serves plain YAML alone, so Cube never renders it, and its cubes and views aren’t served or listed. It opens read-only here: the form edits plain YAML only.',
     );
     const editor = screen.getByRole('textbox', { name: 'cubes/generated.yml, read-only' });
     expect(editor.getAttribute('contenteditable')).not.toBe('true');
@@ -33,15 +35,17 @@ describe('a model file that is code or a template', () => {
     const { unmount } = render(
       <ReadOnlyFile path="cubes/orders.js" content={'cube(`orders`, {});\n'} code="JavaScript" />,
     );
-    expect(screen.getByRole('note').textContent).toMatch(/^JavaScript: Cube runs it/);
+    expect(screen.getByRole('note').textContent).toMatch(
+      /^JavaScript: xcube serves plain YAML alone, so Cube never runs it/,
+    );
     unmount();
 
     const { unmount: gone } = render(
       <ReadOnlyFile path="cubes/helpers.py" content={'x = 1\n'} code="Python" />,
     );
-    // One Cube doesn't use: said so, and nothing said that contradicts it.
+    // Cube uses none: said so, and nothing said that contradicts it.
     expect(screen.getByRole('note').textContent).toBe(
-      'Python: Cube reads only a globals.py at the model’s root, so it doesn’t use this file. It opens read-only here: the form edits plain YAML only.',
+      'Python: xcube serves plain YAML alone, so Cube never reads it. It opens read-only here: the form edits plain YAML only.',
     );
     gone();
 
@@ -52,7 +56,10 @@ describe('a model file that is code or a template', () => {
         code="Python"
       />,
     );
-    expect(screen.getByRole('note').textContent).toMatch(/^Python: the functions and variables/);
+    // Not even the globals Cube once read for its templates.
+    expect(screen.getByRole('note').textContent).toMatch(
+      /^Python: xcube serves plain YAML alone, so Cube never reads it\./,
+    );
     expect(screen.getByRole('textbox', { name: 'globals.py, read-only' }).textContent).toContain(
       'from cube import TemplateContext',
     );

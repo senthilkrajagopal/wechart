@@ -16,13 +16,13 @@ api:
 
 cube:
   # Cube v1.7.45 with the user's fork's package xcube, formerly
-  # cube-introspection (T275, T414, T417, R10), built locally and pushed
-  # nowhere: the node runs on Docker's engine, so the pods use the local
-  # image, as they do wechart's own (docs/deploy.md). Cube and its refresh
-  # worker both run it, with the image's own command. Tagged by the fork's
-  # commit: a rebuild under the same tag wouldn't restart the pods, which pull
-  # only what isn't there.
-  image: xcube:v1.7.45-a13b9cff43
+  # cube-introspection (T275, T414, T417, R10), which from 83cb9f0888 serves
+  # the model too (T447), built locally and pushed nowhere: the node runs on
+  # Docker's engine, so the pods use the local image, as they do wechart's
+  # own (docs/deploy.md). Cube and its refresh worker both run it, with the
+  # image's own command. Tagged by the fork's commit: a rebuild under the same
+  # tag wouldn't restart the pods, which pull only what isn't there.
+  image: xcube:v1.7.45-83cb9f0888
   dataSource:
     type: postgres
     host: superset-postgresql.superset.svc.cluster.local

@@ -135,8 +135,8 @@ test('a form edit that would drop a comment names it first, and waits to be told
  * Fails when: an invalid model is published, or the error is not attributed
  * to a file.
  *
- * On the real Cube, reading this API's model store through infra/cube/cube.js:
- * the change is compiled by Cube as a draft, and goes live only if it compiles.
+ * On the real Cube, under xcube (T447): xcube's dry run compiles the change
+ * without storing it (T445), and it goes live only if it compiles.
  */
 test('a model change Cube refuses is not published, and Cube’s reason is on its file', async ({
   page,
@@ -243,14 +243,23 @@ test('the join diagram draws each declared join its way, and adds one', async ({
     const edge = diagram.locator(`[data-join="orders→${to}"]`);
     await expect(edge).toHaveText('many to one');
     // It ends on the named cube's box, where the arrowhead is — not on orders'.
-    // Its path, `M x y Q cx cy x2 y2`: where it ends is the last point.
+    // Its path, `M x y Q cx cy x2 y2`: where it ends is the last point. Read
+    // with the box in one look: other workers' cubes, published meanwhile,
+    // lay the diagram out again between two reads (T447).
     const line = edge.locator('.join-editor__edge');
-    const d = (await line.getAttribute('d')) ?? '';
+    const { d, x, y, w, h } = await diagram.evaluate((svg, cube) => {
+      const rect = svg.querySelector(`[data-cube="${cube}"] rect`);
+      return {
+        d:
+          svg.querySelector(`[data-join="orders→${cube}"] .join-editor__edge`)?.getAttribute('d') ??
+          '',
+        x: rect?.getAttribute('x'),
+        y: rect?.getAttribute('y'),
+        w: rect?.getAttribute('width'),
+        h: rect?.getAttribute('height'),
+      };
+    }, to);
     const [x2, y2] = (d.match(/-?\d+(?:\.\d+)?/g) ?? []).slice(-2);
-    const box = diagram.locator(`[data-cube="${to}"] rect`);
-    const [x, y, w, h] = await Promise.all(
-      ['x', 'y', 'width', 'height'].map((key) => box.getAttribute(key)),
-    );
     expect(Number(x2)).toBeGreaterThanOrEqual(Number(x) - 1);
     expect(Number(x2)).toBeLessThanOrEqual(Number(x) + Number(w) + 1);
     expect(Number(y2)).toBeGreaterThanOrEqual(Number(y) - 1);
@@ -367,8 +376,9 @@ test('a save that edits a member charts use lists them first, and saves only if 
 test('a Jinja template opens read-only in the code view, with the reason', async ({ page }) => {
   await page.goto('/model/files/cubes%2Ftemplated_example.yml');
 
+  // Never served: xcube serves plain YAML alone (T447, AC-335).
   await expect(page.getByRole('note')).toContainText(
-    'Jinja template: Cube renders it before reading its cubes and views',
+    'Jinja template: xcube serves plain YAML alone, so Cube never renders it',
   );
   await expect(page.getByRole('note')).toContainText('It opens read-only here');
   const code = page.getByRole('textbox', { name: 'cubes/templated_example.yml, read-only' });

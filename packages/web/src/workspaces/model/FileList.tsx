@@ -23,18 +23,18 @@ const GROUPS: readonly [kind: MemberKind, label: string][] = [
 ];
 
 /**
- * What a file that is not plain YAML is, and why its objects are not listed
- * (research/cube/data-modeling.md, "How each file type is compiled").
+ * What a file that is not plain YAML is, and why its objects are not listed:
+ * xcube serves plain YAML alone, so such a file stays in wechart and is never
+ * sent (T447, AC-335, R29; research xcube-slice-2.md, "Path rules"). Cube once
+ * ran, rendered or read such files itself (research/cube/data-modeling.md,
+ * "How each file type is compiled"); under xcube it sees none of them.
  */
-export function codeNoteOf(path: string, code: NonNullable<FileObjects['code']>): string {
+export function codeNoteOf(_path: string, code: NonNullable<FileObjects['code']>): string {
   if (code === 'JavaScript')
-    return 'JavaScript: Cube runs it to make its cubes and views, so they aren’t listed from its text.';
+    return 'JavaScript: xcube serves plain YAML alone, so Cube never runs it, and its cubes and views aren’t served or listed.';
   if (code === 'Jinja')
-    return 'Jinja template: Cube renders it before reading its cubes and views, so they aren’t listed from its text.';
-  // Cube loads only a `globals.py` at the model's root, as the Jinja context.
-  return path === 'globals.py'
-    ? 'Python: the functions and variables the Jinja templates use. It defines no cubes or views.'
-    : 'Python: Cube reads only a globals.py at the model’s root, so it doesn’t use this file.';
+    return 'Jinja template: xcube serves plain YAML alone, so Cube never renders it, and its cubes and views aren’t served or listed.';
+  return 'Python: xcube serves plain YAML alone, so Cube never reads it.';
 }
 
 export const MODEL_FILES_QUERY = {

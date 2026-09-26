@@ -12,8 +12,11 @@ import { describe, expect, it } from 'vitest';
  * own `CMD` starts the package's server: a `command` of `cubejs server` would
  * start Cube without the introspection routes (research, "Don't override the
  * container command").
+ *
+ * T447: from `83cb9f0888` xcube serves the model too (slice 2;
+ * docs/research/xcube-slice-2.md).
  */
-const IMAGE = 'xcube:v1.7.45-a13b9cff43';
+const IMAGE = 'xcube:v1.7.45-83cb9f0888';
 
 const fromRoot = (path: string) =>
   readFileSync(fileURLToPath(new URL(`../../../../${path}`, import.meta.url)), 'utf8');
@@ -42,7 +45,7 @@ describe('docs/deploy.md builds it from the package (T415, T417, AC-248)', () =>
   it('names the image the release runs, and no other', () => {
     expect(deploy).toContain(`\`${IMAGE}\``);
     // No other xcube tag, and no build of the package under its old name.
-    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!a13b9cff43|\$|<)/);
+    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!83cb9f0888|\$|<)/);
     expect(deploy).not.toContain('cube:v1.7.45-introspection-');
   });
 });
@@ -58,7 +61,11 @@ describe('the docker-desktop Helm release runs it (T414, T417, AC-248)', () => {
     const template = fromRoot('deploy/helm/wechart/templates/cube.yaml');
     // One template serves both Deployments (research, "Where it runs today").
     expect(template).toContain('image: {{ $.Values.cube.image }}');
-    expect(template).not.toMatch(/^\s*(command|args):/m);
+    // Cube's own container: the init container that waits for xcube's
+    // schema runs a command of its own (T447).
+    const containers = template.slice(template.indexOf('\n      containers:'));
+    expect(containers).toContain('image: {{ $.Values.cube.image }}');
+    expect(containers).not.toMatch(/^\s*(command|args):/m);
   });
 });
 
@@ -73,4 +80,64 @@ describe('compose runs the package’s image for Cube and its refresh worker (T4
       expect(block).not.toMatch(/^ {4}(command|entrypoint):/m);
     },
   );
+});
+
+/**
+ * T447, AC-333: xcube serves the model from its schema in the metadata
+ * database (research xcube-slice-2.md, "Install"): `XCUBE_DATABASE_URL` on
+ * every Cube process; `XCUBE_ADMIN_TOKENS` on the API instance only, never the
+ * worker; the bootstrap run to completion before either starts (Gotcha 14).
+ */
+describe('compose serves the model from xcube’s schema (T447, AC-333)', () => {
+  const compose = fromRoot('docker-compose.yml');
+  const shared =
+    /^x-cube-environment: &cube-environment\n((?: {2}.*\n)+)/m.exec(compose)?.[1] ?? '';
+
+  it('gives both Cube processes xcube’s database, as the role the bootstrap makes', () => {
+    expect(shared).toMatch(
+      /^ {2}XCUBE_DATABASE_URL: postgres:\/\/xcube:\$\{XCUBE_DB_PASSWORD:-[^}]+\}@wechart-meta:5432\/wechart_meta$/m,
+    );
+    for (const name of ['cube', 'cube-refresh-worker'])
+      expect(serviceBlock(compose, name)).toContain('<<: *cube-environment');
+    // Cube no longer reads wechart's model store.
+    expect(compose).not.toContain('WECHART_MODEL_STORES');
+  });
+
+  it('gives the admin tokens to the API instance alone', () => {
+    expect(serviceBlock(compose, 'cube')).toMatch(
+      /^ {6}XCUBE_ADMIN_TOKENS: \$\{XCUBE_ADMIN_TOKENS:-.{32,}\}$/m,
+    );
+    expect(serviceBlock(compose, 'cube-refresh-worker')).not.toContain('XCUBE_ADMIN_TOKENS');
+    expect(shared).not.toContain('XCUBE_ADMIN_TOKENS');
+  });
+
+  it('runs xcube’s bootstrap on the metadata database before either starts', () => {
+    const init = serviceBlock(compose, 'xcube-db-init');
+    expect(init).toContain('./infra/xcube/bootstrap.sql:/bootstrap.sql:ro');
+    expect(init).toContain('- ON_ERROR_STOP=1');
+    expect(init).toContain('- xcube_password=${XCUBE_DB_PASSWORD:-');
+    expect(init).toContain('- wechart_meta');
+    expect(serviceBlock(compose, 'cube')).toMatch(
+      /xcube-db-init:\n {8}condition: service_completed_successfully/,
+    );
+    // The worker shares the API instance's dependencies.
+    expect(serviceBlock(compose, 'cube-refresh-worker')).toContain('depends_on: *cube-depends-on');
+  });
+
+  it('runs the fork’s own bootstrap, as it was at the image’s commit', () => {
+    const bootstrap = fromRoot('infra/xcube/bootstrap.sql');
+    expect(bootstrap).toContain('83cb9f0888');
+    // Its statements exactly, as the fork has them (research, "Database
+    // bootstrap"): the comments aside, nothing more and nothing less.
+    const statements = bootstrap
+      .split('\n')
+      .filter((line) => line.trim() !== '' && !line.startsWith('--'));
+    expect(statements).toEqual([
+      "SELECT 'CREATE ROLE xcube LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION'",
+      " WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'xcube') \\gexec",
+      "ALTER ROLE xcube WITH LOGIN PASSWORD :'xcube_password' CONNECTION LIMIT 64;",
+      "SELECT format('GRANT CONNECT ON DATABASE %I TO xcube', current_database()) \\gexec",
+      'CREATE SCHEMA IF NOT EXISTS xcube AUTHORIZATION xcube;',
+    ]);
+  });
 });

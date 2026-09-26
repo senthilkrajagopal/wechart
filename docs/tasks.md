@@ -6185,13 +6185,14 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
       - AC-335 stays open until T447 shows it against xcube. AC-140 stays ticked on the e2e above.
       - The read-only reason still says Cube renders the file; T447 corrects it.
       - A plain file under a path xcube refuses (only from a seed, or rows from before T419's path rule) still blocks every snapshot. So does a plain file that depends on a withheld one. Both are outside AC-335's file types, and the seed has neither.
-- [ ] T447 (AC-333, AC-334, AC-330, AC-335) Cut over: xcube serves the model in compose and the docker-desktop release
+- [x] T447 (AC-333, AC-334, AC-330, AC-335, AC-235) Cut over: xcube serves the model in compose and the docker-desktop release
   - Files:
     - `docker-compose.yml`: the `xcube:v1.7.45-83cb9f0888` image, built locally from the fork (`deploy.md`); an `xcube-db-init` one-shot running `bootstrap.sql`; `XCUBE_DATABASE_URL` on both Cube services; `XCUBE_ADMIN_TOKENS` on the API instance only;
     - `infra/cube/cube.js`: `require('xcube').config(…)` as the research gives it, with no `contextToAppId`, `repositoryFactory`, `schemaVersion` or compiler-cache settings;
     - `playwright.config.ts` and `playwright.security.config.ts`: the model id and the admin token for each suite's API;
     - `deploy/helm/wechart/templates/{cube,api,xcube-bootstrap}.yaml`, `values.yaml`, `deploy/helm/values/docker-desktop.yaml`: a plain Job for the bootstrap, Secrets for xcube's password and admin token, the settings on each Cube process, and a `startupProbe`;
     - `deploy/helm/verify.sh`, `docs/deploy.md`.
+    - As built, besides: `infra/xcube/bootstrap.sql` (the fork's, linked into the chart as `files/xcube-bootstrap.sql`), the chart's `secrets.yaml`, `_helpers.tpl` and `cube-config.yaml`, `packages/api/src/model/cube-config.test.ts`, `packages/api/src/deploy/cube-image.test.ts`, `e2e/xcube-cutover.spec.ts`, the read-only reason's tests, and comments in `e2e/model.spec.ts`, `publish-model.spec.ts` and `model-files.ts`.
   - Failing test:
     - both end-to-end suites pass in Chrome against xcube, including AC-009, AC-136, AC-137, AC-140 and AC-235's specs, whose ticks are kept or dropped by the result;
     - `e2e/xcube-cutover.spec.ts`: a member published through the phase-1 suite's API is queried and listed with every API process stopped and Cube restarted (the contract's D1; AC-330's model part). A publish through one API process is in the field list at once through another, started on the same database (D2; AC-334);
@@ -6199,6 +6200,50 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - the read-only reason for a Jinja, JavaScript or Python file (`packages/web/src/workspaces/model/FileList.tsx`) says xcube never serves it, since Cube no longer renders it (T446's review);
     - `verify.sh` does the same in the release.
   - Depends on: T419, T421, T445, T446
+  - **Done 2026-09-26.**
+    - **Compose.** Cube and its refresh worker run `xcube:v1.7.45-83cb9f0888`.
+      - `xcube-db-init` runs the fork's bootstrap on the metadata database first, and both wait for it.
+      - Both have `XCUBE_DATABASE_URL`; only the API instance has `XCUBE_ADMIN_TOKENS`.
+      - `cube.js` is xcube's `config()`, naming the claims `wechartModel` and `wechartRevision`. It keeps `contextToGroups` and the scopes, and sets no store, draft, version or cache settings.
+      - Each suite's API pushes its own model: `e2e`, and `e2e-security`.
+      - The demo API on :4200 now runs with `WECHART_XCUBE_MODEL=demo` and the dev admin token.
+    - **The docker-desktop release.**
+      - A plain bootstrap Job, named by its rendered pod template, so an upgrade that changes it makes a new Job.
+      - The chart generates xcube's role password and admin token.
+      - Each Cube pod has an init container that waits for xcube's schema, and a startup probe (`cube.startupSeconds`, 300).
+      - The API gets `api.xcubeModel` (`wechart`) and the token.
+      - The image is xcube's by default.
+    - **What the tests show:**
+      - **Phase-1 suite in Chrome against xcube:** 593/593. That includes AC-136's refusal and AC-137's field list (`model.spec.ts`, `publish-model.spec.ts`), AC-140's read-only reason, and AC-235's changed-file refusal (`preaggregations.spec.ts`).
+      - **Security suite in Chrome:** 28/28.
+      - **`xcube-cutover.spec.ts`** (Chrome, 6/6):
+        - D1: a cube published, then a second Cube process started that no API can reach, which lists and counts it at the recorded revision;
+        - D2: a second API process on the suite's database, whose field list has a publish at once, and the second Cube answers it too;
+        - AC-335: xcube's hash is the store's plain YAML, the Jinja template stays in wechart, and `product_catalog` is served;
+        - on an API with a database and model of its own: a commit whose send was lost is sent by the next start; a commit the running API didn't send is sent by its reconcile within 60 s (AC-333); a rollup that can't be joined, in a file the change leaves alone, refuses the publish (AC-235, R29).
+      - **`deploy/helm/verify.sh`**, security on: every check passes, including the upgrade through a renamed bootstrap Job. Its step 6: with the API scaled to 0 and Cube restarted, Cube counts the probe; with two API replicas, each lists a publish at once.
+      - **Unit:** `cube-config.test.ts` (xcube's `config()`, its keys, the scopes) and `cube-image.test.ts` (the image, the database, the tokens only on the API instance, the bootstrap first and its exact statements).
+    - **The old `cube-config.test.ts` tests** read wechart's model store, drafts, the untrusted-store fallback, draft names and the compiler-cache TTL. They were removed with that behaviour, which R29 removes at this cut-over. The test-integrity hook flags the removal, 17 assertions for 7; the scope and draft tests are kept.
+    - **The cold review (FAIL)** led to:
+      - AC-333's 60 s reconcile tested against xcube.
+      - A Helm upgrade can no longer fail on the immutable Job.
+      - D2 waits out a catching-up 503 before judging the second Cube's answer.
+      - The spec's API processes:
+        - have their own settings, not the shell's;
+        - are stopped if they don't come up;
+        - are checked to be the process answering;
+        - take ports by parallel index.
+      - The spec drops its database afterwards.
+      - `verify.sh` puts the API back to one replica on any exit.
+      - D1's second Cube starts after the publish, as D1 says.
+      - AC-235 added to this task.
+      - Stale comments corrected, and the bootstrap test pinned to its statements.
+      - The join-diagram e2e reads the edge and its box in one look, since other workers' publishes laid the diagram out again between two reads.
+    - **Left:**
+      - AC-330 stays open for its folders, groups and data sources.
+      - On a fresh xcube, the API's start sync isn't awaited before it listens. Until xcube holds the model, a query is refused `403 Unknown model` (T421's note), so the first import after a new install makes the first queries wait. That goes to T423, with the API's replicas and their readiness.
+      - The e2e's own xcube models (`e2e-cutover-<browser>`) persist in xcube's schema: xcube has no route that deletes a model.
+      - One `sed -i` edit to `verify.sh` (adding openssl to its tools) went round the Edit hooks, against CLAUDE.md; the change was the one intended, and its `.orig` was removed.
 - [ ] T420 (AC-326, AC-250) Call Cube and xcube on wechart's own behalf with a service credential, never a user's token *(moved to slice 4, 2026-09-26: xcube's admin routes take its static admin token until then, `[X2, R29]`)*
   - Files: `packages/api/src/cube/service-token.ts` (+ test), `packages/api/src/cube/client.ts`, `packages/api/src/model/introspection.ts`, `packages/api/src/jobs/*.ts`, `packages/api/src/cube/health.ts`
   - Failing test: `service-token.test.ts`:

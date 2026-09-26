@@ -1,0 +1,1 @@
+../../../../infra/xcube/bootstrap.sql

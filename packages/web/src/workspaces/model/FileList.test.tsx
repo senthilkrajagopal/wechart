@@ -131,11 +131,12 @@ describe('the model files', () => {
 
     const template = await screen.findByRole('region', { name: 'cubes/generated.yml' });
     expect(within(template).queryByRole('alert')).toBeNull();
+    // Never served: xcube serves plain YAML alone (T447, AC-335, R29).
     expect(template.textContent).toContain(
-      'Jinja template: Cube renders it before reading its cubes and views, so they aren’t listed from its text.',
+      'Jinja template: xcube serves plain YAML alone, so Cube never renders it, and its cubes and views aren’t served or listed.',
     );
     expect(screen.getByRole('region', { name: 'globals.py' }).textContent).toContain(
-      'Python: the functions and variables the Jinja templates use. It defines no cubes or views.',
+      'Python: xcube serves plain YAML alone, so Cube never reads it.',
     );
   });
 

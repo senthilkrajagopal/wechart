@@ -54,6 +54,30 @@ spec:
         runAsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      # xcube's role and schema come from the bootstrap Job; a Cube process
+      # started before them exits rather than retrying (research
+      # xcube-slice-2.md, Gotcha 14). So each waits here until it can connect
+      # as xcube and the schema is there (T447).
+      initContainers:
+        - name: wait-for-xcube-schema
+          image: {{ $.Values.meta.image }}
+          command:
+            - sh
+            - -c
+            - until psql "$XCUBE_DATABASE_URL" -Atc "select 1 from pg_namespace where nspname = 'xcube'" | grep -q 1; do sleep 2; done
+          env:
+            - name: XCUBE_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wechart.secretName" $ }}
+                  key: xcube-db-url
+          securityContext:
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
       containers:
         - name: cube
           image: {{ $.Values.cube.image }}
@@ -66,13 +90,33 @@ spec:
             {{- if eq $component "cube-refresh-worker" }}
             - name: CUBEJS_REFRESH_WORKER
               value: "true"
+            {{- else }}
+            # xcube's admin routes, which this release's API pushes the model
+            # to: on the API instance only, never the worker (T447; research,
+            # "Environment").
+            - name: XCUBE_ADMIN_TOKENS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wechart.secretName" $ }}
+                  key: xcube-admin-token
             {{- end }}
-          # With contextToAppId configured, as infra/cube/cube.js does,
+          # With contextToAppId configured, as xcube's config() does,
           # /readyz answers once the server is up and tests nothing further;
           # /livez tests the data source and Cube Store, and an outage there
           # is not something a restart mends. So /readyz for both, and the
           # data source is checked by a query (deploy/helm/verify.sh)
           # (docs/research/cube/kubernetes.md, Gotchas 1 and 2).
+          #
+          # Under xcube the port stays closed until every model is compiled
+          # (research xcube-slice-2.md, "Start-up"): the startup probe waits
+          # that out before the liveness probe may restart it (T447).
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: {{ div (int $.Values.cube.startupSeconds) 5 }}
           readinessProbe:
             httpGet:
               path: /readyz

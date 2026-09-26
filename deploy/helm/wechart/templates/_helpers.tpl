@@ -78,11 +78,6 @@ name: {{ default (include "wechart.secretName" .) $ref.name }}
 key: {{ if $ref.name }}{{ $ref.key | default "client-secret" }}{{ else }}oidc-client-secret{{ end }}
 {{- end }}
 
-{{/* Where Cube reads wechart's model store: the API, as Cube reaches it. */}}
-{{- define "wechart.modelStoreUrl" -}}
-{{- printf "http://%s:%d" (include "wechart.host" (list . "api")) (int .Values.api.port) }}
-{{- end }}
-
 {{/*
 The environment Cube's API and its refresh worker share, as docker-compose
 gives it to them. The data source is the values' own: CUBEJS_DB_* variables
@@ -135,15 +130,14 @@ Secret the values name, never from the values themselves.
   value: "false"
 - name: NODE_ENV
   value: production
-# The model is read from wechart's store (infra/cube/cube.js), which only this
-# release's API is.
-- name: WECHART_MODEL_STORES
-  value: {{ include "wechart.modelStoreUrl" . | quote }}
-- name: WECHART_MODEL_KEY
+# xcube's schema in the metadata database, where the model this release's API
+# pushes is served from (T447, AC-333; infra/cube/cube.js). Cube never calls
+# the API.
+- name: XCUBE_DATABASE_URL
   valueFrom:
     secretKeyRef:
       name: {{ include "wechart.secretName" . }}
-      key: model-key
+      key: xcube-db-url
 {{- range $variable, $value := .Values.cube.env }}
 - name: {{ $variable }}
   value: {{ $value | toString | quote }}
