@@ -6,7 +6,7 @@ import {
   imageProblem,
   newDashboardBody,
 } from '@wechart/core';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 
 import {
   CACHE_POLICIES,
@@ -18,13 +18,13 @@ import {
 import { authCheckOf } from './cube/authCheck';
 import { scopesOf } from './cube/scopes';
 import { healthOf, originOf } from './cube/health';
-import { MetaCache } from './cube/meta-cache';
+import { MetaCache, MetaCachesByGroups } from './cube/meta-cache';
 import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
 import type { SessionStore } from '@fastify/session';
 
 import { PUBLIC, registerGuard, registerRouteAccess, USER } from './auth/guard';
 import { registerSignIn, signInOptionsOf } from './auth/routes';
-import { registerUser, Unauthenticated, userOf } from './auth/user';
+import { Forbidden, registerUser, Unauthenticated, userOf } from './auth/user';
 import { registerBuilds } from './jobs/build';
 import { registerSchedules } from './jobs/schedules';
 import { registerIntrospection } from './model/introspection';
@@ -229,6 +229,35 @@ export function buildServer({
   // dashboard opening many tiles issues one /v1/meta request, not one per tile.
   const meta = metaCache ?? new MetaCache({ fetchMeta: () => client.meta() });
 
+  /**
+   * Cube as a request's user asks it (T322, AC-008): with security on, the
+   * configured context and exactly the user's AD groups, so the model's
+   * access policies apply by group; with it off, as configured. What wechart
+   * asks Cube for itself — compiling a publish, builds, schedules, a data
+   * source's catalog, health — keeps the configured context.
+   */
+  const cubeFor = (request: FastifyRequest): CubeClient =>
+    security === 'oidc' ? client.as({ groups: userOf(request).groups }) : client;
+  // And metadata per set of groups: access policies hide members per group.
+  const metaByGroups = new MetaCachesByGroups(
+    (groups) => new MetaCache({ fetchMeta: () => client.as({ groups }).meta() }),
+  );
+  const metaFor = (request: FastifyRequest): MetaCache =>
+    security === 'oidc' ? metaByGroups.for(userOf(request).groups) : meta;
+  /**
+   * A previewed security context (T172, AC-166) stands in for the asker's
+   * own, groups and all: with security on, a Super-Admin's alone (T322).
+   */
+  const previewOf = (request: FastifyRequest, value: unknown) => {
+    if (value === undefined) return undefined;
+    if (security === 'oidc' && !userOf(request).superAdmin) {
+      throw new Forbidden('Only a Super-Admin can preview another security context.');
+    }
+    const context = previewClaimsOf(value);
+    if (context === null) throw new BadRequest('A preview context is a JSON object.');
+    return context;
+  };
+
   /** Recording must never be what breaks a chart that loaded fine. */
   const record = async (entry: QueryLogEntry) => {
     try {
@@ -240,7 +269,7 @@ export function buildServer({
 
   app.get('/api/health', PUBLIC, () => ({ status: 'ok' }));
 
-  app.get('/api/meta', USER, async () => meta.meta());
+  app.get('/api/meta', USER, async (request) => metaFor(request).meta());
 
   /**
    * Who is signed in (AC-190, AC-252, AC-254): the name the top bar shows,
@@ -274,7 +303,18 @@ export function buildServer({
     files: modelFiles ? await modelFiles.list() : [],
   }));
 
-  registerModelPublishing(app, { config, client, meta, modelFiles });
+  registerModelPublishing(app, {
+    config,
+    client,
+    // A publish is seen at once by every set of groups too (T322).
+    meta: {
+      invalidate: () => {
+        meta.invalidate();
+        metaByGroups.invalidate();
+      },
+    },
+    modelFiles,
+  });
   registerBuilds(app, client);
   // With the model's files: a key's SQL is read there (T273's review).
   registerSchedules(app, client, modelFiles);
@@ -308,7 +348,7 @@ export function buildServer({
   app.delete('/api/running-query/:requestId', USER, async (request, reply) => {
     const { requestId } = request.params as { requestId: string };
     try {
-      await client.cancel(requestId);
+      await cubeFor(request).cancel(requestId);
     } catch (error) {
       app.log.warn({ err: error, requestId }, 'could not cancel query');
     }
@@ -331,14 +371,17 @@ export function buildServer({
     if (cache !== undefined && !CACHE_POLICIES.includes(cache as CachePolicy))
       throw new BadRequest();
     // A previewed security context (T172, AC-166): its claims, never wechart's.
-    const context = body.context === undefined ? undefined : previewClaimsOf(body.context);
-    if (context === null) throw new BadRequest('A preview context is a JSON object.');
+    const context = previewOf(request, body.context);
 
     const requestId = String(request.headers['x-request-id'] ?? 'unknown');
     const startedAt = performance.now();
 
     try {
-      const result = await client.load(body.query, cache as CachePolicy | undefined, context);
+      const result = await cubeFor(request).load(
+        body.query,
+        cache as CachePolicy | undefined,
+        context,
+      );
       const { accelerated, preAggregation } = accelerationOf(result);
       await record({
         requestId,
@@ -374,7 +417,8 @@ export function buildServer({
     // One plan, or — for a query Cube runs as several — one per query; a
     // match only if a rollup serves every one, Cube's matching being
     // all-or-nothing (research/cube/pre-aggregations.md §2).
-    const planned = await client.sql(query);
+    const cube = cubeFor(request);
+    const planned = await cube.sql(query);
     const usedBy = (Array.isArray(planned) ? planned : [planned]).map((plan) =>
       (
         (plan as { sql?: { preAggregations?: { preAggregationId?: unknown }[] } } | null)?.sql
@@ -389,7 +433,7 @@ export function buildServer({
     // Why not is extra: the miss is Cube's plan, and holds without a reason —
     // a chart rollup-only mode would refuse still says so (T153's review).
     try {
-      const [dryRun, compiled] = await Promise.all([client.dryRun(query), client.metaExtended()]);
+      const [dryRun, compiled] = await Promise.all([cube.dryRun(query), cube.metaExtended()]);
       const transformed =
         (dryRun as { transformedQueries?: Transformed[] } | null)?.transformedQueries?.[0] ?? {};
       return { matched: null, miss: missOf(transformed, query, rollupsFrom(compiled)) };
@@ -410,9 +454,8 @@ export function buildServer({
   app.post('/api/sql', USER, async (request, reply) => {
     const body = request.body as { query?: Record<string, unknown>; context?: unknown } | undefined;
     if (!body?.query) throw new BadRequest();
-    const context = body.context === undefined ? undefined : previewClaimsOf(body.context);
-    if (context === null) throw new BadRequest('A preview context is a JSON object.');
-    const planned = await client.sql(body.query, context);
+    const context = previewOf(request, body.context);
+    const planned = await cubeFor(request).sql(body.query, context);
     const queries = (Array.isArray(planned) ? planned : [planned]).map((plan) => {
       const [sql, params] = (plan as { sql?: { sql?: [unknown, unknown] } } | null)?.sql?.sql ?? [];
       return { sql, params: Array.isArray(params) ? params : [] };
@@ -1032,6 +1075,11 @@ export function buildServer({
     // Nobody signed in (AC-251): no content, whatever the route.
     if (error instanceof Unauthenticated) {
       return reply.status(401).send({ error: 'unauthenticated' });
+    }
+
+    // Signed in, and not allowed this (T322).
+    if (error instanceof Forbidden) {
+      return reply.status(403).send({ error: error.message });
     }
 
     app.log.error(error);

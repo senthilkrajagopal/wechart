@@ -51,13 +51,28 @@ export class CubeClient {
   readonly #securityContext: Record<string, unknown>;
   readonly #ttl: number;
   readonly #fetch: typeof fetch;
+  readonly #options: CubeClientOptions;
 
   constructor(options: CubeClientOptions) {
+    this.#options = options;
     this.#apiUrl = options.apiUrl.replace(/\/$/, '');
     this.#apiSecret = options.apiSecret;
     this.#securityContext = options.securityContext;
     this.#ttl = options.tokenTtlSeconds ?? DEFAULT_TTL_SECONDS;
     this.#fetch = options.fetchImpl ?? fetch;
+  }
+
+  /**
+   * This client for one signed-in user (T322, AC-008): the configured context
+   * with the user's AD groups beside it, in place of any the configuration
+   * names, so the model's access policies apply by group (infra/cube/cube.js,
+   * `contextToGroups`; research/cube/access-control.md).
+   */
+  as(user: { readonly groups: readonly string[] }): CubeClient {
+    return new CubeClient({
+      ...this.#options,
+      securityContext: { ...this.#securityContext, groups: [...user.groups] },
+    });
   }
 
   /**

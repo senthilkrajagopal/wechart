@@ -1,0 +1,222 @@
+import type { FastifyInstance } from 'fastify';
+import { afterAll, describe, expect, it } from 'vitest';
+
+import { CubeClient } from '../cube/client';
+import { closeDb, getDb } from '../db/client';
+import { buildServer } from '../server';
+import { pgSessionStore } from './session-store';
+import { PUBLIC_URL, signIn, USERS } from './sign-in.fixture';
+
+/**
+ * T322 (AC-008): WHEN wechart queries Cube, THE SYSTEM SHALL attach the
+ * configured security context to every request. WHILE security is enabled, it
+ * SHALL also attach the signed-in user's AD groups, so the model's access
+ * policies apply by group.
+ * `Fails when: … with security enabled, a request carries no groups or groups
+ * other than the user's …`
+ *
+ * Cube stands in as a recorder of the tokens it is sent; the users sign in
+ * through the real development provider.
+ */
+const config = {
+  cubeApiUrl: 'http://cube.invalid/cubejs-api',
+  cubeApiSecret: 'secret',
+  securityContext: { tenant: 'acme' },
+  port: 4100,
+  modelDir: '',
+};
+const secured = {
+  ...config,
+  security: 'oidc' as const,
+  publicUrl: PUBLIC_URL,
+  sessionSecret: 'a-test-session-secret-at-least-32-characters',
+  oidc: {
+    issuer: 'http://localhost:5556/dex',
+    clientId: 'wechart',
+    clientSecret: 'dev-oidc-secret',
+    groupsClaim: 'groups',
+    scopes: 'openid profile email groups',
+    allowHttp: true,
+  },
+};
+
+interface Asked {
+  readonly path: string;
+  readonly claims: Record<string, unknown>;
+}
+
+/**
+ * A Cube that records each request's path and the claims its token carries.
+ * Asked to compile a draft, it reads the draft back from the server, as Cube
+ * does (publish.test.ts), once `holder.app` is set.
+ */
+function recordingCube(holder: { app?: FastifyInstance } = {}): {
+  cube: CubeClient;
+  asked: Asked[];
+} {
+  const asked: Asked[] = [];
+  const cube = new CubeClient({
+    apiUrl: config.cubeApiUrl,
+    apiSecret: config.cubeApiSecret,
+    securityContext: config.securityContext,
+    fetchImpl: (async (url: string | URL, init?: RequestInit) => {
+      const token = String(new Headers(init?.headers).get('authorization')).replace('Bearer ', '');
+      const claims = JSON.parse(
+        Buffer.from(token.split('.')[1]!, 'base64url').toString('utf8'),
+      ) as Record<string, unknown>;
+      const path = new URL(String(url)).pathname;
+      asked.push({ path, claims });
+      const draft = claims['wechartDraft'];
+      if (path.endsWith('/meta') && typeof draft === 'string' && holder.app !== undefined) {
+        await holder.app.inject({
+          method: 'GET',
+          url: `/api/cube-model/drafts/${draft}`,
+          headers: { 'x-wechart-model-key': 'model-key' },
+        });
+      }
+      const body = path.endsWith('/sql')
+        ? { sql: { sql: ['select 1', []] } }
+        : path.endsWith('/meta')
+          ? { cubes: [] }
+          : path.endsWith('/dry-run')
+            ? { pivotQuery: {}, normalizedQueries: [] }
+            : { data: [], annotation: {} };
+      return new Response(JSON.stringify(body), { status: 200 });
+    }) as typeof fetch,
+  });
+  return { cube, asked };
+}
+
+const servers: FastifyInstance[] = [];
+afterAll(async () => {
+  await Promise.all(servers.map((server) => server.close()));
+  await closeDb();
+});
+const serve = (options: Parameters<typeof buildServer>[0]) => {
+  const app = buildServer(options);
+  servers.push(app);
+  return app;
+};
+
+const QUERY = { query: { measures: ['orders.count'] } };
+
+describe('a signed-in user’s groups in every Cube request (T322, AC-008)', () => {
+  it('asks Cube with the configured context and exactly the user’s groups', async () => {
+    const { cube, asked } = recordingCube();
+    const app = serve({ config: secured, cube, sessions: pgSessionStore(getDb()) });
+    const cookie = await signIn(app, USERS['many']!);
+    const headers = { cookie };
+
+    const answers = [
+      await app.inject({ method: 'GET', url: '/api/meta', headers }),
+      await app.inject({ method: 'POST', url: '/api/load', headers, payload: QUERY }),
+      await app.inject({ method: 'POST', url: '/api/sql', headers, payload: QUERY }),
+      await app.inject({ method: 'POST', url: '/api/acceleration', headers, payload: QUERY }),
+      await app.inject({ method: 'DELETE', url: '/api/running-query/r-1', headers }),
+    ];
+    expect(answers.map((answer) => answer.statusCode)).toEqual([200, 200, 200, 200, 204]);
+
+    // Every route above reached Cube: none skipped by an error.
+    expect(asked.map(({ path }) => path.replace('/cubejs-api', ''))).toEqual([
+      '/v1/meta',
+      '/v1/load',
+      '/v1/sql',
+      '/v1/sql',
+      '/v1/dry-run',
+      '/v1/meta',
+      '/v1/running-query/r-1',
+    ]);
+    for (const { path, claims } of asked) {
+      expect({ tenant: claims['tenant'], groups: claims['groups'] }, path).toEqual({
+        tenant: 'acme',
+        groups: USERS['many']!.groups,
+      });
+    }
+  });
+
+  it('keeps each set of groups’ metadata apart: what Cube shows depends on them', async () => {
+    const { cube, asked } = recordingCube();
+    const app = serve({ config: secured, cube, sessions: pgSessionStore(getDb()) });
+    const writer = await signIn(app, USERS['writer']!);
+    const reader = await signIn(app, USERS['reader']!);
+
+    await app.inject({ method: 'GET', url: '/api/meta', headers: { cookie: writer } });
+    await app.inject({ method: 'GET', url: '/api/meta', headers: { cookie: reader } });
+    await app.inject({ method: 'GET', url: '/api/meta', headers: { cookie: writer } });
+
+    const metas = asked.filter(({ path }) => path.endsWith('/meta'));
+    // One fetch per set of groups; the second writer request is answered from theirs.
+    expect(metas.map(({ claims }) => claims['groups'])).toEqual([['sales-rw'], ['sales-ro']]);
+  });
+
+  // T322's review: a publish must reach every set's metadata, not only the
+  // configured context's, or a new member is missing for up to a minute.
+  it('asks each set of groups afresh after a publish', async () => {
+    const holder: { app?: FastifyInstance } = {};
+    const { cube, asked } = recordingCube(holder);
+    const files: { path: string; content: string }[] = [];
+    const app = serve({
+      config: { ...secured, modelKey: 'model-key', cubeStoreUrl: 'http://store.invalid' },
+      cube,
+      sessions: pgSessionStore(getDb()),
+      modelFiles: {
+        list: async () => files,
+        seed: async () => undefined,
+        write: async (written) => {
+          files.push(...written);
+        },
+      },
+    });
+    holder.app = app;
+    const cookie = await signIn(app, USERS['writer']!);
+    const writersMeta = () =>
+      asked.filter(
+        ({ path, claims }) =>
+          path.endsWith('/meta') && JSON.stringify(claims['groups']) === '["sales-rw"]',
+      );
+
+    await app.inject({ method: 'GET', url: '/api/meta', headers: { cookie } });
+    await app.inject({ method: 'GET', url: '/api/meta', headers: { cookie } });
+    expect(writersMeta()).toHaveLength(1);
+    const published = await app.inject({
+      method: 'POST',
+      url: '/api/model/publish',
+      headers: { cookie },
+      payload: {
+        files: [{ path: 'cubes/a.yml', content: 'cubes:\n  - name: a\n    sql_table: a\n' }],
+      },
+    });
+    expect(published.statusCode, published.body).toBe(200);
+    await app.inject({ method: 'GET', url: '/api/meta', headers: { cookie } });
+    expect(writersMeta()).toHaveLength(2);
+  });
+
+  it('refuses a previewed context to anyone but a Super-Admin: it would stand in for their groups', async () => {
+    const { cube, asked } = recordingCube();
+    const app = serve({ config: secured, cube, sessions: pgSessionStore(getDb()) });
+    const cookie = await signIn(app, USERS['writer']!);
+    const preview = { ...QUERY, context: { groups: ['managers'] } };
+
+    for (const url of ['/api/load', '/api/sql']) {
+      const response = await app.inject({
+        method: 'POST',
+        url,
+        headers: { cookie },
+        payload: preview,
+      });
+      expect(response.statusCode, url).toBe(403);
+    }
+    expect(asked).toEqual([]);
+  });
+});
+
+describe('with security off (AC-008, phase 1)', () => {
+  it('asks Cube with the configured context alone', async () => {
+    const { cube, asked } = recordingCube();
+    const app = serve({ config, cube });
+    await app.inject({ method: 'POST', url: '/api/load', payload: QUERY });
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.claims['tenant']).toBe('acme');
+    expect(asked[0]!.claims).not.toHaveProperty('groups');
+  });
+});

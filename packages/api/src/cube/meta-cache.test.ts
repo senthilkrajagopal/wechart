@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_META_STALENESS_MS, MetaCache } from './meta-cache';
+import { MAX_META_STALENESS_MS, MetaCache, MetaCachesByGroups } from './meta-cache';
 
 /**
  * AC-009: WHEN Cube reports a new `schemaVersion`, THE SYSTEM SHALL serve
@@ -157,5 +157,41 @@ describe('metadata freshness (AC-009)', () => {
 
     await expect(cache.meta()).rejects.toThrow('Cube is down');
     expect(nameIn(await cache.meta())).toBe('recovered');
+  });
+});
+
+/** T322 (AC-008): metadata per set of groups, since policies hide members per group. */
+describe('metadata per set of AD groups', () => {
+  const byGroups = () => {
+    const fetched: string[][] = [];
+    const caches = new MetaCachesByGroups(
+      (groups) =>
+        new MetaCache({
+          fetchMeta: async () => {
+            fetched.push([...groups]);
+            return { cubes: [{ name: groups.join('+') }] };
+          },
+          now: () => 0,
+        }),
+    );
+    return { caches, fetched };
+  };
+
+  it('is one cache for a set of groups, whatever their order or repeats', async () => {
+    const { caches, fetched } = byGroups();
+    expect(nameIn(await caches.for(['b', 'a']).meta())).toBe('a+b');
+    expect(nameIn(await caches.for(['a', 'b', 'a']).meta())).toBe('a+b');
+    expect(nameIn(await caches.for(['c']).meta())).toBe('c');
+    expect(fetched).toEqual([['a', 'b'], ['c']]);
+  });
+
+  it('asks every set afresh after a publish', async () => {
+    const { caches, fetched } = byGroups();
+    await caches.for(['a']).meta();
+    await caches.for(['b']).meta();
+    caches.invalidate();
+    await caches.for(['a']).meta();
+    await caches.for(['b']).meta();
+    expect(fetched).toEqual([['a'], ['b'], ['a'], ['b']]);
   });
 });

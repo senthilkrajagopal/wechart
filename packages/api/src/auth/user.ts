@@ -47,6 +47,14 @@ export class Unauthenticated extends Error {
   }
 }
 
+/** A signed-in user asking for what their role doesn't allow: answered 403. */
+export class Forbidden extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'Forbidden';
+  }
+}
+
 /**
  * The request's user, or 401. Handlers take the user through this and never
  * fall back to anyone: with security on, nobody signed in is nobody, not the

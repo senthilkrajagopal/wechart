@@ -83,3 +83,41 @@ export class MetaCache {
     }
   }
 }
+
+/** At most this many sets of groups keep their metadata; the oldest goes first. */
+const MAX_GROUP_SETS = 256;
+
+/**
+ * Metadata per set of AD groups (T322, AC-008). With security on, what Cube
+ * shows depends on the groups a request carries (access policies hide members
+ * per group), so no two sets share an answer; each keeps AC-009's bound.
+ */
+export class MetaCachesByGroups {
+  readonly #caches = new Map<string, MetaCache>();
+  readonly #make: (groups: readonly string[]) => MetaCache;
+
+  constructor(make: (groups: readonly string[]) => MetaCache) {
+    this.#make = make;
+  }
+
+  /** The cache for these groups, whatever their order or repeats. */
+  for(groups: readonly string[]): MetaCache {
+    const set = [...new Set(groups)].sort();
+    const key = JSON.stringify(set);
+    let cache = this.#caches.get(key);
+    if (cache === undefined) {
+      if (this.#caches.size >= MAX_GROUP_SETS) {
+        const oldest = this.#caches.keys().next().value;
+        if (oldest !== undefined) this.#caches.delete(oldest);
+      }
+      cache = this.#make(set);
+      this.#caches.set(key, cache);
+    }
+    return cache;
+  }
+
+  /** A publish is seen by every set at once (T142/T143). */
+  invalidate(): void {
+    for (const cache of this.#caches.values()) cache.invalidate();
+  }
+}

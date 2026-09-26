@@ -14,7 +14,7 @@ import { test as base, expect, type BrowserContext, type Page } from '@playwrigh
  * The users and their test passwords are Dex's static ones
  * (`infra/dex/test-users.json`, T315): development values only.
  */
-export type Role = 'super' | 'writer' | 'reader' | 'many' | 'nobody';
+export type Role = 'super' | 'writer' | 'reader' | 'many' | 'nobody' | 'manager';
 
 interface TestUser {
   readonly email: string;

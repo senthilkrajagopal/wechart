@@ -39,11 +39,10 @@
 >   `search-palette.spec.ts` "the arrows and Enter open one": its option ids are by
 >   position, so a result source that answers late shifts them between key presses.
 >   All pass alone.
-> - **Must land with T322 (found while planning T323):** `/api/load` and `/api/sql` accept a
->   previewed `context` (T172, AC-166) that *replaces* the Cube security context. With
->   security on, anyone signed in could then ask as another group. While security is on,
->   refuse a `context` with 403 to anyone who isn't a Super-Admin (everyone, until T323
->   computes Super-Admins), and test it in T322's `client.test.ts`/`server.test.ts`.
+> - **Landed with T322:** a previewed `context` on `/api/load` and `/api/sql` is refused (403)
+>   to anyone but a Super-Admin while security is on. T323 must add the test that a
+>   Super-Admin's preview still reaches Cube. For the user: T322 reads AC-008's "every
+>   request" as every request made for a signed-in user (see its done notes).
 > - **Docker Desktop stopped once mid-session (2026-09-25).** After restarting it, bring
 >   the compose stack back with `docker compose --profile security up -d --wait`; the
 >   Helm release recovers by itself.

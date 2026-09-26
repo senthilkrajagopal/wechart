@@ -5140,10 +5140,21 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - an e2e for an expired session opening a page.
     - **Also changed:** the phase-1 status-labels test held every API answer, `/api/me` included, so the gated app showed nothing; it now lets `/api/me` through and still holds each surface's own requests (the full run's 24 failures, all from this).
     - **Ticked:** AC-253 (page and API halves) and AC-316 (the lapse through the browser, and no activity extending it). AC-251 stays open for the deployment's nginx gate (T324).
-- [ ] T322 (AC-008) Put the signed-in user's groups into every Cube request's security context
+- [x] T322 (AC-008) Put the signed-in user's groups into every Cube request's security context
   - Files: `packages/api/src/cube/client.ts` (a per-request `groups` claim), `packages/api/src/server.ts`, `packages/api/src/cube/client.test.ts`, `e2e/security/cube-groups.spec.ts`
   - Failing test: `client.test.ts`: with security on, every Cube request's token carries the configured context and exactly the user's groups; `cube-groups.spec.ts`: the seeded `secured_orders` view returns rows to a member of `managers` and none to `writer` (AC-008).
   - Depends on: T316
+  - **Done 2026-09-25.**
+    - `CubeClient.as({ groups })` is the client for one user: the configured context with exactly their groups, in place of any the configuration names.
+    - With security on, every request made on the signed-in user's behalf uses it: `/api/meta`, `/api/load`, `/api/sql`, `/api/acceleration` (its SQL, dry run and compiled model) and cancelling a query.
+    - Metadata is cached per set of groups (`MetaCachesByGroups`, sorted and deduped, at most 256 sets), since policies hide members per group. A publish refreshes every set.
+    - **The reading taken (for the user to confirm):** AC-008's "every request" is taken as every request made for a signed-in user. wechart's own requests keep the configured context alone: compiling a publish, builds, schedules, a data source's catalog, health and scope probes. Group policies hiding members there would break their checks.
+    - **Found while planning T323:** a previewed `context` (T172, AC-166) stands in for the asker's own, groups and all. With security on it is refused with 403 unless the asker is a Super-Admin (nobody until T323).
+    - **Tests:**
+      - `auth/cube-groups.test.ts`, with users signed in through Dex: each route's status, the exact Cube calls, and the groups on each; metadata per set of groups; a publish refreshing each set; the preview refused; security off sends no groups.
+      - `e2e/security/cube-groups.spec.ts`, in every browser: `manager` gets every status of the seeded `secured_orders` view; `writer` gets Cube's refusal (a hidden member) and no rows.
+    - The cold review (PASS) led to the publish test, the exact calls and statuses, and the writer test asserting Cube's refusal rather than any failure.
+    - AC-008 stays open: it is traced to T339 too.
 - [ ] T323 (AC-256, AC-265) Take the Super-Admin group from the deployment's configuration and open every admin surface to its members
   - Files: `packages/api/src/config.ts` (`WECHART_SUPER_ADMIN_GROUP`), `packages/api/src/auth/user.ts`, `packages/api/src/auth/admin.test.ts`
   - Failing test: `admin.test.ts`: a member of the configured group gets `superAdmin: true` and reaches every folder and admin route; a user outside it gets 403 on the admin routes (AC-256, AC-265).

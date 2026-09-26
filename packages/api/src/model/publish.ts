@@ -135,7 +135,8 @@ export function registerModelPublishing(
   }: {
     config: Config;
     client: CubeClient;
-    meta: MetaCache;
+    /** What a publish makes stale: every cache of Cube's metadata (T322). */
+    meta: Pick<MetaCache, 'invalidate'>;
     modelFiles: ModelFileStore | undefined;
   },
 ): void {

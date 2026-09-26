@@ -99,6 +99,44 @@ describe('security context (AC-008)', () => {
     }
   });
 
+  /**
+   * T322 (AC-008, phase 2): WHILE security is enabled, … also attach the
+   * signed-in user's AD groups, so the model's access policies apply by group.
+   */
+  it('attaches a user’s groups beside the configured context, exactly as given', async () => {
+    const cube = client().as({ groups: ['sales-rw', 'g02'] });
+    await cube.meta();
+    await cube.load({ measures: ['Orders.count'] });
+    await cube.sql({ measures: ['Orders.count'] });
+
+    expect(received).toHaveLength(3);
+    for (const request of received) {
+      const payload = payloadOf(request);
+      expect({
+        tenant: payload['tenant'],
+        role: payload['role'],
+        groups: payload['groups'],
+      }).toEqual({
+        tenant: 'acme',
+        role: 'analyst',
+        groups: ['sales-rw', 'g02'],
+      });
+    }
+  });
+
+  it('gives the user’s groups in place of any the configuration names, and none to the client it came from', async () => {
+    const configured = new CubeClient({
+      apiUrl: baseUrl,
+      apiSecret: 'test-secret-do-not-leak',
+      securityContext: { tenant: 'acme', groups: ['everyone'] },
+    });
+    received = [];
+    await configured.as({ groups: [] }).meta();
+    await configured.meta();
+    expect(payloadOf(received[0]!)['groups']).toEqual([]);
+    expect(payloadOf(received[1]!)['groups']).toEqual(['everyone']);
+  });
+
   it('signs the token with the configured secret, so Cube can verify it', async () => {
     await client({ apiSecret: 'a-specific-secret' }).meta();
 
