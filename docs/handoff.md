@@ -21,9 +21,10 @@
 >   in wechart and in the Cube fork, so it can be rolled back. `main` was pushed at
 >   d844a7c (T314). `feat/xcube` holds slice 0's first step: the Cube image moved to
 >   the fork's package, `cube:v1.7.45-introspection-0b6eef90a9` (research re-pinned, T413–T415).
->   Its complete test passed apart from load flakes; the user asked whether to merge it into
->   `main` and tag it, and was offered `git merge --no-ff feat/xcube` plus a tag
->   `cube-package-0b6eef90a9`, waiting for their yes.
+>   Its complete test passed apart from load flakes, and at the user's word it was merged
+>   into `main` with `--no-ff` (98c2d2e, revertible in one step with `git revert -m 1`) and
+>   tagged `cube-package-0b6eef90a9`, with T416. `feat/xcube` was then brought up to `main`;
+>   slice 0's rest (the rename, a registry, a digest pin) and slices 1 onward start there.
 > - **Deployed:** the release on docker-desktop runs `feat/xcube`: wechart-api/web:abad2c2,
 >   Cube on the package's image, sign-in on through `values/docker-desktop-security.yaml`
 >   (Helm revision 12; revision 14 is a rollback to it after an accidental upgrade, below).
