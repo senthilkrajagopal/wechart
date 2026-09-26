@@ -33,6 +33,30 @@ data:
             return 200 "ok\n";
         }
 
+        {{- if (.Values.security).enabled }}
+        # With security on, every page and every file of the app asks the API
+        # whether anyone is signed in, and a page nobody is signed in to goes
+        # to sign-in, carrying its address: no wechart content is served first
+        # (T321, AC-251; research/openid-client.md, "nginx: gating page
+        # requests"). /api/ is the API's own to refuse (T318).
+        location = /_auth {
+            internal;
+            proxy_pass http://{{ include "wechart.host" (list . "api") }}:{{ .Values.api.port }}/api/auth/check;
+            proxy_pass_request_body off;
+            proxy_set_header Content-Length "";
+            # proxy_set_header is all-or-nothing per level (research/nginx.md).
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $host;
+        }
+
+        location @signin {
+            return 302 /api/auth/login?returnTo=$request_uri;
+        }
+        {{- end }}
+
         # Cube reads the model from the API's own Service, inside the
         # cluster; the browser has no business there.
         location /api/cube-model/ {
@@ -58,15 +82,32 @@ data:
         # Vite's hashed files never change; one that is missing is a 404,
         # not the app.
         location /assets/ {
+            {{- if (.Values.security).enabled }}
+            auth_request /_auth;
+            error_page 401 = @signin;
+            {{- end }}
             try_files $uri =404;
+            {{- if (.Values.security).enabled }}
+            # Only for the signed-in: no shared cache may hand them on (T321's review).
+            add_header Cache-Control "private, max-age=31536000, immutable";
+            {{- else }}
             add_header Cache-Control "public, max-age=31536000, immutable";
+            {{- end }}
         }
 
         location = /index.html {
+            {{- if (.Values.security).enabled }}
+            auth_request /_auth;
+            error_page 401 = @signin;
+            {{- end }}
             add_header Cache-Control "no-cache";
         }
 
         location / {
+            {{- if (.Values.security).enabled }}
+            auth_request /_auth;
+            error_page 401 = @signin;
+            {{- end }}
             try_files $uri /index.html;
         }
     }

@@ -5114,10 +5114,32 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - every role (`super`, `writer`, `reader`, `many` with 20 groups, `nobody` with none) is named in the top bar, and `/api/me` holds exactly its token's groups.
     - The cold review (PASS) led to that every-role spec, the per-worker sign-in's source in the research, and two notes in the config: the suites mustn't run at once (both rebuild `dist`), and a task that publishes models from this suite needs port 4300 among Cube's model stores.
     - AC-252 is ticked on this real top bar with the groups check. AC-257 stays open for its Helm half (T324).
-- [ ] T321 (AC-251, AC-316, AC-253) Send a page request without a session to sign-in, rendering no wechart content first
+- [x] T321 (AC-251, AC-316, AC-253) Send a page request without a session to sign-in, rendering no wechart content first
   - Files: `packages/web/src/shell/AuthGate.tsx` (+ test), `packages/web/src/api/http.ts` (a 401 sends the browser to `/api/auth/login?returnTo=…`), `deploy/helm/wechart/templates/web-config.yaml` (`auth_request` to `/api/auth/check` when security is on)
   - Failing test: `AuthGate.test.tsx`: nothing of the app renders until `/api/me` succeeds; `e2e/security/sign-in.spec.ts`: opening `/explore` without a session lands on Dex's login form with no wechart text on the page (AC-251); signing out through the account menu, then opening `/explore`, lands on Dex's form with no user named (AC-253's page half, T317's review); a session whose 12 hours have passed (its row's expiry moved into the past) sends `/explore` to Dex's form too (AC-316 through the browser, T320's review).
   - Depends on: T318, T320
+  - **Done 2026-09-25.**
+    - **The app** (`shell/AuthGate.tsx`, around the whole app in `main.tsx`):
+      - until `/api/me` answers it shows only the product mark and "Opening wechart…" with its icon;
+      - a 401 sends the browser to sign-in with the page's own address;
+      - any other answer renders the app (security off; the API still refuses its data without a session).
+    - **Mid-session**, a 401 from any API route but sign-in's, and only wechart's own `{ error: 'unauthenticated' }`, shows rule 60's "Your session has ended" state: product mark, sentence, Sign in, with nothing of wechart behind it. The gate watches `window.fetch`, so the app's many callers needn't report it; there is no `api/http.ts`.
+    - **The API** gains `GET /api/auth/check` (204 or 401) for nginx. `/api/auth/login` takes an unencoded `returnTo` whole when it comes first, since nginx can only pass `$request_uri` as it is.
+    - **The chart's nginx**, with `security.enabled`, gates `/`, `/index.html` and `/assets/` with `auth_request` and sends a 401 to sign-in. The pinned image has the module and both renders pass `nginx -t`; T324 runs it.
+    - **`e2e/security/page-gate.spec.ts`** (Chrome, Firefox, Safari):
+      - no session lands on Dex's form, and the top bar never appeared first;
+      - sign-in returns to the page asked for;
+      - after Sign out, `/explore` asks again;
+      - a session whose row has expired shows the ended state mid-work, and asks again on opening a page.
+    - **The cold review (FAIL)** found:
+      - `returnToOf` decoding nginx's already-encoded address again: `%26`, `%23` and `%25` now survive, tested;
+      - a signed-in `/api/auth/login` re-saving the session with a fresh 12 hours (from T316): signed in, it now goes straight back and leaves the session alone, tested against the row's expiry;
+      - T324 must show a signed-in page and script through nginx (added to T324, with AC-251);
+      - gated assets now `private` in the cache;
+      - the ended dialog described by its sentence;
+      - an e2e for an expired session opening a page.
+    - **Also changed:** the phase-1 status-labels test held every API answer, `/api/me` included, so the gated app showed nothing; it now lets `/api/me` through and still holds each surface's own requests (the full run's 24 failures, all from this).
+    - **Ticked:** AC-253 (page and API halves) and AC-316 (the lapse through the browser, and no activity extending it). AC-251 stays open for the deployment's nginx gate (T324).
 - [ ] T322 (AC-008) Put the signed-in user's groups into every Cube request's security context
   - Files: `packages/api/src/cube/client.ts` (a per-request `groups` claim), `packages/api/src/server.ts`, `packages/api/src/cube/client.test.ts`, `e2e/security/cube-groups.spec.ts`
   - Failing test: `client.test.ts`: with security on, every Cube request's token carries the configured context and exactly the user's groups; `cube-groups.spec.ts`: the seeded `secured_orders` view returns rows to a member of `managers` and none to `writer` (AC-008).
@@ -5126,10 +5148,11 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/config.ts` (`WECHART_SUPER_ADMIN_GROUP`), `packages/api/src/auth/user.ts`, `packages/api/src/auth/admin.test.ts`
   - Failing test: `admin.test.ts`: a member of the configured group gets `superAdmin: true` and reaches every folder and admin route; a user outside it gets 403 on the admin routes (AC-256, AC-265).
   - Depends on: T313, T316
-- [ ] T324 (AC-257) Run Dex beside wechart in the Helm release on docker-desktop and sign in there
+- [ ] T324 (AC-257, AC-251) Run Dex beside wechart in the Helm release on docker-desktop and sign in there
   - Files: `deploy/helm/wechart/templates/{dex.yaml,dex-config.yaml}`, `deploy/helm/wechart/values.yaml` (`security.enabled`, `security.oidc.*`, `security.dex.*`, `security.superAdminGroup`), `deploy/helm/wechart/templates/{api.yaml,secrets.yaml,_helpers.tpl}` (the OIDC client secret and the session secret, generated once), `deploy/helm/values/docker-desktop.yaml`, `deploy/helm/verify.sh`
   - Failing test: `verify.sh` with security on: `/explore` without a cookie is redirected to Dex; a scripted sign-in as `writer` through Dex's form makes `/api/me` answer with that user (AC-257, Helm half).
   - Depends on: T321, T317
+  - Also (T321's review): signed in, a page and the app's script answer 200 through nginx's `auth_request`, so the subrequest is shown to carry the cookie (AC-251's page half in the deployment; research's open question).
 
 ## P2.2 Folder permissions and roles (F26)
 
@@ -5571,7 +5594,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
 | AC-234 | T378 | AC-246 | T404 | AC-249 | T336 |
-| AC-251 | T318, T321 | AC-252 | T316, T319, T320 | AC-253 | T317, T321 |
+| AC-251 | T318, T321, T324 | AC-252 | T316, T319, T320 | AC-253 | T317, T321 |
 | AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
 | AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327 |

@@ -887,9 +887,9 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R14, R15, R18, R19]`.
       Fails when: any page renders wechart content, or any API route other than health returns data, without a signed-in session.
 - [x] AC-252 WHERE security is enabled, WHEN a user signs in, THE SYSTEM SHALL take their identity and AD groups from the provider's token, as the configuration names them (issuer, client, groups claim), and show the user's name and a Sign out control in the top bar.
       Fails when: the groups wechart grants access by differ from the token's, or the top bar shows no name or no Sign out.
-- [ ] AC-253 WHEN the user signs out, THE SYSTEM SHALL end the wechart session, so that the next request needs a new sign-in.
+- [x] AC-253 WHEN the user signs out, THE SYSTEM SHALL end the wechart session, so that the next request needs a new sign-in.
       Fails when: after signing out, a page or API route still answers as that user.
-- [ ] AC-316 WHERE security is enabled, THE SYSTEM SHALL end a sign-in 12 hours after it began, whatever the activity, so that the next request needs a new sign-in (`[R24]`).
+- [x] AC-316 WHERE security is enabled, THE SYSTEM SHALL end a sign-in 12 hours after it began, whatever the activity, so that the next request needs a new sign-in (`[R24]`).
       Fails when: a session signed in more than 12 hours ago still answers as its user, or one signed in less than 12 hours ago is refused.
 - [ ] AC-254 WHILE security is disabled, THE SYSTEM SHALL run in single-user mode: no sign-in, and one user holding every permission, as a Super-Admin does. Workspaces and proposals SHALL work as with security on, and that user approves their own proposals (`[P2 input, R19]`).
       Fails when: a sign-in is asked for, or any permission is refused, while security is disabled.

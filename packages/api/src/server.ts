@@ -184,6 +184,15 @@ export function buildServer({
   registerGuard(app, security);
 
   /**
+   * Whether anyone is signed in, for the web server's `auth_request` (T321,
+   * AC-251; research/openid-client.md, "nginx: gating page requests"): 204
+   * or 401, and nothing else. With security off, the single user always is.
+   */
+  app.get('/api/auth/check', PUBLIC, async (request, reply) =>
+    reply.code(request.wechartUser === null ? 401 : 204).send(),
+  );
+
+  /**
    * The Cube deployment's health and the refresh worker's state (T162,
    * AC-156), each from its own probes. Not `/api/health`, which is this API's
    * own, and which a deployment checks without asking Cube anything.

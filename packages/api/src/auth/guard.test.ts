@@ -98,6 +98,8 @@ describe('with security on and no session (T318, AC-251)', () => {
       'cube GET /api/cube-model/files',
       'cube GET /api/cube-model/version',
       'public GET /api/auth/callback',
+      // Whether anyone is signed in, for the web server's page gate (T321).
+      'public GET /api/auth/check',
       'public GET /api/auth/login',
       'public GET /api/cube-health',
       'public GET /api/health',

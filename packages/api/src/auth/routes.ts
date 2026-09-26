@@ -68,6 +68,29 @@ export function safeReturnTo(value: unknown, publicUrl: string): string {
   return `${target.pathname}${target.search}${target.hash}`;
 }
 
+/**
+ * The page sign-in returns to, from `/api/auth/login?returnTo=…`. The app
+ * sends it encoded; the web server, gating a page (T321), can only send
+ * nginx's `$request_uri` as it is, so `/explore?folder=a&panel=access` would
+ * lose `panel` to a parameter of its own. Where `returnTo` comes first, the
+ * whole rest of the query is its value.
+ */
+export function returnToOf(url: string): string | undefined {
+  const query = url.split('?').slice(1).join('?');
+  if (!query.startsWith('returnTo=')) {
+    return new URLSearchParams(query).get('returnTo') ?? undefined;
+  }
+  const rest = query.slice('returnTo='.length);
+  // The app's is encoded whole (`%2F…`); nginx's is the address as it came,
+  // already percent-encoded, which must not be decoded again (T321's review).
+  if (!/^%2F/i.test(rest)) return rest;
+  try {
+    return decodeURIComponent(rest);
+  } catch {
+    return undefined;
+  }
+}
+
 /** A user's key: the subject, qualified by the issuer's hash so two providers can't collide. */
 export function userKeyOf(issuer: string, subject: string): string {
   const qualifier = createHash('sha256').update(issuer).digest('hex').slice(0, 12);
@@ -146,6 +169,12 @@ export function registerSignIn(app: FastifyInstance, options: SignInOptions): vo
   });
 
   app.get('/api/auth/login', PUBLIC, async (request, reply) => {
+    // Already signed in: straight back, the session untouched. Changing it
+    // would save it with a fresh 12 hours, and a sign-in must end 12 hours
+    // after it began, whatever the activity (AC-316; T321's review).
+    if (request.session.user !== undefined) {
+      return reply.redirect(safeReturnTo(returnToOf(request.url), options.publicUrl));
+    }
     let config: oidc.Configuration;
     try {
       config = await oidcConfig(options.oidc);
@@ -155,10 +184,7 @@ export function registerSignIn(app: FastifyInstance, options: SignInOptions): vo
     const verifier = oidc.randomPKCECodeVerifier();
     const state = oidc.randomState();
     const nonce = oidc.randomNonce();
-    const returnTo = safeReturnTo(
-      (request.query as { returnTo?: unknown }).returnTo,
-      options.publicUrl,
-    );
+    const returnTo = safeReturnTo(returnToOf(request.url), options.publicUrl);
 
     // Unfinished attempts lapse, and only the latest few are kept.
     const now = Date.now();

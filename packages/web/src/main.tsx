@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App';
+import { AuthGate } from './shell/AuthGate';
 import { ThemeProvider } from './shell/ThemeProvider';
 import { installStyles } from './shell/styles';
 
@@ -32,7 +33,10 @@ createRoot(container).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <App />
+        {/* Nothing of wechart until the API says who is signed in (T321, AC-251). */}
+        <AuthGate>
+          <App />
+        </AuthGate>
       </ThemeProvider>
     </QueryClientProvider>
   </StrictMode>,

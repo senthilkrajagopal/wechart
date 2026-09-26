@@ -324,6 +324,34 @@ textarea { height: auto; padding: 6px 8px; }
 }
 .account-panel__badge { gap: 4px; margin-top: 4px; }
 
+/* A sign-in state (T321, rule 60): the product mark, one sentence, one
+   action, on the page's own ground, with nothing of wechart behind it. */
+.auth-state {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--wc-bg-page);
+}
+.auth-state__card {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  max-width: 400px;
+  padding: 24px;
+  background: var(--wc-bg-surface);
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 8px;
+}
+.auth-state__title {
+  margin: 0;
+  font-size: var(--wc-text-lg-size);
+  line-height: var(--wc-text-lg-line);
+  font-weight: var(--wc-text-lg-weight);
+}
+.auth-state__card p { margin: 0; color: var(--wc-text-secondary); }
+
 main { padding: var(--wc-surface-padding); }
 
 .visually-hidden {

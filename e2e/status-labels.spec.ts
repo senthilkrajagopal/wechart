@@ -75,6 +75,13 @@ for (const surface of SURFACES) {
       release = resolve;
     });
     await page.route('**/api/**', async (route) => {
+      // Who is signed in is the shell's, answered before any surface renders
+      // (T321's page gate, whose own wait has its icon and words too); held,
+      // no surface would ever show its loading states.
+      if (new URL(route.request().url()).pathname === '/api/me') {
+        await route.continue();
+        return;
+      }
       await held;
       await route.continue().catch(() => undefined);
     });
