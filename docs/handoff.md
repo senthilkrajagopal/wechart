@@ -132,6 +132,48 @@
 >        down to half its size, to make room. Past that, a pie's labels go inside its slices, and a
 >        donut's are hidden. The alternatives were labels drawn over the ring, or inside a donut's
 >        band (too thin for them). Keep this?
+>   - **Slice 3 (2026-09-26, on `feat/xcube`):** research `xcube-slice-3a.md`, `xcube-slice-3b.md`;
+>     R30 and the plan in P2.17. Done: T403 (short titles), T448 (one cube or view per file),
+>     T425 (stored xcube folder ids, tree push), T449 (items mode on the 3b image
+>     `xcube:v1.7.45-c0610bb768@sha256:d787e67c…`, in compose and Helm), T430 (every dashboard
+>     answers as before), T426 (publishes through changesets; T451 carries proposals' check),
+>     **T334** (model files in folders, listed in Explore; only the root's are sent to xcube, and a
+>     publish into another folder answers 409 until T341). Next: T429, T428, T450, T341.
+>     - **Deployed:** the docker-desktop release runs wechart `a3abc06-t449` on the 3b image, the
+>       model in items mode; `verify.sh` passes.
+>     - **Researched, not yet planned:** slice 4 (`xcube-slice-4.md`), slice 5
+>       (`xcube-slice-5.md`, overlays). Slice 6 (connections) was researched, but its doc
+>       couldn't be written here; the report is in the session's tool results (see the session's
+>       last message to the user). cube-b4 says two points of `xcube-slice-5.md` are out of date
+>       from `ed08180c37`: the overlay connections (L92-96) are committed there, and
+>       `PUT …/overlays` takes `connections` (≤ 20; also `400 invalid_connection`,
+>       `422 invalid_secret`, `409 older_instances`). Verify that in the overlay-data-sources
+>       research before building on it.
+>     - **Images published by xcube:** slice 4 `…-6d1e2e3ba1@sha256:8df2c818…`, slice 5
+>       `…-d26ff4238e@sha256:e1377e6d…`, slice 6 `…-fddc376f25@sha256:1c676ae2…` (without the TLS
+>       binding), `…-1249dda9ca@sha256:460c1ab1…` (with it, and slice 8), and
+>       `…-ed08180c37@sha256:bc041aa2…` (overlay data sources, slice 8, the TLS binding).
+>     - **Failing in the last complete run (2026-09-26):** `acceleration.spec.ts` "Data as of…"
+>       in every browser (fails alone too; left for the user after four probes), and
+>       `shell.spec.ts` "the app bar folds navigation and search into a menu" in Safari only: after
+>       widening past 1,024 px and narrowing at once, the menu stays open (its Tab step was fixed
+>       with Option-Tab, 840e9b0; three tries at the rest, then stopped). The rest passed alone.
+>   - **Asked on 2026-09-26, not yet answered:**
+>     18. Which xcube image to pin for slices 4–6: the TLS binding you chose exists only from
+>         `1249dda9ca` on. `ed08180c37` has it too, with overlay data sources.
+>     19. (cube-b4's question) A workspace copy of a data source can change its driver in a
+>         preview, but landing it answers `409 driver_change`. Refuse it in the workspace, or
+>         explain it at approval? The answer goes to `~/Work/xcube-exchange/to-xcube/`.
+>     20. AC-161: xcube never removes the health rows of Cube instances that are gone. Until it
+>         does, what should the UI show when stale rows are present?
+>     21. AC-273, AC-310: xcube binds a data source only at publish. When a nearer `default` or
+>         source appears on a cube's path, should wechart republish the cubes it would now bind
+>         differently?
+>     22. Dremio Cloud: require `https:` URLs (the token would travel in clear otherwise)?
+>     23. AC-193 (checked) says every Explore row has a rename and move menu; T334's model rows have
+>         none, a model being renamed in the model editor. Reword AC-193?
+>     24. The slice 6 research doc: save it from the session's tool results (a one-line `cp`
+>         offered to the user), since it couldn't be written here.
 > - **Pushing is the user's** (this session's push was refused by the permission classifier):
 >   `git push origin main feat/xcube --tags`.
 > - **Done since (2026-09-25, later):**
