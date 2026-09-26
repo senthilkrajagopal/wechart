@@ -5310,10 +5310,27 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - export, and propose routes, which don't exist yet.
     - AC-263 and AC-266 stay unticked. A cached access tree would cut the queries each check costs (T325's note).
   - **For the user:** AC-263 lets a read-only user open "the charts on" their dashboards, even one kept in a folder they can't see. AC-264 says nothing of a hidden folder may appear. T326 follows AC-263, and such a chart's `folderId` names the hidden folder.
-- [ ] T327 (AC-262) Read-write members see their folders' ancestors view-only
+- [x] T327 (AC-262) Read-write members see their folders' ancestors view-only
   - Files: `packages/api/src/access/ancestors.test.ts`
   - Failing test: `ancestors.test.ts`: a read-write member of /A/B lists and opens every dashboard, chart, model and data source in /A and the root, and every write there answers 403 (AC-262).
+  - *2026-09-26:* models and data sources aren't folder items until T334 and T335, so their half of AC-262 moved there. This task covers dashboards and charts.
   - Depends on: T325
+  - **Done 2026-09-26.**
+    - **The behaviour came with T325 and T326.** The test passed at once, so its strength was shown by breaking the code on purpose:
+      - with an ancestor of a read-write grant given dashboards only, 3 of its 4 tests failed at first;
+      - with the dashboard save's check on the library charts it changes dropped, the case that takes /A's library chart into /A/B failed.
+      - Both were restored.
+    - **Tests.** `ancestors.test.ts`: `writer` (read-write on /A/B only) lists, opens and finds every dashboard, library chart and local chart in /A and at the root; `nobody` gets none of it. Eighteen writes answer 403 and change nothing:
+      - creating in /A and at the root;
+      - saving through both routes, including their own dashboard with /A's library chart changed, taken into /A/B, or a new one made in /A;
+      - putting a chart or an image on /A's dashboard;
+      - renames, moves (their own items up into /A, /A/B out of /A), and a delete;
+      - /A's and the root's groups.
+    - **The cold review** (FAIL, on coverage only) led to those saves, attachments, the root's groups and the moves, and to checks that the contents are unchanged.
+    - **The review also found two gaps outside T327:**
+      - `POST /api/model/publish` checks no folder right, so with security on any signed-in user can change the model. T334's test now covers it.
+      - `GET /api/images/:id` checks no access. T408's route matrix, which fails for any route it has no case for, covers it.
+    - AC-262 stays open for its models' and data sources' half (T334, T335).
 - [ ] T328 (AC-267) When security is first turned on, keep phase-1 content as the shared tree, visible only to Super-Admins
   - Files: a migration `…_root-access.cjs` (the root and phase-1 folders with both settings unset), `packages/api/src/access/phase1-content.test.ts`
   - Failing test: `phase1-content.test.ts`: with no groups assigned, `super` sees the seeded tree and `writer`, `reader` and `nobody` see none of it; after a group is set on Finance, its members see Finance (AC-267).
@@ -5360,16 +5377,17 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 *2026-09-26: "per-folder Cube" is superseded. wechart keeps model files and data sources as folder items, and publishes them to xcube as changesets. The tasks that served Cube a chain per folder are retired or rewritten here, and the publishing itself is in P2.17.*
 
-- [ ] T334 (AC-269, AC-131) Keep model files in folders and list them in Explore
-  - Files: a migration `…_model-files-folder.cjs` (a `folder_id` column, existing files in the root; the key becomes `(folder_id, path)`), `packages/api/src/repos/model-files.ts`, `packages/api/src/repos/catalog.ts`, `packages/web/src/workspaces/explore/FolderContents.tsx`, `packages/api/src/repos/model-files.test.ts`
-  - Failing test: `model-files.test.ts`: a folder's listing includes its model files with kind "Model" and "_n_ cubes · _n_ views", and `GET /api/model/files?folder=` returns each file's cubes, views, measures, dimensions, segments, hierarchies, joins and pre-aggregations (AC-269, AC-131).
+- [ ] T334 (AC-269, AC-131, AC-262, AC-266) Keep model files in folders and list them in Explore
+  - Files: a migration `…_model-files-folder.cjs` (a `folder_id` column, existing files in the root; the key becomes `(folder_id, path)`), `packages/api/src/repos/model-files.ts`, `packages/api/src/repos/catalog.ts`, `packages/api/src/model/publish.ts` and `packages/api/src/server.ts` (`GET /api/model/files` and `POST /api/model/publish` check the folder, T327's review), `packages/web/src/workspaces/explore/FolderContents.tsx`, `packages/api/src/repos/model-files.test.ts`
+  - Failing test: `model-files.test.ts`: a folder's listing includes its model files with kind "Model" and "_n_ cubes · _n_ views", and `GET /api/model/files?folder=` returns each file's cubes, views, measures, dimensions, segments, hierarchies, joins and pre-aggregations (AC-269, AC-131). A read-write member of /A/B lists and opens /A's and the root's model files, and every change to them answers 403 (AC-262, its models' half, from T327). With security on, a user without read-write on a model's folder gets 403 from `POST /api/model/publish`, and a user who may not see the folder gets none of its files from `GET /api/model/files` (AC-266; today neither route checks a folder, T327's review).
   - Depends on: T325
-- [ ] T335 (AC-269, AC-164, AC-312, AC-298) Keep data sources as folder items, never sending a credential to the browser
+- [ ] T335 (AC-269, AC-164, AC-312, AC-298, AC-262) Keep data sources as folder items, never sending a credential to the browser
   - Files: `packages/api/src/repos/data-sources.ts` (+ test), `packages/api/src/routes/data-sources.ts` (+ test), `packages/api/src/repos/catalog.ts`
   - Failing test: `data-sources.test.ts`:
     - a folder lists its data sources with kind "Data source" and the driver (AC-269);
     - no response contains a stored secret, only `stored: true` (AC-164);
-    - changing host, port, account, workspace, warehouse, project or connect string clears the secret, and a test or save then asks for it again (AC-312).
+    - changing host, port, account, workspace, warehouse, project or connect string clears the secret, and a test or save then asks for it again (AC-312);
+    - a read-write member of /A/B lists and opens /A's and the root's data sources, and every change to them answers 403 (AC-262, its data sources' half, from T327).
   - *2026-09-26:* the secret it stores is the ciphertext the browser sealed to xcube's key (T441). wechart keeps it and never opens it `[IP 1]`.
   - Depends on: T332, T333, T325
 - [ ] T336 (AC-270, AC-271, AC-249) Keep names unique per folder, and free across folders
@@ -5771,6 +5789,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/access/route-matrix.test.ts` (fixtures for /A, /A/B, /A/B/C, /C and a workspace; the users `super`, `writer`, `reader`, `many`, `nobody`)
   - Failing test: `route-matrix.test.ts`: for every route the server registers, each user gets only items in folders they may see and can change only what they may change; the test fails for a route it has no case for (AC-268).
   - *2026-09-26:* the same users' tokens are also asked of Cube directly, and get nothing wechart refuses them (AC-320's folder check, T436).
+  - *2026-09-26, T327's review:* `GET /api/images/:id` answers any signed-in user who has an image's id. Its case here gives an image only to those who may open its dashboard.
   - Depends on: T340, T355, T364, T369, T371, T436
 - [ ] T409 (AC-307) Render a 10-chart dashboard in a folder with its own models within 3 s at p95 with security on
   - Files: `e2e/perf/secure-dashboard-open.spec.ts`
@@ -6057,9 +6076,9 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-251 | T318, T321, T324, T431 | AC-252 | T316, T319, T320 | AC-253 | T317, T321 |
 | AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323, T325, T326 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
-| AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327 |
+| AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327, T334, T335 |
 | AC-263 | T313, T326, T334, T335, T436 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371 |
-| AC-266 | T326, T340 | AC-267 | T328 | AC-268 | T340, T408 |
+| AC-266 | T326, T340, T334 | AC-267 | T328 | AC-268 | T340, T408 |
 | AC-269 | T334, T335 | AC-270 | T336 | AC-271 | T336 |
 | AC-272 | ~~T337, T339, T340~~ T429 | AC-273 | ~~T338~~ T435 | AC-274 | T341 |
 | AC-275 | ~~T337, T352~~ T428 | AC-276 | T343 | AC-277 | T343 |
