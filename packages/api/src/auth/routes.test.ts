@@ -1,12 +1,10 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
 import type { FastifyInstance } from 'fastify';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getDb } from '../db/client';
 import { buildServer } from '../server';
 import { pgSessionStore } from './session-store';
+import { cookieOf, PUBLIC_URL, signIn, signInAtDex, USERS } from './sign-in.fixture';
 
 /**
  * T316 (AC-252): WHERE security is enabled, WHEN a user signs in, THE SYSTEM
@@ -14,23 +12,8 @@ import { pgSessionStore } from './session-store';
  * configuration names them (issuer, client, groups claim).
  *
  * Signs in through the real development provider (Dex, started by the test
- * setup): the API redirects to Dex, the test fills in Dex's form as a browser
- * would, and hands Dex's redirect back to the API's callback.
+ * setup), with `sign-in.fixture.ts` filling in Dex's form as a browser would.
  */
-interface TestUser {
-  readonly email: string;
-  readonly password: string;
-  readonly groups: readonly string[];
-}
-const USERS = JSON.parse(
-  readFileSync(
-    fileURLToPath(new URL('../../../../infra/dex/test-users.json', import.meta.url)),
-    'utf8',
-  ),
-) as Record<string, TestUser>;
-
-const PUBLIC_URL = 'http://localhost:5373';
-
 const config = (groupsClaim = 'groups') => ({
   cubeApiUrl: 'http://cube.invalid/cubejs-api',
   cubeApiSecret: 'secret',
@@ -60,62 +43,6 @@ function serve(groupsClaim?: string): FastifyInstance {
   const app = buildServer({ config: config(groupsClaim), sessions: pgSessionStore(getDb()) });
   servers.push(app);
   return app;
-}
-
-const cookieOf = (setCookie: string | string[] | undefined): string => {
-  const first = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-  expect(first, 'a session cookie').toBeDefined();
-  return first!.split(';')[0]!;
-};
-
-/** Follows Dex from its authorization URL through its login form, as a browser would. */
-async function signInAtDex(authorizeUrl: string, user: TestUser): Promise<string> {
-  let url = authorizeUrl;
-  // Dex, with one connector, redirects /auth to that connector's login page.
-  for (let hops = 0; hops < 5; hops += 1) {
-    const response = await fetch(url, { redirect: 'manual' });
-    if (response.status >= 300 && response.status < 400) {
-      url = new URL(response.headers.get('location')!, url).href;
-      continue;
-    }
-    const html = await response.text();
-    const action = /<form[^>]*method="post"[^>]*action="([^"]+)"/i.exec(html)?.[1];
-    expect(action, 'Dex’s login form').toBeDefined();
-    const post = await fetch(new URL(action!.replace(/&amp;/g, '&'), url), {
-      method: 'POST',
-      redirect: 'manual',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ login: user.email, password: user.password }),
-    });
-    let next = new URL(post.headers.get('location')!, url).href;
-    // Through Dex's approval step (skipped by its config) to wechart's callback.
-    for (let more = 0; more < 5 && !next.startsWith(PUBLIC_URL); more += 1) {
-      const step = await fetch(next, { redirect: 'manual' });
-      next = new URL(step.headers.get('location')!, next).href;
-    }
-    return next;
-  }
-  throw new Error('Dex never showed its login form');
-}
-
-async function signIn(app: FastifyInstance, user: TestUser): Promise<string> {
-  const login = await app.inject({ method: 'GET', url: '/api/auth/login?returnTo=/explore' });
-  expect(login.statusCode).toBe(302);
-  const authorize = login.headers.location as string;
-  expect(authorize.startsWith('http://localhost:5556/dex/auth')).toBe(true);
-  const loginCookie = cookieOf(login.headers['set-cookie']);
-
-  const callback = new URL(await signInAtDex(authorize, user));
-  expect(callback.pathname).toBe('/api/auth/callback');
-
-  const done = await app.inject({
-    method: 'GET',
-    url: `${callback.pathname}${callback.search}`,
-    headers: { cookie: loginCookie },
-  });
-  expect(done.statusCode).toBe(302);
-  expect(done.headers.location).toBe('/explore');
-  return cookieOf(done.headers['set-cookie']);
 }
 
 describe('signing in through the configured OIDC provider (T316, AC-252)', () => {

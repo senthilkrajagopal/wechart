@@ -95,6 +95,26 @@ export function signInOptionsOf(config: Config, store?: SessionStore): SignInOpt
   };
 }
 
+/**
+ * Where the browser goes once signed out (T317; research/openid-client.md
+ * "Logout"): the provider's end-session page when it has one, so it forgets
+ * the sign-in too (Entra: "perform both"), and from there back to wechart.
+ * Dex has none (research/dex.md), and a provider that can't be reached can't
+ * be asked: then straight back to wechart, whose own session has ended anyway.
+ */
+export function signOutTarget(
+  config: oidc.Configuration | undefined,
+  publicUrl: string,
+  idToken: string | undefined,
+): string {
+  const home = new URL('/', publicUrl).href;
+  if (config?.serverMetadata().end_session_endpoint === undefined) return home;
+  return oidc.buildEndSessionUrl(config, {
+    post_logout_redirect_uri: home,
+    ...(idToken === undefined ? {} : { id_token_hint: idToken }),
+  }).href;
+}
+
 /** The provider couldn't be asked: say so, not "Internal error" (T316's review). */
 function unreachable(reply: FastifyReply, error: unknown): FastifyReply {
   reply.log.warn({ err: error }, 'the sign-in provider could not be reached');
@@ -107,17 +127,19 @@ function unreachable(reply: FastifyReply, error: unknown): FastifyReply {
 export function registerSignIn(app: FastifyInstance, options: SignInOptions): void {
   const secure = options.publicUrl.startsWith('https:');
   const callbackUrl = new URL('/api/auth/callback', options.publicUrl).href;
+  // `__Host-` requires Secure, so a plain-HTTP development origin uses a plain name.
+  const cookieName = secure ? '__Host-wechart' : 'wechart';
+  const cookie = { path: '/', httpOnly: true, sameSite: 'lax', secure } as const;
 
   app.register(fastifyCookie);
   app.register(fastifySession, {
     secret: options.sessionSecret,
-    // `__Host-` requires Secure, so a plain-HTTP development origin uses a plain name.
-    cookieName: secure ? '__Host-wechart' : 'wechart',
+    cookieName,
     ...(options.store === undefined ? {} : { store: options.store }),
     // Neither default suits: one row per anonymous request, and a write per request.
     saveUninitialized: false,
     rolling: false,
-    cookie: { path: '/', httpOnly: true, sameSite: 'lax', secure, maxAge: SIGNED_IN_MS },
+    cookie: { ...cookie, maxAge: SIGNED_IN_MS },
   });
 
   app.get('/api/auth/login', async (request, reply) => {
@@ -219,5 +241,34 @@ export function registerSignIn(app: FastifyInstance, options: SignInOptions): vo
     };
     if (tokens.id_token !== undefined) request.session.idToken = tokens.id_token;
     return reply.redirect(attempt.returnTo);
+  });
+
+  /**
+   * Signing out (T317, AC-253): the session's row is deleted, so every copy of
+   * its cookie stops working at once. A POST, so no link or image another page
+   * embeds can sign anyone out; the Sign out control calls it and then goes to
+   * `redirectTo`.
+   */
+  app.post('/api/auth/logout', async (request, reply) => {
+    const signedIn = request.session.user !== undefined;
+    const idToken = request.session.idToken;
+    await request.session.destroy();
+    // After destroy the session plugin sets no cookie, so it is cleared here
+    // (research) — only where the request sent one. A cross-site form's POST
+    // carries no SameSite=Lax cookie; clearing it anyway would let another
+    // site sign the user out (T317's review).
+    if (request.cookies[cookieName] !== undefined) reply.clearCookie(cookieName, cookie);
+    const home = signOutTarget(undefined, options.publicUrl, undefined);
+    if (!signedIn) return { redirectTo: home };
+
+    // The provider's end-session page where there is one; wechart's own
+    // session has ended whatever the provider does.
+    try {
+      const config = await oidcConfig(options.oidc);
+      return { redirectTo: signOutTarget(config, options.publicUrl, idToken) };
+    } catch (error) {
+      request.log.warn({ err: error }, 'signed out here; the provider’s sign-out was not reached');
+      return { redirectTo: home };
+    }
   });
 }

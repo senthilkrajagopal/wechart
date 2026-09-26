@@ -5060,10 +5060,19 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - the default scopes: no longer Dex's `groups`, which Entra would refuse.
     - A sign-in lasts 12 hours, whatever the activity: the user's answer (R24), now AC-316.
     - AC-252 stays open for the top bar (T319). AC-316 stays open until the security suite shows the lapse through the browser (T320/T321).
-- [ ] T317 (AC-253) Sign out: end the wechart session so the next request needs a new sign-in
+- [x] T317 (AC-253) Sign out: end the wechart session so the next request needs a new sign-in
   - Files: `packages/api/src/auth/routes.ts` (`POST /api/auth/logout`), `packages/api/src/auth/logout.test.ts`
   - Failing test: `logout.test.ts`: after `POST /api/auth/logout`, the same cookie gets 401 on `/api/me`, and the session row is gone (AC-253).
   - Depends on: T316
+  - **Done 2026-09-25.**
+    - Signing out deletes the session's row, so every copy of its cookie stops working at once; another sign-in of the same user is untouched. It is a POST, answering `{ redirectTo }`: the provider's end-session page where discovery names one (with `id_token_hint` and wechart's root to come back to), else wechart's root. Dex has none, so the live tests go to the root; the end-session URL is tested against a provider configuration built in the test.
+    - The Dex sign-in helpers moved from `routes.test.ts` into `sign-in.fixture.ts` for the security tasks after this one. The test-integrity hook counts that as 7 assertions removed from `routes.test.ts`; each is still enforced in the fixture as a thrown error (confirmed by the review).
+    - The cold review (PASS) led to:
+      - the cookie cleared only when the request sent it, so a cross-site form, whose POST carries no SameSite=Lax cookie, can't make the browser drop it;
+      - a provider that fails while its sign-out URL is built sends the browser to wechart's root rather than answering 500 after the session has gone;
+      - tests for clearing the `__Host-` cookie over HTTPS and for the session row existing before sign-out.
+    - Recorded, not fixed: a sign-in started in another tab at the same moment can save the session back (breadth over save edge cases); registering the post-logout address with Entra is checked in T411.
+    - AC-253 stays open for its page half: T321 signs out through the account menu in the browser and finds `/explore` asks for a new sign-in.
 - [ ] T318 (AC-251) Refuse every API route without a session, except health and sign-in, and prove no route is unclassified
   - Files: `packages/api/src/auth/guard.ts` (+ test), `packages/api/src/server.ts` (each route's `config.access`), `packages/api/src/model/publish.ts`, `packages/api/src/model/introspection.ts`, `packages/api/src/jobs/*.ts`
   - Failing test: `guard.test.ts`: with security on and no session, every route registered on the server (collected with an `onRoute` hook) answers 401 `{ error: 'unauthenticated' }` and no data, except `/api/health`, `/api/cube-health`, `/api/auth/*` and the key-guarded `/api/cube-model/*`; with security off, no route answers 401 (T311's review); a route registered without an access class fails the test (AC-251).
@@ -5076,9 +5085,9 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `playwright.security.config.ts`, `e2e/security/fixtures.ts` (signs `super`, `writer`, `reader`, `many` and `nobody` in through Dex's form; storage state per role), `e2e/security/sign-in.spec.ts`, `e2e/package.json` (`e2e:security`)
   - Failing test: `sign-in.spec.ts`: `writer` signs in through Dex in docker-compose and sees their name in the top bar (AC-257, compose half).
   - Depends on: T315, T316, T319
-- [ ] T321 (AC-251, AC-316) Send a page request without a session to sign-in, rendering no wechart content first
+- [ ] T321 (AC-251, AC-316, AC-253) Send a page request without a session to sign-in, rendering no wechart content first
   - Files: `packages/web/src/shell/AuthGate.tsx` (+ test), `packages/web/src/api/http.ts` (a 401 sends the browser to `/api/auth/login?returnTo=…`), `deploy/helm/wechart/templates/web-config.yaml` (`auth_request` to `/api/auth/check` when security is on)
-  - Failing test: `AuthGate.test.tsx`: nothing of the app renders until `/api/me` succeeds; `e2e/security/sign-in.spec.ts`: opening `/explore` without a session lands on Dex's login form with no wechart text on the page (AC-251).
+  - Failing test: `AuthGate.test.tsx`: nothing of the app renders until `/api/me` succeeds; `e2e/security/sign-in.spec.ts`: opening `/explore` without a session lands on Dex's login form with no wechart text on the page (AC-251); signing out through the account menu, then opening `/explore`, lands on Dex's form with no user named (AC-253's page half, T317's review).
   - Depends on: T318, T320
 - [ ] T322 (AC-008) Put the signed-in user's groups into every Cube request's security context
   - Files: `packages/api/src/cube/client.ts` (a per-request `groups` claim), `packages/api/src/server.ts`, `packages/api/src/cube/client.test.ts`, `e2e/security/cube-groups.spec.ts`
@@ -5513,6 +5522,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `docs/deploy.md` (the configuration used), `docs/handoff.md` (the result)
   - Failing test: signing in as a directory user whose groups are known, and comparing the groups wechart resolves with the directory's (AC-258). **Needs the user:** a tenant or broker to test against.
   - Depends on: T410
+  - Also to check there (T317's review): the provider must accept wechart's public root as a post-logout redirect URI, which Entra requires to be registered; and a sign-out URL whose `id_token_hint` carries a token with up to 200 group GUIDs must fit the URL limits on the way.
 
 ## Phase 2 coverage: acceptance criterion → task
 
@@ -5531,7 +5541,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
 | AC-234 | T378 | AC-246 | T404 | AC-249 | T336 |
-| AC-251 | T318, T321 | AC-252 | T316, T319 | AC-253 | T317 |
+| AC-251 | T318, T321 | AC-252 | T316, T319 | AC-253 | T317, T321 |
 | AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
 | AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327 |
