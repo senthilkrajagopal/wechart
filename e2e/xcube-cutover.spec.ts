@@ -204,6 +204,17 @@ test.describe.serial('xcube serves the model (T447)', () => {
 
     await ownCubeFile(request, cube);
 
+    // Sent as its changeset, not the whole model (T426): the revision that
+    // holds it says so in its source.
+    const revision = recordedRevision();
+    const sources = JSON.parse(
+      psql(
+        'wechart_meta',
+        `SELECT coalesce(json_agg(source), '[]') FROM xcube.revisions WHERE model = '${MODEL}' AND rev = ${String(revision)}`,
+      ),
+    ) as { reason?: string; via?: string }[];
+    expect(sources).toEqual([{ reason: 'publish', via: 'changeset' }]);
+
     // At once: no wait, and not 60 s later.
     expect(namesIn(await (await fetch(`${other}/api/meta`)).json())).toContain(cube);
     const loaded = await fetch(`${other}/api/load`, {

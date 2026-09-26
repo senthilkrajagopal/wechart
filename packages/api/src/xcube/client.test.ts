@@ -131,6 +131,96 @@ describe('xcube’s answers (T419, AC-333)', () => {
     }
   });
 
+  /**
+   * T426: a publish as a changeset (research `xcube-slice-3a.md`, "POST
+   * …/changesets" and "?dryRun=true"): checked by its dry run, then applied.
+   */
+  it('checks a changeset by its dry run, with its errors on items', async () => {
+    const calls: { url: string; body: unknown }[] = [];
+    const admin = xcubeAdmin({
+      cubeApiUrl: 'http://cube.invalid/cubejs-api',
+      model: 'dev',
+      token: 'x'.repeat(40),
+      fetch: async (input, init) => {
+        calls.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+        return new Response(
+          JSON.stringify({
+            model: 'dev',
+            valid: false,
+            errors: [{ folderId: 'froot', name: 'orders', kind: 'yaml', line: 3, message: 'bad' }],
+            cubeMessage: null,
+            probes: [],
+            itemsHash: null,
+            currentRevision: 7,
+            items: [],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      },
+    });
+    const upserts = [{ folderId: 'froot', name: 'orders', kind: 'cube' as const, yaml: 'x' }];
+
+    expect(
+      await admin.checkChangeset({ upserts, deletes: [], securityContext: {}, probes: [] }),
+    ).toEqual({
+      valid: false,
+      errors: [{ folderId: 'froot', name: 'orders', kind: 'yaml', line: 3, message: 'bad' }],
+      cubeMessage: null,
+      probes: [],
+      currentRevision: 7,
+    });
+    expect(calls[0]?.url).toBe(
+      'http://cube.invalid/cubejs-api/v1/semantic/models/dev/changesets?dryRun=true',
+    );
+    expect(calls[0]?.body).toEqual({
+      baseRevision: null,
+      upserts,
+      deletes: [],
+      securityContext: {},
+      probes: [],
+    });
+  });
+
+  it('applies a changeset: stored, already in, a stale base, or refused', async () => {
+    const apply = (status: number, body: Record<string, unknown>) =>
+      answering(status, body).applyChangeset({ baseRevision: 3, upserts: [], deletes: [] });
+
+    expect(
+      await apply(201, {
+        generation: 'g1',
+        revision: 4,
+        created: true,
+        itemsHash: 'i'.repeat(64),
+        contentHash: 'c'.repeat(64),
+        items: [],
+      }),
+    ).toEqual({
+      kind: 'stored',
+      generation: 'g1',
+      revision: 4,
+      itemsHash: 'i'.repeat(64),
+      created: true,
+    });
+    // A retry xcube already holds: done, whatever its base.
+    expect(
+      await apply(200, {
+        generation: 'g1',
+        revision: 4,
+        created: false,
+        itemsHash: 'i'.repeat(64),
+      }),
+    ).toMatchObject({ kind: 'stored', created: false });
+    expect(await apply(409, { code: 'conflict', currentRevision: 5 })).toEqual({
+      kind: 'conflict',
+      currentRevision: 5,
+    });
+    expect(
+      await apply(422, { code: 'invalid_items', errors: [{ message: 'no' }], cubeMessage: null }),
+    ).toEqual({ kind: 'refused', errors: [{ message: 'no' }], cubeMessage: null });
+    // A model still holding a file set: a failure, never a conflict to retry.
+    await expect(apply(409, { code: 'mode', error: 'files' })).rejects.toBeInstanceOf(XcubeError);
+  });
+
   it('reads the head’s mode and items hash, null for a files-mode revision (T449)', async () => {
     const head = (current: Record<string, unknown> | null, mode = 'items') =>
       answering(200, { model: 'dev', generation: 'g1', mode, current }).revision();

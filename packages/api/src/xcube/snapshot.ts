@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import type { ModelFile } from '../server';
+import type { Changeset } from './changesets';
 import type { XcubeAdmin } from './client';
 import { treeHashOf, type TreeFolder } from './folders';
 import { itemsHashOf, itemsOf } from './items';
@@ -165,6 +166,51 @@ export function modelSync({
     }
   };
 
+  /**
+   * A publish's changeset applied (T426; research 3a, "POST …/changesets"):
+   * on xcube's current revision, read again and sent again on a stale base,
+   * and taken as done where xcube already holds it. A model still holding a
+   * file set is sent whole, as items, instead.
+   */
+  const apply = async (changeset: Changeset): Promise<SyncResult> => {
+    try {
+      for (let attempt = 0; attempt <= RETRIES; attempt += 1) {
+        const head = await admin.revision();
+        if (head.mode !== 'items' || head.current === null) return await once('publish');
+        const answer = await admin.applyChangeset({
+          baseRevision: head.current.revision,
+          upserts: changeset.upserts,
+          deletes: changeset.deletes,
+          // Recorded with the revision: a changeset told from a whole snapshot.
+          source: { reason: 'publish', via: 'changeset' },
+        });
+        if (answer.kind === 'stored') {
+          refused = undefined;
+          await publications.put(model, {
+            generation: answer.generation,
+            revision: answer.revision,
+            contentHash: answer.itemsHash,
+          });
+          log.info({ model, revision: answer.revision }, 'xcube holds the published change');
+          return { kind: answer.created ? 'sent' : 'same', revision: answer.revision };
+        }
+        if (answer.kind === 'refused') {
+          log.warn(
+            { model, errors: answer.errors, cubeMessage: answer.cubeMessage },
+            'xcube refused the published change; the next reconcile sends the whole model',
+          );
+          return { kind: 'refused', errors: answer.errors };
+        }
+        // A stale base: another replica's change landed first. Read again.
+      }
+      log.warn({ model }, 'xcube’s model kept changing under this change; gave up');
+      return { kind: 'failed' };
+    } catch (error) {
+      log.warn({ model, err: error }, 'could not send the published change to xcube');
+      return { kind: 'failed' };
+    }
+  };
+
   let treeRunning: Promise<TreeResult> | undefined;
   let treeWaiting: Promise<TreeResult> | undefined;
   const putTree = async (reason: SyncReason | 'folder'): Promise<TreeResult> => {
@@ -198,6 +244,26 @@ export function modelSync({
         return start(reason);
       });
       return waiting;
+    },
+
+    /**
+     * A committed publish sent (T426): its changeset where the check gave
+     * one, else the whole model. After whatever is running, so it never
+     * races a send already under way.
+     */
+    publish(changeset?: Changeset): Promise<SyncResult> {
+      if (changeset === undefined) return this.sync('publish');
+      const prior = running ?? Promise.resolve();
+      const run = prior
+        .then(
+          () => apply(changeset),
+          () => apply(changeset),
+        )
+        .finally(() => {
+          if (running === run) running = undefined;
+        });
+      running = run;
+      return run;
     },
 
     /**

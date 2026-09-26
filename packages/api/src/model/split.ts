@@ -139,6 +139,61 @@ export function misnamedIn(file: ModelFile): { path: string; message: string }[]
 }
 
 /**
+ * A YAML file that makes no item (T426's review): YAML that doesn't parse,
+ * at its line, or a file declaring no cube or view. In items mode such a file
+ * is never sent to xcube, so xcube can't refuse it; it is refused here.
+ */
+export function unreadableIn(
+  file: ModelFile,
+): { path: string; line?: number; column?: number; message: string } | undefined {
+  const document = parseDocument(file.content);
+  const [error] = document.errors;
+  if (error !== undefined) {
+    const at = error.linePos?.[0];
+    return {
+      path: file.path,
+      ...(at === undefined ? {} : { line: at.line, column: at.col }),
+      message: error.message,
+    };
+  }
+  return declaredIn(file.content).length === 0
+    ? {
+        path: file.path,
+        message:
+          'A model file holds one cube or view, and this one declares none. Declare it under `cubes:` or `views:` as a list.',
+      }
+    : undefined;
+}
+
+/**
+ * A name another file already declares (T426's review): as an item it would
+ * replace that file's cube in xcube, and the store would never match xcube.
+ * Against the stored files the change leaves, and the changed files before it.
+ */
+export function redeclaredIn(
+  changed: readonly ModelFile[],
+  live: readonly ModelFile[],
+): { path: string; message: string }[] {
+  const paths = new Set(changed.map((file) => file.path));
+  const names = new Map<string, { kind: Declared['kind']; path: string }>();
+  for (const file of live.filter((each) => !paths.has(each.path)))
+    for (const { kind, name } of declaredIn(file.content))
+      if (name !== '' && !names.has(name)) names.set(name, { kind, path: file.path });
+  return changed.flatMap((file) =>
+    declaredIn(file.content).flatMap(({ kind, name }) => {
+      const found = names.get(name);
+      if (found === undefined) {
+        names.set(name, { kind, path: file.path });
+        return [];
+      }
+      return [
+        { path: file.path, message: `\`${name}\` is already a ${found.kind} in ${found.path}.` },
+      ];
+    }),
+  );
+}
+
+/**
  * Each cube's and view's file in wechart's store, by its name (T449). From
  * the move to items mode, Cube's `fileName` is xcube's resolved file
  * (`<fullName>.yml`), so a link to Model names the stored file instead.

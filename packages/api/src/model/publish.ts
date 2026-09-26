@@ -12,7 +12,8 @@ import type { XcubeAdmin } from '../xcube/client';
 import { clashesOf, compiledIn } from './clashes';
 import { refreshKeyProblemsOf } from './refreshKeys';
 import { rollupProblemsOf } from './rollupReferences';
-import { misnamedIn, severalIn } from './split';
+import type { Changeset } from '../xcube/changesets';
+import { misnamedIn, redeclaredIn, severalIn, unreadableIn } from './split';
 import type { CompileError } from './validate';
 
 /**
@@ -112,11 +113,12 @@ export function registerModelPublishing(
     meta: Pick<MetaCache, 'invalidate'>;
     modelFiles: ModelFileStore | undefined;
     /**
-     * Once a publish is committed: xcube is sent the whole set (T419,
+     * Once a publish is committed: xcube is sent the changeset it was
+     * checked as (T426), or the whole model where there is none (T419,
      * AC-333). It answers for itself: a send that fails is logged there, and
      * the publish stands for the next reconcile to send.
      */
-    afterPublish?: () => Promise<unknown>;
+    afterPublish?: (changeset?: Changeset) => Promise<unknown>;
     /**
      * xcube's admin routes, where the deployment names its model in xcube,
      * which check a change (T445). Without them nothing can be published: no
@@ -165,6 +167,9 @@ export function registerModelPublishing(
     // One cube or view per file: each file is one xcube item (T448, AC-337).
     const several = changed.map(severalIn).filter((each) => each !== undefined);
     if (several.length > 0) return reply.status(422).send({ errors: several });
+    // A file that makes no item: never sent, so never checked (T426's review).
+    const unreadable = changed.map(unreadableIn).filter((each) => each !== undefined);
+    if (unreadable.length > 0) return reply.status(422).send({ errors: unreadable });
     // Names xcube's items refuse, which the files dry run would pass (T449's review).
     const misnamed = changed.flatMap(misnamedIn);
     if (misnamed.length > 0) return reply.status(422).send({ errors: misnamed });
@@ -190,6 +195,9 @@ export function registerModelPublishing(
       const clashes = clashesOf(changed, live, compiled);
       if (clashes.length > 0) return reply.status(422).send({ errors: clashes });
     }
+    // A name another file declares: one item each (T426's review).
+    const redeclared = redeclaredIn(changed, live);
+    if (redeclared.length > 0) return reply.status(422).send({ errors: redeclared });
     const paths = new Set(changed.map((file) => file.path));
     const overTemplate = live.find((file) => paths.has(file.path) && JINJA.test(file.content));
     if (overTemplate !== undefined)
@@ -200,10 +208,10 @@ export function registerModelPublishing(
       a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
     );
     /** The change, checked: written, sent to xcube, and seen at once. */
-    const commit = async () => {
+    const commit = async (changeset?: Changeset) => {
       await modelFiles.write(changed);
       // Committed first, then sent: xcube is never ahead of wechart (T419).
-      await afterPublish?.().catch((error: unknown) => {
+      await afterPublish?.(changeset).catch((error: unknown) => {
         app.log.warn({ err: error }, 'could not send the published model to xcube');
       });
       // A model the user just published must not look stale to them (AC-137).
@@ -221,6 +229,7 @@ export function registerModelPublishing(
       xcube,
       draft,
       changed,
+      live,
       securityContext: config.securityContext,
       log: (error) => {
         app.log.warn({ err: error }, 'could not ask xcube to check the model');
@@ -236,6 +245,6 @@ export function registerModelPublishing(
     const rollups = checked.rollups();
     if (rollups.kind === 'unasked') return reply.status(502).send({ error: rollups.error });
     if (rollups.kind === 'unjoinable') return reply.status(422).send({ errors: rollups.errors });
-    return commit();
+    return commit(checked.changeset);
   });
 }

@@ -42,10 +42,14 @@ function serve(options: Parameters<typeof buildServer>[0], stub = fakeXcube()) {
   });
 }
 
-/** What a stub xcube was asked to check: each dry run's files. */
+/**
+ * What a stub xcube was asked to check as a file set: each files dry run's
+ * files. (Its model is never moved to items mode here, so the changeset's
+ * dry run, tried first, answers `409 mode`, T426.)
+ */
 const checkedFiles = (stub: ReturnType<typeof fakeXcube>) =>
   stub.calls
-    .filter((call) => call.path.endsWith('?dryRun=true'))
+    .filter((call) => call.path.endsWith('/snapshot?dryRun=true'))
     .map((call) => (call.body as { files: ModelFile[] }).files);
 
 const ORDERS = { path: 'cubes/orders.yml', content: 'cubes:\n  - name: orders\n' };
@@ -1106,6 +1110,79 @@ describe('one cube or view per model file (T448, AC-337)', () => {
       );
     }
     expect(checkedFiles(stub)).toEqual([]);
+    expect(store.files).toEqual([ORDERS]);
+    await app.close();
+  });
+
+  /**
+   * T426's review (H1): in items mode a file that yields no item is never
+   * sent to xcube, so it isn't checked there; its cube would be deleted and
+   * the broken file kept. It is refused here: YAML that doesn't parse at its
+   * line, and a file declaring nothing.
+   */
+  it('refuses a file that doesn’t parse, at its line, or declares no cube or view', async () => {
+    const store = memory([ORDERS]);
+    const stub = fakeXcube();
+    const app = serve({ config, modelFiles: store }, stub);
+
+    const broken = await publish(app, [
+      { path: 'cubes/orders.yml', content: 'cubes:\n  - name: orders\n    title: [\n' },
+    ]);
+    expect(broken.statusCode).toBe(422);
+    expect(broken.json<{ errors: { path: string; line?: number }[] }>().errors[0]).toMatchObject({
+      path: 'cubes/orders.yml',
+      line: expect.any(Number),
+    });
+
+    const empty = await publish(app, [
+      { path: 'cubes/orders.yml', content: 'cubes:\n  name: x\n' },
+    ]);
+    expect([empty.statusCode, empty.json()]).toEqual([
+      422,
+      {
+        errors: [
+          {
+            path: 'cubes/orders.yml',
+            message:
+              'A model file holds one cube or view, and this one declares none. Declare it under `cubes:` or `views:` as a list.',
+          },
+        ],
+      },
+    ]);
+    expect(checkedFiles(stub)).toEqual([]);
+    expect(store.files).toEqual([ORDERS]);
+    await app.close();
+  });
+
+  /**
+   * T426's review (M1): a name another file already declares would replace
+   * that file's cube in xcube, and the store would never match xcube again.
+   */
+  it('refuses a cube or view another file already declares, naming that file', async () => {
+    const store = memory([ORDERS]);
+    const app = serve({ config, modelFiles: store });
+
+    const again = await publish(app, [
+      { path: 'cubes/copy.yml', content: 'cubes:\n  - name: orders\n' },
+    ]);
+    expect([again.statusCode, again.json()]).toEqual([
+      422,
+      {
+        errors: [
+          { path: 'cubes/copy.yml', message: '`orders` is already a cube in cubes/orders.yml.' },
+        ],
+      },
+    ]);
+
+    // Two changed files declaring one name, likewise.
+    const twice = await publish(app, [
+      { path: 'cubes/a.yml', content: 'cubes:\n  - name: lines\n' },
+      { path: 'cubes/b.yml', content: 'cubes:\n  - name: lines\n' },
+    ]);
+    expect(twice.statusCode).toBe(422);
+    expect(twice.json<{ errors: { path: string; message: string }[] }>().errors).toEqual([
+      { path: 'cubes/b.yml', message: '`lines` is already a cube in cubes/a.yml.' },
+    ]);
     expect(store.files).toEqual([ORDERS]);
     await app.close();
   });

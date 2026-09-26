@@ -31,6 +31,7 @@ import { registerBuilds } from './jobs/build';
 import { registerSchedules } from './jobs/schedules';
 import { registerIntrospection } from './model/introspection';
 import type { Config } from './config';
+import type { Changeset } from './xcube/changesets';
 import type { XcubeAdmin } from './xcube/client';
 import type { PublicationStore } from './xcube/publications';
 import { registerModelPublishing } from './model/publish';
@@ -65,7 +66,7 @@ export interface BuildOptions {
    * xcube (T419, AC-333). A send that fails leaves the publish standing, for
    * the next reconcile to send.
    */
-  readonly afterPublish?: () => Promise<unknown>;
+  readonly afterPublish?: (changeset?: Changeset) => Promise<unknown>;
   /**
    * After a folder is made, changed, moved or removed: put the folder tree
    * to xcube (T449, AC-333). It answers for itself; nothing waits for it.

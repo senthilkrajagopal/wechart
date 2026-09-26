@@ -387,6 +387,92 @@ describe('keeping xcube’s items up to date (T449, AC-333)', () => {
   });
 });
 
+/**
+ * T426: once a publish is committed, xcube is sent the changeset it was
+ * checked as (research `xcube-slice-3a.md`, "POST …/changesets"), on xcube's
+ * current revision, and what xcube acknowledges is recorded, as the tokens
+ * name it (T421, AC-334). Unlike an items snapshot, a changeset leaves the
+ * items it doesn't carry bound as they were (AC-275).
+ */
+describe('a publish sent as its changeset (T426)', () => {
+  const changesetOf = (upserts: readonly ModelFile[]) => ({
+    upserts: itemsOf(upserts),
+    deletes: [],
+  });
+  const changesets = (stub: ReturnType<typeof fakeXcube>) =>
+    stub.calls.filter((call) => call.path.endsWith('/changesets'));
+
+  it('applies it on xcube’s current revision, and records what xcube acknowledged', async () => {
+    const stub = fakeXcube();
+    stub.holdItems('dev', itemsOf([ORDERS]));
+    const dev = deployment(stub);
+    dev.setFiles([ORDERS, VIEWS]);
+
+    expect(await dev.sync.publish(changesetOf([VIEWS]))).toEqual({ kind: 'sent', revision: 2 });
+
+    expect(changesets(stub).map((call) => call.body)).toEqual([
+      {
+        baseRevision: 1,
+        upserts: itemsOf([VIEWS]),
+        deletes: [],
+        // Said in xcube's record of the revision, so a changeset is told from a snapshot.
+        source: { reason: 'publish', via: 'changeset' },
+      },
+    ]);
+    expect(snapshots(stub)).toEqual([]);
+    expect(stub.head('dev')?.itemsHash).toBe(hashOf([ORDERS, VIEWS]));
+    expect(await dev.publications.get('dev')).toEqual({
+      generation: stub.head('dev')?.generation,
+      revision: 2,
+      contentHash: hashOf([ORDERS, VIEWS]),
+    });
+  });
+
+  it('reads the head again and sends again on a stale base, and takes one xcube already holds as done', async () => {
+    const stub = fakeXcube();
+    stub.holdItems('dev', itemsOf([ORDERS]));
+    const dev = deployment(stub);
+
+    stub.conflictNext(1);
+    expect(await dev.sync.publish(changesetOf([VIEWS]))).toHaveProperty('kind', 'sent');
+    expect(changesets(stub).map((call) => call.answered)).toEqual([409, 201]);
+
+    // The same changeset again: already in, whatever its base.
+    expect(await dev.sync.publish(changesetOf([VIEWS]))).toHaveProperty('kind', 'same');
+    expect(changesets(stub).at(-1)?.answered).toBe(200);
+  });
+
+  it('sends the whole model as items where there is no changeset, or xcube still holds a file set', async () => {
+    const stub = fakeXcube();
+    stub.holdFiles('dev', [ORDERS]);
+    const dev = deployment(stub);
+    dev.setFiles([ORDERS, VIEWS]);
+
+    expect(await dev.sync.publish(changesetOf([VIEWS]))).toEqual({ kind: 'sent', revision: 2 });
+    expect(changesets(stub)).toEqual([]);
+    expect(snapshots(stub)).toHaveLength(1);
+    expect(stub.head('dev')?.mode).toBe('items');
+
+    dev.setFiles([VIEWS]);
+    expect(await dev.sync.publish()).toEqual({ kind: 'sent', revision: 3 });
+    expect(snapshots(stub)).toHaveLength(2);
+  });
+
+  it('logs a changeset xcube refuses, and gives up on one it can’t reach', async () => {
+    const stub = fakeXcube();
+    stub.holdItems('dev', itemsOf([ORDERS]));
+    const dev = deployment(stub);
+    stub.refuse([{ folderId: 'froot', name: 'sales', kind: 'compile', message: 'no' }]);
+
+    expect(await dev.sync.publish(changesetOf([VIEWS]))).toHaveProperty('kind', 'refused');
+    expect(dev.warn).toHaveBeenCalled();
+
+    stub.refuse(undefined);
+    stub.down(true);
+    expect(await dev.sync.publish(changesetOf([VIEWS]))).toEqual({ kind: 'failed' });
+  });
+});
+
 describe('the folder tree (T449, AC-333)', () => {
   const TREE: readonly TreeFolder[] = [
     { id: 'froot', parentId: null },

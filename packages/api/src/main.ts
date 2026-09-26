@@ -95,7 +95,8 @@ async function main(): Promise<void> {
     ...(sync === undefined
       ? {}
       : {
-          afterPublish: () => sync.sync('publish'),
+          // Its changeset, as the check had it; else the whole model (T426).
+          afterPublish: (changeset) => sync.publish(changeset),
           // The tree put after every folder change (T449, AC-333).
           afterFolderChange: () => sync.pushTree('folder'),
         }),

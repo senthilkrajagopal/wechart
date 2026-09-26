@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { ModelFile } from '../server';
+import type { ItemError } from './client';
 import { treeHashOf, type TreeFolder } from './folders';
 import { itemsHashOf, type Item } from './items';
 import { contentHashOf } from './snapshot';
@@ -78,9 +79,11 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
       ) => { status: number; error?: string } | undefined)
     | undefined;
   let conflicts = 0;
-  let refusal: readonly ModelError[] | undefined;
+  /** A file set's errors (`ModelError`) or items' (`ItemError`), as the test gives them. */
+  let refusal: readonly (ModelError | ItemError)[] | undefined;
   /** Cube's own text with a refusal, as `/v1/meta` would give it (research: `cubeMessage`). */
   let refusalMessage: string | null = null;
+  let tooLarge = false;
   /** A tree hash to answer instead of the tree's own, as a stale answer would. */
   let wrongTreeHash: number = 0;
 
@@ -126,9 +129,10 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     if (given === undefined || !tokens.includes(given))
       return answer(401, { error: 'A valid xcube admin token is required', code: 'unauthorized' });
 
-    const route = /\/v1\/semantic\/models\/([^/]+)\/(revision|snapshot|folders)$/.exec(
-      url.pathname,
-    );
+    const route =
+      /\/v1\/semantic\/models\/([^/]+)\/(revision|snapshot|folders|changesets|items)$/.exec(
+        url.pathname,
+      );
     if (route === null) return answer(404, { error: 'Not found', code: 'not_found' });
     const model = decodeURIComponent(route[1]!);
     const head = headOf(model);
@@ -154,6 +158,141 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
           revision: head?.revision ?? null,
           state: head === undefined ? 'none' : 'active',
         },
+      });
+    }
+
+    /**
+     * A changeset (T426; research 3a, "POST …/changesets"): `409 mode` on a
+     * model holding a file set. Its dry run answers `valid`, the errors it
+     * is told to refuse with, and each probe run against the items it would
+     * make. Applied, it is `200` when the result is the head whatever the
+     * base, `409 conflict` on a stale base, `422 invalid_items` when told to
+     * refuse, and `201` for a new revision.
+     */
+    /** The head's items (research 3a, "GET …/items"): each one's folder, name and kind. */
+    if (route[2] === 'items' && method === 'GET') {
+      const known = models.get(model);
+      if (known === undefined || head === undefined)
+        return answer(404, { error: `Unknown model "${model}"`, code: 'unknown_model' });
+      return answer(200, {
+        model,
+        revision: head.revision,
+        mode: known.mode,
+        items: head.items.map(({ folderId, name, kind }) => ({
+          folderId,
+          name,
+          kind,
+          fullName: folderId === 'froot' ? name : `${folderId}__${name}`,
+          bindings: {},
+        })),
+      });
+    }
+
+    if (route[2] === 'changesets' && method === 'POST') {
+      if (tooLarge) return answer(413, { error: 'The change is too large', code: 'too_large' });
+      const held = models.get(model);
+      if (held === undefined || held.mode !== 'items')
+        return answer(409, {
+          error: `Model "${model}" holds a file set; send an items snapshot first`,
+          code: 'mode',
+        });
+      const change = body as {
+        baseRevision: number | null;
+        upserts?: readonly Item[];
+        deletes?: readonly { folderId: string; name: string }[];
+        probes?: readonly { id: string; query: Record<string, unknown> }[];
+      };
+      const keyOf = (item: { folderId: string; name: string }) => `${item.folderId}/${item.name}`;
+      const applied = (items: readonly Item[]) => {
+        const gone = new Set((change.deletes ?? []).map(keyOf));
+        const upserted = new Map((change.upserts ?? []).map((item) => [keyOf(item), item]));
+        return [
+          ...items.filter((item) => !gone.has(keyOf(item)) && !upserted.has(keyOf(item))),
+          ...upserted.values(),
+        ];
+      };
+      const current = headOf(model);
+      const result = applied(current?.items ?? []);
+      if (url.searchParams.get('dryRun') === 'true') {
+        const valid = refusal === undefined;
+        const asFiles = result.map((item) => ({ path: `${item.name}.yml`, content: item.yaml }));
+        return answer(200, {
+          model,
+          valid,
+          errors: refusal ?? [],
+          cubeMessage: valid ? null : refusalMessage,
+          probes:
+            valid && !dropping
+              ? (change.probes ?? []).map((probe) => ({
+                  id: probe.id,
+                  candidate: probeAnswer?.(probe, asFiles) ?? { status: 200 },
+                }))
+              : [],
+          itemsHash: valid ? itemsHashOf(result) : null,
+          currentRevision: current?.revision ?? null,
+          items: [],
+        });
+      }
+      // Another replica's changeset lands between this one's read and its send.
+      if (conflicts > 0) {
+        conflicts -= 1;
+        const other: Item = {
+          folderId: 'froot',
+          name: `other_${String(conflicts)}`,
+          kind: 'cube',
+          yaml: '',
+        };
+        held.revisions.push({
+          revision: (current?.revision ?? 0) + 1,
+          contentHash: randomUUID(),
+          itemsHash: itemsHashOf([...(current?.items ?? []), other]),
+          files: [],
+          items: [...(current?.items ?? []), other],
+        });
+      }
+      const head = headOf(model);
+      const next = applied(head?.items ?? []);
+      const itemsHash = itemsHashOf(next);
+      if (head !== undefined && head.itemsHash === itemsHash)
+        return answer(200, {
+          model,
+          generation,
+          revision: head.revision,
+          created: false,
+          contentHash: head.contentHash,
+          itemsHash,
+          items: [],
+        });
+      if ((head?.revision ?? null) !== change.baseRevision)
+        return answer(409, {
+          error: "The model changed since the changeset's base revision",
+          code: 'conflict',
+          currentRevision: head?.revision ?? null,
+          currentItemsHash: head?.itemsHash ?? null,
+        });
+      if (refusal !== undefined)
+        return answer(422, {
+          error: 'The items do not compile',
+          code: 'invalid_items',
+          errors: refusal,
+          cubeMessage: refusalMessage,
+        });
+      const revision = (head?.revision ?? 0) + 1;
+      held.revisions.push({
+        revision,
+        contentHash: randomUUID(),
+        itemsHash,
+        files: [],
+        items: next,
+      });
+      return answer(201, {
+        model,
+        generation,
+        revision,
+        created: true,
+        contentHash: held.revisions.at(-1)?.contentHash,
+        itemsHash,
+        items: [],
       });
     }
 
@@ -367,6 +506,19 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
         items: [],
       });
     },
+    /** A model moved to items mode, holding these items (T426's changesets start from this). */
+    holdItems: (model: string, items: readonly Item[]) => {
+      const held = modelOf(model);
+      held.mode = 'items';
+      held.tree ??= [{ id: 'froot', parentId: null }];
+      held.revisions.push({
+        revision: (headOf(model)?.revision ?? 0) + 1,
+        contentHash: randomUUID(),
+        itemsHash: itemsHashOf(items),
+        files: [],
+        items,
+      });
+    },
     /** The check answers without its probes' results, as a garbled answer would. */
     dropProbes: (on: boolean) => {
       dropping = on;
@@ -387,12 +539,19 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     conflictNext: (n: number) => {
       conflicts = n;
     },
+    /** Changesets are answered `413 too_large`, until put back. */
+    refuseSize: (on: boolean) => {
+      tooLarge = on;
+    },
     /** The next `n` tree puts answer a hash that isn't the tree's. */
     wrongTreeHashNext: (n: number) => {
       wrongTreeHash = n;
     },
     /** Imports are refused with these errors, until cleared with `undefined`. */
-    refuse: (errors: readonly ModelError[] | undefined, cubeMessage: string | null = null) => {
+    refuse: (
+      errors: readonly (ModelError | ItemError)[] | undefined,
+      cubeMessage: string | null = null,
+    ) => {
       refusal = errors;
       refusalMessage = cubeMessage;
     },

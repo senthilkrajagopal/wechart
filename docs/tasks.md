@@ -6590,7 +6590,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
 
       All five are fixed as above. The review's point about stale state in Cube after the SQL reset is covered by the revision headers.
     - **AC-336 ticked** on `items-switch.spec.ts` (Chrome), run twice, and together with the cut-over spec (8 passed).
-- [ ] T426 (~~AC-321,~~ AC-136, ~~AC-288, AC-291,~~ AC-009, AC-137) Publish through xcube's changesets, checking every module a change affects *(split 2026-09-26: proposals don't exist yet (T343–T359), so their check and approval are T451; a direct delete comes with T428's deletes)*
+- [x] T426 (~~AC-321,~~ AC-136, ~~AC-288, AC-291,~~ AC-009, AC-137) Publish through xcube's changesets, checking every module a change affects *(split 2026-09-26: proposals don't exist yet (T343–T359), so their check and approval are T451; a direct delete comes with T428's deletes)*
   - Files: `packages/api/src/xcube/changesets.ts` (+ test), `packages/api/src/xcube/client.ts` (+ test), `packages/api/src/xcube/check.ts` (+ test), `packages/api/src/model/publish.ts` (in place of T445's file-set dry run), ~~`packages/api/src/routes/proposals.ts`,~~ `packages/api/src/server.ts`, `e2e/publish-model.spec.ts`
   - Failing test: `changesets.test.ts`, `check.test.ts` and `publish.test.ts`, against the stub, and `publish-model.spec.ts` against xcube's image:
     - a direct publish is checked with the changeset's dry run, and applied as that changeset once committed to wechart's store;
@@ -6599,10 +6599,37 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - a stale base revision (`409`) is read and sent again;
     - a retried changeset xcube already holds (`200`) is taken as done.
 
-    AC-136 is reworded and ticked again here (R28 Q9); its error lands on the item, with no line from xcube's resolved copy (`[X3A]` §3). T433's refusal of anything that isn't YAML (AC-332) holds through the changeset publish, checked here.
+    AC-136 is ~~reworded and~~ ticked again here (R28 Q9; it keeps its wording, `[R30]`); its error lands on the item, with no line from xcube's resolved copy (`[X3A]` §3). T433's refusal of anything that isn't YAML (AC-332) holds through the changeset publish, checked here.
 
     *Absorbs T432 (retired, 2026-09-26, `[R30]`):* xcube has no field-list route, so Cube's `/v1/meta`, merged across modules and keyed by `x-xcube-revision`, stays the field list. AC-009's and AC-137's tests are re-run here on items mode: after a changeset lands, `/api/meta` from either replica lists its new members within 60 s, without restarting Cube.
   - Depends on: ~~T420,~~ T419 (xcube's admin client, with the static admin token until slice 4), T445, T425, T449
+  - **As built:** also `packages/api/src/xcube/fake.ts`, `snapshot.ts` (+ test), `main.ts`, `model/split.ts`, `publish.test.ts`, `server.ts`, and `e2e/xcube-cutover.spec.ts`. The image-side check is in the cut-over spec rather than `publish-model.spec.ts`, which runs unchanged on the changeset path.
+  - **Done 2026-09-26.**
+    - **The check** reads xcube's head first:
+      - **Items mode** (every deployment from T449): the change is checked by the changeset's dry run. Its upserts and deletes are taken against the published files (`changesets.ts`), with wechart's context and a probe for each cube with rollups. Each error lands on its item's file. A compile error carries no line, since xcube's lines are its resolved copy's; a YAML error keeps its line. A size or request xcube won't take is refused on the change.
+      - **Where xcube's items hash isn't the store's** (a lost send, a row written to the store): the whole model is checked instead, as every item the store makes plus a delete of each item xcube holds that the store doesn't (`GET …/items`).
+      - **Files mode** (the moment before an API's first send): as a file set, T445's path.
+    - **The send.** Once committed, the checked changeset is applied on xcube's current revision (`publish()`):
+      - read again and sent again on a stale base (`409`); one xcube already holds (`200`) is taken as done;
+      - the revision is recorded, as tokens name it (AC-334);
+      - a whole-model check, a model still holding a file set, or no changeset sends the whole model as items;
+      - xcube records the revision's source as `{ reason: 'publish', via: 'changeset' }`.
+    - **Refused before xcube is asked**, since in items mode such a file would never reach it:
+      - YAML that doesn't parse, at its line;
+      - a file declaring no cube or view;
+      - a name another file already declares, naming that file.
+    - **The cold review (FAIL) found:**
+      - a changed file making no item was never checked, its cube deleted in xcube and the broken file kept;
+      - a second file declaring a name replaced the first in xcube;
+      - the whole check kept items the store lacks;
+      - a size refusal became a 502;
+      - the wiring was untested;
+      - AC-136's and AC-137's notes disagreed with the R30 note.
+
+      All are fixed and tested. The notes now say both keep their wording and were retested here.
+    - **AC-136, AC-009 and AC-137 stay ticked, retested on items mode:**
+      - `check.test.ts` (20), `snapshot.test.ts` (25), `client.test.ts`, `changesets.test.ts` and `publish.test.ts`;
+      - in Chrome on compose's Cube on the image: the model specs (50), including `model.spec.ts`'s error on its file with no line, `publish-model.spec.ts`'s new member in the chart builder, and the cut-over spec's D2, where the revision holding the publish says `via: 'changeset'` and the other API and Cube instance list it at once.
 - [ ] T451 (AC-321, AC-288, AC-291) Check a proposal with a changeset's dry run when it is made, and apply that changeset at approval *(split from T426, 2026-09-26)*
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/xcube/changesets.ts`, `e2e/security/publish-check.spec.ts`
   - Failing test: `publish-check.spec.ts`, against xcube's image:

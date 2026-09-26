@@ -5,6 +5,7 @@ import type { Config } from '../config';
 import { buildServer, type ModelFile, type ModelFileStore } from '../server';
 import { xcubeAdmin } from './client';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from './fake';
+import { itemsOf } from './items';
 
 /**
  * T445: a publish is checked by xcube's dry run (`docs/research/xcube-slice-2.md`,
@@ -377,6 +378,187 @@ describe('a publish checked by xcube’s dry run (T445)', () => {
     expect(
       published.json<{ errors: { path: string }[] }>().errors.map((error) => error.path),
     ).toEqual(['cubes/base.yml']);
+    await app.close();
+  });
+});
+
+/**
+ * T426, AC-136 as reworded (R28 Q9): on a model in items mode, a publish is
+ * checked by the changeset's dry run (research `xcube-slice-3a.md`, "POST
+ * …/changesets?dryRun=true"): the items it changes, wechart's context, and a
+ * probe for each cube with rollups. Its errors land on the item's file, with
+ * no line from xcube's resolved copy; a YAML error keeps the author's.
+ */
+describe('a publish checked by the changeset’s dry run (T426)', () => {
+  const inItemsMode = (files: ModelFileStore) => {
+    const served = serving(files);
+    served.stub.holdItems('dev', itemsOf([USER]));
+    return served;
+  };
+  const dryRuns = (stub: ReturnType<typeof fakeXcube>) =>
+    stub.calls.filter((call) => call.path.endsWith('/changesets?dryRun=true'));
+
+  it('asks xcube once: the changed items, wechart’s context, and a probe for each cube with rollups', async () => {
+    const files = store([USER]);
+    const { app, stub, asked } = inItemsMode(files);
+
+    const published = await publish(app, [rollupOn(true)]);
+
+    expect(published.statusCode).toBe(200);
+    expect(dryRuns(stub)).toHaveLength(1);
+    expect(dryRuns(stub)[0]?.body).toEqual({
+      baseRevision: null,
+      upserts: itemsOf([rollupOn(true)]),
+      deletes: [],
+      securityContext: { tenant: 'acme' },
+      probes: [{ id: expect.any(String), query: { measures: ['base.count'] } }],
+    });
+    // No file set is checked any more, and Cube is asked nothing.
+    expect(stub.calls.filter((call) => call.path.endsWith('/snapshot?dryRun=true'))).toEqual([]);
+    expect(asked).not.toHaveBeenCalled();
+    expect(files.files).toEqual([USER, rollupOn(true)]);
+    await app.close();
+  });
+
+  // T426's review (T2): what was checked is what is sent.
+  it('hands the changeset it checked to the send, once committed', async () => {
+    const files = store([USER]);
+    const { app, afterPublish } = inItemsMode(files);
+
+    expect((await publish(app, [rollupOn(true)])).statusCode).toBe(200);
+    expect(afterPublish).toHaveBeenCalledWith({ upserts: itemsOf([rollupOn(true)]), deletes: [] });
+    await app.close();
+  });
+
+  /**
+   * T426's review (M2, T1): where xcube's items aren't the store's, the
+   * check is of the whole model: every item the store makes, and a delete of
+   * each item xcube holds that the store doesn't (`GET …/items`). The publish
+   * then sends the whole model, not a changeset.
+   */
+  it('checks the whole model where xcube’s items aren’t the store’s, and sends it whole', async () => {
+    const gone = { path: 'cubes/gone.yml', content: 'cubes:\n  - name: gone\n' };
+    const files = store([USER]);
+    const { app, stub, afterPublish } = serving(files);
+    stub.holdItems('dev', itemsOf([gone]));
+    const other = { path: 'cubes/other.yml', content: 'cubes:\n  - name: other\n' };
+
+    expect((await publish(app, [other])).statusCode).toBe(200);
+    expect(dryRuns(stub)[0]?.body).toMatchObject({
+      upserts: itemsOf([other, USER]),
+      deletes: [{ folderId: 'froot', name: 'gone' }],
+    });
+    expect(afterPublish).toHaveBeenCalledWith(undefined);
+    await app.close();
+  });
+
+  // T426's review (M3): a size or request xcube won't take lands on the change, as the files check's did.
+  it('refuses a change xcube won’t take for its size, as it refused a file set', async () => {
+    const files = store([USER]);
+    const { app, stub } = inItemsMode(files);
+    stub.refuseSize(true);
+
+    const published = await publish(app, [rollupOn(true)]);
+
+    expect(published.statusCode).toBe(422);
+    expect(published.json<{ errors: { message: string }[] }>().errors[0]?.message).toBe(
+      'The change is too large',
+    );
+    await app.close();
+  });
+
+  it('refuses items xcube says don’t compile, each error on its item’s file, a YAML error at its line', async () => {
+    const files = store([USER]);
+    const { app, stub, afterPublish } = inItemsMode(files);
+    stub.refuse([
+      // A line in xcube's resolved copy, not the author's: never shown (T426's review, T3).
+      {
+        folderId: 'froot',
+        name: 'base',
+        kind: 'compile',
+        line: 9,
+        column: 2,
+        message: 'base cube: sql_table is bad',
+      },
+      { folderId: 'froot', name: 'base', kind: 'yaml', line: 3, column: 5, message: 'bad indent' },
+      { folderId: null, name: null, kind: 'compile', message: 'no_such_member is not defined' },
+    ]);
+    const naming = {
+      path: 'cubes/other.yml',
+      content: 'cubes:\n  - name: other\n    sql: no_such_member\n',
+    };
+
+    const published = await publish(app, [rollupOn(true), naming]);
+
+    expect([published.statusCode, published.json()]).toEqual([
+      422,
+      {
+        errors: [
+          { path: 'cubes/base.yml', message: 'base cube: sql_table is bad' },
+          { path: 'cubes/base.yml', line: 3, column: 5, message: 'bad indent' },
+          { path: 'cubes/other.yml', message: 'no_such_member is not defined' },
+        ],
+      },
+    ]);
+    expect(files.files).toEqual([USER]);
+    expect(afterPublish).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  /**
+   * T426's e2e: a file in wechart's store that xcube doesn't hold (a send
+   * lost, or a row written straight to the store) is checked too, so a
+   * rollup it breaks refuses the publish (R29). Where xcube's items aren't
+   * the store's, every item is sent, and the publish then sends the whole
+   * model rather than a changeset.
+   */
+  it('checks every item where xcube doesn’t hold what wechart’s store does, and sends no changeset', async () => {
+    const files = store([USER, rollupOn(false)]);
+    const { app, stub, afterPublish } = serving(files);
+    // xcube holds USER alone: the rollup's file never reached it.
+    stub.holdItems('dev', itemsOf([USER]));
+    stub.answerProbes(unjoined);
+    const unrelated = { path: 'cubes/other.yml', content: 'cubes:\n  - name: other\n' };
+
+    const published = await publish(app, [unrelated]);
+
+    expect(published.statusCode).toBe(422);
+    expect(dryRuns(stub)[0]?.body).toMatchObject({
+      upserts: itemsOf([rollupOn(false), unrelated, USER]),
+    });
+    expect(published.json()).toEqual({
+      errors: [
+        expect.objectContaining({
+          path: 'cubes/base.yml',
+          preAggregation: { cube: 'base', name: 'by_city' },
+        }),
+      ],
+    });
+    expect(afterPublish).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuses a rollup the dry run’s probe refuses, naming it, its file and Cube’s reason', async () => {
+    const files = store([USER]);
+    const { app, stub } = inItemsMode(files);
+    stub.answerProbes(unjoined);
+
+    const published = await publish(app, [rollupOn(false)]);
+
+    expect([published.statusCode, published.json()]).toEqual([
+      422,
+      {
+        errors: [
+          {
+            path: 'cubes/base.yml',
+            line: 8,
+            message: `Pre-aggregation by_city can't be built: Cube cannot join its cubes. ${REASON}.`,
+            preAggregation: { cube: 'base', name: 'by_city' },
+          },
+        ],
+      },
+    ]);
+    expect(files.files).toEqual([USER]);
     await app.close();
   });
 });

@@ -83,6 +83,46 @@ export interface XcubeAdmin {
   }): Promise<SnapshotAnswer>;
   /** The folder tree (T449, AC-333), and the tree hash xcube answers for it. */
   folders(tree: readonly TreeFolder[]): Promise<{ readonly hash: string }>;
+  /**
+   * A changeset checked, storing nothing (T426; research 3a, "POST
+   * …/changesets?dryRun=true"): its errors on items, and each probe's answer.
+   * A model still holding a file set answers `409 mode`, thrown.
+   */
+  checkChangeset(input: {
+    readonly upserts: readonly Item[];
+    readonly deletes: readonly { readonly folderId: string; readonly name: string }[];
+    readonly securityContext: Record<string, unknown>;
+    readonly probes: readonly { readonly id: string; readonly query: Record<string, unknown> }[];
+  }): Promise<ItemsCheckAnswer>;
+  /** The head's items, by folder and name (research 3a, "GET …/items"); none for a model never imported. */
+  items(): Promise<readonly { readonly folderId: string; readonly name: string }[]>;
+  /** A changeset applied on a base revision (T426; research 3a, "POST …/changesets"). */
+  applyChangeset(input: {
+    readonly baseRevision: number | null;
+    readonly upserts: readonly Item[];
+    readonly deletes: readonly { readonly folderId: string; readonly name: string }[];
+    readonly source?: Record<string, unknown>;
+  }): Promise<SnapshotAnswer>;
+}
+
+/** An error xcube places on an item, or on none (research 3a, `ItemError`). */
+export interface ItemError {
+  readonly folderId: string | null;
+  readonly name: string | null;
+  readonly line?: number;
+  readonly column?: number;
+  readonly kind: string;
+  readonly message: string;
+}
+
+/** xcube's check of a changeset (research 3a, `ItemsCheck`). */
+export interface ItemsCheckAnswer {
+  readonly valid: boolean;
+  readonly errors: readonly ItemError[];
+  readonly cubeMessage: string | null;
+  readonly probes: CheckAnswer['probes'];
+  /** The database head the change was checked on. */
+  readonly currentRevision: number | null;
 }
 
 /** An answer xcube gave that none of the above are: said with its status and code. */
@@ -132,7 +172,7 @@ export function xcubeAdmin({
     'content-type': 'application/json',
   };
 
-  const call = async (method: 'GET' | 'PUT', path: string, body?: unknown) => {
+  const call = async (method: 'GET' | 'PUT' | 'POST', path: string, body?: unknown) => {
     const response = await send(`${base}${path}`, {
       method,
       headers,
@@ -208,37 +248,19 @@ export function xcubeAdmin({
       throw failed(status, answer);
     },
 
-    async itemsSnapshot({ baseRevision, folders, items, source }) {
-      const { status, answer } = await call('PUT', '/snapshot', {
-        baseRevision,
-        folders: folders.map(({ id, parentId }) => ({ id, parentId })),
-        items: items.map(({ folderId, name, kind, yaml }) => ({ folderId, name, kind, yaml })),
-        ...(source === undefined ? {} : { source }),
+    async checkChangeset({ upserts, deletes, securityContext, probes }) {
+      const { status, answer } = await call('POST', '/changesets?dryRun=true', {
+        baseRevision: null,
+        upserts: upserts.map(({ folderId, name, kind, yaml }) => ({ folderId, name, kind, yaml })),
+        deletes: deletes.map(({ folderId, name }) => ({ folderId, name })),
+        securityContext,
+        probes,
       });
-      if (status === 200 || status === 201)
-        return {
-          kind: 'stored',
-          generation: String(answer['generation']),
-          revision: Number(answer['revision']),
-          itemsHash: String(answer['itemsHash']),
-          created: answer['created'] === true,
-        };
-      if (status === 409 && answer['code'] === 'conflict')
-        return {
-          kind: 'conflict',
-          currentRevision:
-            typeof answer['currentRevision'] === 'number' ? answer['currentRevision'] : null,
-        };
-      if (status === 422)
-        return {
-          kind: 'refused',
-          errors: Array.isArray(answer['errors']) ? answer['errors'] : [],
-          cubeMessage: answer['cubeMessage'],
-        };
-      // A tree or a size xcube will never take: refused as surely.
+      // A size, a tree or a request xcube won't take: refused as surely as
+      // items that don't compile, as the files check's were (T426's review).
       if ((status === 400 || status === 413) && REFUSED_ITEMS_CODES.has(String(answer['code'])))
         return {
-          kind: 'refused',
+          valid: false,
           errors: [
             {
               folderId: null,
@@ -248,8 +270,86 @@ export function xcubeAdmin({
             },
           ],
           cubeMessage: null,
+          probes: [],
+          currentRevision: null,
         };
-      throw failed(status, answer);
+      if (status !== 200) throw failed(status, answer);
+      return {
+        valid: answer['valid'] === true,
+        errors: Array.isArray(answer['errors']) ? (answer['errors'] as ItemError[]) : [],
+        cubeMessage: typeof answer['cubeMessage'] === 'string' ? answer['cubeMessage'] : null,
+        probes: Array.isArray(answer['probes']) ? (answer['probes'] as CheckAnswer['probes']) : [],
+        currentRevision:
+          typeof answer['currentRevision'] === 'number' ? answer['currentRevision'] : null,
+      };
+    },
+
+    async items() {
+      const { status, answer } = await call('GET', '/items');
+      if (status === 404 && answer['code'] === 'unknown_model') return [];
+      if (status !== 200) throw failed(status, answer);
+      return (Array.isArray(answer['items']) ? (answer['items'] as Record<string, unknown>[]) : [])
+        .filter((item) => typeof item['folderId'] === 'string' && typeof item['name'] === 'string')
+        .map((item) => ({ folderId: String(item['folderId']), name: String(item['name']) }));
+    },
+
+    async applyChangeset({ baseRevision, upserts, deletes, source }) {
+      const { status, answer } = await call('POST', '/changesets', {
+        baseRevision,
+        upserts: upserts.map(({ folderId, name, kind, yaml }) => ({ folderId, name, kind, yaml })),
+        deletes: deletes.map(({ folderId, name }) => ({ folderId, name })),
+        ...(source === undefined ? {} : { source }),
+      });
+      return stored(status, answer);
+    },
+
+    async itemsSnapshot({ baseRevision, folders, items, source }) {
+      const { status, answer } = await call('PUT', '/snapshot', {
+        baseRevision,
+        folders: folders.map(({ id, parentId }) => ({ id, parentId })),
+        items: items.map(({ folderId, name, kind, yaml }) => ({ folderId, name, kind, yaml })),
+        ...(source === undefined ? {} : { source }),
+      });
+      return stored(status, answer);
     },
   };
+
+  /** An items snapshot's or a changeset's answer, which read alike (research 3a). */
+  function stored(status: number, answer: Record<string, unknown>): SnapshotAnswer {
+    if (status === 200 || status === 201)
+      return {
+        kind: 'stored',
+        generation: String(answer['generation']),
+        revision: Number(answer['revision']),
+        itemsHash: String(answer['itemsHash']),
+        created: answer['created'] === true,
+      };
+    if (status === 409 && answer['code'] === 'conflict')
+      return {
+        kind: 'conflict',
+        currentRevision:
+          typeof answer['currentRevision'] === 'number' ? answer['currentRevision'] : null,
+      };
+    if (status === 422)
+      return {
+        kind: 'refused',
+        errors: Array.isArray(answer['errors']) ? answer['errors'] : [],
+        cubeMessage: answer['cubeMessage'],
+      };
+    // A tree or a size xcube will never take: refused as surely.
+    if ((status === 400 || status === 413) && REFUSED_ITEMS_CODES.has(String(answer['code'])))
+      return {
+        kind: 'refused',
+        errors: [
+          {
+            folderId: null,
+            name: null,
+            kind: 'item',
+            message: String(answer['error'] ?? answer['code']),
+          },
+        ],
+        cubeMessage: null,
+      };
+    throw failed(status, answer);
+  }
 }
