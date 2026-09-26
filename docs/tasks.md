@@ -5988,7 +5988,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
 ### Slice 2: foundation
 
 - [x] T418 [P] (AC-319) Keep publish drafts in the metadata database, so any API replica answers Cube's read-back
-  - Why: the drafts `Map` in `model/publish.ts` breaks with two replicas: Cube's read-back can land on the other one (research `cube/ha-topology.md`, table row 1). This is interim until slice 3 removes the read-back (T431).
+  - Why: the drafts `Map` in `model/publish.ts` breaks with two replicas: Cube's read-back can land on the other one (research `cube/ha-topology.md`, table row 1). This is interim until ~~slice 3~~ slice 2's cut-over removes the read-back (T431; `[R29]`).
   - Files: a migration `…_publish-drafts.cjs`, `packages/api/src/db/schema.ts`, `packages/api/src/model/drafts.ts` (the store), `packages/api/src/model/publish.ts`, `packages/api/src/server.ts` and `packages/api/src/main.ts` (wiring), `packages/api/src/model/publish-drafts.test.ts`
   - Failing test: `publish-drafts.test.ts`: with two API instances on one database, a publish started through one has its draft read by Cube's callback through the other. No draft is held in a process's memory (AC-319).
   - Depends on: none
@@ -6008,15 +6008,44 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
       - a process that dies mid-publish leaves its draft row behind, unread, until slice 3 removes drafts (T431);
       - the chart's `replicas: 1` comment in `api.yaml` names the draft map, and T423 rewrites it.
     - AC-319 stays open (T421–T423, T444).
-- [ ] T419 (AC-330, AC-327) Bring xcube's copy up to date when the API starts, with a full snapshot when it is missing or behind
-  - Files: `packages/api/src/xcube/client.ts` (+ test), `packages/api/src/xcube/snapshot.ts` (+ test), `packages/api/src/xcube/fake.ts`, `packages/api/src/main.ts`
-  - Failing test: `snapshot.test.ts`, against the stub xcube:
-    - an empty xcube gets one full snapshot at start: folders, their allowed groups, model items as written, and data sources with ciphertext only;
-    - an up-to-date one gets none.
+*Rewritten 2026-09-26 for xcube's slice 2 as built (`[X2, R29]`; `docs/research/xcube-slice-2.md`). xcube's side is done at the fork's `83cb9f0888`. wechart's side cuts over in one step, T447: xcube serves the model from then on, with no switch back but the previous image and release. Until T447, the code below runs only where the xcube settings are given (the model id and the admin token), so each commit leaves both suites passing on today's Cube. T431 then removes the old path. The service credential moves to slice 4 (T420): until then, xcube's admin routes take its static admin token (R29).*
 
-    Then, against xcube's slice 2 in compose, with every API process stopped, a published query still answers (AC-330), and no request from Cube reaches wechart (AC-327).
-  - Depends on: T420; xcube's slice 2 (`PUT /v1/semantic/snapshot`, `GET /v1/semantic/revision`)
-- [ ] T420 (AC-326, AC-250) Call Cube and xcube on wechart's own behalf with a service credential, never a user's token
+- [ ] T419 (AC-333, AC-330) ~~Bring xcube's copy up to date when the API starts, with a full snapshot when it is missing or behind~~ Push the whole published file set to xcube at start, after each publish and every 60 s, recording what xcube acknowledged
+  - Files: `packages/api/src/xcube/client.ts` (+ test), `packages/api/src/xcube/snapshot.ts` (+ test), `packages/api/src/xcube/fake.ts`, a migration `…_model-publications.cjs`, `packages/api/src/config.ts` (`WECHART_XCUBE_MODEL`, `WECHART_XCUBE_ADMIN_TOKEN`), `packages/api/src/main.ts`, `packages/api/src/model/publish.ts` (after a commit)
+  - Failing test: `snapshot.test.ts`, against the stub xcube (research §"API surface"):
+    - a model xcube doesn't know (`404 unknown_model`) gets the whole set with `baseRevision: null`;
+    - one whose content hash matches gets no `PUT`; one that differs gets the set with its current revision as the base;
+    - a `409` is read and sent again, at most three times; a `422` is logged, and the same content isn't sent again for 10 minutes;
+    - generation, revision and content hash are recorded as xcube acknowledges them, and a new generation resets the recorded revision;
+    - a publish is committed to wechart's store before it is sent; one lost after the commit (the stub down) is sent by the next reconcile, within 60 s;
+    - two deployments' model ids never touch each other's model; every admin call carries the admin token and never a user's token (AC-333).
+    - ~~an empty xcube gets one full snapshot at start: folders, their allowed groups, model items as written, and data sources with ciphertext only;~~ Folders, their groups and data sources are sent by their own slices (T425, T436, T442), so AC-330 stays open for them.
+  - Depends on: none (the stub); T447 runs it against xcube
+- [ ] T445 (AC-136, AC-235) Check a publish with xcube's dry run in place of the draft Cube compiles, refusing every break
+  - Files: `packages/api/src/xcube/check.ts` (+ test), `packages/api/src/model/publish.ts`, `packages/api/src/model/validate.ts` (`placeOf` exported, for errors xcube names no file for), `packages/api/src/xcube/fake.ts`
+  - Failing test: `check.test.ts`, against the stub xcube:
+    - a publish sends one `PUT …/snapshot?dryRun=true` with the merged files, wechart's base context, and one probe per cube with rollups, with no `compare`;
+    - `valid: false` refuses it with each error on its file, line and column where given, and `path: null` errors placed by `placeOf` (AC-136);
+    - a probe's refusal names the rollup, its file and Cube's reason, and refuses the publish even when the rollup's file is unchanged and it was refused before (AC-235, R29);
+    - nothing is sent to xcube for a refused publish.
+  - Depends on: T419
+- [ ] T446 (AC-335, AC-140) Send only plain YAML to xcube, and keep other model files read-only in wechart's store
+  - Files: `packages/api/src/xcube/snapshot.ts`, `packages/api/src/xcube/check.ts`, `infra/cube/model/cubes/product_catalog.yml` (rewritten as plain YAML), a Jinja example that no dashboard uses, for AC-140, `e2e/model.spec.ts`
+  - Failing test: `snapshot.test.ts` and `check.test.ts`: no snapshot or check holds a `.js`, `.py`, `.jinja` or Jinja-tagged YAML file, however many the store holds (AC-335). `model.spec.ts`: the Jinja example still opens read-only with its reason (AC-140), and `product_catalog` still answers queries.
+  - Depends on: T419, T445
+- [ ] T447 (AC-333, AC-334, AC-330) Cut over: xcube serves the model in compose and the docker-desktop release
+  - Files:
+    - `docker-compose.yml`: the `xcube:v1.7.45-83cb9f0888` image, built locally from the fork (`deploy.md`); an `xcube-db-init` one-shot running `bootstrap.sql`; `XCUBE_DATABASE_URL` on both Cube services; `XCUBE_ADMIN_TOKENS` on the API instance only;
+    - `infra/cube/cube.js`: `require('xcube').config(…)` as the research gives it, with no `contextToAppId`, `repositoryFactory`, `schemaVersion` or compiler-cache settings;
+    - `playwright.config.ts` and `playwright.security.config.ts`: the model id and the admin token for each suite's API;
+    - `deploy/helm/wechart/templates/{cube,api,xcube-bootstrap}.yaml`, `values.yaml`, `deploy/helm/values/docker-desktop.yaml`: a plain Job for the bootstrap, Secrets for xcube's password and admin token, the settings on each Cube process, and a `startupProbe`;
+    - `deploy/helm/verify.sh`, `docs/deploy.md`.
+  - Failing test:
+    - both end-to-end suites pass in Chrome against xcube, including AC-009, AC-136, AC-137, AC-140 and AC-235's specs, whose ticks are kept or dropped by the result;
+    - `e2e/xcube-cutover.spec.ts`: a member published through the phase-1 suite's API is queried and listed with every API process stopped and Cube restarted (the contract's D1; AC-330's model part). A publish through one API process is in the field list at once through another, started on the same database (D2; AC-334);
+    - `verify.sh` does the same in the release.
+  - Depends on: T419, T421, T445, T446
+- [ ] T420 (AC-326, AC-250) Call Cube and xcube on wechart's own behalf with a service credential, never a user's token *(moved to slice 4, 2026-09-26: xcube's admin routes take its static admin token until then, `[X2, R29]`)*
   - Files: `packages/api/src/cube/service-token.ts` (+ test), `packages/api/src/cube/client.ts`, `packages/api/src/model/introspection.ts`, `packages/api/src/jobs/*.ts`, `packages/api/src/cube/health.ts`
   - Failing test: `service-token.test.ts`:
     - every own-behalf call carries the service token (`role: service`; `aud: xcube-admin` for admin calls): introspection, builds and jobs, system partitions, health and every xcube admin call;
@@ -6024,13 +6053,15 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - no response to the browser contains the service credential (AC-326).
 
     Research: `cube/tokens-and-service-credential.md`.
-  - Depends on: T322; xcube's slice 2 (service-credential auth on its admin routes)
-- [ ] T421 (AC-319) Let two API replicas agree: key the metadata cache by xcube's revision, and wait for the migration lock
-  - Files: `packages/api/src/cube/meta-cache.ts`, `packages/api/src/db/migrate.ts` (`advisoryLockMode: 'wait'`), `packages/api/src/cube/meta-cache-replicas.test.ts`, `packages/api/src/db/migrate-concurrent.test.ts`
+  - Depends on: T322; xcube's slice 4 (service-credential auth on its admin routes, in place of the static admin token)
+- [ ] T421 (AC-334, AC-319) Name the model and the revision in every query token, key the metadata cache by xcube's revision, and wait for the migration lock
+  - Files: `packages/api/src/cube/client.ts` (the `wechartModel` and `wechartRevision` claims; a catching-up instance's `503` with `Retry-After` waited for and asked again), `packages/api/src/cube/meta-cache.ts` (keyed by the `x-xcube-revision` an answer came at, fetched again when the recorded revision is newer), `packages/api/src/db/migrate.ts` (`advisoryLockMode: 'wait'`), `packages/api/src/cube/meta-cache-replicas.test.ts`, `packages/api/src/db/migrate-concurrent.test.ts`, `packages/api/src/cube/client.test.ts`
   - Failing test:
+    - every token wechart signs for a query, a preview, introspection or a job names the model; the revision it names is the one last recorded (AC-334);
+    - a `503` from an instance still catching up is asked again after its `Retry-After`, and never reaches the user as an error;
     - two API instances on one database: a publish through one reaches the other's metadata as soon as the revision changes, not 60 s later;
     - starting both at once migrates once, and neither exits (AC-319; research `cube/ha-topology.md`, table rows 3 and 6).
-  - Depends on: T418
+  - Depends on: T419
 - [x] T422 [P] (AC-319) Retry the web app's ~~idempotent requests~~ queries when an API replica or a Cube instance goes away
   - Files: ~~`packages/web/src/api/fetch.ts` (+ test),~~ `packages/web/src/query/loadTile.ts` (+ test), ~~`packages/api/src/server.ts`~~ `packages/api/src/cube/client.ts` (+ test) (a Cube transport failure answers 503, not 500)
   - Failing test: ~~`fetch.test.ts` and~~ `loadTile.test.ts` and `client.test.ts`:
@@ -6070,7 +6101,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - both Deployments return to full strength (AC-319).
 
     The refresh worker stays at one (research `cube/ha-topology.md` §2).
-  - Depends on: T418, T421, T422
+  - Depends on: T418, T421, T422, T447, T431
 
 ### Slice 3: names and modules
 
@@ -6087,7 +6118,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - a stale base revision (`409`) is checked again (AC-321, AC-288, AC-291).
 
     AC-136 is reworded and ticked again here (R28 Q9). T433's refusal of anything that isn't YAML (AC-332) holds through the changeset publish, checked here.
-  - Depends on: T420, T425
+  - Depends on: ~~T420,~~ T419 (xcube's admin client, with the static admin token until slice 4), T445, T425
 - [ ] T427 (AC-322) Word a refused publish: breaks named in the folders the user may see, a count for the rest, all in the audit trail
   - Files: `packages/api/src/xcube/refusal.ts` (+ test), `packages/web/src/workspaces/reviews/Refusal.tsx` (+ test)
   - Failing test: `refusal.test.ts`:
@@ -6115,15 +6146,15 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - `migration.spec.ts`: each seeded dashboard's tile data is recorded before the migration, and matches after it;
     - no reference stored in a chart, dashboard, marking, bookmark or link names a short cube name any more (AC-331).
   - Depends on: T429
-- [ ] T431 (AC-327, AC-251) Remove Cube's model callbacks: `/api/cube-model/*`, the `cube` access class, and the model logic in `cube.js`
-  - Files: `packages/api/src/model/publish.ts`, `packages/api/src/auth/guard.ts` (+ test), `infra/cube/cube.js`, `e2e/security/no-callbacks.spec.ts`
+- [ ] T431 (AC-327, AC-251) Remove Cube's model callbacks: `/api/cube-model/*`, the `cube` access class, and the model logic in `cube.js` *(moved into slice 2's cut-over, 2026-09-26, `[R29]`: it follows T447 there)*
+  - Files: `packages/api/src/model/publish.ts` (the draft path), `packages/api/src/model/drafts.ts` and `publish-drafts.test.ts` (T418's, gone), a migration dropping `publish_drafts`, `packages/api/src/auth/guard.ts` (+ test), `packages/api/src/config.ts` (`WECHART_MODEL_KEY`, `WECHART_CUBE_STORE_URL`), the Playwright configs, `docker-compose.yml` (`WECHART_MODEL_STORES`, `WECHART_MODEL_KEY`, `extra_hosts`), the Helm chart's same settings, `e2e/security/no-callbacks.spec.ts`
   - Failing test:
     - `guard.test.ts`: no route has the `cube` class, and every route but health and sign-in answers 401 without a session (AC-251);
     - `no-callbacks.spec.ts`: publishing, querying and a refresh run with a recorder on wechart's port, which sees no request from Cube or xcube (AC-327).
-  - Depends on: T426, T429, T430
+  - Depends on: T447 ~~T426, T429, T430~~
 - [ ] T432 (AC-009, AC-137) Serve metadata from xcube's merged field list, with a new revision seen within 60 s
   - Files: `packages/api/src/cube/meta-cache.ts`, `packages/api/src/xcube/meta.ts` (+ test)
-  - Failing test: `meta.test.ts`: after a changeset lands, `/api/meta` from either replica returns its new members once xcube reports the revision active on every instance, within 60 s, and without restarting Cube. AC-009 and AC-137 are reworded and ticked again here (R28 Q9).
+  - Failing test: `meta.test.ts`: after a changeset lands, `/api/meta` from either replica returns its new members once xcube reports the revision active on every instance, within 60 s, and without restarting Cube. ~~AC-009 and AC-137 are reworded and ticked again here (R28 Q9).~~ AC-009 and AC-137 keep their wording, and T447 re-runs their tests against xcube (2026-09-26, `[R29]`); here they are checked again against the merged field list.
   - Depends on: T421, T426
 - [x] T433 [P] (AC-332) Refuse to publish a model item that isn't plain YAML
   - Files: `packages/api/src/model/publish.ts`, ~~`packages/api/src/model/yaml-only.test.ts`~~ `packages/api/src/publish.test.ts` (the publish route's own tests, where the refusals already were)
@@ -6265,13 +6296,14 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | ~~AC-311~~ | retired 2026-09-25 (T333 now serves AC-324) | AC-312 | T335 | AC-313 | T397, T398 |
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
 | AC-317 | T412 | AC-318 | T416 | AC-139 | T413, T417 |
-| AC-248 | T414, T415, T417 | AC-250 | T413, T420 | AC-009 | T432 |
-| AC-136 | T426 | AC-137 | T432 | AC-166 | T438 |
-| AC-332 (again) | T426 | | | | |
+| AC-248 | T414, T415, T417 | AC-250 | T413, T420 | AC-009 | T447, T432 |
+| AC-136 | T445, T447, T426 | AC-137 | T447, T432 | AC-166 | T438 |
+| AC-332 (again) | T426 | AC-235 (again) | T445, T447 | AC-140 (again) | T446 |
 | AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | T426 |
 | AC-322 | T427 | AC-323 | T347, T440 | AC-324 | T333 |
-| AC-325 | T441 | AC-326 | T420, T437 | AC-327 | T419, T431, T442 |
-| AC-328 | T341, T425 | AC-329 | T429 | AC-330 | T419 |
-| AC-331 | T430 | AC-332 | T433 | | |
+| AC-325 | T441 | AC-326 | T420, T437 | AC-327 | T431, T442 |
+| AC-328 | T341, T425 | AC-329 | T429 | AC-330 | T419, T447, T425, T436, T442 |
+| AC-331 | T430 | AC-332 | T433 | AC-333 | T419, T447 |
+| AC-334 | T421, T447 | AC-335 | T446 | | |
 
-AC-009, AC-136 and AC-137 are ticked from phase 1. They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).
+AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.
