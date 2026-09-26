@@ -123,10 +123,10 @@ test('a data source’s tables become cubes, each column mapped or said to be le
  * Cube's scaffold dropping columns unsaid (research, "Silent losses"; T145's
  * review): `generate.every_loss` has a time-typed key, `"Amount"` beside
  * `amount`, a `count` column and a quoted `"Visit Count"`
- * (infra/sample-db/generate.sql). The fork at f6355de982 keeps them all
- * (research/cube/introspection-api-f6355de982.md): each column a member, the
- * count kept, the key a key; and wechart's own check (scaffoldCheck.ts) finds
- * nothing to say.
+ * (infra/sample-db/generate.sql). The fork's introspection package keeps them
+ * all, as its overlay did at f6355de982 (research/cube/introspection-api.md,
+ * "Silent losses"): each column a member, the count kept, the key a key; and
+ * wechart's own check (scaffoldCheck.ts) finds nothing to say.
  */
 test('Cube’s scaffold keeps every column of a table that once lost three, and wechart finds nothing lost', async ({
   page,

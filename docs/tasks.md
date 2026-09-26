@@ -5672,10 +5672,11 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 The user's Cube fork moved the introspection API out of Cube's own packages into a standalone package, `cube-introspection/`, on an unmodified Cube v1.7.45: branch `feat/introspection-package` at `0b6eef90a9` (`docs/inputs/2026-09-25-cube-introspection-package.md`; research `cube/introspection-api.md`, which found no difference over HTTP and seven below it, none reaching wechart). The user took the switch on 2026-09-25 as the first step of slice 0 of their wechart ↔ Cube integration plan, on branch `feat/xcube` in both repositories so it can be rolled back. The image is still built locally; the rename, registry and digest pin are the rest of slice 0.
 
-- [ ] T413 (AC-139, AC-250) Run the package's image in compose, for Cube and its refresh worker
+- [x] T413 (AC-139, AC-250) Run the package's image in compose, for Cube and its refresh worker
   - Files: `docker-compose.yml` (the `CUBE_IMAGE` default and the comment above it), `packages/api/src/deploy/cube-image.test.ts`
   - Failing test: `cube-image.test.ts`: compose's `CUBE_IMAGE` default for `cube` and `cube-refresh-worker` is `cube:v1.7.45-introspection-0b6eef90a9`, and neither sets `command:` or `entrypoint:`, which would start Cube without the routes (research, "Don't override the container command"). Then compose up with the default, and `e2e/generate-cubes.spec.ts` passes against it (AC-139, AC-250).
   - Depends on: none
+  - **Done 2026-09-25.** The test failed on the old tag, then passed. `docker compose up -d --wait --force-recreate cube cube-refresh-worker` started both from the new default: `cmd=["node","/cube/node_modules/cube-introspection/dist/src/bin/server.js"]`, "Cube API server (1.7.45) is listening on 4000". Against it, `generate-cubes.spec.ts`, `cube-scopes.spec.ts` and `data-source.spec.ts` passed in Chrome (7). The compose comment now gives the package's build, and `generate-cubes.spec.ts`'s comment no longer names the old image.
 - [ ] T414 (AC-248) Run it in the docker-desktop Helm release
   - Files: `deploy/helm/values/docker-desktop.yaml` (`cube.image`), `packages/api/src/deploy/cube-image.test.ts`
   - Failing test: `cube-image.test.ts`: the values' `cube.image` is the tag, and the chart's Cube template gives its containers no `command` or `args`. Then `deploy/helm/verify.sh` passes against the upgraded release (AC-248).
