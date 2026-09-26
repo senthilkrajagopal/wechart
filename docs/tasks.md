@@ -4982,7 +4982,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 ## P2.0 Foundations: the request's user and effective access
 
 - [x] T311 [P] (AC-254) Carry the request's user, and run as the single Super-Admin while security is off
-  - Files: `packages/api/src/config.ts` (`WECHART_SECURITY=off|oidc`, default `off`), `packages/api/src/auth/user.ts` (+ test), `packages/api/src/server.ts` (an `onRequest` hook filling `request.wechartUser`; `/api/me` returns `{ name, superAdmin, security }`)
+  - Files: `packages/api/src/config.ts` (`WECHART_SECURITY=off|oidc`, default `off`), `packages/api/src/auth/user.ts` (+ test), `packages/api/src/server.ts` (an `onRequest` hook filling `request.wechartUser`; `/api/me` returns `{ name, superAdmin, security }`, and `groups` since T316)
   - Failing test: `user.test.ts` and `server.test.ts`: with security off, `/api/me` answers `{ name: 'admin', superAdmin: true, security: 'off' }`, and every route answers without a session (AC-254).
   - Depends on: none
   - **Done 2026-09-25.**
@@ -5043,10 +5043,23 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - Every user's token carries exactly their groups; `nobody`'s carries no `groups` claim; a wrong password is refused as `access_denied`.
     - The review's healthcheck finding: BusyBox `wget` works, confirming research §2.
     - AC-257 stays open until sign-in through wechart works in compose (T320) and in Helm (T324).
-- [ ] T316 (AC-252) Sign users in with openid-client, keeping identity and groups in a server-side session
-  - Files: `packages/api/package.json` (openid-client 6.8.8, @fastify/cookie 11.1.2, @fastify/session 11.1.3), `packages/api/vite.build.config.ts` (externals), a migration `…_sessions.cjs`, `packages/api/src/auth/{oidc,session-store,routes}.ts` (+ tests), `packages/api/src/config.ts` (`WECHART_OIDC_ISSUER`, `_CLIENT_ID`, `_CLIENT_SECRET`, `_GROUPS_CLAIM`, `_BACKCHANNEL_ORIGIN`, `WECHART_PUBLIC_URL`, `WECHART_SESSION_SECRET`)
+- [x] T316 (AC-252, AC-316) Sign users in with openid-client, keeping identity and groups in a server-side session
+  - Files: `packages/api/package.json` (openid-client 6.8.8, @fastify/cookie 11.1.2, @fastify/session 11.1.3), `packages/api/vite.build.config.ts` (externals), a migration `…_sessions.cjs`, `packages/api/src/auth/{oidc,session-store,routes}.ts` (+ tests), `packages/api/src/config.ts` (`WECHART_OIDC_ISSUER`, `_CLIENT_ID`, `_CLIENT_SECRET`, `_GROUPS_CLAIM`, `_SCOPES`, `_ALLOW_HTTP`, `_BACKCHANNEL_URL`, `WECHART_PUBLIC_URL`, `WECHART_SESSION_SECRET`, `WECHART_TRUST_PROXY`)
   - Failing test: `routes.test.ts`, against Dex: `/api/auth/login` redirects to Dex; completing Dex's form for `writer` and following the callback gives a session whose `/api/me` names the user and lists exactly the token's groups; with `WECHART_OIDC_GROUPS_CLAIM` set to another claim, groups come from that claim (AC-252).
   - Depends on: T311, T315
+  - **Done 2026-09-25.**
+    - The authorization-code flow with PKCE, state and nonce, per attempt. The user (key = the issuer's hash and the subject), name and groups live in a Postgres session; the browser holds a signed id.
+    - The tests drive the real Dex sign-in for `writer`, `many` (20 groups) and `reader`.
+    - The cold review (FAIL) found:
+      - **an open redirect** through `returnTo=/%09/…`: the return path is now resolved against the public address and kept only on its origin;
+      - **sign-in never completing over HTTPS behind nginx**: the Secure cookie was dropped because the API saw plain HTTP. `WECHART_TRUST_PROXY` is now passed to Fastify, and an https public address without it is a startup error;
+      - **permanent rows from unfinished sign-ins**: an attempt now lasts 15 minutes, at most 10 are kept, and a timer sweeps expired sessions;
+      - **a bare 500 when the provider is down**: it now answers 503 with a message;
+      - untested properties: the session id changing at sign-in, and the cookie flags (HttpOnly, SameSite=Lax, and Secure with `__Host-` over HTTPS);
+      - a groups-claim test that proved only "not from `groups`": it now reads another configured claim;
+      - the default scopes: no longer Dex's `groups`, which Entra would refuse.
+    - A sign-in lasts 12 hours, whatever the activity: the user's answer (R24), now AC-316.
+    - AC-252 stays open for the top bar (T319). AC-316 stays open until the security suite shows the lapse through the browser (T320/T321).
 - [ ] T317 (AC-253) Sign out: end the wechart session so the next request needs a new sign-in
   - Files: `packages/api/src/auth/routes.ts` (`POST /api/auth/logout`), `packages/api/src/auth/logout.test.ts`
   - Failing test: `logout.test.ts`: after `POST /api/auth/logout`, the same cookie gets 401 on `/api/me`, and the session row is gone (AC-253).
@@ -5063,7 +5076,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `playwright.security.config.ts`, `e2e/security/fixtures.ts` (signs `super`, `writer`, `reader`, `many` and `nobody` in through Dex's form; storage state per role), `e2e/security/sign-in.spec.ts`, `e2e/package.json` (`e2e:security`)
   - Failing test: `sign-in.spec.ts`: `writer` signs in through Dex in docker-compose and sees their name in the top bar (AC-257, compose half).
   - Depends on: T315, T316, T319
-- [ ] T321 (AC-251) Send a page request without a session to sign-in, rendering no wechart content first
+- [ ] T321 (AC-251, AC-316) Send a page request without a session to sign-in, rendering no wechart content first
   - Files: `packages/web/src/shell/AuthGate.tsx` (+ test), `packages/web/src/api/http.ts` (a 401 sends the browser to `/api/auth/login?returnTo=…`), `deploy/helm/wechart/templates/web-config.yaml` (`auth_request` to `/api/auth/check` when security is on)
   - Failing test: `AuthGate.test.tsx`: nothing of the app renders until `/api/me` succeeds; `e2e/security/sign-in.spec.ts`: opening `/explore` without a session lands on Dex's login form with no wechart text on the page (AC-251).
   - Depends on: T318, T320
@@ -5527,4 +5540,4 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 | AC-305 | T398 | AC-306 | T399 | AC-307 | T409 |
 | AC-308 | T410 | AC-309 | T337 | AC-310 | T338 |
 | AC-311 | T333 | AC-312 | T335 | AC-313 | T397 |
-| AC-314 | T400 | AC-315 | T401 | | |
+| AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |

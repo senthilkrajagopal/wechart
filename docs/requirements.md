@@ -427,6 +427,7 @@ Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in
 - **Development and tests use one provider**, the lightest self-hosted one research finds, whether Keycloak or something smaller `[R14, R15]`.
 - **Production is Microsoft Entra ID, or on-prem AD through an OIDC broker.** That is checked once, at the end of phase 2. Development doesn't test several providers `[R14, R15]`.
 - **Group counts:** a user can be in hundreds of groups, nested ones included. Research must show how the chosen sign-in handles that for each provider `[R12]`. The development test uses a user in 20 groups `[R19]`.
+- **A sign-in lasts 12 hours**, whatever the activity; there is no idle limit `[R24]`.
 
 **Security off.** wechart runs in single-user mode, as in phase 1 `[P2 input]`. Workspaces and approval work as they do with security on, and the one user approves their own copies `[R17]`.
 
@@ -650,6 +651,9 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
+
+**R24 — asked while implementing T316** (the research left it open, and the spec set none)
+- Q: With security on, how long should a sign-in last before wechart asks the user to sign in again? A: "12 hours, no idle limit"
 
 **R23 — accepting the phase-2 design direction** (`docs/design/direction.md` §7e)
 - Q: Do you accept the phase-2 design direction, including the listed defaults? A: "Accept (Recommended)"

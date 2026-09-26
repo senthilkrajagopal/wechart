@@ -889,6 +889,8 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R14, R15, R18, R19]`.
       Fails when: the groups wechart grants access by differ from the token's, or the top bar shows no name or no Sign out.
 - [ ] AC-253 WHEN the user signs out, THE SYSTEM SHALL end the wechart session, so that the next request needs a new sign-in.
       Fails when: after signing out, a page or API route still answers as that user.
+- [ ] AC-316 WHERE security is enabled, THE SYSTEM SHALL end a sign-in 12 hours after it began, whatever the activity, so that the next request needs a new sign-in (`[R24]`).
+      Fails when: a session signed in more than 12 hours ago still answers as its user, or one signed in less than 12 hours ago is refused.
 - [ ] AC-254 WHILE security is disabled, THE SYSTEM SHALL run in single-user mode: no sign-in, and one user holding every permission, as a Super-Admin does. Workspaces and proposals SHALL work as with security on, and that user approves their own proposals (`[P2 input, R19]`).
       Fails when: a sign-in is asked for, or any permission is refused, while security is disabled.
 - [ ] AC-255 WHILE security is enabled, WHEN a user belongs to 20 AD groups, THE SYSTEM SHALL grant them access through every one of them (`[R12, R19]`).
@@ -1168,6 +1170,7 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | Requirement | Acceptance criteria |
 |---|---|
 | §P2.2 Sign-in for everyone when security is on `[R11]` | AC-251, AC-252, AC-253 |
+| §P2.4 A sign-in lasts 12 hours `[R24]` | AC-316 |
 | §P2.4 Security off is single-user mode, with phase 2's flows `[P2 input, R19]` | AC-254 |
 | §P2.2 Users in hundreds of groups; the test uses 20 `[R12, R19]` | AC-255 |
 | §P2.2 The Super-Admin group, named in the deployment's configuration `[R18]` | AC-256, AC-265 |

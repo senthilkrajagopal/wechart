@@ -1,5 +1,6 @@
 import closeWithGrace from 'close-with-grace';
 
+import { pgSessionStore } from './auth/session-store';
 import { loadConfig } from './config';
 import { closeDb, getDb } from './db/client';
 import { migrateToLatest } from './db/migrate';
@@ -33,6 +34,7 @@ async function main(): Promise<void> {
   const modelFiles = modelFileStore(db);
   await modelFiles.seed(await readModelDir(config.modelDir));
 
+  const sessions = pgSessionStore(db);
   const app = buildServer({
     config,
     queryLog: queryLog(db),
@@ -41,10 +43,24 @@ async function main(): Promise<void> {
     images: imageStore(db),
     bookmarks: bookmarkStore(db),
     modelFiles,
+    // Signed-in sessions, kept in the metadata database (T316).
+    sessions,
     logger: true,
   });
 
+  // Expired sessions are swept out: Postgres has no TTL (T316's review).
+  const sweeping = setInterval(
+    () => {
+      sessions.sweep().catch((error: unknown) => {
+        app.log.warn({ err: error }, 'could not sweep expired sessions');
+      });
+    },
+    15 * 60 * 1000,
+  );
+  sweeping.unref();
+
   closeWithGrace({ delay: 5_000 }, async () => {
+    clearInterval(sweeping);
     await app.close();
     await closeDb();
   });

@@ -50,6 +50,54 @@ export interface Config {
    * off, so a configuration built in code keeps phase 1's behaviour.
    */
   readonly security?: SecurityMode;
+  /**
+   * What the browser sees wechart as — `WECHART_PUBLIC_URL`, for example
+   * `https://wechart.example.com` — from which the sign-in callback is built.
+   * Never taken from a request's Host (research/openid-client.md, Gotcha 2).
+   * Required with security on.
+   */
+  readonly publicUrl?: string;
+  /**
+   * Signs the session cookie — `WECHART_SESSION_SECRET`, 32 characters or
+   * more (research/openid-client.md). Required with security on.
+   */
+  readonly sessionSecret?: string;
+  /** The OIDC provider, with security on (AC-252). */
+  readonly oidc?: OidcSettings;
+  /**
+   * `WECHART_TRUST_PROXY`: the proxy in front of the API (nginx), whose
+   * `X-Forwarded-Proto` is believed — `true`, or its addresses, comma-separated.
+   * Behind a TLS-terminating proxy the API sees plain HTTP, and without this a
+   * Secure session cookie is silently never set (research/openid-client.md,
+   * Gotcha 3; T316's review).
+   */
+  readonly trustProxy?: boolean | readonly string[];
+}
+
+/** The OIDC provider wechart signs users in through (AC-252; research/openid-client.md). */
+export interface OidcSettings {
+  /** `WECHART_OIDC_ISSUER`: exactly the provider's `iss`. */
+  readonly issuer: string;
+  /** `WECHART_OIDC_CLIENT_ID`. */
+  readonly clientId: string;
+  /** `WECHART_OIDC_CLIENT_SECRET`: a confidential client. */
+  readonly clientSecret: string;
+  /** `WECHART_OIDC_GROUPS_CLAIM`, `groups` by default: the claim that carries AD groups. */
+  readonly groupsClaim: string;
+  /**
+   * `WECHART_OIDC_SCOPES`, `openid profile email` by default. Providers that
+   * want a scope for groups (Dex's `groups`) are given it here; Entra ID would
+   * refuse it (research/openid-client.md).
+   */
+  readonly scopes: string;
+  /** `WECHART_OIDC_ALLOW_HTTP=true`: a plain-HTTP issuer, for development only. */
+  readonly allowHttp: boolean;
+  /**
+   * `WECHART_OIDC_BACKCHANNEL_URL`: where this service reaches the issuer when
+   * that differs from the browser's address, as inside a cluster (research
+   * Gotcha 1). The issuer string itself stays the browser's.
+   */
+  readonly backchannelUrl?: string;
 }
 
 /** `infra/cube/model`, three levels up from `src/` or `dist/` in this package. */
@@ -100,6 +148,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   return {
     security,
+    ...(security === 'oidc' ? signInOf(env) : {}),
     cubeApiUrl,
     cubeApiSecret,
     securityContext: parseSecurityContext(env['WECHART_SECURITY_CONTEXT']),
@@ -110,6 +159,50 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       ? { cubeStoreUrl: env['WECHART_CUBE_STORE_URL'].replace(/\/$/, '') }
       : {}),
     ...(env['CUBE_WORKER_URL'] ? { cubeWorkerUrl: env['CUBE_WORKER_URL'].replace(/\/$/, '') } : {}),
+  };
+}
+
+/** With security on, everything sign-in needs is required: a missing piece is a startup error. */
+function signInOf(
+  env: NodeJS.ProcessEnv,
+): Pick<Config, 'publicUrl' | 'sessionSecret' | 'oidc' | 'trustProxy'> {
+  const required = (name: string): string => {
+    const value = env[name];
+    if (!value) throw new ConfigError(`${name} is required with WECHART_SECURITY=oidc.`);
+    return value;
+  };
+  const sessionSecret = required('WECHART_SESSION_SECRET');
+  if (sessionSecret.length < 32) {
+    throw new ConfigError('WECHART_SESSION_SECRET must be at least 32 characters.');
+  }
+  const backchannel = env['WECHART_OIDC_BACKCHANNEL_URL'];
+  const publicUrl = required('WECHART_PUBLIC_URL').replace(/\/$/, '');
+  const proxy = env['WECHART_TRUST_PROXY'];
+  // An https address is served through a TLS-terminating proxy here; without
+  // trusting it, the Secure session cookie would never be set.
+  if (publicUrl.startsWith('https:') && !proxy) {
+    throw new ConfigError(
+      'WECHART_PUBLIC_URL is https, so WECHART_TRUST_PROXY must name the proxy in front of the ' +
+        'API (or be "true"): without it the session cookie is never set.',
+    );
+  }
+  return {
+    ...(proxy
+      ? {
+          trustProxy: proxy === 'true' ? true : proxy.split(',').map((address) => address.trim()),
+        }
+      : {}),
+    publicUrl,
+    sessionSecret,
+    oidc: {
+      issuer: required('WECHART_OIDC_ISSUER'),
+      clientId: required('WECHART_OIDC_CLIENT_ID'),
+      clientSecret: required('WECHART_OIDC_CLIENT_SECRET'),
+      groupsClaim: env['WECHART_OIDC_GROUPS_CLAIM'] || 'groups',
+      scopes: env['WECHART_OIDC_SCOPES'] || 'openid profile email',
+      allowHttp: env['WECHART_OIDC_ALLOW_HTTP'] === 'true',
+      ...(backchannel ? { backchannelUrl: backchannel.replace(/\/$/, '') } : {}),
+    },
   };
 }
 

@@ -55,10 +55,25 @@ export function userOf(request: { wechartUser: WechartUser | null }): WechartUse
   return request.wechartUser;
 }
 
-/** Gives every request its user, before any route sees it. */
+/**
+ * Gives every request its user, before any route sees it. With security on it
+ * is read in `preParsing`, which runs after every `onRequest` hook, the
+ * session plugin's included (research/openid-client.md, Gotcha 13).
+ */
 export function registerUser(app: FastifyInstance, security: SecurityMode): void {
   app.decorateRequest('wechartUser', null);
-  app.addHook('onRequest', async (request) => {
-    request.wechartUser = security === 'off' ? SINGLE_USER : null;
+  if (security === 'off') {
+    app.addHook('onRequest', async (request) => {
+      request.wechartUser = SINGLE_USER;
+    });
+    return;
+  }
+  app.addHook('preParsing', async (request) => {
+    const user = (request as { session?: { user?: Omit<WechartUser, 'superAdmin'> } }).session
+      ?.user;
+    request.wechartUser =
+      user === undefined
+        ? null
+        : { key: user.key, name: user.name, groups: [...user.groups], superAdmin: false };
   });
 }

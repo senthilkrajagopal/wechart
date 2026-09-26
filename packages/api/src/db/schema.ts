@@ -83,7 +83,15 @@ export interface DataSourceSecretTable {
   updated_at: Generated<Date>;
 }
 
+/** A signed-in session (T316): the session as @fastify/session serialises it. */
+export interface SessionTable {
+  id: string;
+  session: JSONColumnType<Record<string, unknown>>;
+  expires_at: Date | null;
+}
+
 export interface Database {
+  sessions: SessionTable;
   documents: DocumentTable;
   query_log: QueryLogTable;
   images: ImageTable;

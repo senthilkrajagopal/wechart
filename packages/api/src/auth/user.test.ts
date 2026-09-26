@@ -17,10 +17,97 @@ const config = {
   modelDir: '',
 };
 
+/** Security on, with sign-in configured (T316); nothing here reaches the provider. */
+const secured = {
+  ...config,
+  security: 'oidc' as const,
+  publicUrl: 'http://localhost:5373',
+  sessionSecret: 'a-test-session-secret-at-least-32-characters',
+  oidc: {
+    issuer: 'http://localhost:5556/dex',
+    clientId: 'wechart',
+    clientSecret: 'dev-oidc-secret',
+    groupsClaim: 'groups',
+    scopes: 'openid',
+    allowHttp: true,
+  },
+};
+
+/** What sign-in needs with security on (T316). */
+const SIGN_IN_ENV = {
+  WECHART_PUBLIC_URL: 'http://localhost:5373',
+  WECHART_SESSION_SECRET: 'a-test-session-secret-at-least-32-characters',
+  WECHART_OIDC_ISSUER: 'http://localhost:5556/dex',
+  WECHART_OIDC_CLIENT_ID: 'wechart',
+  WECHART_OIDC_CLIENT_SECRET: 'dev-oidc-secret',
+};
+
 describe('the security mode (T311)', () => {
   it('is off unless the deployment turns it on', () => {
     expect(loadConfig({ CUBE_API_SECRET: 's' }).security).toBe('off');
-    expect(loadConfig({ CUBE_API_SECRET: 's', WECHART_SECURITY: 'oidc' }).security).toBe('oidc');
+    expect(
+      loadConfig({ CUBE_API_SECRET: 's', WECHART_SECURITY: 'oidc', ...SIGN_IN_ENV }).security,
+    ).toBe('oidc');
+  });
+
+  it('refuses security on without everything sign-in needs (T316)', () => {
+    for (const missing of Object.keys(SIGN_IN_ENV)) {
+      const env: Record<string, string> = {
+        CUBE_API_SECRET: 's',
+        WECHART_SECURITY: 'oidc',
+        ...SIGN_IN_ENV,
+      };
+      delete env[missing];
+      expect(() => loadConfig(env), missing).toThrow(new RegExp(missing));
+    }
+    expect(() =>
+      loadConfig({
+        CUBE_API_SECRET: 's',
+        WECHART_SECURITY: 'oidc',
+        ...SIGN_IN_ENV,
+        WECHART_SESSION_SECRET: 'too-short',
+      }),
+    ).toThrow(/32 characters/);
+  });
+
+  it('reads the provider’s settings, groups claim and scopes included', () => {
+    const loaded = loadConfig({
+      CUBE_API_SECRET: 's',
+      WECHART_SECURITY: 'oidc',
+      ...SIGN_IN_ENV,
+      WECHART_OIDC_GROUPS_CLAIM: 'roles',
+      WECHART_OIDC_ALLOW_HTTP: 'true',
+    });
+    expect(loaded.oidc).toEqual({
+      issuer: 'http://localhost:5556/dex',
+      clientId: 'wechart',
+      clientSecret: 'dev-oidc-secret',
+      groupsClaim: 'roles',
+      // No `groups` scope unless asked for: it is Dex's, and Entra ID refuses
+      // it (T316's review).
+      scopes: 'openid profile email',
+      allowHttp: true,
+    });
+  });
+
+  it('refuses an https address with no proxy trusted, which could never set the cookie', () => {
+    expect(() =>
+      loadConfig({
+        CUBE_API_SECRET: 's',
+        WECHART_SECURITY: 'oidc',
+        ...SIGN_IN_ENV,
+        WECHART_PUBLIC_URL: 'https://wechart.example',
+      }),
+    ).toThrow(/WECHART_TRUST_PROXY/);
+    expect(
+      loadConfig({
+        CUBE_API_SECRET: 's',
+        WECHART_SECURITY: 'oidc',
+        ...SIGN_IN_ENV,
+        WECHART_PUBLIC_URL: 'https://wechart.example',
+        WECHART_TRUST_PROXY: '10.0.0.5, 10.0.0.6',
+      }).trustProxy,
+    ).toEqual(['10.0.0.5', '10.0.0.6']);
   });
 
   it('refuses a mode it does not know, rather than running open', () => {
@@ -35,7 +122,12 @@ describe('with security off, every request is the single Super-Admin (AC-254)', 
     const response = await app.inject({ method: 'GET', url: '/api/me' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ name: 'admin', superAdmin: true, security: 'off' });
+    expect(response.json()).toEqual({
+      name: 'admin',
+      groups: [],
+      superAdmin: true,
+      security: 'off',
+    });
     await app.close();
   });
 
@@ -54,7 +146,7 @@ describe('with security off, every request is the single Super-Admin (AC-254)', 
 
 describe('with security on and nobody signed in, no one is the Super-Admin (T311’s review)', () => {
   it('carries no user, and never falls back to the single user', async () => {
-    const app = buildServer({ config: { ...config, security: 'oidc' as const } });
+    const app = buildServer({ config: secured });
     app.get('/probe', async (request) => ({ user: request.wechartUser }));
 
     const probe = await app.inject({ method: 'GET', url: '/probe' });
@@ -69,7 +161,7 @@ describe('with security on and nobody signed in, no one is the Super-Admin (T311
   it('creates nothing on behalf of a user who isn’t there', async () => {
     const created: unknown[] = [];
     const app = buildServer({
-      config: { ...config, security: 'oidc' as const },
+      config: secured,
       documents: {
         create: async (document: unknown) => {
           created.push(document);

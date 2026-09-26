@@ -20,6 +20,9 @@ import { scopesOf } from './cube/scopes';
 import { healthOf, originOf } from './cube/health';
 import { MetaCache } from './cube/meta-cache';
 import { missOf, rollupsFrom, type Transformed } from './cube/preaggMatch';
+import type { SessionStore } from '@fastify/session';
+
+import { registerSignIn, signInOptionsOf } from './auth/routes';
 import { registerUser, Unauthenticated, userOf } from './auth/user';
 import { registerBuilds } from './jobs/build';
 import { registerSchedules } from './jobs/schedules';
@@ -48,6 +51,8 @@ export interface BuildOptions {
   readonly bookmarks?: BookmarkStore;
   /** The Cube model's files (T137, AC-131). */
   readonly modelFiles?: ModelFileStore;
+  /** Signed-in sessions, with security on (T316): the metadata database. */
+  readonly sessions?: SessionStore;
   /**
    * How Cube's unauthenticated probes — its health (T162), whether it
    * enforces auth (T175) — are asked; `fetch` unless a test says.
@@ -158,9 +163,20 @@ export function buildServer({
   healthFetch,
   logger = false,
   introspectionRetryMs,
+  sessions,
 }: BuildOptions): FastifyInstance {
-  const app = Fastify({ logger });
+  const app = Fastify({
+    logger,
+    // Behind nginx, so `request.protocol` reads its X-Forwarded-Proto (T316's review).
+    ...(config.trustProxy === undefined
+      ? {}
+      : {
+          trustProxy:
+            config.trustProxy === true ? true : [...(config.trustProxy as readonly string[])],
+        }),
+  });
   const security = config.security ?? 'off';
+  if (security === 'oidc') registerSignIn(app, signInOptionsOf(config, sessions));
   registerUser(app, security);
 
   /**
@@ -220,7 +236,7 @@ export function buildServer({
    */
   app.get('/api/me', async (request) => {
     const user = userOf(request);
-    return { name: user.name, superAdmin: user.superAdmin, security };
+    return { name: user.name, groups: user.groups, superAdmin: user.superAdmin, security };
   });
 
   /**
