@@ -376,6 +376,12 @@ As in Part 1, every statement traces to a round or an input. Anything undecided 
 - The architecture is set out in §P2.4, "Architecture".
 - Passages the decisions overturn are kept, marked **Superseded** with the decision that replaces them, and followed by what now holds.
 
+**Amended again 2026-09-26 by the final integration plan** (`docs/inputs/2026-09-26-integration-plan-decisions.md`, which supersedes the 2026-09-25 decisions), cited as `[IP n]` for its decision n. The shared plan doc it names is kept as a snapshot (`docs/inputs/2026-09-26-integration-plan.md`), cited as `[plan]`. Round R28 settled what the two left open.
+- wechart is the system of record for everything people author and manage. xcube keeps a derived copy of what is published, in its own schema.
+- xcube groups cubes that reference each other into **modules** and compiles each on its own. A publish checks only the modules it affects.
+- The work is split into the plan's slices 0–8. wechart's side of each goes through these gates.
+- Passages the plan overturns are marked **Superseded** in the same way, with `[IP n]`, `[plan]` or `[R28]`.
+
 ## P2.1 Problem
 
 Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in and one trusted user. It has one Cube model and one data source for everything, and a change to shared content is live at once `[Part 1 §4]`. Phase 2 adds:
@@ -442,8 +448,10 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 
 **Data inside cubes.** The signed-in user's AD groups go into Cube's security context, so the model's access policies can filter rows and members by group. For now it's groups only; user attributes come later `[R14]`. That is every query made for a signed-in user; ~~what wechart asks Cube for itself (compiling a model, builds, schedules, a data source's catalog, health) carries the configured context alone `[R25]`~~.
 - **Superseded** `[AD 1, AD 4, AD 12]`. A signed-in user's queries carry an RS256 token holding their groups only, signed by wechart.
+  - **Which groups, and what else** `[IP 8, R28]`. The token carries the user's groups that some access policy names, generated or written in a model. That keeps a user in hundreds of groups inside the request-header limit.
+  - It also carries the token's own kind (`role: user`), issuer, audience and expiry. It carries no subject or other attribute of the user.
 - What wechart asks Cube or xcube for on its own behalf uses a separate **service credential**: introspection, builds and jobs, system partitions, health, and every xcube admin call `[AD 12, R27]`.
-- Compiling belongs to xcube, at publish `[AD 1, AD 6]`.
+- Compiling belongs to xcube, at publish `[AD 1, AD 6]`, module by module `[IP 4, IP 5]`.
 - Cube enforces access too: xcube generates access policies from each folder's allowed groups (below) `[AD 4]`.
 - The Security workspace's "Preview as" chooses groups, and previews exactly those `[R27]`.
 
@@ -464,35 +472,54 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 **Relaxed from phase 1.** ~~A cube's name no longer has to be unique across the whole model.~~ Cubes, models, dashboards and data sources must be unique **within a folder** `[P2 input]`.
 - **Superseded in part** `[AD 2, R27]`. The whole deployment is one flat model.
 - Every cube, view and data source is published under a unique name, prefixed by its folder's id.
-- The shared root adds no prefix, so phase-1 content and links resolve as they are.
+- ~~The shared root adds no prefix, so phase-1 content and links resolve as they are.~~ **Superseded** `[IP 3, R28]`: the shared root is prefixed like any other folder, with no special handling.
+  - A published name is `<folderId>__<shortName>`.
+  - The folder id is written as `f` plus the 32 hex digits of the folder's UUID, since Cube names can't hold a hyphen or start with a digit.
+  - xcube gives every cube and pre-aggregation a short, stable `sql_alias`, so database identifiers stay within the database's limits `[plan, R28]`.
+  - Every stored reference to a member is migrated to the prefixed names in slice 3. That covers charts, dashboards, markings, bookmarks and links, the places R27 lists as naming members by short cube names. Every existing dashboard renders unchanged `[IP 3, plan, R27]`.
 
-**Architecture** `[AD 1–12, R27]`
+**Architecture** `[AD 1–12, R27; IP 1–9, plan, R28]`
 - **Who owns what** `[AD 1]`:
-  - Cube plus xcube own the published model, Cube's rules (validation and access policies) and the connection runtime.
+  - ~~Cube plus xcube own the published model, Cube's rules (validation and access policies) and the connection runtime.~~ **Superseded** `[IP 1, IP 2, plan]`:
+    - **wechart is the system of record** for everything people author and manage: folders, cube and view items as written, data-source records, drafts, workspaces, proposals, approvals, the 10-version history, permissions, dashboards, credentials and the audit trail.
+    - **xcube keeps a derived runtime copy** of what is published: resolved items, the reference graph, modules and their versions, folder groups and active connections. It lives in xcube's own `xcube` schema, under its own database role, on wechart's Postgres cluster. Neither side reads the other's tables.
+    - **The copy can be rebuilt.** If xcube's copy is lost, wechart sends a full snapshot and xcube rebuilds it.
+    - **Rules and runtime.** xcube resolves names, groups modules, validates, and generates access policies. Cube Core compiles, plans, runs queries and evaluates access policies, unmodified.
   - wechart owns workflow, folders, permissions, users and groups, dashboards and the UI.
   - Cube never calls wechart at runtime. There are no model callbacks to wechart, and no drafts held in the API's memory.
+- **Modules** `[IP 4, plan]`:
+  - xcube groups cubes and views that reference each other into modules (the connected components of their references), and compiles and versions each module on its own. Adding or changing a cube recompiles only its module.
+  - Shared cubes are copied into each module that uses them.
+  - A query spanning modules compiles an on-demand union of them.
+  - The field list merges every module's metadata, filtered by the caller's groups.
+- **Only YAML models** `[R28]`. Model code runs where xcube decrypts credentials, so xcube accepts only YAML model items, and runs with Node's `require` switched off. A JavaScript, Python or Jinja model file is refused at publish.
+- **The work is sliced** as the plan sets out (slices 0–8). Each slice leaves both systems working, and wechart's side of each follows xcube's routes for it `[plan]`.
 - **xcube knows the folder tree:** ids and parents, plus each folder's allowed groups. xcube resolves names `[AD 5]`.
 - **Each folder's allowed groups** are those granted on the folder, on any ancestor, or on any descendant (whose items use its cubes), plus the Super-Admin group.
   - wechart works the set out and sends it with the tree.
   - A folder no group reaches admits only Super-Admins.
   - With security off, no policies are generated.
   - Row-level policies written in the model still apply inside `[R27]`.
-- **Every publish compiles the whole model**, and is refused if anything anywhere breaks `[AD 6]`.
+  - **How Cube applies them** `[IP 6, R28]`. xcube checks a query's folders against the token's groups for each request, in addition to the model's own policies, which still apply. The folder check is not a policy ORed with the authored ones. A permission change takes effect in Cube without recompiling any module.
+- ~~**Every publish compiles the whole model**, and is refused if anything anywhere breaks `[AD 6]`.~~ **Superseded** `[IP 5, plan]`: **every publish validates each module it affects**, in a throwaway compile, and is refused if any of them breaks.
   - A proposal is checked when proposed, as an overlay, and again at approval `[R27]`.
   - Renames, moves and deletes that touch models, data sources or folders holding them are checked the same way, and refused when something would break `[R27]`.
-  - A refusal names what broke in folders the publisher can see, with Cube's error per file. For the rest it says "_n_ items in folders you can't see would break". A Super-Admin sees everything named, and the audit trail records all of it `[R27]`.
+  - A delete or rename of a name that another published item still references is refused, naming those items `[plan]`.
+  - A refusal names what broke in folders the publisher can see. ~~with Cube's error per file~~ Each break comes with its error and its item, and with line and column where xcube can give them `[plan]`. For the rest it says "_n_ items in folders you can't see would break". A Super-Admin sees everything named, and the audit trail records all of it `[R27]`.
 - **Unpublished workspace and proposal content** is pushed to xcube as short-lived overlays `[AD 8]`.
   - A workspace overlay is its owner's alone.
   - A proposal overlay may be queried by its author, the target folder's read-write members and Super-Admins until it is approved or rejected, then dropped.
   - Names resolve in the overlay first, then along the target's or origin's folder path `[R27]`.
 - **wechart keeps each published version** of its model items, for history, compare and restore. xcube holds only what is published now `[R27]`.
 - **Build history:** xcube records the refresh worker's builds, and wechart pulls them into its own history `[R27]`.
-- **Scale:** designed for 100–200 model-bearing folders. Sharding is a later add-on `[AD 9]`.
+- **Scale:** designed for 100–200 model-bearing folders. ~~Sharding is a later add-on `[AD 9]`.~~ **Superseded** `[IP 4, plan]`: thousands of cubes, with modules keeping compile and planning costs flat.
 - **Callers:** only wechart's server calls Cube or xcube, for now `[AD 10]`.
 - **High availability of the query path:** 2 or more Cube instances with the Cube Store queue, and a stateless wechart API on 2 or more replicas. Cube Store stays single-node for now `[AD 11]`. It is tested: stopping one Cube instance and one API replica during use loses no signed-in session and fails no query the web app retries `[R27]`.
+  - Every Cube process runs the plan's runtime settings. These include the Cube Store queue, and a queue heartbeat of 5–10 s, so a crashed instance releases its queries in about 30 s `[IP 9, plan]`.
 - **Tokens** carry groups only, for now `[AD 12]`.
-  - wechart signs them RS256 and pushes its public keys (JWKS) to xcube when it starts and when keys rotate, so Cube verifies them without calling wechart `[AD 12, R27]`.
+  - wechart signs them RS256 and pushes its public keys (JWKS) to xcube when it starts and when keys rotate, so Cube verifies them without calling wechart `[AD 12, R27]`. The push goes to an xcube admin route. xcube never fetches keys from wechart `[R28]`.
   - Admin calls use the separate service credential `[AD 12]`.
+  - Where xcube's private key and wechart's signing key are kept in production is decided before slice 6 `[plan]`. Until then, development keeps the fixed key pair (above).
 
 ## P2.5 Stack
 
@@ -500,7 +527,8 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - credentials encrypted in the metadata database `[R14, R15]`, to xcube's public key `[AD 7]`;
 - changes to the Cube fork where needed, through the Cube-expert agent `[R15]`, in xcube's package `[AD 1]`;
 - Cube plus xcube as the semantic service, with wechart as its client `[AD 1]`;
-- RS256 user tokens with their public keys pushed to xcube, and a separate service credential for admin calls `[AD 12, R27]`.
+- RS256 user tokens with their public keys pushed to xcube, and a separate service credential for admin calls `[AD 12, R27]`;
+- `jose` 6.2.12 to sign tokens in wechart's API, and `hpke` 1.1.7 (RFC 9180) to encrypt credentials to xcube's public key in the browser `[R28]`.
 
 **Decided after research** (these were the open items; the user chose on 2026-09-25, rounds R20–R22)
 
@@ -508,8 +536,9 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 |---|---|---|
 | **How sign-in is built** | **wechart's API is its own OIDC client** (openid-client 6.8.8), with a server-side session in the metadata database (@fastify/session 11.1.3 with @fastify/cookie 11.1.2). Not oauth2-proxy `[R20]`. | `docs/research/openid-client.md`; compared with `docs/research/oauth2-proxy.md` |
 | **Development OIDC provider** | **Dex 2.45.1**, with users and groups from its config file `[R20]`. | `docs/research/dex.md`; compared with `docs/research/keycloak.md` and `docs/research/authelia.md` |
-| **Per-folder models in Cube** | ~~One compile per folder chain, nearest file first, and connections served by wechart `[R20]`.~~ **Superseded** `[AD 1, AD 2, AD 5]`: one flat model owned by Cube and xcube, under folder-prefixed names. xcube resolves names and runs connections. | `docs/research/cube/per-folder-models.md` (superseded); new research on xcube's admin API and the naming scheme |
-| **How credentials are encrypted** | ~~AES-256-GCM through `node:crypto`, key from the deployment's Secret.~~ **Superseded** `[AD 7]`: encrypted to xcube's public key, in the browser `[R27]`. | `docs/research/credential-encryption.md` (superseded); new research on public-key encryption |
+| **Per-folder models in Cube** | ~~One compile per folder chain, nearest file first, and connections served by wechart `[R20]`.~~ **Superseded** `[AD 1, AD 2, AD 5]`: one flat model owned by Cube and xcube, under folder-prefixed names. xcube resolves names and runs connections. **Then** `[IP 1–4]`: one flat namespace, compiled as modules. wechart is the system of record, and xcube keeps the derived copy. | `docs/research/cube/per-folder-models.md` (superseded); `cube/xcube-runtime.md`, `cube/prefixed-names.md`, `cube/whole-model-publish.md` |
+| **How credentials are encrypted** | ~~AES-256-GCM through `node:crypto`, key from the deployment's Secret.~~ **Superseded** `[AD 7]`: encrypted to xcube's public key, in the browser `[R27]`, with HPKE through `hpke` 1.1.7 `[R28]`. | `docs/research/credential-encryption.md` (superseded); `docs/research/credential-sealing.md` |
+| **How tokens are signed** | RS256 through `jose` 6.2.12, keys pushed to xcube, and a separate service credential `[AD 12, R27, R28]`. | `docs/research/cube/tokens-and-service-credential.md` |
 | **Where a connection test runs** | **In Cube, at wechart's request:** ~~a fork endpoint~~ an xcube route runs Cube's own drivers, so a pass means the Cube that will use the source can connect. wechart starts it and shows each check `[R20, AD 1]`. wechart sends only the ciphertext, and xcube decrypts `[AD 7]`. | `docs/research/connection-testing.md` |
 
 ## P2.6 Scope
@@ -544,10 +573,14 @@ With security on, a deployment that names no Super-Admin group refuses to start 
   - A name found nowhere on that path is refused at publish, naming it `[R27]`.
   - Children's items are never used, and there is no fallback to descendant folders `[R27]`.
 - **Overriding.** A child folder overrides a name by publishing its own item. Binding from the viewer's folder is dropped `[AD 3]`.
-- **Rebinding.** When a nearer definition is published, the items whose binding changes are re-resolved at that publish, and the whole-model compile checks the result. Deleting something others are bound to fails that compile, so the delete is refused, naming what depends on it `[R27]`.
+- ~~**Rebinding.** When a nearer definition is published, the items whose binding changes are re-resolved at that publish, and the whole-model compile checks the result. Deleting something others are bound to fails that compile, so the delete is refused, naming what depends on it `[R27]`.~~ **Superseded** `[IP 3, plan, R28]`: **no rebinding.**
+  - Each item keeps the binding it was published with. When a nearer definition is published, an item beneath it binds to it only when that item is next published.
+  - Deleting or renaming a name that another published item still references is refused, naming those items.
 - **Path only.** An item uses only the cubes found on its own folder path, and the chart editor lists only those. A cube elsewhere is reached by publishing an item in a folder beneath it `[R27]`.
 - **Prefixes are built from folder ids**, so renaming or moving a folder keeps names, references, pre-aggregations and links. People see titles in the UI; the prefixed name shows only in YAML and SQL `[R27]`.
-- **The shared root has no prefix**, so phase-1 content and links resolve as they are, with nothing migrated `[R27]`.
+  - The picker shows each cube's title with its folder path beside it `[plan]`.
+  - The name's form and the folder id's are set out in §P2.4, "Relaxed from phase 1" `[IP 3, R28]`.
+- ~~**The shared root has no prefix**, so phase-1 content and links resolve as they are, with nothing migrated `[R27]`.~~ **Superseded** `[IP 3, R28]`: the root is prefixed like every folder. Stored references are migrated in slice 3, and every existing dashboard renders unchanged.
 - **A cube that names no data source** uses one called `default`, bound at publish like any other name `[R22, AD 3]`. The deployment's own default connection is a data source named `default` in the shared root, stored and managed like any other; the Helm values seed it on install `[R27]`.
 
 **E. Workspaces, copying and approval** `[P2 input, R12, R17]`
@@ -568,9 +601,9 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - While a proposal waits, the folder's readers see the old version. The folder's read-write members see a Reviews list with a count in the app, and that is the only notice `[R12]`.
 - An approved item replaces a same-named item in the folder. The **last 10 versions** are kept and can be restored `[R17]`.
 
-*What needs no approval:* creating subfolders, setting permissions, renaming, moving and deleting are direct for read-write members `[R17]`. Where they touch models, data sources or folders holding them, they apply only if the whole model still compiles `[R27]`.
+*What needs no approval:* creating subfolders, setting permissions, renaming, moving and deleting are direct for read-write members `[R17]`. Where they touch models, data sources or folders holding them, they apply only if ~~the whole model still compiles~~ every module they affect still compiles `[R27; IP 5]`.
 
-*Every proposal* is checked against the whole model when it is proposed, and again at approval. An approval that would break anything is refused `[AD 6, R27]`.
+*Every proposal* is checked against ~~the whole model~~ every module it affects when it is proposed, and again at approval. An approval that would break anything is refused `[AD 6, R27; IP 5]`.
 
 **F. Bookmarks** `[R12]`
 - Personal to each user by default.
@@ -580,7 +613,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - A list per folder, with each source's health.
 - Adding a source with a connection test, run by Cube's own drivers at wechart's request `[R20]`, in xcube, which alone decrypts the credential `[AD 1, AD 7]`.
 - The six driver types, each with its own authentication.
-- The restart note, and whether ~~Cube has~~ every Cube instance has picked the change up `[AD 11]`.
+- ~~The restart note, and~~ whether ~~Cube has~~ every Cube instance has picked the change up `[AD 11]`. No change needs a restart: xcube swaps the connection's driver while queries run. A change of database type lands as a publish, because the SQL dialect is fixed at compile `[plan]`.
 - Test history.
 - Credentials never shown.
 
@@ -602,7 +635,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - **User attributes in Cube's security context.** Groups only, for now `[R14, R16]`.
 - **Notices outside the app.** No email or chat `[R12, R16]`.
 - **Testing more than one identity provider during development.** Entra ID and brokers are checked at the end of phase 2 `[R14, R15, R16]`.
-- **Sharding the model.** Designed for 100–200 model-bearing folders; sharding is a later add-on `[AD 9]`.
+- ~~**Sharding the model.** Designed for 100–200 model-bearing folders; sharding is a later add-on `[AD 9]`.~~ **Superseded** `[IP 4]`: modules split the compile. Nothing further is planned for scale.
 - **Cube Store beyond one node** `[AD 11]`.
 - **Anything but wechart's server calling Cube or xcube**, for now `[AD 10]`.
 
@@ -614,7 +647,7 @@ The rest still apply: AI and chat authoring, scheduled delivery and alerts, embe
 
 ## P2.8 Open questions
 
-**None.** All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections.
+**None.** All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections. The ten the 2026-09-26 plan left open were settled in round R28, in the same way.
 
 | # | Question | Decision |
 |---|---|---|
@@ -721,6 +754,20 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
+
+**R28 — the questions the 2026-09-26 integration plan left open** (`docs/inputs/2026-09-26-integration-plan-decisions.md`; the list of places it contradicts went to the user first, and the user answered all ten in one message, then asked that the whole list be worked through)
+- Q1: The shared root: R27 kept its names unprefixed, with nothing migrated. Decision 3 and the plan prefix every name and migrate chart and dashboard references in slice 3. Should the root be prefixed too? A: "keep it consistent... no special handling for root"
+- Q2: Overrides: when a child folder publishes its own `orders`, do its existing items switch at once (R27, AC-275) or when each is next published (the plan)? A: "agree.. only when it is next published"
+- Q3: Folder ids in names: wechart's folder ids are UUIDs, which Cube names reject. Recommended: `f` plus the UUID's 32 hex digits, with xcube's short `sql_alias` keeping database names short. A: "sql_alias"
+- Q4: Token claims: groups trimmed to those some policy names, plus `role`, and no `sub`? A: "sounds good"
+- Q5: Keys: wechart pushes its JWKS to xcube through an admin route, never fetched from wechart? A: "okay"
+- Q6: Folder access in Cube: gate policy evaluation by folder inside xcube, rather than write folder policies into the model, where Cube would OR them with authored ones? A: "okay"
+- Q7: Model files: xcube accepts YAML only, with Node's `require` off, because model code runs where credentials are decrypted? A: "okay"
+- Q8: Libraries: `jose` 6.2.12 to sign tokens, `hpke` 1.1.7 to encrypt credentials in the browser? A: "okay"
+- Q9: AC-136, AC-137 and AC-009 stay ticked until slice 3 changes how publishing works, then are retested? A: "okay"
+- Q10: Which branch for the xcube slices? A: "feat/xcube all work with be in feat/xcube until i merge to main explicitly"
+- Claude's reading of Q3, stated to the user before writing: Cube names can't hold a raw UUID, so a name is `f` plus the UUID's 32 hex digits, and xcube's `sql_alias` keeps database identifiers short.
+- The user, after the answers: "We now have to work though all of this" (the list, pasted back).
 
 **R27 — the questions the 2026-09-25 architecture decisions left open** (`docs/inputs/2026-09-25-architecture-decisions.md`; the user confirmed the list of places they contradict, then answered)
 - Q: Rebinding (decision 3): when a nearer cube, data source or `default` is published after other items already bound a farther one, or a bound item is deleted, what happens to the items already bound? A: "Rebind at that publish (Recommended)"
