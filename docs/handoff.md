@@ -75,8 +75,22 @@
 >     unticked and amended, AC-326 given the interim. Plan: T419 and T421 rewritten, T445 (dry-run
 >     check), T446 (YAML only) and T447 (the cut-over) added, T431 moved into slice 2, T420 to
 >     slice 4. The image `xcube:v1.7.45-83cb9f0888` is built locally.
->   - **In progress:** T386 (range marking) and T419 (pushes to xcube) are written and in cold
->     review; then T445, T421, T446, T447, T431, T423 in that order.
+>   - **Slice 2's cut-over is done (2026-09-26):**
+>     - T386: range marking, **AC-093**;
+>     - T419: pushes to xcube;
+>     - T445: the dry-run check;
+>     - T446: YAML only;
+>     - T421: model and revision claims, the revision-keyed metadata cache, the migration lock;
+>     - T447: the cut-over, **AC-333, AC-334, AC-335 and AC-235 ticked**.
+>
+>     Compose's Cube and the docker-desktop release now run xcube. Each API pushes its own model:
+>     - `e2e` and `e2e-security`, for the two suites;
+>     - `demo`, for the demo API on :4200, which now starts with `WECHART_XCUBE_MODEL=demo WECHART_XCUBE_ADMIN_TOKEN=dev-xcube-admin-token-0123456789abcdef`;
+>     - `wechart`, in the release.
+>
+>     Also done: T391 (value-axis labels, **AC-299**), T392 (series order, **AC-300**), T393 (table columns, **AC-301**), T394 (markdown text, **AC-302**).
+>   - **Next:** T431 (remove the model store: its routes, drafts, the `cube` class, the store settings), then T423.
+>   - **Deployed now:** Helm revision 17, with wechart-api/web `c82a902-t447` and Cube `xcube:v1.7.45-83cb9f0888`. Its bootstrap Job is named by its pod template.
 >   - **Asked, not yet answered:**
 >     1. May the contract points (JWKS push route, the gate instead of written policies, YAML only,
 >        the `f…` folder-id form, the build-event record) be posted as comments on the plan doc's
@@ -98,6 +112,17 @@
 >     10. T330: with sign-in off there's no Access button (one user, no groups). Confirm.
 >     11. The fork session's input file `docs/inputs/2026-09-26-xcube-slice-2-contract.md` is
 >        cited but uncommitted. Commit it?
+>     12. T394: each keystroke in a markdown tile's text is its own undo step and "change", as alt
+>        text and link labels already are. Merge a run of typing into one step?
+>     13. The delete toast's Undo undoes the latest change, which can be a keystroke typed after
+>        the delete (from before T394). Clear the toast on the next change, or have it restore its
+>        own delete?
+>     14. A header tile's text can't be edited anywhere, and no criterion covers it. Add one?
+>     15. T392: a Top N "Other (n)" series is named by its count, so its saved place in the series
+>        order is lost when the count changes. Fix?
+>     16. The test-integrity hook counts assertions. Twice it flagged changes that only added
+>        assertions (T419), and it flagged T447's `cube-config.test.ts`. There, tests of the removed
+>        model store went with the store, as R29 decided.
 > - **Pushing is the user's** (this session's push was refused by the permission classifier):
 >   `git push origin main feat/xcube --tags`.
 > - **Done since (2026-09-25, later):**
