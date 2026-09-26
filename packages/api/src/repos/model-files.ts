@@ -30,6 +30,7 @@ export function modelFileStore(db: Kysely<Database>): ModelFileStore & {
    */
   replace(path: string, files: readonly ModelFile[], folderId?: string): Promise<unknown>;
   all(): Promise<readonly ModelFile[]>;
+  remove(folderId: string, path: string): Promise<unknown>;
 } {
   return {
     async replace(path, files, folderId = ROOT_FOLDER_ID) {
@@ -59,6 +60,14 @@ export function modelFileStore(db: Kysely<Database>): ModelFileStore & {
         .orderBy(sql`path collate "C"`)
         .execute();
       return rows.map((row) => ({ folderId: row.folder_id, path: row.path, content: row.content }));
+    },
+    /** A file removed from its folder: a model item deleted (T428). */
+    async remove(folderId: string, path: string) {
+      await db
+        .deleteFrom('model_files')
+        .where('folder_id', '=', folderId)
+        .where('path', '=', path)
+        .execute();
     },
     /** Every folder's files, by folder then path: the whole model xcube is sent (T452). */
     async all() {

@@ -130,6 +130,11 @@ describe('model files in folders', () => {
       { folderId: a, path: file, content: 'in a\n' },
       { folderId: b, path: file, content: 'b, changed\n' },
     ]);
+
+    // Removed from one folder, it stays in the other (T428).
+    await store().remove(a, file);
+    expect(await store().list(a)).toEqual([]);
+    expect(await store().list(b)).toEqual([{ folderId: b, path: file, content: 'b, changed\n' }]);
   });
 
   it('lists a folder’s model files in its contents, each a model with the cubes and views it declares', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildServer } from '../server';
-import { referencesOf } from './references';
+import { referencesOf, usersOfCubes } from './references';
 
 /**
  * T147 / AC-141: WHEN the user edits a member that charts use, THE SYSTEM
@@ -178,5 +178,45 @@ describe('the route', () => {
 
     expect(response.json()).toEqual({ charts: [], dashboards: [] });
     await app.close();
+  });
+});
+
+/**
+ * T428, AC-275: what a delete or rename of a cube would leave bound to
+ * nothing — the charts whose query names it, and the dashboards whose own
+ * filters do, read where they keep references. Words that happen to spell
+ * it, a title or a text, are not uses (T428's review).
+ */
+describe('the items that use a cube (T428)', () => {
+  const doc = (kind: string, id: string, title: string, body: unknown) => ({
+    kind,
+    id,
+    title,
+    body,
+    localToDashboardId: null,
+  });
+
+  it('names the charts whose query names the cube, and the dashboards whose filters do', () => {
+    const documents = [
+      doc('chart', 'c1', 'By month', {
+        chart: {
+          source: { cube: 'sales' },
+          wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
+        },
+      }),
+      doc('chart', 'c2', 'Sales', {
+        chart: {
+          source: { cube: 'sales' },
+          wells: { measures: ['sales.count'], dimensions: [], timeDimensions: [] },
+        },
+      }),
+      doc('dashboard', 'd1', 'Board', { filters: [{ member: 'orders.status' }] }),
+      doc('dashboard', 'd2', 'orders', { pages: [{ items: [{ text: 'orders.count' }] }] }),
+    ];
+
+    expect(usersOfCubes(documents, ['orders'])).toEqual({
+      charts: [{ id: 'c1', title: 'By month' }],
+      dashboards: [{ id: 'd1', title: 'Board' }],
+    });
   });
 });

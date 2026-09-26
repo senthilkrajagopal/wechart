@@ -264,3 +264,50 @@ describe('only a folder’s read-write members change its models (T334, AC-266, 
     expect((await files().list(ids.b)).map((file) => file.content)).toEqual([ORDERS]);
   });
 });
+
+/**
+ * T428's review: the model delete, with security on (AC-266, AC-275) — only
+ * a folder's read-write members delete its models, and a refusal names only
+ * what they may see, counting the rest (AC-322).
+ */
+describe('deleting a model (T428)', () => {
+  const del = (who: string, folderId: string, path: string) =>
+    as(who, {
+      method: 'DELETE',
+      url: `/api/model/files?folder=${folderId}&path=${encodeURIComponent(path)}`,
+    });
+
+  it('answers 403 to one who may not change the folder, and 404 where they can’t see it', async () => {
+    expect((await del('reader', ids.b, paths.b)).statusCode).toBe(403);
+    expect((await del('writer', ids.a, paths.a)).statusCode).toBe(403);
+    expect((await del('nobody', ids.a, paths.a)).statusCode).toBe(404);
+    expect((await del('writer', ids.c, paths.c)).statusCode).toBe(404);
+    expect((await files().list(ids.b)).map((file) => file.content)).toEqual([ORDERS]);
+    expect((await files().list(ids.a)).map((file) => file.content)).toEqual([ORDERS]);
+  });
+
+  it('counts, and never names, what uses it in folders they can’t see', async () => {
+    const xcubeB = (await folderXcubeIds(getDb()).of([ids.b])).get(ids.b)!;
+    const cube = `${xcubeB}__${MARK}_orders`;
+    // A chart in /C, which `writer` can't see, on /A/B's cube.
+    await make('chart', {
+      title: `Hidden ${MARK}`,
+      folderId: ids.c,
+      chart: {
+        source: { cube },
+        wells: { measures: [`${cube}.count`], dimensions: [], timeDimensions: [] },
+      },
+    });
+
+    const answer = await del('writer', ids.b, paths.b);
+
+    expect(answer.statusCode).toBe(409);
+    expect(answer.json()).toEqual({
+      error: `“${MARK}_orders” is still used by 1 item in folders you can’t see.`,
+      charts: [],
+      dashboards: [],
+      hidden: 1,
+    });
+    expect((await files().list(ids.b)).map((file) => file.content)).toEqual([ORDERS]);
+  });
+});

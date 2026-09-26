@@ -1,3 +1,7 @@
+import type { ChartDefinition } from '@wechart/core';
+
+import { cubesOfChart } from './bind';
+
 /**
  * What uses a member (T147, AC-141): the charts that name it, and the
  * dashboards that name it or hold a chart that does, listed before an edit
@@ -88,4 +92,45 @@ export function referencesOf(
     .filter((dashboard) => dashboard.members.length > 0);
 
   return { charts, dashboards };
+}
+
+/**
+ * The items that use any of these cubes, by full name (T428, AC-275): the
+ * charts whose query names one, and the dashboards whose own filters do.
+ * Read where each keeps references, not from every string in it: a refusal
+ * mustn't rest on a title that spells a cube's name (T428's review).
+ */
+export function usersOfCubes(
+  documents: readonly ReferenceDocument[],
+  cubes: readonly string[],
+): {
+  charts: { id: string; title: string | null }[];
+  dashboards: { id: string; title: string | null }[];
+} {
+  const wanted = new Set(cubes);
+  const usesAny = (names: readonly string[]) => names.some((name) => wanted.has(name));
+  const cubeOf = (member: unknown) =>
+    typeof member === 'string' && member.includes('.') ? member.slice(0, member.indexOf('.')) : '';
+  return {
+    charts: documents
+      .filter((document) => {
+        if (document.kind !== 'chart') return false;
+        const chart = (document.body as { chart?: ChartDefinition } | null)?.chart;
+        if (typeof chart?.source?.cube !== 'string' || chart.source.cube === '') return false;
+        const { source, others } = cubesOfChart(chart);
+        return usesAny([source, ...others]);
+      })
+      .map(({ id, title }) => ({ id, title })),
+    dashboards: documents
+      .filter((document) => {
+        if (document.kind !== 'dashboard') return false;
+        const filters = (document.body as { filters?: unknown } | null)?.filters;
+        return usesAny(
+          (Array.isArray(filters) ? (filters as { member?: unknown }[]) : []).map((filter) =>
+            cubeOf(filter.member),
+          ),
+        );
+      })
+      .map(({ id, title }) => ({ id, title })),
+  };
 }

@@ -39,7 +39,7 @@ import { XcubeError, type XcubeAdmin } from './xcube/client';
 import type { PublishedFolders } from './xcube/folders';
 import type { PublicationStore } from './xcube/publications';
 import { registerModelPublishing } from './model/publish';
-import { referencesOf, type ReferenceDocument } from './model/references';
+import { referencesOf, usersOfCubes, type ReferenceDocument } from './model/references';
 import { searchable, visibleCounts, type Visibility } from './access/visible';
 import type { BookmarkStore } from './repos/bookmarks';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from './repos/catalog';
@@ -125,6 +125,8 @@ export interface ModelFileStore {
   list(folderId?: string): Promise<readonly ModelFile[]>;
   /** Every folder's files: the whole model xcube is sent (T452). The root's where absent. */
   all?(): Promise<readonly ModelFile[]>;
+  /** A file removed from its folder: a model item deleted (T428). */
+  remove?(folderId: string, path: string): Promise<unknown>;
   /** Stores each file whose path is not stored yet; never writes over one that is. */
   seed(files: readonly ModelFile[]): Promise<unknown>;
   /** Stores each file, over the one at its path if there is one: a publish (T142). */
@@ -458,6 +460,21 @@ export function buildServer({
     ...(xcube === undefined ? {} : { xcube }),
     ...(folders === undefined ? {} : { folders }),
     ...(beforeFolderPublish === undefined ? {} : { beforeFolderPublish }),
+    // What a delete or rename would leave bound to nothing (T428, AC-275):
+    // named where the user may see it, and only counted where not (AC-322).
+    referencedBy: async (request, cubes) => {
+      const all = (await cat?.referenceDocuments?.()) ?? [];
+      const users = usersOfCubes(all, cubes);
+      const seen = usersOfCubes(await visibleOf(request, all), cubes);
+      return {
+        ...seen,
+        hidden:
+          users.charts.length +
+          users.dashboards.length -
+          seen.charts.length -
+          seen.dashboards.length,
+      };
+    },
   });
   // With the model's files: each rollup's link names its stored file (T449).
   registerBuilds(app, client, modelFiles);
@@ -485,25 +502,7 @@ export function buildServer({
       .filter((member) => member !== '');
     if (members.length === 0) return { charts: [], dashboards: [] };
     const all = (await cat?.referenceDocuments?.()) ?? [];
-    // With security on, only what the user may see (T326's review): a dashboard
-    // in a folder they see, a chart local to one, a library chart where every
-    // kind is theirs.
-    const seen = await visibilityOf(request);
-    if (seen === undefined) return referencesOf(all, members);
-    const folderOf = (document: { body: unknown }) =>
-      folderIdOf((document.body ?? {}) as Record<string, unknown>);
-    const dashboards = new Map(
-      all.filter((each) => each.kind === 'dashboard').map((each) => [each.id, each]),
-    );
-    const visible = all.filter((document) => {
-      if (document.kind === 'dashboard') return seen.rights.has(folderOf(document) ?? '');
-      if (document.localToDashboardId !== null) {
-        const dashboard = dashboards.get(document.localToDashboardId);
-        return dashboard !== undefined && seen.rights.has(folderOf(dashboard) ?? '');
-      }
-      return seen.rights.get(folderOf(document) ?? '')?.kinds === 'all';
-    });
-    return referencesOf(visible, members);
+    return referencesOf(await visibleOf(request, all), members);
   });
 
   /**
@@ -757,6 +756,78 @@ export function buildServer({
       return { kind: 'unreachable' };
     }
   };
+  /**
+   * Of these charts and dashboards, those the user may see (T326's review):
+   * a dashboard in a folder they see, a chart local to one, a library chart
+   * where every kind is theirs. All of them with security off.
+   */
+  const visibleOf = async (
+    request: FastifyRequest,
+    all: readonly ReferenceDocument[],
+  ): Promise<readonly ReferenceDocument[]> => {
+    const seen = await visibilityOf(request);
+    if (seen === undefined) return all;
+    const folderOf = (document: { body: unknown }) =>
+      folderIdOf((document.body ?? {}) as Record<string, unknown>);
+    const dashboards = new Map(
+      all.filter((each) => each.kind === 'dashboard').map((each) => [each.id, each]),
+    );
+    return all.filter((document) => {
+      if (document.kind === 'dashboard') return seen.rights.has(folderOf(document) ?? '');
+      if (document.localToDashboardId !== null) {
+        const dashboard = dashboards.get(document.localToDashboardId);
+        return dashboard !== undefined && seen.rights.has(folderOf(dashboard) ?? '');
+      }
+      return seen.rights.get(folderOf(document) ?? '')?.kinds === 'all';
+    });
+  };
+
+  /** The folder and every folder beneath it, by id (T428). */
+  const subtreeOf = async (folderId: string): Promise<Set<string>> => {
+    const all = (cat ? await cat.folders({ counted: false }) : []) as {
+      id: string;
+      parentId: string | null;
+    }[];
+    const beneath = new Set([folderId]);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const folder of all)
+        if (folder.parentId !== null && beneath.has(folder.parentId) && !beneath.has(folder.id)) {
+          beneath.add(folder.id);
+          grew = true;
+        }
+    }
+    return beneath;
+  };
+  /** Whether a folder is My workspace or beneath it (T428). */
+  const inWorkspace = async (folderId: string): Promise<boolean> => {
+    const parents = new Map(
+      (
+        (cat ? await cat.folders({ counted: false }) : []) as {
+          id: string;
+          parentId: string | null;
+        }[]
+      ).map((folder) => [folder.id, folder.parentId]),
+    );
+    const seen = new Set<string>();
+    for (
+      let at: string | null | undefined = folderId;
+      at != null && !seen.has(at);
+      at = parents.get(at)
+    ) {
+      if (at === MY_WORKSPACE_ID) return true;
+      seen.add(at);
+    }
+    return false;
+  };
+  /** How many model files a folder holds, in it or beneath it (T428). */
+  const modelsBeneath = async (folderId: string): Promise<number> => {
+    if (modelFiles?.all === undefined) return 0;
+    const subtree = await subtreeOf(folderId);
+    return (await modelFiles.all()).filter((file) => subtree.has(file.folderId ?? ROOT_FOLDER_ID))
+      .length;
+  };
+
   /** A refused or unasked binding, answered. */
   const bindingRefused = (reply: FastifyReply, kind: string, bound: Bound) =>
     bound.kind === 'refused'
@@ -1422,6 +1493,16 @@ export function buildServer({
       return reply.code(403).send({ error: READ_ONLY });
     }
 
+    // A folder holding models moved into My workspace would leave xcube's
+    // tree, and its cubes with it, unchecked (T428's review, AC-275).
+    if (kind === 'folder' && body?.folderId !== undefined && (await inWorkspace(body.folderId))) {
+      const models = await modelsBeneath(id);
+      if (models > 0)
+        return reply.status(409).send({
+          error: `This folder holds ${String(models)} model${models === 1 ? '' : 's'}, in it or beneath it, and My workspace can’t hold models yet.`,
+        });
+    }
+
     // Moved into a folder, a chart or a dashboard is published there: each
     // cube it names bound on its new path, and a dashboard's own charts with
     // it (T429's review, AC-272). Written together where any binding changes.
@@ -1539,6 +1620,17 @@ export function buildServer({
           dashboards,
         });
       }
+    }
+
+    // A folder holding models, itself or beneath it, isn't deleted: its cubes
+    // would leave xcube with nothing checked against what uses them (T428's
+    // review, AC-275). Its models are deleted first, each checked.
+    if (kind === 'folder') {
+      const models = await modelsBeneath(id);
+      if (models > 0)
+        return reply.status(409).send({
+          error: `This folder holds ${String(models)} model${models === 1 ? '' : 's'}, in it or beneath it: delete ${models === 1 ? 'it' : 'them'} first.`,
+        });
     }
 
     const removed = await docs.remove(kind, id);

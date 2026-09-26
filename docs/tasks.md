@@ -6656,6 +6656,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - a proposal is checked (`dryRun`) when made, and applied at approval;
     - a break refuses it and changes no folder, proposal or module;
     - a stale base revision (`409`) is checked again (AC-321, AC-288, AC-291).
+  - *2026-09-26, from T428's review:* an approval is AC-275's "approved" trigger. It must refuse a delete or rename of a name a chart or dashboard still uses, as a direct publish does (`inUse` in `model/publish.ts`, and the visibility rule with it). A test here should show it, so AC-275 stays demonstrated.
   - Depends on: T426, T349, T352
 - [ ] T427 (AC-322) Word a refused publish: breaks named in the folders the user may see, a count for the rest, all in the audit trail
   - Files: `packages/api/src/xcube/refusal.ts` (+ test), `packages/web/src/workspaces/reviews/Refusal.tsx` (+ test)
@@ -6666,7 +6667,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - a Super-Admin sees all of them named;
     - the audit trail records every one (AC-322).
   - Depends on: T426, T368
-- [ ] T428 (AC-275) Keep published items bound until they are published again, and refuse to delete or rename a name still referenced
+- [x] T428 (AC-275) Keep published items bound until they are published again, and refuse to delete or rename a name still referenced
   - Files: `packages/api/src/xcube/changesets.ts`, `packages/api/src/model/references.ts` (+ test), `e2e/security/binding.spec.ts`
   - Failing test: `binding.spec.ts`, against xcube's slice 3:
     - /A/B publishes its own `orders`, and a chart published earlier in /A/B/C keeps /A's until it is published again, then takes /A/B's;
@@ -6677,6 +6678,42 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     wechart checks its own charts and dashboards against `GET …/items` before it sends a delete. xcube refuses a removal another item is bound to itself (`[X3]`; research 3a, "Removal and renames").
   - *2026-09-26, from T452's review:* a folder's model files are xcube items now, but deleting the folder removes only its document, and moving it into a workspace takes it out of the published tree. Either way its files drop out of the items. The tree push then answers `409 folder_in_use`, so until the next reconcile no new folder's push lands and publishes into new folders are refused. That reconcile then drops those cubes with no check against the charts that use them. What a folder holding models should do on a delete or such a move is for the user (handoff question 5 asks it of a non-empty folder); this task's delete checks should cover it.
   - Depends on: T426, T429, T334
+  - *Files, as built:* `packages/api/src/model/publish.ts` (`DELETE /api/model/files`, the rename check, `inUse`), `packages/api/src/model/references.ts` (`usersOfCubes`, + test), `packages/api/src/xcube/check.ts` (a deleted item's error placed on its file), `packages/api/src/repos/model-files.ts` (`remove`, + test), `packages/api/src/server.ts` (`referencedBy` with the visibility rule, the folder delete and move guards), `packages/api/src/model-delete.test.ts`, `packages/api/src/access/models.test.ts`, `e2e/security/binding.spec.ts`.
+  - **Done 2026-09-26.**
+    - **Kept bound.** Charts and dashboards store full names since T429, so a nearer definition published later changes nothing already published. An item takes the nearer one when it is next published (bound by its short name).
+    - **Deletes.** `DELETE /api/model/files?folder=&path=` deletes a model item. In order:
+      - it needs read-write on the folder (T334's check: 403, or 404 where the folder can't be seen);
+      - it refuses a Jinja template, read-only as publishing over one is;
+      - it is refused while a chart or dashboard names the cube;
+      - it applies only if xcube's dry run of the changeset passes, and xcube refuses one another model item is bound to, naming it;
+      - then the file is removed and the changeset sent.
+    - **Renames.** A publish whose file no longer declares a name is refused while a chart or dashboard names it.
+    - **What counts as a use** (`usersOfCubes`): a chart whose query names the cube (source, wells, encoding, grains, filters), and a dashboard whose own filters do; never a title or text that spells it. A refusal names only what the user may see, as `/api/model/references` does, and counts the rest (AC-322's rule).
+    - **Folders.** A folder holding a model, in it or beneath, is neither deleted nor moved into My workspace (409). Either would take its cubes out of xcube with nothing checked. Whether a non-empty folder's delete should instead cascade is handoff question 5.
+    - **Tests.**
+      - `binding.spec.ts`, against compose's xcube:
+        - a chart in /A/B/C bound to /A's cube still answers from it after /A/B publishes an empty one of the same name;
+        - deleting /A's is refused naming the chart;
+        - the chart, published again from its stored body, answers from /A/B's;
+        - renaming /A/B's is refused;
+        - xcube refuses deleting /A's while /A's `binding_lines` joins it;
+        - with that gone, both are deleted, and `/api/meta` no longer lists them.
+      - `model-delete.test.ts`: the refusals, xcube's refusal on the deleted file, a root cube a title spells, a template, and the folder guards.
+      - `access/models.test.ts`: the delete's 403 and 404, and a hidden chart counted, never named.
+      - `references.test.ts`: `usersOfCubes`.
+    - **The cold review** (FAIL) found:
+      - the folder delete and move gap;
+      - the refusal naming charts the user can't see;
+      - no access test;
+      - a proxy for "what it queries";
+      - the root's names matched in any string;
+      - no check that the delete reached xcube;
+      - a template deletable;
+      - the approval path;
+      - xcube's wording.
+
+      All are fixed, or noted: the approval path is T451's, and noted there.
+    - **AC-275 ticked** on `binding.spec.ts` and `model-delete.test.ts`. T451 must repeat the check at approval.
 - [x] T452 (AC-328, AC-271) Publish model files into any folder, as that folder's items in xcube *(added 2026-09-26: after T334, only the root's files reached xcube, and T429's picker and T341's isolation both need a folder's cubes published)*
   - Files: `packages/api/src/xcube/items.ts` (+ test), `packages/api/src/xcube/{snapshot,check,changesets}.ts`, `packages/api/src/repos/{model-files,folder-xcube-ids}.ts`, `packages/api/src/model/{publish,split}.ts`, `packages/api/src/main.ts`, `packages/api/src/xcube/fake.ts`, `packages/api/src/publish.test.ts`, `e2e/folder-models.spec.ts`
   - Failing test:

@@ -14,7 +14,7 @@ import { clashesOf, compiledIn } from './clashes';
 import { refreshKeyProblemsOf } from './refreshKeys';
 import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
 import type { Changeset } from '../xcube/changesets';
-import { chainOf, ROOT_ONLY, type PublishedFolders } from '../xcube/folders';
+import { chainOf, ROOT_ONLY, XCUBE_ROOT, type PublishedFolders } from '../xcube/folders';
 import { declaredIn, misnamedIn, redeclaredIn, severalIn, unreadableIn } from './split';
 import type { CompileError } from './validate';
 
@@ -150,6 +150,7 @@ export function registerModelPublishing(
     refusalIn,
     folders,
     beforeFolderPublish,
+    referencedBy,
   }: {
     config: Config;
     client: CubeClient;
@@ -182,8 +183,128 @@ export function registerModelPublishing(
     folders?: () => Promise<PublishedFolders>;
     /** The tree put to xcube, before a publish into a folder other than the root (T452). */
     beforeFolderPublish?: () => Promise<unknown>;
+    /**
+     * The charts and dashboards that name any of these cubes, by full name
+     * (T428, AC-275): what a delete or rename of them would leave bound to
+     * nothing.
+     */
+    referencedBy?: (
+      request: FastifyRequest,
+      cubes: readonly string[],
+    ) => Promise<{
+      /** Those the user may see, named. */
+      readonly charts: readonly { readonly id: string; readonly title: string | null }[];
+      readonly dashboards: readonly { readonly id: string; readonly title: string | null }[];
+      /** How many more there are that the user may not see: counted, never named (AC-322). */
+      readonly hidden: number;
+    }>;
   },
 ): void {
+  /**
+   * Refused while a chart or dashboard names any of these short names in a
+   * folder, by its xcube id: the refusal, naming them; else nothing (T428,
+   * AC-275). wechart checks its own items; xcube, its model's.
+   */
+  const inUse = async (request: FastifyRequest, names: readonly string[], xcubeId: string) => {
+    if (names.length === 0 || referencedBy === undefined) return undefined;
+    const full = names.map((name) => (xcubeId === XCUBE_ROOT ? name : `${xcubeId}__${name}`));
+    const { charts, dashboards, hidden } = await referencedBy(request, full);
+    if (charts.length === 0 && dashboards.length === 0 && hidden === 0) return undefined;
+    const quoted = (titles: readonly { title: string | null }[]) =>
+      titles.map((each) => `“${each.title ?? 'Untitled'}”`).join(', ');
+    const users = [
+      ...(charts.length === 0
+        ? []
+        : [`the chart${charts.length === 1 ? '' : 's'} ${quoted(charts)}`]),
+      ...(dashboards.length === 0
+        ? []
+        : [`the dashboard${dashboards.length === 1 ? '' : 's'} ${quoted(dashboards)}`]),
+      // Counted, never named, where the user may not see them (AC-322).
+      ...(hidden === 0
+        ? []
+        : [`${String(hidden)} item${hidden === 1 ? '' : 's'} in folders you can’t see`]),
+    ].join(' and ');
+    return {
+      error: `${names.map((name) => `“${name}”`).join(', ')} ${names.length === 1 ? 'is' : 'are'} still used by ${users}.`,
+      charts: charts.map(({ id, title }) => ({ id, title })),
+      dashboards: dashboards.map(({ id, title }) => ({ id, title })),
+      hidden,
+    };
+  };
+
+  /**
+   * Delete a model item: its file, from its folder (T428, AC-275, AC-291).
+   * Refused while a chart or dashboard names it, naming them, and applied
+   * only if xcube's check of the delete passes: xcube refuses one another
+   * model item is bound to, naming it. Then removed from the store and sent.
+   */
+  app.delete('/api/model/files', USER, async (request, reply) => {
+    const { folder, path } = request.query as { folder?: unknown; path?: unknown };
+    const folderId = typeof folder === 'string' && folder !== '' ? folder : ROOT_FOLDER_ID;
+    if (typeof path !== 'string' || path === '')
+      return reply.status(400).send({ error: 'Name the model file to delete by its path.' });
+    const refusal = await refusalIn?.(request, folderId);
+    if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
+    const served = (await folders?.()) ?? ROOT_ONLY;
+    const xcubeId = served.ids.get(folderId);
+    if (modelFiles?.remove === undefined || xcubeId === undefined)
+      return reply.status(409).send({
+        error: 'Models can’t be deleted here: xcube doesn’t serve this folder.',
+      });
+    const live = (await modelFiles.all?.()) ?? (await modelFiles.list());
+    const file = live.find(
+      (each) => (each.folderId ?? ROOT_FOLDER_ID) === folderId && each.path === path,
+    );
+    if (file === undefined)
+      return reply.status(404).send({ error: `There’s no model file ${path} here.` });
+    // Read-only, as publishing over one is refused (T428's review).
+    if (JINJA.test(file.content))
+      return reply.status(409).send({
+        error: `${path} is a Jinja template, and templates are read-only here.`,
+      });
+
+    const used = await inUse(
+      request,
+      declaredIn(file.content)
+        .map(({ name }) => name)
+        .filter((name) => name !== ''),
+      xcubeId,
+    );
+    if (used !== undefined) return reply.status(409).send(used);
+    // xcube checks a delete and serves it (T445, T447); without it, neither happens.
+    if (xcube === undefined)
+      return reply.status(409).send({
+        error:
+          'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_XCUBE_ADMIN_TOKEN), so a delete could not be checked or served.',
+      });
+
+    const draft = live.filter((each) => each !== file);
+    const checked = await checkWithXcube({
+      xcube,
+      draft,
+      changed: [file],
+      live,
+      folders: served.ids,
+      securityContext: config.securityContext,
+      log: (error) => {
+        app.log.warn({ err: error }, 'could not ask xcube to check a delete');
+      },
+    });
+    if (checked.kind === 'unreachable') return reply.status(502).send({ error: checked.error });
+    if (checked.kind === 'invalid') return reply.status(422).send({ errors: checked.errors });
+    const rollups = checked.rollups();
+    if (rollups.kind === 'unasked') return reply.status(502).send({ error: rollups.error });
+    if (rollups.kind === 'unjoinable') return reply.status(422).send({ errors: rollups.errors });
+
+    await modelFiles.remove(folderId, path);
+    // Committed first, then sent: xcube is never ahead of wechart (T419).
+    await afterPublish?.(checked.changeset).catch((error: unknown) => {
+      app.log.warn({ err: error }, 'could not send the deleted model item to xcube');
+    });
+    meta.invalidate();
+    return { version: versionOf(draft) };
+  });
+
   /**
    * Publish changed files: checked by xcube's dry run of the whole model with
    * them in it, and written only if it compiles and plans (AC-136, AC-235).
@@ -284,6 +405,17 @@ export function registerModelPublishing(
     // review), and free in another folder (AC-271, T452).
     const redeclared = redeclaredIn(changed, inFolder);
     if (redeclared.length > 0) return reply.status(422).send({ errors: redeclared });
+    // A name a changed file no longer declares is renamed away: refused while
+    // a chart or dashboard still names it (T428, AC-275).
+    const declaring = new Set(
+      changed.flatMap((file) => declaredIn(file.content)).map(({ name }) => name),
+    );
+    const renamedAway = inFolder
+      .filter((file) => changed.some((each) => each.path === file.path))
+      .flatMap((file) => declaredIn(file.content).map(({ name }) => name))
+      .filter((name) => name !== '' && !declaring.has(name));
+    const used = await inUse(request, renamedAway, served.ids.get(folderId)!);
+    if (used !== undefined) return reply.status(409).send(used);
     const paths = new Set(changed.map((file) => file.path));
     const overTemplate = inFolder.find((file) => paths.has(file.path) && JINJA.test(file.content));
     if (overTemplate !== undefined)

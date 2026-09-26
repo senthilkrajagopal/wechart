@@ -148,7 +148,8 @@ export async function checkWithXcube({
         string,
         { readonly path: string | undefined; readonly folderId: string | undefined }
       >();
-      for (const file of draft) {
+      // The draft's first; then what is live, for an item the change deletes (T428).
+      for (const file of [...draft, ...live]) {
         const xcubeId = folders.get(file.folderId ?? ROOT_FOLDER_ID);
         if (xcubeId === undefined) continue;
         for (const { name } of declaredIn(file.content))
