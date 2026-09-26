@@ -59,6 +59,8 @@ async function main(): Promise<void> {
           model: config.xcube.model,
           token: config.xcube.adminToken,
         });
+  // What xcube acknowledged: recorded by the sync, and read for every token (T421).
+  const publications = publicationStore(db);
   const sync =
     admin === undefined || config.xcube === undefined
       ? undefined
@@ -66,7 +68,7 @@ async function main(): Promise<void> {
           model: config.xcube.model,
           admin,
           files: () => modelFiles.list(),
-          publications: publicationStore(db),
+          publications,
           log: {
             warn: (details, message) => app.log.warn(details, message),
             info: (details, message) => app.log.info(details, message),
@@ -84,6 +86,7 @@ async function main(): Promise<void> {
     drafts: publishDraftStore(db),
     ...(sync === undefined ? {} : { afterPublish: () => sync.sync('publish') }),
     ...(admin === undefined ? {} : { xcube: admin }),
+    publications,
     // Each folder's AD groups (T314).
     folderAccess: folderAccessStore(db),
     // Signed-in sessions, kept in the metadata database (T316).

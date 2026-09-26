@@ -195,3 +195,37 @@ describe('metadata per set of AD groups', () => {
     expect(fetched).toEqual([['a'], ['b'], ['a'], ['b']]);
   });
 });
+
+/**
+ * T421's review: the entry follows the recorded revision, which only rises.
+ * A fetch begun at an older revision that answers after one at a newer
+ * revision must not put the older answer back.
+ */
+describe('metadata keyed by xcube’s recorded revision (T421, AC-334)', () => {
+  it('keeps the newer revision’s answer when an older fetch answers last', async () => {
+    let recorded = 4;
+    const releases: (() => void)[] = [];
+    const fetched: number[] = [];
+    const cache = new MetaCache({
+      revision: async () => recorded,
+      fetchMeta: async () => {
+        const at = recorded;
+        fetched.push(at);
+        // Revision 4's fetch is slow: it answers after revision 5's.
+        if (at === 4) await new Promise<void>((resolve) => releases.push(resolve));
+        return { cubes: [{ name: `r${String(at)}` }] };
+      },
+    });
+
+    const older = cache.meta();
+    await Promise.resolve();
+    await Promise.resolve();
+    recorded = 5;
+    expect(await cache.meta()).toEqual({ cubes: [{ name: 'r5' }] });
+    releases.forEach((release) => release());
+    expect(await older).toEqual({ cubes: [{ name: 'r4' }] });
+
+    expect(await cache.meta()).toEqual({ cubes: [{ name: 'r5' }] });
+    expect(fetched).toEqual([4, 5]);
+  });
+});

@@ -18,7 +18,37 @@ export interface CubeClientOptions {
   /** Seconds a minted token stays valid. */
   readonly tokenTtlSeconds?: number;
   readonly fetchImpl?: typeof fetch;
+  /**
+   * The deployment's model in xcube (T421, AC-334): every token names it, and
+   * the last revision xcube acknowledged, read as each request is signed, so
+   * an answer comes from that revision or a newer one on any Cube instance
+   * (research `xcube-slice-2.md`, "Token claims"). Absent, tokens name no
+   * model and Cube answers from its mounted directory, as before the cut-over.
+   */
+  readonly model?: {
+    readonly id: string;
+    readonly revision: () => Promise<number | undefined>;
+  };
+  /** How long to wait before asking a catching-up instance again; its Retry-After, by default. */
+  readonly catchUpDelayMs?: (retryAfterSeconds: number) => number;
 }
+
+/**
+ * A Cube instance behind the revision a token names catches up for up to 10 s,
+ * then answers one of these 503s with `Retry-After: 2` (research, "Serving"):
+ * it is asked again, a few times, and the answer is the caller's.
+ */
+const CATCHING_UP =
+  /is not active on this instance yet|is not loaded on this instance yet|has no revision that compiles on this instance yet/;
+/**
+ * Three asks: each can take xcube's 10 s of catching up, so the last answer
+ * comes about 34 s in, inside a proxy's usual 60 s read timeout (T421's review).
+ */
+const CATCH_UP_ASKS = 3;
+
+/** How long to wait before asking again: the instance's Retry-After, 5 s at most. */
+export const catchUpDelayOf = (retryAfterSeconds: number): number =>
+  Math.min(retryAfterSeconds, 5) * 1000;
 
 /**
  * A failure reported by Cube. Carries Cube's own message so a tile can show it
@@ -65,6 +95,7 @@ export class CubeClient {
   readonly #ttl: number;
   readonly #fetch: typeof fetch;
   readonly #options: CubeClientOptions;
+  readonly #catchUpDelayMs: (retryAfterSeconds: number) => number;
 
   constructor(options: CubeClientOptions) {
     this.#options = options;
@@ -73,6 +104,7 @@ export class CubeClient {
     this.#securityContext = options.securityContext;
     this.#ttl = options.tokenTtlSeconds ?? DEFAULT_TTL_SECONDS;
     this.#fetch = options.fetchImpl ?? fetch;
+    this.#catchUpDelayMs = options.catchUpDelayMs ?? catchUpDelayOf;
   }
 
   /**
@@ -174,7 +206,12 @@ export class CubeClient {
       body: JSON.stringify({
         action: 'post',
         selector: {
-          contexts: [{ securityContext: this.#securityContext }],
+          // Cube builds for this context in place of the token's: it names
+          // the model and its revision too (T421's review; research
+          // `xcube-slice-2.md`, refresh contexts name the model).
+          contexts: [
+            { securityContext: { ...this.#securityContext, ...(await this.#modelClaims()) } },
+          ],
           timezones: ['UTC'],
           preAggregations: ids,
         },
@@ -223,15 +260,14 @@ export class CubeClient {
   ): Promise<{ status: number; body: unknown }> {
     if (!/^\/v1\/introspection\/data-sources(?:[/?]|$)/.test(path))
       throw new Error('Only Cube’s introspection routes are asked with an introspection token.');
-    const response = await this.#fetch(`${this.#apiUrl}${path}`, {
+    const { response, text } = await this.#send(path, async () => ({
       method: init.method ?? 'GET',
       headers: {
         ...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
-        authorization: `Bearer ${this.#token({ wechartIntrospection: true }, undefined, INTROSPECTION_TTL_SECONDS)}`,
+        authorization: `Bearer ${this.#token({ wechartIntrospection: true }, undefined, INTROSPECTION_TTL_SECONDS, await this.#modelClaims())}`,
       },
       ...(init.body === undefined ? {} : { body: init.body }),
-    });
-    const text = await response.text();
+    }));
     return { status: response.status, body: text ? safeJson(text) : null };
   }
 
@@ -244,14 +280,16 @@ export class CubeClient {
     path: string,
     init: { method?: string; body?: string; headers?: Record<string, string> },
   ): Promise<{ status: number; body: unknown }> {
-    const response = await this.#fetch(`${this.#apiUrl}${path}`, {
+    const { response, text } = await this.#send(path, async () => ({
       ...init,
-      headers: { ...init.headers, authorization: `Bearer ${this.#token()}` },
+      headers: {
+        ...init.headers,
+        authorization: `Bearer ${this.#token(undefined, undefined, this.#ttl, await this.#modelClaims())}`,
+      },
       redirect: 'manual',
       // A hung Cube is not an answer: the probe reads it as unknown.
       signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
-    });
-    const text = await response.text();
+    }));
     return { status: response.status, body: text ? safeJson(text) : null };
   }
 
@@ -261,34 +299,73 @@ export class CubeClient {
     context?: Record<string, unknown>,
     preview?: Record<string, unknown>,
   ): Promise<unknown> {
-    // Signed before asking: a token that can't be made is wechart's fault, not Cube away.
-    const headers = {
-      ...init.headers,
-      // AC-008: every request, not only the first.
-      authorization: `Bearer ${this.#token(context, preview)}`,
-    };
-    let response: Response;
-    let text: string;
-    try {
-      response = await this.#fetch(`${this.#apiUrl}${path}`, { ...init, headers });
-      text = await response.text();
-    } catch (failure) {
-      // A cancellation stays one: the caller asked for it.
-      if ((failure as { name?: unknown } | null)?.name === 'AbortError') throw failure;
-      // Cube gone mid-request, or not there: Cube away, not wechart failing,
-      // so the web app waits it out and asks again (T422, AC-319).
-      throw new CubeUnreachable(failure);
-    }
+    const { response, text } = await this.#send(
+      path,
+      async () => ({
+        ...init,
+        headers: {
+          ...init.headers,
+          // AC-008: every request, not only the first.
+          authorization: `Bearer ${this.#token(context, preview, this.#ttl, await this.#modelClaims())}`,
+        },
+      }),
+      (failure) => {
+        // A cancellation stays one: the caller asked for it.
+        if ((failure as { name?: unknown } | null)?.name === 'AbortError') return;
+        // Cube gone mid-request, or not there: Cube away, not wechart failing,
+        // so the web app waits it out and asks again (T422, AC-319).
+        throw new CubeUnreachable(failure);
+      },
+    );
     const parsed: unknown = text ? safeJson(text) : null;
+    if (response.ok) return parsed;
+    throw new CubeError(
+      cubeMessage(parsed) ?? `Cube returned ${String(response.status)}`,
+      response.status,
+    );
+  }
 
-    if (!response.ok) {
-      throw new CubeError(
-        cubeMessage(parsed) ?? `Cube returned ${String(response.status)}`,
-        response.status,
-      );
+  /**
+   * One request to Cube, signed afresh for each ask, and asked again while
+   * the Cube instance answering catches up to the revision the token names
+   * (T421, AC-334): its 503 is waited out, never the caller's. Every path —
+   * a query, introspection, a probe — passes xcube's pin (T421's review).
+   */
+  async #send(
+    path: string,
+    initFor: () => Promise<RequestInit>,
+    onFailure?: (failure: unknown) => void,
+  ): Promise<{ response: Response; text: string }> {
+    for (let ask = 1; ; ask += 1) {
+      // Signed before asking: a token that can't be made is wechart's fault, not Cube away.
+      const init = await initFor();
+      let response: Response;
+      let text: string;
+      try {
+        response = await this.#fetch(`${this.#apiUrl}${path}`, init);
+        text = await response.text();
+      } catch (failure) {
+        onFailure?.(failure);
+        throw failure;
+      }
+      const message = cubeMessage(text ? safeJson(text) : null) ?? '';
+      if (response.status !== 503 || !CATCHING_UP.test(message) || ask >= CATCH_UP_ASKS)
+        return { response, text };
+      const after = Number(response.headers.get('retry-after') ?? '2');
+      const wait = this.#catchUpDelayMs(Number.isFinite(after) ? after : 2);
+      await new Promise((resolve) => setTimeout(resolve, wait));
     }
+  }
 
-    return parsed;
+  /** The model and its revision, for this request (T421). */
+  async #modelClaims(): Promise<Record<string, unknown>> {
+    const model = this.#options.model;
+    if (model === undefined) return {};
+    const revision = await model.revision();
+    return {
+      wechartModel: model.id,
+      ...(revision !== undefined && revision > 0 ? { wechartRevision: revision } : {}),
+    };
   }
 
   /**
@@ -300,6 +377,8 @@ export class CubeClient {
     context?: Record<string, unknown>,
     preview?: Record<string, unknown>,
     ttl: number = this.#ttl,
+    /** The model and its revision (T421), set last, so nothing names them for wechart. */
+    model: Record<string, unknown> = {},
   ): string {
     const issuedAt = Math.floor(Date.now() / 1000);
     const header = { alg: 'HS256', typ: 'JWT' };
@@ -313,6 +392,7 @@ export class CubeClient {
       ...(preview === undefined
         ? { ...this.#securityContext, ...context }
         : { ...previewClaimsOf(preview), ...wechartClaimsOf(this.#securityContext) }),
+      ...model,
       iat: issuedAt,
       exp: issuedAt + ttl,
     };

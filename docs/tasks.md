@@ -6179,14 +6179,41 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
 
     Research: `cube/tokens-and-service-credential.md`.
   - Depends on: T322; xcube's slice 4 (service-credential auth on its admin routes, in place of the static admin token)
-- [ ] T421 (AC-334, AC-319) Name the model and the revision in every query token, key the metadata cache by xcube's revision, and wait for the migration lock
-  - Files: `packages/api/src/cube/client.ts` (the `wechartModel` and `wechartRevision` claims; a catching-up instance's `503` with `Retry-After` waited for and asked again), `packages/api/src/cube/meta-cache.ts` (keyed by the `x-xcube-revision` an answer came at, fetched again when the recorded revision is newer), `packages/api/src/db/migrate.ts` (`advisoryLockMode: 'wait'`), `packages/api/src/cube/meta-cache-replicas.test.ts`, `packages/api/src/db/migrate-concurrent.test.ts`, `packages/api/src/cube/client.test.ts`
+- [x] T421 (AC-334, AC-319) Name the model and the revision in every query token, key the metadata cache by xcube's revision, and wait for the migration lock
+  - Files: `packages/api/src/cube/client.ts` (the `wechartModel` and `wechartRevision` claims; a catching-up instance's `503` with `Retry-After` waited for and asked again), `packages/api/src/cube/meta-cache.ts` (keyed by the recorded revision read before each fetch, fetched again when it changes), `packages/api/src/db/migrate.ts` (`advisoryLockMode: 'wait'`), `packages/api/src/server.ts` and `packages/api/src/main.ts` (wiring), `packages/api/src/xcube/publications.ts` and `xcube/snapshot.ts` (the record only rises within a generation), tests `cube/model-claims.test.ts`, `cube/meta-cache-replicas.test.ts`, `cube/meta-cache.test.ts`, `xcube/query-claims.test.ts`, `xcube/publications.test.ts`, `db/migrate-concurrent.test.ts`
   - Failing test:
     - every token wechart signs for a query, a preview, introspection or a job names the model; the revision it names is the one last recorded (AC-334);
     - a `503` from an instance still catching up is asked again after its `Retry-After`, and never reaches the user as an error;
     - two API instances on one database: a publish through one reaches the other's metadata as soon as the revision changes, not 60 s later;
     - starting both at once migrates once, and neither exits (AC-319; research `cube/ha-topology.md`, table rows 3 and 6).
   - Depends on: T419
+  - **Done 2026-09-26, against stubs; xcube itself answers from T447.**
+    - **Tokens.** Where the deployment names its model in xcube, every token wechart signs names it (`wechartModel`). It also names the revision last recorded (`wechartRevision`), read as each request is signed, so another replica's publish is seen at once. That covers a query, the field list, a plan, a preview, a build, introspection and a probe. The model's claims come last, so no context can name them. A build's selector context names them too, since Cube builds for that context in place of the token's. No revision is named before xcube has acknowledged one, and 0 never is.
+    - **Catching up.** An instance still catching up answers one of xcube's three 503s. Every path asks it again after its `Retry-After` (5 s at most), three asks in all, about 34 s at worst.
+    - **The field list.** Metadata is cached per recorded revision and fetched again as soon as the record changes. A fetch begun at an older revision can't replace a newer one's answer.
+    - **The record.** Within one xcube store it only rises, so a replica that read xcube before another's publish was recorded can't put the older revision back. If the record can't be read, the last revision read stands and queries go on.
+    - **Migrations** wait for another replica's lock instead of failing.
+    - **Without xcube configured**, nothing changes (a test says so).
+    - **What the tests show:**
+      - `model-claims.test.ts` (12): the claims on each path; a preview can't name them; revisions 0 and none; the build's context; `as()` with security on; the catch-up retries with their `Retry-After`, on queries, introspection and probes; the give-up; the default wait.
+      - `query-claims.test.ts` (4), through `buildServer`: the recorded revision in Cube's tokens, followed at once; the model alone before any revision; the last revision while the record can't be read; no model without xcube.
+      - `meta-cache-replicas.test.ts`: two replicas on one database.
+      - `meta-cache.test.ts`: an older fetch answering last.
+      - `publications.test.ts`: the record only rising, in the database and in memory.
+      - `migrate-concurrent.test.ts`: three migrations at once all come up.
+    - **The cold review (FAIL)** led to:
+      - **A build ran for the disk model.** The selector's context names the model now.
+      - **Introspection and probes met the catch-up 503 unretried.** One send loop serves every path now.
+      - **The recorded revision could move backwards in a race.** The record only rises within a generation now, and the sync's same-generation reset is gone.
+      - **An older fetch could replace a newer cache entry.** It no longer can.
+      - **A metadata-DB error failed queries.** The last revision read stands now.
+      - **The retries were cut from five to three**, to stay inside a proxy's 60 s.
+      - **Tests added** for the `Retry-After` read, revision 0, `as()` and the build context.
+    - **A slip:** one test was appended to `meta-cache.test.ts` with a shell heredoc, against CLAUDE.md. The file was then edited through the Edit tool, so the quality check ran over it, and it passed.
+    - **Left:**
+      - AC-334 waits for T447's two-replica e2e against xcube. AC-319 waits for T447, T423 and T444 besides.
+      - Until the first sync records a revision, tokens name the model alone, and xcube answers `403 Unknown model` for a model never imported (Gotcha 6). T447 orders compose so the API's start sync comes first.
+      - The cache is keyed by the revision alone. After xcube's store is made again, an entry at the same number can outlive it by up to 60 s.
 - [x] T422 [P] (AC-319) Retry the web app's ~~idempotent requests~~ queries when an API replica or a Cube instance goes away
   - Files: ~~`packages/web/src/api/fetch.ts` (+ test),~~ `packages/web/src/query/loadTile.ts` (+ test), ~~`packages/api/src/server.ts`~~ `packages/api/src/cube/client.ts` (+ test) (a Cube transport failure answers 503, not 500)
   - Failing test: ~~`fetch.test.ts` and~~ `loadTile.test.ts` and `client.test.ts`:

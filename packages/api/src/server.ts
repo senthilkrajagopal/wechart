@@ -33,6 +33,7 @@ import { registerIntrospection } from './model/introspection';
 import type { Config } from './config';
 import { memoryDraftStore, type PublishDraftStore } from './model/drafts';
 import type { XcubeAdmin } from './xcube/client';
+import type { PublicationStore } from './xcube/publications';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, type ReferenceDocument } from './model/references';
 import { searchable, visibleCounts, type Visibility } from './access/visible';
@@ -74,6 +75,11 @@ export interface BuildOptions {
   readonly afterPublish?: () => Promise<unknown>;
   /** xcube's admin routes, for its check of a publish (T445), where xcube is configured. */
   readonly xcube?: XcubeAdmin;
+  /**
+   * What xcube last acknowledged of each model (T419), read for the revision
+   * every token to Cube names and the field list follows (T421, AC-334).
+   */
+  readonly publications?: PublicationStore;
   /** Signed-in sessions, with security on (T316): the metadata database. */
   readonly sessions?: SessionStore;
   /** Each folder's AD groups (T314, AC-259, AC-260). */
@@ -197,6 +203,7 @@ export function buildServer({
   drafts = memoryDraftStore(),
   afterPublish,
   xcube,
+  publications,
   folderAccess,
   healthFetch,
   logger = false,
@@ -250,6 +257,29 @@ export function buildServer({
    */
   // The Security workspace's: a Super-Admin's alone (T323, AC-265).
   app.get('/api/cube-auth', ADMIN, async () => authCheckOf(config.cubeApiUrl, healthFetch));
+  /**
+   * The model xcube serves this deployment, and the revision last recorded
+   * for it, read as each request is signed (T421, AC-334): an answer comes
+   * from that revision or a newer one, whichever replica recorded it.
+   */
+  const xcubeModel = config.xcube?.model;
+  // The last revision read stands while the record can't be read: reading it
+  // is never what breaks a chart (T421's review).
+  let lastRevision: number | undefined;
+  const model =
+    xcubeModel === undefined || publications === undefined
+      ? undefined
+      : {
+          id: xcubeModel,
+          revision: async () => {
+            try {
+              lastRevision = (await publications.get(xcubeModel))?.revision;
+            } catch (error) {
+              app.log.warn({ err: error }, 'could not read the revision xcube acknowledged');
+            }
+            return lastRevision;
+          },
+        };
   const client =
     cube ??
     new CubeClient({
@@ -261,11 +291,14 @@ export function buildServer({
         ...config.securityContext,
         ...(config.cubeStoreUrl === undefined ? {} : { wechartStore: config.cubeStoreUrl }),
       },
+      ...(model === undefined ? {} : { model }),
     });
 
   // Metadata is cached with a 60-second freshness bound (AC-009), so a
-  // dashboard opening many tiles issues one /v1/meta request, not one per tile.
-  const meta = metaCache ?? new MetaCache({ fetchMeta: () => client.meta() });
+  // dashboard opening many tiles issues one /v1/meta request, not one per tile;
+  // and fetched again as soon as the recorded revision changes (T421).
+  const metaOptions = model === undefined ? {} : { revision: model.revision };
+  const meta = metaCache ?? new MetaCache({ fetchMeta: () => client.meta(), ...metaOptions });
 
   /**
    * Cube as a request's user asks it (T322, AC-008): with security on, the
@@ -278,7 +311,7 @@ export function buildServer({
     security === 'oidc' ? client.as({ groups: userOf(request).groups }) : client;
   // And metadata per set of groups: access policies hide members per group.
   const metaByGroups = new MetaCachesByGroups(
-    (groups) => new MetaCache({ fetchMeta: () => client.as({ groups }).meta() }),
+    (groups) => new MetaCache({ fetchMeta: () => client.as({ groups }).meta(), ...metaOptions }),
   );
   const metaFor = (request: FastifyRequest): MetaCache =>
     security === 'oidc' ? metaByGroups.for(userOf(request).groups) : meta;

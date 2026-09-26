@@ -17,6 +17,13 @@ export const MAX_META_STALENESS_MS = 60_000;
 
 export interface MetaCacheOptions {
   readonly fetchMeta: () => Promise<unknown>;
+  /**
+   * The revision of the model xcube last acknowledged, as recorded (T421,
+   * AC-334): an entry fetched at an older one is fetched again at once, so a
+   * publish through another replica is seen as soon as it is recorded, not
+   * 60 s later. Absent, the 60-second bound alone.
+   */
+  readonly revision?: () => Promise<number | undefined>;
   /** Injected so tests can control the deadline exactly. */
   readonly now?: () => number;
   readonly maxStalenessMs?: number;
@@ -25,15 +32,19 @@ export interface MetaCacheOptions {
 interface Entry {
   readonly value: unknown;
   readonly fetchedAt: number;
+  /** The recorded revision it was fetched at (T421). */
+  readonly revision: number | undefined;
 }
 
 export class MetaCache {
   readonly #fetchMeta: () => Promise<unknown>;
   readonly #now: () => number;
   readonly #maxStalenessMs: number;
+  readonly #revision: (() => Promise<number | undefined>) | undefined;
 
   #entry: Entry | null = null;
-  #inFlight: Promise<unknown> | null = null;
+  #inFlight: { readonly value: Promise<unknown>; readonly revision: number | undefined } | null =
+    null;
   /** Bumped by `invalidate`: a fetch begun before it answers only those who waited on it. */
   #generation = 0;
 
@@ -41,18 +52,33 @@ export class MetaCache {
     this.#fetchMeta = options.fetchMeta;
     this.#now = options.now ?? Date.now;
     this.#maxStalenessMs = options.maxStalenessMs ?? MAX_META_STALENESS_MS;
+    this.#revision = options.revision;
   }
 
-  async meta(): Promise<unknown> {
+  meta(): Promise<unknown> {
+    // Read first where there's a revision to follow; otherwise at once, so a
+    // fetch this starts is in flight before the caller's next step (T143).
+    return this.#revision === undefined
+      ? this.#metaAt(undefined)
+      : this.#revision().then((revision) => this.#metaAt(revision));
+  }
+
+  #metaAt(revision: number | undefined): Promise<unknown> {
     const entry = this.#entry;
-    if (entry && this.#now() - entry.fetchedAt < this.#maxStalenessMs) {
-      return entry.value;
+    if (
+      entry &&
+      entry.revision === revision &&
+      this.#now() - entry.fetchedAt < this.#maxStalenessMs
+    ) {
+      return Promise.resolve(entry.value);
     }
 
     // One fetch serves every caller waiting on it, so a dashboard opening many
-    // tiles at once produces one request rather than one per tile.
-    this.#inFlight ??= this.#refresh();
-    return this.#inFlight;
+    // tiles at once produces one request rather than one per tile — at the
+    // same revision: one begun at an older one serves no one asking at a newer.
+    if (this.#inFlight === null || this.#inFlight.revision !== revision)
+      this.#inFlight = { value: this.#refresh(revision), revision };
+    return this.#inFlight.value;
   }
 
   /**
@@ -70,16 +96,24 @@ export class MetaCache {
     this.#generation += 1;
   }
 
-  async #refresh(): Promise<unknown> {
+  async #refresh(revision: number | undefined): Promise<unknown> {
     const generation = this.#generation;
     try {
       const value = await this.#fetchMeta();
-      if (generation === this.#generation) this.#entry = { value, fetchedAt: this.#now() };
+      // Never over a newer revision's answer: one begun at an older revision
+      // can answer last (T421's review).
+      const newer = this.#entry?.revision;
+      if (
+        generation === this.#generation &&
+        (newer === undefined || revision === undefined || revision >= newer)
+      )
+        this.#entry = { value, fetchedAt: this.#now(), revision };
       return value;
     } finally {
       // Cleared whether the fetch resolved or threw, so a failure is never
       // cached and the next caller tries again — unless a newer fetch holds it.
-      if (generation === this.#generation) this.#inFlight = null;
+      if (generation === this.#generation && this.#inFlight?.revision === revision)
+        this.#inFlight = null;
     }
   }
 }

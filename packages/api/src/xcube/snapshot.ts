@@ -87,17 +87,15 @@ export function modelSync({
         // at worst a conflict, never a revision built on content it lacks.
         const head = await admin.revision();
         // What's recorded follows xcube's store before anything is sent: a
-        // revision of an older store, or one it no longer holds, means nothing
-        // there (research, Gotcha 8; T419's review).
+        // revision of an older store means nothing there (research, Gotcha 8;
+        // T419's review). Within one store the record only rises (T421's
+        // review): a higher recorded revision there is another replica's
+        // publish, recorded after this read xcube's head, not one xcube lost.
         const recorded = await publications.get(model);
-        const holds = head.current?.revision ?? 0;
-        if (
-          recorded !== undefined &&
-          (recorded.generation !== head.generation || recorded.revision > holds)
-        )
+        if (recorded !== undefined && recorded.generation !== head.generation)
           await publications.put(model, {
             generation: head.generation,
-            revision: holds,
+            revision: head.current?.revision ?? 0,
             contentHash: head.current?.contentHash ?? '',
           });
         const published = plainYamlOf(await files());

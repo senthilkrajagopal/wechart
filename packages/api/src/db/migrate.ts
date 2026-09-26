@@ -37,6 +37,14 @@ export async function migrateToLatest(): Promise<void> {
     dir: migrationsDir(),
     direction: 'up',
     migrationsTable: 'pgmigrations',
+    advisoryLockMode: migrationLockMode,
     log: () => {},
   });
 }
+
+/**
+ * Replicas starting at once wait for one another's migrations rather than
+ * throwing "Another migration is already running", node-pg-migrate's default
+ * (T421, AC-319; research `cube/ha-topology.md`, table row 6).
+ */
+export const migrationLockMode = 'wait' as const;
