@@ -5765,10 +5765,37 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.12 Markings (F10, F11, returned)
 
-- [ ] T386 [P] (AC-093) Mark a continuous range by dragging along an axis
-  - Files: `packages/charts/src/marks/range.ts` (+ test), `packages/web/src/dashboard/markings/*`, `e2e/markings.spec.ts`
+- [x] T386 [P] (AC-093) Mark a continuous range by dragging along an axis
+  - Files: ~~`packages/charts/src/marks/range.ts` (+ test), `packages/web/src/dashboard/markings/*`~~ `packages/core/src/markings/{model,buckets,predicate,query,limit}.ts` (+ tests), `packages/charts/src/interaction/axisRange.ts` (+ test), `packages/web/src/dashboard/settings/MarkingsSettings.tsx` (+ test), `packages/web/src/tiles/{ChartCanvas,ChartTile}.tsx`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/shell/styles.ts`, `docs/research/echarts-axis-pixels.md`, `e2e/markings.spec.ts`
   - Failing test: `markings.spec.ts`: in range mode, a drag along the x axis marks the range, draws a coloured stripe on the axis, and the bounds stay when a filter changes (AC-093).
   - Depends on: none
+  - **Done 2026-09-26.**
+    - **Range mode is per marking.** It is set in Settings › Markings, under "Marking mode": "Items" or "Range-based", Spotfire's words, which R7 keeps. A marking stores `mode: 'range'`, and one without it marks items, as every marking did before.
+    - **Where a range can be dragged.** On a tile whose marking is range-based, and whose x axis is a time dimension drawn one band per bucket: bar, grouped and stacked bar, line, multi-line, area, stacked area and combo.
+      - A drag there marks from the bucket under its start to the bucket under its end, at the chart's grain. Ctrl or ⌘ adds a range. It is announced like any marking change.
+      - Elsewhere, a range-based marking marks by click and shape, as before.
+    - **The stripe.** It is drawn over the x axis in the marking's colour, from the stored bounds alone (`bucketStripeFor`). A filter that takes buckets away shortens it and never moves the bounds.
+    - **Phase 1's range helpers are now wired:** `rangeFromDrag`, `applyAxisRange`, `stripeFor`, and the range's `inDateRange` filter for limited tiles.
+    - **What the tests show.**
+      - `model.test.ts`: the mode, set and kept through a rename or recolour.
+      - `axisRange.test.ts`: the stripe spans the buckets inside the bounds, and those left after a filter; a drag's ends read as buckets, and an end that can't be placed is none.
+      - `predicate.test.ts`, `invert.test.ts`: covered by the review fixes below.
+      - `MarkingsSettings.test.tsx`: the control.
+      - `e2e/markings.spec.ts` (Chrome): on a range-based marking over orders by month, the tile takes a drag as a span. The drag leaves a stripe from its first bucket to a later one. After a status filter, with the chart asked again, the stored bounds on the stripe and the chip's words are unchanged.
+    - **The cold review (PASS)** found these, all fixed:
+      - A range drag selected the axis text. The no-select rule now covers `data-marks-range`.
+      - A range was drawn, and matched rows, only to its last bucket's *start*, while the filter it becomes reached that bucket's end. So a month range showed on a day-grain tile only to the 1st. Now all three use the end of the last bucket at the range's own grain (`rangeEndOf`, in the new `buckets.ts` that `query.ts` shares).
+      - Invert marked everything on a range-marked tile. A range over the tile's own axis now comes off, and what lay outside it is marked.
+      - Stripes showed on tiles the marking isn't linked to.
+      - The drag's ends had no NaN guard.
+      - The ECharts behaviour relied on had no source, so `echarts-axis-pixels.md` records it, observed.
+      - The e2e waits for the filtered query.
+    - **Left, for the user or later:**
+      - The stripe has no drag handles to move or resize a range (references-markings rule 30).
+      - A numeric dimension's axis takes no range.
+      - A tile's badge counts a range as one item.
+      - The stripe sits on the grid's bottom edge, which misses an axis drawn at zero among negative values.
+    - AC-093 is ticked.
 - [ ] T387 [P] (AC-097) Draw a partly marked item: the marked share for additive measures, a pattern for the others
   - Files: `packages/charts/src/marks/partial.ts` (+ test)
   - Failing test: `partial.test.ts`: a partly marked sum draws the marked share from the baseline at full strength and fades the rest; an average or distinct count draws the whole item patterned, with marked and total values in the tooltip (AC-097).

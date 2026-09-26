@@ -37,7 +37,15 @@ export {
 export { insideShape, touchesSpan, type Point, type Shape } from './interaction/hitTest';
 export { itemsInShape, type PixelConverter, type ShapeItem } from './interaction/itemsInShape';
 export { dragGesture, type DragEvent, type DragGesture } from './interaction/dragOverlay';
-export { stripeFor, type AxisPixels, type Stripe } from './interaction/axisRange';
+export {
+  bucketRangeAt,
+  bucketStripeFor,
+  edgeBetween,
+  stripeFor,
+  type AxisPixels,
+  type BucketAxis,
+  type Stripe,
+} from './interaction/axisRange';
 export { markFromLegend, type LegendModifiers } from './interaction/legendMark';
 export {
   keyToMarking,

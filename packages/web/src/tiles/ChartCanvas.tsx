@@ -1,7 +1,10 @@
 import {
+  bucketRangeAt,
+  bucketStripeFor,
   CLICK_SLOP_PX,
   dragGesture,
   echarts,
+  edgeBetween,
   focusedItemOf,
   itemClicks,
   itemsInShape,
@@ -11,7 +14,8 @@ import {
   type EChartsOption,
   type Point,
 } from '@wechart/charts';
-import { seriesOf, type RenderSpec } from '@wechart/core';
+import { seriesOf, type MarkingSlot, type RenderSpec } from '@wechart/core';
+import { COLORS } from '@wechart/ui';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { clickedName, type ClickedItem } from '../dashboard/crossfilter/clicked';
@@ -44,6 +48,24 @@ export interface ChartCanvasProps {
    */
   readonly onShapeMark?: ((items: readonly ClickedItem[], toggle: boolean) => void) | undefined;
   /**
+   * A drag along the x axis, where the tile's marking is in range mode (T386,
+   * AC-093): the buckets under its two ends, and whether Ctrl or ⌘ was held,
+   * which adds a range rather than replacing the marking. In place of
+   * `onShapeMark`: in range mode a drag marks a span of the axis, not a shape.
+   */
+  readonly onAxisRange?: ((range: { from: string; to: string }, add: boolean) => void) | undefined;
+  /**
+   * The marked ranges to show as coloured stripes along the x axis (AC-093),
+   * each in its marking's colour, placed from their stored bounds alone.
+   */
+  readonly rangeStripes?:
+    | readonly {
+        readonly from: string | number;
+        readonly to: string | number;
+        readonly slot: MarkingSlot;
+      }[]
+    | undefined;
+  /**
    * A right-click on the chart (T266, AC-246): the tile's menu opens at the
    * pointer, and the browser's own menu does not. Absent, the browser's does.
    */
@@ -52,12 +74,25 @@ export interface ChartCanvasProps {
 
 const DEFAULT_HEIGHT = 320;
 const SVG_NS = 'http://www.w3.org/2000/svg';
+/** How thick a marked range's stripe is drawn over the x axis (T386). */
+const STRIPE_PX = 6;
+
+/** The x axis's categories, where it is a category axis: the buckets a range spans. */
+function xCategoriesOf(option: EChartsOption): readonly string[] | undefined {
+  const axes = option.xAxis;
+  const first = (Array.isArray(axes) ? axes[0] : axes) as
+    { type?: unknown; data?: unknown } | undefined;
+  if (first?.type !== 'category' || !Array.isArray(first.data)) return undefined;
+  return first.data.map(String);
+}
 
 export function ChartCanvas({
   spec,
   height = DEFAULT_HEIGHT,
   onItemClick,
   onShapeMark,
+  onAxisRange,
+  rangeStripes,
   onContextMenuAt,
 }: ChartCanvasProps) {
   /** The page's theme, which the chart is drawn in (AC-211). */
@@ -97,6 +132,11 @@ export function ChartCanvas({
   useEffect(() => {
     shaped.current = onShapeMark;
   }, [onShapeMark]);
+  /** The latest, read at the end of a drag along the axis (T386). */
+  const ranged = useRef(onAxisRange);
+  useEffect(() => {
+    ranged.current = onAxisRange;
+  }, [onAxisRange]);
   /**
    * Whether the press under way has become a drag (AC-088): its release is
    * then the end of a shape, never a click on empty plot area that would
@@ -253,6 +293,19 @@ export function ChartCanvas({
     /** Ctrl or ⌘ held at the release: add or toggle, not replace (AC-089). */
     let toggleOnRelease = false;
     const gesture = dragGesture((shape) => {
+      /**
+       * In range mode (T386, AC-093): the buckets under the drag's two ends,
+       * read off the x axis as drawn (`convertFromPixel`, research/echarts.md).
+       */
+      const onRange = ranged.current;
+      if (onRange !== undefined) {
+        const categories = xCategoriesOf(chart.getOption() as EChartsOption);
+        if (categories === undefined || shape.kind !== 'rect') return;
+        const indexAt = (x: number) => Number(chart.convertFromPixel({ xAxisIndex: 0 }, x));
+        const range = bucketRangeAt(categories, indexAt(shape.x0), indexAt(shape.x1));
+        if (range !== undefined) onRange(range, toggleOnRelease);
+        return;
+      }
       const items = itemsInShape(chart, chart.getOption() as EChartsOption, shape);
       shaped.current?.(
         items.map(({ name, seriesName }) => ({ name, seriesName })),
@@ -276,7 +329,13 @@ export function ChartCanvas({
         ? window.document.createElementNS(SVG_NS, 'polygon')
         : window.document.createElementNS(SVG_NS, 'rect');
       if (lasso) outline.setAttribute('points', path.map((point) => point.join(',')).join(' '));
-      else {
+      else if (ranged.current !== undefined) {
+        // A span of the axis, the whole height of the chart (T386).
+        outline.setAttribute('x', String(Math.min(first[0], last[0])));
+        outline.setAttribute('y', '0');
+        outline.setAttribute('width', String(Math.abs(last[0] - first[0])));
+        outline.setAttribute('height', String(element.clientHeight));
+      } else {
         outline.setAttribute('x', String(Math.min(first[0], last[0])));
         outline.setAttribute('y', String(Math.min(first[1], last[1])));
         outline.setAttribute('width', String(Math.abs(last[0] - first[0])));
@@ -346,10 +405,12 @@ export function ChartCanvas({
     };
     element.addEventListener('contextmenu', onContextMenu);
     const onPress = (event: MouseEvent) => {
-      if (event.button !== 0 || shaped.current === undefined) return;
+      if (event.button !== 0 || (shaped.current === undefined && ranged.current === undefined))
+        return;
       const box = element.getBoundingClientRect();
       origin = { left: box.left, top: box.top };
-      lasso = event.altKey;
+      // A range is a span, never a lasso.
+      lasso = event.altKey && ranged.current === undefined;
       dragging.current = false;
       const [x, y] = local(event);
       path = [[x, y]];
@@ -408,6 +469,66 @@ export function ChartCanvas({
     }
   }, [spec, theme, canvas]);
 
+  /**
+   * The marked ranges' stripes along the x axis (T386, AC-093; direction.md
+   * rule 30 of §7a), drawn over the chart as DOM, as a shape being dragged is,
+   * after the option above: each from its stored bounds (`bucketStripeFor`),
+   * so a filter that takes buckets away shortens a stripe and never moves it.
+   * The grid is found by the chart's own `containPixel` (research/echarts.md).
+   */
+  useLayoutEffect(() => {
+    const element = node.current;
+    const chart = instance.current;
+    if (element === null) return undefined;
+    const layer = window.document.createElement('div');
+    layer.className = 'range-stripes';
+    layer.setAttribute('aria-hidden', 'true');
+    const drawn = () => {
+      if (chart === null || chart.isDisposed() || canvas === null) return;
+      if (rangeStripes === undefined || rangeStripes.length === 0) return;
+      const categories = xCategoriesOf(chart.getOption() as EChartsOption);
+      if (categories === undefined || categories.length === 0) return;
+      const centreOf = (index: number) =>
+        Number(chart.convertToPixel({ xAxisIndex: 0 }, categories[index] ?? ''));
+      const [width, height] = [element.clientWidth, element.clientHeight];
+      const midX = centreOf(Math.floor(categories.length / 2));
+      const midY = height / 2;
+      const inGrid = (x: number, y: number) => chart.containPixel({ gridIndex: 0 }, [x, y]);
+      if (!Number.isFinite(midX) || !inGrid(midX, midY)) return;
+      const bottom = edgeBetween((y) => inGrid(midX, y), midY, height);
+      const extent = {
+        from: edgeBetween((x) => inGrid(x, midY), midX, 0),
+        to: edgeBetween((x) => inGrid(x, midY), midX, width),
+      };
+      for (const range of rangeStripes) {
+        const stripe = bucketStripeFor(
+          { member: '', from: range.from, to: range.to },
+          { categories, centreOf, extent, orientation: 'horizontal' },
+          range.slot,
+        );
+        if (stripe === null) continue;
+        const bar = window.document.createElement('div');
+        bar.className = 'range-stripe';
+        bar.dataset['testid'] = 'range-stripe';
+        bar.dataset['from'] = String(range.from);
+        bar.dataset['to'] = String(range.to);
+        Object.assign(bar.style, {
+          left: `${String(stripe.start)}px`,
+          width: `${String(stripe.end - stripe.start)}px`,
+          top: `${String(bottom - STRIPE_PX / 2)}px`,
+          height: `${String(STRIPE_PX)}px`,
+          background: COLORS[theme][range.slot],
+        });
+        layer.appendChild(bar);
+      }
+    };
+    drawn();
+    element.appendChild(layer);
+    return () => {
+      layer.remove();
+    };
+  }, [spec, theme, canvas, rangeStripes]);
+
   return (
     /**
      * `jsx-a11y/no-static-element-interactions` asks for a role and a
@@ -432,6 +553,8 @@ export function ChartCanvas({
       // Positioned, so a shape being dragged is drawn over the chart (AC-088).
       style={{ height: `${String(height)}px`, width: '100%', position: 'relative' }}
       data-marks-shapes={onShapeMark === undefined ? undefined : 'true'}
+      // A drag marks a span of the x axis, in a marking's range mode (T386).
+      data-marks-range={onAxisRange === undefined ? undefined : 'true'}
       /**
        * Mouse events, not pointer events: `pointerup` fires *before*
        * `mouseup`, so on a pointer release the series handler would not yet

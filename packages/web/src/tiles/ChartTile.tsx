@@ -37,6 +37,10 @@ export interface ChartTileProps {
   readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
   /** A shape dragged over the chart, where the tile marks (AC-088, AC-089). */
   readonly onShapeMark?: ChartCanvasProps['onShapeMark'];
+  /** A drag along the x axis, where the tile's marking is in range mode (T386, AC-093). */
+  readonly onAxisRange?: ChartCanvasProps['onAxisRange'];
+  /** The marked ranges shown as stripes along the x axis (AC-093). */
+  readonly rangeStripes?: ChartCanvasProps['rangeStripes'];
   /** A right-click on the chart: its menu, at the pointer (T266, AC-246). */
   readonly onContextMenuAt?: ChartCanvasProps['onContextMenuAt'];
   /** Marking this tile's rows, where it draws a table (AC-092). */
@@ -100,6 +104,8 @@ interface ChartBodyProps {
   readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
   /** A shape dragged over it, while the tile marks (AC-088). */
   readonly onShapeMark?: ChartCanvasProps['onShapeMark'];
+  readonly onAxisRange?: ChartCanvasProps['onAxisRange'];
+  readonly rangeStripes?: ChartCanvasProps['rangeStripes'];
   readonly onContextMenuAt?: ChartCanvasProps['onContextMenuAt'];
   /**
    * Marking this tile's rows, where it draws a table and the cube has a
@@ -120,6 +126,8 @@ function ChartBody({
   height,
   onItemClick,
   onShapeMark,
+  onAxisRange,
+  rangeStripes,
   onContextMenuAt,
   rowMarking,
 }: ChartBodyProps) {
@@ -151,6 +159,8 @@ function ChartBody({
       {...(height === undefined ? {} : { height })}
       {...(onItemClick === undefined ? {} : { onItemClick })}
       {...(onShapeMark === undefined ? {} : { onShapeMark })}
+      {...(onAxisRange === undefined ? {} : { onAxisRange })}
+      {...(rangeStripes === undefined ? {} : { rangeStripes })}
       {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
     />
   );
@@ -168,6 +178,8 @@ export function ChartTile({
   served,
   onItemClick,
   onShapeMark,
+  onAxisRange,
+  rangeStripes,
   onContextMenuAt,
   rowMarking,
   badge,
@@ -303,6 +315,8 @@ export function ChartTile({
           {...(height === undefined ? {} : { height })}
           {...(onItemClick === undefined ? {} : { onItemClick })}
           {...(onShapeMark === undefined ? {} : { onShapeMark })}
+          {...(onAxisRange === undefined ? {} : { onAxisRange })}
+          {...(rangeStripes === undefined ? {} : { rangeStripes })}
           {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
         />

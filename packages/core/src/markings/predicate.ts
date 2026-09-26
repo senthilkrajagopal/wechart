@@ -16,6 +16,8 @@
  * range-based marking, kept because "bounds are symbolic" in the same way.
  */
 
+import { rangeEndOf } from './buckets';
+
 /** One member, optionally at a granularity, equal to one value. */
 export interface MemberValue {
   /** A Cube member name, such as `orders.status`. */
@@ -227,7 +229,9 @@ export function matchesPredicate(
     if (typeof value === 'number' && typeof range.from === 'number') {
       return value >= range.from && value <= Number(range.to);
     }
-    if (typeof value === 'string') return value >= String(range.from) && value <= String(range.to);
+    // To the end of its last bucket, at the grain it was marked at (T386's review).
+    if (typeof value === 'string')
+      return value >= String(range.from) && value <= String(rangeEndOf(range));
     return false;
   };
 

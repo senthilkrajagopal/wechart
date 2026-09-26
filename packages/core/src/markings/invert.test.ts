@@ -66,6 +66,40 @@ describe('Invert marking on one tile (AC-115)', () => {
   });
 });
 
+/**
+ * T386's review: a range dragged along the tile's own axis (AC-093) is this
+ * tile's marking. Inverting takes it off and marks what lay outside it; kept,
+ * the range and the items outside it together marked everything.
+ */
+describe('Invert marking on a tile marked by a range (T386)', () => {
+  const MONTH = (value: string): MarkedItem => [{ member: 'orders.ordered_at', value }];
+  const MONTHS = ['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01'].map(MONTH);
+  const RANGED: MarkingPredicate = {
+    items: [category('Instruments')],
+    ranges: [{ member: 'orders.ordered_at', from: '2026-02-01', to: '2026-03-01' }],
+  };
+
+  it('takes the range off, marks what lay outside it, and keeps another tile’s', () => {
+    const { predicate } = invertTileItems(RANGED, 'tile-months', MONTHS);
+    expect(predicate.ranges).toEqual([]);
+    expect(predicate.items).toEqual([
+      category('Instruments'),
+      MONTH('2026-01-01'),
+      MONTH('2026-04-01'),
+    ]);
+  });
+
+  it('keeps a range over a member the tile doesn’t draw', () => {
+    const elsewhere: MarkingPredicate = {
+      items: [],
+      ranges: [{ member: 'orders.shipped_at', from: '2026-02-01', to: '2026-03-01' }],
+    };
+    expect(invertTileItems(elsewhere, 'tile-months', MONTHS).predicate.ranges).toEqual(
+      elsewhere.ranges,
+    );
+  });
+});
+
 describe('Mark all on one tile, stored as its filter (AC-115, AC-102)', () => {
   it('stores the tile’s filter and its count, not a list; another tile’s kept', () => {
     const { predicate, refused } = markAllOfTile(MARKED, 't1', [REGION], TILE);

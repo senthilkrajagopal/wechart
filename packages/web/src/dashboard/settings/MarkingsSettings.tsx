@@ -2,10 +2,13 @@ import {
   addMarking,
   canAddMarking,
   MARKING_SLOTS,
+  markingModeOf,
   markingsFrom,
   renameMarking,
+  setMarkingMode,
   setMarkingSlot,
   type Marking,
+  type MarkingMode,
   type MarkingSlot,
 } from '@wechart/core';
 import { COLORS } from '@wechart/ui';
@@ -77,6 +80,7 @@ export function MarkingsSettings({ document, onChange, titleOf }: MarkingsSettin
           <tr>
             <th scope="col">Colour</th>
             <th scope="col">Name</th>
+            <th scope="col">Marking mode</th>
             <th scope="col">Default</th>
             <th scope="col">Used by</th>
             <th scope="col">
@@ -123,6 +127,24 @@ export function MarkingsSettings({ document, onChange, titleOf }: MarkingsSettin
                       withMarkings(renameMarking(markings, marking.id, event.target.value))
                     }
                   />
+                </td>
+                <td>
+                  {/* Items, or a range dragged along an axis (T386, AC-093), in
+                      Spotfire's words ("Marking mode > Range-based"), which R7
+                      keeps; set per marking. */}
+                  <select
+                    className="select-sm"
+                    aria-label={`Marking mode of ${marking.name}`}
+                    value={markingModeOf(marking)}
+                    onChange={(event) =>
+                      withMarkings(
+                        setMarkingMode(markings, marking.id, event.target.value as MarkingMode),
+                      )
+                    }
+                  >
+                    <option value="items">Items</option>
+                    <option value="range">Range-based</option>
+                  </select>
                 </td>
                 <td>
                   <label className="marking-default">

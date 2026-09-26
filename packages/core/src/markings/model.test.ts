@@ -6,8 +6,10 @@ import {
   addMarking,
   canAddMarking,
   defaultMarkings,
+  markingModeOf,
   markingsFrom,
   problemsWith,
+  setMarkingMode,
   removeMarking,
   renameMarking,
   setDefaultMarking,
@@ -261,5 +263,31 @@ describe('renaming and recolouring a marking (AC-198)', () => {
     const three = addMarking(addMarking(defaultMarkings()));
     const left = removeMarking(three, three[1]?.id ?? '');
     expect(named(addMarking(left))).toEqual(['Marking', 'Marking 3', 'Marking 4']);
+  });
+});
+
+/**
+ * T386, AC-093: WHILE a marking is in range mode, a drag along an axis marks a
+ * continuous range (references-markings.md: Spotfire's "Marking mode >
+ * Range-based", set per marking).
+ */
+describe('a marking’s mode (T386, AC-093)', () => {
+  it('marks items until set to range mode, one marking at a time', () => {
+    const two = addMarking(defaultMarkings());
+    expect(two.map(markingModeOf)).toEqual(['items', 'items']);
+
+    const ranged = setMarkingMode(two, 'mk2', 'range');
+    expect(ranged.map(markingModeOf)).toEqual(['items', 'range']);
+    expect(problemsWith(ranged)).toEqual([]);
+
+    // And back: items is no mode stored at all, as a marking made before modes.
+    const back = setMarkingMode(ranged, 'mk2', 'items');
+    expect(back[1]).toEqual(two[1]);
+  });
+
+  it('keeps its mode when it is renamed or recoloured', () => {
+    const ranged = setMarkingMode(defaultMarkings(), 'mk1', 'range');
+    expect(markingModeOf(renameMarking(ranged, 'mk1', 'Periods')[0]!)).toBe('range');
+    expect(markingModeOf(setMarkingSlot(ranged, 'mk1', 'mk3')[0]!)).toBe('range');
   });
 });

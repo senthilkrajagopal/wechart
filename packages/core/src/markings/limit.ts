@@ -112,7 +112,9 @@ const markedWhole = (predicate: MarkingPredicate, tileId: string) =>
  * marked come off and the unmarked go on — within the cap (AC-102), since
  * this adds a list. A tile marked whole has no unmarked item, so it inverts
  * to none of it. Items another tile contributed are not the tile's, and stay
- * as they are; so do ranges.
+ * as they are; so do ranges over members the tile doesn't draw. A range over
+ * the tile's own member (AC-093) is its marking, and goes, as its marked
+ * items do (T386's review).
  */
 export function invertTileItems(
   predicate: MarkingPredicate,
@@ -127,8 +129,9 @@ export function invertTileItems(
   const drawnMarked = (item: MarkedItem) =>
     isItemMarked(predicate, item) ||
     matchesPredicate(rest, Object.fromEntries(item.map((part) => [part.member, part.value])));
+  const drawn = new Set(tileItems.flatMap((item) => item.map((part) => part.member)));
   return addItemsWithinLimit(
-    rest,
+    { ...rest, ranges: rest.ranges.filter((range) => !drawn.has(range.member)) },
     tileItems.filter((item) => !drawnMarked(item)),
   );
 }

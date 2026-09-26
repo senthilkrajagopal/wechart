@@ -3125,3 +3125,123 @@ test('a click while editing selects the tile and leaves the marking as it was', 
   await expect(chip).toContainText('shipped');
   for (const clicked of ['completed', 'Instruments']) await expect(chip).not.toContainText(clicked);
 });
+
+/**
+ * T386 / AC-093: WHILE a marking is in range mode, THE SYSTEM SHALL let the
+ * user drag along an axis to mark a continuous range, show it as a coloured
+ * stripe on that axis, and keep its bounds when filters change.
+ * `Fails when: the stripe does not appear, or the bounds move when a filter
+ * changes.`
+ *
+ * Orders by month, on a dashboard whose one marking is in range mode, with a
+ * status filter to change afterwards.
+ */
+test('in range mode a drag along the time axis marks its buckets, striped on the axis, and the bounds hold when a filter changes', async ({
+  page,
+  request,
+}) => {
+  const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const title = `Ranges ${unique}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  const chart = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'chart', title: 'By month', folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  await request.put(`${API}/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: 'By month',
+        owner: 'admin',
+        localToDashboardId: dashboard.id,
+        chart: {
+          source: { cube: 'orders' },
+          wells: {
+            measures: ['orders.count'],
+            dimensions: [],
+            timeDimensions: ['orders.ordered_at'],
+          },
+          granularities: { 'orders.ordered_at': 'month' },
+          chartType: 'bar',
+        },
+      },
+    },
+  });
+  await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed', interactions: { mode: 'markings' } },
+        markings: [{ id: 'm1', name: 'Periods', slot: 'mk1', isDefault: true, mode: 'range' }],
+        filters: [{ id: 'f-status', widget: 'checkbox', member: 'orders.status' }],
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [{ id: 'tile-months', kind: 'chart', w: 12, h: 40, chartId: chart.id }],
+          },
+        ],
+      },
+    },
+  });
+
+  await page.goto(`/explore/dashboards/${dashboard.id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const months = tile(page, 'tile-months');
+  const canvas = months.getByTestId('chart-canvas');
+  await expect(canvas.locator('svg text').first()).toBeVisible();
+  // It takes a drag as a span of its axis, not a shape.
+  await expect(canvas).toHaveAttribute('data-marks-range', 'true');
+  const box = (await canvas.boundingBox())!;
+
+  // Along the axis, left to right, across the middle of the plot.
+  const y = box.y + box.height * 0.5;
+  await page.mouse.move(box.x + box.width * 0.35, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.5, y, { steps: 5 });
+  await page.mouse.move(box.x + box.width * 0.7, y, { steps: 5 });
+  await page.mouse.up();
+
+  // A stripe on the axis, over two months or more.
+  const stripe = months.getByTestId('range-stripe');
+  await expect(stripe).toBeVisible();
+  const from = await stripe.getAttribute('data-from');
+  const to = await stripe.getAttribute('data-to');
+  expect(from).not.toBeNull();
+  expect(from! < to!).toBe(true);
+  const chip = page.getByTestId('mark-chip');
+  await expect(chip).toBeVisible();
+  const said = await chip.textContent();
+
+  // A filter changes what the chart shows: the bounds stay where they were.
+  const status = page.getByRole('region', { name: 'Filters' }).locator('[data-widget="checkbox"]');
+  await status.locator('button[aria-expanded]').click();
+  // The chart asked again with the filter, and drawn from that answer
+  // (T386's review: not the render from before it).
+  const refiltered = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/load') &&
+      JSON.stringify(response.request().postDataJSON()).includes('orders.status'),
+  );
+  await page
+    .getByRole('region', { name: 'Filters' })
+    .getByRole('checkbox', { name: 'shipped' })
+    .check();
+  expect((await refiltered).status()).toBe(200);
+  await page.keyboard.press('Escape');
+  await expect(months.getByTestId('chart-tile')).not.toHaveAttribute('aria-busy', 'true');
+  await expect(stripe).toBeVisible();
+  expect(await stripe.getAttribute('data-from')).toBe(from);
+  expect(await stripe.getAttribute('data-to')).toBe(to);
+  await expect(chip).toHaveText(said!);
+});

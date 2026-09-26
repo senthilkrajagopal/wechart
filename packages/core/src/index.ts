@@ -114,6 +114,7 @@ export {
   type AxisDrag,
   type RangeModifiers,
 } from './markings/range';
+export { rangeEndOf } from './markings/buckets';
 
 export { markingApplicability, type Applicability } from './markings/applicability';
 
@@ -162,13 +163,16 @@ export {
   addMarking,
   canAddMarking,
   defaultMarkings,
+  markingModeOf,
   markingsFrom,
   problemsWith,
   removeMarking,
   renameMarking,
   setDefaultMarking,
+  setMarkingMode,
   setMarkingSlot,
   type Marking,
+  type MarkingMode,
   type MarkingSlot,
 } from './markings/model';
 

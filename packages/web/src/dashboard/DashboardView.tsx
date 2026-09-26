@@ -10,9 +10,12 @@ import {
   MARKING_ITEM_LIMIT,
   OTHER_LABEL,
   type MarkedItem,
+  applyAxisRange,
   applyItemClick,
   applyToggleOrAdd,
   isItemMarked,
+  markingModeOf,
+  rangeFromDrag,
   matchesPredicate,
   rowsCsvOf,
   EMPTY_PREDICATE,
@@ -509,6 +512,8 @@ function TileBody({
   canEditChart = false,
   onItemClick,
   onShapeMark,
+  onAxisRange,
+  rangeStripes,
   onContextMenuAt,
   rowMarking,
   limited,
@@ -541,6 +546,10 @@ function TileBody({
   onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
   /** A shape dragged over its chart, while it marks (AC-088, AC-089). */
   onShapeMark?: ChartTileProps['onShapeMark'];
+  /** A drag along its x axis, in a marking's range mode (T386, AC-093). */
+  onAxisRange?: ChartTileProps['onAxisRange'];
+  /** Its marking's ranges, striped along its x axis (AC-093). */
+  rangeStripes?: ChartTileProps['rangeStripes'];
   /** A right-click on its chart: its menu, at the pointer (T266, AC-246). */
   onContextMenuAt?: ChartTileProps['onContextMenuAt'];
   /** Marking its rows, where it draws a table (AC-092). */
@@ -708,6 +717,8 @@ function TileBody({
           {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
           {...(onItemClick === undefined ? {} : { onItemClick })}
           {...(onShapeMark === undefined ? {} : { onShapeMark })}
+          {...(onAxisRange === undefined ? {} : { onAxisRange })}
+          {...(rangeStripes === undefined ? {} : { rangeStripes })}
           {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
         />
@@ -815,6 +826,22 @@ interface TileCharts {
    * nothing (T190 stage 7's review, `dragOverlay.ts`'s own failing state).
    */
   readonly marksShapes?: ((tileId: string, chartId: string) => boolean) | undefined;
+  /**
+   * A drag along a tile's x axis, where its marking is in range mode and the
+   * axis is a time dimension's buckets (T386, AC-093): the buckets under its
+   * ends, and whether Ctrl or ⌘ was held. `rangeMarks` says which tiles take it.
+   */
+  readonly onMarkRange?:
+    | ((tileId: string, chartId: string, range: { from: string; to: string }, add: boolean) => void)
+    | undefined;
+  readonly rangeMarks?: ((tileId: string, chartId: string) => boolean) | undefined;
+  /** The marked ranges to stripe along a tile's x axis (AC-093). */
+  readonly rangeStripesOn?:
+    | ((
+        tileId: string,
+        chartId: string,
+      ) => readonly { from: string | number; to: string | number; slot: MarkingSlot }[] | undefined)
+    | undefined;
   /**
    * Open a tile's menu (T266, AC-246): at the pointer of a right-click on
    * its chart, or — from Shift+F10 or the Menu key — at the tile.
@@ -1491,13 +1518,31 @@ function Elements({
                   })}
               {...(charts.onMarkShape === undefined ||
               drill !== undefined ||
-              charts.marksShapes?.(element.id, chartId) !== true
+              charts.marksShapes?.(element.id, chartId) !== true ||
+              // In range mode a drag marks a span of the axis instead (T386).
+              charts.rangeMarks?.(element.id, chartId) === true
                 ? {}
                 : {
                     onShapeMark: (items: readonly ClickedItem[], toggle: boolean) => {
                       charts.onMarkShape?.(element.id, chartId, items, toggle);
                     },
                   })}
+              {...(charts.onMarkRange === undefined ||
+              drill !== undefined ||
+              charts.rangeMarks?.(element.id, chartId) !== true
+                ? {}
+                : {
+                    onAxisRange: (range: { from: string; to: string }, add: boolean) => {
+                      charts.onMarkRange?.(element.id, chartId, range, add);
+                    },
+                  })}
+              {...(() => {
+                const stripes =
+                  drill === undefined ? charts.rangeStripesOn?.(element.id, chartId) : undefined;
+                return stripes === undefined || stripes.length === 0
+                  ? {}
+                  : { rangeStripes: stripes };
+              })()}
               {...(charts.onTileMenu === undefined
                 ? {}
                 : {
@@ -1851,6 +1896,22 @@ function numberedPast(from: number, filters: readonly { readonly id: string }[])
     from,
   );
 }
+
+/**
+ * The charts that draw their x member along a vertical chart's category axis,
+ * one band per value: those a range can be dragged along (T386, AC-093). Not a
+ * horizontal bar, whose categories run down the y axis.
+ */
+const RANGE_TYPES: ReadonlySet<ChartType> = new Set<ChartType>([
+  'bar',
+  'groupedBar',
+  'stackedBar',
+  'line',
+  'multiLine',
+  'area',
+  'stackedArea',
+  'combo',
+]);
 
 function markingColour(slot: MarkingSlot, theme: 'light' | 'dark'): string {
   return COLORS[theme][slot];
@@ -3307,6 +3368,80 @@ export function DashboardView({
       !['pie', 'donut', 'treemap', 'kpi', 'table', 'pivot'].includes(type)
     );
   };
+
+  /**
+   * The x axis a range-mode drag marks along (T386, AC-093): a time
+   * dimension's buckets, on a chart that draws them along a vertical chart's
+   * category axis, where the tile's marking is in range mode. Nothing
+   * elsewhere: a category of words has no span between two of its values.
+   */
+  const rangeAxisOf = (tileId: string, chartId: string) => {
+    if (!marksShapes(tileId, chartId)) return undefined;
+    const tile = elementAt(live, tileId);
+    const markingId = tile !== null && isTile(tile) ? marksWithOf(tile) : undefined;
+    const marking = markings.find((each) => each.id === markingId);
+    const spec = drawn.specs[chartId];
+    if (marking === undefined || markingModeOf(marking) !== 'range' || spec === undefined)
+      return undefined;
+    if (!RANGE_TYPES.has(spec.chartType)) return undefined;
+    const member = memberOn(spec.encoding, 'x');
+    const granularity = member === undefined ? undefined : spec.granularities?.[member];
+    return member === undefined || granularity === undefined
+      ? undefined
+      : { member, granularity, marking };
+  };
+  const rangeMarks = (tileId: string, chartId: string) =>
+    rangeAxisOf(tileId, chartId) !== undefined;
+
+  /**
+   * A drag along a tile's axis in range mode (T386, AC-093): the buckets
+   * between its ends, bounds that stay as they are whatever the filters do.
+   * Plain, it replaces the marking, as a plain drag does; with Ctrl or ⌘ it
+   * adds a range and keeps what was marked (`applyAxisRange`).
+   */
+  const onMarkRange = (
+    tileId: string,
+    chartId: string,
+    ends: { from: string; to: string },
+    add: boolean,
+  ) => {
+    const axis = rangeAxisOf(tileId, chartId);
+    if (axis === undefined) return;
+    const range = rangeFromDrag({
+      member: axis.member,
+      granularity: axis.granularity,
+      from: ends.from,
+      to: ends.to,
+    });
+    const after = applyAxisRange(markingOf(marks, axis.marking.id), range, { add });
+    setMarks((now) => withMarking(now, axis.marking.id, after));
+    noteSource(axis.marking.id, tileId);
+    const from = chartTitleOf(chartId);
+    // Said with its count and where from (AC-101).
+    setMarkSaid(
+      announceMarking({
+        marking: axis.marking,
+        markedCount: markedCount(after),
+        ...(from === undefined ? {} : { tileName: from }),
+      }),
+    );
+  };
+
+  /** A tile's marking's ranges over its x member, as stripes in its colour (AC-093). */
+  const rangeStripesOn = (tileId: string, chartId: string) => {
+    const tile = elementAt(live, tileId);
+    const markingId = tile !== null && isTile(tile) ? marksWithOf(tile) : undefined;
+    const marking = markings.find((each) => each.id === markingId);
+    const spec = drawn.specs[chartId];
+    const member = spec === undefined ? undefined : memberOn(spec.encoding, 'x');
+    // Not on a tile the marking can't reach, which says so instead (T386's review).
+    if (marking === undefined || member === undefined || notLinked[chartId] !== undefined)
+      return undefined;
+    return markingOf(marks, marking.id)
+      .ranges.filter((range) => range.member === member)
+      .map((range) => ({ from: range.from, to: range.to, slot: marking.slot }));
+  };
+
   const charts: TileCharts = {
     specs: withWholes,
     errors: withFiltered.errors,
@@ -3317,7 +3452,18 @@ export function DashboardView({
      * a click picks the tile up.
      */
     ...(crossFiltering ? { onItemClick } : {}),
-    ...(marking ? { onMarkClick, onMarkShape, marksShapes, notLinked } : {}),
+    ...(marking
+      ? {
+          onMarkClick,
+          onMarkShape,
+          marksShapes,
+          // A span of the axis, in a marking's range mode (T386, AC-093).
+          onMarkRange,
+          rangeMarks,
+          rangeStripesOn,
+          notLinked,
+        }
+      : {}),
     /**
      * Not gated on `marking`: a limited tile explains itself while the
      * dashboard is being edited too, where clicking selects the tile rather

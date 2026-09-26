@@ -1,3 +1,4 @@
+import { asUtc, GRAIN_END, stamp } from './buckets';
 import type { LimitCombination } from './limit-by';
 import {
   isEmptyPredicate,
@@ -27,30 +28,8 @@ import {
 export type CubeFilter = Record<string, unknown>;
 type Filter = CubeFilter;
 
-/** The end of the bucket a granularity's start instant opens. */
-const GRAIN_END: Readonly<Record<string, (start: Date) => Date>> = {
-  second: (at) => new Date(at.getTime() + 999),
-  minute: (at) => new Date(at.getTime() + 59_999),
-  hour: (at) => new Date(at.getTime() + 3_599_999),
-  day: (at) => new Date(at.getTime() + 86_399_999),
-  week: (at) => new Date(at.getTime() + 7 * 86_400_000 - 1),
-  month: (at) => new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1) - 1),
-  quarter: (at) => new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 3, 1) - 1),
-  year: (at) => new Date(Date.UTC(at.getUTCFullYear() + 1, 0, 1) - 1),
-};
-
-/**
- * A time Cube wrote, read as UTC. Cube writes a bucket's value wall-clock in
- * the query's time zone with no zone of its own ("2026-03-01T00:00:00.000"),
- * and wechart asks in UTC; `new Date` would read that as the browser's local
- * time and slide the span by the machine's offset. A value that names its
- * zone, and a bare date (which JavaScript already reads as UTC), are left.
- */
-export const asUtc = (text: string): string =>
-  text.includes('T') && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text) ? `${text}Z` : text;
-
-/** `YYYY-MM-DDTHH:mm:ss.SSS`, the form Cube's own `drillDown` emits. */
-const stamp = (at: Date): string => at.toISOString().replace('Z', '');
+// A bucket's span, shared with what a range marks and draws (T386's review).
+export { asUtc } from './buckets';
 
 /**
  * A marked time bucket, as the span it covers.

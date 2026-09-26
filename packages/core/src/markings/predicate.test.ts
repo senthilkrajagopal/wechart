@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { rangeEndOf } from './buckets';
+
 import {
   EMPTY_PREDICATE,
   isEmptyPredicate,
@@ -143,6 +145,34 @@ describe('what a marking stores', () => {
       });
 
       expect(byDay.filter((row) => matchesPredicate(marked, row))).toEqual([byDay[0], byDay[1]]);
+    });
+
+    /**
+     * T386's review: a range keeps the grain it was dragged at. Its last
+     * bucket runs to that bucket's end, so a tile drawn by day marks every
+     * day of February for a January-to-February range by month, as the
+     * filter a limited tile is asked with does (`rangeFilter`).
+     */
+    it('runs to the end of its last bucket, at the grain it was marked at', () => {
+      const months = withRange(EMPTY_PREDICATE, {
+        member: 'orders.created',
+        granularity: 'month',
+        from: '2026-01-01T00:00:00.000',
+        to: '2026-02-01T00:00:00.000',
+      });
+      const days = ['2026-01-01', '2026-02-01', '2026-02-28', '2026-03-01'].map((day) => ({
+        'orders.created': `${day}T00:00:00.000`,
+      }));
+
+      expect(days.filter((row) => matchesPredicate(months, row))).toEqual(days.slice(0, 3));
+      expect(
+        rangeEndOf({
+          member: 'orders.created',
+          granularity: 'month',
+          from: 'x',
+          to: '2026-02-01T00:00:00.000',
+        }),
+      ).toBe('2026-02-28T23:59:59.999');
     });
 
     it('marks numbers by value, not by their place in the result', () => {

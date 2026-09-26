@@ -30,6 +30,32 @@ export interface Marking {
   readonly slot: MarkingSlot;
   /** Exactly one marking in a dashboard has this set. */
   readonly isDefault: boolean;
+  /**
+   * `range`: a drag along an axis marks the continuous range between its ends
+   * (T386, AC-093; Spotfire's "Marking mode > Range-based",
+   * references-markings.md). Absent, it marks items, as every marking did before.
+   */
+  readonly mode?: 'range';
+}
+
+export type MarkingMode = 'items' | 'range';
+
+/** How a marking marks: items, unless it was set to range mode. */
+export const markingModeOf = (marking: Marking): MarkingMode => marking.mode ?? 'items';
+
+/** One marking in another mode (T386, AC-093); the others as they were. */
+export function setMarkingMode(
+  markings: readonly Marking[],
+  id: string,
+  mode: MarkingMode,
+): readonly Marking[] {
+  return markings.map((marking) => {
+    if (marking.id !== id) return marking;
+    // Items is no mode stored at all, as a marking made before there were modes.
+    const { mode: _was, ...rest } = marking;
+    void _was;
+    return mode === 'range' ? { ...rest, mode } : rest;
+  });
 }
 
 /** direction.md rule 57: one marking named "Marking", set as the default. */
