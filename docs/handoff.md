@@ -89,8 +89,12 @@
 >     - `wechart`, in the release.
 >
 >     Also done: T391 (value-axis labels, **AC-299**), T392 (series order, **AC-300**), T393 (table columns, **AC-301**), T394 (markdown text, **AC-302**).
->   - **Next:** T431 (remove the model store: its routes, drafts, the `cube` class, the store settings), then T423.
->   - **Deployed now:** Helm revision 17, with wechart-api/web `c82a902-t447` and Cube `xcube:v1.7.45-83cb9f0888`. Its bootstrap Job is named by its pod template.
+>   - **Done since:**
+>     - T431: the model store is gone (its routes, drafts, the `cube` class, the store settings and claims). **AC-251 ticked.** AC-327 waits for connection tests (slice 4). Every break now refuses a publish, a live rollup naming what the model lacks included (R29).
+>     - T395: pie and donut labels are never cut; **AC-303 ticked**.
+>     - The demo API on :4200 now starts without `WECHART_MODEL_KEY`.
+>   - **Next:** T423 (two API replicas and their readiness; it also carries the first-start `403 Unknown model` wait).
+>   - **Deployed now:** Helm revision 18, with wechart-api/web `10c9797-t431` and Cube `xcube:v1.7.45-83cb9f0888`. The images were built from T431's working tree before its commit.
 >   - **Asked, not yet answered:**
 >     1. May the contract points (JWKS push route, the gate instead of written policies, YAML only,
 >        the `f…` folder-id form, the build-event record) be posted as comments on the plan doc's
@@ -122,7 +126,12 @@
 >        order is lost when the count changes. Fix?
 >     16. The test-integrity hook counts assertions. Twice it flagged changes that only added
 >        assertions (T419), and it flagged T447's `cube-config.test.ts`. There, tests of the removed
->        model store went with the store, as R29 decided.
+>        model store went with the store, as R29 decided. It flagged T431's `publish.test.ts` and
+>        `server.test.ts` for the same reason; T431's Done note lists what went.
+>     17. T395: when a pie's or donut's data labels have no room beside the ring, the ring shrinks,
+>        down to half its size, to make room. Past that, a pie's labels go inside its slices, and a
+>        donut's are hidden. The alternatives were labels drawn over the ring, or inside a donut's
+>        band (too thin for them). Keep this?
 > - **Pushing is the user's** (this session's push was refused by the permission classifier):
 >   `git push origin main feat/xcube --tags`.
 > - **Done since (2026-09-25, later):**
