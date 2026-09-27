@@ -8,7 +8,7 @@ import { pgSessionStore } from '../auth/session-store';
 import { PUBLIC_URL, signIn, USERS } from '../auth/sign-in.fixture';
 import { closeDb, getDb } from '../db/client';
 import { catalog } from '../repos/catalog';
-import { dataSourceStore } from '../repos/data-sources';
+import { DataSourceRefused, dataSourceStore } from '../repos/data-sources';
 import { documents, type DocumentKind, type StoredDocument } from '../repos/documents';
 import { folderAccessStore, ROOT_ACCESS_ID } from '../repos/folder-access';
 import { buildServer } from '../server';
@@ -228,6 +228,82 @@ describe('a folder holding data sources (T335’s review)', () => {
       expect(await docs().get('folder', outer)).not.toBeNull();
     } finally {
       await sources().remove(held.id);
+      await open.close();
+    }
+  });
+});
+
+describe('a save landing in xcube first (T442, AC-327)', () => {
+  it('stores what xcube takes, and nothing xcube refuses, saying why', async () => {
+    const landed: string[] = [];
+    const open = buildServer({
+      config: { ...secured, security: 'off' as const },
+      documents: docs(),
+      catalog: catalog(getDb()),
+      dataSources: sources(),
+      dataSourceLanding: {
+        prepare: async () => ({
+          land: async (source) => {
+            if (source.name.endsWith('_refused'))
+              throw new DataSourceRefused(
+                422,
+                'xcube can’t open a secret: password. Enter it again.',
+              );
+            landed.push(source.name);
+          },
+          unland: async (source) => {
+            landed.push(`renamed from ${source.name}`);
+          },
+        }),
+        unland: async (source) => {
+          landed.push(`-${source.name}`);
+        },
+      },
+    });
+    try {
+      const taken = await open.inject({
+        method: 'POST',
+        url: '/api/data-sources',
+        payload: postgres(ids.b, `${MARK}_landed`),
+      });
+      expect(taken.statusCode).toBe(201);
+
+      const refused = await open.inject({
+        method: 'POST',
+        url: '/api/data-sources',
+        payload: postgres(ids.b, `${MARK}_refused`),
+      });
+      expect(refused.statusCode).toBe(422);
+      expect(refused.json()).toEqual({
+        error: 'xcube can’t open a secret: password. Enter it again.',
+        problems: ['xcube can’t open a secret: password. Enter it again.'],
+      });
+
+      const id = taken.json<{ id: string }>().id;
+      expect(
+        (
+          await open.inject({
+            method: 'PUT',
+            url: `/api/data-sources/${id}`,
+            payload: {
+              fields: { host: 'db', port: 5432, database: 'other', user: 'cube', ssl: true },
+            },
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (await open.inject({ method: 'DELETE', url: `/api/data-sources/${id}` })).statusCode,
+      ).toBe(204);
+      expect(landed).toEqual([`${MARK}_landed`, `${MARK}_landed`, `-${MARK}_landed`]);
+      // Cube takes its connections from xcube: wechart serves none (AC-327).
+      await open.ready();
+      const routes = open.printRoutes({ commonPrefix: false });
+      expect(routes).toContain('/api/data-sources (POST)');
+      expect(routes).not.toMatch(/connection/i);
+      expect((await sources().inFolder(ids.b)).map((each) => each.name)).not.toContain(
+        `${MARK}_refused`,
+      );
+    } finally {
       await open.close();
     }
   });

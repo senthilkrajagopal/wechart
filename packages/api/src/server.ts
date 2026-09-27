@@ -50,6 +50,7 @@ import { searchable, visibleCounts, type Visibility } from './access/visible';
 import type { BookmarkStore } from './repos/bookmarks';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from './repos/catalog';
 import type { DataSourceStore } from './repos/data-sources';
+import type { DataSourceLanding } from './routes/data-sources';
 import type { FolderAccessStore } from './repos/folder-access';
 import { registerFolderAccess } from './routes/access';
 import { registerDataSources } from './routes/data-sources';
@@ -113,6 +114,11 @@ export interface BuildOptions {
   readonly folderAccess?: FolderAccessStore;
   /** Data sources as folder items, their secrets sealed (T335, AC-269). */
   readonly dataSources?: DataSourceStore;
+  /**
+   * Where a data source lands before it is stored, and leaves before it is
+   * removed (T442): xcube's connections. Unset without xcube.
+   */
+  readonly dataSourceLanding?: DataSourceLanding;
   /**
    * How Cube's unauthenticated probes — its health (T162), whether it
    * enforces auth (T175) — are asked; `fetch` unless a test says.
@@ -248,6 +254,7 @@ export function buildServer({
   publications,
   folderAccess,
   dataSources,
+  dataSourceLanding,
   healthFetch,
   logger = false,
   introspectionRetryMs,
@@ -515,6 +522,7 @@ export function buildServer({
   if (dataSources !== undefined)
     registerDataSources(app, {
       store: dataSources,
+      ...(dataSourceLanding === undefined ? {} : { landing: dataSourceLanding }),
       ...(config.xcubePublicKey === undefined ? {} : { key: config.xcubePublicKey }),
       access: async (request, folderId, want) => {
         const seen = await visibilityOf(request);

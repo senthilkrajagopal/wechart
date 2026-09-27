@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 
 import type { APIRequestContext } from '@playwright/test';
+import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
+import { CUBE, serviceToken } from '../api-process';
 import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 
 /**
@@ -19,18 +21,25 @@ import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
  */
 const RUN = Math.random().toString(36).slice(2, 8);
 /** The key the suite's API gives the browser: an envelope must be sealed to it. */
-const KID = (
-  JSON.parse(
-    readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
-  ) as { kid: string }
-).kid;
-/** Sized as xcube takes an envelope: a 32-byte `enc`, one 256-byte bucket and its tag. */
-const ENVELOPE = {
-  v: 1,
-  kid: KID,
-  enc: Buffer.alloc(32, `enc-${RUN}`).toString('base64url'),
-  ct: Buffer.alloc(272, `ct-${RUN}-secret-envelope`).toString('base64url'),
-};
+const KEY = JSON.parse(
+  readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
+) as XcubeKey;
+const FIELDS = { host: 'sample-db', port: 5432, database: 'sample', user: 'cube', ssl: false };
+/**
+ * Sealed as the browser seals one (T441), for exactly these fields: xcube
+ * opens every envelope a data source lands with (T442).
+ */
+const sealedFor = (fields: Record<string, unknown>) =>
+  sealSecretV1(KEY, 'postgres', 'password', fields, `e2e-${RUN}-password`);
+const MODEL = 'e2e-security';
+const connectionsOf = async (request: APIRequestContext) =>
+  (
+    (await (
+      await request.get(`${CUBE}/v1/semantic/models/${MODEL}/connections`, {
+        headers: { authorization: `Bearer ${serviceToken()}` },
+      })
+    ).json()) as { connections: { name: string; secrets: string[] }[] }
+  ).connections;
 
 async function setUp(request: APIRequestContext) {
   const folder = await request.post('/api/documents', {
@@ -45,18 +54,19 @@ async function setUp(request: APIRequestContext) {
       })
     ).status(),
   ).toBe(200);
+  const envelope = await sealedFor(FIELDS);
   const source = await request.post('/api/data-sources', {
     data: {
       folderId,
       name: 'warehouse',
       driver: 'postgres',
       authMethod: 'password',
-      fields: { host: 'sample-db', port: 5432, database: 'sample', user: 'cube', ssl: false },
-      sealed: { password: ENVELOPE },
+      fields: FIELDS,
+      sealed: { password: envelope },
     },
   });
   expect(source.status(), await source.text()).toBe(201);
-  return { folderId, sourceId: ((await source.json()) as { id: string }).id };
+  return { folderId, sourceId: ((await source.json()) as { id: string }).id, envelope };
 }
 
 test.use({ role: 'super' });
@@ -65,7 +75,7 @@ test('a folder lists its data source as a data source, built on its driver, and 
   page,
   browser,
 }) => {
-  const { folderId, sourceId } = await setUp(page.request);
+  const { folderId, sourceId, envelope } = await setUp(page.request);
   try {
     const answers: string[] = [];
     page.on('response', (response) => {
@@ -89,8 +99,8 @@ test('a folder lists its data source as a data source, built on its driver, and 
     expect(await opened.json()).toMatchObject({ secrets: { password: { stored: true } } });
     answers.push(await opened.text());
     for (const answer of answers) {
-      expect(answer).not.toContain(ENVELOPE.ct);
-      expect(answer).not.toContain(ENVELOPE.enc);
+      expect(answer).not.toContain(envelope.ct);
+      expect(answer).not.toContain(envelope.enc);
     }
 
     // A read-only member of the folder sees no data source there (AC-263).
@@ -109,6 +119,50 @@ test('a folder lists its data source as a data source, built on its driver, and 
     } finally {
       await context.close();
     }
+  } finally {
+    await page.request.delete(`/api/data-sources/${sourceId}`);
+    await page.request.delete(`/api/documents/folder/${folderId}`);
+  }
+});
+
+/**
+ * T442 (AC-327, AC-161): a folder's data source lands in xcube as a
+ * connection — its full name `<folderId>__<name>`, its secret named and never
+ * given back — and xcube, which opens each envelope for its target, refuses
+ * one sealed for another, so wechart stores nothing. Removed, it leaves xcube.
+ */
+test('a data source lands in xcube as a connection, refused when its secret won’t open there, and leaves with it', async ({
+  page,
+}) => {
+  const { folderId, sourceId } = await setUp(page.request);
+  const name = `f${folderId.replaceAll('-', '')}__warehouse`;
+  try {
+    const held = (await connectionsOf(page.request)).find((each) => each.name === name);
+    expect(held?.secrets).toEqual(['password']);
+    expect(JSON.stringify(await connectionsOf(page.request))).not.toContain(`e2e-${RUN}-password`);
+
+    // Sealed for another host, sent with this one: xcube can't open it.
+    const moved = await page.request.post('/api/data-sources', {
+      data: {
+        folderId,
+        name: 'elsewhere',
+        driver: 'postgres',
+        authMethod: 'password',
+        fields: FIELDS,
+        sealed: { password: await sealedFor({ ...FIELDS, host: 'other-db' }) },
+      },
+    });
+    expect(moved.status(), await moved.text()).toBe(422);
+    expect(((await moved.json()) as { error: string }).error).toMatch(
+      /^xcube can’t open a secret: .*Enter it again\.$/,
+    );
+    const listed = (await (await page.request.get(`/api/folders/${folderId}/contents`)).json()) as {
+      title: string;
+    }[];
+    expect(listed.map((row) => row.title)).not.toContain('elsewhere');
+
+    expect((await page.request.delete(`/api/data-sources/${sourceId}`)).status()).toBe(204);
+    expect((await connectionsOf(page.request)).map((each) => each.name)).not.toContain(name);
   } finally {
     await page.request.delete(`/api/data-sources/${sourceId}`);
     await page.request.delete(`/api/documents/folder/${folderId}`);

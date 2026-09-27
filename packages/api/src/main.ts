@@ -18,6 +18,7 @@ import { modelFileStore } from './repos/model-files';
 import { queryLog } from './repos/query-log';
 import { xcubePublicKeyOf } from './secrets/xcube-key';
 import { xcubeAdmin } from './xcube/client';
+import { connectionSync, xcubeConnections } from './xcube/connections';
 import { publicationStore } from './xcube/publications';
 import { modelSync } from './xcube/snapshot';
 import { seedDevData } from './seed';
@@ -100,6 +101,23 @@ async function main(): Promise<void> {
             info: (details, message) => app.log.info(details, message),
           },
         });
+  const dataSources = dataSourceStore(db, { kid: config.xcubePublicKey.kid });
+  /**
+   * Each folder's data source landed in xcube as a connection, before wechart
+   * commits it (T442, AC-327): a new folder's tree put first.
+   */
+  const landing =
+    config.xcube === undefined || service === undefined || sync === undefined
+      ? undefined
+      : connectionSync({
+          connections: xcubeConnections({
+            cubeApiUrl: config.cubeApiUrl,
+            model: config.xcube.model,
+            token: () => service.token(),
+          }),
+          folders: () => folderIds.published(),
+          pushTree: () => sync.pushTree('folder'),
+        });
   const app = buildServer({
     config,
     queryLog: queryLog(db),
@@ -130,7 +148,15 @@ async function main(): Promise<void> {
     // Each folder's AD groups (T314).
     folderAccess: folderAccessStore(db),
     // Data sources as folder items, their secrets sealed (T335).
-    dataSources: dataSourceStore(db, { kid: config.xcubePublicKey.kid }),
+    dataSources,
+    ...(landing === undefined
+      ? {}
+      : {
+          dataSourceLanding: {
+            prepare: (folderId) => landing.prepare(folderId),
+            unland: (source) => landing.unland(source),
+          },
+        }),
     // Signed-in sessions, kept in the metadata database (T316).
     sessions,
     logger: true,
@@ -159,8 +185,24 @@ async function main(): Promise<void> {
         }, 60_000);
   reconciling?.unref();
   // The tree first, then the items (T449): a model xcube holds as a file set
-  // is moved to items mode by this first send.
-  void sync?.pushTree('start').then(() => sync.sync('start'));
+  // is moved to items mode by this first send. Between them, the data sources
+  // xcube lacks or holds otherwise (T442, AC-330), so an item bound to one
+  // finds its connection there.
+  void sync
+    ?.pushTree('start')
+    .then(async () => {
+      if (landing === undefined) return;
+      const report = await landing.reconcile(dataSources).catch((error: unknown) => {
+        app.log.warn({ err: error }, 'could not bring xcube’s connections up to wechart’s');
+        return undefined;
+      });
+      if (report === undefined) return;
+      const said = 'xcube’s connections brought up to wechart’s';
+      // A secret xcube can't open, or a connection it refused: said as a warning.
+      if (report.unopened.length + report.failed.length > 0) app.log.warn(report, said);
+      else if (report.put.length + report.removed.length > 0) app.log.info(report, said);
+    })
+    .then(() => sync.sync('start'));
 
   // Stopped, it finishes the requests under way, taking no new ones (Fastify's
   // `close()`), for up to 15 s: past a query's 10 s long-poll on Cube, which

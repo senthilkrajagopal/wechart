@@ -127,6 +127,118 @@ describe('a folder’s data sources (AC-269, AC-164)', () => {
   });
 });
 
+/**
+ * T442: a data source lands in xcube before it is stored, from inside the
+ * store's transaction: xcube's refusal, or xcube away, stores nothing.
+ */
+describe('landing in xcube before it is stored (T442)', () => {
+  const refusing = async () => {
+    throw new DataSourceRefused(503, 'xcube can’t be reached');
+  };
+
+  it('lands a new one whole, with every envelope and its revision, and stores nothing when refused', async () => {
+    const folder = folderId();
+    const seen: unknown[] = [];
+    const made = await store().create(postgres(folder), {
+      land: async (source, landed) => {
+        seen.push({ source, landed });
+      },
+    });
+    const kept = await store().sealedOf(made.id);
+    expect(seen).toEqual([{ source: made, landed: kept }]);
+
+    await expect(store().create(postgres(folder, 'refused'), { land: refusing })).rejects.toThrow(
+      'xcube can’t be reached',
+    );
+    expect((await store().inFolder(folder)).map((each) => each.name)).toEqual(['warehouse']);
+  });
+
+  it('lands a change with the envelopes it keeps and the new ones, and changes nothing when refused', async () => {
+    const made = await store().create({
+      ...postgres(folderId()),
+      authMethod: 'client-certificate',
+      fields: { ...postgres('x').fields, sslCert: 'PEM' },
+      sealed: { sslKey: sealed('key'), sslPassphrase: sealed('pass') },
+    });
+
+    const seen: { sealed: Record<string, SealedV1> }[] = [];
+    await store().update(
+      made.id,
+      { fields: { ...made.fields, database: 'other' }, sealed: { sslPassphrase: sealed('pass2') } },
+      {
+        land: async (_source, landed) => {
+          seen.push({ sealed: { ...landed.sealed } });
+        },
+      },
+    );
+    expect(seen).toEqual([{ sealed: { sslKey: sealed('key'), sslPassphrase: sealed('pass2') } }]);
+
+    const before = await store().get(made.id);
+    await expect(
+      store().update(
+        made.id,
+        { fields: { ...made.fields, database: 'third' } },
+        { land: refusing },
+      ),
+    ).rejects.toThrow('xcube can’t be reached');
+    expect(await store().get(made.id)).toEqual(before);
+  });
+
+  it('renamed, leaves its old name in xcube first, and keeps it where cubes use it or the save fails (T442’s review)', async () => {
+    const folder = folderId();
+    const made = await store().create(postgres(folder, 'old_name'));
+    const said: string[] = [];
+    const tracking = {
+      land: async (source: { name: string }) => {
+        said.push(`land ${source.name}`);
+      },
+      unland: async (source: { name: string }) => {
+        said.push(`unland ${source.name}`);
+      },
+    };
+
+    const renamed = await store().update(made.id, { name: 'new_name' }, tracking);
+    expect(renamed.name).toBe('new_name');
+    expect(said).toEqual(['unland old_name', 'land new_name']);
+
+    // Cubes use it: refused before anything changes.
+    said.length = 0;
+    await expect(
+      store().update(made.id, { name: 'third' }, { ...tracking, unland: refusing }),
+    ).rejects.toThrow('xcube can’t be reached');
+    expect((await store().get(made.id))?.name).toBe('new_name');
+
+    // The new name refused: the old name's connection is put back.
+    await store().create(postgres(folder, 'taken'));
+    said.length = 0;
+    await expect(store().update(made.id, { name: 'taken' }, tracking)).rejects.toThrow(
+      'This folder already has a data source named taken.',
+    );
+    expect(said).toEqual(['unland new_name', 'land new_name']);
+    expect((await store().get(made.id))?.name).toBe('new_name');
+  });
+
+  it('is removed from xcube first, and kept when xcube refuses', async () => {
+    const made = await store().create(postgres(folderId()));
+
+    await expect(store().remove(made.id, { unland: refusing })).rejects.toThrow(
+      'xcube can’t be reached',
+    );
+    expect(await store().get(made.id)).toEqual(made);
+
+    const unlanded: string[] = [];
+    expect(
+      await store().remove(made.id, {
+        unland: async (source) => {
+          unlanded.push(source.id);
+        },
+      }),
+    ).toBe(true);
+    expect(unlanded).toEqual([made.id]);
+    expect(await store().get(made.id)).toBeUndefined();
+  });
+});
+
 describe('a change to a data source', () => {
   it('asks for its secrets again when where it connects changes, TLS included (AC-312)', async () => {
     const made = await store().create(postgres(folderId()));

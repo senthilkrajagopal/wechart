@@ -7212,15 +7212,56 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
     - when one does, it starts;
     - while xcube can't be reached it waits, as for its first push (AC-324).
   - Depends on: T420, T333
-- [ ] T442 (AC-161, AC-327, AC-330) Land each folder data source in xcube as a connection: driver, fields and ciphertext, never plaintext *(rewritten 2026-09-26 to slice 6 as built, `[X6]`)*
-  - Files: `packages/api/src/xcube/connections.ts` (+ test), `packages/api/src/xcube/admin.ts` (`DELETE`), `packages/api/src/repos/data-sources.ts`
+- [x] T442 (AC-161, AC-327, AC-330) Land each folder data source in xcube as a connection: driver, fields and ciphertext, never plaintext *(rewritten 2026-09-26 to slice 6 as built, `[X6]`)*
+  - Files: `packages/api/src/xcube/connections.ts` (+ test), ~~`packages/api/src/xcube/admin.ts` (`DELETE`)~~ (the connections client has its own `DELETE`), `packages/api/src/repos/data-sources.ts` (+ test), `packages/api/src/routes/data-sources.ts`, `packages/api/src/server.ts`, `packages/api/src/main.ts`, `packages/api/src/access/data-sources.test.ts`, `e2e/security/folder-data-sources.spec.ts`
   - Failing test: `connections.test.ts`, against the stub xcube:
     - whenever a folder's data source is stored or changed, and at start for any xcube lacks, `PUT …/connections/{fullName}` carries `{ folderId, driver, authMethod, fields, sealed, revisions }`, the full name being the short name in the root and `<folderId>__<name>` elsewhere, with no plaintext anywhere in the call;
-    - `422 invalid_secret` clears the stored secret and says to enter it again; `409 driver_change` is never sent, since the type can't change (T335);
+    - `422 invalid_secret` ~~clears the stored secret and~~ refuses the save and says to enter it again *(2026-09-26, from T442's review: at start it is reported and the secret kept; xcube answers 422 for a key it lacks too, and wechart holds the only copy)*; `409 driver_change` is never sent, since the type can't change (T335);
     - a deleted source is removed with `DELETE`, and `409 in_use` refuses the delete, naming the cubes;
     - the API serves no route that hands a connection to Cube (AC-327, AC-161, AC-330).
-    - `e2e`: against compose's xcube, a data source added to the root answers `GET …/connections/{name}/health` live on every instance.
+    - ~~`e2e`: against compose's xcube, a data source added to the root answers `GET …/connections/{name}/health` live on every instance.~~ *Moved to T435 (2026-09-26): xcube writes a health row only when an instance builds a driver, on a connection's first query, and a query through one needs a cube bound to it.*
+    - *(2026-09-26)* `e2e`: against compose's xcube, a data source sealed as the browser seals it lands as `<folderId>__<name>`, its secret named and never given back; one sealed for another host is refused (422) and not stored; deleted, it leaves xcube.
   - Depends on: T420, T335, T441
+  - **Done 2026-09-26. No AC is ticked:**
+    - AC-161's health and swap are T435's and T365's.
+    - AC-327's connection test is T361's.
+    - AC-330's folders and items on restart are other tasks'.
+  - **As built:**
+    - **Saving.** A data source's save lands in xcube inside the store's transaction, after its rows are written and before they commit.
+      - The PUT carries the whole connection: every stored envelope and its revision. xcube stores it whole.
+      - xcube's refusal answers the save with xcube's reason, and nothing is stored:
+        - 400 with its problems;
+        - 422 as "xcube can’t open a secret: … Enter it again.";
+        - 409 when cubes use it.
+      - Another answer from xcube is 502, "xcube refused it: xcube answered N: …". xcube away is 503, "xcube can’t be reached, so nothing was saved".
+    - **Preparing.** The folder's xcube id is read, and xcube's tree put, before the transaction opens, so a folder made a moment ago is in xcube's tree. Inside, only xcube is called, with a 15 s timeout.
+      - A folder wechart publishes no tree for (a workspace's, until slice 5) is refused, 409.
+    - **Renaming.** The old name's connection is removed first, refused while cubes use it, and put back if the save then fails.
+    - **Deleting.** The connection is removed from xcube first, refused while cubes use it.
+    - **At start,** between the tree push and the items sync (`main.ts`):
+      - each connection xcube lacks, or holds with another folder, driver, sign-in, fields or revisions, is put;
+      - each one wechart doesn't have is removed;
+      - a stored secret xcube can't open is reported, and kept.
+    - No route of wechart's serves a connection: `access/data-sources.test.ts` checks the route table.
+    - The security e2e's envelopes are now really sealed: xcube opens every one.
+    - xcube's test of wechart's golden vectors (T441) passes on its side: all 8 AAD strings and 7 envelopes, now in xcube's CI (`to-wechart/2026-09-26-2230-golden-vectors-match.md`).
+  - **The cold review (FAIL), fixed:**
+    - A rename left the old connection in xcube.
+    - The start cleared stored secrets on any 422, though xcube answers 422 for a key it lacks too, and wechart holds the only copy. It now reports them and keeps them.
+    - xcube was called with the save's transaction open while asking the pool for a second connection, so ten saves at once could deadlock it. Now prepared outside, with a short timeout.
+    - Every other answer read as "can't be reached" (now 502 with xcube's answer).
+    - The reconcile's comparisons and failures were untested.
+    - The health e2e is moved to T435.
+    - **Left as they are:**
+      - the reconcile runs at start only, reading once (the user's standing call on concurrency);
+      - a save PUTs even when nothing changed;
+      - a workspace's data sources are refused while xcube is configured. T346/T347 must lift that with slice 5's overlays.
+  - **Tests:**
+    - `connections.test.ts` 15;
+    - `repos/data-sources.test.ts` 16;
+    - `access/data-sources.test.ts` 10;
+    - Chrome: `security/folder-data-sources.spec.ts` 2 and `explore.spec.ts` 19;
+    - the full unit suite (at commit).
 - [ ] T435 (AC-273, AC-310, AC-328) Bind a model's data sources at publish, nearest first from its folder, and give a cube with none the nearest `default` *(moved here from slice 3, 2026-09-26)*
   - **Why here.** xcube answered that binding comes with slice 6: a bound name must be a connection Cube can open, and connections arrive with T442. At publish xcube resolves `data_source` along the item's folder path, as it does cube names. It pushes no data-source items into the tree `[xcube answer to-wechart/2026-09-26-1030-data-source-binding.md]`.
   - **Until slice 6.** xcube passes `data_source` through unchanged. With `CUBEJS_DATASOURCES` unset, Cube maps any name to the default connection, so `data_source: warehouse` reads the default database. With it set, an undeclared name fails the publish's compile. That is xcube's reading of Cube 1.7.45, not run (same answer, §2).
@@ -7230,6 +7271,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
     - a model in /A/B naming `warehouse` binds /A's when /A has one, and never /A/B/C's or a sibling's;
     - a name found nowhere on its path is refused, naming it; a cube that extends another queries its parent's data source; adding a nearer `warehouse` later changes nothing a published cube queries until that cube is published again (AC-273);
     - a cube with no data source binds /A/B's `default`, else /A's, else the root's (AC-310);
+    - *(moved from T442, 2026-09-26)* a query on a cube bound to a data source added to the root answers, and then `GET …/connections/{name}/health` reports it live on every instance that built its driver (AC-161's first half; T365 shows it);
     - *(added 2026-09-26, from T341's review)* the data source it binds is published as `<folderId>__<name>` for /A's and under its short name for the root's, and renaming or moving /A changes neither (AC-328, its data-source clause).
   - Depends on: T426, T442
 - [ ] T443 (AC-310) Seed the shared root's `default` data source at install with a post-install Job, and manage it like any other *(rewritten 2026-09-26, `[R31]`: ~~from the Helm values~~ a Job seals the password, so wechart never receives it)*

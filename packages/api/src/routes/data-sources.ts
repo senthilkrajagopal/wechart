@@ -7,6 +7,7 @@ import {
   type DataSource,
   type DataSourceChange,
   type DataSourceStore,
+  type Landing,
 } from '../repos/data-sources';
 import { XCUBE_PUBLIC_KEY, type XcubePublicKey } from '../secrets/xcube-key';
 
@@ -27,6 +28,16 @@ export type DataSourceAccess = (
   folderId: string,
   want: 'read' | 'write',
 ) => Promise<{ readonly status: number; readonly body: { readonly error: string } } | undefined>;
+
+/**
+ * Where a save lands before wechart commits it, and a removal first (T442):
+ * xcube's connections. Each throws `DataSourceRefused` to refuse.
+ */
+export interface DataSourceLanding {
+  /** Made ready for a folder before a save's transaction: it asks the database nothing after. */
+  readonly prepare: (folderId: string) => Promise<Required<Pick<Landing, 'land' | 'unland'>>>;
+  readonly unland: (source: DataSource) => Promise<void>;
+}
 
 /** As the browser sees one: its secrets named, never held out. */
 export function viewOf(source: DataSource) {
@@ -72,9 +83,11 @@ export function registerDataSources(
     store,
     access,
     key,
+    landing,
   }: {
     readonly store: DataSourceStore;
     readonly access: DataSourceAccess;
+    readonly landing?: DataSourceLanding;
     /** xcube's public key, which the browser seals a typed secret to (T441, AC-325). */
     readonly key?: XcubePublicKey;
   },
@@ -88,6 +101,10 @@ export function registerDataSources(
       : { kid: key.kid, x: key.x },
   );
 
+  // Landed in xcube before it is committed, where xcube is there (T442): made
+  // ready for the folder before the store opens its transaction.
+  const landingIn = async (folderId: string): Promise<Landing> =>
+    landing === undefined ? {} : landing.prepare(folderId);
   const refused = (reply: FastifyReply, error: unknown) => {
     if (error instanceof DataSourceRefused)
       return reply.status(error.status).send({ error: error.message, problems: error.problems });
@@ -132,14 +149,17 @@ export function registerDataSources(
     const refusal = await access(request, folderId, 'write');
     if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
     try {
-      const made = await store.create({
-        folderId,
-        name: String(value['name'] ?? ''),
-        driver: String(value['driver'] ?? ''),
-        authMethod: String(value['authMethod'] ?? ''),
-        fields: (value['fields'] ?? {}) as Record<string, FieldValue>,
-        sealed: (value['sealed'] ?? {}) as Record<string, SealedV1>,
-      });
+      const made = await store.create(
+        {
+          folderId,
+          name: String(value['name'] ?? ''),
+          driver: String(value['driver'] ?? ''),
+          authMethod: String(value['authMethod'] ?? ''),
+          fields: (value['fields'] ?? {}) as Record<string, FieldValue>,
+          sealed: (value['sealed'] ?? {}) as Record<string, SealedV1>,
+        },
+        await landingIn(folderId),
+      );
       return reply.status(201).send(viewOf(made));
     } catch (failure) {
       return refused(reply, failure);
@@ -163,7 +183,7 @@ export function registerDataSources(
         : { sealed: value['sealed'] as Record<string, SealedV1> }),
     };
     try {
-      return viewOf(await store.update(source.id, change));
+      return viewOf(await store.update(source.id, change, await landingIn(source.folderId)));
     } catch (failure) {
       return refused(reply, failure);
     }
@@ -172,7 +192,11 @@ export function registerDataSources(
   app.delete('/api/data-sources/:id', USER, async (request, reply) => {
     const source = await reached(request, reply, 'write');
     if (source === undefined) return reply;
-    await store.remove(source.id);
+    try {
+      await store.remove(source.id, landing === undefined ? {} : { unland: landing.unland });
+    } catch (failure) {
+      return refused(reply, failure);
+    }
     return reply.status(204).send();
   });
 }

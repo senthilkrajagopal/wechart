@@ -61,7 +61,7 @@ export interface DataSourceChange {
 /** Why a data source wasn't stored: a status for the API to answer with, and each problem. */
 export class DataSourceRefused extends Error {
   constructor(
-    readonly status: 400 | 404 | 409 | 422,
+    readonly status: 400 | 404 | 409 | 422 | 502 | 503,
     message: string,
     readonly problems: readonly string[] = [message],
   ) {
@@ -70,18 +70,39 @@ export class DataSourceRefused extends Error {
   }
 }
 
+/** A data source's envelopes and their revisions, as stored: for xcube alone, never the browser. */
+export interface Landed {
+  readonly sealed: Readonly<Record<string, SealedV1>>;
+  readonly revisions: Readonly<Record<string, string>>;
+}
+
+/**
+ * Where a save lands before it is committed (T442): xcube, which checks every
+ * envelope opens and stores the connection whole. Throwing refuses the save,
+ * and nothing is stored. Called inside the save's transaction, so neither
+ * asks the database anything (T442's review).
+ */
+export interface Landing {
+  readonly land?: (source: DataSource, landed: Landed) => Promise<void>;
+  /**
+   * On a rename, the old name's connection, removed before the save: its
+   * refusal (cubes use it) keeps the old name (T442's review).
+   */
+  readonly unland?: (source: DataSource) => Promise<void>;
+}
+
 export interface DataSourceStore {
   inFolder(folderId: string): Promise<DataSource[]>;
   all(): Promise<DataSource[]>;
   get(id: string): Promise<DataSource | undefined>;
-  create(input: NewDataSource): Promise<DataSource>;
-  update(id: string, change: DataSourceChange): Promise<DataSource>;
-  remove(id: string): Promise<boolean>;
-  /** Its envelopes and their revisions: for xcube alone (T442), never the browser. */
-  sealedOf(id: string): Promise<{
-    readonly sealed: Readonly<Record<string, SealedV1>>;
-    readonly revisions: Readonly<Record<string, string>>;
-  }>;
+  create(input: NewDataSource, landing?: Landing): Promise<DataSource>;
+  update(id: string, change: DataSourceChange, landing?: Landing): Promise<DataSource>;
+  /** Removed from xcube first, where `unland` is given: its refusal keeps it. */
+  remove(
+    id: string,
+    unlanding?: { readonly unland?: (source: DataSource) => Promise<void> },
+  ): Promise<boolean>;
+  sealedOf(id: string): Promise<Landed>;
 }
 
 const MAX_NAME = 64;
@@ -142,9 +163,11 @@ export function dataSourceStore(
       );
     if (problems.length > 0) throw new DataSourceRefused(400, problems.join(' '), problems);
   };
-  const secretsOf = async (ids: readonly string[]) => {
+  /** In the transaction a save runs in, or out of one. */
+  type Reader = Kysely<Database>;
+  const secretsOf = async (ids: readonly string[], on: Reader = db) => {
     if (ids.length === 0) return new Map<string, string[]>();
-    const rows = await db
+    const rows = await on
       .selectFrom('data_source_secrets')
       .select(['data_source_id', 'field'])
       .where('data_source_id', 'in', [...ids])
@@ -173,8 +196,8 @@ export function dataSourceStore(
     version: row.version,
     updatedAt: row.updated_at,
   });
-  const select = () =>
-    db
+  const select = (on: Reader = db) =>
+    on
       .selectFrom('data_sources')
       .select([
         'id',
@@ -186,9 +209,34 @@ export function dataSourceStore(
         'version',
         'updated_at',
       ]);
-  const withSecrets = async (rows: Row[]) => {
-    const secrets = await secretsOf(rows.map((row) => row.id));
+  const withSecrets = async (rows: Row[], on: Reader = db) => {
+    const secrets = await secretsOf(
+      rows.map((row) => row.id),
+      on,
+    );
     return rows.map((row) => toSource(row, secrets.get(row.id) ?? []));
+  };
+  const getOn = async (id: string, on: Reader) => {
+    const row = (await select(on).where('id', '=', id).executeTakeFirst()) as Row | undefined;
+    return row === undefined ? undefined : (await withSecrets([row], on))[0];
+  };
+  const sealedOn = async (id: string, on: Reader): Promise<Landed> => {
+    const rows = await on
+      .selectFrom('data_source_secrets')
+      .select(['field', 'envelope', 'revision'])
+      .where('data_source_id', '=', id)
+      .execute();
+    return {
+      sealed: Object.fromEntries(
+        rows.map((row) => [row.field, row.envelope as unknown as SealedV1]),
+      ),
+      revisions: Object.fromEntries(rows.map((row) => [row.field, row.revision])),
+    };
+  };
+  /** As written, still in its transaction: landed, or the whole save undone (T442). */
+  const landIn = async (tx: Reader, id: string, landing: Landing | undefined) => {
+    if (landing?.land === undefined) return;
+    await landing.land((await getOn(id, tx))!, await sealedOn(id, tx));
   };
   /** A name the folder already holds, said as AC-270 has it. */
   const taken = (error: unknown, name: string) =>
@@ -208,11 +256,10 @@ export function dataSourceStore(
     },
 
     async get(id) {
-      const row = (await select().where('id', '=', id).executeTakeFirst()) as Row | undefined;
-      return row === undefined ? undefined : (await withSecrets([row]))[0];
+      return getOn(id, db);
     },
 
-    async create(input) {
+    async create(input, landing) {
       checkName(input.name);
       checkShape(input);
       checkKeys(input.sealed);
@@ -231,6 +278,7 @@ export function dataSourceStore(
             })
             .execute();
           await putSecrets(tx, id, input.sealed);
+          await landIn(tx, id, landing);
         });
       } catch (error) {
         throw taken(error, input.name);
@@ -238,7 +286,7 @@ export function dataSourceStore(
       return (await store.get(id))!;
     },
 
-    async update(id, change) {
+    async update(id, change, landing) {
       const current = await store.get(id);
       if (current === undefined) throw new DataSourceRefused(404, 'There’s no such data source.');
       if (change.driver !== undefined && change.driver !== current.driver) {
@@ -277,6 +325,11 @@ export function dataSourceStore(
         kept,
       );
       if (problems.length > 0) throw new DataSourceRefused(400, problems.join(' '), problems);
+      // Renamed: the old name's connection goes first, refused while cubes
+      // use it, and is put back should the save then fail (T442's review).
+      const renamed = name !== current.name && landing?.unland !== undefined;
+      const before = renamed ? await store.sealedOf(id) : undefined;
+      if (renamed) await landing.unland!(current);
       try {
         await db.transaction().execute(async (tx) => {
           await tx
@@ -298,30 +351,32 @@ export function dataSourceStore(
               .where('field', 'in', stale)
               .execute();
           await putSecrets(tx, id, sealed);
+          await landIn(tx, id, landing);
         });
       } catch (error) {
+        if (renamed && landing.land !== undefined)
+          // Best-effort: the start's reconcile puts it back if this fails too.
+          await landing.land(current, before!).catch(() => undefined);
         throw taken(error, name);
       }
       return (await store.get(id))!;
     },
 
-    async remove(id) {
+    async remove(id, unlanding) {
+      if (unlanding?.unland !== undefined) {
+        const source = await getOn(id, db);
+        if (source === undefined) return false;
+        // Out of xcube first: a connection left there with no data source
+        // behind it is the start's reconcile's to remove; one removed here and
+        // kept by wechart would break what uses it (T442).
+        await unlanding.unland(source);
+      }
       const removed = await db.deleteFrom('data_sources').where('id', '=', id).executeTakeFirst();
       return Number(removed.numDeletedRows) > 0;
     },
 
     async sealedOf(id) {
-      const rows = await db
-        .selectFrom('data_source_secrets')
-        .select(['field', 'envelope', 'revision'])
-        .where('data_source_id', '=', id)
-        .execute();
-      return {
-        sealed: Object.fromEntries(
-          rows.map((row) => [row.field, row.envelope as unknown as SealedV1]),
-        ),
-        revisions: Object.fromEntries(rows.map((row) => [row.field, row.revision])),
-      };
+      return sealedOn(id, db);
     },
   };
   return store;
