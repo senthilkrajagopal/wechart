@@ -233,248 +233,272 @@ export function registerModelPublishing(
   };
 
   /**
+   * The model's publishes and deletes one at a time (T460, AC-273): each is
+   * checked only once the one before it is committed and sent to xcube. One
+   * checked while another's change was in wechart's store and not yet in
+   * xcube found the two apart and sent the whole model, which binds every
+   * cube afresh: published cubes moved to a nearer data source without being
+   * published again.
+   */
+  let last: Promise<unknown> = Promise.resolve();
+  const oneAtATime = <T>(work: () => Promise<T>): Promise<T> => {
+    const run = last.then(work, work);
+    last = run.catch(() => undefined);
+    return run;
+  };
+
+  /**
    * Delete a model item: its file, from its folder (T428, AC-275, AC-291).
    * Refused while a chart or dashboard names it, naming them, and applied
    * only if xcube's check of the delete passes: xcube refuses one another
    * model item is bound to, naming it. Then removed from the store and sent.
    */
-  app.delete('/api/model/files', USER, async (request, reply) => {
-    const { folder, path } = request.query as { folder?: unknown; path?: unknown };
-    const folderId = typeof folder === 'string' && folder !== '' ? folder : ROOT_FOLDER_ID;
-    if (typeof path !== 'string' || path === '')
-      return reply.status(400).send({ error: 'Name the model file to delete by its path.' });
-    const refusal = await refusalIn?.(request, folderId);
-    if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
-    const served = (await folders?.()) ?? ROOT_ONLY;
-    const xcubeId = served.ids.get(folderId);
-    if (modelFiles?.remove === undefined || xcubeId === undefined)
-      return reply.status(409).send({
-        error: 'Models can’t be deleted here: xcube doesn’t serve this folder.',
-      });
-    const live = (await modelFiles.all?.()) ?? (await modelFiles.list());
-    const file = live.find(
-      (each) => (each.folderId ?? ROOT_FOLDER_ID) === folderId && each.path === path,
-    );
-    if (file === undefined)
-      return reply.status(404).send({ error: `There’s no model file ${path} here.` });
-    // Read-only, as publishing over one is refused (T428's review).
-    if (JINJA.test(file.content))
-      return reply.status(409).send({
-        error: `${path} is a Jinja template, and templates are read-only here.`,
-      });
+  app.delete('/api/model/files', USER, (request, reply) =>
+    oneAtATime(async () => {
+      const { folder, path } = request.query as { folder?: unknown; path?: unknown };
+      const folderId = typeof folder === 'string' && folder !== '' ? folder : ROOT_FOLDER_ID;
+      if (typeof path !== 'string' || path === '')
+        return reply.status(400).send({ error: 'Name the model file to delete by its path.' });
+      const refusal = await refusalIn?.(request, folderId);
+      if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
+      const served = (await folders?.()) ?? ROOT_ONLY;
+      const xcubeId = served.ids.get(folderId);
+      if (modelFiles?.remove === undefined || xcubeId === undefined)
+        return reply.status(409).send({
+          error: 'Models can’t be deleted here: xcube doesn’t serve this folder.',
+        });
+      const live = (await modelFiles.all?.()) ?? (await modelFiles.list());
+      const file = live.find(
+        (each) => (each.folderId ?? ROOT_FOLDER_ID) === folderId && each.path === path,
+      );
+      if (file === undefined)
+        return reply.status(404).send({ error: `There’s no model file ${path} here.` });
+      // Read-only, as publishing over one is refused (T428's review).
+      if (JINJA.test(file.content))
+        return reply.status(409).send({
+          error: `${path} is a Jinja template, and templates are read-only here.`,
+        });
 
-    const used = await inUse(
-      request,
-      declaredIn(file.content)
-        .map(({ name }) => name)
-        .filter((name) => name !== ''),
-      xcubeId,
-    );
-    if (used !== undefined) return reply.status(409).send(used);
-    // xcube checks a delete and serves it (T445, T447); without it, neither happens.
-    if (xcube === undefined)
-      return reply.status(409).send({
-        error:
-          'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_SERVICE_KEY), so a delete could not be checked or served.',
+      const used = await inUse(
+        request,
+        declaredIn(file.content)
+          .map(({ name }) => name)
+          .filter((name) => name !== ''),
+        xcubeId,
+      );
+      if (used !== undefined) return reply.status(409).send(used);
+      // xcube checks a delete and serves it (T445, T447); without it, neither happens.
+      if (xcube === undefined)
+        return reply.status(409).send({
+          error:
+            'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_SERVICE_KEY), so a delete could not be checked or served.',
+        });
+
+      const draft = live.filter((each) => each !== file);
+      const checked = await checkWithXcube({
+        xcube,
+        draft,
+        changed: [file],
+        live,
+        folders: served.ids,
+        securityContext: config.securityContext,
+        log: (error) => {
+          app.log.warn({ err: error }, 'could not ask xcube to check a delete');
+        },
       });
+      if (checked.kind === 'unreachable') return reply.status(502).send({ error: checked.error });
+      if (checked.kind === 'invalid') return reply.status(422).send({ errors: checked.errors });
+      const rollups = checked.rollups();
+      if (rollups.kind === 'unasked') return reply.status(502).send({ error: rollups.error });
+      if (rollups.kind === 'unjoinable') return reply.status(422).send({ errors: rollups.errors });
 
-    const draft = live.filter((each) => each !== file);
-    const checked = await checkWithXcube({
-      xcube,
-      draft,
-      changed: [file],
-      live,
-      folders: served.ids,
-      securityContext: config.securityContext,
-      log: (error) => {
-        app.log.warn({ err: error }, 'could not ask xcube to check a delete');
-      },
-    });
-    if (checked.kind === 'unreachable') return reply.status(502).send({ error: checked.error });
-    if (checked.kind === 'invalid') return reply.status(422).send({ errors: checked.errors });
-    const rollups = checked.rollups();
-    if (rollups.kind === 'unasked') return reply.status(502).send({ error: rollups.error });
-    if (rollups.kind === 'unjoinable') return reply.status(422).send({ errors: rollups.errors });
-
-    await modelFiles.remove(folderId, path);
-    // Committed first, then sent: xcube is never ahead of wechart (T419).
-    await afterPublish?.(checked.changeset).catch((error: unknown) => {
-      app.log.warn({ err: error }, 'could not send the deleted model item to xcube');
-    });
-    meta.invalidate();
-    return { version: versionOf(draft) };
-  });
+      await modelFiles.remove(folderId, path);
+      // Committed first, then sent: xcube is never ahead of wechart (T419).
+      await afterPublish?.(checked.changeset).catch((error: unknown) => {
+        app.log.warn({ err: error }, 'could not send the deleted model item to xcube');
+      });
+      meta.invalidate();
+      return { version: versionOf(draft) };
+    }),
+  );
 
   /**
    * Publish changed files: checked by xcube's dry run of the whole model with
    * them in it, and written only if it compiles and plans (AC-136, AC-235).
    * xcube's errors come back on the files they are about.
    */
-  app.post('/api/model/publish', USER, async (request, reply) => {
-    const body = request.body as
-      { files?: unknown; create?: unknown; folderId?: unknown } | undefined;
-    // The folder whose models change: the shared root's unless one is named (T334).
-    const folderId =
-      typeof body?.folderId === 'string' && body.folderId !== '' ? body.folderId : ROOT_FOLDER_ID;
-    const refusal = await refusalIn?.(request, folderId);
-    if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
-    // Published as the folder's items, under its xcube id (T452, AC-328). A
-    // folder xcube's tree doesn't hold (a workspace's, until slice 5) is
-    // served by none, so nothing is published into it.
-    const served = (await folders?.()) ?? ROOT_ONLY;
-    if (!served.ids.has(folderId))
-      return reply.status(409).send({
-        error:
-          'This folder isn’t one xcube serves (a workspace’s, say), so its models can’t be published.',
-      });
-    const files = Array.isArray(body?.files) ? (body.files as unknown[]) : [];
-    const changed = files
-      .filter(
-        (file): file is ModelFile =>
-          typeof (file as ModelFile | null)?.path === 'string' &&
-          typeof (file as ModelFile).content === 'string' &&
-          MODEL_PATH.test((file as ModelFile).path) &&
-          (file as ModelFile).path.length <= MAX_PATH_LENGTH,
-      )
-      // Each in the folder checked above, whatever a file says of its own
-      // (T334's review): its path and text, and nothing else it was sent with.
-      // In the folder published to (T452); a root file names none, as before.
-      .map(({ path, content }): ModelFile =>
-        folderId === ROOT_FOLDER_ID ? { path, content } : { folderId, path, content },
-      );
-    // Only YAML models are published: code in any other form runs where
-    // Cube's secrets are (R28; AC-332).
-    for (const file of files) {
-      const path = (file as ModelFile | null)?.path;
-      const kind =
-        typeof path === 'string' && path !== ''
-          ? NOT_YAML.find(([test]) => test.test(path))?.[1]
-          : undefined;
-      if (kind !== undefined)
-        return reply
-          .status(400)
-          .send({ error: `Only YAML models can be published: ${path} is ${kind}.` });
-    }
-    if (changed.length === 0 || changed.length !== files.length)
-      return reply.status(400).send({
-        error: 'Send the changed YAML model files, each by a plain path inside the model.',
-      });
-    const template = changed.find((file) => JINJA.test(file.content));
-    if (template !== undefined)
-      return reply.status(400).send({
-        error: `Only YAML models can be published: ${template.path} is a Jinja template, which Cube would render with its own environment.`,
-      });
-    // One cube or view per file: each file is one xcube item (T448, AC-337).
-    const several = changed.map(severalIn).filter((each) => each !== undefined);
-    if (several.length > 0) return reply.status(422).send({ errors: several });
-    // A file that makes no item: never sent, so never checked (T426's review).
-    const unreadable = changed.map(unreadableIn).filter((each) => each !== undefined);
-    if (unreadable.length > 0) return reply.status(422).send({ errors: unreadable });
-    // Names xcube's items refuse, which the files dry run would pass (T449's review).
-    const misnamed = changed.flatMap(misnamedIn);
-    if (misnamed.length > 0) return reply.status(422).send({ errors: misnamed });
-    // xcube checks a change and serves it (T445, T447); without it, neither happens.
-    if (modelFiles === undefined || xcube === undefined)
-      return reply.status(409).send({
-        error:
-          modelFiles === undefined
-            ? 'There is no model store here to publish to.'
-            : 'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_SERVICE_KEY), so a change could not be checked or served.',
-      });
+  app.post('/api/model/publish', USER, (request, reply) =>
+    oneAtATime(async () => {
+      const body = request.body as
+        { files?: unknown; create?: unknown; folderId?: unknown } | undefined;
+      // The folder whose models change: the shared root's unless one is named (T334).
+      const folderId =
+        typeof body?.folderId === 'string' && body.folderId !== '' ? body.folderId : ROOT_FOLDER_ID;
+      const refusal = await refusalIn?.(request, folderId);
+      if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
+      // Published as the folder's items, under its xcube id (T452, AC-328). A
+      // folder xcube's tree doesn't hold (a workspace's, until slice 5) is
+      // served by none, so nothing is published into it.
+      const served = (await folders?.()) ?? ROOT_ONLY;
+      if (!served.ids.has(folderId))
+        return reply.status(409).send({
+          error:
+            'This folder isn’t one xcube serves (a workspace’s, say), so its models can’t be published.',
+        });
+      const files = Array.isArray(body?.files) ? (body.files as unknown[]) : [];
+      const changed = files
+        .filter(
+          (file): file is ModelFile =>
+            typeof (file as ModelFile | null)?.path === 'string' &&
+            typeof (file as ModelFile).content === 'string' &&
+            MODEL_PATH.test((file as ModelFile).path) &&
+            (file as ModelFile).path.length <= MAX_PATH_LENGTH,
+        )
+        // Each in the folder checked above, whatever a file says of its own
+        // (T334's review): its path and text, and nothing else it was sent with.
+        // In the folder published to (T452); a root file names none, as before.
+        .map(({ path, content }): ModelFile =>
+          folderId === ROOT_FOLDER_ID ? { path, content } : { folderId, path, content },
+        );
+      // Only YAML models are published: code in any other form runs where
+      // Cube's secrets are (R28; AC-332).
+      for (const file of files) {
+        const path = (file as ModelFile | null)?.path;
+        const kind =
+          typeof path === 'string' && path !== ''
+            ? NOT_YAML.find(([test]) => test.test(path))?.[1]
+            : undefined;
+        if (kind !== undefined)
+          return reply
+            .status(400)
+            .send({ error: `Only YAML models can be published: ${path} is ${kind}.` });
+      }
+      if (changed.length === 0 || changed.length !== files.length)
+        return reply.status(400).send({
+          error: 'Send the changed YAML model files, each by a plain path inside the model.',
+        });
+      const template = changed.find((file) => JINJA.test(file.content));
+      if (template !== undefined)
+        return reply.status(400).send({
+          error: `Only YAML models can be published: ${template.path} is a Jinja template, which Cube would render with its own environment.`,
+        });
+      // One cube or view per file: each file is one xcube item (T448, AC-337).
+      const several = changed.map(severalIn).filter((each) => each !== undefined);
+      if (several.length > 0) return reply.status(422).send({ errors: several });
+      // A file that makes no item: never sent, so never checked (T426's review).
+      const unreadable = changed.map(unreadableIn).filter((each) => each !== undefined);
+      if (unreadable.length > 0) return reply.status(422).send({ errors: unreadable });
+      // Names xcube's items refuse, which the files dry run would pass (T449's review).
+      const misnamed = changed.flatMap(misnamedIn);
+      if (misnamed.length > 0) return reply.status(422).send({ errors: misnamed });
+      // xcube checks a change and serves it (T445, T447); without it, neither happens.
+      if (modelFiles === undefined || xcube === undefined)
+        return reply.status(409).send({
+          error:
+            modelFiles === undefined
+              ? 'There is no model store here to publish to.'
+              : 'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_SERVICE_KEY), so a change could not be checked or served.',
+        });
 
-    // The whole model, every folder's files (T452), and this folder's own.
-    const live = (await modelFiles.all?.()) ?? (await modelFiles.list());
-    const inFolder = live.filter((file) => (file.folderId ?? ROOT_FOLDER_ID) === folderId);
-    // Files generated from a data source are new ones: never over what the
-    // folder has, file or name (T276, AC-249), whatever the browser checked.
-    if (body?.create === true) {
-      // Cube's model names the cubes of files not read here as YAML, which
-      // only the root holds; asked as wechart asks it everything, and
-      // without it the files alone decide.
-      const compiled =
-        folderId === ROOT_FOLDER_ID
-          ? await client.metaExtended().then(compiledIn, (error: unknown) => {
-              app.log.warn({ err: error }, 'could not read Cube’s model to check generated names');
-              return [];
-            })
-          : [];
-      const clashes = clashesOf(changed, inFolder, compiled).map((clash) =>
-        // Said as that folder's file, as its rollups' refusals are (T450's review).
-        folderId === ROOT_FOLDER_ID ? clash : { ...clash, folderId },
+      // The whole model, every folder's files (T452), and this folder's own.
+      const live = (await modelFiles.all?.()) ?? (await modelFiles.list());
+      const inFolder = live.filter((file) => (file.folderId ?? ROOT_FOLDER_ID) === folderId);
+      // Files generated from a data source are new ones: never over what the
+      // folder has, file or name (T276, AC-249), whatever the browser checked.
+      if (body?.create === true) {
+        // Cube's model names the cubes of files not read here as YAML, which
+        // only the root holds; asked as wechart asks it everything, and
+        // without it the files alone decide.
+        const compiled =
+          folderId === ROOT_FOLDER_ID
+            ? await client.metaExtended().then(compiledIn, (error: unknown) => {
+                app.log.warn(
+                  { err: error },
+                  'could not read Cube’s model to check generated names',
+                );
+                return [];
+              })
+            : [];
+        const clashes = clashesOf(changed, inFolder, compiled).map((clash) =>
+          // Said as that folder's file, as its rollups' refusals are (T450's review).
+          folderId === ROOT_FOLDER_ID ? clash : { ...clash, folderId },
+        );
+        if (clashes.length > 0) return reply.status(422).send({ errors: clashes });
+      }
+      // A name another file in the folder declares: one item each (T426's
+      // review), and free in another folder (AC-271, T452).
+      const redeclared = redeclaredIn(changed, inFolder);
+      if (redeclared.length > 0) return reply.status(422).send({ errors: redeclared });
+      // A name a changed file no longer declares is renamed away: refused while
+      // a chart or dashboard still names it (T428, AC-275).
+      const declaring = new Set(
+        changed.flatMap((file) => declaredIn(file.content)).map(({ name }) => name),
       );
-      if (clashes.length > 0) return reply.status(422).send({ errors: clashes });
-    }
-    // A name another file in the folder declares: one item each (T426's
-    // review), and free in another folder (AC-271, T452).
-    const redeclared = redeclaredIn(changed, inFolder);
-    if (redeclared.length > 0) return reply.status(422).send({ errors: redeclared });
-    // A name a changed file no longer declares is renamed away: refused while
-    // a chart or dashboard still names it (T428, AC-275).
-    const declaring = new Set(
-      changed.flatMap((file) => declaredIn(file.content)).map(({ name }) => name),
-    );
-    const renamedAway = inFolder
-      .filter((file) => changed.some((each) => each.path === file.path))
-      .flatMap((file) => declaredIn(file.content).map(({ name }) => name))
-      .filter((name) => name !== '' && !declaring.has(name));
-    const used = await inUse(request, renamedAway, served.ids.get(folderId)!);
-    if (used !== undefined) return reply.status(409).send(used);
-    const paths = new Set(changed.map((file) => file.path));
-    const overTemplate = inFolder.find((file) => paths.has(file.path) && JINJA.test(file.content));
-    if (overTemplate !== undefined)
-      return reply.status(409).send({
-        error: `${overTemplate.path} is a Jinja template, and templates are read-only here.`,
-      });
-    const replaced = (file: ModelFile) =>
-      (file.folderId ?? ROOT_FOLDER_ID) === folderId && paths.has(file.path);
-    const draft = [...live.filter((file) => !replaced(file)), ...changed].sort((a, b) =>
-      a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
-    );
-    // A folder's cubes join cubes in the folders above it: xcube needs the
-    // tree it holds to have this folder, made a moment ago or not.
-    if (folderId !== ROOT_FOLDER_ID)
-      await beforeFolderPublish?.().catch((error: unknown) => {
-        app.log.warn({ err: error }, 'could not put the folder tree to xcube before a publish');
-      });
-    /** The change, checked: written, sent to xcube, and seen at once. */
-    const commit = async (changeset?: Changeset) => {
-      await modelFiles.write(changed);
-      // Committed first, then sent: xcube is never ahead of wechart (T419).
-      await afterPublish?.(changeset).catch((error: unknown) => {
-        app.log.warn({ err: error }, 'could not send the published model to xcube');
-      });
-      // A model the user just published must not look stale to them (AC-137).
-      meta.invalidate();
-      return { version: versionOf(draft) };
-    };
+      const renamedAway = inFolder
+        .filter((file) => changed.some((each) => each.path === file.path))
+        .flatMap((file) => declaredIn(file.content).map(({ name }) => name))
+        .filter((name) => name !== '' && !declaring.has(name));
+      const used = await inUse(request, renamedAway, served.ids.get(folderId)!);
+      if (used !== undefined) return reply.status(409).send(used);
+      const paths = new Set(changed.map((file) => file.path));
+      const overTemplate = inFolder.find(
+        (file) => paths.has(file.path) && JINJA.test(file.content),
+      );
+      if (overTemplate !== undefined)
+        return reply.status(409).send({
+          error: `${overTemplate.path} is a Jinja template, and templates are read-only here.`,
+        });
+      const replaced = (file: ModelFile) =>
+        (file.folderId ?? ROOT_FOLDER_ID) === folderId && paths.has(file.path);
+      const draft = [...live.filter((file) => !replaced(file)), ...changed].sort((a, b) =>
+        a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+      );
+      // A folder's cubes join cubes in the folders above it: xcube needs the
+      // tree it holds to have this folder, made a moment ago or not.
+      if (folderId !== ROOT_FOLDER_ID)
+        await beforeFolderPublish?.().catch((error: unknown) => {
+          app.log.warn({ err: error }, 'could not put the folder tree to xcube before a publish');
+        });
+      /** The change, checked: written, sent to xcube, and seen at once. */
+      const commit = async (changeset?: Changeset) => {
+        await modelFiles.write(changed);
+        // Committed first, then sent: xcube is never ahead of wechart (T419).
+        await afterPublish?.(changeset).catch((error: unknown) => {
+          app.log.warn({ err: error }, 'could not send the published model to xcube');
+        });
+        // A model the user just published must not look stale to them (AC-137).
+        meta.invalidate();
+        return { version: versionOf(draft) };
+      };
 
-    /**
-     * Checked by xcube's dry run (T445): one call compiles the whole model with
-     * the change in it and plans each cube's rollups against it. Refused in
-     * the order Cube's own checks refused: the compile, names the model
-     * doesn't have, crons, then joins. Every break refuses it (R29).
-     */
-    const checked = await checkWithXcube({
-      xcube,
-      draft,
-      changed,
-      live,
-      folders: served.ids,
-      securityContext: config.securityContext,
-      log: (error) => {
-        app.log.warn({ err: error }, 'could not ask xcube to check the model');
-      },
-    });
-    if (checked.kind === 'unreachable') return reply.status(502).send({ error: checked.error });
-    if (checked.kind === 'invalid') return reply.status(422).send({ errors: checked.errors });
-    const unknown = unknownInRollups(draft, served);
-    if (unknown.length > 0) return reply.status(422).send({ errors: unknown });
-    // Crons Cube's refresh worker can't run, in the files being changed (T258, AC-153).
-    const crons = refreshKeyProblemsOf(changed);
-    if (crons.length > 0) return reply.status(422).send({ errors: crons });
-    const rollups = checked.rollups();
-    if (rollups.kind === 'unasked') return reply.status(502).send({ error: rollups.error });
-    if (rollups.kind === 'unjoinable') return reply.status(422).send({ errors: rollups.errors });
-    return commit(checked.changeset);
-  });
+      /**
+       * Checked by xcube's dry run (T445): one call compiles the whole model with
+       * the change in it and plans each cube's rollups against it. Refused in
+       * the order Cube's own checks refused: the compile, names the model
+       * doesn't have, crons, then joins. Every break refuses it (R29).
+       */
+      const checked = await checkWithXcube({
+        xcube,
+        draft,
+        changed,
+        live,
+        folders: served.ids,
+        securityContext: config.securityContext,
+        log: (error) => {
+          app.log.warn({ err: error }, 'could not ask xcube to check the model');
+        },
+      });
+      if (checked.kind === 'unreachable') return reply.status(502).send({ error: checked.error });
+      if (checked.kind === 'invalid') return reply.status(422).send({ errors: checked.errors });
+      const unknown = unknownInRollups(draft, served);
+      if (unknown.length > 0) return reply.status(422).send({ errors: unknown });
+      // Crons Cube's refresh worker can't run, in the files being changed (T258, AC-153).
+      const crons = refreshKeyProblemsOf(changed);
+      if (crons.length > 0) return reply.status(422).send({ errors: crons });
+      const rollups = checked.rollups();
+      if (rollups.kind === 'unasked') return reply.status(502).send({ error: rollups.error });
+      if (rollups.kind === 'unjoinable') return reply.status(422).send({ errors: rollups.errors });
+      return commit(checked.changeset);
+    }),
+  );
 }

@@ -7309,6 +7309,15 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
     - web data-sources 17;
     - Chrome: `security/data-sources.spec.ts` 7, `folder-data-sources.spec.ts` 3, `data-source-binding.spec.ts` (T435) on the new image, `jobs`, `items-switch`, `xcube-cutover` and `admin` (31);
     - units: api 774 (T443's red test aside), web 1556.
+- [x] T460 (AC-273) Send a model's publishes one at a time, each as its own changeset, so no publish sends the whole model over another in flight *(added 2026-09-27, from T343's full security run)*
+  - Files: `packages/api/src/model/publish.ts`, `packages/api/src/xcube/publish-serial.test.ts`
+  - Failing test: `publish-serial.test.ts`: two publishes at once, the first's change reaching xcube a moment after it is committed, each go to xcube as a changeset and neither as the whole model (AC-273).
+  - Depends on: T435
+  - **Done 2026-09-27. AC-273 stays ticked.** A full run of the security suite, at HEAD before T343 too, moved published cubes to a nearer data source without their being published again (`data-source-binding.spec.ts`, `data-sources.spec.ts`).
+    - **The cause:** xcube's revisions showed whole-model sends (`{"reason": "publish"}`, no changeset) between changesets. A publish checked while another's change was committed to wechart's store and not yet in xcube found the two apart (T426's `whole`) and sent the whole model. A whole send binds every cube afresh.
+    - **The fix:** a model's publishes and deletes run one at a time on each API. Each is checked only once the one before it is committed and sent.
+    - **Afterwards:** the full security suite passes in Chrome (59), and the run's revisions show one whole send, at start, and every publish as a changeset (35).
+  - **Left to xcube** (`to-xcube/2026-09-27-0530-snapshot-rebinds.md`): the recovery sends at start, after a refusal, or across two API replicas still bind every cube afresh. Asked: keep each item's resolved YAML when its authored YAML is unchanged.
 
 ### Slice 5: previews
 
