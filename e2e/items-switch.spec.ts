@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { createHmac } from 'node:crypto';
+import { createHmac, generateKeyPairSync } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { migrateChartDocument, readChartDocument, toChartSpec, toCubeQuery } from '@wechart/core';
 import { expect, test } from '@playwright/test';
 
-import { ADMIN_TOKEN, CUBE, SECRET, startApi, stopApi, type ApiProcess } from './api-process';
+import { CUBE, SECRET, serviceToken, startApi, stopApi, type ApiProcess } from './api-process';
 
 /**
  * T430 / AC-336: WHEN wechart first moves its model to xcube's items mode
@@ -100,7 +100,7 @@ const forget = (model: string) =>
 async function xcube(model: string, path: string, init?: RequestInit) {
   const response = await fetch(`${CUBE}/v1/semantic/models/${model}${path}`, {
     ...init,
-    headers: { authorization: `Bearer ${ADMIN_TOKEN}`, 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${serviceToken()}`, 'content-type': 'application/json' },
   });
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
 }
@@ -229,11 +229,21 @@ test.describe.serial('the move to items mode (T430, AC-336)', () => {
   });
 
   test('every seeded chart answers the same, nothing stored changes, and the rollup isn’t rebuilt', async () => {
-    // Served seeded, but kept from xcube's admin routes: it can't move the model.
+    // Served seeded, but kept from xcube's admin routes: it can't move the
+    // model. Its service key is one xcube doesn't hold (T420).
+    const unknownKey = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    }).privateKey;
     api = await startApi(port, {
       database,
       model,
-      settings: { WECHART_SEED: '1', WECHART_XCUBE_ADMIN_TOKEN: 'x'.repeat(40) },
+      settings: {
+        WECHART_SEED: '1',
+        WECHART_SERVICE_KEY_FILE: '',
+        WECHART_SERVICE_KEY: unknownKey,
+      },
     });
     const files = await head(model);
     expect(files.mode).toBe('files');
@@ -291,25 +301,29 @@ test.describe.serial('the move to items mode (T430, AC-336)', () => {
     const planBefore = await rollupPlan(model, files.revision);
     expect(String(planBefore.tableName)).toMatch(/monthly_orders/);
     expect(planBefore.loadSql).toBeDefined();
-    // Built now, through the API's own builds route, as Jobs builds it: the
-    // refresh worker's schedule isn't this spec's to wait for.
-    const build = await fetch(`${api.url}/api/builds`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ preAggregation: 'monthly_orders.by_status_month' }),
-    });
-    const { tokens } = (await build.json()) as { tokens: string[] };
+    // Built now, through Cube's jobs API with the service credential, as Jobs
+    // builds it (T420): the refresh worker's schedule isn't this spec's to
+    // wait for, and this API is kept from xcube, its service key with it.
+    const jobs = (body: Record<string, unknown>) =>
+      fetch(`${CUBE}/v1/pre-aggregations/jobs`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${serviceToken()}`, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then((response) => response.json() as Promise<unknown>);
+    const tokens = (await jobs({
+      action: 'post',
+      selector: {
+        contexts: [{ securityContext: { wechartModel: model, wechartRevision: files.revision } }],
+        timezones: ['UTC'],
+        preAggregations: ['monthly_orders.by_status_month'],
+      },
+    })) as string[];
     expect(tokens.length).toBeGreaterThan(0);
     await expect
       .poll(
         async () => {
-          const status = await fetch(`${api!.url}/api/builds/status`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ tokens }),
-          });
-          const jobs = (await status.json()) as { status: string }[];
-          return jobs.length === tokens.length && jobs.every((job) => job.status === 'done');
+          const states = (await jobs({ action: 'get', tokens })) as { status: string }[];
+          return states.length === tokens.length && states.every((job) => job.status === 'done');
         },
         { timeout: 180_000, intervals: [2_000] },
       )

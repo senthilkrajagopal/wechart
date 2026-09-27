@@ -9,7 +9,7 @@ F24, AC-248, task T274. The Helm chart at `deploy/helm/wechart` runs wechart, Cu
 | `web`: the built app, and `/api` passed to the API | Deployment | `wechart-web:<tag>` (nginx, unprivileged) | `LoadBalancer`, port `web.service.port` | `/healthz` |
 | `api`: wechart's API | Deployment, `api.replicas` (2), rolled one at a time, with a PodDisruptionBudget | `wechart-api:<tag>` | ClusterIP 4100 | `/api/health` |
 | `meta`: wechart's metadata database | StatefulSet with a volume | `postgres:18.6-alpine3.24` | headless 5432 | `pg_isready` over TCP |
-| `cube`: Cube's API | Deployment, `cube.replicas` (2), with a PodDisruptionBudget | `ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768@sha256:d787e67c…` | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
+| `cube`: Cube's API | Deployment, `cube.replicas` (2), with a PodDisruptionBudget | `ghcr.io/senthilkrajagopal/xcube:v1.7.45-ed08180c37@sha256:bc041aa2…` | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
 | `cube-refresh-worker`: Cube's refresh worker | Deployment, 1 replica | the same | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
 | `xcube-bootstrap-<hash>`: xcube's role and schema in the metadata database | Job, run once | `postgres:18.6-alpine3.24` | none | none |
 | `cubestore`: Cube Store, one node | StatefulSet with a volume | `cubejs/cubestore:v1.7.45` (`-arm64v8` on arm64) | headless 3030 | `:3031/readyz`, `:3031/livez` |
@@ -36,12 +36,12 @@ docker build -f deploy/Dockerfile --target api -t wechart-api:$TAG .
 docker build -f deploy/Dockerfile --target web -t wechart-web:$TAG .
 ```
 
-Cube runs v1.7.45, unmodified, with the user's fork's package xcube. xcube adds the data-source introspection API that wechart generates cubes with (T275, T413–T415, T417; `docs/research/cube/introspection-api.md`). From the fork's commit `83cb9f0888` it also serves the model (T447; `docs/research/xcube-slice-2.md`), and from `c0610bb768` it serves it as items: names resolved in folders, compiled in modules (T449; `docs/research/xcube-slice-3a.md`, `xcube-slice-3b.md`). xcube is the package that was `cube-introspection/`, renamed at the fork's commit `a13b9cff43` with its HTTP API unchanged.
+Cube runs v1.7.45, unmodified, with the user's fork's package xcube. xcube adds the data-source introspection API that wechart generates cubes with (T275, T413–T415, T417; `docs/research/cube/introspection-api.md`). From the fork's commit `83cb9f0888` it also serves the model (T447; `docs/research/xcube-slice-2.md`), and from `c0610bb768` it serves it as items: names resolved in folders, compiled in modules (T449; `docs/research/xcube-slice-3a.md`, `xcube-slice-3b.md`). From `ed08180c37` it carries slices 4–6: the folder gate and RS256 tokens, overlays for previews, and data-source connections (T420, R31; `docs/research/xcube-slice-4.md`, `-5.md`, `-6.md`, `xcube-overlay-data-sources.md`). Each model's rollups build once more on the first start of this image, in a schema of the model's own. xcube is the package that was `cube-introspection/`, renamed at the fork's commit `a13b9cff43` with its HTTP API unchanged.
 
 The fork's CI publishes the image for amd64 and arm64, and it is pulled by digest, never by its moving tag `v1.7.45-feat-xcube`:
 
 ```sh
-docker pull ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768@sha256:d787e67c23f567437e49e1ad1e3eab1802c143bd1bfab465ded9e9468c5e1ab8
+docker pull ghcr.io/senthilkrajagopal/xcube:v1.7.45-ed08180c37@sha256:bc041aa208df0cd748b59fbfdbeca8684538f08c67f6020b0316d1efd1eb6fd8
 ```
 
 That is the chart's default `cube.image` and docker-compose's, for Cube and its refresh worker alike; a plain `cubejs/cube` image won't start with xcube's `cube.js`. The image's own command starts the package's server, so give Cube no `command` or `args`: `cubejs server` would start it without the introspection routes.
@@ -143,7 +143,7 @@ This release's model starts empty. The API seeds its model store from `WECHART_M
 
 Build the model in the browser's **Model** workspace, then the dashboards.
 - **Checking a publish.** xcube's dry run compiles the change and plans each cube's rollups without storing anything, and it refuses any break (T445).
-- **Sending it.** Once committed to wechart's store, the API sends the whole model to xcube as items, each plain YAML file one root item, with the folder tree (T419, T446, T449). It also sends it when it starts and every 60 seconds, if xcube's items hash differs from wechart's. The tree is put again when the API starts and after every folder change. The model's id is `api.xcubeModel` (`wechart`), and the admin token is the one the chart generates.
+- **Sending it.** Once committed to wechart's store, the API sends the whole model to xcube as items, each plain YAML file one root item, with the folder tree (T419, T446, T449). It also sends it when it starts and every 60 seconds, if xcube's items hash differs from wechart's. The tree is put again when the API starts and after every folder change. The model's id is `api.xcubeModel` (`wechart`). The API calls xcube with its service credential, under the key the chart generates (T420).
 - **Every query token** names that model and the revision last recorded, so an answer never comes from an older one (T421).
 - **With the API stopped**, Cube still serves the published model.
 
@@ -200,7 +200,7 @@ At the first install the chart generates these secrets:
 - Cube's API secret;
 - the metadata database's password;
 - xcube's role password, and the URL Cube connects to xcube's schema by;
-- xcube's admin token, which Cube's API instance and wechart's API share (static until slice 4, R29);
+- wechart's service key pair (T420): the API signs its own calls to Cube and xcube with the private half, and Cube's API instance is given a certificate of the public half. It replaced xcube's static admin token, which an upgrade drops;
 - for sign-in, the session cookie's secret and the OIDC client secret its Dex shares with the API. It keeps them in the Secret `wechart-secrets`. Every upgrade reads them back, so they never change (`docs/research/helm.md`, "Pattern: generate-once Secret").
 
 The Secret is kept on uninstall (`helm.sh/resource-policy: keep`). The metadata database's volume outlives an uninstall too, and its password was set when the database was first initialised, so a new password would lock the API out. A reinstall with the same release name and namespace takes the kept Secret back.

@@ -1,3 +1,5 @@
+import { createPrivateKey, type KeyObject } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import type { SecurityMode } from './auth/user';
@@ -75,12 +77,14 @@ export interface Config {
    */
   readonly xcubePublicKey?: XcubePublicKey;
   /**
-   * The deployment's model in xcube, and the token xcube's admin routes take
-   * (T419, AC-333; R29): `WECHART_XCUBE_MODEL` and `WECHART_XCUBE_ADMIN_TOKEN`,
-   * both or neither. Without them wechart sends xcube nothing, as before the
+   * The deployment's model in xcube (T419, AC-333), and the private key of
+   * wechart's service credential, which xcube's admin routes, the jobs API
+   * and introspection take (T420, AC-326; slice 4): `WECHART_XCUBE_MODEL`, and
+   * `WECHART_SERVICE_KEY` or a file named by `WECHART_SERVICE_KEY_FILE`, both
+   * or neither. Without them wechart sends xcube nothing, as before the
    * cut-over (T447).
    */
-  readonly xcube?: { readonly model: string; readonly adminToken: string };
+  readonly xcube?: { readonly model: string; readonly serviceKey: string };
 }
 
 /** The OIDC provider wechart signs users in through (AC-252; research/openid-client.md). */
@@ -160,42 +164,56 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ...(env['WECHART_SUPER_ADMIN_GROUP']
       ? { superAdminGroup: env['WECHART_SUPER_ADMIN_GROUP'] }
       : {}),
-    ...xcubeOf(env, cubeApiSecret),
+    ...xcubeOf(env),
   };
 }
 
 /** xcube's model id (research: `MODEL_ID` in its `snapshot.ts`). */
 const MODEL_ID = /^[a-z0-9][a-z0-9_-]{0,62}$/;
-/** What xcube takes as an admin token (research, "Admin authentication"). */
-const ADMIN_TOKEN = /^[A-Za-z0-9._~-]{32,}$/;
+/** The smallest RSA key xcube takes (research `xcube-slice-4.md`, "Keys and tokens"). */
+const MIN_SERVICE_KEY_BITS = 2048;
 
-/** The deployment's model and xcube's admin token, both or neither (T419). */
-function xcubeOf(env: NodeJS.ProcessEnv, cubeApiSecret: string): Pick<Config, 'xcube'> {
+/** The deployment's model and wechart's service key, both or neither (T419, T420). */
+function xcubeOf(env: NodeJS.ProcessEnv): Pick<Config, 'xcube'> {
   const model = env['WECHART_XCUBE_MODEL'] ?? '';
-  const adminToken = env['WECHART_XCUBE_ADMIN_TOKEN'] ?? '';
-  if (model === '' && adminToken === '') return {};
+  const serviceKey = serviceKeyOf(env);
+  if (model === '' && serviceKey === '') return {};
   if (model === '')
     throw new ConfigError(
-      'WECHART_XCUBE_MODEL is required with WECHART_XCUBE_ADMIN_TOKEN: it names this deployment’s model in xcube.',
+      'WECHART_XCUBE_MODEL is required with WECHART_SERVICE_KEY: it names this deployment’s model in xcube.',
     );
-  if (adminToken === '')
+  if (serviceKey === '')
     throw new ConfigError(
-      'WECHART_XCUBE_ADMIN_TOKEN is required with WECHART_XCUBE_MODEL: xcube’s admin routes take it.',
+      'WECHART_SERVICE_KEY (or WECHART_SERVICE_KEY_FILE) is required with WECHART_XCUBE_MODEL: xcube’s admin routes take its tokens.',
     );
   if (!MODEL_ID.test(model))
     throw new ConfigError(
       `WECHART_XCUBE_MODEL "${model}" isn’t a model id xcube takes: 1–63 lower-case letters, digits, "_" and "-", starting with a letter or digit.`,
     );
-  // The token itself is never repeated.
-  if (!ADMIN_TOKEN.test(adminToken))
+  // The key itself is never repeated.
+  let key: KeyObject;
+  try {
+    key = createPrivateKey(serviceKey);
+  } catch {
+    throw new ConfigError('WECHART_SERVICE_KEY isn’t a private key in PEM.');
+  }
+  const bits = key.asymmetricKeyDetails?.modulusLength ?? 0;
+  if (key.asymmetricKeyType !== 'rsa' || bits < MIN_SERVICE_KEY_BITS)
     throw new ConfigError(
-      'WECHART_XCUBE_ADMIN_TOKEN isn’t a token xcube takes: 32 or more of A–Z, a–z, 0–9, ".", "_", "~" and "-".',
+      `WECHART_SERVICE_KEY isn’t a key xcube takes: an RSA key of ${String(MIN_SERVICE_KEY_BITS)} bits or more.`,
     );
-  if (adminToken === cubeApiSecret)
-    throw new ConfigError(
-      'WECHART_XCUBE_ADMIN_TOKEN is the same as CUBE_API_SECRET, which xcube refuses: give it a token of its own.',
-    );
-  return { xcube: { model, adminToken } };
+  return { xcube: { model, serviceKey } };
+}
+
+/** `WECHART_SERVICE_KEY`, or the file `WECHART_SERVICE_KEY_FILE` names: a mounted Secret. */
+function serviceKeyOf(env: NodeJS.ProcessEnv): string {
+  const file = env['WECHART_SERVICE_KEY_FILE'] ?? '';
+  if (file === '') return env['WECHART_SERVICE_KEY'] ?? '';
+  try {
+    return readFileSync(file, 'utf8');
+  } catch {
+    throw new ConfigError(`WECHART_SERVICE_KEY_FILE names ${file}, which can’t be read.`);
+  }
 }
 
 /** With security on, everything sign-in needs is required: a missing piece is a startup error. */

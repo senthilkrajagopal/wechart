@@ -19,3 +19,20 @@ half (requirements.md §P2.4, "Credentials"; R27).
 
 xcube's own start-up check needs a sample credential sealed to this key, which
 xcube's side makes (`<kid>.check` in the research).
+
+# wechart's development service key pair
+
+wechart's API calls xcube's admin routes, Cube's jobs API and introspection
+with its service credential: RS256 tokens under a key of its own (T420,
+AC-326; `docs/research/xcube-slice-4.md`, "The service token").
+
+- `dev-service-key.pem`: the private half, RSA 2048-bit in PKCS#8 PEM, made
+  with `openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048`. The
+  API reads it from `WECHART_SERVICE_KEY_FILE`, and nothing else is given it.
+  For development only.
+- `dev-service-key.pub.pem`: the public half (`openssl pkey -pubout`). compose
+  mounts it into the Cube API instance as `XCUBE_SERVICE_KEYS_FILE`; xcube
+  names it by its RFC 7638 thumbprint, as wechart does.
+
+The Helm chart generates its own pair at install (`genSelfSignedCert`), and
+keeps it across upgrades.

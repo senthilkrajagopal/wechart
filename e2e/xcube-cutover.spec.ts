@@ -3,7 +3,7 @@ import { createHash, createHmac } from 'node:crypto';
 
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
-import { ADMIN_TOKEN, CUBE, SECRET, startApi, stopApi, type ApiProcess } from './api-process';
+import { CUBE, SECRET, serviceToken, startApi, stopApi, type ApiProcess } from './api-process';
 import { ownCubeFile } from './model-files';
 
 /**
@@ -86,8 +86,12 @@ async function startCube(name: string): Promise<string> {
   const env = (
     JSON.parse(docker('inspect', '-f', '{{json .Config.Env}}', 'wechart-cube')) as string[]
   )
-    // Not an admin: this process only answers.
-    .filter((entry) => !entry.startsWith('XCUBE_ADMIN_TOKENS='));
+    // Not an admin: this process only answers. With no service key (T420),
+    // nor the admin token that preceded it, it serves no admin route.
+    .filter(
+      (entry) =>
+        !entry.startsWith('XCUBE_ADMIN_TOKENS=') && !entry.startsWith('XCUBE_SERVICE_KEYS'),
+    );
   docker(
     'run',
     '-d',
@@ -270,7 +274,7 @@ test.describe.serial('xcube serves the model (T447)', () => {
     const resolve = async () => {
       const answer = await fetch(`${CUBE}/v1/semantic/models/${MODEL}/resolve`, {
         method: 'POST',
-        headers: { authorization: `Bearer ${ADMIN_TOKEN}`, 'content-type': 'application/json' },
+        headers: { authorization: `Bearer ${serviceToken()}`, 'content-type': 'application/json' },
         body: JSON.stringify({ folderId, names: ['orders'] }),
       });
       const body = (await answer.json()) as { names?: Record<string, string | null> };
@@ -533,7 +537,7 @@ const hashOf = (files: readonly File[]) =>
 /** xcube's head of a model: its items hash, and its mode (T449). */
 async function xcubeHead(model = MODEL): Promise<string | undefined> {
   const response = await fetch(`${CUBE}/v1/semantic/models/${model}/revision`, {
-    headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    headers: { authorization: `Bearer ${serviceToken()}` },
   });
   const head = (await response.json()) as { mode?: string; current?: { itemsHash?: string } };
   // Only an items-mode head is wechart's from T449; a file set never is.

@@ -7,9 +7,9 @@ import type { Item } from './items';
  * §"API surface we will use"; items mode, T449: `xcube-slice-3a.md`), under
  * Cube's base path: `{CUBE_API_URL}/v1/semantic/models/{model}`.
  *
- * Called with xcube's static admin token until slice 4 gives wechart its
- * service credential (R29), never with a user's token. Only wechart's server
- * calls them (AC-327).
+ * Called with wechart's service credential (T420, AC-326; slice 4,
+ * `xcube-slice-4.md`), which replaced xcube's static admin token, and never
+ * with a user's token. Only wechart's server calls them (AC-327).
  */
 export interface XcubeHead {
   readonly generation: string;
@@ -181,20 +181,24 @@ export function xcubeAdmin({
 }: {
   readonly cubeApiUrl: string;
   readonly model: string;
-  readonly token: string;
+  /**
+   * The service credential's token, minted for each call (T420, slice 4);
+   * or a fixed token, as the stub xcube takes one.
+   */
+  readonly token: string | (() => Promise<string>);
   readonly fetch?: typeof fetch;
   readonly timeoutMs?: number;
 }): XcubeAdmin {
   const base = `${cubeApiUrl.replace(/\/$/, '')}/v1/semantic/models/${encodeURIComponent(model)}`;
-  const headers = {
-    authorization: `Bearer ${token}`,
-    'content-type': 'application/json',
-  };
+  const credential = typeof token === 'string' ? async () => token : token;
 
   const call = async (method: 'GET' | 'PUT' | 'POST', path: string, body?: unknown) => {
     const response = await send(`${base}${path}`, {
       method,
-      headers,
+      headers: {
+        authorization: `Bearer ${await credential()}`,
+        'content-type': 'application/json',
+      },
       signal: AbortSignal.timeout(timeoutMs),
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });

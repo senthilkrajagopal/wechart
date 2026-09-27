@@ -2,6 +2,7 @@ import closeWithGrace from 'close-with-grace';
 
 import { pgSessionStore } from './auth/session-store';
 import { loadConfig } from './config';
+import { serviceCredential } from './cube/service-token';
 import { closeDb, getDb } from './db/client';
 import { migrateToLatest } from './db/migrate';
 import { bookmarkStore } from './repos/bookmarks';
@@ -58,13 +59,25 @@ async function main(): Promise<void> {
    * publish and every 60 s, where the deployment names its model in xcube.
    * The same admin client checks each publish first (T445).
    */
-  const admin =
+  /**
+   * wechart's service credential (T420, AC-326): every call of its own —
+   * xcube's admin routes, the jobs API, introspection, the whole field list —
+   * carries its token, never a user's, and xcube's static admin token no more.
+   */
+  const service =
     config.xcube === undefined
+      ? undefined
+      : await serviceCredential({
+          privateKeyPem: config.xcube.serviceKey,
+          model: config.xcube.model,
+        });
+  const admin =
+    config.xcube === undefined || service === undefined
       ? undefined
       : xcubeAdmin({
           cubeApiUrl: config.cubeApiUrl,
           model: config.xcube.model,
-          token: config.xcube.adminToken,
+          token: () => service.token(),
         });
   // What xcube acknowledged: recorded by the sync, and read for every token (T421).
   const publications = publicationStore(db);
@@ -111,6 +124,7 @@ async function main(): Promise<void> {
     // Where each folder's model files are published (T452).
     folders: () => folderIds.published(),
     ...(admin === undefined ? {} : { xcube: admin }),
+    ...(service === undefined ? {} : { serviceToken: () => service.token() }),
     publications,
     // Each folder's AD groups (T314).
     folderAccess: folderAccessStore(db),

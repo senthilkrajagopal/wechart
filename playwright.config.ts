@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import { defineConfig, devices } from '@playwright/test';
 
@@ -7,6 +8,10 @@ const DEV_XCUBE_PUBLIC_KEY = readFileSync(
   new URL('./infra/xcube/dev-credential-key.pub.jwk', import.meta.url),
   'utf8',
 ).trim();
+/** wechart's development service key, its own calls' credential (infra/xcube/README.md; T420). */
+const DEV_SERVICE_KEY_FILE = fileURLToPath(
+  new URL('./infra/xcube/dev-service-key.pem', import.meta.url),
+);
 
 const PORT = 5273;
 const baseURL = `http://localhost:${PORT}`;
@@ -91,10 +96,11 @@ export default defineConfig({
         // than from whatever the last run left behind.
         WECHART_RESET_DATA: '1',
         // xcube serves this suite's model (T447, AC-333): pushed by this API
-        // under its own model id, with the admin token compose gives Cube's
-        // API instance (docker-compose.yml, XCUBE_ADMIN_TOKENS). A dev value.
+        // under its own model id, with the service key whose public half
+        // compose gives Cube's API instance (docker-compose.yml,
+        // XCUBE_SERVICE_KEYS_FILE; T420). A dev key.
         WECHART_XCUBE_MODEL: 'e2e',
-        WECHART_XCUBE_ADMIN_TOKEN: 'dev-xcube-admin-token-0123456789abcdef',
+        WECHART_SERVICE_KEY_FILE: DEV_SERVICE_KEY_FILE,
         // The compose refresh worker's own health probes (T162, AC-156).
         CUBE_WORKER_URL: 'http://localhost:54001',
       },

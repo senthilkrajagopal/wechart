@@ -96,6 +96,11 @@ export interface BuildOptions {
   /** xcube's admin routes, for its check of a publish (T445), where xcube is configured. */
   readonly xcube?: XcubeAdmin;
   /**
+   * The service credential's token (T420, AC-326): what wechart's own calls
+   * to Cube carry — jobs, introspection, the whole model's field list.
+   */
+  readonly serviceToken?: () => Promise<string>;
+  /**
    * What xcube last acknowledged of each model (T419), read for the revision
    * every token to Cube names and the field list follows (T421, AC-334).
    */
@@ -235,6 +240,7 @@ export function buildServer({
   folders,
   beforeFolderPublish,
   xcube,
+  serviceToken,
   publications,
   folderAccess,
   healthFetch,
@@ -337,6 +343,7 @@ export function buildServer({
       apiSecret: config.cubeApiSecret,
       securityContext: config.securityContext,
       ...(model === undefined ? {} : { model }),
+      ...(serviceToken === undefined ? {} : { service: serviceToken }),
     });
 
   // Metadata is cached with a 60-second freshness bound (AC-009), so a

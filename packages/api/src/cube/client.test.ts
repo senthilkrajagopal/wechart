@@ -207,6 +207,69 @@ describe('the introspection token (AC-250)', () => {
   });
 });
 
+/**
+ * T420 / AC-326, AC-250: WHEN wechart calls Cube on its own behalf (the jobs
+ * API, introspection, the whole model's field list), THE SYSTEM SHALL use the
+ * service credential, never a user's token; and no user's token SHALL be
+ * granted `introspection`. xcube's slice 4 gives a service token `jobs` and
+ * `introspection` only, and the whole field list is xcube's own
+ * `GET …/meta?extended=true` (`xcube-slice-4.md`, "What wechart calls today").
+ */
+describe('the service credential, on wechart’s own calls (AC-326, AC-250)', () => {
+  const serviced = () => {
+    received = [];
+    respond = () => ({ status: 200, body: JSON.stringify({ cubes: [] }) });
+    return new CubeClient({
+      apiUrl: baseUrl,
+      apiSecret: 'test-secret-do-not-leak',
+      securityContext: { tenant: 'acme' },
+      model: { id: 'e2e', revision: async () => 7 },
+      service: async () => 'the-service-token',
+    });
+  };
+  const bearerOf = (request: RecordedRequest) => String(request.headers['authorization']);
+
+  it('builds, and reads builds, with it', async () => {
+    const cube = serviced();
+    await cube.buildPreAggregations(['orders.daily']);
+    await cube.jobStatuses(['job-1']);
+
+    expect(received.map(bearerOf)).toEqual([
+      'Bearer the-service-token',
+      'Bearer the-service-token',
+    ]);
+    // Its builds name the model the token is for (research, "The service token").
+    expect(JSON.parse(received[0]!.body)).toMatchObject({
+      selector: { contexts: [{ securityContext: { wechartModel: 'e2e' } }] },
+    });
+  });
+
+  it('browses a data source with it, signing no introspection token of its own', async () => {
+    const cube = serviced();
+    await cube.introspect('/v1/introspection/data-sources');
+
+    // The service token itself, not a minute's HS256 token with the claim.
+    expect(received.map(bearerOf)).toEqual(['Bearer the-service-token']);
+  });
+
+  it('reads the field list from the revision last published, which xcube’s own meta can’t yet say', async () => {
+    const cube = serviced();
+    await cube.metaExtended();
+
+    // AC-334: never answered from before a publish (see `metaExtended`).
+    expect(received[0]!.url).toBe('/v1/meta?extended=true');
+    expect(payloadOf(received[0]!)).toMatchObject({ wechartModel: 'e2e', wechartRevision: 7 });
+  });
+
+  it('queries for wechart’s users with their own tokens still', async () => {
+    const cube = serviced();
+    await cube.load({ measures: ['orders.count'] });
+    await cube.metaExtended();
+
+    for (const request of received) expect(bearerOf(request)).not.toContain('the-service-token');
+  });
+});
+
 describe('the secret never leaves the service (AC-007)', () => {
   it('is not in the metadata result wechart hands back', async () => {
     const result = await client({ apiSecret: 'super-secret-value' }).meta();

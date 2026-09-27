@@ -56,8 +56,10 @@ test('building a pre-aggregation shows its job token and follows it to done', as
   // T158 / AC-152: in words, with its icon — never colour alone.
   await expect(job.getByTestId('job-state')).toHaveText('Done');
   await expect(job.getByTestId('job-state').locator('svg[data-icon="ok"]')).toHaveCount(1);
+  // In the model's own rollup schema, `<schema>_<model>_<hash>`, from slice 6
+  // (T420; research xcube-slice-6.md, "Pre-aggregation schemas").
   await expect(job.getByTestId('job-table')).toContainText(
-    'prod_pre_aggregations.monthly_orders_by_status_month',
+    /^prod_pre_aggregations_e2e_[0-9a-f]+\.monthly_orders_by_status_month/,
   );
 
   // Cube's own record of that token agrees.

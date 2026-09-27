@@ -42,7 +42,8 @@ x-cube-volumes: &cube-volumes
 # infra/xcube/README.md). A file named by its key id, as the research
 # lays out xcube's keys (credential-sealing.md, "Key management").
 x-cube-secrets: &cube-secrets
-  - source: xcube_credential_key
+  - &xcube-credential-key
+    source: xcube_credential_key
     target: /run/secrets/xcube-credential-keys/uYWeMx6i173fsiolFp1xi-qiav50k52AGinM56Y8JEw.pem
 
 services:
@@ -143,13 +144,16 @@ services:
   # schema in the metadata database, which wechart's API pushes to (T447,
   # AC-333; docs/research/xcube-slice-2.md). From c0610bb768 it serves the
   # model as items, names resolved in folders and compiled in modules (T449;
-  # xcube-slice-3a.md, xcube-slice-3b.md). The fork's CI publishes the image
-  # for amd64 and arm64, pulled here by digest: its moving tag isn't a version.
+  # xcube-slice-3a.md, xcube-slice-3b.md). From ed08180c37 it carries slices
+  # 4-6: the folder gate and RS256 tokens, overlays, connections (T420, R31;
+  # xcube-slice-4.md, -5.md, -6.md, xcube-overlay-data-sources.md). The fork's
+  # CI publishes the image for amd64 and arm64, pulled here by digest: its
+  # moving tag isn't a version.
   # The image's own CMD starts the package's server: give neither service a
   # `command`, or Cube starts without the routes. Cube and its refresh worker
   # run the same image.
   cube:
-    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768@sha256:d787e67c23f567437e49e1ad1e3eab1802c143bd1bfab465ded9e9468c5e1ab8}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-ed08180c37@sha256:bc041aa208df0cd748b59fbfdbeca8684538f08c67f6020b0316d1efd1eb6fd8}
     container_name: wechart-cube
     depends_on: &cube-depends-on
       sample-db:
@@ -160,17 +164,21 @@ services:
         condition: service_completed_successfully
     environment:
       <<: *cube-environment
-      # xcube's admin routes, which wechart's APIs push the model to: on the
-      # API instance only, never the worker (research, "Environment"). A dev
-      # value; each suite's API holds the same (playwright configs).
-      XCUBE_ADMIN_TOKENS: ${XCUBE_ADMIN_TOKENS:-dev-xcube-admin-token-0123456789abcdef}
+      # wechart's service credential's public half (T420, AC-326; slice 4):
+      # xcube's admin routes, the jobs API and introspection take its tokens.
+      # On the API instance only, which serves them; the worker verifies no
+      # token of wechart's (research xcube-slice-4.md, "Environment"). The
+      # static admin token it replaced is retired: none is set.
+      XCUBE_SERVICE_KEYS_FILE: /run/secrets/xcube-service-keys
     # Cube calls nothing of wechart's (T431, AC-327), so no host name is added
     # for the API on the host (Docker Desktop resolves host.docker.internal
     # regardless; e2e/no-callbacks.spec.ts watches for such a call).
     ports:
       - '54000:4000'
     volumes: *cube-volumes
-    secrets: *cube-secrets
+    secrets:
+      - *xcube-credential-key
+      - xcube-service-keys
 
   # Cube's refresh worker: the same image and configuration, told only to
   # build and refresh pre-aggregations. The API instance above is in
@@ -179,7 +187,7 @@ services:
   # "Topology"; pre-aggregations.md, "Observed locally"). A build asked for
   # through the jobs API runs in the API instance, though (upgrade-1.7.43.md).
   cube-refresh-worker:
-    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768@sha256:d787e67c23f567437e49e1ad1e3eab1802c143bd1bfab465ded9e9468c5e1ab8}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-ed08180c37@sha256:bc041aa208df0cd748b59fbfdbeca8684538f08c67f6020b0316d1efd1eb6fd8}
     container_name: wechart-cube-refresh-worker
     depends_on: *cube-depends-on
     environment:
@@ -228,3 +236,7 @@ secrets:
   # Development only: the fixed key pair's private half (infra/xcube/README.md).
   xcube_credential_key:
     file: ./infra/xcube/dev-credential-key.pem
+  # Development only: the public half of wechart's service key (T420;
+  # infra/xcube/README.md). Its private half is the API's alone.
+  xcube-service-keys:
+    file: ./infra/xcube/dev-service-key.pub.pem

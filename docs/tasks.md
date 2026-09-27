@@ -6535,7 +6535,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
       - On a fresh xcube, the API's start sync isn't awaited before it listens. Until xcube holds the model, a query is refused `403 Unknown model` (T421's note), so the first import after a new install makes the first queries wait. That goes to T423, with the API's replicas and their readiness.
       - The e2e's own xcube models (`e2e-cutover-<browser>`) persist in xcube's schema: xcube has no route that deletes a model.
       - One `sed -i` edit to `verify.sh` (adding openssl to its tools) went round the Edit hooks, against CLAUDE.md; the change was the one intended, and its `.orig` was removed.
-- [ ] T420 (AC-326, AC-250, AC-333) Call Cube and xcube on wechart's own behalf with a service credential, never a user's token *(moved to slice 4, 2026-09-26: xcube's admin routes take its static admin token until then, `[X2, R29]`)*
+- [x] T420 (AC-326, AC-250, AC-333) Call Cube and xcube on wechart's own behalf with a service credential, never a user's token *(moved to slice 4, 2026-09-26: xcube's admin routes take its static admin token until then, `[X2, R29]`)*
   - Files: `packages/api/src/cube/service-token.ts` (+ test), `packages/api/src/cube/client.ts`, `packages/api/src/xcube/admin.ts`, `packages/api/src/model/introspection.ts`, `packages/api/src/jobs/*.ts`, `packages/api/src/cube/health.ts`
   - *2026-09-26, slice 4 as built (`[X4]`, `xcube-slice-4.md`):*
     - **The image.** Pin `ghcr.io/senthilkrajagopal/xcube:v1.7.45-ed08180c37@sha256:bc041aa2…` (R31) in `docker-compose.yml`, `deploy/helm/wechart/values.yaml`, `deploy/helm/values/docker-desktop.yaml` and `packages/api/src/deploy/cube-image.test.ts`. Each model's rollups build once more after it (`[X6]`).
@@ -6549,6 +6549,41 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
 
     Research: `cube/tokens-and-service-credential.md`; `xcube-slice-4.md`.
   - Depends on: T322
+  - **Done 2026-09-26. AC-333 ticked again; AC-326 and AC-250 stay open for T437.**
+    - **The image** is `…-ed08180c37@sha256:bc041aa2…` in compose, Helm's values and `cube-image.test.ts`. xcube migrated its schema to 7 on first start. Each model's rollups now live in `prod_pre_aggregations_<model>_<hash>` (`jobs.spec.ts` names it so).
+    - **The service credential** (`cube/service-token.ts`, `jose` 6.2.12):
+      - an RS256 token with `kid` the RFC 7638 thumbprint, `aud: xcube-admin`, `role: service` and `wechartModel`;
+      - two minutes' life, kept while a minute is left;
+      - an RSA key of 2048 bits or more, PKCS#8 or the PKCS#1 Helm makes.
+    - **Where its private half comes from:** `WECHART_SERVICE_KEY` or `WECHART_SERVICE_KEY_FILE` replaces `WECHART_XCUBE_ADMIN_TOKEN`.
+      - In development it is `infra/xcube/dev-service-key.pem`, and compose gives the public half to Cube's API instance alone (`XCUBE_SERVICE_KEYS_FILE`).
+      - The chart generates the pair once (`genSelfSignedCert`, kept by `lookup`), gives the API the key and Cube's API instance a certificate, and drops the old admin token.
+      - The e2e helpers sign service tokens with the development key (`e2e/api-process.ts`, `serviceToken`).
+    - **It carries:** every xcube admin call (`xcubeAdmin`'s token, minted per call), the jobs API and introspection.
+    - **Not moved: the whole field list for Jobs, Schedules and a publish's name check.**
+      - It stays on `/v1/meta?extended=true` with wechart's own token naming the recorded revision.
+      - xcube's `GET …/meta` answered the previous revision for about 500 ms after a changeset, measured, which AC-334 forbids, and the e2e Schedules tests failed on it.
+      - xcube is asked for a least revision there (`~/Work/xcube-exchange/to-xcube/2026-09-26-2030-meta-revision-and-bindings.md`). The move waits for its image, and T436 needs it: under the gate, wechart's own token sees only the folders its groups reach.
+    - **The partitions route** has no caller yet: T375 builds it, on this credential.
+    - **Tests:**
+      - `service-token.test.ts`;
+      - `client.test.ts` (jobs, introspection, the field list's revision, users' own tokens);
+      - `xcube/client.test.ts` (a token per call), `xcube/config.test.ts`;
+      - `service-wiring.test.ts` (through the server: builds, their state and introspection carry the service token, and no response holds it);
+      - `cube-image.test.ts` (compose, the chart's Secret, its guard, the API's key and the certificate on Cube's API instance alone).
+      - Both e2e suites pass in Chrome on the new image, apart from those listed below. `items-switch.spec.ts` builds through Cube's jobs API with the service token, since its API is kept from xcube, credential and all.
+    - **The cold review (FAIL)** found:
+      - the field list's revision (above), which e2e had found too;
+      - no server-level test (added);
+      - a vacuous assertion (fixed);
+      - Helm tests by text only (the guard and the worker now checked).
+    - **Handed on:**
+      - T437 removes `cube.js`'s `wechartIntrospection` branch once HS256 is refused, which AC-250 needs.
+      - T436 waits on xcube's least revision on `GET …/meta`, and on AC-297's per-folder filtering (T371), since that list is unfiltered.
+      - The scope probes (`/api/cube-scopes`) still probe with wechart's own token. After T437 they describe a user's token only (AC-170's wording, for the user).
+    - **Failing, not T420's:**
+      - `acceleration.spec.ts` "Data as of…" (known);
+      - `editor-preview.spec.ts` "a tile resized in this session is previewed at its new height", off by 26 px: T402's uncommitted narrow-tile foot is in the tree (question 29).
 - [x] T421 (AC-334, AC-319) Name the model and the revision in every query token, key the metadata cache by xcube's revision, and wait for the migration lock
   - Files: `packages/api/src/cube/client.ts` (the `wechartModel` and `wechartRevision` claims; a catching-up instance's `503` with `Retry-After` waited for and asked again), `packages/api/src/cube/meta-cache.ts` (keyed by the recorded revision read before each fetch, fetched again when it changes), `packages/api/src/db/migrate.ts` (`advisoryLockMode: 'wait'`), `packages/api/src/server.ts` and `packages/api/src/main.ts` (wiring), `packages/api/src/xcube/publications.ts` and `xcube/snapshot.ts` (the record only rises within a generation), tests `cube/model-claims.test.ts`, `cube/meta-cache-replicas.test.ts`, `cube/meta-cache.test.ts`, `xcube/query-claims.test.ts`, `xcube/publications.test.ts`, `db/migrate-concurrent.test.ts`
   - Failing test:
@@ -7026,9 +7061,10 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
       - a permission change applies within 60 seconds, with no module compiled; with security off every token is admitted (AC-320);
       - a read-only user's dashboards answer (AC-263);
       - with security on, a publish that breaks a folder's rollup is refused: its dry-run probes run as the Super-Admin group, which every folder admits (AC-321; `xcube-slice-4.md` Gotcha 10).
-  - Depends on: T425, T437
+  - *2026-09-26, from T420:* under the gate, wechart's own token sees only the folders its groups reach, so Jobs', Schedules' and a publish's whole field list must move to xcube's `GET …/meta` first. That needs xcube to take a least revision there (asked, `to-xcube/2026-09-26-2030-meta-revision-and-bindings.md`). That list is unfiltered, so Jobs and Schedules need AC-297's per-folder filtering (T371) before the gate goes on.
+  - Depends on: T425, T437, T371; xcube's least revision on `GET …/meta` (its published image)
 - [ ] T437 (AC-326, AC-008) Sign every query token RS256, carrying only the groups some policy or folder names, and push the keys to xcube *(rewritten 2026-09-26 to slice 4 as built, `[X4]`)*
-  - Files: `packages/api/package.json` (`jose` 6.2.12), `packages/api/vite.build.config.ts` (`jose` external), `packages/api/src/cube/signing.ts` (+ test), `packages/api/src/cube/client.ts`, `packages/api/src/xcube/keys.ts` (+ test), `infra/cube/cube.js` (`contextToGroups` goes; xcube reads `groups`), the signing key in `docker-compose.yml` and a chart Secret generated once (`lookup`)
+  - Files: `packages/api/src/cube/signing.ts` (+ test), `packages/api/src/cube/client.ts`, `packages/api/src/xcube/keys.ts` (+ test), `infra/cube/cube.js` (`contextToGroups` goes; xcube reads `groups`; the `wechartIntrospection` branch goes, T420's hand-on), the signing key in `docker-compose.yml` and a chart Secret generated once (`lookup`), and the e2e helpers that sign HS256 query tokens themselves (`items-switch.spec.ts`, `xcube-cutover.spec.ts`, `deploy/helm/verify.sh`). (`jose` came with T420.)
   - Failing test:
     - `signing.test.ts`:
       - every query token is RS256 with a `kid`, security on or off;

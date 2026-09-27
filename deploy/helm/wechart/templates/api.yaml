@@ -95,15 +95,16 @@ spec:
             - name: CUBE_WORKER_URL
               value: {{ printf "http://%s:%d" (include "wechart.host" (list . "cube-refresh-worker")) (int .Values.cube.port) | quote }}
             # This release's model in xcube, which the API pushes its published
-            # files to and names in every token, and the admin token xcube's
-            # routes take (T447, AC-333, AC-334; R29: static until slice 4).
+            # files to and names in every token (T447, AC-333, AC-334), and the
+            # service key its own calls to Cube and xcube are signed with
+            # (T420, AC-326; slice 4). No other pod has it.
             - name: WECHART_XCUBE_MODEL
               value: {{ required "api.xcubeModel is required: this release's model id in xcube" .Values.api.xcubeModel | quote }}
-            - name: WECHART_XCUBE_ADMIN_TOKEN
+            - name: WECHART_SERVICE_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "wechart.secretName" . }}
-                  key: xcube-admin-token
+                  key: service-key.pem
             # xcube's public key, which credentials are encrypted to; the API
             # won't start without it (T333, AC-324). Public: no Secret needed.
             - name: WECHART_XCUBE_PUBLIC_KEY

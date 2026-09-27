@@ -5,7 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Config } from '../config';
 import { buildServer } from '../server';
-import { FAKE_ADMIN_TOKEN } from './fake';
+/** Read only by `main.ts`, which signs with it: the server is handed nothing of it here. */
+const SERVICE_KEY = 'unused-by-the-server';
 import { memoryPublications } from './publications';
 
 /**
@@ -54,7 +55,7 @@ describe('the model and its revision in Cube’s tokens (T421, AC-334)', () => {
     const publications = memoryPublications();
     await publications.put('dev', { generation: 'g', revision: 3, contentHash: 'h3' });
     const app = buildServer({
-      config: configOf({ model: 'dev', adminToken: FAKE_ADMIN_TOKEN }),
+      config: configOf({ model: 'dev', serviceKey: SERVICE_KEY }),
       publications,
     });
 
@@ -77,7 +78,7 @@ describe('the model and its revision in Cube’s tokens (T421, AC-334)', () => {
   it('names the model alone before xcube has acknowledged a revision of it', async () => {
     tokens.length = 0;
     const app = buildServer({
-      config: configOf({ model: 'dev', adminToken: FAKE_ADMIN_TOKEN }),
+      config: configOf({ model: 'dev', serviceKey: SERVICE_KEY }),
       publications: memoryPublications(),
     });
 
@@ -96,7 +97,7 @@ describe('the model and its revision in Cube’s tokens (T421, AC-334)', () => {
     await publications.put('dev', { generation: 'g', revision: 3, contentHash: 'h3' });
     let down = false;
     const app = buildServer({
-      config: configOf({ model: 'dev', adminToken: FAKE_ADMIN_TOKEN }),
+      config: configOf({ model: 'dev', serviceKey: SERVICE_KEY }),
       publications: {
         ...publications,
         get: async (model) => {

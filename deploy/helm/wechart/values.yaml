@@ -61,10 +61,11 @@ meta:
 # Cube's API and its refresh worker.
 cube:
   # Cube v1.7.45 with the user's fork's package xcube, which serves the model
-  # (T447; infra/cube/cube.js requires it), as items from c0610bb768 (T449).
+  # (T447; infra/cube/cube.js requires it), as items from c0610bb768 (T449),
+  # with slices 4-6 from ed08180c37 (T420, R31).
   # Published by the fork's CI for amd64 and arm64, and pinned by digest
   # (docs/deploy.md); a plain cubejs/cube image won't start with this cube.js.
-  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768@sha256:d787e67c23f567437e49e1ad1e3eab1802c143bd1bfab465ded9e9468c5e1ab8
+  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-ed08180c37@sha256:bc041aa208df0cd748b59fbfdbeca8684538f08c67f6020b0316d1efd1eb6fd8
   port: 4000
   # How long a Cube process may take to connect to xcube's schema, migrate it
   # and compile every model before it answers: its port stays closed until

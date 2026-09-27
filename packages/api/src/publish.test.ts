@@ -209,7 +209,7 @@ describe('publishing model changes', () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json<{ error: string }>().error).toBe(
-      'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_XCUBE_ADMIN_TOKEN), so a change could not be checked or served.',
+      'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_SERVICE_KEY), so a change could not be checked or served.',
     );
     expect(store.files).toEqual([ORDERS]);
     await app.close();

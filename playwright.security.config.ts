@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import { defineConfig, devices } from '@playwright/test';
 
@@ -7,6 +8,10 @@ const DEV_XCUBE_PUBLIC_KEY = readFileSync(
   new URL('./infra/xcube/dev-credential-key.pub.jwk', import.meta.url),
   'utf8',
 ).trim();
+/** wechart's development service key, its own calls' credential (infra/xcube/README.md; T420). */
+const DEV_SERVICE_KEY_FILE = fileURLToPath(
+  new URL('./infra/xcube/dev-service-key.pem', import.meta.url),
+);
 
 const PORT = 5373;
 const API_PORT = 4300;
@@ -63,7 +68,7 @@ export default defineConfig({
         // from the phase-1 suite's (T447, AC-333): a publish through one
         // never reaches the other. A dev value, as compose's.
         WECHART_XCUBE_MODEL: 'e2e-security',
-        WECHART_XCUBE_ADMIN_TOKEN: 'dev-xcube-admin-token-0123456789abcdef',
+        WECHART_SERVICE_KEY_FILE: DEV_SERVICE_KEY_FILE,
         CUBE_WORKER_URL: 'http://localhost:54001',
         WECHART_SECURITY: 'oidc',
         WECHART_PUBLIC_URL: baseURL,

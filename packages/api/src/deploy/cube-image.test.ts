@@ -19,9 +19,13 @@ import { describe, expect, it } from 'vitest';
  * T449, AC-333: from `c0610bb768` it serves the model as items, and the
  * fork's CI publishes the image, pulled by digest: its moving tag isn't a
  * version (research xcube-slice-3b.md, "Install", Gotcha 1).
+ *
+ * T420, AC-326: `ed08180c37` carries slices 4, 5 and 6 (the folder gate and
+ * RS256 tokens, overlays, connections), the image the user chose for them
+ * (R31; research xcube-overlay-data-sources.md, "Install").
  */
 const IMAGE =
-  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-c0610bb768@sha256:d787e67c23f567437e49e1ad1e3eab1802c143bd1bfab465ded9e9468c5e1ab8';
+  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-ed08180c37@sha256:bc041aa208df0cd748b59fbfdbeca8684538f08c67f6020b0316d1efd1eb6fd8';
 /** Slice 2's image, built locally: only the way back names it. */
 const SLICE_2_IMAGE = 'xcube:v1.7.45-83cb9f0888';
 
@@ -51,7 +55,7 @@ describe('docs/deploy.md pulls the fork’s published image by digest (T449, AC-
 
   it('names the image the release runs, and slice 2’s only for the way back, with how to build it', () => {
     // No other xcube tag, and no build of the package under its old name.
-    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!c0610bb768@|83cb9f0888|feat-xcube|\$|<)/);
+    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!ed08180c37@|83cb9f0888|feat-xcube|\$|<)/);
     expect(deploy).not.toContain('cube:v1.7.45-introspection-');
     // Slice 2's image was built locally and never published: the way back says how.
     const back = deploy.slice(deploy.indexOf('### Items mode, and the way back'));
@@ -66,6 +70,43 @@ describe('the docker-desktop Helm release runs it (T414, T417, AC-248)', () => {
     const values = fromRoot('deploy/helm/values/docker-desktop.yaml');
     const cube = /^cube:\n((?: {2}.*\n|\s*\n)+)/m.exec(values)?.[1] ?? '';
     expect(/^ {2}image: (.+)$/m.exec(cube)?.[1]).toBe(IMAGE);
+  });
+
+  /**
+   * T420, AC-326: the service key pair is generated once and kept, as the
+   * chart's other secrets are (`lookup`); the API gets the private half,
+   * Cube's API instance a certificate of the public half, and no pod the
+   * static admin token (research `cube/tokens-and-service-credential.md`,
+   * "Kubernetes": `genSelfSignedCert`).
+   */
+  it('gives the API the service key, and Cube’s API instance its certificate alone', () => {
+    const secrets = fromRoot('deploy/helm/wechart/templates/secrets.yaml');
+    expect(secrets).toContain('genSelfSignedCert');
+    expect(secrets).toMatch(/get \$data "service-key\.pem"/);
+    // Made only when the Secret holds no pair: an upgrade keeps it (T420's review).
+    expect(secrets).toMatch(
+      /\{\{- if not \(and \$serviceKey \$serviceCert\) \}\}\n\{\{- \$generated := genSelfSignedCert/,
+    );
+    expect(secrets).toMatch(/^ {2}service-key\.pem: /m);
+    expect(secrets).toMatch(/^ {2}service-cert\.pem: /m);
+    expect(secrets).not.toContain('xcube-admin-token');
+
+    const api = fromRoot('deploy/helm/wechart/templates/api.yaml');
+    expect(api).toMatch(/- name: WECHART_SERVICE_KEY\n[^-]*key: service-key\.pem/);
+    expect(api).not.toContain('WECHART_XCUBE_ADMIN_TOKEN');
+
+    const cube = fromRoot('deploy/helm/wechart/templates/cube.yaml');
+    const apiInstance = cube.slice(cube.indexOf('{{- else }}'));
+    expect(apiInstance).toMatch(/- name: XCUBE_SERVICE_KEYS\n[^-]*key: service-cert\.pem/);
+    // Not the worker's: it verifies no token of wechart's.
+    const worker = cube.slice(
+      cube.indexOf('{{- if eq $component "cube-refresh-worker" }}'),
+      cube.indexOf('{{- else }}'),
+    );
+    expect(worker).toContain('CUBEJS_REFRESH_WORKER');
+    expect(worker).not.toContain('XCUBE_SERVICE_KEYS');
+    expect(cube).not.toContain('XCUBE_ADMIN_TOKENS');
+    expect(cube).not.toContain('service-key.pem');
   });
 
   it('gives Cube’s containers the image’s own command', () => {
@@ -114,12 +155,23 @@ describe('compose serves the model from xcube’s schema (T447, AC-333)', () => 
     expect(compose).not.toContain('WECHART_MODEL_STORES');
   });
 
-  it('gives the admin tokens to the API instance alone', () => {
+  /**
+   * T420, AC-326: slice 4's service credential replaces the static admin
+   * token (research xcube-slice-4.md, "Environment"): its public half, as a
+   * PEM file, on the API instance alone, which serves the admin routes, jobs
+   * and introspection; the worker verifies no token of wechart's.
+   */
+  it('gives the service key’s public half to the API instance alone, and no admin token to any', () => {
     expect(serviceBlock(compose, 'cube')).toMatch(
-      /^ {6}XCUBE_ADMIN_TOKENS: \$\{XCUBE_ADMIN_TOKENS:-.{32,}\}$/m,
+      /^ {6}XCUBE_SERVICE_KEYS_FILE: \/run\/secrets\/xcube-service-keys$/m,
     );
-    expect(serviceBlock(compose, 'cube-refresh-worker')).not.toContain('XCUBE_ADMIN_TOKENS');
-    expect(shared).not.toContain('XCUBE_ADMIN_TOKENS');
+    expect(serviceBlock(compose, 'cube')).toMatch(/^ {6}- xcube-service-keys$/m);
+    expect(compose).toMatch(
+      /^ {2}xcube-service-keys:\n {4}file: \.\/infra\/xcube\/dev-service-key\.pub\.pem$/m,
+    );
+    expect(serviceBlock(compose, 'cube-refresh-worker')).not.toContain('XCUBE_SERVICE_KEYS');
+    expect(shared).not.toContain('XCUBE_SERVICE_KEYS');
+    expect(compose).not.toContain('XCUBE_ADMIN_TOKENS');
   });
 
   it('runs xcube’s bootstrap on the metadata database before either starts', () => {

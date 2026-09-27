@@ -98,14 +98,15 @@ spec:
             - name: CUBEJS_REFRESH_WORKER
               value: "true"
             {{- else }}
-            # xcube's admin routes, which this release's API pushes the model
-            # to: on the API instance only, never the worker (T447; research,
-            # "Environment").
-            - name: XCUBE_ADMIN_TOKENS
+            # A certificate of wechart's service key (T420, AC-326; slice 4):
+            # xcube's admin routes, the jobs API and introspection take its
+            # tokens. On the API instance only, which serves them, never the
+            # worker (research xcube-slice-4.md, "Environment").
+            - name: XCUBE_SERVICE_KEYS
               valueFrom:
                 secretKeyRef:
                   name: {{ include "wechart.secretName" $ }}
-                  key: xcube-admin-token
+                  key: service-cert.pem
             # Stopped, it takes no new request (503, with Retry-After) and
             # lets those under way finish for 15 s, past a long-poll's 10 s,
             # where it would otherwise exit at once and cut them off (T423;

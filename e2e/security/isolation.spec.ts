@@ -1,5 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 
+import { serviceToken } from '../api-process';
 import { expect, test } from './fixtures';
 
 /**
@@ -26,7 +27,6 @@ const ids = { a: '', c: '' };
 const charts: Record<'root' | 'a' | 'c', string> = { root: '', a: '', c: '' };
 /** xcube's admin routes for this suite's model, as its API is given them (the security config). */
 const XCUBE = 'http://localhost:54000/cubejs-api/v1/semantic/models/e2e-security';
-const XCUBE_ADMIN_TOKEN = 'dev-xcube-admin-token-0123456789abcdef';
 const xcubeIdOf = (folderId: string) => `f${folderId.replaceAll('-', '')}`;
 const full = (folderId: string) => `${xcubeIdOf(folderId)}__iso_sales`;
 
@@ -290,7 +290,7 @@ test.describe('two folders’ same-named cubes, kept apart (T341, AC-274, AC-328
       (
         (await (
           await request.post(`${XCUBE}/resolve`, {
-            headers: { authorization: `Bearer ${XCUBE_ADMIN_TOKEN}` },
+            headers: { authorization: `Bearer ${serviceToken()}` },
             data: { folderId: xcubeIdOf(ids.a), names: ['iso_only_c'] },
           })
         ).json()) as { names?: Record<string, string | null> }

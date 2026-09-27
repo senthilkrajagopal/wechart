@@ -1,12 +1,35 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createHash, createPrivateKey, createPublicKey, sign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import { expect } from '@playwright/test';
 
 /** The development values every API of this suite's holds (playwright.config.ts, compose). */
 export const SECRET = 'dev-secret';
-export const ADMIN_TOKEN = 'dev-xcube-admin-token-0123456789abcdef';
 export const CUBE = 'http://localhost:54000/cubejs-api';
+/** wechart's development service key (infra/xcube/README.md; T420). */
+export const SERVICE_KEY_FILE = fileURLToPath(
+  new URL('../infra/xcube/dev-service-key.pem', import.meta.url),
+);
+
+/**
+ * A service token for xcube's admin routes, as wechart's API signs its own
+ * (T420; `docs/research/xcube-slice-4.md`, "The service token"): RS256 under
+ * the development service key, its `kid` the RFC 7638 thumbprint xcube names
+ * the key by. It names no model, so it serves every model's routes.
+ */
+export function serviceToken(): string {
+  const pem = readFileSync(SERVICE_KEY_FILE, 'utf8');
+  const { n, e } = createPublicKey(pem).export({ format: 'jwk' }) as { n: string; e: string };
+  const kid = createHash('sha256')
+    .update(JSON.stringify({ e, kty: 'RSA', n }))
+    .digest('base64url');
+  const at = Math.floor(Date.now() / 1000);
+  const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const unsigned = `${part({ alg: 'RS256', kid })}.${part({ aud: 'xcube-admin', role: 'service', iat: at, exp: at + 300 })}`;
+  return `${unsigned}.${sign('sha256', Buffer.from(unsigned), createPrivateKey(pem)).toString('base64url')}`;
+}
 
 export interface ApiProcess {
   readonly url: string;
@@ -41,7 +64,7 @@ export async function startApi(
         'utf8',
       ).trim(),
       WECHART_XCUBE_MODEL: model,
-      WECHART_XCUBE_ADMIN_TOKEN: ADMIN_TOKEN,
+      WECHART_SERVICE_KEY_FILE: SERVICE_KEY_FILE,
       ...settings,
     },
     stdio: 'ignore',

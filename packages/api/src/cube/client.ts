@@ -31,6 +31,13 @@ export interface CubeClientOptions {
   };
   /** How long to wait before asking a catching-up instance again; its Retry-After, by default. */
   readonly catchUpDelayMs?: (retryAfterSeconds: number) => number;
+  /**
+   * The service credential's token (T420, AC-326, AC-250; `service-token.ts`):
+   * what wechart's own calls carry — the jobs API, introspection, and the
+   * whole model's field list from xcube — in place of any token it signs
+   * here. Absent, those calls are signed here as before slice 4.
+   */
+  readonly service?: () => Promise<string>;
 }
 
 /**
@@ -181,7 +188,7 @@ export class CubeClient {
    * (T155; research/cube/refresh-jobs-caching.md §B).
    */
   async buildPreAggregations(ids: readonly string[]): Promise<unknown> {
-    return this.#request('/v1/pre-aggregations/jobs', {
+    return this.#serviceRequest('/v1/pre-aggregations/jobs', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -202,14 +209,24 @@ export class CubeClient {
 
   /** `POST /v1/pre-aggregations/jobs`, `action: get`: each token's state. */
   async jobStatuses(tokens: readonly string[]): Promise<unknown> {
-    return this.#request('/v1/pre-aggregations/jobs', {
+    return this.#serviceRequest('/v1/pre-aggregations/jobs', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action: 'get', tokens }),
     });
   }
 
-  /** `/v1/meta?extended=true`: the model as compiled, its pre-aggregations included. */
+  /**
+   * `/v1/meta?extended=true`: the model as compiled, its pre-aggregations
+   * included, from the revision last recorded or a newer one (T421, AC-334).
+   *
+   * Jobs and Schedules read it here still, not from xcube's own
+   * `GET …/meta?extended=true` under the service credential (T420): that
+   * route answers from whatever revision the instance has active, and for
+   * about half a second after a publish that is the one before it, which
+   * AC-334 forbids. xcube is asked to take a least revision there
+   * (`~/Work/xcube-exchange/to-xcube/`); the move waits for its image.
+   */
   async metaExtended(): Promise<unknown> {
     return this.#request('/v1/meta?extended=true', { method: 'GET' });
   }
@@ -241,11 +258,23 @@ export class CubeClient {
   ): Promise<{ status: number; body: unknown }> {
     if (!/^\/v1\/introspection\/data-sources(?:[/?]|$)/.test(path))
       throw new Error('Only Cube’s introspection routes are asked with an introspection token.');
+    // The service credential, which xcube grants `introspection` (T420); else
+    // a minute's token with the claim cube.js grants it for, as before slice 4.
+    const service = this.#options.service;
     const { response, text } = await this.#send(path, async () => ({
       method: init.method ?? 'GET',
       headers: {
         ...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
-        authorization: `Bearer ${this.#token({ wechartIntrospection: true }, undefined, INTROSPECTION_TTL_SECONDS, await this.#modelClaims())}`,
+        authorization: `Bearer ${
+          service === undefined
+            ? this.#token(
+                { wechartIntrospection: true },
+                undefined,
+                INTROSPECTION_TTL_SECONDS,
+                await this.#modelClaims(),
+              )
+            : await service()
+        }`,
       },
       ...(init.body === undefined ? {} : { body: init.body }),
     }));
@@ -280,15 +309,28 @@ export class CubeClient {
     context?: Record<string, unknown>,
     preview?: Record<string, unknown>,
   ): Promise<unknown> {
+    // AC-008: every request, not only the first.
+    return this.#answer(path, init, async () =>
+      this.#token(context, preview, this.#ttl, await this.#modelClaims()),
+    );
+  }
+
+  /**
+   * A call of wechart's own (T420, AC-326): with the service credential where
+   * there is one, else signed as any other request.
+   */
+  async #serviceRequest(path: string, init: RequestInit): Promise<unknown> {
+    const service = this.#options.service;
+    return service === undefined ? this.#request(path, init) : this.#answer(path, init, service);
+  }
+
+  /** One request, carrying the token `bearer` gives for each ask, and Cube's answer read. */
+  async #answer(path: string, init: RequestInit, bearer: () => Promise<string>): Promise<unknown> {
     const { response, text } = await this.#send(
       path,
       async () => ({
         ...init,
-        headers: {
-          ...init.headers,
-          // AC-008: every request, not only the first.
-          authorization: `Bearer ${this.#token(context, preview, this.#ttl, await this.#modelClaims())}`,
-        },
+        headers: { ...init.headers, authorization: `Bearer ${await bearer()}` },
       }),
       (failure) => {
         // A cancellation stays one: the caller asked for it.

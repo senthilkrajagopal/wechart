@@ -22,6 +22,32 @@ const answering = (status: number, body: Record<string, unknown>) =>
 const send = (status: number, body: Record<string, unknown>) =>
   answering(status, body).itemsSnapshot({ baseRevision: null, folders: [], items: [] });
 
+/**
+ * T420 / AC-326, AC-333: xcube's admin routes are called with the service
+ * credential (slice 4), a token minted for each call, never the static admin
+ * token nor a user's.
+ */
+describe('the credential xcube’s admin routes are called with', () => {
+  it('sends the token its source mints, for each call', async () => {
+    const sent: (string | null)[] = [];
+    let minted = 0;
+    const admin = xcubeAdmin({
+      cubeApiUrl: 'http://cube.invalid/cubejs-api',
+      model: 'dev',
+      token: async () => `service-token-${String((minted += 1))}`,
+      fetch: async (_url, init) => {
+        sent.push(new Headers(init?.headers).get('authorization'));
+        return new Response(JSON.stringify({ items: [] }), { status: 200 });
+      },
+    });
+
+    await admin.items();
+    await admin.items();
+
+    expect(sent).toEqual(['Bearer service-token-1', 'Bearer service-token-2']);
+  });
+});
+
 describe('xcube’s answers (T419, AC-333)', () => {
   /**
    * An items snapshot (T449; research `xcube-slice-3a.md`, "PUT …/snapshot

@@ -259,7 +259,7 @@ describe('only a folder’s read-write members change its models (T334, AC-266, 
 
     expect(answer.statusCode).toBe(409);
     expect(answer.json<{ error: string }>().error).toBe(
-      'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_XCUBE_ADMIN_TOKEN), so a change could not be checked or served.',
+      'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_SERVICE_KEY), so a change could not be checked or served.',
     );
     expect((await files().list(ids.b)).map((file) => file.content)).toEqual([ORDERS]);
   });

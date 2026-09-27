@@ -29,6 +29,7 @@ export default defineConfig({
         'node-pg-migrate',
         'close-with-grace',
         'openid-client',
+        'jose',
         '@fastify/cookie',
         '@fastify/session',
       ],

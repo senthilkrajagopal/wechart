@@ -275,7 +275,7 @@ export function registerModelPublishing(
     if (xcube === undefined)
       return reply.status(409).send({
         error:
-          'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_XCUBE_ADMIN_TOKEN), so a delete could not be checked or served.',
+          'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_SERVICE_KEY), so a delete could not be checked or served.',
       });
 
     const draft = live.filter((each) => each !== file);
@@ -379,7 +379,7 @@ export function registerModelPublishing(
         error:
           modelFiles === undefined
             ? 'There is no model store here to publish to.'
-            : 'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_XCUBE_ADMIN_TOKEN), so a change could not be checked or served.',
+            : 'xcube isn’t configured here (WECHART_XCUBE_MODEL and WECHART_SERVICE_KEY), so a change could not be checked or served.',
       });
 
     // The whole model, every folder's files (T452), and this folder's own.
