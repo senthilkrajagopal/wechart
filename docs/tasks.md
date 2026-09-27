@@ -7714,7 +7714,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   1. the critical and major bugs (T463–T465);
   2. the data-source path (T471, T472, T462);
   3. roles and the workspace (T331, T348);
-  4. the cross-screen patterns (T466–T470);
+  4. the cross-screen patterns (T466–T470, T476–T478). *(2026-09-27, after T472: moved ahead of T462, T331 and T348, since the user asked after the phase-1 cleanup — a small decision, reported.)*
   5. the other phase-2 surfaces as their tasks come (T473–T475, and T357, T358, T367, T369, T371 with their designs);
   6. then T437 (RS256 keys, paused: `git stash list`, "T437 wip") and T347 (overlays).
 - **Every UI task:**
@@ -7779,16 +7779,30 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - a category is one colour on every tile of a dashboard;
     - pie and donut labels follow the theme in dark (UX-103, UX-113).
   - Depends on: none
-- [ ] T466 (AC-187) One page frame, one dialog pattern, control sizes by context, one date formatter, and the theme's own controls
-  - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/shell/{PageHead,Dialog,formatTime}.tsx|ts` (+ tests), every page and dialog that differs
-  - Failing test: `design-conformance.spec.ts`, measured on every page and dialog:
-    - 24 px gutters; a 20/600 title row with its note and primary action; one `.info-bar`;
-    - dialogs at 16/600 and 14 px, with Cancel beside one primary at the foot;
-    - controls 32/14 in forms and dialogs, 28/12 in panes and filter bars;
-    - `accent-color` and `color-scheme: dark` under the dark theme, with `.switch` for booleans;
-    - one date and time format, with the exact time in a tooltip;
-    - members by title in the palette and the query log (UX-106 … UX-111, UX-118, UX-090, UX-108, UX-102's parts that AC-220 covers, UX-013).
+- [ ] T466 (AC-187) One page frame and one dialog pattern
+  - *(2026-09-27: split into T466, T476, T477 and T478, one commit each; the measurements below stay as a whole across the four.)*
+  - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/shell/{PageHead,InfoBar}.tsx` (+ tests), every page and dialog that differs, `e2e/consistency.spec.ts`
+  - Failing test: `consistency.spec.ts`, measured on every page and dialog:
+    - 24 px gutters;
+    - a 20/600 title row with its note and primary action;
+    - one `.info-bar` with the info icon for page notes;
+    - no stale phase copy (UX-111);
+    - dialogs at 16/600 and 14 px, with Cancel beside one primary at the foot (UX-106, UX-109, UX-111).
   - Depends on: none
+- [ ] T476 (AC-187) Control sizes by context, and the theme's own controls
+  - Files: `packages/web/src/shell/styles.ts`, the forms and filter bars that differ, `e2e/consistency.spec.ts`
+  - Failing test: `consistency.spec.ts`:
+    - controls 32/14 in forms and dialogs, 28/12 in panes and filter bars, labels stacked 12/600 above them (UX-107);
+    - `accent-color` on the root and `color-scheme: dark` under the dark theme, with `.switch` for booleans (UX-108, UX-090).
+  - Depends on: T466
+- [ ] T477 (AC-187) One date and time format, with the exact time in a tooltip
+  - Files: `packages/web/src/shell/formatTime.ts` (+ test), each date shown (Explore, Data sources, Jobs, a tile's badge and menu), `e2e/consistency.spec.ts`
+  - Failing test: `consistency.spec.ts`, and `formatTime.test.ts`: recent times relative ("4 min ago"), older ones "Sep 27, 03:27", a clock "03:27", all on one 24-hour clock, each with its exact time in a tooltip (UX-110).
+  - Depends on: T466
+- [ ] T478 (AC-187, AC-220) Members by title in the search palette and the query log
+  - Files: `packages/web/src/shell/SearchPalette.tsx`, `packages/web/src/workspaces/jobs/…` (+ tests), `e2e/consistency.spec.ts`
+  - Failing test: `consistency.spec.ts`: the palette's field results and the query log name members by title, never by id (UX-102's parts AC-220 covers, UX-013, UX-082).
+  - Depends on: T466
 - [ ] T467 (AC-036, AC-039, AC-042, AC-187) Fix the chart bugs the re-check found
   - Files: `packages/charts/src/…`, `packages/web/src/editor/…` (+ tests)
   - Failing test:
@@ -7904,7 +7918,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-154 | T377 | AC-155 | T379 | AC-157 | T364, T459 |
 | AC-158 | T363, T461 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
 | AC-161 | T335, T363, T365, T435, T442, T462 | AC-163 | T362, T363, T461, T462 | AC-164 | T335 |
-| AC-176 | T405 | AC-180 | T407 | AC-187 | T406 |
+| AC-176 | T405 | AC-180 | T407 | AC-187 | T406, T466–T470, T476–T478 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
 | AC-234 | T378 | AC-246 | T404 | AC-249 | T336, T450 |
