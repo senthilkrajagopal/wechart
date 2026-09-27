@@ -9,7 +9,7 @@ F24, AC-248, task T274. The Helm chart at `deploy/helm/wechart` runs wechart, Cu
 | `web`: the built app, and `/api` passed to the API | Deployment | `wechart-web:<tag>` (nginx, unprivileged) | `LoadBalancer`, port `web.service.port` | `/healthz` |
 | `api`: wechart's API | Deployment, `api.replicas` (2), rolled one at a time, with a PodDisruptionBudget | `wechart-api:<tag>` | ClusterIP 4100 | `/api/health` |
 | `meta`: wechart's metadata database | StatefulSet with a volume | `postgres:18.6-alpine3.24` | headless 5432 | `pg_isready` over TCP |
-| `cube`: Cube's API | Deployment, `cube.replicas` (2), with a PodDisruptionBudget | `ghcr.io/senthilkrajagopal/xcube:v1.7.45-ed08180c37@sha256:bc041aa2…` | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
+| `cube`: Cube's API | Deployment, `cube.replicas` (2), with a PodDisruptionBudget | `ghcr.io/senthilkrajagopal/xcube:v1.7.45-e53cf2a8b8@sha256:58e53294…` | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
 | `cube-refresh-worker`: Cube's refresh worker | Deployment, 1 replica | the same | ClusterIP 4000 | `/readyz` (startup, readiness, liveness) |
 | `xcube-bootstrap-<hash>`: xcube's role and schema in the metadata database | Job, run once | `postgres:18.6-alpine3.24` | none | none |
 | `cubestore`: Cube Store, one node | StatefulSet with a volume | `cubejs/cubestore:v1.7.45` (`-arm64v8` on arm64) | headless 3030 | `:3031/readyz`, `:3031/livez` |
@@ -36,12 +36,12 @@ docker build -f deploy/Dockerfile --target api -t wechart-api:$TAG .
 docker build -f deploy/Dockerfile --target web -t wechart-web:$TAG .
 ```
 
-Cube runs v1.7.45, unmodified, with the user's fork's package xcube. xcube adds the data-source introspection API that wechart generates cubes with (T275, T413–T415, T417; `docs/research/cube/introspection-api.md`). From the fork's commit `83cb9f0888` it also serves the model (T447; `docs/research/xcube-slice-2.md`), and from `c0610bb768` it serves it as items: names resolved in folders, compiled in modules (T449; `docs/research/xcube-slice-3a.md`, `xcube-slice-3b.md`). From `ed08180c37` it carries slices 4–6: the folder gate and RS256 tokens, overlays for previews, and data-source connections (T420, R31; `docs/research/xcube-slice-4.md`, `-5.md`, `-6.md`, `xcube-overlay-data-sources.md`). Each model's rollups build once more on the first start of this image, in a schema of the model's own. xcube is the package that was `cube-introspection/`, renamed at the fork's commit `a13b9cff43` with its HTTP API unchanged.
+Cube runs v1.7.45, unmodified, with the user's fork's package xcube. xcube adds the data-source introspection API that wechart generates cubes with (T275, T413–T415, T417; `docs/research/cube/introspection-api.md`). From the fork's commit `83cb9f0888` it also serves the model (T447; `docs/research/xcube-slice-2.md`), and from `c0610bb768` it serves it as items: names resolved in folders, compiled in modules (T449; `docs/research/xcube-slice-3a.md`, `xcube-slice-3b.md`). From `ed08180c37` it carries slices 4–6: the folder gate and RS256 tokens, overlays for previews, and data-source connections (T420, R31; `docs/research/xcube-slice-4.md`, `-5.md`, `-6.md`, `xcube-overlay-data-sources.md`). Each model's rollups built once more on that image's first start, in a schema of the model's own. From `e53cf2a8b8`, `GET …/items` names each cube's bound data source, a cube bound to any data source but `default` gets an SQL alias naming it, and each instance re-reports its connections' health on a heartbeat (T459; `docs/research/xcube-22132c309c.md`, `xcube-e53cf2a8b8.md`). Nothing rebuilds when it starts; a cube bound to a folder's data source rebuilds its rollups once, under its new alias, at its next publish. xcube is the package that was `cube-introspection/`, renamed at the fork's commit `a13b9cff43` with its HTTP API unchanged.
 
 The fork's CI publishes the image for amd64 and arm64, and it is pulled by digest, never by its moving tag `v1.7.45-feat-xcube`:
 
 ```sh
-docker pull ghcr.io/senthilkrajagopal/xcube:v1.7.45-ed08180c37@sha256:bc041aa208df0cd748b59fbfdbeca8684538f08c67f6020b0316d1efd1eb6fd8
+docker pull ghcr.io/senthilkrajagopal/xcube:v1.7.45-e53cf2a8b8@sha256:58e5329448f2962d3b95df9b5542db2b94f9b5783531bd8195d25b8246f1ab58
 ```
 
 That is the chart's default `cube.image` and docker-compose's, for Cube and its refresh worker alike; a plain `cubejs/cube` image won't start with xcube's `cube.js`. The image's own command starts the package's server, so give Cube no `command` or `args`: `cubejs server` would start it without the introspection routes.

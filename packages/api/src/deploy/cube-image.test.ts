@@ -23,9 +23,14 @@ import { describe, expect, it } from 'vitest';
  * T420, AC-326: `ed08180c37` carries slices 4, 5 and 6 (the folder gate and
  * RS256 tokens, overlays, connections), the image the user chose for them
  * (R31; research xcube-overlay-data-sources.md, "Install").
+ *
+ * T459, AC-157: `e53cf2a8b8` adds each cube's bound data source to
+ * `GET …/items`, a rebound cube's own SQL alias (AC-273), the connection
+ * heartbeat (AC-161) and the publish/removal race fixed: the image built
+ * last, as R31 asks (research xcube-22132c309c.md, xcube-e53cf2a8b8.md).
  */
 const IMAGE =
-  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-ed08180c37@sha256:bc041aa208df0cd748b59fbfdbeca8684538f08c67f6020b0316d1efd1eb6fd8';
+  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-e53cf2a8b8@sha256:58e5329448f2962d3b95df9b5542db2b94f9b5783531bd8195d25b8246f1ab58';
 /** Slice 2's image, built locally: only the way back names it. */
 const SLICE_2_IMAGE = 'xcube:v1.7.45-83cb9f0888';
 
@@ -55,7 +60,7 @@ describe('docs/deploy.md pulls the fork’s published image by digest (T449, AC-
 
   it('names the image the release runs, and slice 2’s only for the way back, with how to build it', () => {
     // No other xcube tag, and no build of the package under its old name.
-    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!ed08180c37@|83cb9f0888|feat-xcube|\$|<)/);
+    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!e53cf2a8b8@|83cb9f0888|feat-xcube|\$|<)/);
     expect(deploy).not.toContain('cube:v1.7.45-introspection-');
     // Slice 2's image was built locally and never published: the way back says how.
     const back = deploy.slice(deploy.indexOf('### Items mode, and the way back'));

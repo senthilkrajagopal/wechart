@@ -23,6 +23,7 @@ const source = (over: Partial<ListedSource> = {}): ListedSource => ({
   authMethod: 'password',
   updatedAt: '2026-09-26T10:00:00.000Z',
   lastTest: { ok: true, ranAt: '2026-09-26T11:00:00.000Z', checks: [], current: true },
+  usedBy: [],
   ...over,
 });
 const failed = source({
@@ -89,6 +90,67 @@ describe('the data sources a user may see (T364, AC-157)', () => {
     const health = within(rows()[0]!).getByTestId('source-health');
     expect(health.getAttribute('data-state')).toBe('idle');
     expect(health.textContent).toBe('Not tested since it changed');
+  });
+
+  /**
+   * T459 (AC-157): beside each, the cubes xcube bound to it at publish, each
+   * with its folder's path; none said as none, and none known — xcube away —
+   * said so, never as none.
+   */
+  it('lists the cubes that use each, with their folders, and says when none is known', () => {
+    render(
+      <DataSourcesList
+        sources={[
+          source({
+            usedBy: [
+              {
+                name: 'sales',
+                folderId: 'f-sales',
+                folderPath: [
+                  { id: 'f-finance', title: 'Finance' },
+                  { id: 'f-sales', title: 'Sales' },
+                ],
+              },
+              { name: 'orders', folderId: 'root', folderPath: [] },
+            ],
+          }),
+          failed,
+          source({ id: 'ds-4', name: 'unknown', usedBy: null }),
+        ]}
+      />,
+    );
+
+    const [used, none, unknown] = rows().map((row) => within(row).getByTestId('source-used-by'));
+    expect(
+      within(used!)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['sales · Finance / Sales', 'orders · Shared']);
+    expect(none?.textContent).toBe('No cube');
+    expect(unknown?.textContent).toBe('Not known: xcube didn’t answer');
+    expect(screen.getByRole('columnheader', { name: 'Used by' })).toBeDefined();
+  });
+
+  it('counts, never names, the cubes that use it in folders the user can’t see (T459’s review, as AC-322 counts them)', () => {
+    render(
+      <DataSourcesList
+        sources={[
+          source({
+            usedBy: [{ name: 'sales', folderId: 'root', folderPath: [] }],
+            usedElsewhere: 1,
+          }),
+          source({ id: 'ds-5', name: 'lake', usedBy: [], usedElsewhere: 2 }),
+        ]}
+      />,
+    );
+
+    const [some, hidden] = rows().map((row) => within(row).getByTestId('source-used-by'));
+    expect(
+      within(some!)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['sales · Shared', '1 cube in a folder you can’t see']);
+    expect(hidden?.textContent).toBe('2 cubes in folders you can’t see');
   });
 
   it('names a workspace’s own as Explore does, never as the shared root (T364’s review)', () => {

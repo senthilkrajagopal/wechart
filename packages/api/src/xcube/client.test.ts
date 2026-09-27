@@ -337,6 +337,7 @@ describe('xcube’s answers (T419, AC-333)', () => {
           kind: 'cube',
           fullName: 'fsales__sales',
           bindings: { sales: 'fsales__sales', customers: 'customers' },
+          dataSource: 'fsales__warehouse',
         },
       ],
     }).items();
@@ -345,9 +346,53 @@ describe('xcube’s answers (T419, AC-333)', () => {
       {
         folderId: 'fsales',
         name: 'sales',
+        kind: 'cube',
         fullName: 'fsales__sales',
         bindings: { sales: 'fsales__sales', customers: 'customers' },
+        dataSource: 'fsales__warehouse',
       },
+    ]);
+  });
+
+  /**
+   * T459 (AC-157; research xcube-e53cf2a8b8.md, "GET …/items"): a cube's
+   * data source as bound at publish — a full name, `default`, or `null` for
+   * one that `extends` another — and none on a view. An older image sends
+   * none on a cube either: unknown, never taken for `default`.
+   */
+  it('gives up on a read of the items at the wait it is asked for, not a publish’s (T459’s review)', async () => {
+    const hung = xcubeAdmin({
+      cubeApiUrl: 'http://cube.invalid/cubejs-api',
+      model: 'dev',
+      token: 'x'.repeat(40),
+      fetch: (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        }),
+    });
+    const started = Date.now();
+    await expect(hung.items({ timeoutMs: 50 })).rejects.toThrow();
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  it('reads each cube’s bound data source, none on a view, and none known from an older image', async () => {
+    const items = await answering(200, {
+      model: 'dev',
+      revision: 5,
+      mode: 'items',
+      items: [
+        { folderId: 'froot', name: 'orders', kind: 'cube', bindings: {}, dataSource: 'default' },
+        { folderId: 'fa', name: 'child', kind: 'cube', bindings: {}, dataSource: null },
+        { folderId: 'fa', name: 'summary', kind: 'view', bindings: {} },
+        { folderId: 'fa', name: 'old', kind: 'cube', bindings: {} },
+      ],
+    }).items();
+
+    expect(items.map(({ name, kind, dataSource }) => ({ name, kind, dataSource }))).toEqual([
+      { name: 'orders', kind: 'cube', dataSource: 'default' },
+      { name: 'child', kind: 'cube', dataSource: null },
+      { name: 'summary', kind: 'view', dataSource: undefined },
+      { name: 'old', kind: 'cube', dataSource: undefined },
     ]);
   });
 });

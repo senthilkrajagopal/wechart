@@ -244,6 +244,115 @@ describe('every data source the user may see, in every folder (T364, AC-157)', (
     expect((await listing('writer')).find((row) => row.id === held.a)?.lastTest).toBeNull();
   });
 
+  /**
+   * T459 (AC-157): beside each, the cubes xcube bound to it at publish, each
+   * with its folder's path — a cube that extends another counted with its
+   * parent's — and only those in folders the user sees every item of. Without
+   * xcube, or with xcube away, the page is still given, with none known.
+   */
+  it('lists beside each the cubes bound to it, where the user sees them (T459)', async () => {
+    const xids = new Map([
+      ['root', 'froot'],
+      [ids.a, 'fa'],
+      [ids.b, 'fb'],
+      [ids.c, 'fc'],
+    ]);
+    let away = false;
+    const withXcube = buildServer({
+      config: secured,
+      sessions: pgSessionStore(getDb()),
+      documents: docs(),
+      catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
+      dataSources: sources(),
+      folders: async () => ({ ids: xids, parents: new Map() }),
+      modelFiles: {
+        list: async () => [],
+        all: async () => [
+          {
+            folderId: ids.b,
+            path: 'cubes/child.yml',
+            content: 'cubes:\n  - name: child\n    extends: base\n',
+          },
+        ],
+        seed: async () => undefined,
+        write: async () => undefined,
+      },
+      xcube: {
+        items: async () => {
+          if (away) throw new TypeError('fetch failed');
+          return [
+            {
+              folderId: 'fa',
+              name: 'base',
+              kind: 'cube',
+              fullName: 'fa__base',
+              bindings: {},
+              dataSource: 'fa__warehouse',
+            },
+            {
+              folderId: 'fb',
+              name: 'child',
+              kind: 'cube',
+              fullName: 'fb__child',
+              bindings: { base: 'fa__base' },
+              dataSource: null,
+            },
+            {
+              folderId: 'fc',
+              name: 'secret',
+              kind: 'cube',
+              fullName: 'fc__secret',
+              bindings: {},
+              dataSource: 'fa__warehouse',
+            },
+          ];
+        },
+      } as never,
+    });
+    try {
+      type Used = {
+        id: string;
+        usedBy: { name: string; folderPath: { title: string }[] }[] | null;
+        usedElsewhere?: number;
+      };
+      const rowA = async () =>
+        (
+          await withXcube.inject({
+            method: 'GET',
+            url: '/api/data-sources',
+            headers: { cookie: cookies['writer']! },
+          })
+        )
+          .json<Used[]>()
+          .find((row) => row.id === held.a);
+      const usedBy = async () => (await rowA())?.usedBy;
+
+      // /C's cube is counted, never named, as AC-322 counts what can't be seen.
+      expect((await rowA())?.usedElsewhere).toBe(1);
+      expect(await usedBy()).toEqual([
+        { name: 'base', folderId: ids.a, folderPath: [{ id: ids.a, title: `A ${MARK}` }] },
+        {
+          name: 'child',
+          folderId: ids.b,
+          folderPath: [
+            { id: ids.a, title: `A ${MARK}` },
+            { id: ids.b, title: `B ${MARK}` },
+          ],
+        },
+      ]);
+      away = true;
+      expect(await usedBy()).toBeNull();
+      expect((await rowA())?.usedElsewhere).toBe(0);
+    } finally {
+      await withXcube.close();
+    }
+    // Without xcube: none known.
+    expect((await listing('writer')).find((row) => row.id === held.a)).toMatchObject({
+      usedBy: null,
+    });
+  });
+
   it('tells a read-write member from a read-only one, for the page with none to list (T364’s review)', async () => {
     const me = async (who: string) =>
       (await as(who, { method: 'GET', url: '/api/me' })).json<{ readWrite: boolean }>();

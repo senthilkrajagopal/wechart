@@ -97,9 +97,10 @@ export interface XcubeAdmin {
   /**
    * The head's items, by folder and name, each with its full name and the
    * bindings it was published with (research 3a, "GET …/items"); none for a
-   * model never imported.
+   * model never imported. A read for a page can ask to wait less than a
+   * publish does (T459's review).
    */
-  items(): Promise<readonly HeldItem[]>;
+  items(options?: { readonly timeoutMs?: number }): Promise<readonly HeldItem[]>;
   /**
    * Names resolved nearest first from a folder, as xcube binds them at
    * publish: each one's full name, or `null` where no folder on the path
@@ -119,9 +120,18 @@ export interface XcubeAdmin {
 export interface HeldItem {
   readonly folderId: string;
   readonly name: string;
+  /** `cube` or `view`, as xcube says; absent from an answer that says neither. */
+  readonly kind?: 'cube' | 'view';
   readonly fullName: string;
   /** Every name it bound when it was published, to the full name bound: its own included. */
   readonly bindings: Readonly<Record<string, string>>;
+  /**
+   * A cube's data source as bound at publish and never rebound (T459, AC-157;
+   * research xcube-e53cf2a8b8.md): the connection's full name, `default`, or
+   * null for a cube that `extends` another and takes its parent's. Absent on
+   * a view, and on any item from an image older than `e53cf2a8b8`: unknown.
+   */
+  readonly dataSource?: string | null;
 }
 
 /** An error xcube places on an item, or on none (research 3a, `ItemError`). */
@@ -192,14 +202,19 @@ export function xcubeAdmin({
   const base = `${cubeApiUrl.replace(/\/$/, '')}/v1/semantic/models/${encodeURIComponent(model)}`;
   const credential = typeof token === 'string' ? async () => token : token;
 
-  const call = async (method: 'GET' | 'PUT' | 'POST', path: string, body?: unknown) => {
+  const call = async (
+    method: 'GET' | 'PUT' | 'POST',
+    path: string,
+    body?: unknown,
+    wait = timeoutMs,
+  ) => {
     const response = await send(`${base}${path}`, {
       method,
       headers: {
         authorization: `Bearer ${await credential()}`,
         'content-type': 'application/json',
       },
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(wait),
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     const answer = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -307,8 +322,8 @@ export function xcubeAdmin({
       };
     },
 
-    async items() {
-      const { status, answer } = await call('GET', '/items');
+    async items(options) {
+      const { status, answer } = await call('GET', '/items', undefined, options?.timeoutMs);
       if (status === 404 && answer['code'] === 'unknown_model') return [];
       if (status !== 200) throw failed(status, answer);
       return (Array.isArray(answer['items']) ? (answer['items'] as Record<string, unknown>[]) : [])
@@ -317,9 +332,15 @@ export function xcubeAdmin({
           const folderId = String(item['folderId']);
           const name = String(item['name']);
           const bindings = item['bindings'];
+          const kind = item['kind'];
+          const dataSource = item['dataSource'];
           return {
             folderId,
             name,
+            ...(kind === 'cube' || kind === 'view' ? { kind } : {}),
+            ...(kind === 'cube' && (typeof dataSource === 'string' || dataSource === null)
+              ? { dataSource }
+              : {}),
             fullName:
               typeof item['fullName'] === 'string'
                 ? item['fullName']

@@ -19,6 +19,7 @@ import {
   type TestedConnection,
 } from '../xcube/connections';
 import { cubeStateOf } from '../xcube/cube-state';
+import type { CubeUsing } from '../xcube/used-by';
 
 /**
  * A data source's own routes (T335; AC-269, AC-164, AC-312, AC-161, AC-262,
@@ -116,6 +117,12 @@ export function registerDataSources(
       readonly pathOf: () => Promise<
         (folderId: string) => readonly { readonly id: string; readonly title: string }[]
       >;
+      /**
+       * The cubes xcube bound to each data source at publish, by the data
+       * source's id (T459, AC-157). Unset without xcube; a failure is said as
+       * none known.
+       */
+      readonly usedBy?: () => Promise<ReadonlyMap<string, readonly CubeUsing[]>>;
     };
     /** A data source's Cube instances' reports, from xcube (T365, AC-161). */
     readonly health?: (source: DataSource) => Promise<ConnectionHealth | undefined>;
@@ -184,6 +191,17 @@ export function registerDataSources(
     const sees = await listing.sees(request);
     const pathOf = await listing.pathOf();
     const visible = (await store.all()).filter((source) => sees(source.folderId));
+    // xcube away is no reason to refuse the page: its cubes are said unknown.
+    const used =
+      listing.usedBy === undefined || visible.length === 0
+        ? undefined
+        : await listing.usedBy().catch((error: unknown) => {
+            request.log.warn(
+              { err: error },
+              'could not read the cubes xcube bound to data sources',
+            );
+            return undefined;
+          });
     const latest =
       tests === undefined
         ? new Map<string, ConnectionTest>()
@@ -207,6 +225,18 @@ export function registerDataSources(
                 checks: test.checks,
                 current: test.settings === source.settingsPrint,
               },
+        // Only the cubes in folders the user sees every item of (AC-263); the
+        // rest counted, never named, as a refused publish counts them (AC-322).
+        usedBy:
+          used === undefined
+            ? null
+            : (used.get(source.id) ?? [])
+                .filter((cube) => sees(cube.folderId))
+                .map((cube) => ({ ...cube, folderPath: pathOf(cube.folderId) })),
+        usedElsewhere:
+          used === undefined
+            ? 0
+            : (used.get(source.id) ?? []).filter((cube) => !sees(cube.folderId)).length,
       };
     });
   });

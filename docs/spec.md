@@ -672,7 +672,7 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
 >   The root's `default` is seeded by a post-install Job (AC-310). A
 >   workspace's data sources are previewed through its overlay (AC-280).
 
-- [ ] AC-157 THE SYSTEM SHALL list, in the Data sources workspace, every data source the user may see, each with its folder, its driver type, its health from the last test, and the cubes whose models use it (phase 2: `[R16, R19]`).
+- [x] AC-157 THE SYSTEM SHALL list, in the Data sources workspace, every data source the user may see, each with its folder, its driver type, its health from the last test, and the cubes whose models use it (phase 2: `[R16, R19]`).
       Fails when: a data source the user may see is missing, one they may not see is listed, or a cube list disagrees with the models.
 - [ ] AC-158 WHEN the user adds a data source in their workspace, THE SYSTEM SHALL take its name, the driver type, the connection fields for that driver and a Test step, and SHALL refuse to create it until the test passes or the user explicitly overrides (direction.md rules 23, 35; phase 2: `[P2 input]`).
       Fails when: a source is created with a failing test and no override.

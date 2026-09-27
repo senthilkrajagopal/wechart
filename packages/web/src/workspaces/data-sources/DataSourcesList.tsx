@@ -34,6 +34,19 @@ export interface ListedSource {
     /** False once a save changed the settings it tested: no longer its health (T364's review). */
     readonly current: boolean;
   } | null;
+  /**
+   * The cubes xcube bound to it at publish, in folders the user sees (T459,
+   * AC-157); null when xcube couldn't be asked.
+   */
+  readonly usedBy: readonly UsingCube[] | null;
+  /** How many more use it in folders the user can't see: counted, never named (AC-322's way). */
+  readonly usedElsewhere?: number;
+}
+
+interface UsingCube {
+  readonly name: string;
+  readonly folderId: string;
+  readonly folderPath: readonly { readonly id: string; readonly title: string }[];
 }
 
 const driverLabel = (driver: string) =>
@@ -41,11 +54,33 @@ const driverLabel = (driver: string) =>
 
 const ROOTS = new Map([SHARED_ROOT, MY_WORKSPACE].map((root) => [root.id, root.title]));
 
-/** Its path as Explore names it: a root by its title, else each folder's. */
-const pathLabel = (source: ListedSource) =>
-  source.folderPath.length === 0
-    ? (ROOTS.get(source.folderId) ?? source.folderId)
-    : source.folderPath.map((folder) => folder.title).join(' / ');
+/** A folder's path as Explore names it: a root by its title, else each folder's. */
+const pathLabel = (at: Pick<ListedSource, 'folderId' | 'folderPath'>) =>
+  at.folderPath.length === 0
+    ? (ROOTS.get(at.folderId) ?? at.folderId)
+    : at.folderPath.map((folder) => folder.title).join(' / ');
+
+const elsewhere = (count: number) =>
+  count === 1
+    ? '1 cube in a folder you can’t see'
+    : `${String(count)} cubes in folders you can’t see`;
+
+function UsedBy({ cubes, hidden = 0 }: { cubes: ListedSource['usedBy']; hidden?: number }) {
+  if (cubes === null) return <span className="sources-muted">Not known: xcube didn’t answer</span>;
+  if (cubes.length === 0 && hidden === 0) return <span className="sources-muted">No cube</span>;
+  if (cubes.length === 0) return <span className="sources-muted">{elsewhere(hidden)}</span>;
+  return (
+    <ul className="sources-used-by">
+      {cubes.map((cube) => (
+        <li key={`${cube.folderId}/${cube.name}`}>
+          {cube.name}
+          <span className="sources-muted"> · {pathLabel(cube)}</span>
+        </li>
+      ))}
+      {hidden === 0 ? null : <li className="sources-muted">{elsewhere(hidden)}</li>}
+    </ul>
+  );
+}
 
 function healthOf(source: ListedSource): { kind: StateKind; label: string } {
   const test = source.lastTest;
@@ -162,6 +197,7 @@ export function DataSourcesList({
               <th scope="col">Folder</th>
               <th scope="col">Driver</th>
               <th scope="col">Health</th>
+              <th scope="col">Used by</th>
               <th scope="col">Updated</th>
             </tr>
           </thead>
@@ -192,6 +228,14 @@ export function DataSourcesList({
                         </span>
                       )}
                     </span>
+                  </td>
+                  <td data-testid="source-used-by">
+                    <UsedBy
+                      cubes={source.usedBy}
+                      {...(source.usedElsewhere === undefined
+                        ? {}
+                        : { hidden: source.usedElsewhere })}
+                    />
                   </td>
                   <td>{new Date(source.updatedAt).toLocaleString()}</td>
                 </tr>

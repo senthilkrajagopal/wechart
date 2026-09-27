@@ -7259,10 +7259,34 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
     - wechart serves no route for Cube to read a model or a connection from (T431's and T442's route checks, cited);
     - the web app asks nothing of Cube's or xcube's address (AC-327).
   - Depends on: T442, T361
-- [ ] T459 (AC-157) Show beside each data source the cubes bound to it, from xcube's items *(added 2026-09-27, from T364: xcube binds a cube at publish and never rebinds it, so only xcube knows which cubes use a data source)*
+- [x] T459 (AC-157) Show beside each data source the cubes bound to it, from xcube's items *(added 2026-09-27, from T364: xcube binds a cube at publish and never rebinds it, so only xcube knows which cubes use a data source)*
   - Files: `packages/api/src/xcube/client.ts` (`GET …/items`' `dataSource`), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`' `usedBy`), `packages/web/src/workspaces/data-sources/DataSourcesList.tsx`, `e2e/security/data-sources.spec.ts`
   - Failing test: `data-sources.spec.ts`, against compose's xcube: a cube published in a folder under a data source's folder lists, beside that source, with its folder's path; published again after a nearer source of that name is added, it stays beside the first source until it is republished; a cube in a folder the viewer can't reach isn't listed (AC-157).
   - Depends on: T364, and xcube reporting each cube's bound data source in `GET …/items` in a published, researched image (asked: `to-xcube/2026-09-27-2330-items-data-source.md`)
+  - **Done 2026-09-27. AC-157 ticked** (its other parts are T364's): `e2e/security/data-sources.spec.ts` in Chrome, against compose's xcube on `e53cf2a8b8`:
+    - a cube in the sales folder naming `parent_…` is listed beside its parent folder's `parent_…`, with its folder's path;
+    - after a nearer `parent_…` is added it stays there, the nearer one reading "No cube";
+    - published again, it moves beside the nearer one;
+    - managers' cube, bound to a root data source, is counted for `writer` ("1 cube in a folder you can't see") and never named, and named for `super`.
+  - **As built:**
+    - **The image** is pinned at `ghcr.io/senthilkrajagopal/xcube:v1.7.45-e53cf2a8b8@sha256:58e53294…`, as R31's "the one built last" asks. It's in compose, Helm's values, `docs/deploy.md` and `cube-image.test.ts` (research `xcube-22132c309c.md`, `xcube-e53cf2a8b8.md`). It adds `dataSource` to `GET …/items`, a rebound cube's own SQL alias (AC-273), the connection heartbeat (AC-161) and the publish/removal race fix. Nothing rebuilds at start.
+    - **The client** reads each item's `kind`, and a cube's `dataSource`. One from an older image is unknown, never `default`.
+    - **`xcube/used-by.ts`** matches each bound name to a wechart data source by `connectionNameOf` its folder's xcube id and its name. A cube that `extends` another takes its parent's, through its own YAML and bindings, with a guard against loops.
+    - **`GET /api/data-sources`** gives `usedBy`: the cubes in folders the user sees every item of, each with its folder's path. It also gives `usedElsewhere`, the count of the rest, as AC-322 counts what can't be seen. It is null when xcube doesn't answer within 15 s, which leaves the page standing. wechart's YAML is read only when some cube takes its parent's.
+  - **Review (one round), fixed:**
+    - the page waiting on a hung xcube for a publish's two minutes;
+    - "No cube" said while cubes the user can't see used it: now counted, AC-322's way (a small decision, overturnable);
+    - the republish step added to the e2e;
+    - the orphan unit test pinned;
+    - an O(N²) append.
+  - **Left:**
+    - cubes bound to Cube's own `default` while the root has no `default` data source match no row, until T443 seeds one;
+    - the stub xcube's `/items` still says no `dataSource`.
+  - **Tests:**
+    - `used-by.test.ts` 5, `client.test.ts` 14, `access/data-sources.test.ts` 25;
+    - web data-sources 17;
+    - Chrome: `security/data-sources.spec.ts` 7, `folder-data-sources.spec.ts` 3, `data-source-binding.spec.ts` (T435) on the new image, `jobs`, `items-switch`, `xcube-cutover` and `admin` (31);
+    - units: api 774 (T443's red test aside), web 1556.
 
 ### Slice 5: previews
 

@@ -42,7 +42,8 @@ import { registerIntrospection } from './model/introspection';
 import type { Config } from './config';
 import type { Changeset } from './xcube/changesets';
 import { XcubeError, type XcubeAdmin } from './xcube/client';
-import type { PublishedFolders } from './xcube/folders';
+import { ROOT_ONLY, type PublishedFolders } from './xcube/folders';
+import { cubesUsing, extendsIn } from './xcube/used-by';
 import type { PublicationStore } from './xcube/publications';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, usersOfCubes, type ReferenceDocument } from './model/references';
@@ -546,6 +547,41 @@ export function buildServer({
       // The Data sources page (T364, AC-157): the folders a user sees every
       // item of — never a read-only user's (AC-263) — and each one's path.
       listing: {
+        // The cubes xcube bound to each, at publish (T459, AC-157): only xcube
+        // knows, since nothing is rebound when a nearer source is added.
+        ...(xcube === undefined
+          ? {}
+          : {
+              usedBy: async () => {
+                const [held, published, all] = await Promise.all([
+                  // A page waits for this read, so not a publish's two minutes
+                  // (T459's review): the 15 s a connection's calls wait.
+                  xcube.items({ timeoutMs: 15_000 }),
+                  folders === undefined ? ROOT_ONLY : folders(),
+                  dataSources.all(),
+                ]);
+                // wechart's YAML only for a cube that takes its parent's.
+                const files =
+                  modelFiles === undefined || !held.some((item) => item.dataSource === null)
+                    ? []
+                    : modelFiles.all === undefined
+                      ? await modelFiles.list()
+                      : await modelFiles.all();
+                const extended = new Map<string, string>();
+                for (const file of files) {
+                  const found = extendsIn(file.content);
+                  const xcubeId = published.ids.get(file.folderId ?? ROOT_FOLDER_ID);
+                  if (found !== undefined && xcubeId !== undefined)
+                    extended.set(`${xcubeId}/${found.name}`, found.extends);
+                }
+                return cubesUsing({
+                  held,
+                  published,
+                  sources: all,
+                  extendsOf: (xcubeId, name) => extended.get(`${xcubeId}/${name}`),
+                });
+              },
+            }),
         sees: async (request) => {
           const seen = await visibilityOf(request);
           if (seen === undefined) return () => true;

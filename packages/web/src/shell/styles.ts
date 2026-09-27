@@ -1662,6 +1662,9 @@ fieldset.model-field > legend {
    page with none to list, its note and the way to Explore under it. */
 .status__when { font-weight: 400; color: var(--wc-text-secondary); }
 .sources-empty { display: grid; gap: 8px; justify-items: start; }
+/* The cubes each uses (T459): one a line, its folder after it, quieter. */
+.sources-used-by { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.sources-muted { color: var(--wc-text-secondary); }
 .query-log--sticky thead th {
   position: sticky;
   top: var(--wc-app-bar-height);

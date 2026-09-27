@@ -22,7 +22,40 @@ const KEY = JSON.parse(
   readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
 ) as XcubeKey;
 const FIELDS = { host: 'sample-db', port: 5432, database: 'sample', user: 'sample', ssl: false };
-const made = { parent: '', folder: '', hidden: '', sources: [] as string[] };
+const made = {
+  parent: '',
+  folder: '',
+  hidden: '',
+  sources: [] as string[],
+  cubes: [] as { folderId: string; name: string }[],
+};
+
+/** A cube naming its data source by its short name, published into a folder (T459). */
+async function cube(
+  request: APIRequestContext,
+  folderId: string,
+  name: string,
+  source: string,
+  title?: string,
+) {
+  const content = [
+    'cubes:',
+    `  - name: ${name}`,
+    ...(title === undefined ? [] : [`    title: ${title}`]),
+    '    sql: SELECT 1 AS n',
+    `    data_source: ${source}`,
+    '    measures:',
+    '      - name: count',
+    '        type: count',
+    '',
+  ].join('\n');
+  const answer = await request.post('/api/model/publish', {
+    data: { folderId, files: [{ path: `cubes/${name}.yml`, content }] },
+  });
+  expect(answer.status(), await answer.text()).toBe(200);
+  if (!made.cubes.some((each) => each.folderId === folderId && each.name === name))
+    made.cubes.push({ folderId, name });
+}
 
 async function folder(request: APIRequestContext, title: string, parent: string) {
   const answer = await request.post('/api/documents', {
@@ -58,6 +91,11 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
       storageState: { cookies: [], origins: [] },
     });
     await signInThroughDex(await context.newPage(), 'super');
+    // The cubes first: xcube keeps a data source a published cube is bound to.
+    for (const { folderId, name } of made.cubes)
+      await context.request.delete(
+        `/api/model/files?folder=${folderId}&path=${encodeURIComponent(`cubes/${name}.yml`)}`,
+      );
     for (const id of made.sources) await context.request.delete(`/api/data-sources/${id}`);
     for (const id of [made.folder, made.parent, made.hidden].filter((each) => each !== ''))
       await context.request.delete(`/api/documents/folder/${id}`);
@@ -150,6 +188,99 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
         'href',
         '/explore',
       );
+    });
+  });
+
+  /**
+   * T459 (AC-157): beside each data source, the cubes xcube bound to it at
+   * publish. A cube in the sales folder naming `parent_…` binds its parent's;
+   * a nearer `parent_…` added after rebinds nothing (AC-273), so the cube
+   * stays beside the first. A root data source's cube in managers' folder is
+   * no business of `writer`'s.
+   */
+  test.describe('the cubes bound to each', () => {
+    test.describe('as super, who publishes them', () => {
+      test.use({ role: 'super' });
+
+      test('publishes a cube on the parent’s, then adds a nearer one of that name, and a cube only managers reach', async ({
+        page,
+      }) => {
+        const request = page.request;
+        await cube(request, made.folder, `uses_${RUN}`, `parent_${RUN}`);
+        await dataSource(request, made.folder, `parent_${RUN}`);
+        await dataSource(request, 'root', `root_${RUN}`);
+        await cube(request, made.hidden, `secret_${RUN}`, `root_${RUN}`);
+
+        await page.goto('/data-sources');
+        const table = page.getByRole('main').getByRole('table', { name: 'Data sources' });
+        // Super sees every folder, managers' cube included.
+        await expect(
+          table
+            .getByRole('row')
+            .filter({ hasText: `root_${RUN}` })
+            .getByTestId('source-used-by'),
+        ).toHaveText(`secret_${RUN} · Sources hidden ${RUN}`);
+      });
+    });
+
+    test.describe('as writer', () => {
+      test.use({ role: 'writer' });
+
+      test('sees each cube beside the source it was bound to, never rebound, and none it can’t reach', async ({
+        page,
+      }) => {
+        await page.goto('/data-sources');
+        const table = page.getByRole('main').getByRole('table', { name: 'Data sources' });
+        const rowOf = (name: string, folder: string) =>
+          table
+            .getByRole('row')
+            .filter({ hasText: name })
+            .filter({ has: page.getByRole('link', { name: folder, exact: true }) });
+
+        await expect(
+          rowOf(`parent_${RUN}`, `Sources parent ${RUN}`).getByTestId('source-used-by'),
+        ).toHaveText(`uses_${RUN} · Sources parent ${RUN} / Sources ${RUN}`);
+        await expect(
+          rowOf(`parent_${RUN}`, `Sources parent ${RUN} / Sources ${RUN}`).getByTestId(
+            'source-used-by',
+          ),
+        ).toHaveText('No cube');
+        // Managers' cube counted, never named (as AC-322 counts what can't be seen).
+        await expect(rowOf(`root_${RUN}`, 'Shared').getByTestId('source-used-by')).toHaveText(
+          '1 cube in a folder you can’t see',
+        );
+        await expect(page.getByRole('main')).not.toContainText(`secret_${RUN}`);
+      });
+    });
+
+    test.describe('as super, again', () => {
+      test.use({ role: 'super' });
+
+      test('publishes the cube again, which binds it to the nearer one', async ({ page }) => {
+        await cube(page.request, made.folder, `uses_${RUN}`, `parent_${RUN}`, 'Uses, again');
+      });
+    });
+
+    test.describe('as writer, again', () => {
+      test.use({ role: 'writer' });
+
+      test('sees it beside the nearer one once it’s published again, and the first with none', async ({
+        page,
+      }) => {
+        await page.goto('/data-sources');
+        const table = page.getByRole('main').getByRole('table', { name: 'Data sources' });
+        const usedBy = (folder: string) =>
+          table
+            .getByRole('row')
+            .filter({ hasText: `parent_${RUN}` })
+            .filter({ has: page.getByRole('link', { name: folder, exact: true }) })
+            .getByTestId('source-used-by');
+
+        await expect(usedBy(`Sources parent ${RUN} / Sources ${RUN}`)).toHaveText(
+          `uses_${RUN} · Sources parent ${RUN} / Sources ${RUN}`,
+        );
+        await expect(usedBy(`Sources parent ${RUN}`)).toHaveText('No cube');
+      });
     });
   });
 });

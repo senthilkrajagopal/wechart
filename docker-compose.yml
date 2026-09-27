@@ -155,14 +155,17 @@ services:
   # model as items, names resolved in folders and compiled in modules (T449;
   # xcube-slice-3a.md, xcube-slice-3b.md). From ed08180c37 it carries slices
   # 4-6: the folder gate and RS256 tokens, overlays, connections (T420, R31;
-  # xcube-slice-4.md, -5.md, -6.md, xcube-overlay-data-sources.md). The fork's
+  # xcube-slice-4.md, -5.md, -6.md, xcube-overlay-data-sources.md); from
+  # e53cf2a8b8, each cube's bound data source in its items, a rebound cube's
+  # own SQL alias and the connection heartbeat (T459; xcube-22132c309c.md,
+  # xcube-e53cf2a8b8.md). The fork's
   # CI publishes the image for amd64 and arm64, pulled here by digest: its
   # moving tag isn't a version.
   # The image's own CMD starts the package's server: give neither service a
   # `command`, or Cube starts without the routes. Cube and its refresh worker
   # run the same image.
   cube:
-    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-ed08180c37@sha256:bc041aa208df0cd748b59fbfdbeca8684538f08c67f6020b0316d1efd1eb6fd8}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-e53cf2a8b8@sha256:58e5329448f2962d3b95df9b5542db2b94f9b5783531bd8195d25b8246f1ab58}
     container_name: wechart-cube
     depends_on: &cube-depends-on
       sample-db:
@@ -197,7 +200,7 @@ services:
   # "Topology"; pre-aggregations.md, "Observed locally"). A build asked for
   # through the jobs API runs in the API instance, though (upgrade-1.7.43.md).
   cube-refresh-worker:
-    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-ed08180c37@sha256:bc041aa208df0cd748b59fbfdbeca8684538f08c67f6020b0316d1efd1eb6fd8}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-e53cf2a8b8@sha256:58e5329448f2962d3b95df9b5542db2b94f9b5783531bd8195d25b8246f1ab58}
     container_name: wechart-cube-refresh-worker
     depends_on: *cube-depends-on
     environment:
