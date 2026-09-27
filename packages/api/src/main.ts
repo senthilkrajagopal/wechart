@@ -23,6 +23,7 @@ import { connectionSync, xcubeConnections } from './xcube/connections';
 import { publicationStore } from './xcube/publications';
 import { modelSync } from './xcube/snapshot';
 import { seedDevData } from './seed';
+import { seedDefault } from './seed-default';
 import { buildServer } from './server';
 
 /**
@@ -239,4 +240,6 @@ async function main(): Promise<void> {
   await app.listen({ port: config.port, host: '0.0.0.0' });
 }
 
-await main();
+// The install Job's one-shot, in this image (T443, AC-310): no server, no database.
+if (process.argv[2] === 'seed-default') process.exit(await seedDefault(process.env));
+else await main();

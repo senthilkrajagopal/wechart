@@ -5809,6 +5809,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - *(2026-09-26, from T335's review)* a data source's row in Explore opens it in this form, its settings shown and each stored secret said as stored (AC-269's open half: T335 lists them, and its rows open nothing until this form exists).
     - *(2026-09-26, from T362)* a stored data source's settings show its test history from `GET /api/data-sources/:id/tests`, newest first, each test with its time, who ran it, its outcome and each check (`TestHistory.tsx`; AC-163's showing half: T362 records and lists them);
     - *(2026-09-26, from T361)* the Test step shows each check xcube ran (`secrets`, `config`, `connect`, `schemas`) with its result, and a failed one's error text as xcube redacted it (AC-159's showing half: T361 runs the test and answers the checks);
+    - *(2026-09-27, from T443)* the shared root's `default`, seeded at install, opens and changes in this form like any other data source (AC-310's "managed like any other");
     - *(2026-09-27, from T364)* a stored data source's settings show T365's `CubeState`: whether every Cube instance uses its settings, from `GET /api/data-sources/:id/cube-state`, against compose's xcube after a query through the source, with `.cube-state` and its parts styled in `shell/styles.ts` (AC-161's showing half);
     - *(2026-09-26, from T441)* the form seals each typed secret at submit with core's `sealSecretV1`, to the key `GET /api/data-sources/sealing-key` gives, and a canary secret typed into it appears in no request body to wechart (the Test step's included), no stored row and no line of the API's log, in Chrome, Firefox and WebKit (AC-325's form half: T441 built the sealer and the key route, and there was no form to type into).
   - Depends on: T454, T361, T345
@@ -7504,15 +7505,39 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362â€
     - The spec is API-only and browser-independent, so `playwright.security.config.ts` runs it in Chrome alone.
     - Until the pin, a Chrome run of the whole suite may see the race with the other specs publishing to the model (`binding`, `isolation`, `picker`).
   - **Tests:** Chrome, the spec 6, in two clean runs after the review; with `folder-data-sources.spec.ts` on all three browsers, 15 before it.
-- [ ] T443 (AC-310) Seed the shared root's `default` data source at install with a post-install Job, and manage it like any other *(rewritten 2026-09-26, `[R31]`: ~~from the Helm values~~ a Job seals the password, so wechart never receives it)*
+- [x] T443 (AC-310) Seed the shared root's `default` data source at install with a post-install Job, and manage it like any other *(rewritten 2026-09-26, `[R31]`: ~~from the Helm values~~ a Job seals the password, so wechart never receives it)*
   - Files: `deploy/helm/wechart/templates/seed-default-job.yaml` (a post-install Job: xcube's image seals the chart Secret's database password with xcube's public key, `sealSecretV1`; a second step posts the envelope), `packages/api/src/routes/data-sources.ts` (the seeding route, taking only an envelope, allowed only to the Job's credential and only while the root has no `default`), `docker-compose.yml` (the same one-shot for development), `deploy/helm/verify.sh`, `e2e/security/root-default.spec.ts`
   - Failing test: `root-default.spec.ts`, and `verify.sh` on docker-desktop:
     - after install the root holds a `default` data source, which xcube serves as a connection and which answers a test;
-    - it opens and changes in Data sources;
+    - ~~it opens and changes in Data sources;~~ *moved to T363 (2026-09-27): there is no form to change it in until then;*
     - a root cube with no data source binds it;
     - no request to wechart's API, stored row or log line holds the password (AC-310).
   - Depends on: T442
-
+  - **Done 2026-09-27. AC-310 is not ticked:** its "opened and changed in Data sources" is T363's form. AC-251 is amended (the user's answer: "yes for the recommendation") and stays ticked on its sweep.
+  - **As built** (the Files line above is the plan):
+    - **Sealing and sending:** one step in wechart's API image, `node dist/main.js seed-default` (`packages/api/src/seed-default.ts`), with core's `sealSecretV1`, not xcube's image. Nothing for compose: `security/root-default.spec.ts` runs the seeder against the suite's API as the Job would.
+    - **Fields:** the seeder takes the driver's own sign-in whose one secret is the password (`password`, SQL Server's `sql-login`, â€¦) and each field of its connection and sign-in from `WECHART_DEFAULT_DB_<FIELD>`, typed as core's DRIVERS says. The chart gives PostgreSQL's family from `cube.dataSource` and any other driver's fields in `cube.dataSource.seedFields`. A driver with no sign-in by password (BigQuery) is said to need adding in Data sources.
+    - **The route,** `POST /api/data-sources/root-default` (access class `install`):
+      - its token is checked before the body is read, in constant time;
+      - it says nothing back: 204, 401, 400, 409, 422;
+      - 409 means only that the root has its `default`;
+      - it works only while the root has none. Two Jobs at once are safe: the second insert meets the unique key and answers 409.
+    - **The token** is `seed-token` in the chart's generated Secret, made once and kept. The API is given it only where the Job is rendered.
+    - **The Job** is a plain Job named by its pod template, as the key Job is. It runs again when that changes (an image or chart upgrade) and finds the `default` there, and so changes nothing. If one is ever removed while no cube uses it, an upgrade seeds it again from the values. *A small decision, reported:* a post-install hook would never run on the releases already installed.
+    - **verify.sh 4a:** the Job completes, the root holds its `default`, and it connects.
+  - **Review (one round), fixed:**
+    - the seeder sending PostgreSQL's fields to every driver;
+    - the API's port hard-coded;
+    - a malformed body without the token answering 500;
+    - a refusal of xcube's read as "already seeded";
+    - the token given where no Job runs;
+    - tini replaced by the Job's `command`;
+    - a test assertion that couldn't fail;
+    - the e2e now checks that xcube holds `default` as a connection.
+  - **Reported:** with security off, the Job's route still answers its token alone. I read that as AC-251's exemption, no user's permission for AC-254, and the security-off sweep leaves it out by name.
+  - **Tests:**
+    - `root-default.test.ts` 7, `seed-default.test.ts` 5, `seed-token.test.ts` 3, `guard.test.ts` 5;
+    - Chrome: `security/root-default.spec.ts`, with the data-source specs (17).
 ### Slice 8: hardening
 
 - [ ] T444 (AC-307, AC-319) Hold a 10-chart dashboard's p95 under 3 s on two Cube instances, with one stopped mid-run

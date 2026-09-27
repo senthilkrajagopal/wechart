@@ -2,6 +2,7 @@ import type { FastifyInstance, InjectOptions } from 'fastify';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getDb } from '../db/client';
+import { dataSourceStore } from '../repos/data-sources';
 import { folderAccessStore } from '../repos/folder-access';
 import { buildServer } from '../server';
 import { routesOf } from './guard';
@@ -65,9 +66,11 @@ const errorOf = (body: string): unknown => {
  */
 function everyRoute(): FastifyInstance {
   const app = buildServer({
-    config: secured,
+    // The data sources' routes, and the install Job's seeding route (T443).
+    config: { ...secured, seedToken: 'a-seed-token-for-the-sweep' },
     sessions: pgSessionStore(getDb()),
     folderAccess: folderAccessStore(getDb()),
+    dataSources: dataSourceStore(getDb()),
   });
   servers.push(app);
   return app;
@@ -110,7 +113,7 @@ describe('with security on and no session (T318, AC-251)', () => {
     }
   });
 
-  it('exempts only health and sign-in', async () => {
+  it('exempts only health, sign-in and the install Job’s seeding', async () => {
     const app = everyRoute();
     await app.ready();
     const open = routesOf(app)
@@ -120,6 +123,8 @@ describe('with security on and no session (T318, AC-251)', () => {
       .map((route) => `${route.access} ${route.method} ${route.url}`)
       .sort();
     expect(open).toEqual([
+      // The install Job's, answering only its token (T443; AC-251 amended).
+      'install POST /api/data-sources/root-default',
       'public GET /api/auth/callback',
       // Whether anyone is signed in, for the web server's page gate (T321).
       'public GET /api/auth/check',
@@ -173,10 +178,20 @@ describe('with security on and no session (T318, AC-251)', () => {
 
 describe('with security off (T311’s review, AC-254)', () => {
   it('answers no route 401: nobody is asked to sign in', async () => {
-    const app = buildServer({ config, introspectionRetryMs: 0 });
+    // As shipped: the data sources' routes, and the install Job's seeding (T443).
+    const app = buildServer({
+      config: { ...config, seedToken: 'a-seed-token-for-the-sweep-0123456789' },
+      dataSources: dataSourceStore(getDb()),
+      introspectionRetryMs: 0,
+    });
     servers.push(app);
     await app.ready();
-    const routes = routesOf(app).filter((route) => route.method !== 'HEAD');
+    // Not the install Job's route, which answers its token alone in every mode
+    // (AC-251's exemption, T443): it is no user's permission, and none is asked for.
+    const routes = routesOf(app).filter(
+      (route) => route.method !== 'HEAD' && route.access !== 'install',
+    );
+    expect(routesOf(app).filter((route) => route.access === 'install')).toHaveLength(1);
     expect(routes.length).toBeGreaterThan(30);
     for (const route of routes) {
       const response = await app.inject({

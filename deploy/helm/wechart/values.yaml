@@ -98,6 +98,13 @@ cube:
     # Any other CUBEJS_DB_* variables the driver takes, as plain values,
     # e.g. CUBEJS_DB_SSL: 'true'.
     env: {}
+    # The shared root's `default` data source is seeded from these at install
+    # (T443, AC-310): type, host, port, database, user, CUBEJS_DB_SSL and the
+    # password's Secret. Any other field its driver's password sign-in takes,
+    # as xcube names it (core's DRIVERS), goes here, e.g. for Snowflake
+    # {account: acme-eu, warehouse: compute_wh, username: cube}; or
+    # {sslRejectUnauthorized: false, sslCa: '<PEM>'} for a PostgreSQL CA.
+    seedFields: {}
     # Any other CUBEJS_DB_* variables taken from Secrets:
     # VARIABLE: { name: <secret>, key: <key> }.
     secretEnv: {}

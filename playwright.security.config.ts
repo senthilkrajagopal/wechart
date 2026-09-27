@@ -13,8 +13,14 @@ const DEV_SERVICE_KEY_FILE = fileURLToPath(
   new URL('./infra/xcube/dev-service-key.pem', import.meta.url),
 );
 
+/**
+ * The install Job's token for this suite's API, a development value (T443,
+ * AC-310): `security/root-default.spec.ts` seeds the root's `default` with it.
+ */
+export const SEED_TOKEN = 'the-security-suite-seed-token-0123456789';
+
 const PORT = 5373;
-const API_PORT = 4300;
+export const API_PORT = 4300;
 const baseURL = `http://localhost:${PORT}`;
 
 /**
@@ -73,6 +79,7 @@ export default defineConfig({
         CUBE_API_SECRET: 'dev-secret',
         CUBE_API_URL: 'http://localhost:54000/cubejs-api',
         WECHART_XCUBE_PUBLIC_KEY: DEV_XCUBE_PUBLIC_KEY,
+        WECHART_SEED_TOKEN: SEED_TOKEN,
         WECHART_SEED: '1',
         WECHART_RESET_DATA: '1',
         // xcube serves this suite's model under a model id of its own, apart

@@ -85,6 +85,35 @@ export interface Config {
    * cut-over (T447).
    */
   readonly xcube?: { readonly model: string; readonly serviceKey: string };
+  /**
+   * The install Job's token, `WECHART_SEED_TOKEN` or the file
+   * `WECHART_SEED_TOKEN_FILE` names (T443, AC-310, AC-251): the one thing its
+   * route to seed the shared root's `default` data source answers. Unset,
+   * there is no such route.
+   */
+  readonly seedToken?: string;
+}
+
+/** A seeding token shorter than this could be guessed (T443). */
+const SEED_TOKEN_MIN = 32;
+
+/** `WECHART_SEED_TOKEN`, or the file `WECHART_SEED_TOKEN_FILE` names: a mounted Secret. */
+function seedTokenOf(env: NodeJS.ProcessEnv): Pick<Config, 'seedToken'> {
+  const file = env['WECHART_SEED_TOKEN_FILE'] ?? '';
+  let token = env['WECHART_SEED_TOKEN'] ?? '';
+  if (file !== '') {
+    try {
+      token = readFileSync(file, 'utf8').trim();
+    } catch {
+      throw new ConfigError(`WECHART_SEED_TOKEN_FILE names ${file}, which can’t be read.`);
+    }
+  }
+  if (token === '') return {};
+  if (token.length < SEED_TOKEN_MIN)
+    throw new ConfigError(
+      `WECHART_SEED_TOKEN is ${String(token.length)} characters; it needs at least ${String(SEED_TOKEN_MIN)}.`,
+    );
+  return { seedToken: token };
 }
 
 /** The OIDC provider wechart signs users in through (AC-252; research/openid-client.md). */
@@ -165,6 +194,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       ? { superAdminGroup: env['WECHART_SUPER_ADMIN_GROUP'] }
       : {}),
     ...xcubeOf(env),
+    ...seedTokenOf(env),
   };
 }
 

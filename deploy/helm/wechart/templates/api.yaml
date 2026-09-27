@@ -113,6 +113,16 @@ spec:
                 configMapKeyRef:
                   name: {{ include "wechart.xcubePublicKeyConfigMap" . }}
                   key: jwk
+            {{- if and .Values.cube.dataSource.type .Values.cube.dataSource.passwordSecret.name }}
+            # The install Job's token, for its seeding of the shared root's
+            # `default` data source alone (T443, AC-310; seed-default.yaml):
+            # only where that Job is rendered, so no route waits for none.
+            - name: WECHART_SEED_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wechart.secretName" . }}
+                  key: seed-token
+            {{- end }}
             {{- if .Values.api.seed }}
             # wechart's sample dashboards, which name the sample database's cubes.
             - name: WECHART_SEED

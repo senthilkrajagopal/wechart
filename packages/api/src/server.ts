@@ -540,6 +540,7 @@ export function buildServer({
   if (dataSources !== undefined)
     registerDataSources(app, {
       store: dataSources,
+      ...(config.seedToken === undefined ? {} : { seedToken: config.seedToken }),
       ...(dataSourceLanding === undefined ? {} : { landing: dataSourceLanding }),
       ...(connectionTest === undefined ? {} : { tester: connectionTest }),
       ...(connectionTests === undefined ? {} : { tests: connectionTests }),

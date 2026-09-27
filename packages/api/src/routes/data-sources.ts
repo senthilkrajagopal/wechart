@@ -1,7 +1,10 @@
 import type { FieldValue, SealedV1 } from '@wechart/core';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-import { USER } from '../auth/guard';
+import { createHash, timingSafeEqual } from 'node:crypto';
+
+import { INSTALL, USER } from '../auth/guard';
+import { ROOT_FOLDER_ID } from '../repos/catalog';
 import {
   DataSourceRefused,
   type DataSource,
@@ -66,6 +69,17 @@ export function viewOf(source: DataSource) {
 
 const NOT_THERE = { error: 'There’s no such data source, or it isn’t yours to see.' };
 
+/** The shared root's default data source, which the install Job seeds (T443, AC-310). */
+const DEFAULT_SOURCE = 'default';
+
+/** Whether a header carries the secret, compared in constant time over their digests. */
+const sameSecret = (given: string | undefined, secret: string) =>
+  given !== undefined &&
+  timingSafeEqual(
+    createHash('sha256').update(given).digest(),
+    createHash('sha256').update(secret).digest(),
+  );
+
 /** The same fields and values, in whatever order they came. */
 const sameFields = (
   a: Readonly<Record<string, FieldValue>>,
@@ -101,6 +115,7 @@ export function registerDataSources(
     store,
     access,
     key,
+    seedToken,
     landing,
     tester,
     tests,
@@ -135,6 +150,8 @@ export function registerDataSources(
     readonly tester?: (body: TestedConnection) => Promise<TestAnswer>;
     /** xcube's public key, which the browser seals a typed secret to (T441, AC-325). */
     readonly key?: XcubePublicKey;
+    /** The install Job's token (T443): with it, the root's `default` can be seeded. */
+    readonly seedToken?: string;
   },
 ): void {
   // Public by nature: it seals, and opens nothing (AC-298).
@@ -392,6 +409,63 @@ export function registerDataSources(
       return refused(reply, failure);
     }
   });
+
+  /**
+   * The install Job's (T443, AC-310, AC-251): the shared root's `default`
+   * data source, made from the envelope the Job sealed its database password
+   * into, so wechart never receives the password. It answers the Job's token
+   * alone — no session stands in for it — says nothing back, and works only
+   * while the root has no `default`: after that it is managed like any other.
+   */
+  if (seedToken !== undefined)
+    app.post(
+      '/api/data-sources/root-default',
+      {
+        ...INSTALL,
+        // Before its body is read, so no body reaches a parser unasked (T443's review).
+        onRequest: async (request, reply) => {
+          if (!sameSecret(request.headers.authorization, `Bearer ${seedToken}`))
+            await reply.status(401).send();
+        },
+      },
+      async (request, reply) => {
+        const { value, error } = readBody(request.body);
+        if (value === undefined) {
+          request.log.warn({ error }, 'the root’s default data source was refused');
+          return reply.status(400).send();
+        }
+        const held = await store.inFolder(ROOT_FOLDER_ID);
+        if (held.some((source) => source.name === DEFAULT_SOURCE)) return reply.status(409).send();
+        try {
+          await store.create(
+            {
+              folderId: ROOT_FOLDER_ID,
+              name: DEFAULT_SOURCE,
+              driver: String(value['driver'] ?? ''),
+              authMethod: String(value['authMethod'] ?? ''),
+              fields: (value['fields'] ?? {}) as Record<string, FieldValue>,
+              sealed: (value['sealed'] ?? {}) as Record<string, SealedV1>,
+            },
+            await landingIn(ROOT_FOLDER_ID),
+          );
+          return reply.status(204).send();
+        } catch (failure) {
+          if (!(failure instanceof DataSourceRefused)) throw failure;
+          // Why, in the API's log only: the Job is told nothing.
+          request.log.warn(
+            { problems: failure.problems },
+            'the root’s default data source was refused',
+          );
+          // 409 says only that the root has its default — another Job's, a
+          // moment ago — never a refusal of xcube's, which would read as done
+          // (T443's review).
+          const seeded = (await store.inFolder(ROOT_FOLDER_ID)).some(
+            (source) => source.name === DEFAULT_SOURCE,
+          );
+          return reply.status(seeded ? 409 : failure.status === 409 ? 422 : failure.status).send();
+        }
+      },
+    );
 
   app.post('/api/data-sources', USER, async (request, reply) => {
     const { value, error } = readBody(request.body);

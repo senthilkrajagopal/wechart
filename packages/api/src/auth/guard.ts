@@ -9,14 +9,17 @@ import type { SecurityMode } from './user';
  * - `user`: everything else, which with security on answers 401 and nothing
  *   more to a request without a signed-in session;
  * - `admin`: a `user` route for Super-Admins alone, which answers anyone else
- *   signed in 403 (T323, AC-256, AC-265): the Security workspace's.
+ *   signed in 403 (T323, AC-256, AC-265): the Security workspace's;
+ * - `install`: the install Job's, which no session reaches: it answers its own
+ *   token alone, checked by its handler, and returns nothing (T443, AC-251,
+ *   AC-310). One route: seeding the shared root's `default` data source.
  *
  * Every route declares its class. One that doesn't stops the server starting,
  * so a route added later can't be open by being forgotten. Cube reads nothing
  * from wechart since xcube serves the model, so no class is Cube's (T431,
  * AC-251, AC-327).
  */
-export type Access = 'public' | 'user' | 'admin';
+export type Access = 'public' | 'user' | 'admin' | 'install';
 
 declare module 'fastify' {
   interface FastifyContextConfig {
@@ -32,6 +35,7 @@ const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 export const PUBLIC = { config: { access: 'public' } } as const;
 export const USER = { config: { access: 'user' } } as const;
 export const ADMIN = { config: { access: 'admin' } } as const;
+export const INSTALL = { config: { access: 'install' } } as const;
 
 export interface RouteAccess {
   readonly method: HTTPMethods;
@@ -56,9 +60,9 @@ export function registerRouteAccess(app: FastifyInstance): void {
   app.addHook('onRoute', (route) => {
     const access = route.config?.access;
     const methods = [route.method].flat();
-    if (access !== 'public' && access !== 'user' && access !== 'admin') {
+    if (access !== 'public' && access !== 'user' && access !== 'admin' && access !== 'install') {
       throw new Error(
-        `${methods.join(',')} ${route.url} declares no access class (public, user or admin; T318)`,
+        `${methods.join(',')} ${route.url} declares no access class (public, user, admin or install; T318)`,
       );
     }
     for (const method of methods) routes.push({ method, url: route.url, access });
@@ -99,7 +103,8 @@ export function registerGuard(
       }
     }
     const access = request.routeOptions.config.access;
-    if (access === 'public') return;
+    // The install Job's route answers its token alone, in its handler (T443).
+    if (access === 'public' || access === 'install') return;
     // Sent and awaited, the reply stops the chain: no body is read and no
     // handler runs (T318's review; Fastify's hook runner checks `reply.sent`).
     if (request.wechartUser === null) {

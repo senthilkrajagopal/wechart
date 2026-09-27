@@ -1,0 +1,103 @@
+{{- /*
+The shared root's `default` data source, seeded at install (T443, AC-310):
+the deployment's own database, `cube.dataSource`. The Job runs wechart's API
+image (`node dist/main.js seed-default`). It seals the password from the
+chart's Secret with xcube's public key, and sends the API only the envelope,
+with the release's seed token, so wechart never receives the password. After
+that the root's `default` is managed like any other data source; a later run
+finds it there and changes nothing.
+
+A plain Job, named by its pod template like the other two, rather than a hook:
+it waits for the API itself, and a post-install hook would never run under
+`--wait` while the API waits for the credential key (xcube-credential-key.yaml).
+Rendered only where the values name a database and its password's Secret.
+*/ -}}
+{{- $source := .Values.cube.dataSource }}
+{{- if and $source.type $source.passwordSecret.name }}
+{{- $component := include "wechart.component" (list . "seed-default") }}
+{{- $prefix := $component | trunc 54 | trimSuffix "-" }}
+{{- $pod := include "wechart.seedDefaultPod" . }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-%s" $prefix (sha256sum $pod | trunc 8) }}
+  labels:
+    {{- include "wechart.labels" (list . "seed-default") | nindent 4 }}
+spec:
+  # The API still starting, or away: tried again (it also waits five minutes).
+  backoffLimit: 6
+  template:
+    {{- $pod | nindent 4 }}
+{{- end }}
+
+{{- define "wechart.seedDefaultPod" }}
+{{- $source := .Values.cube.dataSource }}
+metadata:
+  labels:
+    {{- include "wechart.labels" (list . "seed-default") | nindent 4 }}
+spec:
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  restartPolicy: OnFailure
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: seed
+      image: {{ include "wechart.image" (list . .Values.images.api) }}
+      imagePullPolicy: {{ .Values.images.pullPolicy }}
+      # Arguments to the image's own entrypoint, so tini stays PID 1 and a
+      # stopped Job ends at once (T443's review).
+      args: [node, dist/main.js, seed-default]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          memory: 256Mi
+      env:
+        - name: WECHART_API_URL
+          value: {{ printf "http://%s:%v" (include "wechart.host" (list . "api")) .Values.api.port | quote }}
+        - name: WECHART_SEED_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "wechart.secretName" . }}
+              key: seed-token
+        - name: WECHART_XCUBE_PUBLIC_KEY
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "wechart.xcubePublicKeyConfigMap" . }}
+              key: jwk
+        - name: WECHART_DEFAULT_DB_TYPE
+          value: {{ $source.type | quote }}
+        # The driver's own fields (core's DRIVERS), as the seeder reads them:
+        # PostgreSQL's family from the values' host, port, database and user
+        # and Cube's CUBEJS_DB_SSL; any other driver's in `seedFields`.
+        - name: WECHART_DEFAULT_DB_HOST
+          value: {{ $source.host | quote }}
+        - name: WECHART_DEFAULT_DB_PORT
+          value: {{ $source.port | toString | quote }}
+        - name: WECHART_DEFAULT_DB_DATABASE
+          value: {{ $source.database | quote }}
+        - name: WECHART_DEFAULT_DB_USER
+          value: {{ $source.user | quote }}
+        - name: WECHART_DEFAULT_DB_SSL
+          value: {{ (get ($source.env | default dict) "CUBEJS_DB_SSL") | default "false" | toString | quote }}
+        {{- range $field, $value := ($source.seedFields | default dict) }}
+        - name: {{ printf "WECHART_DEFAULT_DB_%s" ($field | snakecase | upper) }}
+          value: {{ $value | toString | quote }}
+        {{- end }}
+        - name: WECHART_DEFAULT_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ $source.passwordSecret.name }}
+              key: {{ $source.passwordSecret.key }}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+{{- end }}

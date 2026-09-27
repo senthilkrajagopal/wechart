@@ -290,6 +290,31 @@ else
   fail "4. /api/cube-health answered $status: $(cat "$body")"
 fi
 
+# 4a. The shared root's `default` data source, seeded at install by a Job that
+# seals the database password itself (T443, AC-310): there, and it connects.
+seed_job="$(k get jobs -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=seed-default" \
+  -o jsonpath='{.items[-1:].metadata.name}')"
+if [[ -z "$seed_job" ]]; then
+  fail '4a. no seed-default Job: the values name no data source with a password Secret'
+elif ! k wait --for=condition=complete "job/$seed_job" --timeout=300s > /dev/null; then
+  fail "4a. the seed-default Job didn't complete: $(k logs "job/$seed_job" --tail=5 2>&1 | tr '\n' ' ')"
+else
+  pass "4a. $seed_job completed: $(k logs "job/$seed_job" --tail=1 2>&1)"
+  status="$(fetch "$url/api/data-sources")"
+  root_default="$(jq -r '[.[] | select(.folderId == "root" and .name == "default")][0].id // empty' "$body" 2> /dev/null)"
+  if [[ "$status" == 200 && -n "$root_default" ]]; then
+    pass "4a. the shared root holds its default data source ($(jq -r --arg id "$root_default" '.[] | select(.id == $id) | .driver' "$body"))"
+    status="$(fetch -X POST -H 'content-type: application/json' --data '{}' --max-time 90 "$url/api/data-sources/$root_default/test")"
+    if [[ "$status" == 200 ]] && jq -e '.ok == true' "$body" > /dev/null; then
+      pass '4a. it connects: every check xcube ran passed'
+    else
+      fail "4a. its connection test answered $status: $(head -c 300 "$body")"
+    fi
+  else
+    fail "4a. no root default in /api/data-sources ($status): $(head -c 300 "$body")"
+  fi
+fi
+
 # 5. A query from the web app reaches the data source the values name.
 meta_pod="$(k get pods -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=meta" \
   -o jsonpath='{.items[0].metadata.name}')"
