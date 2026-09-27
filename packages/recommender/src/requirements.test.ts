@@ -20,6 +20,19 @@ const counts = (measures = 0, dimensions = 0, timeDimensions = 0) => ({
 });
 
 describe('what a chart needs (AC-033)', () => {
+  /**
+   * T398, AC-305 and AC-313: a country map is offered for one measure and a
+   * dimension holding ISO-3 country codes; a dimension of anything else is
+   * named for what it lacks.
+   */
+  it('asks a country map for a measure and a dimension of country codes', () => {
+    expect(canDraw('map', { ...counts(1, 1), countryCodes: 1 })).toBe(true);
+    expect(canDraw('map', counts(1, 1))).toBe(false);
+    expect(describeMissing('map', counts(1, 1))).toEqual([
+      'Country map needs a dimension of ISO-3 country codes in Dimensions; add 1 more.',
+    ]);
+  });
+
   it('reports nothing missing when the fields are there', () => {
     expect(missingFor('bar', counts(1, 1))).toEqual([]);
     expect(canDraw('bar', counts(1, 1))).toBe(true);

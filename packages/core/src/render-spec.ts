@@ -42,7 +42,9 @@ export type ChartType =
   | 'trellis'
   | 'combo'
   // Phase 2 (AC-306): the spread of a measure's values in each category.
-  | 'boxplot';
+  | 'boxplot'
+  // Phase 2 (AC-305): a measure by country, its dimension ISO-3 codes.
+  | 'map';
 
 /**
  * The visual channels a member can be bound to.
@@ -80,6 +82,7 @@ export const CHART_TYPES: readonly ChartType[] = [
   'trellis',
   'combo',
   'boxplot',
+  'map',
 ];
 
 /**

@@ -1,4 +1,23 @@
-import type { ChartSpec } from '@wechart/core';
+import { countryCodeMarkingOf, holdsCountryCodes, type ChartSpec } from '@wechart/core';
+
+/**
+ * How the model marks each dimension as holding country codes, from its
+ * `meta.wechart.countryCode` in `/v1/meta` (T397, AC-313): true, false, or
+ * unmarked.
+ */
+export function countryMarkingsOf(meta: unknown): (member: string) => boolean | undefined {
+  const marked = new Map<string, boolean>();
+  const cubes = (meta as { cubes?: unknown } | null | undefined)?.cubes;
+  for (const cube of Array.isArray(cubes) ? cubes : []) {
+    const dimensions = (cube as { dimensions?: unknown }).dimensions;
+    for (const dimension of Array.isArray(dimensions) ? dimensions : []) {
+      const { name, meta: own } = dimension as { name?: unknown; meta?: unknown };
+      const marking = countryCodeMarkingOf(own);
+      if (typeof name === 'string' && marking !== undefined) marked.set(name, marking);
+    }
+  }
+  return (member) => marked.get(member);
+}
 import { recommend, type ChartType, type Signature } from '@wechart/recommender';
 
 /**
@@ -15,8 +34,21 @@ import { recommend, type ChartType, type Signature } from '@wechart/recommender'
  * this result, and it costs nothing extra. It follows that the rows must be in
  * hand before recommending — deciding first would decide with none.
  */
-export function signatureOf(spec: ChartSpec, rows: readonly Record<string, unknown>[]): Signature {
+export function signatureOf(
+  spec: ChartSpec,
+  rows: readonly Record<string, unknown>[],
+  /**
+   * How the model marks a dimension as holding country codes, where it does
+   * (T398, AC-313): otherwise its values decide.
+   */
+  countryMarking?: (member: string) => boolean | undefined,
+): Signature {
   const distinct = (member: string) => new Set(rows.map((row) => String(row[member] ?? ''))).size;
+  const countryCodes = (member: string) =>
+    holdsCountryCodes(
+      rows.map((row) => row[member]),
+      countryMarking?.(member),
+    );
 
   return {
     fields: [
@@ -25,6 +57,7 @@ export function signatureOf(spec: ChartSpec, rows: readonly Record<string, unkno
         name,
         kind: 'dimension' as const,
         ...(rows.length > 0 ? { cardinality: distinct(name) } : {}),
+        ...(countryCodes(name) ? { countryCodes: true } : {}),
       })),
       ...spec.timeDimensions.map((name) => ({
         name,

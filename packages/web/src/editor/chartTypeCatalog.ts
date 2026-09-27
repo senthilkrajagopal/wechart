@@ -35,6 +35,8 @@ export const TYPE_PURPOSES: readonly TypePurpose[] = [
     types: ['boxplot', 'heatmap', 'pivot', 'trellis'],
   },
   { id: 'correlation', name: 'Correlation', types: ['scatter'] },
+  // Phase 2 (T398, AC-305): the prototype's gallery has no map.
+  { id: 'geography', name: 'Geography', types: ['map'] },
   { id: 'kpi', name: 'KPI', types: ['kpi'] },
   { id: 'table', name: 'Table', types: ['table', 'pivot'] },
 ];
@@ -61,6 +63,7 @@ export const TYPE_DESCRIPTIONS: Readonly<Record<ChartType, string>> = {
   trellis: 'One small panel per member',
   combo: 'Bars plus a line on two axes (use with care)',
   boxplot: 'Spread of values per category: median, quartiles and outliers',
+  map: 'A measure by country, shaded on a world map',
 };
 
 /** What a type needs, in the words the field list uses (AC-033's requirements). */

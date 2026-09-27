@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { CHART_TYPES, type RenderSpec } from '@wechart/core';
 
+import countries from './geo/countries-50m.geo.json';
+import { registerCountries } from './geo/countryMap';
 import { DRAWABLE_TYPES, isDrawable, optionFor } from './optionFor';
 import {
   cellsOf,
@@ -57,6 +59,19 @@ const spec = (chartType: RenderSpec['chartType']): RenderSpec => {
     };
   }
 
+  // Countries, by their ISO-3 codes, on the registered boundaries (T398).
+  if (chartType === 'map') {
+    return {
+      chartType,
+      encoding: { x: ['customers.country_iso3'], y: ['orders.count'] },
+      rows: [
+        { 'customers.country_iso3': 'FRA', 'orders.count': 10 },
+        { 'customers.country_iso3': 'USA', 'orders.count': 30 },
+      ],
+      palette: PALETTE,
+    };
+  }
+
   if (chartType === 'heatmap') {
     return {
       chartType,
@@ -81,6 +96,11 @@ const spec = (chartType: RenderSpec['chartType']): RenderSpec => {
 };
 
 describe('every drawable type produces marks', () => {
+  // A map is drawn only on its boundaries, registered first (T398).
+  beforeAll(() => {
+    registerCountries(countries);
+  });
+
   for (const chartType of DRAWABLE_TYPES) {
     it(`draws ${chartType}`, () => {
       const svg = renderToSvg(optionFor(spec(chartType)));

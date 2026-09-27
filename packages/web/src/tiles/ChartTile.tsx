@@ -12,6 +12,7 @@ import { DataTable, type DataTableProps } from './DataTable';
 import { Kpi } from './Kpi';
 import { PivotTable } from './PivotTable';
 import { TileEmpty } from './TileEmpty';
+import { UnplacedCodes } from './UnplacedCodes';
 
 /**
  * One chart, whatever kind it is (AC-037), and the table behind it (AC-178).
@@ -338,6 +339,8 @@ export function ChartTile({
           {...(rowMarking === undefined ? {} : { rowMarking })}
         />
       )}
+      {/* A map's codes it can't place, named under it (T398, rule 87). */}
+      {spec.chartType === 'map' && !showingTable ? <UnplacedCodes spec={spec} /> : null}
     </div>
   );
 }

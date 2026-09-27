@@ -6043,10 +6043,41 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The cold review (PASS) led to more form tests, a check of the list against ISO's user-assigned ranges, the research's count verified, and AC-313 moved to T398.
     - For T398: whether a marking left on a dimension whose type changed from string still counts; whether lower-case or padded codes are normalised (research open question 5).
     - AC-313 stays open: its failing state is about the map being offered, which is T398's.
-- [ ] T398 (AC-305, AC-313) Draw a country map on Natural Earth 1:50m boundaries, with a legend, and name the codes it can't place
+- [x] T398 (AC-305, AC-313) Draw a country map on Natural Earth 1:50m boundaries, with a legend, and name the codes it can't place
   - Files: `packages/charts/src/geo/{countries-50m.geo.json,countryMap.ts}` (the slim file derived from Natural Earth v5.1.2, keyed `ISO_A3`, then `ISO_A3_EH`), `packages/charts/package.json` (d3-geo 3.1.1), `packages/charts/src/series/map.ts` (+ test), `packages/charts/src/echarts.ts` (`MapChart`), `packages/core/src/render-spec.ts` (`map`), `packages/core/src/topN.ts` (the map is excluded), `packages/recommender/src/*` (offered per AC-313), `packages/web/src/tiles/UnplacedCodes.tsx`, `e2e/country-map.spec.ts`
   - Failing test: `map.test.ts`: every code in the data, SGP, FRA and NOR included, is filled from the sequential ramp; the legend shows the range and "No data"; `country-map.spec.ts`: an unplaced code is named under the map (AC-305; rules 86–87).
   - Depends on: T397
+  - **Done 2026-09-27.**
+    - **Boundaries:** `packages/charts/scripts/derive-countries.mjs`, pinned to Natural Earth v5.1.2's 50m file by its git blob, writes `countries-50m.geo.json`.
+      - 242 features, 1.7 MB (585 kB gzipped), loaded as their own chunk the first time a map is drawn.
+      - Keyed `ISO_A3`, else `ISO_A3_EH` (France and Norway), else `~ADM0_A3` (Somaliland, Kosovo, N. Cyprus, Siachen: drawn, never placed).
+      - Australia's three features share one key and are named "Australia".
+      - Antarctica is kept.
+    - **Drawing:** ECharts' map series in d3-geo's Equal Earth projection (rule 86).
+      - §5's ramp, from the placed values' range; countries without a value in the null neutral.
+      - A continuous legend with its two ends in the measure's format, and a "No data" swatch beside it.
+      - Its own tooltip: the country's name, then the value or "No data".
+      - Marked, highlighted and keyboard-focused in outline and fade only, leaving the fill to the scale (the review).
+      - The dark theme recolours the swatch and the legend's words.
+      - The validator separates the null neutral from both ends of the ramp in both themes (ΔE 14.9 to 43.7).
+    - **Offered:** a `map` type through core, the recommender and the gallery.
+      - Drawable for a measure by a first dimension holding ISO-3 codes, by its values unless `meta.wechart.countryCode` says (T397). Otherwise its card names what's missing.
+      - A runner-up among the recommender's suggestions, a bar reading values more exactly.
+      - Another grouping is warned of, since each country shows one row (the review).
+      - Customize offers no legend or labels for it.
+    - **Unplaced codes:** named under the map in page DOM, "Not on the map: GUF, …" (rule 87). A row with no code is named "(empty)".
+    - **Tests:**
+      - `map.test.ts` (SGP, FRA and NOR filled from the ramp; the null neutral; the legend's ends and swatch; the tooltip's names; marking, highlight and focus on a map);
+      - `UnplacedCodes.test.tsx`, `signature.test.ts`, `recommend.test.ts`, `requirements.test.ts`, `warnings.test.ts`, `themed.test.ts`;
+      - the every-type tests in `optionFor.test.ts` and `format-places.test.ts`;
+      - e2e `country-map.spec.ts` against the real Cube: offered and suggested, four ramp fills, the legend, and "Not on the map: GUF"; withheld for codes marked "not a country code", offered for names marked as one. `table-view.spec.ts` (AC-178) draws the map from a cube of its own (`countries.ts`).
+      - Chrome, Firefox and Safari.
+    - **AC-305 and AC-313 ticked** on those.
+    - **Left:**
+      - Singapore is filled but sub-pixel in a small tile; whether a marker should show tiny states is the research's open question 2 (handoff question 28).
+      - Codes aren't normalised: a lower-case `fra` isn't an ISO code (T397's rule).
+      - A `countryCode` marking counts on any dimension, whatever its type.
+      - On a very narrow tile the legend's bar and the swatch may meet.
 - [x] T399 [P] (AC-306) Draw a box plot with type-7 quartiles, and whiskers per the chart option
   - Files: `packages/core/src/stats/boxplot.ts` (+ test), `packages/charts/src/series/boxplot.ts` (+ test), `packages/charts/src/echarts.ts` (`BoxplotChart`), `packages/core/src/render-spec.ts` (`boxplot`)
   - Failing test: `boxplot.test.ts`: medians and quartiles equal PostgreSQL's `percentile_cont` on the same values; Tukey whiskers end at the most extreme value within 1.5 × IQR with values beyond as dots; the min/max option draws the extremes (AC-306; rule 88).

@@ -60,6 +60,9 @@ export function applyTopN(spec: RenderSpec): RenderSpec {
   // A box plot's rows are its observations (T399): summing a tail into
   // "Other" would draw a box no category has.
   if (spec.chartType === 'boxplot') return spec;
+  // A map's rows are countries (T398): "Other" would uncolour real ones and
+  // be a code no map can place (research/country-map.md).
+  if (spec.chartType === 'map') return spec;
 
   // One entry per category, in the order they arrived, with what to rank by.
   const byCategory = new Map<string, Record<string, unknown>[]>();

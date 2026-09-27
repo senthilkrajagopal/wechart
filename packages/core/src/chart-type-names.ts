@@ -26,6 +26,7 @@ export const CHART_TYPE_NAMES: Readonly<Record<ChartType, string>> = {
   trellis: 'Small multiples',
   combo: 'Combo (bar + line)',
   boxplot: 'Box plot',
+  map: 'Country map',
 };
 
 export function chartTypeName(type: ChartType): string {

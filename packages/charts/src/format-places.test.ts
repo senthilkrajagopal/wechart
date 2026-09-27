@@ -10,10 +10,12 @@
  *
  * Tables are covered in `packages/web` where they are rendered.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from '@wechart/core';
 
+import countries from './geo/countries-50m.geo.json';
+import { registerCountries } from './geo/countryMap';
 import { DRAWABLE_TYPES, optionFor } from './optionFor';
 import { tooltipFor } from './tooltip';
 import { labelsOf, renderToSvg } from './testing/renderToSvg';
@@ -361,9 +363,14 @@ function everyTypeSpec(chartType: (typeof DRAWABLE_TYPES)[number]): RenderSpec {
 }
 
 /** Types whose value is a colour or an area, not a position on an axis. */
-const NO_VALUE_AXIS: readonly string[] = ['pie', 'donut', 'treemap', 'heatmap'];
+const NO_VALUE_AXIS: readonly string[] = ['pie', 'donut', 'treemap', 'heatmap', 'map'];
 
 describe('every drawable type', () => {
+  // A map is drawn only on its boundaries, registered first (T398).
+  beforeAll(() => {
+    registerCountries(countries);
+  });
+
   it.each(DRAWABLE_TYPES)('writes a %s’s measure as money in its tooltip', (chartType) => {
     // Each as ECharts hands it over: a box as its category's index and its
     // five values, `refunded` being the second category (T399).

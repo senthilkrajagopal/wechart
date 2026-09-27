@@ -24,6 +24,8 @@ import { tooltipFor } from './tooltip';
 import { boxplotOption, isBoxplotType } from './series/boxplot';
 import { comboOption, isComboType } from './series/combo';
 import { heatmapOption, isHeatmapType } from './series/heatmap';
+import { countryMap } from './geo/countryMap';
+import { isMapType, mapOption } from './series/map';
 import { lineOption, isLineType } from './series/line';
 import { fitPieLabels, pieOption, isPieType } from './series/pie';
 import { scatterOption, isScatterType } from './series/scatter';
@@ -52,10 +54,29 @@ export const DRAWABLE_TYPES = [
   'trellis',
   'combo',
   'boxplot',
+  'map',
 ] as const satisfies readonly ChartType[];
 
 export function isDrawable(chartType: string): boolean {
   return (DRAWABLE_TYPES as readonly string[]).includes(chartType);
+}
+
+/** A map's regions with no fill of their own: the visualMap's scale fills them. */
+function regionsFilledByScale(option: EChartsOption): EChartsOption {
+  const series = (option['series'] as Record<string, unknown>[] | undefined) ?? [];
+  return {
+    ...option,
+    series: series.map((one) => ({
+      ...one,
+      data: ((one['data'] as Record<string, unknown>[] | undefined) ?? []).map((item) => {
+        const style = item['itemStyle'] as Record<string, unknown> | undefined;
+        if (style === undefined || !('color' in style)) return item;
+        const rest = { ...style };
+        delete rest['color'];
+        return { ...item, itemStyle: rest };
+      }),
+    })),
+  };
 }
 
 /**
@@ -123,6 +144,18 @@ export function optionFor(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
   }
   if (isComboType(spec.chartType)) return drawn(onGrid(comboOption(spec, canvas)));
   if (isBoxplotType(spec.chartType)) return drawn(onGrid(boxplotOption(spec)));
+  // Its own legend and tooltip, and no axes (T398). Drawn only once its
+  // boundaries are registered: the tile loads them first (`loadCountryMap`).
+  if (isMapType(spec.chartType)) {
+    const map = countryMap();
+    if (map === undefined) throw new Error('The country map’s boundaries are not loaded yet.');
+    // Marked, highlighted and focused as every chart is (T398's review), in
+    // outline and fade only: a region's fill is the scale's, and a colour
+    // of the item's own would stand in for it (direction.md, "Country map").
+    return regionsFilledByScale(
+      withKeyboardFocus(withMarks(withHighlight(mapOption(spec, map), spec), spec), spec),
+    );
+  }
 
   // Reached only by the DOM-rendered types — KPI, table and pivot — which
   // `ChartTile` routes before this is called, and which ECharts genuinely

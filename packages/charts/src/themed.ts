@@ -50,11 +50,19 @@ function swapsFor(theme: ChartTheme): ReadonlyMap<string, string> {
   swaps.set(COLORS.light['border-strong'].toLowerCase(), COLORS.dark['border-strong']);
   // The ring on the item the keyboard is on (T306), in the theme's accent.
   swaps.set(COLORS.light.accent.toLowerCase(), COLORS.dark.accent);
+  // A drawn word, as a map legend's "No data" is (T398): in the dark
+  // theme's secondary text. `OTHER`'s dark value is this very colour, which
+  // swaps are read against the light ones only, never twice.
+  swaps.set(COLORS.light['text-secondary'].toLowerCase(), COLORS.dark['text-secondary']);
   return swaps;
 }
 
-/** A key whose value is a colour, or a list of them: `color`, `borderColor`, … */
-const isColourKey = (key: string) => key === 'color' || /Color$/.test(key);
+/**
+ * A key whose value is a colour, or a list of them: `color`, `borderColor`,
+ * … and a drawn element's `fill` and `stroke` (T398: a map legend's swatch).
+ */
+const isColourKey = (key: string) =>
+  key === 'color' || key === 'fill' || key === 'stroke' || /Color$/.test(key);
 
 /**
  * The option with its colours swapped — only its colours.
@@ -142,6 +150,14 @@ export function themed(option: EChartsOption, theme: ChartTheme): EChartsOption 
     ...(coloured['legend'] === undefined
       ? {}
       : { legend: eachOf(coloured['legend'], (one) => withText(one, tokens['text-secondary'])) }),
+    // A colour legend's words — a map's two ends (T398) — as a legend's are.
+    ...(coloured['visualMap'] === undefined
+      ? {}
+      : {
+          visualMap: eachOf(coloured['visualMap'], (one) =>
+            withText(one, tokens['text-secondary']),
+          ),
+        }),
     ...(coloured['title'] === undefined
       ? {}
       : { title: eachOf(coloured['title'], (one) => withText(one, tokens['text-primary'])) }),

@@ -98,6 +98,26 @@ describe('the recommendation follows the signature (AC-028)', () => {
     expect(small).not.toBe(large);
   });
 
+  /**
+   * T398, AC-305: a country map is offered — as a runner-up, since a bar
+   * reads values more exactly — for a measure by a dimension of ISO-3 codes,
+   * and for nothing else.
+   */
+  it('offers a country map for a measure by country codes, and only then', () => {
+    const countries: Field = { ...dimension(20, 'customers.country_iso3'), countryCodes: true };
+    const byCountry = recommend(signature(measure(), countries));
+    expect(byCountry.top?.candidate.chartType).toBe('bar');
+    expect(byCountry.runnersUp.map((each) => each.candidate.chartType)).toContain('map');
+
+    const byStatus = recommend(signature(measure(), dimension(20)));
+    expect(
+      [byStatus.top, ...byStatus.runnersUp].map((each) => each?.candidate.chartType),
+    ).not.toContain('map');
+    expect(
+      enumerate(signature(measure(), dimension(20))).map((each) => each.chartType),
+    ).not.toContain('map');
+  });
+
   it('shows two measures against each other as a scatter', () => {
     const types = [
       recommend(signature(measure(), measure('m2'))).top?.candidate.chartType,

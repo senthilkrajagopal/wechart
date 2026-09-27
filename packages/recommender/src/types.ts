@@ -14,6 +14,12 @@ export interface Field {
   readonly kind: FieldKind;
   /** Distinct values, where known. Several rules are cardinality rules. */
   readonly cardinality?: number;
+  /**
+   * A dimension holding ISO-3 country codes, as the caller decided it
+   * (AC-313): by its values, or as the model marks it. The recommender only
+   * reads the answer; how it was reached is Cube's and the model's.
+   */
+  readonly countryCodes?: boolean;
 }
 
 export interface Signature {

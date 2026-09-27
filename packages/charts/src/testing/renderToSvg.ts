@@ -16,11 +16,13 @@ import {
   BoxplotChart,
   HeatmapChart,
   LineChart,
+  MapChart,
   PieChart,
   ScatterChart,
   TreemapChart,
 } from 'echarts/charts';
 import {
+  GraphicComponent,
   GridComponent,
   LegendComponent,
   TitleComponent,
@@ -36,6 +38,8 @@ echarts.use([
   PieChart,
   TreemapChart,
   HeatmapChart,
+  MapChart,
+  GraphicComponent,
   VisualMapComponent,
   GridComponent,
   LegendComponent,
@@ -124,6 +128,21 @@ export function cellsOf(svg: string): (Box & { luminance: number })[] {
       // Rec. 709 luma. Only the ordering matters here, not the exact value.
       return { ...box, luminance: 0.2126 * r + 0.7152 * g + 0.0722 * b };
     });
+}
+
+/**
+ * Each drawn region of a map, by the data item it draws (T398): SSR tags
+ * every element with a data index as `ecmeta_data_index`
+ * (research/country-map.md, "SVG renderer and the tests"). A country of many
+ * polygons is many paths with one index.
+ */
+export function regionsOf(svg: string): { readonly dataIndex: number; readonly fill: string }[] {
+  return [...svg.matchAll(/<path\b([^>]*)>/g)].flatMap((match) => {
+    const attributes = match[1] ?? '';
+    const index = /\becmeta_data_index="(\d+)"/.exec(attributes)?.[1];
+    const fill = /\bfill="([^"]*)"/.exec(attributes)?.[1];
+    return index === undefined || fill === undefined ? [] : [{ dataIndex: Number(index), fill }];
+  });
 }
 
 /** Every filled `<path>`, with any `translate` already applied. */

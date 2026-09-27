@@ -45,6 +45,9 @@ function categoryReader(spec: RenderSpec) {
       // A slice carries its category apart from its written name (AC-221).
       if (typeof object['category'] === 'string') return object['category'];
       if (one.type === 'treemap' && typeof object['name'] === 'string') return object['name'];
+      // A map's region by its code: the codes it can't place aren't drawn,
+      // so its items aren't the categories in order (T398's review).
+      if (one.type === 'map' && typeof object['name'] === 'string') return object['name'];
     }
     return categories[index];
   };

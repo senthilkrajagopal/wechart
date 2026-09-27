@@ -167,10 +167,12 @@ describe('a row limit (T390)', () => {
  * holds. Each is left as it came.
  */
 describe('the types with no category ranked on y', () => {
-  it('leaves a scatter, a heatmap and a box plot as they came', () => {
+  it('leaves a scatter, a heatmap, a box plot and a country map as they came', () => {
     // A box plot's rows are its observations (T399): folding them would draw
-    // an "Other" box from the sums of other categories' values.
-    for (const chartType of ['scatter', 'heatmap', 'boxplot'] as const) {
+    // an "Other" box from the sums of other categories' values. A map's are
+    // countries (T398): folding would uncolour real countries and add a code
+    // "Other" that no map can place (research/country-map.md).
+    for (const chartType of ['scatter', 'heatmap', 'boxplot', 'map'] as const) {
       const unfolded = spec({ chartType });
       expect(applyTopN(unfolded)).toBe(unfolded);
     }

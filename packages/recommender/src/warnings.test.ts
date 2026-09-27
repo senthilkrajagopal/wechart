@@ -105,6 +105,22 @@ describe('what a chosen type warns of (AC-218)', () => {
     expect(warningsFor('boxplot', signature(measure(), time, dimension(20)))).toEqual([]);
   });
 
+  /**
+   * T398's review: a country map colours each country by one value. Another
+   * grouping splits a country's rows, and only one of them can be drawn.
+   */
+  it('warns a country map with another grouping that each country shows one of its rows', () => {
+    const codes: Field = { ...dimension(20, 'orders.iso3'), countryCodes: true };
+    const once =
+      'A country map shows one value per country, and another grouping splits them, so each country shows only its first. Remove the other grouping to map the measure by country alone.';
+
+    expect(warningsFor('map', signature(measure(), codes))).toEqual([]);
+    // Many countries are no colour cap: the scale takes them all.
+    expect(warningsFor('map', signature(measure(), { ...codes, cardinality: 200 }))).toEqual([]);
+    expect(warningsFor('map', signature(measure(), codes, dimension(3)))).toEqual([once]);
+    expect(warningsFor('map', signature(measure(), codes, time))).toEqual([once]);
+  });
+
   it('warns of nothing a chart can show as it is', () => {
     expect(warningsFor('bar', signature(measure(), dimension(4)))).toEqual([]);
     expect(warningsFor('table', signature(measure(), dimension(400)))).toEqual([]);

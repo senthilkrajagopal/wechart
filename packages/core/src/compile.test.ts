@@ -143,6 +143,13 @@ describe('the default encoding of the types that read their channels differently
     });
   });
 
+  it('colours a country map’s countries, its first plain dimension, by its first measure (T398)', () => {
+    expect(defaultEncoding(twoMeasuresTwoDimensions.chart, 'map')).toEqual({
+      x: ['orders.status'],
+      y: ['orders.count'],
+    });
+  });
+
   it('encodes every other type as before, and a compile uses the type it draws', () => {
     expect(defaultEncoding(twoMeasuresTwoDimensions.chart, 'groupedBar')).toEqual(
       defaultEncoding(twoMeasuresTwoDimensions.chart),

@@ -20,6 +20,15 @@ export function warningsFor(
 ): string[] {
   const of = (kind: Field['kind']) => signature.fields.filter((field) => field.kind === kind);
   const [measures, dimensions, times] = [of('measure'), of('dimension'), of('timeDimension')];
+  // A country map colours each country by one value (T398's review): another
+  // grouping splits its rows, and only one of them can be drawn. Its many
+  // countries are no colour's capacity: the scale takes them all.
+  if (chartType === 'map')
+    return dimensions.length + times.length > 1
+      ? [
+          'A country map shows one value per country, and another grouping splits them, so each country shows only its first. Remove the other grouping to map the measure by country alone.',
+        ]
+      : [];
   const [category, split] =
     times[0] === undefined ? [dimensions[0], dimensions[1]] : [times[0], dimensions[0]];
 

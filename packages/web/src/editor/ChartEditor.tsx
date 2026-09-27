@@ -50,7 +50,7 @@ import {
 import { OPENED_WITH, type EditorState } from './openChart';
 import { PreviewFrame, type TileSize } from './PreviewFrame';
 import { META_QUERY } from '../query/meta';
-import { signatureOf, topTypeOf } from '../query/signature';
+import { countryMarkingsOf, signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { FieldList } from './FieldList';
 import { Wells } from './Wells';
@@ -124,6 +124,9 @@ const UNDRAWN_TYPES: readonly (ChartType | null)[] = [
   'pivot',
   'trellis',
   'boxplot',
+  // A map's legend is its colour scale, and a country has no label to give
+  // (T398's review).
+  'map',
   null,
 ];
 
@@ -387,7 +390,21 @@ export function ChartEditor({
    * given the same type in both places. Cardinalities come from the rows the
    * query actually returned (AC-028).
    */
-  const signature: Signature = useMemo(() => signatureOf(spec, rows), [spec, rows]);
+  // A dimension of country codes, by its values unless the model says (T398, AC-313).
+  const countryMarking = useMemo(() => countryMarkingsOf(meta.data), [meta.data]);
+  const signature: Signature = useMemo(
+    () => signatureOf(spec, rows, countryMarking),
+    [spec, rows, countryMarking],
+  );
+  /** What the fields are, for what a type needs (AC-033): a map's country codes too (T398). */
+  const counts = {
+    measures: spec.measures.length,
+    dimensions: spec.dimensions.length,
+    timeDimensions: spec.timeDimensions.length,
+    // The first dimension's alone: it is the one a map draws by (T398's review).
+    countryCodes:
+      signature.fields.find((field) => field.kind === 'dimension')?.countryCodes === true ? 1 : 0,
+  };
 
   const recommendation = useMemo(() => recommend(signature), [signature]);
   const explanation = useMemo(() => explain(signature), [signature]);
@@ -421,13 +438,7 @@ export function ChartEditor({
    * missing and where — rather than rendering empty axes and leaving the user
    * to work out which of three wells wants what.
    */
-  const missing = shownType
-    ? describeMissing(shownType, {
-        measures: spec.measures.length,
-        dimensions: spec.dimensions.length,
-        timeDimensions: spec.timeDimensions.length,
-      })
-    : [];
+  const missing = shownType ? describeMissing(shownType, counts) : [];
 
   /**
    * What a manual choice strains (AC-218): a combo's two value axes, or more
@@ -910,11 +921,7 @@ export function ChartEditor({
         <ChartTypeGallery
           current={shownType}
           suggested={suggested}
-          counts={{
-            measures: spec.measures.length,
-            dimensions: spec.dimensions.length,
-            timeDimensions: spec.timeDimensions.length,
-          }}
+          counts={counts}
           onChoose={(type) => {
             setChartTypeState(chooseType(type));
             closeGallery();

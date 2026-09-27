@@ -2,6 +2,7 @@ import { CHART_TYPES } from '@wechart/core';
 import { expect, test, type Page } from '@playwright/test';
 
 import { chooseChartType } from './chartType';
+import { newChartOnCountries } from './countries';
 import { wellPicker } from './wells';
 
 /**
@@ -18,6 +19,10 @@ import { wellPicker } from './wells';
  * requirements of all eighteen. Skipping the ones that fell short would have
  * been the easy way to a green run and would have excused exactly the types
  * most likely to be missing a view.
+ *
+ * All but the country map (T398), which needs a dimension of ISO-3 codes the
+ * sample model has none of: it is drawn from a cube of this browser's own,
+ * its measure by its codes (`countries.ts`), and checked as every other type.
  */
 async function openEditorWithEveryWellFilled(page: Page, chartType: string) {
   await page.goto('/explore/charts/seed-chart-empty/edit');
@@ -37,8 +42,20 @@ async function openEditorWithEveryWellFilled(page: Page, chartType: string) {
 }
 
 for (const chartType of CHART_TYPES) {
-  test(`${chartType} offers a table view of its data`, async ({ page }) => {
-    await openEditorWithEveryWellFilled(page, chartType);
+  test(`${chartType} offers a table view of its data`, async ({ page, request }, testInfo) => {
+    /** The column the table has to show: the chart's own grouping, by its title. */
+    let grouping: string | RegExp = 'Orders Status';
+    if (chartType === 'map') {
+      const cube = await newChartOnCountries(page, request, testInfo.project.name);
+      await wellPicker(page, 'dimensions').selectOption(`${cube}.iso3`);
+      await expect(page.getByTestId('result-row-count')).toBeVisible();
+      await chooseChartType(page, chartType);
+      await expect(page.getByTestId('missing-fields')).toBeHidden();
+      // Its codes, by the title Cube gives `iso3` ("… Iso3").
+      grouping = /^Country Sales \S+ Iso3$/;
+    } else {
+      await openEditorWithEveryWellFilled(page, chartType);
+    }
 
     if (chartType === 'table') {
       // Already a table; a control that switched it to a table would do
@@ -56,7 +73,10 @@ for (const chartType of CHART_TYPES) {
     // The table shows the chart's own members, not some other query's — by
     // their titles (AC-220).
     await expect(
-      table.getByRole('columnheader', { name: 'Orders Status', exact: true }),
+      table.getByRole('columnheader', {
+        name: grouping,
+        ...(typeof grouping === 'string' ? { exact: true } : {}),
+      }),
     ).toBeVisible();
   });
 }

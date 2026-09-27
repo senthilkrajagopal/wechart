@@ -2,7 +2,9 @@ import {
   bucketRangeAt,
   bucketStripeFor,
   CLICK_SLOP_PX,
+  countryMap,
   dragGesture,
+  loadCountryMap,
   echarts,
   edgeBetween,
   focusedItemOf,
@@ -19,6 +21,7 @@ import { COLORS } from '@wechart/ui';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { clickedName, type ClickedItem } from '../dashboard/crossfilter/clicked';
+import { StateLine } from '../shell/StatusIcon';
 import { useThemeName } from '../shell/ThemeProvider';
 
 /**
@@ -102,6 +105,29 @@ export function ChartCanvas({
   /** Whether the tooltip up is the keyboard's (T306). */
   const tipShown = useRef(false);
   const [canvas, setCanvas] = useState<Canvas | null>(null);
+  /**
+   * A map's boundaries, registered before its first option is set, which
+   * ECharts throws on without them (T398; research/country-map.md): fetched
+   * once, the first time a map is drawn.
+   */
+  const isMap = spec.chartType === 'map';
+  const [mapReady, setMapReady] = useState(() => countryMap() !== undefined);
+  const [mapFailed, setMapFailed] = useState(false);
+  useEffect(() => {
+    if (!isMap || mapReady) return undefined;
+    let current = true;
+    loadCountryMap().then(
+      () => {
+        if (current) setMapReady(true);
+      },
+      () => {
+        if (current) setMapFailed(true);
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [isMap, mapReady]);
   /** The latest, read by a click without rebinding the handlers each render. */
   const clicked = useRef(onItemClick);
   /**
@@ -442,8 +468,10 @@ export function ChartCanvas({
 
   useLayoutEffect(() => {
     const chart = instance.current;
-    // Not before its box is known: the first option is drawn for it.
+    // Not before its box is known: the first option is drawn for it. A map,
+    // not before its boundaries are registered.
     if (chart === null || chart.isDisposed() || canvas === null) return;
+    if (isMap && !mapReady) return;
 
     // notMerge: a chart type change replaces the option outright. Merging
     // would leave the previous type's series in place beside the new one.
@@ -467,7 +495,7 @@ export function ChartCanvas({
       chart.dispatchAction({ type: 'hideTip' });
       tipShown.current = false;
     }
-  }, [spec, theme, canvas]);
+  }, [spec, theme, canvas, isMap, mapReady]);
 
   /**
    * The marked ranges' stripes along the x axis (T386, AC-093; direction.md
@@ -528,6 +556,14 @@ export function ChartCanvas({
       layer.remove();
     };
   }, [spec, theme, canvas, rangeStripes]);
+
+  // Said, rather than a blank tile, when a map's boundaries can't be had.
+  if (isMap && mapFailed)
+    return (
+      <StateLine kind="err" testId="map-failed">
+        The map’s boundaries could not be loaded. Reload the page to try again.
+      </StateLine>
+    );
 
   return (
     /**

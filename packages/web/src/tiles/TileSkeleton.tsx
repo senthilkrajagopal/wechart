@@ -39,6 +39,8 @@ const SHAPES: Record<ChartType, Shape> = {
   treemap: 'blocks',
   heatmap: 'grid',
   trellis: 'blocks',
+  // Regions, as a patchwork of blocks is (T398).
+  map: 'blocks',
   kpi: 'number',
   table: 'rows',
   pivot: 'rows',

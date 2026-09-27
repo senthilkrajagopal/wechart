@@ -93,6 +93,40 @@ describe('what the dark theme recolours, and what it leaves alone (T210 review)'
     expect(drawn.series[0]?.itemStyle.color).toBe('#5c5b57');
   });
 
+  /**
+   * T398: a country map's legend in the dark theme's own colours — its
+   * "No data" swatch in the dark null neutral, and the words of the swatch
+   * and of the bar's two ends in the dark secondary text.
+   */
+  it('draws a map’s legend in the dark theme’s colours', () => {
+    const drawn = themed(
+      {
+        visualMap: { text: ['9', '1'] },
+        graphic: [
+          {
+            type: 'group',
+            children: [
+              { type: 'rect', style: { fill: '#b3b1ab', stroke: COLORS.light['border-strong'] } },
+              { type: 'text', style: { text: 'No data', fill: COLORS.light['text-secondary'] } },
+            ],
+          },
+        ],
+        series: [{ type: 'map', itemStyle: { areaColor: '#b3b1ab' } }],
+      },
+      'dark',
+    ) as unknown as {
+      visualMap: { textStyle: { color: string } };
+      graphic: { children: { style: { fill: string; stroke?: string } }[] }[];
+      series: { itemStyle: { areaColor: string } }[];
+    };
+
+    expect(drawn.visualMap.textStyle.color).toBe(COLORS.dark['text-secondary']);
+    const [swatch, words] = drawn.graphic[0]!.children;
+    expect(swatch?.style).toEqual({ fill: '#5c5b57', stroke: COLORS.dark['border-strong'] });
+    expect(words?.style.fill).toBe(COLORS.dark['text-secondary']);
+    expect(drawn.series[0]?.itemStyle.areaColor).toBe('#5c5b57');
+  });
+
   it('never renames a data value that happens to be a palette colour', () => {
     // A member whose value is a colour — a product's colour column — must
     // stay the value it is on the axis, the legend and the click it sends.

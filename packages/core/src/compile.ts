@@ -87,6 +87,9 @@ export function defaultEncoding(chart: ChartDefinition, chartType?: ChartType): 
   // values (T399): a box per day of a time dimension says nothing.
   if (chartType === 'boxplot')
     return encoded({ x: channel(firstDimension), y: channel(firstMeasure) });
+  // A country per member of its first plain dimension, coloured by its first
+  // measure (T398, AC-305).
+  if (chartType === 'map') return encoded({ x: channel(firstDimension), y: channel(firstMeasure) });
   // Its groupings down the rows and across the columns, its measures in the cells.
   if (chartType === 'pivot')
     return encoded({

@@ -2,7 +2,7 @@ import { emptySpec } from '@wechart/core';
 import { recommend } from '@wechart/recommender';
 import { describe, expect, it } from 'vitest';
 
-import { recommendedTypeOf, signatureOf, topTypeOf } from './signature';
+import { countryMarkingsOf, recommendedTypeOf, signatureOf, topTypeOf } from './signature';
 
 /**
  * `signatureOf` is what the editor and the dashboard both recommend from
@@ -64,6 +64,61 @@ describe('the signature of a chart', () => {
   it('carries the row count', () => {
     expect(signatureOf(spec, rows).rowCount).toBe(3);
     expect(signatureOf(spec, []).rowCount).toBe(0);
+  });
+
+  /**
+   * T398, AC-313: THE SYSTEM SHALL treat a dimension as holding ISO-3 country
+   * codes when every non-empty value is an ISO 3166-1 alpha-3 code, unless
+   * the model marks it otherwise.
+   */
+  it('marks a dimension holding country codes, by its values unless the model says', () => {
+    const byCountry = {
+      ...emptySpec('orders'),
+      measures: ['orders.count'],
+      dimensions: ['orders.iso3'],
+    };
+    const countries = [
+      { 'orders.iso3': 'FRA', 'orders.count': 3 },
+      { 'orders.iso3': 'SGP', 'orders.count': 4 },
+      { 'orders.iso3': null, 'orders.count': 1 },
+    ];
+    const iso3 = (marking?: boolean) =>
+      signatureOf(byCountry, countries, () => marking).fields.find(
+        (field) => field.name === 'orders.iso3',
+      )?.countryCodes;
+
+    expect(iso3()).toBe(true);
+    expect(iso3(false)).toBe(undefined);
+    // Status names aren't codes, unless the model says they are.
+    expect(signatureOf(spec, rows).fields.some((field) => field.countryCodes === true)).toBe(false);
+    expect(
+      signatureOf(spec, rows, () => true).fields.find((field) => field.name === 'orders.status')
+        ?.countryCodes,
+    ).toBe(true);
+  });
+});
+
+describe('the model’s country-code markings', () => {
+  it('reads each dimension’s `meta.wechart.countryCode`', () => {
+    const marking = countryMarkingsOf({
+      cubes: [
+        {
+          name: 'orders',
+          dimensions: [
+            { name: 'orders.iso3', meta: { wechart: { countryCode: true } } },
+            { name: 'orders.code', meta: { wechart: { countryCode: false } } },
+            { name: 'orders.status' },
+          ],
+        },
+      ],
+    });
+
+    expect(['orders.iso3', 'orders.code', 'orders.status'].map(marking)).toEqual([
+      true,
+      false,
+      undefined,
+    ]);
+    expect(countryMarkingsOf(undefined)('orders.iso3')).toBe(undefined);
   });
 });
 

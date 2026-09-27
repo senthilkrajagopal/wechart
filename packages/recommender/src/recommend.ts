@@ -129,6 +129,11 @@ export function enumerate(signature: Signature): Candidate[] {
       }),
     );
     candidates.push(build('treemap', { valueFields: measures.slice(0, 1), categoryField: first! }));
+    // By country, where the one grouping holds ISO-3 codes (T398, AC-305):
+    // its countries shaded by the measure. A second grouping has nowhere to go.
+    if (first!.countryCodes === true && second === undefined) {
+      candidates.push(build('map', { valueFields: measures.slice(0, 1), categoryField: first! }));
+    }
 
     if (second) {
       candidates.push(
@@ -272,6 +277,7 @@ const REASONS: Record<ChartType, string> = {
   trellis: 'One small chart per category, on a shared scale.',
   combo: 'Two measures of the same scale together.',
   boxplot: 'How a measure’s values spread within each category.',
+  map: 'A measure by country, shaded on a map.',
 };
 
 function reasonFor(candidate: Candidate): string {

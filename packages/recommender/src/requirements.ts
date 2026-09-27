@@ -18,12 +18,16 @@ export interface Requirement {
   readonly memberType: string;
   /** Time dimensions count towards it as well: a grouping of either kind (T242). */
   readonly timeCounts?: boolean;
+  /** Only dimensions holding ISO-3 country codes count towards it (T398, AC-313). */
+  readonly countryCodes?: boolean;
 }
 
 export interface FieldCounts {
   readonly measures: number;
   readonly dimensions: number;
   readonly timeDimensions: number;
+  /** The dimensions holding ISO-3 country codes (AC-313), where known; none otherwise. */
+  readonly countryCodes?: number;
 }
 
 const measures = (atLeast: number): Requirement => ({
@@ -47,6 +51,14 @@ const groupings = (atLeast: number): Requirement => ({
   atLeast,
   memberType: `${String(atLeast)} dimensions, or a time dimension and a dimension,`,
   timeCounts: true,
+});
+
+/** A dimension whose values are ISO-3 country codes, or which the model marks so (AC-313). */
+const countryCodes = (): Requirement => ({
+  well: 'dimensions',
+  atLeast: 1,
+  memberType: 'a dimension of ISO-3 country codes',
+  countryCodes: true,
 });
 
 const time = (): Requirement => ({
@@ -79,10 +91,13 @@ export const REQUIREMENTS: Record<ChartType, readonly Requirement[]> = {
   // A measure's values spread per category (AC-306): one plain dimension to
   // box by, as `compile` encodes it.
   boxplot: [measures(1), dimensions(1)],
+  // A measure by country (AC-305): a dimension of ISO-3 codes to colour by.
+  map: [measures(1), countryCodes()],
 };
 
 /** How many fields the chart has towards a requirement. */
 function have(requirement: Requirement, counts: FieldCounts): number {
+  if (requirement.countryCodes === true) return counts.countryCodes ?? 0;
   return counts[requirement.well] + (requirement.timeCounts === true ? counts.timeDimensions : 0);
 }
 

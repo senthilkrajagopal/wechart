@@ -18,12 +18,14 @@ import {
   BoxplotChart,
   HeatmapChart,
   LineChart,
+  MapChart,
   PieChart,
   ScatterChart,
   TreemapChart,
 } from 'echarts/charts';
 import {
   AxisPointerComponent,
+  GraphicComponent,
   GridComponent,
   LegendComponent,
   TitleComponent,
@@ -42,6 +44,11 @@ echarts.use([
   PieChart,
   TreemapChart,
   HeatmapChart,
+  // The country map (T398): its geo component and `registerMap` come with
+  // it, and `registerMap` does nothing until it is used (research/country-map.md).
+  MapChart,
+  // The map legend's "No data" swatch (rule 86).
+  GraphicComponent,
   GridComponent,
   TooltipComponent,
   AxisPointerComponent,
