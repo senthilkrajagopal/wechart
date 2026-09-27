@@ -104,14 +104,15 @@ test('the section delete question keeps Tab inside it, and Cancel returns to the
   const keep = dialog.getByTestId('keep-contents');
   const cancel = dialog.getByTestId('cancel-delete-section');
   await expect(keep).toBeFocused();
-  // Round from the first choice to the last and back, never onto the page
-  // behind the backdrop.
-  await page.keyboard.press('Shift+Tab');
-  await expect(cancel).toBeFocused();
+  // Round from the last choice to the first and back, never onto the page
+  // behind the backdrop: the foot reads Cancel · Delete · Keep since T466's
+  // dialog pattern, Keep the primary it opens on.
   await page.keyboard.press('Tab');
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
   await expect(keep).toBeFocused();
 
-  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
   await page.keyboard.press('Enter');
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('[data-tile="section-detail"]')).toBeFocused();
