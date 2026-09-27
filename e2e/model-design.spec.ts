@@ -177,6 +177,20 @@ test('T479: the tree as design 03 note 1 — a Model head, folder rows, full-wid
       return Math.round(words.getBoundingClientRect().left - node.getBoundingClientRect().left);
     });
   expect(inset).toBeLessThanOrEqual(12);
+  // "+ New cube", the space after "+" kept in a flex box.
+  expect(
+    await actions
+      .getByRole('button')
+      .first()
+      .evaluate((node) => {
+        const [plus, words] = [node.querySelector('span'), document.createRange()];
+        words.setStartAfter(plus as Node);
+        words.setEndAfter(node.lastChild as Node);
+        return Math.round(
+          words.getBoundingClientRect().left - (plus?.getBoundingClientRect().right ?? 0),
+        );
+      }),
+  ).toBeGreaterThanOrEqual(3);
   expect((await actions.boundingBox())?.y ?? 0).toBeGreaterThan(
     (await tree.getByRole('link', { name: /^secured_orders\.yml/ }).boundingBox())?.y ?? Infinity,
   );

@@ -747,7 +747,8 @@ main:has(.model-page) {
   font: 600 12px/16px Inter, system-ui, sans-serif;
 }
 .model-tree__actions { display: grid; gap: 6px; margin-top: 8px; padding: 12px; border-top: 1px solid var(--wc-border-subtle); }
-.model-tree__actions .btn-sm { display: flex; align-items: center; justify-content: flex-start; text-align: left; }
+/* A flex box drops the space after "+": the gap keeps it (T479). */
+.model-tree__actions .btn-sm { display: flex; gap: 4px; align-items: center; justify-content: flex-start; text-align: left; }
 .model-tree__name { min-width: 0; overflow-wrap: anywhere; }
 .model-tree__tag,
 .model-tree__mark {
