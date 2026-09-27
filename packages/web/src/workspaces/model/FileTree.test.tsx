@@ -204,16 +204,27 @@ describe('the model’s file tree (AC-222)', () => {
       const actions = nav.querySelector('.model-tree__actions');
       expect(
         [...(actions?.querySelectorAll('button') ?? [])].map((button) => button.textContent),
-      ).toEqual(['+ New cube', '+ New view', '+ Generate cubes']);
+        // Generate named as designs 11 and 12 name it (T485).
+      ).toEqual(['+ New cube', '+ New view', '+ Generate from a data source…']);
       // After the files, not over them.
       const lastFile = within(nav).getAllByRole('link').at(-1);
       expect(
         (lastFile?.compareDocumentPosition(actions as Node) ?? 0) &
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-      await userEvent.click(within(nav).getByRole('button', { name: 'Generate cubes' }));
+      const generate = within(nav).getByRole('button', { name: 'Generate from a data source…' });
+      expect(generate.classList.contains('is-open')).toBe(false);
+      await userEvent.click(generate);
       expect(onGenerate).toHaveBeenCalledTimes(1);
       expect(onNew).not.toHaveBeenCalled();
+    });
+
+    it('draws Generate pressed while its pane is open (design 11 pin 9)', () => {
+      const { nav } = tree({ onGenerate: vi.fn(), generating: true });
+      const generate = within(nav).getByRole('button', { name: 'Generate from a data source…' });
+      expect(generate.classList.contains('is-open')).toBe(true);
+      // It opens a pane, not a disclosure: nothing says it expands (T485's review).
+      expect(generate.hasAttribute('aria-expanded')).toBe(false);
     });
   });
 

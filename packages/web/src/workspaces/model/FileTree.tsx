@@ -47,6 +47,8 @@ export interface FileTreeProps {
   readonly onNew: (kind: 'cube' | 'view') => void;
   /** Generate cubes from a data source's tables (T145, AC-139). */
   readonly onGenerate?: (() => void) | undefined;
+  /** Whether Generate cubes is open: its button is shown pressed (design 11 pin 9). */
+  readonly generating?: boolean | undefined;
 }
 
 export function fileHref(path: string): string {
@@ -61,6 +63,7 @@ export function FileTree({
   onOpen,
   onNew,
   onGenerate,
+  generating = false,
 }: FileTreeProps) {
   // Each file read once for whether it parses, whether Cube would take what
   // it says (AC-227), and whether it is code the form can't open (AC-140) —
@@ -205,8 +208,14 @@ export function FileTree({
             <span aria-hidden="true">+ </span>New view
           </button>
           {onGenerate === undefined ? null : (
-            <button type="button" className="btn-sm" onClick={onGenerate}>
-              <span aria-hidden="true">+ </span>Generate cubes
+            // As designs 11 and 12 name it, drawn pressed while its pane is open;
+            // it opens a pane, not a disclosure, so pressed again it goes there.
+            <button
+              type="button"
+              className={`btn-sm model-tree__generate${generating ? ' is-open' : ''}`}
+              onClick={onGenerate}
+            >
+              <span aria-hidden="true">+ </span>Generate from a data source…
             </button>
           )}
         </div>

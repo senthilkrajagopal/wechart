@@ -7981,7 +7981,33 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - the General tab opens with Name focused and selected;
     - the head says "New file · not published".
   - Depends on: T479, T481
-- [ ] T485 (AC-139, AC-249, AC-344) Generate cubes as design 11's docked pane
+- [x] T485 (AC-139, AC-249, AC-344) Generate cubes as design 11's docked pane
+  - **Done 2026-09-27.** Tested in `GenerateCubes.test.tsx`, `FileTree.test.tsx`, and `e2e/generate-cubes.spec.ts` plus T485's test in `e2e/model-design.spec.ts` (Chrome, Firefox and Safari).
+  - **No backend change** (R35): the pane asks the same introspection, scaffold and publish routes as T145 and T276.
+  - **The pane** (pins 1, 2, 8, 10):
+    - 480 px, docked as the Model page's third column. On a file's page it takes the code's place and the form widens.
+    - Opened from the tree's "+ Generate from a data source…", which is drawn pressed while the pane is open. Pressed again, it moves focus to the pane.
+    - The heading takes focus once, when the pane opens. Closing returns focus to the opener.
+    - The rail shows Source · Tables · Review. The foot is Back · Cancel · one primary named for what it does next ("Next: Tables", "Generate 2 cubes", "Publish 2 cubes", Close), with the blocked reason beside it.
+    - Each step's first control takes focus as the step opens, or the heading does while there is nothing to press.
+  - **It keeps what it holds** in the query cache (`useKept`), so it stays docked, as it was, when a clashing file opens beside it (pin 17). An answer to a question no longer asked lands nowhere.
+  - **Source:** radios name each data source with its driver. Schemas get a search when there are more than 10. A read that fails gives the API's words and Retry.
+  - **Tables:**
+    - a search;
+    - a Type pill whose menu closes on Escape (from its pill too), and on a press or focus outside it;
+    - "n tables · m chosen · 51–100 of 120", with ‹ › paging;
+    - a table's columns open in place under its row, captioned.
+  - **Review:**
+    - One summary: "2 cubes ready to publish", "1 of 2 cubes clashes with the model", or "1 needs a look first".
+    - A file per generated cube with its status (Ready, Check or Clashes, each with its icon) and its counts. A block that isn't Ready opens by itself.
+    - Clashes are error bars naming the existing file or cube, with "Open <file>" and "Leave this table out" ("Leave out clashing tables" in the summary). They are checked against the model as it is now, so a clash put right beside the pane clears at once.
+    - The YAML in the code face at full length, drawn only once opened, soft-wrapped, with a "↵ Wrap" toggle. `YamlEditor` gained `wrap` for this (research/code-editor.md addendum).
+    - The columns left out, each with its reason.
+    - An API refusal is one alert that includes what was refused.
+  - **Back** is live while generating and stops waiting for it. From a published round it starts afresh at Tables.
+  - **"Discard this generation?"** comes up on leaving with anything chosen or generated and unpublished (✕, Cancel, Escape); a reload asks too.
+  - The old dialog's CSS is gone.
+  - Not changed after review: the pane stays docked across a trip to another workspace (the ACs and the design are silent on it), and Cancel stays beside a blocked reason (design 11 draws it both ways).
   - Files: `packages/web/src/workspaces/model/{GenerateCubes,ModelFilePage}.tsx` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/generate-cubes.spec.ts`, `e2e/model-design.spec.ts`
   - Failing test: `GenerateCubes.test.tsx` and `model-design.spec.ts` (MW-20 … MW-25). Design 11's states, over the same function set as today:
     - a 480 px pane docked beside the tree, with a ✕;

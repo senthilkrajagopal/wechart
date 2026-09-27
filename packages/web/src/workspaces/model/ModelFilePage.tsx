@@ -832,6 +832,8 @@ function FileBody({
 const DRAFTS_KEY = ['model-drafts'] as const;
 /** The file New cube or New view just made, until it opens (ModelFilePage's `made`). */
 const MADE_KEY = ['model-made'] as const;
+/** Whether Generate cubes is docked, kept for the tab (ModelFilePage's `generating`). */
+const GENERATING_KEY = ['generate-cubes-open'] as const;
 const DRAFTS_STORAGE = 'wechart.model.drafts';
 
 function readDrafts(): Record<string, string> {
@@ -962,8 +964,29 @@ export function ModelFilePage({
   const open = (next: string) => {
     router.history.push(fileHref(next));
   };
-  /** Whether Generate cubes is open (T145, AC-139). */
-  const [generating, setGenerating] = useState(false);
+  /**
+   * Whether Generate cubes is open (T145, AC-139): kept for the tab, as what
+   * it holds is (GenerateCubes' `GENERATE_KEY`), so it stays docked when a
+   * clashing file opens from the overview — another page (design 11 pin 17).
+   */
+  const generating =
+    useQuery({
+      queryKey: GENERATING_KEY,
+      queryFn: () => false,
+      initialData: false,
+      staleTime: Number.POSITIVE_INFINITY,
+      gcTime: Number.POSITIVE_INFINITY,
+    }).data === true;
+  const setGenerating = (next: boolean) => {
+    queryClient.setQueryData(GENERATING_KEY, next);
+  };
+  /** Closed: focus back on what opened it (design 11 pin 9, rule 85). */
+  const closeGenerate = () => {
+    setGenerating(false);
+    setTimeout(() => {
+      page.current?.querySelector<HTMLElement>('.model-tree__generate')?.focus();
+    }, 0);
+  };
   const makeNew = (kind: 'cube' | 'view') => {
     const firstCube = stored
       .flatMap((each) => objectsOf(each.path, each.content).objects)
@@ -991,7 +1014,10 @@ export function ModelFilePage({
   }, [path, files.isSuccess]);
 
   return (
-    <div ref={page} className="model-workspace model-page">
+    <div
+      ref={page}
+      className={`model-workspace model-page${generating ? ' model-page--generating' : ''}`}
+    >
       <FileTree
         files={all}
         current={path}
@@ -999,26 +1025,13 @@ export function ModelFilePage({
         unpublished={unpublishedPaths}
         onOpen={open}
         onNew={makeNew}
+        generating={generating}
         onGenerate={() => {
-          setGenerating(true);
+          // Already open: pressed again, it takes you to the pane.
+          if (generating) page.current?.querySelector<HTMLElement>('.generate-pane h2')?.focus();
+          else setGenerating(true);
         }}
       />
-      {generating ? (
-        <GenerateCubes
-          existing={all}
-          onClose={() => {
-            setGenerating(false);
-          }}
-          onPublished={() => {
-            // The store now has them: read it again, so the tree lists them.
-            void queryClient.invalidateQueries({ queryKey: MODEL_FILES_QUERY.queryKey });
-          }}
-          onOpen={(opened) => {
-            setGenerating(false);
-            open(opened);
-          }}
-        />
-      ) : null}
       <div className="model-page__main">
         {files.isPending ? (
           // Untitled while it reads: the title comes once, with what it heads.
@@ -1068,6 +1081,23 @@ export function ModelFilePage({
           />
         )}
       </div>
+      {/* Docked beside the model, as design 01's pane is (design 11): on a
+          file's page it takes the code's place, and the form widens. */}
+      {generating ? (
+        <GenerateCubes
+          existing={all}
+          onClose={closeGenerate}
+          onPublished={() => {
+            // The store now has them: read it again, so the tree lists them.
+            void queryClient.invalidateQueries({ queryKey: MODEL_FILES_QUERY.queryKey });
+          }}
+          onOpen={(opened) => {
+            setGenerating(false);
+            open(opened);
+          }}
+          onShow={open}
+        />
+      ) : null}
     </div>
   );
 }

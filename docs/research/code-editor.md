@@ -101,3 +101,168 @@ Where Monaco is genuinely stronger: documented screen-reader strategy — "The M
 - UNVERIFIED: exact release date of monaco-editor 0.56.0. The GitHub releases listing returned dates inconsistent with the 2026 dev builds on the same page ([releases](https://github.com/microsoft/monaco-editor/releases)); npm's `latest` document carries no `time` field.
 - UNVERIFIED: whether the CodeMirror docs site (codemirror.net) is still the canonical docs host after the April 2026 move — three fetches of codemirror.net pages returned nothing, so every CodeMirror claim here comes from package sources on code.haverbeke.berlin or the archived website repo.
 - Open question for the user: should the SQL preview (AC-168) reuse `@codemirror/lang-sql`'s `schema` completion with the Cube-generated schema, or stay a plain read-only highlight with no completion? The ACs do not say.
+
+## Addendum 2026-09-27: wrapping, line tints and gutter flags (T482)
+
+*The integration-researcher's report, verbatim, as saved for T482.*
+
+**Versions checked.** These are the installed copies, one of each in the store and pinned in `packages/web/package.json`: `@codemirror/view` **6.43.12**, `@codemirror/state` **6.7.5**, `@codemirror/lint` **6.9.7** and `@codemirror/lang-yaml` **6.1.3**. The registry has since published view 6.43.13 (2026-09-22). Its two fixes are "`coordsAtPos` … non-dominant-direction text" and "`visualLineSide` … now deprecated", and neither touches the APIs below ([CHANGELOG](https://code.haverbeke.berlin/codemirror/view/raw/branch/main/CHANGELOG.md)). T482 needs no new package.
+
+**Source key.** Paths are relative to the repo root, and line numbers are for the versions above.
+- `view.d.ts` / `view.js` = `node_modules/.pnpm/@codemirror+view@6.43.12/node_modules/@codemirror/view/dist/index.{d.ts,js}`
+- `state.d.ts` / `state.js` = `node_modules/.pnpm/@codemirror+state@6.7.5/node_modules/@codemirror/state/dist/index.{d.ts,js}`
+- `lint.js` = `node_modules/.pnpm/@codemirror+lint@6.9.7/node_modules/@codemirror/lint/dist/index.js`
+- Reference manual: `https://codemirror.net/docs/ref/`. It loaded on 2026-09-27, as did the examples pages cited below. That answers the earlier open question about codemirror.net: it is still the docs host.
+
+### 1. Soft wrap, switchable at runtime
+
+- **Signature:** `static lineWrapping: Extension;`. The doc comment says it "enables line wrapping in the editor (by setting CSS `white-space` to `pre-wrap` in the content)" (`view.d.ts:1442-1446`; [ref](https://codemirror.net/docs/ref/#view.EditorView^lineWrapping)).
+- **What it does:** it is only `EditorView.contentAttributes.of({ "class": "cm-lineWrapping" })` (`view.js:8994`). The base theme then sets `white-space: break-spaces` (with `pre-wrap` as a fallback), `word-break: break-word`, `overflow-wrap: anywhere` and `flex-shrink: 1` (`view.js:6858-6864`). So in 6.43.12 the real value is `break-spaces`, not the `pre-wrap` the comment names.
+- **Compartment:** the API is `of(ext: Extension): Extension` and `reconfigure(content: Extension): StateEffect<unknown>` (`state.d.ts:725-748`; [ref](https://codemirror.net/docs/ref/#state.Compartment)). `lineWrapping` is a plain `Extension`, so it can sit in a compartment and be swapped with `[]`. The migration guide uses the same pattern for `tabSize` ([migration](https://codemirror.net/docs/migration)).
+- **No manual re-measure is needed.** On every measure the view reads `getComputedStyle(contentDOM).whiteSpace`. If wrapping has turned on or off relative to its height oracle, it refreshes the line heights (`view.js:5374`, `5401-5403`, `5418-5421`, `6333-6337`).
+
+```ts
+const wrap = new Compartment();                         // once per editor, not per render
+// extensions: wrap.of(wrapOn ? EditorView.lineWrapping : []),
+view.dispatch({ effects: wrap.reconfigure(on ? EditorView.lineWrapping : []) });
+```
+
+**Gotchas**
+- **One compartment per configuration.** Putting the same `Compartment` twice in one configuration throws `RangeError("Duplicate use of compartment in extensions")` (`state.js:1991-1993`).
+- **The `view.lineWrapping` getter lags.** It returns `viewState.heightOracle.lineWrapping` (`view.d.ts:1091-1096`, `view.js:8598`), which changes only at the next measure. The measure is scheduled with `requestAnimationFrame` (`view.js:8041-8042`, `8344-8346`). The `cm-lineWrapping` class, by contrast, is written synchronously during `dispatch` by `updateAttrs()` (`view.js:8032`).
+- **Unit tests run in jsdom.** `packages/web/vite.config.ts:27` sets `environment: 'jsdom'`, and jsdom does no layout ("returning zeros for many layout-related properties", [jsdom README](https://raw.githubusercontent.com/jsdom/jsdom/main/README.md)). Unit tests should assert that `.cm-content` has the `cm-lineWrapping` class. Wrapped heights need the Playwright e2e.
+- **Gutter heights under wrap.** Each gutter element gets `style.height` equal to its line block's height (`view.js:11574-11586`, `11677-11681`). A wrapped line's number, lint dot and any `gutterLineClass` class therefore span the whole wrapped height. The content sits at the top of that span, because the base theme gives `.cm-gutterElement` only `box-sizing` and line numbers only padding and `text-align: right` (`view.js:6978-6986`).
+
+### 2. Tinting whole lines (1-based numbers from React props)
+
+**Signatures**
+- `static line(spec: LineDecorationSpec): Decoration`. The spec is `{ attributes?, class?: string /* Shorthand for {attributes: {class: value}} */ }` (`view.d.ts:182-197`, `343-346`; [ref](https://codemirror.net/docs/ref/#view.Decoration^line)).
+- `static set(of: Range<Decoration> | readonly Range<Decoration>[], sort?: boolean): DecorationSet` and `static none: DecorationSet` (`view.d.ts:347-356`).
+- `static decorations: Facet<DecorationSet | ((view: EditorView) => DecorationSet), …>` (`view.d.ts:1307-1323`).
+- `StateField.define<Value>(config: StateFieldSpec<Value>)`, where the spec has `create`, `update(value, tr)` and `provide?: (field) => Extension` (`state.d.ts:611-661`).
+- `StateEffect.define<Value = null>(spec?)` (`state.d.ts:836`).
+- `Facet.from<T extends Input>(field: StateField<T>): Extension`, with an overload `from<T>(field, get: (value: T) => Input)` (`state.d.ts:586-593`; [ref](https://codemirror.net/docs/ref/#state.Facet.from)).
+- `RangeSetBuilder`: `add(from, to, value)` then `finish(): RangeSet<T>`. Ranges "should be added in sorted (by `from` and `value.startSide`) order" (`state.d.ts:1656-1683`).
+- `RangeSet.map(changes: ChangeDesc): RangeSet<T>` (`state.d.ts:1580-1583`).
+- `Text.line(n: number): Line`, documented as "the (1-based) line number", with `Line.from` as "the start of the line" (`state.d.ts:44-47`, `119-141`).
+
+The pattern follows the [decoration example](https://codemirror.net/examples/decoration/) ("`underlines.map(tr.changes)`", "`provide: f => EditorView.decorations.from(f)`"):
+
+```ts
+/** Valid, unique, sorted 1-based line numbers → line-start offsets in `doc`. */
+function lineStarts(doc: Text, lines: readonly number[]): number[] {
+  return [...new Set(lines)]
+    .filter((n) => Number.isInteger(n) && n >= 1 && n <= doc.lines)
+    .sort((a, b) => a - b)
+    .map((n) => doc.line(n).from);
+}
+const setTinted = StateEffect.define<readonly number[]>();
+const tint = Decoration.line({ class: 'wc-yaml-tint' });
+const tintField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);                     // positions → new doc
+    for (const e of tr.effects)
+      if (e.is(setTinted)) {
+        const b = new RangeSetBuilder<Decoration>();
+        for (const at of lineStarts(tr.newDoc, e.value)) b.add(at, at, tint);
+        deco = b.finish();
+      }
+    return deco;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+// React: useEffect(() => { view.current?.dispatch({ effects: setTinted.of(lines) }); }, [lines]);
+```
+
+`tr.newDoc` is the documented cheap way to reach the new document from inside a transaction ("won't force the entire new state to be computed", `state.d.ts:944-952`).
+
+**Gotchas**
+- **StateField or ViewPlugin?**
+  - Sets provided directly (a field) may affect vertical layout. Sets provided as functions (a plugin) "are called *after* the new viewport has been computed, and thus **must not** introduce block widgets or replacing decorations that cover line breaks" (`view.d.ts:1307-1323`). A plugin that tries throws "Block decorations may not be specified via plugins" (`view.js:2750-2755`).
+  - Line decorations are neither of those, so either route works. The field is the right one here: the input arrives as effects from React, and it must map through edits between prop updates.
+  - The [zebra example](https://codemirror.net/examples/zebra/) shows the ViewPlugin variant. It rebuilds over `view.visibleRanges` on each doc or viewport change, which suits decorations computable from the view alone.
+- **Sorted order is enforced.** `RangeSetBuilder.add` throws `"Ranges must be added sorted by \`from\` position and \`startSide\`"` (`state.js:3510-3513`). `Decoration.set` and `RangeSet.of` also go through a strict builder unless `sort` is `true` (`state.js:3424-3429`, `view.js:293-295`). Hence the sort in `lineStarts`.
+- **Stale line numbers throw.** `doc.line(n)` throws `RangeError("Invalid line number …")` when `n < 1` or `n > doc.lines` (`state.js:18-20`). Line numbers from props can be stale against the document, so filter them against `doc.lines`, as `lineStarts` does.
+- **Ranges must be zero-length, at the line start.** A line decoration's `range(from, to)` throws "Line decoration ranges must be zero-length" (`view.js:332-335`). A line decoration affects the line's DOM "when positioned at the start of a line" ([decoration example](https://codemirror.net/examples/decoration/)), so always use `doc.line(n).from`.
+- **How mapping moves tints between prop updates.**
+  - A line decoration is a point with `startSide = -200000000` and `mapMode = TrackBefore` (`view.js:323-339`). Zero-length ranges map with `mapPos(pos, startSide, mapMode)` (`state.js:3108-3112`).
+  - `TrackBefore` means "Return null if the character *before* the position is deleted" (`state.d.ts:156-159`). A tint is dropped when its line is joined to the previous one.
+  - A negative `assoc` "will move it before insertions at that point" (`state.d.ts:223-226`). Pressing Enter at column 0 of a tinted line leaves the tint on the new empty line. This lasts until the next `setTinted`.
+- **Classes merge.** Line-decoration classes are appended to `cm-line` and to one another (`view.js:36-46`, `2855-2866`). `LineDecoration.eq` compares `class` and `attributes` (`view.js:327-331`).
+- **Selection visibility.** The `drawSelection` layer is drawn *below* the text (`above: false`, `view.js:9603-9604`; `LayerConfig.above`, `view.d.ts:1777-1781`). YamlEditor installs no `drawSelection` today (see its imports), so the native `::selection` shows. If `drawSelection` is ever added, an opaque `.cm-line` background would hide the selection, so keep the tint translucent. The base theme's own `.cm-activeLine` uses alpha colours (`view.js:6946-6947`).
+
+### 3. Flagging lines in the gutter
+
+**Signatures**
+- `abstract class GutterMarker extends RangeValue` has `eq(other)`, `toDOM?(view): Node`, `elementClass: string` ("add CSS classes to the gutter element that contains this marker") and `destroy(dom)` (`view.d.ts:2271-2290`; [ref](https://codemirror.net/docs/ref/#view.GutterMarker)).
+- `gutterLineClass: Facet<RangeSet<GutterMarker>, …>` is "used to add a class to all gutter elements for a given line. Markers given to this facet should *only* define an `elementClass`, not a `toDOM` (or the marker will appear in all gutters for the line)" (`view.d.ts:2291-2298`; [ref](https://codemirror.net/docs/ref/#view.gutterLineClass)).
+- `lineNumberMarkers: Facet<RangeSet<GutterMarker>, …>` is "used to provide markers to the line number gutter" (`view.d.ts:2385-2388`). A marker with DOM here replaces the number: "markers … which replace the line numbers for affected lines" ([gutter example](https://codemirror.net/examples/gutter/)).
+- `gutter(config: GutterConfig): Extension` takes `class`, `markers(view)`, `lineMarker`, `renderEmptyElements` (default false) and `side`. "The order in which the gutters appear is determined by their extension priority" (`view.d.ts:2307-2360`).
+- **Marker defaults:** `point = true`, `startSide = endSide = -1`, `mapMode = TrackBefore`, `elementClass = ""`, and `eq()` returns `false` (`view.js:11321-11342`). So place a marker with `marker.range(doc.line(n).from)`.
+
+```ts
+const flag = new (class extends GutterMarker { override elementClass = 'wc-yaml-flag'; })(); // singleton
+const setFlagged = StateEffect.define<readonly number[]>();
+const flagField = StateField.define<RangeSet<GutterMarker>>({
+  create: () => RangeSet.empty,
+  update(set, tr) {
+    set = set.map(tr.changes);
+    for (const e of tr.effects)
+      if (e.is(setFlagged)) set = RangeSet.of(lineStarts(tr.newDoc, e.value).map((at) => flag.range(at)));
+    return set;
+  },
+  provide: (f) => gutterLineClass.from(f),   // or lineNumberMarkers.from(f): class on the number column only
+});
+```
+
+The library's own `highlightActiveLineGutter` follows the same shape: a singleton marker with `elementClass = "cm-activeLineGutter"`, fed to `gutterLineClass` (`view.js:11817-11833`). The [gutter example](https://codemirror.net/examples/gutter/)'s breakpoint field also maps with `set.map(transaction.changes)`, as `lintGutter`'s own marker field does (`lint.js:848-865`).
+
+**Gotchas**
+- **How `gutterLineClass` meets `lintGutter()`.**
+  - `lintGutter()` is a separate `gutter({class: "cm-gutter-lint", markers: …})`. Its `LintGutterMarker` has a `toDOM` and no `elementClass`, and it does not use `gutterLineClass` (`lint.js:759-776`, `836-847`, `923-925`).
+  - `gutterLineClass` markers are appended to *every* gutter's marker list for the line (`view.js:11465-11495`, `11587-11598`). So a flagged line's class lands on the line-number element *and* on the lint-gutter element.
+  - The lint gutter also renders an otherwise empty `cm-gutterElement` for a flagged line that has no diagnostic, because the list is non-empty and `renderEmptyElements: false` no longer applies.
+  - To style one column only, scope the selector: `.cm-lineNumbers .cm-gutterElement.wc-yaml-flag` (`view.js:6981`, `11773-11776`) or `.cm-gutter-lint …`. Alternatively use `lineNumberMarkers`, which adds the class to the number column only.
+- **Never give a class marker a `toDOM`.**
+  - The line-number gutter's `lineMarker` returns no number when any other marker has a `toDOM` (`others.some(m => m.toDOM)`, `view.js:11777-11781`). A `toDOM` marker in `gutterLineClass` or `lineNumberMarkers` therefore *hides the line number*, and under `gutterLineClass` it also shows in the lint column.
+  - For an icon, either draw it in CSS on the class (the lint gutter draws its dots with CSS `content: url(svg)`, `lint.js:876-896`), or add a dedicated `gutter({ class: 'wc-flag-gutter', markers: v => v.state.field(flagField) })` whose marker defines `toDOM`.
+- **DOM churn.** Markers are compared by identity, or by same constructor plus `eq` (`view.js:11325-11327`). Elements re-render their markers when the lists differ (`view.js:11684-11685`, `11732-11739`). Because the default `eq` is `false`, use a singleton marker or implement `eq`.
+- **Only rendered lines have gutter elements.** Elements exist only for `viewportLineBlocks` (`view.js:11468`), the same partial-render caveat as the text.
+- **Accessibility.** The gutter container is `aria-hidden="true"` (`view.js:11405`), so flags and tints are visual only. The warn bar's text must carry the meaning.
+
+### 4. Scrolling a line to the top of the view
+
+- **Signature:** `static scrollIntoView(pos: number | SelectionRange, options?: { y?: ScrollStrategy; x?: ScrollStrategy; yMargin?: number; xMargin?: number }): StateEffect<unknown>`, with `ScrollStrategy = "nearest" | "start" | "end" | "center"`. `"start"` moves the position "to the top of the view". `yMargin` "Defaults to 5. Must be less than the height of the editor" (`view.d.ts:58`, `1126-1158`; [ref](https://codemirror.net/docs/ref/#view.EditorView^scrollIntoView)).
+- **It goes in `effects`,** typed `StateEffect<any> | readonly StateEffect<any>[]` (`state.d.ts:878`), so it can travel with the tint:
+
+```ts
+const doc = view.state.doc;
+if (n >= 1 && n <= doc.lines)
+  view.dispatch({ effects: [setTinted.of(lines),
+    EditorView.scrollIntoView(doc.line(n).from, { y: 'start', yMargin: 0 })] });
+```
+
+**Gotchas**
+- **It is asynchronous.** The effect is stored during `dispatch` (`view.js:8020-8023`) and applied in the next measure (`view.js:8232-8239`), which runs on `requestAnimationFrame` (`view.js:8344-8346`). E2e tests should poll `scrollTop` or the line's position rather than read it right away. While the editor has zero height, the target is held, not dropped (`view.js:8233`).
+- **Ancestors can scroll too.**
+  - The scroll walks every scrollable ancestor, starting at `.cm-scroller` and stopping at the body or at a `position: fixed|sticky` element. It skips non-overflowing elements (`view.js:540-555`, `624-630`).
+  - With `y: 'start'`, the strategy drops to `'nearest'` for ancestors only when an element actually moved the full distance (`view.js:616-621`).
+  - For a line near the end of the file, `.cm-scroller` cannot move far enough. The outer pane or page is then also scrolled to put the line at *its* top. This is read from the source, not documented.
+  - If that shows up, make sure the editor's own scroller is the scrolling element (see "Scrolling" above), or take over with `EditorView.scrollHandler` (`view.d.ts:1235-1246`).
+- **Safe alongside a doc change.** The target is mapped through the transaction's changes and clipped to the document length (`view.js:1348-1357`), so it can ride with a `value` change.
+- **The default margin.** `yMargin` defaults to 5 px (`view.js:8680-8683`). Pass `0` for a flush top. `x` stays `'nearest'`, and the gutter's width is already counted as a scroll margin (`view.js:11549-11557`, `3455-3459`).
+
+### Open questions / unverified
+
+- UNVERIFIED as an observed behaviour: the ancestor-scroll spill for `y: 'start'` near the end of the document. It is inferred from reading `scrollRectIntoView` (`view.js:540-631`) and has not been seen in a browser. The T482 e2e should cover "Show in YAML" on the file's last lines.
+- **Frontmatter:** no new packages. `@codemirror/view`, `@codemirror/state` and `@codemirror/lint` are already in `packages:`. The pinned versions above match `packages/web/package.json`. The reference manual and example URLs could be added to `sources:`.
+
+Sources:
+- https://codemirror.net/docs/ref/
+- https://codemirror.net/examples/decoration/
+- https://codemirror.net/examples/gutter/
+- https://codemirror.net/examples/zebra/
+- https://codemirror.net/docs/migration
+- https://code.haverbeke.berlin/codemirror/view/raw/branch/main/CHANGELOG.md
+- https://raw.githubusercontent.com/jsdom/jsdom/main/README.md

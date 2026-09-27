@@ -165,7 +165,8 @@ test('T479: the tree as design 03 note 1 — a Model head, folder rows, full-wid
   await expect(actions.getByRole('button')).toHaveText([
     '+ New cube',
     '+ New view',
-    '+ Generate cubes',
+    // As designs 11 and 12 name it (T485).
+    '+ Generate from a data source…',
   ]);
   // Each set left, as design 03 draws them: its words start at its padding.
   const inset = await actions
@@ -359,6 +360,68 @@ test('T480: members as rows that read like the YAML, opening into a short groupe
   await expect(
     form.getByRole('list', { name: 'Joins' }).locator('.model-member__type').first(),
   ).toHaveText('many to one');
+});
+
+test('T485: Generate cubes docks 480 px beside the model, and stays docked as a clashing file opens (design 11)', async ({
+  page,
+}) => {
+  await page.goto('/model');
+  const tree = page.getByRole('navigation', { name: 'Model files' });
+  const opener = tree.getByRole('button', { name: 'Generate from a data source…' });
+  await opener.click();
+  await expect(opener).toHaveClass(/\bis-open\b/);
+  const pane = page.getByRole('dialog', { name: 'Generate cubes' });
+  // Docked, not a modal: the tree and the overview stay in view beside it (pins 1, 10).
+  const box = await pane.boundingBox();
+  expect([Math.round(box?.x ?? 0), Math.round(box?.width ?? 0)]).toEqual([960, 480]);
+  await expect(page.getByRole('heading', { level: 1, name: 'Model' })).toBeVisible();
+  const title = pane.getByRole('heading', { level: 2, name: 'Generate cubes' });
+  await expect(title).toBeFocused();
+  // Pressed again while open, it takes you to the pane (T485's review).
+  await opener.focus();
+  await opener.press('Enter');
+  await expect(title).toBeFocused();
+  // The steps as design 01's rail, and the same foot at every step (pins 2, 8).
+  await expect(pane.getByRole('list', { name: 'Steps' }).getByRole('listitem')).toHaveText([
+    '1Source',
+    '2Tables',
+    '3Review',
+  ]);
+  const foot = pane.locator('.source-pane__foot');
+  const footAt = async () => Math.round((await foot.boundingBox())?.y ?? 0);
+  const first = await footAt();
+
+  await pane.getByRole('radio', { name: 'public', exact: true }).check();
+  await pane.getByRole('button', { name: 'Next: Tables' }).click();
+  await pane.getByRole('searchbox', { name: 'Search tables' }).fill('orders');
+  await pane
+    .getByRole('table', { name: 'Tables in public' })
+    .getByRole('checkbox', { name: 'orders', exact: true })
+    .check();
+  expect(await footAt()).toBe(first);
+  await pane.getByRole('button', { name: 'Generate 1 cube' }).click();
+  const orders = pane.getByRole('region', { name: 'cubes/orders.yml' });
+  await expect(orders.locator('.generate-pane__status')).toHaveText('Clashes');
+  expect(await footAt()).toBe(first);
+
+  // Open the file it clashes with: another page, and the pane stays, as it was (pin 17).
+  await orders.getByRole('button', { name: 'Open cubes/orders.yml' }).click();
+  await expect(page).toHaveURL(/\/model\/files\/cubes%2Forders\.yml$/);
+  await expect(pane.getByRole('region', { name: 'cubes/orders.yml' })).toBeVisible();
+  // On a file's page it takes the code's place, and the form widens (state Q).
+  await expect(page.getByRole('region', { name: 'YAML and join diagram' })).toBeHidden();
+  expect(
+    Math.round((await page.getByRole('region', { name: 'Form editor' }).boundingBox())?.width ?? 0),
+  ).toBe(720);
+
+  // Leaving with it generated asks first; Discard closes it, focus back on its opener (pin 11).
+  await pane.getByRole('button', { name: 'Close' }).click();
+  const question = pane.getByRole('alertdialog', { name: 'Discard this generation?' });
+  await expect(question).toContainText('The 1 generated cube isn’t published.');
+  await question.getByRole('button', { name: 'Discard' }).click();
+  await expect(pane).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await expect(page.getByRole('region', { name: 'YAML and join diagram' })).toBeVisible();
 });
 
 test('T470: a bar over the form is a band across the pane, and a view’s tabs are short too', async ({

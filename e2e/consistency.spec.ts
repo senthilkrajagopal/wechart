@@ -127,12 +127,13 @@ test.describe('one dialog pattern (UX-106)', () => {
     page,
   }) => {
     await page.goto('/model');
-    await page.getByRole('button', { name: 'Generate cubes' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Generate cubes from a data source' });
+    await page.getByRole('button', { name: 'Generate from a data source…' }).click();
+    // Design 11's pane, as design 01's: its title, then Cancel and the step's one primary.
+    const dialog = page.getByRole('dialog', { name: 'Generate cubes' });
     expect((await typeOf(dialog)).title).toEqual({ size: '16px', weight: '600' });
-    const foot = dialog.locator('.dialog__actions').last();
-    await expect(foot.getByRole('button')).toHaveText(['Cancel', /^Generate/]);
-    await expect(foot.getByRole('button', { name: /^Generate/ })).toHaveClass(/btn-primary/);
+    const foot = dialog.locator('.source-pane__foot');
+    await expect(foot.getByRole('button')).toHaveText(['Cancel', /^Next: Tables/]);
+    await expect(foot.getByRole('button', { name: /^Next: Tables/ })).toHaveClass(/btn-primary/);
   });
 
   test('a dashboard’s settings discard question: a 16/600 title, 14 px body', async ({ page }) => {

@@ -1,5 +1,7 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GenerateCubes } from './GenerateCubes';
@@ -11,9 +13,10 @@ import { GenerateCubes } from './GenerateCubes';
  * `Fails when: a selected table produces no cube, or a column is dropped
  * without saying so.`
  *
- * The flow alone, against a stub of the API's proxy (T145) — whose answers are
- * the fork's, as observed (research/cube/introspection-api.md); the e2e asks
- * the real one.
+ * Drawn as design 11 (T485, AC-344): a pane in three steps — Source, Tables,
+ * Review — its foot Back · Cancel · one primary. The flow alone, against a
+ * stub of the API's proxy (T145), whose answers are the fork's, as observed
+ * (research/cube/introspection-api.md); the e2e asks the real one.
  */
 const STORES = `cubes:\n  - name: chrome_stores\n    sql_table: generate.chrome_stores\n    dimensions:\n      - name: id\n        sql: id\n        type: number\n        primary_key: true\n    measures:\n      - name: count\n        type: count\n`;
 const VISITS = `cubes:\n  - name: chrome_visits\n    sql_table: generate.chrome_visits\n    joins:\n      - name: chrome_stores\n        sql: "{CUBE}.store_id = {chrome_stores.id}"\n        relationship: many_to_one\n    measures:\n      - name: count\n        type: count\n`;
@@ -67,6 +70,7 @@ function api(scaffolded?: unknown) {
         });
       if (url.endsWith('/scaffold') && scaffolded !== undefined) return json(scaffolded);
       if (url.endsWith('/scaffold'))
+        // Its two cubes, whichever tables are asked for: the pane shows what comes.
         return json({
           cubes: [
             {
@@ -105,61 +109,133 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** The pane with a query cache of its own, which keeps what it holds (T485). */
+function withCache(client = new QueryClient()) {
+  return {
+    client,
+    wrap: (children: ReactNode) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  };
+}
+
+type Props = Partial<Parameters<typeof GenerateCubes>[0]>;
+function pane(props: Props = {}, cache = withCache()) {
+  const handlers = {
+    onClose: vi.fn(),
+    onPublished: vi.fn(),
+    onOpen: vi.fn(),
+    onShow: vi.fn(),
+  };
+  const all = { existing: [], ...handlers, ...props };
+  const view = render(cache.wrap(<GenerateCubes {...all} />));
+  return {
+    ...handlers,
+    ...all,
+    cache,
+    rerender: (next: Props) => {
+      view.rerender(cache.wrap(<GenerateCubes {...all} {...next} />));
+    },
+    unmount: view.unmount,
+    dialog: screen.getByRole('dialog', { name: 'Generate cubes' }),
+  };
+}
+
+/** The foot's buttons, and which one is the primary (T466, UX-106; design 11 pin 8). */
+const foot = (dialog: HTMLElement) =>
+  [...dialog.querySelectorAll(':scope > footer button')].map(
+    (button) =>
+      `${button.textContent ?? ''}${button.classList.contains('btn-primary') ? ' *' : ''}`,
+  );
+
+/** Source, then a schema, then Next: the Tables step. */
+async function toTables(dialog: HTMLElement, schema = 'generate') {
+  await userEvent.click(await within(dialog).findByRole('radio', { name: schema }));
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Next: Tables' }));
+  return within(dialog).findByRole('table', { name: `Tables in ${schema}` });
+}
+
 describe('generating cubes from a data source (AC-139)', () => {
   it('browses to tables, generates a cube for each chosen, says what it left out, and publishes them', async () => {
     const asked = api();
-    const onPublished = vi.fn();
-    render(<GenerateCubes existing={[]} onClose={vi.fn()} onPublished={onPublished} />);
-    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
+    const { dialog, onPublished } = pane();
 
-    // The source, its one data source chosen already; then the schema.
-    expect(await within(dialog).findByRole('option', { name: 'default (postgres)' })).toBeTruthy();
-    await userEvent.selectOptions(
-      await within(dialog).findByRole('combobox', { name: 'Schema' }),
-      'generate',
+    // Step 1: the source, its one data source chosen already, by its driver's name; then the schema.
+    const source = await within(dialog).findByRole('radio', { name: 'default PostgreSQL' });
+    expect((source as HTMLInputElement).checked).toBe(true);
+    expect(foot(dialog)).toEqual(['Cancel', 'Next: Tables › *']);
+    expect(dialog.querySelector('.source-pane__foot-note')?.textContent).toBe('Choose a schema');
+    const tables = await toTables(dialog);
+    expect(within(dialog).getByText('2 tables · none chosen').isConnected).toBe(true);
+    // Where the tables come from, with Change back to the source.
+    expect(
+      dialog.querySelector('.generate-pane__where .source-pane__chosen-text')?.textContent,
+    ).toBe('default · PostgreSQL › generate');
+    expect(
+      within(dialog.querySelector('.generate-pane__where') as HTMLElement).getByRole('button', {
+        name: 'Change',
+      }).isConnected,
+    ).toBe(true);
+
+    // A look at one table's columns, opened in place under its row, captioned.
+    const peek = within(tables).getByRole('button', { name: 'Columns of chrome_visits' });
+    await userEvent.click(peek);
+    expect(peek.getAttribute('aria-expanded')).toBe('true');
+    const columns = await within(tables).findByRole('table', { name: 'Columns of chrome_visits' });
+    expect(within(columns).getByText('store_id').isConnected).toBe(true);
+    expect(within(columns).getByText('→ chrome_stores.id').isConnected).toBe(true);
+    expect(tables.querySelector('.generate-pane__caption')?.textContent).toBe(
+      'chrome_visits · 2 columns',
     );
-    const tables = await within(dialog).findByRole('table', { name: 'Tables in generate' });
-    expect(within(dialog).getByText('2 tables')).toBeTruthy();
-
-    // A look at one table's columns before choosing.
-    await userEvent.click(within(tables).getByRole('button', { name: 'Columns of chrome_visits' }));
-    const columns = await within(dialog).findByRole('table', { name: 'Columns of chrome_visits' });
-    expect(within(columns).getByText('store_id')).toBeTruthy();
-    expect(within(columns).getByText('→ chrome_stores.id')).toBeTruthy();
 
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_visits' }));
-    /** The foot's buttons, and which one is the primary (T466, UX-106). */
-    const foot = () =>
-      [...dialog.querySelectorAll(':scope > .dialog__actions button')].map(
-        (button) =>
-          `${button.textContent ?? ''}${button.classList.contains('btn-primary') ? ' *' : ''}`,
-      );
-    expect(foot()).toEqual(['Cancel', 'Generate 2 cubes *']);
+    expect(within(dialog).getByText('2 tables · 2 chosen').isConnected).toBe(true);
+    expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Generate 2 cubes *']);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 2 cubes' }));
 
-    // A cube per table, its YAML, and every column left out with why.
+    // Step 3: a cube per table, its YAML, and every column left out with why.
     const stores = await within(dialog).findByRole('region', { name: 'cubes/chrome_stores.yml' });
-    expect(within(stores).getByTestId('generated-yaml').textContent).toBe(STORES);
-    expect(within(stores).getByRole('list', { name: 'Columns left out' }).textContent).toBe(
-      'floor_area (numeric): a number, neither a key nor named like a measure',
+    // Its YAML drawn once opened (T485's review): as the API gave it, line for line.
+    expect(within(stores).queryByRole('textbox')).toBeNull();
+    await userEvent.click(within(stores).getByText('YAML', { selector: 'summary' }));
+    const yaml = within(stores).getByRole('textbox', {
+      name: 'cubes/chrome_stores.yml, as generated',
+    });
+    expect([...yaml.querySelectorAll('.cm-line')].map((line) => line.textContent).join('\n')).toBe(
+      STORES,
     );
-    const visits = within(dialog).getByRole('region', { name: 'cubes/chrome_visits.yml' });
-    expect(
+    expect(stores.querySelector('.generate-pane__status')?.textContent).toBe('Ready');
+    expect(stores.querySelector('.generate-pane__counts')?.textContent).toBe(
+      '1 dimension · 1 measure · 1 column left out',
+    );
+    const leftOut = (region: HTMLElement) =>
       [
-        ...within(visits).getByRole('list', { name: 'Columns left out' }).querySelectorAll('li'),
-      ].map((item) => item.textContent),
-    ).toEqual([
-      'store_id (integer): a number, neither a key nor named like a measure',
-      '_loaded_at (timestamp with time zone): its name starts with an underscore',
+        ...within(region).getByRole('list', { name: 'Columns left out' }).querySelectorAll('li'),
+      ].map((item) => [
+        item.querySelector('.generate-pane__left-name')?.textContent,
+        item.querySelector('.generate-pane__raw')?.textContent,
+        item.querySelector('.generate-pane__why')?.textContent,
+      ]);
+    expect(leftOut(stores)).toEqual([
+      ['floor_area', 'numeric', 'a number, neither a key nor named like a measure'],
     ]);
+    const visits = within(dialog).getByRole('region', { name: 'cubes/chrome_visits.yml' });
+    expect(leftOut(visits)).toEqual([
+      ['store_id', 'integer', 'a number, neither a key nor named like a measure'],
+      ['_loaded_at', 'timestamp with time zone', 'its name starts with an underscore'],
+    ]);
+    expect(
+      within(dialog).getByText('2 cubes ready to publish. Nothing is in the model until you do.')
+        .isConnected,
+    ).toBe(true);
 
     // Generated: Publish is the one primary.
-    expect(foot()).toEqual(['Cancel', 'Generate 2 cubes', 'Publish 2 cubes *']);
+    expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Publish 2 cubes *']);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Publish 2 cubes' }));
-    expect(await within(dialog).findByText('Published 2 cubes.')).toBeTruthy();
-    // Published: nothing to cancel, and nothing to generate over what was.
-    expect(foot()).toEqual(['Close *', 'Generate 2 cubes']);
+    expect((await within(dialog).findByText('Published 2 cubes.')).isConnected).toBe(true);
+    // Published: nothing to cancel, and Close the one primary.
+    expect(foot(dialog)).toEqual(['‹ Back', 'Close *']);
     expect(onPublished).toHaveBeenCalledWith([
       'cubes/chrome_stores.yml',
       'cubes/chrome_visits.yml',
@@ -199,23 +275,25 @@ describe('generating cubes from a data source (AC-139)', () => {
         },
       ],
     });
-    render(<GenerateCubes existing={[]} onClose={vi.fn()} onPublished={vi.fn()} />);
-    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
-    await userEvent.selectOptions(
-      await within(dialog).findByRole('combobox', { name: 'Schema' }),
-      'generate',
-    );
-    const tables = await within(dialog).findByRole('table', { name: 'Tables in generate' });
+    const { dialog } = pane();
+    const tables = await toTables(dialog);
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_visits' }));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 1 cube' }));
 
     const visits = await within(dialog).findByRole('region', { name: 'cubes/chrome_visits.yml' });
     expect(within(visits).getByRole('list', { name: 'Columns left out' }).textContent).toBe(
-      'Amount (numeric): its member’s name is another column’s, and Cube kept only one',
+      'Amount numericits member’s name is another column’s, and Cube kept only one',
     );
     expect(
-      within(visits).getByText('No count measure: a column’s measure took its name, count.'),
-    ).toBeTruthy();
+      within(visits).getByText('No count measure: a column’s measure took its name, count.')
+        .isConnected,
+    ).toBe(true);
+    // A warning to look at: Check, and the block opens by itself.
+    expect(visits.querySelector('.generate-pane__status')?.textContent).toBe('Check');
+    expect(visits.querySelector('details')?.open).toBe(true);
+    expect(
+      within(dialog).getByText('1 cube ready to publish; 1 needs a look first.').isConnected,
+    ).toBe(true);
   });
 
   /** T145's review: a key Cube wrote as a time alone, and a file the API could not check. */
@@ -239,13 +317,8 @@ describe('generating cubes from a data source (AC-139)', () => {
         },
       ],
     });
-    render(<GenerateCubes existing={[]} onClose={vi.fn()} onPublished={vi.fn()} />);
-    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
-    await userEvent.selectOptions(
-      await within(dialog).findByRole('combobox', { name: 'Schema' }),
-      'generate',
-    );
-    const tables = await within(dialog).findByRole('table', { name: 'Tables in generate' });
+    const { dialog } = pane();
+    const tables = await toTables(dialog);
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_visits' }));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 2 cubes' }));
@@ -254,18 +327,18 @@ describe('generating cubes from a data source (AC-139)', () => {
     expect(
       within(stores).getByText(
         'Not marked as the cube’s primary key: opened_at. A join to this cube needs one.',
-      ),
-    ).toBeTruthy();
+      ).isConnected,
+    ).toBe(true);
     const visits = within(dialog).getByRole('region', { name: 'cubes/chrome_visits.yml' });
     expect(within(visits).queryByText('Every column is in the cube.')).toBeNull();
     expect(
       within(visits).getByText(
         'wechart could not read this file to check it against its table: only Cube’s list of what it left out is shown.',
-      ),
-    ).toBeTruthy();
+      ).isConnected,
+    ).toBe(true);
   });
 
-  /** T145's review: the Next page, and a type, are asked of the API as chosen. */
+  /** T145's review: the next page, and a type, are asked of the API as chosen. */
   it('asks for the next page, and for a type from the first page', async () => {
     const asked = api();
     const fetchStub = vi.mocked(fetch);
@@ -276,18 +349,25 @@ describe('generating cubes from a data source (AC-139)', () => {
       asked.push({ url: String(input) });
       return new Response(JSON.stringify({ tables: [], total: 120 }), { status: 200 });
     });
-    render(<GenerateCubes existing={[]} onClose={vi.fn()} onPublished={vi.fn()} />);
-    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
-    await userEvent.selectOptions(
-      await within(dialog).findByRole('combobox', { name: 'Schema' }),
-      'generate',
-    );
-    expect(await within(dialog).findByText('120 tables · showing 1–50')).toBeTruthy();
+    const { dialog } = pane();
+    await userEvent.click(await within(dialog).findByRole('radio', { name: 'generate' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Next: Tables' }));
+    expect(
+      (await within(dialog).findByText('120 tables · none chosen · 1–50 of 120')).isConnected,
+    ).toBe(true);
 
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Next' }));
-    expect(await within(dialog).findByText('120 tables · showing 51–100')).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Next page' }));
+    expect(
+      (await within(dialog).findByText('120 tables · none chosen · 51–100 of 120')).isConnected,
+    ).toBe(true);
+    // The Type pill's menu: Views, from the first page again.
+    const pill = within(dialog).getByRole('button', { name: /^Type · All/ });
+    await userEvent.click(pill);
     await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Views' }));
-    expect(await within(dialog).findByText('120 tables · showing 1–50')).toBeTruthy();
+    expect(
+      (await within(dialog).findByText('120 tables · none chosen · 1–50 of 120')).isConnected,
+    ).toBe(true);
+    expect(pill.textContent).toBe('Type · Views ▾');
 
     expect(asked.map((each) => each.url).filter((url) => url.includes('/tables?'))).toEqual([
       '/api/introspection/sources/default/tables?schema=generate&limit=50&offset=0',
@@ -329,23 +409,24 @@ describe('generating cubes from a data source (AC-139)', () => {
           ],
         }),
       );
-    render(<GenerateCubes existing={[]} onClose={vi.fn()} onPublished={vi.fn()} />);
-    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
-    await userEvent.selectOptions(
-      await within(dialog).findByRole('combobox', { name: 'Schema' }),
-      'generate',
-    );
-    const tables = await within(dialog).findByRole('table', { name: 'Tables in generate' });
+    const { dialog } = pane();
+    const tables = await toTables(dialog);
     await userEvent.click(within(tables).getByRole('button', { name: 'Columns of chrome_stores' }));
     await userEvent.click(within(tables).getByRole('button', { name: 'Columns of chrome_visits' }));
+    // One table's columns at a time: the first closed as the second opened.
+    expect(
+      within(tables)
+        .getByRole('button', { name: 'Columns of chrome_stores' })
+        .getAttribute('aria-expanded'),
+    ).toBe('false');
 
     pending.get('chrome_visits')?.(columnsOf('chrome_visits', 'visited_at'));
     const columns = await within(dialog).findByRole('table', { name: 'Columns of chrome_visits' });
-    expect(await within(columns).findByText('visited_at')).toBeTruthy();
+    expect((await within(columns).findByText('visited_at')).isConnected).toBe(true);
     pending.get('chrome_stores')?.(columnsOf('chrome_stores', 'city'));
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(within(columns).queryByText('city')).toBeNull();
-    expect(within(columns).getByText('visited_at')).toBeTruthy();
+    expect(within(columns).getByText('visited_at').isConnected).toBe(true);
   });
 
   /**
@@ -356,78 +437,227 @@ describe('generating cubes from a data source (AC-139)', () => {
    */
   it('marks a generated cube whose name or file the model has, naming it, and publishes nothing', async () => {
     const asked = api();
-    render(
-      <GenerateCubes
-        existing={[
-          { path: 'cubes/chrome_stores.yml', content: 'cubes:\n  - name: stores\n' },
-          { path: 'views/visits.yml', content: 'views:\n  - name: chrome_visits\n' },
-        ]}
-        onClose={vi.fn()}
-        onPublished={vi.fn()}
-      />,
-    );
-    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
-    await userEvent.selectOptions(
-      await within(dialog).findByRole('combobox', { name: 'Schema' }),
-      'generate',
-    );
-    const tables = await within(dialog).findByRole('table', { name: 'Tables in generate' });
+    const { dialog, onShow } = pane({
+      existing: [
+        { path: 'cubes/chrome_stores.yml', content: 'cubes:\n  - name: stores\n' },
+        { path: 'views/visits.yml', content: 'views:\n  - name: chrome_visits\n' },
+      ],
+    });
+    const tables = await toTables(dialog);
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_visits' }));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 2 cubes' }));
 
     const stores = await within(dialog).findByRole('region', { name: 'cubes/chrome_stores.yml' });
-    // "In the model": the dialog's files are the store's and the unpublished drafts (T276's review).
-    expect(within(stores).getByRole('list', { name: 'Clashes with the model' }).textContent).toBe(
-      'cubes/chrome_stores.yml is already in the model.',
-    );
+    // "In the model": the pane's files are the store's and the unpublished drafts (T276's review).
+    const clashOf = (region: HTMLElement) =>
+      region.querySelector('.generate-pane__file-body > .generate-pane__note.is-err p')
+        ?.textContent;
+    expect(clashOf(stores)).toBe('cubes/chrome_stores.yml is already in the model.');
+    expect(stores.querySelector('.generate-pane__status')?.textContent).toBe('Clashes');
     const visits = within(dialog).getByRole('region', { name: 'cubes/chrome_visits.yml' });
-    expect(within(visits).getByRole('list', { name: 'Clashes with the model' }).textContent).toBe(
-      '`chrome_visits` is already a view in views/visits.yml.',
+    expect(clashOf(visits)).toBe('chrome_visits is already a view in views/visits.yml.');
+    expect(within(dialog).getByRole('note').textContent).toBe(
+      '2 of 2 cubes clash with the model. Nothing is published while a cube clashes.Leave out clashing tables',
     );
+
+    // Publish refused, with its reason beside it.
     const publish = within(dialog).getByRole('button', { name: 'Publish 2 cubes' });
     expect(publish.getAttribute('aria-disabled')).toBe('true');
-    expect(
-      within(dialog).getByText(
-        'Nothing is published while a cube clashes with the model: leave its table out and generate again.',
-      ),
-    ).toBeTruthy();
+    expect(dialog.querySelector('.source-pane__foot-note')?.textContent).toBe(
+      'Resolve 2 clashes to publish',
+    );
     await userEvent.click(publish);
     expect(asked.some((each) => each.url === '/api/model/publish')).toBe(false);
+
+    // Open the file it clashes with, beside the pane.
+    await userEvent.click(within(visits).getByRole('button', { name: 'Open views/visits.yml' }));
+    expect(onShow).toHaveBeenCalledWith('views/visits.yml');
+    // Leave a table out: the rest generated again, without it.
+    await userEvent.click(within(stores).getByRole('button', { name: 'Leave this table out' }));
+    await vi.waitFor(() => {
+      expect(asked.filter((each) => each.url.endsWith('/scaffold')).at(-1)?.body).toEqual({
+        tables: [{ schema: 'generate', table: 'chrome_visits' }],
+      });
+    });
   });
 
   /** T276's review: once published, the cubes are the model's — not a clash with it. */
   it('marks no clash with the files it has just published itself', async () => {
     api();
-    const props = { onClose: vi.fn(), onPublished: vi.fn() };
-    const { rerender } = render(<GenerateCubes existing={[]} {...props} />);
-    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
-    await userEvent.selectOptions(
-      await within(dialog).findByRole('combobox', { name: 'Schema' }),
-      'generate',
-    );
-    const tables = await within(dialog).findByRole('table', { name: 'Tables in generate' });
+    const { dialog, rerender } = pane();
+    const tables = await toTables(dialog);
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
     // One table chosen; the stub's scaffold answers with its two cubes all the same.
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 1 cube' }));
     await userEvent.click(await within(dialog).findByRole('button', { name: 'Publish 2 cubes' }));
-    expect(await within(dialog).findByText('Published 2 cubes.')).toBeTruthy();
+    expect((await within(dialog).findByText('Published 2 cubes.')).isConnected).toBe(true);
 
-    // The page reads the store again, and hands the dialog what it now holds.
-    rerender(
-      <GenerateCubes
-        existing={[
-          { path: 'cubes/chrome_stores.yml', content: STORES },
-          { path: 'cubes/chrome_visits.yml', content: VISITS },
-        ]}
-        {...props}
-      />,
-    );
-    expect(within(dialog).queryByRole('list', { name: 'Clashes with the model' })).toBeNull();
+    // The page reads the store again, and hands the pane what it now holds.
+    rerender({
+      existing: [
+        { path: 'cubes/chrome_stores.yml', content: STORES },
+        { path: 'cubes/chrome_visits.yml', content: VISITS },
+      ],
+    });
+    expect(dialog.querySelector('.generate-pane__status.is-clash')).toBeNull();
     expect(within(dialog).queryByText(/Nothing is published while a cube clashes/)).toBeNull();
+    // Each file to open, closing the pane.
+    expect(
+      within(dialog).getByRole('list', { name: 'Published files' }).querySelectorAll('li'),
+    ).toHaveLength(2);
   });
 
-  /** T276's review: the API's refusal of a clash the dialog could not see is shown as it gives it. */
+  /** T485's review: checked against the model as it is now, not as it was when generated. */
+  it('clears a clash as soon as the model no longer has it', async () => {
+    api();
+    const { dialog, rerender } = pane({
+      existing: [{ path: 'cubes/chrome_stores.yml', content: 'cubes:\n  - name: stores\n' }],
+    });
+    const tables = await toTables(dialog);
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 1 cube' }));
+    expect(
+      (await within(dialog).findByText('1 of 2 cubes clashes with the model.')).isConnected,
+    ).toBe(true);
+    expect(
+      within(dialog).getByRole('button', { name: 'Publish 2 cubes' }).getAttribute('aria-disabled'),
+    ).toBe('true');
+
+    // The file is renamed in the editor beside the pane: the page hands over the model as it is.
+    rerender({
+      existing: [{ path: 'cubes/stores.yml', content: 'cubes:\n  - name: stores\n' }],
+    });
+    expect(dialog.querySelector('.generate-pane__status.is-clash')).toBeNull();
+    expect(
+      within(dialog).getByText('2 cubes ready to publish. Nothing is in the model until you do.')
+        .isConnected,
+    ).toBe(true);
+    expect(
+      within(dialog).getByRole('button', { name: 'Publish 2 cubes' }).hasAttribute('aria-disabled'),
+    ).toBe(false);
+    expect(dialog.querySelector('.source-pane__foot-note')).toBeNull();
+  });
+
+  /** T485's review: Back, from a round published, starts another at Tables with nothing chosen. */
+  it('goes back from a published round to Tables, afresh', async () => {
+    api();
+    const { dialog } = pane();
+    const tables = await toTables(dialog);
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 1 cube' }));
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Publish 2 cubes' }));
+    expect((await within(dialog).findByText('Published 2 cubes.')).isConnected).toBe(true);
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Back' }));
+    const again = await within(dialog).findByRole('table', { name: 'Tables in generate' });
+    expect(within(dialog).getByText('2 tables · none chosen').isConnected).toBe(true);
+    expect(
+      (within(again).getByRole('checkbox', { name: 'chrome_stores' }) as HTMLInputElement).checked,
+    ).toBe(false);
+    expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Generate cubes *']);
+    // The step's first control takes focus as it opens.
+    expect(document.activeElement).toBe(
+      within(dialog).getByRole('searchbox', { name: 'Search tables' }),
+    );
+  });
+
+  /** T485's review: Back while generating stops waiting for it; its answer lands nowhere. */
+  it('lets Back leave a generation still running, and drops its answer', async () => {
+    api();
+    const fetchStub = vi.mocked(fetch);
+    const answer = fetchStub.getMockImplementation();
+    let release: (response: Response) => void = () => undefined;
+    fetchStub.mockImplementation(async (input, init) =>
+      String(input).endsWith('/scaffold')
+        ? new Promise<Response>((resolve) => {
+            release = resolve;
+          })
+        : ((await answer?.(input, init)) ?? new Response('{}')),
+    );
+    const { dialog } = pane();
+    const tables = await toTables(dialog);
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 1 cube' }));
+    expect((await within(dialog).findByText('Generating…')).isConnected).toBe(true);
+    // Nothing to press yet: the pane's heading holds focus, not the page.
+    expect(document.activeElement).toBe(
+      within(dialog).getByRole('heading', { level: 2, name: 'Generate cubes' }),
+    );
+
+    const back = within(dialog).getByRole('button', { name: 'Back' });
+    expect((back as HTMLButtonElement).disabled).toBe(false);
+    await userEvent.click(back);
+    expect(
+      (await within(dialog).findByRole('table', { name: 'Tables in generate' })).isConnected,
+    ).toBe(true);
+    release(
+      new Response(
+        JSON.stringify({
+          cubes: [
+            {
+              cube: 'chrome_stores',
+              fileName: 'chrome_stores.yml',
+              content: STORES,
+              unmappedColumns: [],
+            },
+          ],
+        }),
+      ),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(within(dialog).queryByRole('region', { name: 'cubes/chrome_stores.yml' })).toBeNull();
+    expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Generate 1 cube *']);
+  });
+
+  /** T485's review: the Type menu closes as a menu does, and never the pane with it. */
+  it('closes the Type menu on Escape, from its pill too, and on a press outside it', async () => {
+    api();
+    const { dialog, onClose } = pane();
+    await toTables(dialog);
+    const pill = within(dialog).getByRole('button', { name: /^Type · All/ });
+    const menu = () => within(dialog).queryByRole('group', { name: 'Types' });
+
+    await userEvent.click(pill);
+    expect(pill.getAttribute('aria-controls')).toBe(menu()?.id);
+    // Escape in the menu: closed, focus back on its pill.
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Views' }));
+    await userEvent.keyboard('{Escape}');
+    expect(menu()).toBeNull();
+    expect(document.activeElement).toBe(pill);
+    // Escape on the pill while it is open: the menu closes, the pane stays, nothing asked.
+    await userEvent.click(pill);
+    expect(document.activeElement).toBe(pill);
+    await userEvent.keyboard('{Escape}');
+    expect(menu()).toBeNull();
+    expect(within(dialog).queryByRole('alertdialog')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    // A press outside it.
+    await userEvent.click(pill);
+    await userEvent.click(within(dialog).getByRole('searchbox', { name: 'Search tables' }));
+    expect(menu()).toBeNull();
+    expect(pill.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  /** Design 11 state K: a file's YAML soft-wraps, and Wrap turns it off. */
+  it('wraps a generated file’s YAML, with Wrap to turn it off', async () => {
+    api();
+    const { dialog } = pane();
+    const tables = await toTables(dialog);
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 1 cube' }));
+    const stores = await within(dialog).findByRole('region', { name: 'cubes/chrome_stores.yml' });
+    await userEvent.click(within(stores).getByText('YAML', { selector: 'summary' }));
+    const wrap = within(stores).getByRole('button', { name: 'Wrap' });
+    const content = () => stores.querySelector('.cm-content');
+    expect(wrap.getAttribute('aria-pressed')).toBe('true');
+    expect(content()?.classList.contains('cm-lineWrapping')).toBe(true);
+    await userEvent.click(wrap);
+    expect(wrap.getAttribute('aria-pressed')).toBe('false');
+    expect(content()?.classList.contains('cm-lineWrapping')).toBe(false);
+  });
+
+  /** T276's review: the API's refusal of a clash the pane could not see is shown as it gives it. */
   it('shows the API’s refusal of a clash, naming the file', async () => {
     api();
     const fetchStub = vi.mocked(fetch);
@@ -447,43 +677,93 @@ describe('generating cubes from a data source (AC-139)', () => {
           )
         : ((await answer?.(input, init)) ?? new Response('{}')),
     );
-    render(<GenerateCubes existing={[]} onClose={vi.fn()} onPublished={vi.fn()} />);
-    const dialog = screen.getByRole('dialog', { name: 'Generate cubes from a data source' });
-    await userEvent.selectOptions(
-      await within(dialog).findByRole('combobox', { name: 'Schema' }),
-      'generate',
-    );
-    const tables = await within(dialog).findByRole('table', { name: 'Tables in generate' });
+    const { dialog } = pane();
+    const tables = await toTables(dialog);
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 1 cube' }));
     await userEvent.click(await within(dialog).findByRole('button', { name: 'Publish 2 cubes' }));
 
+    // The refusal and what was refused, read out as one alert (T485's review).
     const refused = await within(dialog).findByRole('alert');
     expect(refused.textContent).toBe(
-      'Nothing was published:cubes/chrome_stores.yml: `chrome_stores` is already a cube in cubes/stores.js.',
+      'Nothing was published. The model is unchanged.‹ Back to TablesRefusedcubes/chrome_stores.yml`chrome_stores` is already a cube in cubes/stores.js.',
+    );
+    // The API's words as it gives them, backticks and all, by file.
+    expect(within(dialog).getByRole('list', { name: 'Refused' }).textContent).toBe(
+      'cubes/chrome_stores.yml`chrome_stores` is already a cube in cubes/stores.js.',
     );
   });
 
-  it('says why when a source cannot be browsed, rather than list nothing', async () => {
+  it('says why when a source cannot be browsed, and asks again on Retry', async () => {
+    let asks = 0;
     vi.stubGlobal(
       'fetch',
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              error:
-                'Cube did not let wechart browse its data sources: its introspection scope is not granted (infra/cube/cube.js).',
-            }),
-            { status: 503 },
-          ),
-      ),
+      vi.fn(async () => {
+        asks += 1;
+        return new Response(
+          JSON.stringify({
+            error:
+              'Cube did not let wechart browse its data sources: its introspection scope is not granted (infra/cube/cube.js).',
+          }),
+          { status: 503 },
+        );
+      }),
     );
-    render(<GenerateCubes existing={[]} onClose={vi.fn()} onPublished={vi.fn()} />);
+    const { dialog } = pane();
 
+    const failed = await within(dialog).findByRole('alert');
+    expect(failed.textContent).toBe(
+      'The data sources can’t be read.Cube did not let wechart browse its data sources: its introspection scope is not granted (infra/cube/cube.js).Retry',
+    );
+    await userEvent.click(within(failed).getByRole('button', { name: 'Retry' }));
+    await vi.waitFor(() => {
+      expect(asks).toBe(2);
+    });
+  });
+
+  /** Design 11 pin 11, rule 85: leaving with work in it asks first. */
+  it('asks before throwing away what is chosen, and closes at once when nothing is', async () => {
+    api();
+    const first = pane();
+    await userEvent.click(within(first.dialog).getByRole('button', { name: 'Cancel' }));
+    expect(first.onClose).toHaveBeenCalledTimes(1);
+    first.unmount();
+
+    const { dialog, onClose } = pane();
+    const tables = await toTables(dialog);
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
+    await userEvent.keyboard('{Escape}');
+    const question = within(dialog).getByRole('alertdialog', { name: 'Discard this generation?' });
+    expect(within(question).getByText('The 1 chosen table is forgotten.').isConnected).toBe(true);
+    // On the answer that loses nothing.
+    expect(document.activeElement).toBe(
+      within(question).getByRole('button', { name: 'Keep editing' }),
+    );
+    await userEvent.click(within(question).getByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await userEvent.click(
+      within(
+        within(dialog).getByRole('alertdialog', { name: 'Discard this generation?' }),
+      ).getByRole('button', { name: 'Discard' }),
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  /** Design 11 pin 17: the pane keeps what it holds across pages, as the query cache does. */
+  it('keeps its step and what is chosen when it is drawn again on another page', async () => {
+    api();
+    const cache = withCache();
+    const first = pane({}, cache);
+    const tables = await toTables(first.dialog);
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_visits' }));
+    first.unmount();
+
+    const { dialog } = pane({}, cache);
+    const again = await within(dialog).findByRole('table', { name: 'Tables in generate' });
     expect(
-      await screen.findByText(
-        'Cube did not let wechart browse its data sources: its introspection scope is not granted (infra/cube/cube.js).',
-      ),
-    ).toBeTruthy();
+      (within(again).getByRole('checkbox', { name: 'chrome_visits' }) as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Generate 1 cube *']);
   });
 });
