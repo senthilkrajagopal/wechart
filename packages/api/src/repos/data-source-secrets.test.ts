@@ -1,7 +1,9 @@
 import { execFile } from 'node:child_process';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { promisify } from 'node:util';
 
+import { sealSecretV1, type XcubeKey } from '@wechart/core';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeDb, databaseUrl, getDb } from '../db/client';
@@ -22,10 +24,18 @@ const run = promisify(execFile);
  *
  * T335 replaced T332's AES store: wechart now keeps each secret as the
  * envelope the browser sealed to xcube's key, and never opens one. A secret
- * sent in plain text, as a field, is refused, and so never stored. That a
- * stored envelope opens with xcube's key alone is T441's, which seals one.
+ * sent in plain text, as a field, is refused, and so never stored. T441 seals
+ * the canary as the browser does; that such an envelope opens with xcube's
+ * private key, and so with nothing wechart holds, is core's `seal.test.ts`.
  */
 const folder = `folder-${randomUUID()}`;
+/** xcube's development public key: all wechart is given. */
+const DEV_KEY = JSON.parse(
+  readFileSync(
+    new URL('../../../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url),
+    'utf8',
+  ),
+) as XcubeKey;
 afterAll(async () => {
   // Its secrets go with it.
   await getDb().deleteFrom('data_sources').where('folder_id', '=', folder).execute();
@@ -46,15 +56,10 @@ describe('data-source credentials at rest (T332, T335, AC-298)', () => {
   it('leave no readable secret in a dump of the metadata database, only the envelope', async () => {
     // Only [A-Za-z0-9-], so its JSON and URL encodings equal its raw form.
     const canary = `wcanary-${randomUUID()}`;
-    const store = dataSourceStore(getDb());
-    const envelope = {
-      v: 1 as const,
-      kid: 'kid-1',
-      // Sized as xcube takes one: a 32-byte `enc`, one 256-byte bucket and its tag.
-      enc: randomBytes(32).toString('base64url'),
-      ct: randomBytes(272).toString('base64url'),
-    };
+    const store = dataSourceStore(getDb(), { kid: DEV_KEY.kid });
     const fields = { host: 'db', database: 'sales', user: 'cube' };
+    // Sealed as the browser seals it (T441), to xcube's development key.
+    const envelope = await sealSecretV1(DEV_KEY, 'postgres', 'password', fields, canary);
 
     // The secret sent as a field, in plain text: refused, never stored.
     await expect(

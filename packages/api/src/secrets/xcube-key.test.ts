@@ -193,7 +193,11 @@ describe('where the development key pair lives (T333, AC-324, AC-298)', () => {
       path === 'docker-compose.yml' ||
       path.startsWith('infra/xcube/') ||
       path.startsWith('docs/') ||
-      path === 'packages/api/src/secrets/xcube-key.test.ts';
+      path === 'packages/api/src/secrets/xcube-key.test.ts' ||
+      // T441: the sealing test stands in for xcube, opening what the browser
+      // seals (and the golden vectors xcube's tests open) with this key. A
+      // test alone; no product code reads it.
+      path === 'packages/core/src/data-sources/seal.test.ts';
 
     const holding: string[] = [];
     const naming: string[] = [];

@@ -8,6 +8,7 @@ import {
   type DataSourceChange,
   type DataSourceStore,
 } from '../repos/data-sources';
+import { XCUBE_PUBLIC_KEY, type XcubePublicKey } from '../secrets/xcube-key';
 
 /**
  * A data source's own routes (T335; AC-269, AC-164, AC-312, AC-161, AC-262,
@@ -67,8 +68,26 @@ function readBody(body: unknown): { value?: Record<string, unknown>; error?: str
 
 export function registerDataSources(
   app: FastifyInstance,
-  { store, access }: { readonly store: DataSourceStore; readonly access: DataSourceAccess },
+  {
+    store,
+    access,
+    key,
+  }: {
+    readonly store: DataSourceStore;
+    readonly access: DataSourceAccess;
+    /** xcube's public key, which the browser seals a typed secret to (T441, AC-325). */
+    readonly key?: XcubePublicKey;
+  },
 ): void {
+  // Public by nature: it seals, and opens nothing (AC-298).
+  app.get('/api/data-sources/sealing-key', USER, async (_request, reply) =>
+    key === undefined
+      ? reply.status(503).send({
+          error: `wechart has no key to seal a data source’s secrets to: set ${XCUBE_PUBLIC_KEY}.`,
+        })
+      : { kid: key.kid, x: key.x },
+  );
+
   const refused = (reply: FastifyReply, error: unknown) => {
     if (error instanceof DataSourceRefused)
       return reply.status(error.status).send({ error: error.message, problems: error.problems });

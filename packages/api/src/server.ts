@@ -515,6 +515,7 @@ export function buildServer({
   if (dataSources !== undefined)
     registerDataSources(app, {
       store: dataSources,
+      ...(config.xcubePublicKey === undefined ? {} : { key: config.xcubePublicKey }),
       access: async (request, folderId, want) => {
         const seen = await visibilityOf(request);
         if (seen === undefined) return undefined;

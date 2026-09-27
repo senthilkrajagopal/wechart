@@ -233,6 +233,41 @@ describe('a folder holding data sources (T335’s review)', () => {
   });
 });
 
+describe('the key a secret is sealed to (T441, AC-325)', () => {
+  it('is xcube’s public key, as configured, for anyone signed in, and nothing that decrypts', async () => {
+    const key = { kid: 'uYWeMx6i173fsiolFp1xi-qiav50k52AGinM56Y8JEw', x: 'x'.repeat(43) };
+    const keyed = buildServer({
+      config: { ...secured, xcubePublicKey: key },
+      sessions: pgSessionStore(getDb()),
+      documents: docs(),
+      catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
+      dataSources: sources(),
+    });
+    try {
+      const cookie = await signIn(keyed, USERS['reader']!);
+      const answer = await keyed.inject({
+        method: 'GET',
+        url: '/api/data-sources/sealing-key',
+        headers: { cookie },
+      });
+      expect(answer.statusCode).toBe(200);
+      expect(answer.json()).toEqual({ kid: key.kid, x: key.x });
+      expect(
+        (await keyed.inject({ method: 'GET', url: '/api/data-sources/sealing-key' })).statusCode,
+      ).toBe(401);
+    } finally {
+      await keyed.close();
+    }
+    // Without one, none is made up.
+    const unkeyed = await as('writer', { method: 'GET', url: '/api/data-sources/sealing-key' });
+    expect(unkeyed.statusCode).toBe(503);
+    expect(unkeyed.json()).toEqual({
+      error: 'wechart has no key to seal a data source’s secrets to: set WECHART_XCUBE_PUBLIC_KEY.',
+    });
+  });
+});
+
 describe('a read-write member’s changes (AC-312, AC-161)', () => {
   it('creates one in their folder, sealed, and refuses one whose secret is in plain text', async () => {
     const created = await as('writer', {

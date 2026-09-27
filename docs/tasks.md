@@ -5736,11 +5736,12 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: a migration `…_connection-tests.cjs`, `packages/api/src/repos/connection-tests.ts` (+ test), `packages/web/src/workspaces/data-sources/TestHistory.tsx`
   - Failing test: `connection-tests.test.ts`: every test run is stored with its time, checks and outcome, and the source's history lists them newest first (AC-163).
   - Depends on: T361
-- [ ] T363 (AC-158, AC-160, AC-161, AC-269) Add a data source in the workspace through Type → Connection → Test → Name, refusing a failing test without an override
+- [ ] T363 (AC-158, AC-160, AC-161, AC-269, AC-325) Add a data source in the workspace through Type → Connection → Test → Name, refusing a failing test without an override
   - Files: `packages/web/src/workspaces/data-sources/{NewSourceWizard,ConnectionForm}.tsx` (+ tests), `packages/api/src/routes/data-sources.ts`, `e2e/security/data-sources.spec.ts`
   - Failing test: `data-sources.spec.ts`: the wizard takes a name, a driver, that driver's fields and a Test step; Create stays disabled until the test passes or "Create anyway" is chosen; the API refuses a create with no passing test and no override (AC-158).
     - *(2026-09-26, `[XD, X6, R31]`)* the Type step offers the eight drivers of T454, each form with its authentication methods and TLS fields and none other (AC-160); an existing data source's form shows its type fixed, saying to make a new data source for another (AC-161); a secret is sealed at submit, not on typing (`credential-sealing.md` Gotcha 9).
     - *(2026-09-26, from T335's review)* a data source's row in Explore opens it in this form, its settings shown and each stored secret said as stored (AC-269's open half: T335 lists them, and its rows open nothing until this form exists).
+    - *(2026-09-26, from T441)* the form seals each typed secret at submit with core's `sealSecretV1`, to the key `GET /api/data-sources/sealing-key` gives, and a canary secret typed into it appears in no request body to wechart (the Test step's included), no stored row and no line of the API's log, in Chrome, Firefox and WebKit (AC-325's form half: T441 built the sealer and the key route, and there was no form to type into).
   - Depends on: T454, T361, T345
 - [ ] T364 (AC-157, AC-233, AC-001) List every visible data source with its folder, driver, health and the cubes that use it
   - Files: `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (replacing the deferred page), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`), `e2e/security/data-sources.spec.ts`
@@ -7170,16 +7171,40 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
     - MySQL's client certificate says it is sent only over TLS, since xcube sends neither it nor a password with TLS off.
     - `databricks-jdbc` is gone; no Databricks data source was ever stored.
     - The cold review (PASS) found the required flags and kinds untested (now pinned in `drivers.test.ts`), and one comment unclear (reworded). `credential-sealing.md`'s `V1_TARGET_KEYS` table predates the TLS binding: T441 takes the target from `targetKeysOf`, checked against xcube's golden vectors.
-- [ ] T441 (AC-325, AC-298) Seal a typed secret in the browser to xcube's public key, and store only the ciphertext *(amended 2026-09-26: the golden vectors and the TLS target, `[X6]`)*
+- [x] T441 (AC-325, AC-298) Seal a typed secret in the browser to xcube's public key, and store only the ciphertext *(amended 2026-09-26: the golden vectors and the TLS target, `[X6]`)*
   - Files: ~~`packages/web/package.json`~~ `packages/core/package.json` (`hpke` 1.1.7), `packages/core/src/data-sources/aad.ts` (+ test, `secretAadV1`), `packages/core/src/data-sources/golden-v1.json` (xcube's golden AAD and envelope vectors, which xcube asked for so it can open them in its own test), ~~`packages/web/src/workspaces/data-sources/seal.ts`~~ `packages/core/src/data-sources/seal.ts` (+ test; in core, so the browser and the tests share one sealer), `packages/api/src/routes/data-sources.ts`, ~~`packages/api/src/repos/data-source-secrets.ts`~~ `packages/api/src/repos/data-source-secrets.test.ts` (the `pg_dump` canary test, from T332; T335 removed T332's AES store)
   - Failing test:
     - `aad.test.ts`: `secretAadV1(driver, field, fields)` equals xcube's golden strings for postgres, mysql, mssql, oracle and dremio (`xcube/test/unit/credentials.test.ts` L33-48); the target's pairs are sorted, each value `String(v)` as sent, `""` when absent;
     - `seal.test.ts`: the browser seals with HPKE (X25519, HKDF-SHA256, AES-128-GCM, `info` `wechart/data-source-secret/v1`, padded to 256 bytes) to the configured public key, as `{ v: 1, kid, enc, ct }`, and a test key pair opens it; fields are sent exactly as sealed, no default filled and no `false` dropped;
-    - a canary secret typed into the form appears in no request body to wechart, no stored row and no log line (AC-325);
+    - ~~a canary secret typed into the form appears in no request body to wechart, no stored row and no log line (AC-325);~~ *moved to T363 (2026-09-26): there is no form to type into until then;*
     - a `pg_dump` holds no plaintext, and wechart holds no private key (AC-298).
 
     Research: `credential-sealing.md`; `xcube-overlay-data-sources.md` (Gotcha 14: send stored values unchanged).
   - Depends on: T333, T335, T454
+  - **Done 2026-09-26. No AC is ticked:**
+    - AC-325 needs the form a secret is typed into. T363 now cites it: the form seals at submit, and a typed canary reaches no request body, row or log line.
+    - AC-298 waits for the other flows that store envelopes: T346, T352, T362 and T368.
+  - **As built:**
+    - Core's `secretAadV1`, `padV1` and `sealSecretV1`, exported with `isSealedDriver` from `@wechart/core`. They live in core, so the browser and the API's tests seal with the same code.
+    - `hpke` 1.1.7 is in core's dependencies.
+    - `GET /api/data-sources/sealing-key` gives anyone signed in `{ kid, x }`, xcube's public key as `WECHART_XCUBE_PUBLIC_KEY` holds it. It answers 503, naming the setting, when there is none; the API refuses to start without one, so only a test sees that.
+      - The research proposed `credential-key` returning `{ v: 1, kid, x }` (`credential-sealing.md`). Its name says what it is for, and a scheme version would be a second copy of the envelope's own `v`.
+    - `golden-v1.json` has two parts:
+      - xcube's five golden AAD strings, plus redshift's, snowflake's and bigquery's, so all eight drivers' bindings are there.
+      - Seven envelopes sealed to the development key.
+      - The three new drivers' vectors were made by an independent script from xcube's own target table (`xcube/src/connections/drivers.ts`), not by core's sealer. Core's test checks both parts, and opens each envelope with the development private key.
+    - The `pg_dump` test (`repos/data-source-secrets.test.ts`) stores a canary sealed by `sealSecretV1`. The dump holds the envelope and none of the canary's four encodings.
+    - T332's AES keyring, `secrets/crypto.ts` and its test, is removed. Nothing has used it since T335.
+    - Files beyond those listed: `packages/core/src/index.ts`, `packages/api/src/server.ts` (the key to the route), and `packages/api/src/secrets/xcube-key.test.ts`. The last lets core's `seal.test.ts` name the development private key, which it opens with.
+  - **The cold review (PASS) found:**
+    - This entry still listed the form's canary test (now struck).
+    - The golden vectors lacked redshift, snowflake and bigquery, which wechart had told xcube they would include (added).
+    - `isSealedDriver` took `constructor` and other names every object has as drivers (now its own keys only, tested).
+    - Left as they are: minor notes on `seal.test.ts`'s matchers, and core's `lib` lacking DOM types.
+  - **Tests:**
+    - core's data-source tests 35;
+    - API: the key route in `access/data-sources.test.ts`, and the `pg_dump` test;
+    - the full unit suite (below, at commit).
 - [ ] T455 (AC-324) Refuse to start when xcube holds no credential key with wechart's public key's id *(added 2026-09-26, `[X6]`)*
   - Files: `packages/api/src/secrets/xcube-key.ts` (+ test), `packages/api/src/main.ts`
   - Failing test: `xcube-key.test.ts`, against the stub xcube:
@@ -7269,7 +7294,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
 | AC-332 (again) | T426 | AC-235 (again) | T445, T447 | AC-140 (again) | T446 |
 | AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | ~~T426~~ T451, T436, T456 |
 | AC-322 | T427 | AC-323 | T347, T440 | AC-324 | T333, T455 |
-| AC-325 | T441 | AC-326 | T420, T437 | AC-327 | T431, T442 |
+| AC-325 | T441, T363 | AC-326 | T420, T437 | AC-327 | T431, T442 |
 | AC-328 | T341, T425, T449, T452, T435 | AC-329 | T429, T450, T342, T347 | AC-330 | T419, T447, T425, T449, T436, T442 |
 | ~~AC-331~~ (retired, `[R30]`) | ~~T430~~ | AC-332 | T433 | AC-333 | T419, T447, T449, T425, T420 |
 | AC-334 | T421, T447 | AC-335 | T446, T447 | AC-336 | T430, T449 |
