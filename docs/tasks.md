@@ -5522,10 +5522,10 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - a query naming a member its item isn't bound to answers 403 and reaches no Cube (AC-268).
   - ~~`queries.test.ts`: … a query for a dashboard in /A/B is signed with /A/B's chain. `resolution.spec.ts`: a chart in /A/B draws /A/B's `sales` while /A defines its own (AC-272, AC-268).~~
   - Depends on: T326
-- [ ] T341 (AC-274, AC-328) Keep two folders' same-named cubes and their rollups apart, under their prefixed names *(rewritten 2026-09-26: xcube publishes each under `<folderId>__<shortName>` with its own `sql_alias`; nothing is served from wechart, `[IP 3, plan, R28]`; amended again 2026-09-26, `[X3, user; R30]`: the root's stay bare)*
-  - Files: `e2e/security/isolation.spec.ts`, the stub `packages/api/src/xcube/fake.ts`
+- [x] T341 (AC-274, AC-328) Keep two folders' same-named cubes and their rollups apart, under their prefixed names *(rewritten 2026-09-26: xcube publishes each under `<folderId>__<shortName>` with its own `sql_alias`; nothing is served from wechart, `[IP 3, plan, R28]`; amended again 2026-09-26, `[X3, user; R30]`: the root's stay bare)*
+  - Files: `e2e/security/isolation.spec.ts` ~~, the stub `packages/api/src/xcube/fake.ts`~~ (it needed no change)
   - Failing test: `isolation.spec.ts`, against compose's Cube running xcube's slice 3:
-    - /A and /C each define `sales` over different tables. They publish as `fa…__sales` and `fc…__sales`, and each folder's chart returns its own count (AC-274);
+    - /A and /C each define `sales` over different ~~tables~~ rows of one table. They publish as `fa…__sales` and `fc…__sales`, and each folder's chart returns its own count (AC-274);
     - the root's own `sales`, where it has one, stays `sales`, with its SQL and rollup table as before;
     - their rollups build into differently named tables, none over 63 bytes on Postgres;
     - renaming and moving /A changes neither published name, and rebuilds no rollup (AC-328).
@@ -5533,6 +5533,17 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - *2026-09-26, from T334:* model files now sit in folders, but only the root's are sent to xcube (`modelFiles.list()` is the root's), and `POST /api/model/publish` refuses any other folder with 409. ~~This task sends each folder's files as that folder's items … and lifts the 409.~~ That is T452's now; this task keeps the isolation test.
   - ~~Files: `packages/api/src/model/chain.ts` (each served cube's `sql_alias` from its origin folder and resolved data source) … Failing test: `isolation.spec.ts`, against the real Cube: … the same query from each folder returns each one's own count …~~
   - Depends on: T425, T426, T429, T334, T449
+  - **Done 2026-09-26.** No product change was needed: xcube's prefixes and `sql_alias`es, T452's publish into folders and T429's binding already keep them apart. The spec shows it, against compose's xcube, as `super`:
+    - Three `iso_sales`, over three sets of rows: the root's orders not completed, /A's every order, /C's the completed ones.
+    - A chart saved in each folder stores its own cube in its source and its measure (`iso_sales` for the root, `f…__iso_sales` for /A and /C). Each stored query answers its own count, and the three counts all differ.
+    - The three rollups build into tables whose names differ before Cube's version suffix, and none is over 63 bytes. /A's and /C's queries each read their own table, with no identifier over 63 bytes. The root's table is still `…iso_sales_by_status`.
+    - Renaming /A and moving it beneath /C:
+      - xcube resolves /C's name from /A, and Cube serves that revision;
+      - /A keeps its name, its answer and its rollup build (the same `lastUpdatedAt`);
+      - the charts stored before the move answer as they did.
+    - Run in Chrome, Firefox and Safari together; all 9 pass.
+    - **AC-274 ticked** on `isolation.spec.ts`.
+    - **AC-328 stays open.** Its data-source clause is T435's now (a sub-bullet added there, from the review), and its never-reused ids are T425's `folder-xcube-ids` tests.
 - [ ] T342 (AC-222, AC-131, AC-141, AC-329) Open a model in its folder, beside that folder's files, read-only when shared
   - Files: `packages/web/src/router/routes.tsx` (`/explore/folders/$folderId/models/$path`), `packages/web/src/workspaces/model/{ModelFilePage,FileTree}.tsx`, `packages/web/src/workspaces/model/editedMembers.ts` (+ test), `packages/web/src/workspaces/explore/ExplorePage.tsx` (a model row's link), `packages/web/src/workspaces/model/ModelInFolder.test.tsx`, `e2e/security/model-in-folder.spec.ts`
   - Failing test: `model-in-folder.spec.ts`:
@@ -6897,14 +6908,15 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
     - a deleted source is removed;
     - the API serves no route that hands a connection to Cube (AC-327, AC-161).
   - Depends on: T420, T441, T352
-- [ ] T435 (AC-273, AC-310) Bind a model's data sources at publish, nearest first from its folder, and give a cube with none the nearest `default` *(moved here from slice 3, 2026-09-26)*
+- [ ] T435 (AC-273, AC-310, AC-328) Bind a model's data sources at publish, nearest first from its folder, and give a cube with none the nearest `default` *(moved here from slice 3, 2026-09-26)*
   - **Why here.** xcube answered that binding comes with slice 6: a bound name must be a connection Cube can open, and connections arrive with T442. At publish xcube resolves `data_source` along the item's folder path, as it does cube names. It pushes no data-source items into the tree `[xcube answer to-wechart/2026-09-26-1030-data-source-binding.md]`.
   - **Until slice 6.** xcube passes `data_source` through unchanged. With `CUBEJS_DATASOURCES` unset, Cube maps any name to the default connection, so `data_source: warehouse` reads the default database. With it set, an undeclared name fails the publish's compile. That is xcube's reading of Cube 1.7.45, not run (same answer, §2).
   - Files: `e2e/security/data-source-binding.spec.ts`, `packages/api/src/xcube/connections.ts`
   - Failing test: `data-source-binding.spec.ts`, against xcube's slice 6:
     - a model in /A/B naming `warehouse` binds /A's when /A has one, and never /A/B/C's or a sibling's;
     - a name found nowhere on its path is refused, naming it (AC-273);
-    - a cube with no data source binds /A/B's `default`, else /A's, else the root's (AC-310).
+    - a cube with no data source binds /A/B's `default`, else /A's, else the root's (AC-310);
+    - *(added 2026-09-26, from T341's review)* the data source it binds is published as `<folderId>__<name>` for /A's and under its short name for the root's, and renaming or moving /A changes neither (AC-328, its data-source clause).
   - Depends on: T426, T442
 - [ ] T443 (AC-310) Seed the shared root's `default` data source from the Helm values, and manage it like any other
   - Files: `deploy/helm/wechart/templates/api.yaml`, `packages/api/src/seed.ts`, `e2e/security/root-default.spec.ts`
@@ -6968,7 +6980,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | ~~T426~~ T451 |
 | AC-322 | T427 | AC-323 | T347, T440 | AC-324 | T333 |
 | AC-325 | T441 | AC-326 | T420, T437 | AC-327 | T431, T442 |
-| AC-328 | T341, T425, T449, T452 | AC-329 | T429, T450, T342 | AC-330 | T419, T447, T425, T449, T436, T442 |
+| AC-328 | T341, T425, T449, T452, T435 | AC-329 | T429, T450, T342 | AC-330 | T419, T447, T425, T449, T436, T442 |
 | ~~AC-331~~ (retired, `[R30]`) | ~~T430~~ | AC-332 | T433 | AC-333 | T419, T447, T449, T425 |
 | AC-334 | T421, T447 | AC-335 | T446, T447 | AC-336 | T430, T449 |
 | AC-337 | T448 | AC-009 (again) | T426 | AC-189, AC-249 (again, folder items) | T450 |
