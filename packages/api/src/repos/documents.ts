@@ -1,5 +1,5 @@
 import { migrateChartDocument } from '@wechart/core';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 
 import type { Database } from '../db/schema';
 
@@ -204,6 +204,47 @@ export function documents(db: Kysely<Database>) {
         });
 
       return writes.map((write) => written.get(key(write)) as StoredDocument);
+    },
+
+    /**
+     * Several made together, or none (T344): a dashboard copied into a
+     * workspace with its charts, so a copy is never left without a chart it
+     * shows.
+     */
+    async createTogether(creates: readonly CreateInput[]): Promise<StoredDocument[]> {
+      if (creates.length === 0) return [];
+      const rows = await db.transaction().execute(async (trx) =>
+        trx
+          .insertInto('documents')
+          .values(creates.map(({ kind, id, body }) => ({ kind, id, body: JSON.stringify(body) })))
+          .returningAll()
+          .execute(),
+      );
+      return rows.map(toDocument);
+    },
+
+    /**
+     * The items of a kind copied from `originId` (T344), each naming it in
+     * its `origin`, in `inFolders` when given (a workspace's: T344's review),
+     * in a fixed order.
+     */
+    async withOrigin(
+      kind: DocumentKind,
+      originId: string,
+      inFolders?: readonly string[],
+    ): Promise<StoredDocument[]> {
+      if (inFolders !== undefined && inFolders.length === 0) return [];
+      const rows = await db
+        .selectFrom('documents')
+        .selectAll()
+        .where('kind', '=', kind)
+        .where(sql<boolean>`body -> 'origin' ->> 'id' = ${originId}`)
+        .$if(inFolders !== undefined, (query) =>
+          query.where(sql<string>`body ->> 'folderId'`, 'in', [...inFolders!]),
+        )
+        .orderBy('id')
+        .execute();
+      return rows.map(toDocument);
     },
 
     /** Remove an object. Returns false when there was nothing to remove. */

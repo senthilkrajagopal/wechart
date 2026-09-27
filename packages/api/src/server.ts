@@ -63,6 +63,7 @@ import type { ConnectionHealth, TestAnswer, TestedConnection } from './xcube/con
 import type { FolderAccessStore } from './repos/folder-access';
 import { registerFolderAccess } from './routes/access';
 import { registerDataSources } from './routes/data-sources';
+import { chartCopy, dashboardCopies, type ShownCopy } from './routes/workspace-copy';
 import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
 
 /**
@@ -214,6 +215,20 @@ export interface DocumentWriter {
       expectedVersion: number;
     }[],
   ): Promise<readonly { id: string; version: number }[]>;
+  /** Several made together, or none (T344's copies). */
+  createTogether?(
+    creates: readonly {
+      kind: 'folder' | 'dashboard' | 'chart';
+      id: string;
+      body: Record<string, unknown>;
+    }[],
+  ): Promise<unknown>;
+  /** The items of a kind copied from one (T344), in `inFolders` when given. */
+  withOrigin?(
+    kind: 'dashboard' | 'chart',
+    originId: string,
+    inFolders?: readonly string[],
+  ): Promise<readonly { id: string; body: Record<string, unknown> }[]>;
 }
 
 /** The slice of the catalog repository the server exposes. */
@@ -886,10 +901,17 @@ export function buildServer({
     body: Record<string, unknown>,
     stored: Record<string, unknown> | null | undefined,
   ): Record<string, unknown> => {
-    const { targetFolderId: _sent, ...rest } = body;
-    void _sent;
+    // Its origin too (T344's review): what a copy was copied from is the
+    // server's record, which its proposal and overlay rely on (T347, T349).
+    const { targetFolderId: _sent, origin: _origin, ...rest } = body;
+    void [_sent, _origin];
     const target = stored?.['targetFolderId'];
-    return target === undefined ? rest : { ...rest, targetFolderId: target };
+    const origin = stored?.['origin'];
+    return {
+      ...rest,
+      ...(target === undefined ? {} : { targetFolderId: target }),
+      ...(origin === undefined ? {} : { origin }),
+    };
   };
   /**
    * The folder whose rights govern an item (T326): a folder's own; a chart
@@ -1336,6 +1358,98 @@ export function buildServer({
     return rows.map((row) =>
       row.kind === 'folder' ? { ...row, itemCount: counts.get(row.id) ?? 0 } : row,
     );
+  });
+
+  /**
+   * "Edit in my workspace" (T344; AC-278, AC-279): a shared dashboard or
+   * library chart copied into the user's own workspace, or their copy already
+   * there opened (200, `created: false`). Only for one they may propose back:
+   * a read-write member of its folder, who has a workspace (AC-277, AC-284).
+   * A local chart goes with its dashboard; what is in a workspace is edited
+   * there. With sign-in off there are no workspaces.
+   */
+  app.post('/api/workspace/copies', USER, async (request, reply) => {
+    const seen = await visibilityOf(request);
+    if (seen === undefined || !docs?.get || !docs.createTogether || !docs.withOrigin)
+      return reply.code(404).send({ error: 'Workspaces need sign-in.' });
+    const body = request.body as { kind?: unknown; id?: unknown } | undefined;
+    const kind = body?.kind;
+    const id = body?.id;
+    if ((kind !== 'dashboard' && kind !== 'chart') || typeof id !== 'string' || id === '')
+      throw new BadRequest('Name the dashboard or chart to copy: { kind, id }.');
+    const own = workspaceIdOf(userOf(request).key);
+    if (!seen.rights.has(own))
+      return reply.code(403).send({
+        error: 'You have no workspace: only read-write members and Super-Admins have one.',
+      });
+    // A stored item this version can't read is said so, as the document GET
+    // says it, never taken for one that isn't there (T344's review).
+    const read = async (what: 'dashboard' | 'chart', which: string) => {
+      try {
+        return { found: await docs.get!(what, which) };
+      } catch (failure) {
+        if (failure instanceof ChartDocumentError) return { unreadable: failure.message };
+        throw failure;
+      }
+    };
+    const item = await read(kind, id);
+    if (item.unreadable !== undefined) return reply.code(422).send({ error: item.unreadable });
+    const stored = item.found ?? null;
+    if (stored === null || !(await mayOpen(seen, kind, stored)))
+      return reply.code(404).send(NOT_THERE);
+    if (kind === 'chart' && typeof stored.body['localToDashboardId'] === 'string')
+      throw new BadRequest('A chart on a dashboard is copied with its dashboard.');
+    const home = folderIdOf(stored.body);
+    if ((await workspaceRootOf(home)) !== null)
+      throw new BadRequest('It is in a workspace already: edit it there.');
+    if (home === null || !mayWrite(seen, home)) return reply.code(403).send({ error: READ_ONLY });
+
+    // Their copies, wherever in their workspace they are.
+    const mine = [own, ...(await foldersBeneath(own)).map((folder) => folder.id)];
+    const copyOf = async (what: 'dashboard' | 'chart', originId: string) =>
+      (await docs.withOrigin!(what, originId, mine))[0];
+    // Their copy, if there is one, opens instead: never a second.
+    const existing = await copyOf(kind, id);
+    if (existing !== undefined) return { kind, id: existing.id, created: false };
+
+    const owner = userOf(request).key;
+    let copies;
+    if (kind === 'dashboard') {
+      /**
+       * What each chart it shows becomes (T344's review): one its copier
+       * can't open refuses the copy, rather than landing in their workspace;
+       * one they have a copy of already is that copy; a library chart they
+       * may propose back is copied as one; any other becomes the copy's own
+       * local chart, so nothing else governs it.
+       */
+      const shown: ShownCopy[] = [];
+      for (const chartId of chartIdsOf(stored.body)) {
+        const chart = await read('chart', chartId);
+        if (chart.unreadable !== undefined)
+          return reply.code(422).send({ error: chart.unreadable });
+        if (chart.found == null) continue;
+        const found = chart.found;
+        if (!(await mayOpen(seen, 'chart', found)))
+          return reply.code(409).send({
+            error: 'It shows a chart you can’t open, so it can’t be copied into your workspace.',
+          });
+        const folder = folderIdOf(found.body);
+        const library = typeof found.body['localToDashboardId'] !== 'string';
+        const reused = library ? await copyOf('chart', found.id) : undefined;
+        if (reused !== undefined) shown.push({ as: 'reuse', chart: found, copyId: reused.id });
+        else if (library && folder !== null && mayWrite(seen, folder))
+          shown.push({ as: 'library', chart: found });
+        else
+          shown.push({
+            as: 'local',
+            chart: found,
+            folderSeen: folder !== null && seen.rights.has(folder),
+          });
+      }
+      copies = dashboardCopies(stored, shown, own, owner, () => randomUUID());
+    } else copies = [chartCopy(stored, own, owner, () => randomUUID())];
+    await docs.createTogether(copies);
+    return reply.code(201).send({ kind, id: copies[0]!.id, created: true });
   });
 
   /**

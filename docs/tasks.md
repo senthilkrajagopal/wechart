@@ -5631,10 +5631,27 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Tests:**
     - api 801 (`workspaces.test.ts` 9, `workspace-alias.test.ts` 2), web 1559 (`roots.test.ts` 3);
     - Chrome: the security suite (59) and Explore, design conformance, dashboard, settings and editor (137).
-- [ ] T344 (AC-278, AC-279) Copy a dashboard into the workspace with its charts, never editing shared items in place
+- [x] T344 (AC-278, AC-279) Copy a dashboard into the workspace with its charts, never editing shared items in place *(2026-09-27: the copy; the refusal of in-place edits moved to T349)*
   - Files: `packages/api/src/routes/workspace-copy.ts` (+ test), `packages/api/src/server.ts` (a write to a shared item answers 409 "Edit in my workspace"), `packages/api/src/repos/documents.ts`
   - Failing test: `workspace-copy.test.ts`: copying a dashboard brings its local charts and the library charts it shows, and a model or data source only when chosen; a second copy opens the first; any `PUT`, `PATCH` of content on a shared dashboard, chart, model or data source is refused (AC-278, AC-279).
   - Depends on: T343
+  - *Sequenced 2026-09-27:*
+    - The copy is built now: `POST /api/workspace/copies` for a dashboard or chart. A dashboard's copy brings copies of its local charts and the library charts it shows, pointing at the copies. Each copy records its origin (kind, id, version, folder) and targets its origin's folder. A second copy opens the first. Models and data sources come with T347 and T346, which make their copies.
+    - Copying needs read-write access to the item's folder, since only such a member can propose it back (AC-284). This is a small decision under the standing instruction, and can be overturned.
+    - The refusal of in-place edits to shared items lands with proposals (T349). Until then, a shared item changed in place is the only way it changes, as with AC-192's shared-folder half (T331).
+    - The "Edit in my workspace" button is built to the phase-2 design review (T348).
+  - *As built (2026-09-27):*
+    - `POST /api/workspace/copies` (`server.ts`), with the copies drawn up in `routes/workspace-copy.ts`, made in one transaction (`documents.createTogether`), and found by origin in the copier's workspace (`documents.withOrigin`).
+    - What each chart a dashboard shows becomes, from the review:
+      - one its copier can't open refuses the copy (409), rather than landing in their workspace;
+      - one this version can't read refuses it (422), rather than the copy showing the original;
+      - one they have a copy of already is shown as that copy;
+      - a library chart they may propose back is copied as a workspace library chart, targeting its folder;
+      - another dashboard's local chart, or a library chart from a folder they can't write, becomes the copy's own local chart. It names its origin's folder only where they can see it.
+    - A save keeps a copy's `origin` as stored, as it keeps its target.
+    - Tests: `routes/workspace-copy.test.ts` (11).
+    - AC-278 and AC-279 stay unticked. The button is T348's, the refusal of in-place edits is T349's, and models and data sources are T347's and T346's.
+    - The review also noted a double-submit race (two concurrent copies both made). It is left under the standing instruction on save edge cases; T348's button disables itself while a copy is made.
 - [x] T345 (AC-282, AC-192) Create items in the workspace with a target folder
   - Files: `packages/api/src/server.ts` (`POST /api/documents` in a workspace requires `targetFolderId`), `packages/web/src/workspaces/explore/{CreateMenu,NewItemDialog,TargetPicker}.tsx` (+ tests)
   - Failing test: `NewItemDialog.test.tsx` and `targets.test.ts`: the workspace's New menu offers Dashboard, Chart, Model, Data source and Folder; the first four ask for a target among the folders where the user has read-write access, preselected when there is one; creating without a target, or with a folder they can't write, answers 400 or 403 (AC-282, AC-192; rule 74).
@@ -5697,6 +5714,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [ ] T349 (AC-284) Propose a workspace item into its target folder, with an optional description of up to 1,000 characters
   - Files: a migration `…_proposals.cjs` (`proposals`, `proposal_items` with the item snapshot), `packages/api/src/repos/proposals.ts` (+ test), `packages/api/src/routes/proposals.ts` (+ test)
   - Failing test: `proposals.test.ts`: a proposal records the item snapshot, the folder, the author, the time and the description; 1,001 characters answer 400; the folder serves its current version until approval (AC-284).
+    - *(2026-09-27, moved from T344)* with proposals in place, any `PUT` or `PATCH` of content on a shared dashboard, chart, model or data source is refused with 409, "Edit in my workspace" (AC-278). Until then a change in place is the only way a shared item changes.
   - Depends on: T344
 - [ ] T350 (AC-285) Put the workspace-only models a proposed dashboard needs into the same proposal
   - Files: `packages/api/src/routes/proposals.ts`, ~~`packages/api/src/model/chain.ts`~~ `packages/api/src/xcube/overlays.ts` (2026-09-26), `packages/api/src/routes/proposal-bundle.test.ts`
