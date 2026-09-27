@@ -7874,7 +7874,21 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - MW-13's line saying what an empty list is for.
 - Each task's e2e grows `e2e/model-design.spec.ts`, measured at 1,440 × 900.
 
-- [ ] T479 (AC-222, AC-226, AC-344) The tree and the editor head as design 03 notes 1 and 2
+- [x] T479 (AC-222, AC-226, AC-344) The tree and the editor head as design 03 notes 1 and 2
+  - **Done 2026-09-27.** Tested in `FileTree.test.tsx` and `e2e/model-design.spec.ts` (T479's two tests, in Chrome, Firefox and Safari).
+  - **The tree**, as design 03 note 1:
+    - "Model", with "✓ All published" (in the status colour) or "◷ n unpublished";
+    - folder rows under `model/` that fold, the open file's folder too. A file opened in a folded folder opens it again.
+    - Each folder's files stay a list, named as a group around it.
+    - A code or template file is tagged with its kind; "read-only" is said, not only shown on a hover.
+    - "+ New cube", "+ New view" and "+ Generate cubes" come after the files.
+    - The focus ring is drawn inside the row.
+  - **The head**, as design 03 note 2:
+    - 44 px, the path at 13/600 mono (D1). AC-231 is amended so a model file is headed by its path in the editor's head; `admin.spec.ts` checks the file pages at 13/600 and the Model overview at 20/600. direction.md §7d records the 13 px.
+    - "Published · no changes", "Unpublished changes" or "New file · not published".
+    - Discard and Save always shown, disabled at rest (D2).
+    - Just published, the outcome says it in place of the state. A long path gives way first, cut short with its whole in a tooltip, so the head stays one 44 px line (`model.spec.ts`, on publishing).
+  - **Left as a difference from design 03:** the head names the file by its path as the URL does (AC-002), "cubes/orders.yml". Design 03 prefixes it "model/".
   - Files: `packages/web/src/workspaces/model/{FileTree,ModelFilePage}.tsx` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
   - Failing test: `FileTree.test.tsx` and `model-design.spec.ts`:
     - **The tree** (MW-02, MW-03, MW-04):

@@ -29,8 +29,8 @@ describe('the model’s file tree (AC-222)', () => {
   it('lists every file under its folder, each a link to it, the open one current', () => {
     const { nav } = tree();
     // In its folder, not merely beside it.
-    const cubes = within(nav).getByRole('group', { name: 'cubes/' });
-    expect(cubes.getAttribute('aria-label')).toBe('cubes/');
+    const cubes = within(nav).getByRole('group', { name: 'model/cubes/' });
+    expect(cubes.getAttribute('aria-label')).toBe('model/cubes/');
     const orders = within(cubes).getByRole('link', { name: /^orders\.yml/ });
     expect(orders.getAttribute('href')).toBe('/model/files/cubes%2Forders.yml');
     expect(orders.getAttribute('aria-current')).toBe('page');
@@ -97,6 +97,124 @@ describe('the model’s file tree (AC-222)', () => {
     expect(within(nav).getByRole('link', { name: /^orders\.yml/ }).textContent).not.toContain(
       'problems',
     );
+  });
+
+  describe('drawn as design 03 note 1 (T479, AC-344)', () => {
+    it('heads the tree "Model" with the model’s state, in words beside its icon', () => {
+      tree();
+      const head = screen.getByRole('heading', { level: 2, name: 'Model' });
+      const state = head.parentElement?.querySelector('.model-tree__state');
+      expect(state?.textContent).toBe('All published');
+      expect(state?.querySelector('svg')?.getAttribute('data-icon')).toBe('ok');
+      // In the status colour, as design 03's .status.ok (T479's review).
+      expect(state?.classList.contains('model-tree__state--ok')).toBe(true);
+    });
+
+    it('counts the files not yet published in the head', () => {
+      tree({ unpublished: new Set(['cubes/orders.yml', 'views/summary.yml']) });
+      const state = screen
+        .getByRole('heading', { level: 2, name: 'Model' })
+        .parentElement?.querySelector('.model-tree__state');
+      expect(state?.textContent).toBe('2 unpublished');
+      expect(state?.querySelector('svg')?.getAttribute('data-icon')).toBe('idle');
+    });
+
+    it('draws each folder as a row under model/ that folds its files away', async () => {
+      const { nav } = tree();
+      const folder = within(nav).getByRole('button', { name: 'model/cubes/' });
+      expect(folder.getAttribute('aria-expanded')).toBe('true');
+      const cubes = within(nav).getByRole('group', { name: 'model/cubes/' });
+      expect(folder.getAttribute('aria-controls')).toBe(cubes.id);
+      expect(within(cubes).getByRole('link', { name: /^orders\.yml/ }).isConnected).toBe(true);
+      // The model's own root is model/.
+      expect(
+        within(nav).getByRole('button', { name: 'model/' }).getAttribute('aria-expanded'),
+      ).toBe('true');
+
+      // Folded: the open file is in cubes/, so fold views/ to see one go.
+      const views = within(nav).getByRole('button', { name: 'model/views/' });
+      await userEvent.click(views);
+      expect(views.getAttribute('aria-expanded')).toBe('false');
+      expect(within(nav).queryByRole('link', { name: /^summary\.yml/ })).toBeNull();
+      // The others stay open.
+      expect(within(nav).getByRole('link', { name: /^orders\.yml/ }).isConnected).toBe(true);
+      await userEvent.click(views);
+      expect(within(nav).getByRole('link', { name: /^summary\.yml/ }).isConnected).toBe(true);
+    });
+
+    it('folds the open file’s folder too, and opens a folder again when a file in it opens', async () => {
+      const props = { files: FILES, onOpen: vi.fn(), onNew: vi.fn() };
+      const { rerender } = render(<FileTree {...props} current="cubes/orders.yml" />);
+      const nav = screen.getByRole('navigation', { name: 'Model files' });
+      // Any folder folds, the open file's too (T479's review): no press does nothing.
+      const cubes = within(nav).getByRole('button', { name: 'model/cubes/' });
+      await userEvent.click(cubes);
+      expect(cubes.getAttribute('aria-expanded')).toBe('false');
+      expect(within(nav).queryByRole('link', { name: /^orders\.yml/ })).toBeNull();
+      await userEvent.click(within(nav).getByRole('button', { name: 'model/views/' }));
+      // Opening a file in a folded folder — from a link, the overview — shows its row.
+      rerender(<FileTree {...props} current="views/summary.yml" />);
+      expect(
+        within(nav).getByRole('button', { name: 'model/views/' }).getAttribute('aria-expanded'),
+      ).toBe('true');
+      expect(
+        within(nav)
+          .getByRole('link', { name: /^summary\.yml/ })
+          .getAttribute('aria-current'),
+      ).toBe('page');
+      // The other stays as it was left.
+      expect(cubes.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('keeps each folder’s files a list, named as a group around it', () => {
+      const { nav } = tree();
+      const cubes = within(nav).getByRole('group', { name: 'model/cubes/' });
+      expect(within(cubes).getByRole('list').children).toHaveLength(2);
+      expect(within(cubes).getAllByRole('listitem')).toHaveLength(2);
+    });
+
+    it('tags a file the form can’t open with its kind, read-only', () => {
+      const jinja = {
+        path: 'cubes/templated.yml',
+        content: 'cubes:\n  {% for n in [1] %}\n  - name: t{{ n }}\n  {% endfor %}\n',
+      };
+      const { nav } = tree({ files: [...FILES, jinja] });
+      const tag = within(nav)
+        .getByRole('link', { name: /^templated\.yml/ })
+        .querySelector('.model-tree__kind');
+      // Read-only said as well as shown on a hover (T479's review).
+      expect(tag?.textContent).toBe('Jinja, read-only');
+      expect(tag?.querySelector('.visually-hidden')?.textContent).toBe(', read-only');
+      expect(tag?.getAttribute('title')).toBe('Jinja template · read-only here');
+      expect(
+        within(nav)
+          .getByRole('link', { name: /^globals\.py/ })
+          .querySelector('.model-tree__kind')?.textContent,
+      ).toBe('Python, read-only');
+      expect(
+        within(nav)
+          .getByRole('link', { name: /^orders\.yml/ })
+          .querySelector('.model-tree__kind'),
+      ).toBeNull();
+    });
+
+    it('offers New cube, New view and Generate cubes under the tree, after its files', async () => {
+      const onGenerate = vi.fn();
+      const { nav, onNew } = tree({ onGenerate });
+      const actions = nav.querySelector('.model-tree__actions');
+      expect(
+        [...(actions?.querySelectorAll('button') ?? [])].map((button) => button.textContent),
+      ).toEqual(['+ New cube', '+ New view', '+ Generate cubes']);
+      // After the files, not over them.
+      const lastFile = within(nav).getAllByRole('link').at(-1);
+      expect(
+        (lastFile?.compareDocumentPosition(actions as Node) ?? 0) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      await userEvent.click(within(nav).getByRole('button', { name: 'Generate cubes' }));
+      expect(onGenerate).toHaveBeenCalledTimes(1);
+      expect(onNew).not.toHaveBeenCalled();
+    });
   });
 
   it('says a file not yet published is new', () => {

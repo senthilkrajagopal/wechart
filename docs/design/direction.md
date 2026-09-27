@@ -435,7 +435,7 @@ Two further changes made at the same time, neither of them a contrast failure:
 The user asked that the UI "align with the ui styles in" the design prototype (`docs/design/prototype/`). Where the prototype's component rules differ from §3–5, the prototype's rule is followed, and each difference is recorded here:
 
 - **Radius:** buttons, icon buttons, filter pills, tiles and panels are 6 px, where §4 says 4 px for controls. Inputs and selects stay 4 px, and a pill's scope tag is 3 px.
-- **13 px type**, which is outside the §3 scale, on filter pills and page tabs.
+- **13 px type**, which is outside the §3 scale, on filter pills and page tabs. *(2026-09-27, T479, R34: also the file's path in the model editor's head, 13/600 in the code face, as phase-1 design 03 draws it. It heads an editor pane, not a page: the Model overview's title stays 20/600.)*
 - **Inspector controls** (the Properties panel) are 28 px at 12 px (`.input.sm`), as §4's compact row for inspectors.
 - **`bg-hover`**, a token not in §5, for a hovered button or row. Light `#efeeea`, dark `#2c2c2a`. These are the nearest shades to the prototype's that pass the contrast audit (AC-005); the prototype's own `#e9e8e4` does not.
 - **`bg-role-dimension-soft`**, the prototype's `--role-dim-soft`, a token not in §5: the avatar's ground, under `role-dimension` initials. Light `#e6eef8`, dark `#1d2a3a`, the prototype's own values. `role-dimension` on it is 4.68:1 in light and 6.44:1 in dark, and the pair is audited with the other tints (T245).

@@ -78,10 +78,6 @@ for (const path of [
   '/data-sources',
   '/explore',
   // A page inside a workspace is titled the same way.
-  '/model/files/cubes%2Forders.yml',
-  // A file that is code, and one there is none of (T234's review).
-  '/model/files/cubes%2Ftemplated_example.yml',
-  '/model/files/cubes%2Fno_such_file.yml',
   '/explore/charts/seed-chart-status',
   // Not the chart editor: its title is the chart's own, an editable field in
   // its one header row (AC-214), as the prototype's editor has it.
@@ -96,6 +92,31 @@ for (const path of [
         return [style.fontSize, style.fontWeight, style.lineHeight];
       }),
     ).toEqual(['20px', '600', '26px']);
+  });
+
+// AC-231 as amended by R34: a model file is headed by its path in the editor's
+// head, at design 03's 13/600 in the code face — a file, one that is code, and
+// one there is none of (T234's review) — not by a page title (T479, D1).
+for (const path of [
+  '/model/files/cubes%2Forders.yml',
+  '/model/files/cubes%2Ftemplated_example.yml',
+  '/model/files/cubes%2Fno_such_file.yml',
+])
+  test(`${path} is headed by its path, 13 px at 600 in the code face`, async ({ page }) => {
+    await page.goto(path);
+    const title = page.getByRole('main').getByRole('heading', { level: 1 }).first();
+    await expect(title).toBeVisible();
+    expect(
+      await title.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return [
+          style.fontSize,
+          style.fontWeight,
+          style.lineHeight,
+          style.fontFamily.split(',')[0]?.replace(/"/g, ''),
+        ];
+      }),
+    ).toEqual(['13px', '600', '20px', 'IBM Plex Mono']);
   });
 
 for (const [path, name] of [

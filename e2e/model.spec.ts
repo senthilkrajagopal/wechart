@@ -209,6 +209,10 @@ test('a model change Cube compiles is published, and Cube serves it', async ({
     PUBLISHED,
   );
   await expect(page.getByRole('button', { name: 'Save & reload Cube' })).toBeDisabled();
+  // Said once, in the head's one 44 px line, however long the path (T479's review).
+  const head = page.getByRole('region', { name: 'Form editor' }).locator('.model-editor__head');
+  expect(Math.round((await head.boundingBox())?.height ?? 0)).toBe(44);
+  await expect(head.locator('.model-editor__state')).toHaveCount(0);
   const stored = (await (await page.request.get('/api/model/files')).json()) as {
     files: { path: string; content: string }[];
   };

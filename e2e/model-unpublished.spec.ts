@@ -39,7 +39,8 @@ test('a value Cube would refuse is a problem at its line, and an unpublished edi
   await expect(problems).toContainText('No problems in cubes/orders.yml');
   await expect(head).not.toContainText('Unpublished changes');
   await expect(row).not.toContainText('unpublished');
-  await expect(head.getByRole('button', { name: 'Discard' })).toHaveCount(0);
+  // Shown at rest but not to be pressed, as design 03 draws it (T479, D2).
+  await expect(head.getByRole('button', { name: 'Discard' })).toBeDisabled();
   expect(await asksBeforeUnload(page)).toBe(false);
 
   // AC-227: `type: sum` made `summ` on line 36 — it parses; Cube would refuse it.
@@ -86,6 +87,7 @@ test('a value Cube would refuse is a problem at its line, and an unpublished edi
   await expect(problems).toContainText('No problems in cubes/orders.yml');
   await expect(head).not.toContainText('Unpublished changes');
   await expect(row).not.toContainText('unpublished');
+  await expect(head.getByRole('button', { name: 'Discard' })).toBeDisabled();
   expect(await asksBeforeUnload(page)).toBe(false);
   await tree.getByRole('link', { name: /^customers\.yml/ }).click();
   await expect(page).toHaveURL(/\/model\/files\/cubes%2Fcustomers\.yml$/);

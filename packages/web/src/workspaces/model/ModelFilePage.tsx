@@ -501,24 +501,29 @@ function FileEditor({
       */}
       <section className="model-editor__pane" aria-label="Form editor">
         <div className="model-editor__head">
-          {/* It names the object the URL selected, as every deep link does (AC-002). */}
-          <h1 className="workspace-title model-editor__path" data-testid="selected-object">
+          {/* It names the object the URL selected, as every deep link does (AC-002):
+              the editor's head, at design 03's 13/600 (T479, D1). */}
+          <h1 className="model-editor__path" data-testid="selected-object" title={path}>
             {path}
           </h1>
-          {changed ? (
-            // Said beside the file's actions, with its icon (AC-226; direction.md rule 3).
-            // A state the head keeps, not news: no live region to announce it.
-            <span className="model-editor__changed">
-              <StatusIcon kind="idle" />
-              Unpublished changes
+          {/* The file's state, with its icon and in words (AC-226; direction.md
+              rule 3; design 03 note 2 and state C). A state the head keeps, not
+              news: no live region to announce it. Just published, the outcome
+              says it instead, the one line the head has room for (T479's review). */}
+          {outcome?.ok === true && !changed ? null : (
+            <span
+              className={`model-editor__state${published && !changed ? ' model-editor__state--ok' : ''}`}
+            >
+              <StatusIcon kind={published && !changed ? 'ok' : 'idle'} />
+              {!published
+                ? 'New file · not published'
+                : changed
+                  ? 'Unpublished changes'
+                  : 'Published · no changes'}
             </span>
-          ) : null}
-          {changed && (published || onDiscard !== undefined) ? (
-            <button type="button" className="btn-sm" onClick={discard}>
-              Discard
-            </button>
-          ) : null}
-          {outcome === null ? null : (
+          )}
+          {/* Edited since: "Published" no longer holds, and only the state is said. */}
+          {outcome === null || (outcome.ok && changed) ? null : (
             <StateLine
               kind={outcome.ok ? 'ok' : 'err'}
               className={`model-editor__outcome${outcome.ok ? '' : ' model-editor__outcome--failed'}`}
@@ -526,6 +531,16 @@ function FileEditor({
               {outcome.text}
             </StateLine>
           )}
+          {/* Both always there, as design 03 draws them; pressed only with a
+              change (D2) — a file made here always has one to discard. */}
+          <button
+            type="button"
+            className="btn-sm model-editor__discard"
+            disabled={published ? !changed : onDiscard === undefined}
+            onClick={discard}
+          >
+            Discard
+          </button>
           <button
             ref={saveButton}
             type="button"
@@ -749,13 +764,13 @@ function FileEditor({
 
 /**
  * A page with no editor — a file that is code, one there is none of, one
- * still being read — headed as the editor is, by its path (AC-002, AC-231).
+ * still being read — headed as the editor is, by its path (AC-002; T479).
  */
 function Solo({ path, children }: { path: string; children: ReactNode }) {
   return (
     <div className="model-page__solo">
       <div className="model-editor__head">
-        <h1 className="workspace-title model-editor__path" data-testid="selected-object">
+        <h1 className="model-editor__path" data-testid="selected-object">
           {path}
         </h1>
       </div>

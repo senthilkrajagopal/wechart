@@ -605,8 +605,9 @@ main:has(.explore) {
 
 /* The Model workspace's files (T137, AC-131): each file a card, and under it
    the cubes and views it defines, their members grouped by kind. */
-/* Spacing only: its size is .workspace-title's, the page title every
-   workspace shares (AC-231). */
+/* Spacing only: the overview's size is .workspace-title's, the page title
+   every workspace shares (AC-231); a file's path heads its editor at 13/600
+   (T479). */
 .model-workspace h1 { margin: 0 0 16px; }
 .model-files { display: grid; gap: 12px; max-width: 960px; }
 .model-file {
@@ -695,25 +696,58 @@ main:has(.model-page) {
 .model-page__overview { flex: 1; min-height: 0; overflow: auto; padding: var(--wc-surface-padding); }
 .model-page__overview > .info-bar { margin-bottom: 12px; }
 .model-tree { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--wc-border-subtle); background: var(--wc-bg-surface); }
-.model-tree__head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 48px; padding: 8px 12px; border-bottom: 1px solid var(--wc-border-subtle); }
-.model-tree__head h2 { flex: 1 0 100%; margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: var(--wc-text-sm-strong-weight); }
-.model-tree__body { flex: 1; min-height: 0; overflow: auto; padding: 8px; }
+/* Design 03 note 1 (T479): a 44 px head, "Model" and the model's state; folder
+   rows under model/ that fold; files in 28 px rows, the open one a full-width
+   accent-soft row; New cube, New view and Generate cubes after the files. */
+.model-tree__head { flex: none; display: flex; gap: 8px; align-items: center; min-height: 44px; padding: 8px 12px; border-bottom: 1px solid var(--wc-border-subtle); }
+.model-tree__head h2 { margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: var(--wc-text-sm-strong-weight); }
+.model-tree__state { display: inline-flex; gap: 4px; align-items: center; margin-left: auto; color: var(--wc-text-secondary); font-size: 12px; line-height: 16px; white-space: nowrap; }
+.model-tree__body { flex: 1; min-height: 0; overflow: auto; padding: 4px 0; }
+.model-tree__folder + .model-tree__folder { margin-top: 4px; }
 .model-tree__folder ul { margin: 0; padding: 0; list-style: none; }
-.model-tree__dir { margin: 8px 0 2px; padding: 0 8px; color: var(--wc-text-secondary); font: 12px/16px var(--wc-font-code); }
-.model-tree__folder:first-child .model-tree__dir { margin-top: 0; }
+.model-workspace button.model-tree__dir {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--wc-text-secondary);
+  font: 600 12px/16px var(--wc-font-code);
+  text-align: left;
+  cursor: pointer;
+}
+.model-workspace button.model-tree__dir:hover { background: var(--wc-bg-hover); }
+.model-tree__caret { flex: none; width: 10px; }
 .model-tree__file {
   display: flex;
   gap: 6px;
   align-items: center;
   min-height: 28px;
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 2px 12px 2px 28px;
   color: var(--wc-text-primary);
   font: 12px/16px var(--wc-font-code);
   text-decoration: none;
 }
 .model-tree__file:hover { background: var(--wc-bg-hover); }
 .model-tree__file[aria-current='page'] { background: var(--wc-bg-accent-soft); color: var(--wc-accent); font-weight: 600; }
+/* Focus drawn inside the row, as its state, not a ring round it (MW-04). */
+.model-tree :is(.model-tree__file, .model-tree__dir):focus-visible { outline-offset: -2px; border-radius: 0; }
+/* A file the form can't open: its kind, as design 03's tag, at 12 px (D5). */
+.model-tree__kind {
+  flex: none;
+  margin-left: auto;
+  padding: 0 4px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 3px;
+  color: var(--wc-text-muted);
+  font: 600 12px/16px Inter, system-ui, sans-serif;
+}
+.model-tree__actions { display: grid; gap: 6px; margin-top: 8px; padding: 12px; border-top: 1px solid var(--wc-border-subtle); }
+.model-tree__actions .btn-sm { display: flex; align-items: center; justify-content: flex-start; text-align: left; }
 .model-tree__name { min-width: 0; overflow-wrap: anywhere; }
 .model-tree__tag,
 .model-tree__mark {
@@ -836,22 +870,37 @@ main:has(.model-page) {
 .join-editor__add input, .join-editor__add select { width: 100%; height: 28px; font-size: 12px; }
 .join-editor__add button { justify-self: start; }
 /* The prototype's editor head: the file's one action, and how it went (T142). */
+/* Design 03's .editor-head (T479): 44 px, padded 6/12. */
 .model-editor__head {
   flex: none;
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
-  min-height: 48px;
-  padding: 8px 16px;
+  min-height: 44px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--wc-border-subtle);
   background: var(--wc-bg-surface);
 }
-/* The file's path heads its form: the page title's size (AC-231), in the
-   code face a path is written in (AC-223). */
-.model-workspace .model-editor__path { flex: 1; min-width: 0; margin: 0; font-family: var(--wc-font-code); overflow-wrap: anywhere; }
-.model-editor__outcome { margin: 0; color: var(--wc-text-secondary); font-size: 12px; }
-/* The file's unpublished changes, beside Discard (T237, AC-226). */
-.model-editor__changed {
+/* The file's path heads its form in the code face a path is written in
+   (AC-223), at design 03's 13/600: the editor's head, not a page title (D1). */
+/* One line, the head's 44 px holding whatever it says (T479's review): a long
+   path gives way first, cut short with its whole in its tooltip; an outcome
+   takes up to two lines of its own; the state and the actions never wrap. */
+.model-workspace .model-editor__path {
+  flex: 0 100 auto;
+  min-width: 64px;
+  margin: 0;
+  overflow: hidden;
+  font: 600 13px/20px var(--wc-font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-editor__outcome { flex: 0 0 auto; max-width: 50%; margin: 0; color: var(--wc-text-secondary); font-size: 12px; line-height: 16px; }
+.model-editor__head .btn-sm { flex: none; white-space: nowrap; }
+/* The file's actions at the head's end, Discard beside Save (design 03 note 2). */
+.model-editor__discard { margin-left: auto; }
+/* The file's state beside its path: published, unpublished changes, or new (T237, T479, AC-226). */
+.model-editor__state {
   display: inline-flex;
   flex: none;
   gap: 4px;
@@ -860,6 +909,9 @@ main:has(.model-page) {
   font-size: 12px;
   white-space: nowrap;
 }
+/* Published, and the whole model: design 03's .status.ok, in the status colour (T479's review). */
+.model-editor__state--ok,
+.model-tree__state--ok { color: var(--wc-status-success); }
 /* Leaving with them asks first: the warning bar under the head, in view
    however far the form is scrolled. */
 .model-editor__warnbar.model-editor__leave { flex: none; align-items: center; }
