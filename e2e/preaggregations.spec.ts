@@ -337,6 +337,8 @@ test('taking away a member another file’s rollup names is refused, and that ro
   await page.goto(`/model/files/${encodeURIComponent(basePath)}`);
   const form = page.getByRole('region', { name: `Cube ${base}` });
   await form.getByRole('tab', { name: /^Dimensions/ }).click();
+  // Remove is inside the open member since T480.
+  await form.locator('.model-member__name', { hasText: /^region$/ }).click();
   await form.getByRole('button', { name: /^Remove .* region$/ }).click();
   await page.getByRole('button', { name: 'Save & reload Cube' }).click();
 

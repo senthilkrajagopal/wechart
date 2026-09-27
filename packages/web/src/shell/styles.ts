@@ -1061,7 +1061,9 @@ button.model-problems__row { cursor: pointer; }
 .model-form > .model-form__tabs { flex: none; gap: 0; }
 .model-form > .model-form__tabs button { padding: 0 8px; }
 .model-form__count { color: var(--wc-text-muted); font-weight: 400; }
-.model-form__panel { padding: 12px; }
+/* Members run flush to the pane under their rules; a form of fields is inset 12. */
+.model-form__panel { padding: 0; }
+.model-form__lock > .model-form__fields { padding: 12px; }
 .model-form__fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1073,16 +1075,19 @@ button.model-problems__row { cursor: pointer; }
 .model-form__fields > .model-field--object,
 .model-form__fields > .model-field--list,
 .model-form__legacy { grid-column: 1 / -1; }
-/* Inspector controls, 28 px at 12 px (direction.md §7d), over the global
-   32 px input rule, which outranks a bare class. */
-.model-field input:not([type='checkbox']):not([type='radio']),
-.model-field select { width: 100%; height: 28px; font-size: 12px; }
-.model-field__sql,
-.model-field__yaml {
+/* Inspector controls, 28 px at 12 px (direction.md §7d; UX-107, MW-09), over
+   the global 32 px input rule, which the bare class lost to. */
+.model-workspace .model-field input:not([type='checkbox']):not([type='radio']),
+.model-workspace .model-field select { width: 100%; height: 28px; font-size: 12px; }
+/* Design 03's .ta (MW-09): 48 px at least, 12/18 in the code face. */
+.model-workspace .model-field__sql,
+.model-workspace .model-field__yaml {
   width: 100%;
-  font-family: var(--wc-font-code);
-  font-size: 12px;
+  min-height: 48px;
+  font: 12px/18px var(--wc-font-code);
 }
+/* A description runs the full width, as design 03 draws it (T480's review). */
+.model-form__fields > .model-field[data-key='description'] { grid-column: 1 / -1; }
 .model-field__flag { display: flex; gap: 6px; }
 fieldset.model-field {
   margin: 0;
@@ -1102,27 +1107,67 @@ fieldset.model-field > legend {
   font-size: 12px;
 }
 .model-form__legacy[open] > summary { margin-bottom: 8px; }
-.model-members { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.model-member {
-  padding: 6px 8px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 6px;
-}
-.model-member[open] > summary { margin-bottom: 8px; }
-.model-member__name { font-weight: 600; }
-/* A member's row with its Remove beside it, and the list's "+ measure" under
-   it, as the prototype's .formbar. */
-.model-members-block { display: grid; gap: 6px; justify-items: start; }
-.model-members-block > .model-members { width: 100%; }
-.model-members__item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+/* Design 03's .mrow (T480, MW-10): members as rows under rules, not boxes,
+   flush to the pane; the list closed by "+ dimension · n total". */
+.model-members { display: grid; margin: 0; padding: 0; list-style: none; }
+.model-members-block { display: grid; }
+.model-members__item { display: grid; grid-template-columns: minmax(0, 1fr); border-bottom: 1px solid var(--wc-border-subtle); }
+.model-member { padding: 0; border: 0; border-radius: 0; }
+.model-member__name { font-family: var(--wc-font-code); font-weight: 600; }
+.model-members__foot { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--wc-border-subtle); }
+.model-members__total { color: var(--wc-text-muted); font-size: 12px; line-height: 16px; }
+/* An open member (design 03 note 6): its fields on the subtle ground, inset
+   under its name, Remove at its foot. */
+.model-member > .model-form__fields,
+.model-member > .model-member__foot { background: var(--wc-bg-subtle); }
+.model-member > .model-form__fields { padding: 4px 12px 8px 40px; }
+.model-member > .model-member__foot { display: flex; justify-content: flex-end; padding: 0 12px 12px 40px; }
+.model-workspace .model-member__remove { border-color: transparent; background: none; color: var(--wc-status-error); }
+.model-workspace .model-member__remove:hover:not(:disabled) { background: var(--wc-bg-hover); }
+/* The rarer groups under Advanced, named by their keys (MW-12). */
+.model-form__advanced { grid-column: 1 / -1; }
+.model-form__advanced > summary {
+  display: flex;
   gap: 6px;
-  align-items: start;
+  align-items: baseline;
+  padding-top: 8px;
+  color: var(--wc-text-secondary);
+  font: 600 12px/16px Inter, system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  list-style: none;
 }
-.model-members__item > .model-members__remove { grid-column: 2; grid-row: 1; }
+.model-form__advanced > summary::-webkit-details-marker { display: none; }
+.model-form__advanced > summary::before { content: '▸' / ''; color: var(--wc-text-muted); }
+.model-form__advanced[open] > summary::before { content: '▾' / ''; }
+.model-form__advanced-keys {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--wc-text-muted);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+.model-form__advanced[open] > .model-form__group { margin-top: 8px; }
+/* A boolean as design 03's switch, its label, Cube's default, and the switch
+   at the row's end. */
+/* Over .field's stacked grid, which comes later. */
+.field.model-field--switch { display: flex; gap: 6px; align-items: center; min-height: 28px; font-size: 12px; }
+.field.model-field--switch > label { font-size: 12px; font-weight: 400; color: var(--wc-text-primary); }
+.model-field__default { flex: 1; color: var(--wc-text-muted); }
+.model-workspace .model-field__expression {
+  height: 20px;
+  padding: 0 4px;
+  border-color: transparent;
+  background: none;
+  color: var(--wc-text-muted);
+  font: 400 12px/16px var(--wc-font-code);
+}
 /* What a rollup declares, under it in the list (T148, AC-142): label and
-   value in two columns, in the member's own inset. */
+   value in two columns, under its name. */
 .rollup-facts {
   grid-column: 1;
   grid-row: 2;
@@ -1130,7 +1175,7 @@ fieldset.model-field > legend {
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 2px 12px;
   margin: 0;
-  padding: 0 9px 4px;
+  padding: 0 12px 6px 36px;
   font-size: 12px;
   line-height: 16px;
 }
@@ -1140,7 +1185,7 @@ fieldset.model-field > legend {
   grid-column: 1;
   grid-row: 3;
   margin: 0;
-  padding: 0 9px 4px;
+  padding: 0 12px 6px 36px;
   font-size: 12px;
   line-height: 16px;
   color: var(--wc-text-primary);
@@ -1157,36 +1202,44 @@ fieldset.model-field > legend {
 .rollup-facts dt { color: var(--wc-text-muted); }
 .rollup-facts dd { margin: 0; color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 .model-field__problem { color: var(--wc-status-error); font-size: 12px; }
-.model-member__type {
-  margin-left: 8px;
-  color: var(--wc-text-secondary);
-  font-family: var(--wc-font-code);
+.model-member__type { grid-column: 3; color: var(--wc-text-secondary); }
+/* A member's row, collapsed (T236, AC-225), as design 03's .mrow-head (T480):
+   the caret, its name and badges, its type on the right, and its SQL on a
+   line of its own under the name. */
+.model-member > summary {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 16px;
+  list-style: none;
+  cursor: pointer;
 }
-/* A member's row, collapsed (T236, AC-225), as the prototype's .mrow-head:
-   its name and badges, its type, and a line of its SQL. */
-.model-member > summary { display: flex; flex-wrap: nowrap; gap: 6px; align-items: baseline; min-width: 0; list-style: none; }
-/* A flex summary draws no marker of its own: the prototype's caret
+.model-member > summary:hover { background: var(--wc-bg-hover); }
+/* A grid summary draws no marker of its own: the prototype's caret
    (model.js), closed and open, silent to a screen reader, which hears the
    row's expanded state instead. */
 .model-member > summary::-webkit-details-marker { display: none; }
-.model-member > summary::before { content: '▸' / ''; flex: none; width: 10px; color: var(--wc-text-muted); }
+.model-member > summary::before { content: '▸' / ''; grid-column: 1; color: var(--wc-text-muted); font-size: 12px; }
 .model-member[open] > summary::before { content: '▾' / ''; }
+.model-member__names { grid-column: 2; display: flex; gap: 6px; align-items: center; min-width: 0; }
+/* Design 03's .mbadge, at direction's 12 px floor (D5), square as a tag (UX-119). */
 .model-member__badge {
   flex: none;
-  padding: 0 6px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 999px;
+  padding: 0 5px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 3px;
   color: var(--wc-text-secondary);
-  font-size: 12px;
-  line-height: 16px;
+  font: 600 12px/16px Inter, system-ui, sans-serif;
 }
 .model-member__sql {
-  flex: 1;
+  grid-column: 2 / -1;
   min-width: 0;
   overflow: hidden;
   color: var(--wc-text-muted);
   font: 12px/16px var(--wc-font-code);
-  text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

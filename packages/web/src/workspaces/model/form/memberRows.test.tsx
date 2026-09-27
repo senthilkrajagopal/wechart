@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { MemberList } from './ObjectForm';
@@ -34,13 +35,17 @@ const row = (name: string) => {
   return found;
 };
 
-/** The keys a member's own form offers — not a nested object's — in its order. */
+/**
+ * The keys a member's own form offers — not a nested object's — in its order:
+ * its groups', those under Advanced (T480), and its legacy keys.
+ */
 const ownKeys = (item: HTMLElement) =>
   [
     ...item.querySelectorAll(
       [
         ':scope > .model-member > .model-form__fields > [data-key]',
         ':scope > .model-member > .model-form__fields > .model-form__group > .model-form__fields > [data-key]',
+        ':scope > .model-member > .model-form__fields > .model-form__advanced > .model-form__group > .model-form__fields > [data-key]',
         ':scope > .model-member > .model-form__fields > details > [data-key]',
       ].join(', '),
     ),
@@ -90,7 +95,8 @@ describe('a member’s row (AC-225)', () => {
     const badges = (name: string) =>
       [...row(name).querySelectorAll('.model-member__badge')].map((badge) => badge.textContent);
     expect(badges('id')).toEqual(['PK', 'hidden']);
-    expect(badges('shown')).toEqual(['PK']);
+    // Made public, it says so, as design 03 badges `id` (T480).
+    expect(badges('shown')).toEqual(['PK', 'public']);
   });
 
   it('offers a CASE by how a dimension is defined, not by its type', () => {
@@ -163,6 +169,309 @@ describe('a member’s row (AC-225)', () => {
     expect(place.getByRole('group', { name: 'Geography' })).toBeTruthy();
     // Defined by its point, it has no SQL of its own to offer.
     expect(place.queryByLabelText('SQL')).toBeNull();
+  });
+
+  describe('as design 03 notes 5–7 draw it (T480, AC-344)', () => {
+    it('keeps Remove off the row: it is at the foot of the open member, named for it', async () => {
+      const onChange = vi.fn();
+      render(<MemberList schema={SCHEMA['Y.6']} items={DIMENSIONS} onChange={onChange} />);
+      const status = row('status');
+      const summary = status.querySelector('summary');
+      expect(summary?.querySelector('button')).toBeNull();
+      // Not beside the member either: inside it, at its foot, only seen open.
+      expect(status.querySelectorAll(':scope > button')).toHaveLength(0);
+      await userEvent.click(
+        within(status).getByText('status', { selector: '.model-member__name' }),
+      );
+      const remove = within(status).getByRole('button', { name: 'Remove dimension status' });
+      expect(remove.textContent).toBe('Remove dimension');
+      // At the foot, after every field.
+      const fields = status.querySelector('.model-member > .model-form__fields');
+      expect(
+        (fields?.compareDocumentPosition(remove) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      await userEvent.click(remove);
+      expect(onChange).toHaveBeenCalledWith(DIMENSIONS.filter((each) => each.name !== 'status'));
+    });
+
+    it('puts a join’s relationship where a member’s type goes, in words', () => {
+      render(
+        <MemberList
+          schema={SCHEMA['Y.5']}
+          items={[
+            {
+              name: 'customers',
+              sql: '{CUBE}.customer_id = {customers}.id',
+              relationship: 'many_to_one',
+            },
+          ]}
+          onChange={vi.fn()}
+        />,
+      );
+      const join = screen.getByRole('listitem');
+      expect(join.querySelector('.model-member__type')?.textContent).toBe('many to one');
+      expect(join.querySelector('.model-member__sql')?.textContent).toBe(
+        '{CUBE}.customer_id = {customers}.id',
+      );
+    });
+
+    it('ends the list with “+ dimension” and how many there are', () => {
+      list();
+      const add = screen.getByRole('button', { name: 'Add dimension' });
+      expect(add.textContent).toBe('+ dimension');
+      expect(add.parentElement?.querySelector('.model-members__total')?.textContent).toBe(
+        '5 total',
+      );
+    });
+
+    it('opens a new member at once, its name focused to type over', async () => {
+      function Held() {
+        const [items, setItems] = useState<Record<string, unknown>[]>(DIMENSIONS);
+        return (
+          <MemberList
+            schema={SCHEMA['Y.6']}
+            items={items}
+            onChange={(next) => {
+              setItems(next ?? []);
+            }}
+          />
+        );
+      }
+      render(<Held />);
+      await userEvent.click(screen.getByRole('button', { name: 'Add dimension' }));
+      const added = row('dimension_1');
+      expect(added.querySelector('details')?.open).toBe(true);
+      const name = within(added).getByLabelText('Name', { exact: true });
+      expect(document.activeElement).toBe(name);
+    });
+
+    it('opens on Basics, the member’s own shape beside it, and the rest under Advanced', async () => {
+      list();
+      const status = row('status');
+      await userEvent.click(
+        within(status).getByText('status', { selector: '.model-member__name' }),
+      );
+      const basics = within(status).getByRole('group', { name: 'Basics' });
+      expect(
+        [...basics.querySelectorAll(':scope > .model-form__fields > [data-key]')].map((each) =>
+          each.getAttribute('data-key'),
+        ),
+      ).toEqual(['name', 'type', 'sql', 'title', 'format', 'description', 'public', 'primary_key']);
+      // The rest, folded: named by the keys it holds — the country code among them.
+      const advanced = status.querySelector<HTMLDetailsElement>(
+        '.model-member > .model-form__fields > .model-form__advanced',
+      );
+      expect(advanced?.open).toBe(false);
+      expect(advanced?.querySelector('summary')?.textContent).toBe(
+        'Advanced mask, sub_query, links, multi_stage, order, meta, suggest_filter_values, key, country code',
+      );
+      // A string's country-code marking is there, not in the open body.
+      expect(advanced?.querySelector('[data-setting="country-code"]')?.isConnected).toBe(true);
+      // A geographic point is how `place` is defined: in view, not folded.
+      await userEvent.click(
+        within(row('place')).getByText('place', { selector: '.model-member__name' }),
+      );
+      const point = within(row('place')).getByRole('group', { name: 'Geography' });
+      expect(point.closest('.model-form__advanced')).toBeNull();
+    });
+
+    it('opens Advanced by itself when the file writes one of its keys', () => {
+      render(
+        <MemberList
+          schema={SCHEMA['Y.6']}
+          items={[{ name: 'ordered', sql: 'x', type: 'string', order: 'desc' }]}
+          onChange={vi.fn()}
+        />,
+      );
+      const advanced = row('ordered').querySelector<HTMLDetailsElement>('.model-form__advanced');
+      expect(advanced?.open).toBe(true);
+    });
+
+    it('leaves Advanced open when the last key the user set there is cleared (T480’s review)', async () => {
+      function Held() {
+        const [items, setItems] = useState<Record<string, unknown>[]>([
+          { name: 'ordered', sql: 'x', type: 'string', order: 'desc' },
+        ]);
+        return (
+          <MemberList
+            schema={SCHEMA['Y.6']}
+            items={items}
+            onChange={(next) => {
+              setItems(next ?? []);
+            }}
+          />
+        );
+      }
+      render(<Held />);
+      const advanced = row('ordered').querySelector<HTMLDetailsElement>('.model-form__advanced');
+      expect(advanced?.open).toBe(true);
+      await userEvent.selectOptions(within(row('ordered')).getByLabelText('Order'), '');
+      expect(within(row('ordered')).getByLabelText<HTMLSelectElement>('Order').value).toBe('');
+      expect(advanced?.open).toBe(true);
+    });
+
+    it('keeps a CASE under Advanced until it defines the dimension', () => {
+      render(
+        <MemberList
+          schema={SCHEMA['Y.6']}
+          items={[
+            { name: 'late', type: 'boolean' },
+            { name: 'band', type: 'string', case: { when: [{ sql: 'x', label: 'a' }] } },
+          ]}
+          onChange={vi.fn()}
+        />,
+      );
+      const offered = within(row('late')).getByRole('group', { name: 'CASE / WHEN' });
+      expect(offered.closest('.model-form__advanced')?.isConnected).toBe(true);
+      const defining = within(row('band')).getByRole('group', { name: 'CASE / WHEN' });
+      expect(defining.closest('.model-form__advanced')).toBeNull();
+    });
+
+    it('opens nothing and moves no focus when the owner holds an add (T480’s review)', async () => {
+      const { rerender } = render(
+        <MemberList schema={SCHEMA['Y.6']} items={DIMENSIONS} onChange={vi.fn()} />,
+      );
+      const add = screen.getByRole('button', { name: 'Add dimension' });
+      await userEvent.click(add);
+      expect(document.activeElement).toBe(add);
+      // A member arrives later, from the YAML: it takes no focus and stays closed.
+      rerender(
+        <MemberList
+          schema={SCHEMA['Y.6']}
+          items={[...DIMENSIONS, { name: 'typed', sql: 'x', type: 'string' }]}
+          onChange={vi.fn()}
+        />,
+      );
+      expect(row('typed').querySelector('details')?.open).toBe(false);
+      expect(document.activeElement).toBe(add);
+    });
+
+    it('after a remove, closes the member now in its place and focuses its row (T480’s review)', async () => {
+      function Held() {
+        const [items, setItems] = useState<Record<string, unknown>[]>(DIMENSIONS);
+        return (
+          <MemberList
+            schema={SCHEMA['Y.6']}
+            items={items}
+            onChange={(next) => {
+              setItems(next ?? []);
+            }}
+          />
+        );
+      }
+      render(<Held />);
+      await userEvent.click(
+        within(row('status')).getByText('status', { selector: '.model-member__name' }),
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Remove dimension status' }));
+      expect(screen.queryByText('status', { selector: '.model-member__name' })).toBeNull();
+      const next = row('at').querySelector('details');
+      expect(next?.open).toBe(false);
+      expect(document.activeElement).toBe(next?.querySelector('summary'));
+    });
+
+    it('draws Public and Primary key as switches that show Cube’s default', async () => {
+      const onChange = vi.fn();
+      render(
+        <MemberList
+          schema={SCHEMA['Y.6']}
+          items={[
+            { name: 'status', sql: 'status', type: 'string' },
+            { name: 'id', sql: 'id', type: 'number', primary_key: true },
+          ]}
+          onChange={onChange}
+        />,
+      );
+      const status = row('status');
+      const statusPublic = within(status).getByRole('switch', { name: 'Public' });
+      // Unset: Cube's default, and said to be one.
+      expect((statusPublic as HTMLInputElement).checked).toBe(true);
+      expect(
+        document.getElementById(statusPublic.getAttribute('aria-describedby') ?? '')?.textContent,
+      ).toBe('· default on');
+      // A primary key is hidden by default.
+      const idPublic = within(row('id')).getByRole('switch', { name: 'Public' });
+      expect((idPublic as HTMLInputElement).checked).toBe(false);
+      expect(
+        document.getElementById(idPublic.getAttribute('aria-describedby') ?? '')?.textContent,
+      ).toBe('· default off');
+      expect(
+        (within(row('id')).getByRole('switch', { name: 'Primary key' }) as HTMLInputElement)
+          .checked,
+      ).toBe(true);
+
+      // Off from the default writes it; back on to the default takes the key away.
+      await userEvent.click(statusPublic);
+      expect(onChange).toHaveBeenLastCalledWith([
+        { name: 'status', sql: 'status', type: 'string', public: false },
+        { name: 'id', sql: 'id', type: 'number', primary_key: true },
+      ]);
+    });
+
+    it('writes nothing when a switch is put back to Cube’s default', async () => {
+      const onChange = vi.fn();
+      render(
+        <MemberList
+          schema={SCHEMA['Y.6']}
+          items={[{ name: 'status', sql: 'status', type: 'string', public: false }]}
+          onChange={onChange}
+        />,
+      );
+      await userEvent.click(within(row('status')).getByRole('switch', { name: 'Public' }));
+      expect(onChange).toHaveBeenLastCalledWith([
+        { name: 'status', sql: 'status', type: 'string' },
+      ]);
+    });
+
+    it('keeps an expression an expression, and offers one from the switch', async () => {
+      const onChange = vi.fn();
+      render(
+        <MemberList
+          schema={SCHEMA['Y.6']}
+          items={[
+            { name: 'secret', sql: 'x', type: 'string', public: '{ securityContext.is_admin }' },
+            { name: 'plain', sql: 'x', type: 'string' },
+          ]}
+          onChange={onChange}
+        />,
+      );
+      expect(
+        (within(row('secret')).getByLabelText('Public expression') as HTMLInputElement).value,
+      ).toBe('{ securityContext.is_admin }');
+      expect(within(row('secret')).queryByRole('switch', { name: 'Public' })).toBeNull();
+      await userEvent.click(
+        within(row('plain')).getByRole('button', { name: 'ƒx: Public as an expression' }),
+      );
+      expect(onChange).toHaveBeenLastCalledWith([
+        { name: 'secret', sql: 'x', type: 'string', public: '{ securityContext.is_admin }' },
+        { name: 'plain', sql: 'x', type: 'string', public: '' },
+      ]);
+    });
+
+    it('moves focus to the expression’s field when a switch becomes one (T480’s review)', async () => {
+      function Held() {
+        const [items, setItems] = useState<Record<string, unknown>[]>([
+          { name: 'plain', sql: 'x', type: 'string' },
+        ]);
+        return (
+          <MemberList
+            schema={SCHEMA['Y.6']}
+            items={items}
+            onChange={(next) => {
+              setItems(next ?? []);
+            }}
+          />
+        );
+      }
+      render(<Held />);
+      await userEvent.click(
+        within(row('plain')).getByRole('button', { name: 'ƒx: Public as an expression' }),
+      );
+      const expression = await within(row('plain')).findByLabelText('Public expression');
+      await vi.waitFor(() => {
+        expect(document.activeElement).toBe(expression);
+      });
+    });
   });
 
   it('never hides a key the file writes, whatever its type', async () => {

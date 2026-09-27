@@ -91,22 +91,24 @@ test('a form edit that would drop a comment names it first, and waits to be told
   const comment = '# Cube hides primary keys from metadata unless told otherwise.';
   await form.getByRole('tab', { name: /^Dimensions/ }).click();
   await form.locator('.model-member__name', { hasText: /^id$/ }).click();
+  // A switch since T480: on, as the file writes it; a primary key's default is off.
   const publicField = form
     .getByRole('listitem')
     .filter({ has: page.locator('.model-member__name', { hasText: /^id$/ }) })
     .locator('[data-key="public"]')
-    .getByLabel('Public', { exact: true });
-  await expect(publicField).toHaveValue('true');
+    .getByRole('switch', { name: 'Public' });
+  await expect(publicField).toBeChecked();
 
   // Warned, and nothing applied yet: the comment is still in the file.
-  await publicField.selectOption('');
+  // Off is the default, so the key and the comment on it would go.
+  await publicField.click();
   const warning = page.getByRole('alert').filter({ hasText: 'This edit would drop' });
   await expect(warning).toContainText(
     // Named by its first line, of four.
     'This edit would drop the comment “Cube hides primary keys from metadata unless told otherwise. This one …”.',
   );
   await expect(yaml).toContainText(comment);
-  await expect(publicField).toHaveValue('true');
+  await expect(publicField).toBeChecked();
   await expect(publicField).toBeDisabled();
   // The focus is on the choice that loses nothing, not lost with the locked field.
   await expect(warning.getByRole('button', { name: 'Keep the file' })).toBeFocused();
@@ -118,10 +120,12 @@ test('a form edit that would drop a comment names it first, and waits to be told
   await expect(publicField).toBeEnabled();
 
   // Applied anyway: the key and its comment go.
-  await publicField.selectOption('');
+  await publicField.click();
   await page.getByRole('alert').getByRole('button', { name: 'Apply anyway' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'This edit would drop' })).toHaveCount(0);
-  await expect(publicField).toHaveValue('');
+  await expect(publicField).not.toBeChecked();
+  // The key itself gone, not written false: off is a primary key's default.
+  await expect(yaml).not.toContainText('public:');
   await yaml.evaluate((element) => {
     element.scrollTop = 0;
   });
@@ -149,10 +153,11 @@ test('a model change Cube refuses is not published, and Cube’s reason is on it
   // A measure whose SQL names a member there is none of.
   await form.getByRole('tab', { name: /^Measures/ }).click();
   await form.getByRole('button', { name: 'Add measure' }).click();
-  await form.locator('.model-member__name', { hasText: /^measure_1$/ }).click();
   const measure = form
     .getByRole('listitem')
     .filter({ has: page.locator('.model-member__name', { hasText: /^measure_1$/ }) });
+  // Added, it opens on its own, its name to type over (T480).
+  await expect(measure.locator('.model-member')).toHaveAttribute('open', '');
   const own = (key: string) =>
     // In its named group (T236, AC-225).
     measure.locator(
@@ -764,7 +769,8 @@ test('a member’s row shows its type, SQL and badges, and opens on the fields t
   await expect(id.locator('.model-member__type')).toHaveText('number');
   await expect(id.locator('.model-member__sql')).toHaveText('id');
   await expect(id.locator('.model-member__sql')).toBeVisible();
-  await expect(id.locator('.model-member__badge')).toHaveText(['PK']);
+  // The seed's id is made public, which design 03 badges (T480).
+  await expect(id.locator('.model-member__badge')).toHaveText(['PK', 'public']);
   // Its caret says it opens, and then that it is open.
   const caret = () =>
     id

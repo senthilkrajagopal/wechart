@@ -231,6 +231,122 @@ test('T479: the editor head as design 03 note 2 — 44 px, a 13/600 path, its st
   await expect(page).toHaveURL(/\/model$/);
 });
 
+test('T480: members as rows that read like the YAML, opening into a short grouped form (MW-09, MW-10, MW-12)', async ({
+  page,
+}) => {
+  await page.goto(ORDERS);
+  const form = page.getByRole('region', { name: 'Cube orders' });
+  await form.getByRole('tab', { name: /^Dimensions/ }).click();
+  const list = form.getByRole('list', { name: 'Dimensions' });
+  const status = list.getByRole('listitem').filter({
+    has: page.locator('.model-member__name', { hasText: /^status$/ }),
+  });
+
+  // The name in the code face at 600; a badge a 12 px tag, square (D5, UX-119).
+  const id = list.getByRole('listitem').filter({
+    has: page.locator('.model-member__name', { hasText: /^id$/ }),
+  });
+  expect(
+    await id.locator('.model-member__name').evaluate((node) => {
+      const style = getComputedStyle(node);
+      return [style.fontFamily.split(',')[0]?.replace(/"/g, ''), style.fontWeight];
+    }),
+  ).toEqual(['IBM Plex Mono', '600']);
+  expect(
+    await id
+      .locator('.model-member__badge')
+      .first()
+      .evaluate((node) => [
+        getComputedStyle(node).fontSize,
+        getComputedStyle(node).borderTopLeftRadius,
+      ]),
+  ).toEqual(['12px', '3px']);
+
+  // A row under a rule, not a box, flush to the pane; no Remove on it.
+  const drawn = await status.evaluate((node) => {
+    const member = node.querySelector('.model-member') as HTMLElement;
+    return {
+      rule: getComputedStyle(node).borderBottomWidth,
+      box: getComputedStyle(member).borderTopWidth,
+      buttons: node.querySelectorAll(':scope > button').length,
+    };
+  });
+  expect(drawn).toEqual({ rule: '1px', box: '0px', buttons: 0 });
+  const pane = await page.getByRole('region', { name: 'Form editor' }).boundingBox();
+  const row = await status.boundingBox();
+  expect(Math.round(row?.x ?? 0)).toBe(Math.round(pane?.x ?? -1));
+  // The SQL on a line of its own, under the name; the type at the row's right.
+  const [name, sql, type] = await Promise.all([
+    status.locator('.model-member__name').boundingBox(),
+    status.locator('.model-member__sql').boundingBox(),
+    status.locator('.model-member__type').boundingBox(),
+  ]);
+  expect(sql?.y ?? 0).toBeGreaterThanOrEqual((name?.y ?? 0) + (name?.height ?? 0));
+  expect(Math.round((type?.x ?? 0) + (type?.width ?? 0))).toBe(
+    Math.round((row?.x ?? 0) + (row?.width ?? 0) - 12),
+  );
+  // "+ dimension · 3 total" closes the list.
+  await expect(
+    form.locator('.model-form__lock > .model-members-block > .model-members__foot'),
+  ).toHaveText('+ dimension3 total');
+
+  // Open: Basics on the subtle ground, 28 px controls, the switch, Remove at its foot.
+  await status.locator('.model-member > summary').first().click();
+  const body = status.locator('.model-member > .model-form__fields');
+  expect(await body.evaluate((node) => getComputedStyle(node).paddingLeft)).toBe('40px');
+  await expect(status.getByRole('group', { name: 'Basics' })).toBeVisible();
+  const title = status.getByLabel('Title', { exact: true });
+  expect(Math.round((await title.boundingBox())?.height ?? 0)).toBe(28);
+  expect(await title.evaluate((node) => getComputedStyle(node).fontSize)).toBe('12px');
+  // On the subtle ground (design 03's .mrow-body).
+  expect(
+    await body.evaluate((node) => {
+      const probe = document.createElement('span');
+      probe.style.backgroundColor = 'var(--wc-bg-subtle)';
+      document.body.append(probe);
+      const subtle = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return getComputedStyle(node).backgroundColor === subtle;
+    }),
+  ).toBe(true);
+  // Title | Format, Description the full width, then Public | Primary key (T480's review).
+  const [titleBox, formatBox, descriptionBox, publicBox, keyBox] = await Promise.all(
+    ['title', 'format', 'description', 'public', 'primary_key'].map((key) =>
+      status
+        .locator(`.model-member > .model-form__fields [data-key="${key}"]`)
+        .first()
+        .boundingBox(),
+    ),
+  );
+  expect(Math.round(formatBox?.y ?? 0)).toBe(Math.round(titleBox?.y ?? -1));
+  expect(Math.round(descriptionBox?.width ?? 0)).toBeGreaterThan(
+    Math.round((titleBox?.width ?? 0) * 1.9),
+  );
+  expect(Math.round(keyBox?.y ?? 0)).toBe(Math.round(publicBox?.y ?? -1));
+  expect(keyBox?.x ?? 0).toBeGreaterThan(publicBox?.x ?? Infinity);
+  await expect(status.getByRole('switch', { name: 'Public' })).toBeChecked();
+  // On one line, as design 03's .inline: the label, Cube's default, the switch.
+  const publicRow = status.locator('[data-key="public"]');
+  expect(Math.round((await publicRow.boundingBox())?.height ?? 0)).toBe(28);
+  expect(
+    Math.round(
+      ((await status.getByRole('switch', { name: 'Public' }).boundingBox())?.y ?? 0) -
+        ((await publicRow.locator('label').boundingBox())?.y ?? 0),
+    ),
+  ).toBeLessThanOrEqual(4);
+  await expect(status.locator('[data-key="public"] .model-field__default')).toHaveText(
+    '· default on',
+  );
+  await expect(status.locator('.model-form__advanced')).not.toHaveAttribute('open', '');
+  await expect(status.getByRole('button', { name: 'Remove dimension status' })).toBeVisible();
+
+  // A join says its relationship where a type goes.
+  await form.getByRole('tab', { name: /^Joins/ }).click();
+  await expect(
+    form.getByRole('list', { name: 'Joins' }).locator('.model-member__type').first(),
+  ).toHaveText('many to one');
+});
+
 test('T470: a bar over the form is a band across the pane, and a view’s tabs are short too', async ({
   page,
 }) => {
@@ -242,8 +358,8 @@ test('T470: a bar over the form is a band across the pane, and a view’s tabs a
     .getByRole('listitem')
     .filter({ has: page.locator('.model-member__name', { hasText: /^id$/ }) })
     .locator('[data-key="public"]')
-    .getByLabel('Public', { exact: true })
-    .selectOption('');
+    .getByRole('switch', { name: 'Public' })
+    .click();
   // The just-in-time loss warning (AC-134), as design 03's .warnbar: the
   // pane's full width, square, ruled beneath, and above the tabs in view.
   const bar = page.getByRole('alert').filter({ hasText: 'This edit would drop' });

@@ -1,5 +1,6 @@
 import { countryCodeMarkingOf } from '@wechart/core';
-import { useContext, useId, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import { parse, stringify } from 'yaml';
 
 import { StatusIcon } from '../../../shell/StatusIcon';
@@ -406,6 +407,76 @@ function YamlControl({
   );
 }
 
+/** A boolean's value when the file doesn't write it, where the research gives one. */
+const defaultOf = (field: Field, owner: Value): boolean | undefined =>
+  typeof field.default === 'function' ? field.default(owner) : field.default;
+
+/**
+ * A boolean as design 03's switch, its label and Cube's default beside it
+ * ("Public · default on"; T480). Unwritten, it shows the default; put back to
+ * the default, the key goes. A flag — a boolean or an expression Cube
+ * evaluates — can still be made an expression.
+ */
+function SwitchRow({
+  field,
+  value,
+  owner,
+  onChange,
+}: {
+  field: Field;
+  value: unknown;
+  owner: Value;
+  onChange: (next: unknown) => void;
+}) {
+  const id = useId();
+  const fallback = defaultOf(field, owner) ?? false;
+  const on = typeof value === 'boolean' ? value : fallback;
+  return (
+    <div className="field model-field model-field--switch" data-key={field.key}>
+      <label htmlFor={id}>{field.label}</label>
+      <span id={`${id}-default`} className="model-field__default">
+        · default {fallback ? 'on' : 'off'}
+      </span>
+      {field.kind === 'flag' ? (
+        <button
+          type="button"
+          className="model-field__expression"
+          // Its visible "ƒx" in its name (WCAG 2.5.3; T480's review).
+          aria-label={`ƒx: ${field.label} as an expression`}
+          title="Use an expression Cube evaluates"
+          onClick={(event) => {
+            // The switch gives way to the expression's field: focus goes to it,
+            // not to the page (T480's review).
+            const fields = event.currentTarget.closest('.model-form__fields');
+            onChange('');
+            setTimeout(() => {
+              fields
+                ?.querySelector<HTMLInputElement>(
+                  `[data-key="${field.key}"] input[aria-label="${field.label} expression"]`,
+                )
+                ?.focus();
+            }, 0);
+          }}
+        >
+          ƒx
+        </button>
+      ) : null}
+      <input
+        id={id}
+        type="checkbox"
+        role="switch"
+        className="switch"
+        checked={on}
+        aria-describedby={`${id}-default`}
+        onChange={(event) => {
+          const next = event.target.checked;
+          onChange(next === fallback ? undefined : next);
+        }}
+      />
+    </div>
+  );
+}
+
 function FieldRow({
   field,
   value,
@@ -421,6 +492,15 @@ function FieldRow({
     onChange(write(value, field.key, next));
   };
   const shaped = fits(field, own);
+
+  // A boolean with a default the research gives, and not an expression: a switch.
+  if (
+    shaped &&
+    (field.kind === 'flag' || field.kind === 'boolean') &&
+    field.default !== undefined &&
+    typeof own !== 'string'
+  )
+    return <SwitchRow field={field} value={own} owner={value} onChange={change} />;
 
   // A list or object the schema describes is its own set of fields.
   if (shaped && field.kind === 'object' && field.of !== undefined) {
@@ -510,6 +590,34 @@ function CountryCodeRow({ value, onChange }: { value: Value; onChange: (next: Va
   );
 }
 
+/**
+ * A fold that opens itself when what it holds is written, and never closes
+ * on its own: clearing the last key a user set leaves it where they are
+ * (T480's review). Opening and closing it otherwise is the user's.
+ */
+function Fold({
+  className,
+  opened,
+  summary,
+  children,
+}: {
+  className: string;
+  opened: boolean;
+  summary: ReactNode;
+  children: ReactNode;
+}) {
+  const fold = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (opened && fold.current !== null) fold.current.open = true;
+  }, [opened]);
+  return (
+    <details ref={fold} className={className}>
+      <summary>{summary}</summary>
+      {children}
+    </details>
+  );
+}
+
 /** Every field of an object, its legacy keys set apart in a group of their own. */
 export function ObjectForm({
   schema,
@@ -542,40 +650,78 @@ export function ObjectForm({
     .filter((name): name is string => name !== undefined)
     .filter((name) => groups.has(name) || (name === 'Geography' && countryCode))
     .map((name) => [name, groups.get(name) ?? []] as const);
+  /**
+   * Design 03 note 6 (T480, MW-12): Basics open, and the groups that say how
+   * this member is defined — a CASE, switch values, a geographic point — beside
+   * it; every other group folded under Advanced, named by the keys it holds.
+   */
+  const open = (name: string) =>
+    name === 'Basics' ||
+    // A CASE is in view only on a dimension it defines; offered, it waits under Advanced.
+    (name === 'CASE / WHEN' && value['case'] !== undefined) ||
+    name === 'Switch' ||
+    (name === 'Geography' && value['type'] === 'geo');
+  const inView = shown.filter(([name]) => open(name));
+  const folded = shown.filter(([name]) => !open(name));
+  const foldsCountryCode = countryCode && folded.some(([name]) => name === 'Geography');
+  const foldedKeys = [
+    ...folded.flatMap(([, inside]) => inside.map((field) => field.key)),
+    // wechart's own setting, named with the keys it sits among (T480's review).
+    ...(foldsCountryCode ? ['country code'] : []),
+  ];
+  // Opened by itself when the file writes one of its keys: nothing written is hidden (AC-225).
+  const written =
+    folded.some(([, inside]) => inside.some((field) => read(value, field.key) !== undefined)) ||
+    (foldsCountryCode && countryCodeMarkingOf(value['meta']) !== undefined);
+  const legacyWritten = legacy.some((field) => read(value, field.key) !== undefined);
   const id = useId();
+  /** A group's title's id: its name has spaces and slashes, which an id can't (T480's review). */
+  const titleId = (name: string) => `${id}-${name.replace(/[^A-Za-z0-9]+/g, '-')}`;
+  const group = ([name, inside]: readonly [string, readonly Field[]]) => (
+    // Named by its title, said once; not a heading, in a pane headed by the file.
+    <section key={name} role="group" aria-labelledby={titleId(name)} className="model-form__group">
+      <p id={titleId(name)} className="model-form__group-title">
+        {name}
+      </p>
+      <div className="model-form__fields">
+        {inside.map((field) => (
+          <FieldRow key={field.key} field={field} value={value} onChange={onChange} />
+        ))}
+        {name === 'Geography' && countryCode ? (
+          <CountryCodeRow value={value} onChange={onChange} />
+        ) : null}
+      </div>
+    </section>
+  );
   return (
     <div className="model-form__fields">
       {ungrouped.map((field) => (
         <FieldRow key={field.key} field={field} value={value} onChange={onChange} />
       ))}
-      {shown.map(([name, inside]) => (
-        // Named by its title, said once; not a heading, in a pane headed by the file.
-        <section
-          key={name}
-          role="group"
-          aria-labelledby={`${id}-${name}`}
-          className="model-form__group"
+      {inView.map(group)}
+      {folded.length === 0 ? null : (
+        <Fold
+          className="model-form__advanced"
+          opened={written}
+          summary={
+            <>
+              Advanced <span className="model-form__advanced-keys">{foldedKeys.join(', ')}</span>
+            </>
+          }
         >
-          <p id={`${id}-${name}`} className="model-form__group-title">
-            {name}
-          </p>
-          <div className="model-form__fields">
-            {inside.map((field) => (
-              <FieldRow key={field.key} field={field} value={value} onChange={onChange} />
-            ))}
-            {name === 'Geography' && countryCode ? (
-              <CountryCodeRow value={value} onChange={onChange} />
-            ) : null}
-          </div>
-        </section>
-      ))}
+          {folded.map(group)}
+        </Fold>
+      )}
       {legacy.length === 0 ? null : (
-        <details className="model-form__legacy">
-          <summary>Legacy and undocumented keys</summary>
+        <Fold
+          className="model-form__legacy"
+          opened={legacyWritten}
+          summary="Legacy and undocumented keys"
+        >
           {legacy.map((field) => (
             <FieldRow key={field.key} field={field} value={value} onChange={onChange} />
           ))}
-        </details>
+        </Fold>
       )}
     </div>
   );
@@ -600,16 +746,37 @@ function previewOf(item: Value): string | undefined {
   return undefined;
 }
 
-/** A member's badges (AC-225): primary key, hidden from the API, its format. */
+/**
+ * A member's badges (AC-225): primary key; hidden from the API, or a primary
+ * key made public, as design 03 badges `id` (T480); its format.
+ */
 function badgesOf(item: Value): string[] {
+  const key = item['primary_key'] === true;
   return [
-    item['primary_key'] === true ? 'PK' : undefined,
+    key ? 'PK' : undefined,
     // A primary key is hidden unless it says otherwise (Y.6, `public`).
-    item['public'] === false || (item['primary_key'] === true && item['public'] === undefined)
+    item['public'] === false || (key && item['public'] === undefined)
       ? 'hidden'
-      : undefined,
+      : key && item['public'] === true
+        ? 'public'
+        : undefined,
     typeof item['format'] === 'string' ? item['format'] : undefined,
   ].filter((badge): badge is string => badge !== undefined);
+}
+
+/**
+ * What goes where a member's type goes (design 03 note 5): its type, or a
+ * join's relationship, in words — "many to one", as the join diagram says it
+ * (T480, MW-11).
+ */
+function typeOf(item: Value): string | undefined {
+  if (typeof item['type'] === 'string') return item['type'];
+  if (typeof item['relationship'] === 'string')
+    return item['relationship']
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/_/g, ' ')
+      .toLowerCase();
+  return undefined;
 }
 
 /** A new member's name, `segment_1`, the first not taken; none for an object without one. */
@@ -644,29 +811,76 @@ export function MemberList({
 }) {
   const { title } = schema;
   const noun = title.charAt(0).toLowerCase() + title.slice(1);
+  /**
+   * An add or a remove, then what it leaves once the owner has put it in the
+   * list — which it may not: an edit held to ask about a comment (T480's
+   * review). The owner's update is flushed first, so the list is read as it
+   * now is: an added member opens with its name focused to type over (design
+   * 03 note 7); after a remove, the member now in its place is closed and its
+   * row focused, so a second press removes nothing unseen. A list other than
+   * the one expected is left alone.
+   */
+  const rows = useRef<HTMLUListElement>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const change = (next: Value[] | undefined, then: (list: HTMLUListElement) => void) => {
+    const expected = next?.length ?? 0;
+    flushSync(() => {
+      onChange(next);
+    });
+    const list = rows.current;
+    if (list !== null && list.children.length === expected) then(list);
+  };
+  const add = () => {
+    change([...items, newItem(schema, items)], (list) => {
+      const details = list.lastElementChild?.querySelector('details');
+      if (details === null || details === undefined) return;
+      details.open = true;
+      const name = details.querySelector<HTMLInputElement>(
+        ':scope > .model-form__fields [data-key="name"] input',
+      );
+      name?.focus();
+      name?.select();
+    });
+  };
+  const remove = (index: number) => {
+    const rest = items.filter((_, at) => at !== index);
+    change(rest.length === 0 ? undefined : rest, (list) => {
+      const details = list.children[index]?.querySelector('details');
+      if (details === null || details === undefined) {
+        addButton.current?.focus();
+        return;
+      }
+      details.open = false;
+      details.querySelector<HTMLElement>(':scope > summary')?.focus();
+    });
+  };
   return (
     <div className="model-members-block">
-      <ul className="model-members" aria-label={pluralOf(schema)}>
+      <ul ref={rows} className="model-members" aria-label={pluralOf(schema)}>
         {items.map((entry, index) => {
           // A `-` with nothing after it yet is a member with no keys, not a crash.
           const item = isPlain(entry) ? entry : {};
           const name =
             typeof item['name'] === 'string' ? item['name'] : `${title} ${String(index + 1)}`;
-          const type = typeof item['type'] === 'string' ? item['type'] : undefined;
+          const type = typeOf(item);
           const preview = previewOf(item);
           const badges = badgesOf(item);
           return (
             // Positions, not names: a member's name is one of the fields it edits.
             <li key={index} className="model-members__item">
               <details className="model-member">
-                {/* Collapsed, still read (AC-225): its type, its SQL, its badges. */}
+                {/* Collapsed, still read (AC-225), as design 03's rows read like
+                    the YAML: the name and its badges, the type on the right, the
+                    SQL on its own line under the name. */}
                 <summary>
-                  <span className="model-member__name">{name}</span>
-                  {badges.map((badge) => (
-                    <span key={badge} className="model-member__badge">
-                      {badge}
-                    </span>
-                  ))}
+                  <span className="model-member__names">
+                    <span className="model-member__name">{name}</span>
+                    {badges.map((badge) => (
+                      <span key={badge} className="model-member__badge">
+                        {badge}
+                      </span>
+                    ))}
+                  </span>
                   {type === undefined ? null : <span className="model-member__type">{type}</span>}
                   {preview === undefined ? null : (
                     // Not read out as the row's name each time it is reached:
@@ -683,35 +897,38 @@ export function MemberList({
                     onChange(items.map((each, at) => (at === index ? next : each)));
                   }}
                 />
+                {/* Remove inside the open member, where it is deliberate (design 03 note 6). */}
+                <div className="model-member__foot">
+                  <button
+                    type="button"
+                    className="btn-sm model-member__remove"
+                    aria-label={`Remove ${noun} ${name}`}
+                    onClick={() => {
+                      remove(index);
+                    }}
+                  >
+                    Remove {noun}
+                  </button>
+                </div>
               </details>
               {describe?.(item)}
-              <button
-                type="button"
-                className="btn-sm model-members__remove"
-                aria-label={`Remove ${noun} ${name}`}
-                title={`Remove ${noun} ${name}`}
-                onClick={() => {
-                  const rest = items.filter((_, at) => at !== index);
-                  onChange(rest.length === 0 ? undefined : rest);
-                }}
-              >
-                Remove
-              </button>
             </li>
           );
         })}
       </ul>
-      {/* The prototype's "+ measure" (model.js, `data-addroot`). */}
-      <button
-        type="button"
-        className="btn-sm model-members__add"
-        aria-label={`Add ${noun}`}
-        onClick={() => {
-          onChange([...items, newItem(schema, items)]);
-        }}
-      >
-        + {noun}
-      </button>
+      {/* The prototype's "+ measure" (model.js, `data-addroot`), and how many (design 03 note 7). */}
+      <div className="model-members__foot">
+        <button
+          ref={addButton}
+          type="button"
+          className="btn-sm model-members__add"
+          aria-label={`Add ${noun}`}
+          onClick={add}
+        >
+          + {noun}
+        </button>
+        <span className="model-members__total">{items.length} total</span>
+      </div>
     </div>
   );
 }

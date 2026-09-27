@@ -39,10 +39,11 @@ test('a measure published in the Model workspace is in the chart builder’s fie
   const form = page.getByRole('region', { name: `Cube ${cube}` });
   await form.getByRole('tab', { name: /^Measures/ }).click();
   await form.getByRole('button', { name: 'Add measure' }).click();
-  await form.locator('.model-member__name', { hasText: /^measure_1$/ }).click();
   const measure = form
     .getByRole('listitem')
     .filter({ has: page.locator('.model-member__name', { hasText: /^measure_1$/ }) });
+  // Added, it opens on its own, its name to type over (T480).
+  await expect(measure.locator('.model-member')).toHaveAttribute('open', '');
   const own = (key: string) =>
     // In its named group (T236, AC-225).
     measure.locator(

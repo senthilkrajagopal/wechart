@@ -29,12 +29,13 @@ const optionsOf = (select: HTMLElement) =>
 
 /**
  * A member's own field, not a nested object's: in its named group (T236,
- * AC-225), or ungrouped.
+ * AC-225), that group under Advanced (T480), or ungrouped.
  */
 const ownRow = (key: string, inside = '') =>
   [
     `.model-member > .model-form__fields > [data-key="${key}"]${inside}`,
     `.model-member > .model-form__fields > .model-form__group > .model-form__fields > [data-key="${key}"]${inside}`,
+    `.model-member > .model-form__fields > .model-form__advanced > .model-form__group > .model-form__fields > [data-key="${key}"]${inside}`,
   ].join(', ');
 
 describe('a cube’s form', () => {

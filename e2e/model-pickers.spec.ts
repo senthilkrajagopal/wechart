@@ -66,10 +66,12 @@ test('a rollup’s members, a join’s target, drill members and a view’s incl
   await expect(target.locator('option', { hasText: /^orders$/ })).toHaveCount(0);
   await orders.getByRole('tab', { name: /^Measures/ }).click();
   await orders.locator('.model-member__name', { hasText: /^total_amount$/ }).click();
-  const drill = orders
+  const totalAmount = orders
     .getByRole('listitem')
-    .filter({ has: page.locator('.model-member__name', { hasText: /^total_amount$/ }) })
-    .getByRole('group', { name: 'Drill members', exact: true });
+    .filter({ has: page.locator('.model-member__name', { hasText: /^total_amount$/ }) });
+  // Drill members are among the rarer keys, under Advanced (T480).
+  await totalAmount.locator('.model-form__advanced > summary').first().click();
+  const drill = totalAmount.getByRole('group', { name: 'Drill members', exact: true });
   await typesNothing(drill);
   await expect(drill.getByRole('button', { name: 'status', exact: true })).toBeVisible();
   await expect(drill.getByRole('button', { name: 'customers.country', exact: true })).toBeVisible();

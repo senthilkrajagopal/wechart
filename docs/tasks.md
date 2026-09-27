@@ -7900,7 +7900,31 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       - the focus ring inside the current row.
     - **The head** (MW-05): 44 px; the path 13/600 mono; "✓ Published · no changes" at rest; Discard and Save disabled until there is a change; "◷ New file · not published" for a draft.
   - Depends on: T470
-- [ ] T480 (AC-225, AC-344) Member rows that read like the YAML, opening into a short grouped form
+- [x] T480 (AC-225, AC-344) Member rows that read like the YAML, opening into a short grouped form
+  - **Done 2026-09-27.** Tested in `memberRows.test.tsx` and `e2e/model-design.spec.ts` (T480's test, in Chrome, Firefox and Safari).
+  - **Rows** (design 03 note 5):
+    - under rules, flush to the pane;
+    - the name in mono 600, with 12 px square badges (`PK`; `public` for a primary key made public; `hidden`; the format);
+    - the type, or a join's relationship in words, at the right;
+    - the SQL on a line of its own;
+    - "+ dimension · n total" at the end.
+  - **An open member** (note 6):
+    - on the subtle ground, inset 40 px;
+    - Basics as design 03 draws it: Name | Type, SQL, Title | Format, Description, Public | Primary key;
+    - the member's shape beside it (a CASE that defines it, switch values, a geographic point);
+    - every other group, and a CASE only offered, under "Advanced", named by its keys. Advanced opens by itself when the file writes one of its keys, and never snaps shut under the user.
+    - Written legacy keys open their fold too.
+    - "Remove dimension" is at its foot.
+  - **Booleans with a default in the research are switches** that show it ("Public · default on"): a dimension's public, primary key and sub-query keys, a measure's, segment's and hierarchy's public, a view's cube prefix, and a rollup's scheduled refresh, non-strict date range and union with source data. Back at the default, the key goes. "ƒx" makes one an expression, focused.
+  - **Adds and removes** flush the owner's update and then read the list:
+    - an added member opens with its name focused and selected;
+    - after a remove, the member now in its place is closed and its row focused;
+    - an edit the owner holds moves nothing.
+  - Controls are 28/12; SQL and YAML fields are 48 px at 12/18 mono.
+  - The review's other fixes:
+    - groups named by valid ids;
+    - `order` among the rarer keys;
+    - the caret at 12 px.
   - Files: `packages/web/src/workspaces/model/form/{ObjectForm,schema}.ts(x)` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
   - Failing test: `memberRows.test.tsx` and `model-design.spec.ts`:
     - **Rows** (design 03 notes 5 and 7; MW-10, MW-11):
@@ -7929,7 +7953,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
         - Description.
       - **▾ Refresh.**
       - **▸ Advanced** (collapsed): extends, sql_alias, calendar and meta, plus the legacy keys.
-    - Each field has its one-line help from `docs/research/cube/data-modeling.md`.
+    - Each field has its one-line help from `docs/research/cube/data-modeling.md`. So do an open member's Basics (design 03 note 6, T480's review), with the required fields marked.
     - A view's General is grouped the same way.
     - Every key stays reachable (AC-132, rule 26).
   - Depends on: T480

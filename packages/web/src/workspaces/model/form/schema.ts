@@ -88,6 +88,13 @@ export interface Field {
    * shown whatever this says: nothing written is hidden.
    */
   readonly applies?: (owner: Readonly<Record<string, unknown>>) => boolean;
+  /**
+   * For a boolean: Cube's value when the key is not written, as
+   * `docs/research/cube/data-modeling.md` gives it — drawn as a switch that
+   * shows it ("Public · default on"; design 03 note 6, T480). Only where the
+   * research gives one.
+   */
+  readonly default?: boolean | ((owner: Readonly<Record<string, unknown>>) => boolean);
 }
 
 export type SectionId =
@@ -301,15 +308,17 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       }),
       f('sql', 'sql', { group: 'Basics', applies: (d) => dimensionShape(d) === 'sql' }),
       f('title', 'text', { group: 'Basics' }),
+      // Design 03 note 6's Basics: the format with the title (T480).
+      f('format', 'format', { group: 'Basics' }),
       f('description', 'text', { group: 'Basics' }),
-      f('primary_key', 'flag', { group: 'Basics' }),
-      f('public', 'flag', { group: 'Basics' }),
-      f('order', 'enum', { options: ['asc', 'desc'], group: 'Basics' }),
+      // Y.6: `public` defaults to true, but false on a primary key; `primary_key`
+      // to false. Side by side, Public first, as design 03 draws them.
+      f('public', 'flag', { group: 'Basics', default: (d) => d['primary_key'] !== true }),
+      f('primary_key', 'flag', { group: 'Basics', default: false }),
       f('case', 'object', { of: 'Y.6c', group: 'CASE / WHEN', applies: mayCase }),
       f('latitude', 'yaml', { group: 'Geography', applies: (d) => d['type'] === 'geo' }),
       f('longitude', 'yaml', { group: 'Geography', applies: (d) => d['type'] === 'geo' }),
       f('values', 'yaml', { group: 'Switch', applies: (d) => d['type'] === 'switch' }),
-      f('format', 'format', { group: 'Formatting' }),
       f('currency', 'text', { group: 'Formatting', applies: (d) => d['type'] === 'number' }),
       f('mask', 'yaml', { group: 'Formatting' }),
       f('granularities', 'list', {
@@ -318,15 +327,22 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
         applies: (d) => d['type'] === 'time',
       }),
       f('time_shift', 'list', { of: 'Y.6b', group: 'Time', applies: (d) => d['type'] === 'time' }),
-      f('sub_query', 'flag', { group: 'Sub-query', applies: (d) => dimensionShape(d) === 'sql' }),
+      f('sub_query', 'flag', {
+        group: 'Sub-query',
+        applies: (d) => dimensionShape(d) === 'sql',
+        default: false,
+      }),
       f('propagate_filters_to_sub_query', 'flag', {
         group: 'Sub-query',
         applies: (d) => d['sub_query'] !== undefined && d['sub_query'] !== false,
+        default: false,
       }),
       f('links', 'list', { of: 'Y.6d', group: 'Links' }),
       f('multi_stage', 'boolean', { group: 'Multi-stage' }),
       f('add_group_by', 'references', { group: 'Multi-stage', applies: multiStage }),
       f('filter', 'object', { of: 'Y.7d', group: 'Multi-stage', applies: multiStage }),
+      // The default sort order, with the rarer keys under Advanced, as design 03 has it.
+      f('order', 'enum', { options: ['asc', 'desc'], group: 'More' }),
       f('meta', 'yaml', { group: 'More' }),
       f('suggest_filter_values', 'boolean', { group: 'More' }),
       // Undocumented (Y.6), and tied to no shape: offered on any.
@@ -390,9 +406,10 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       }),
       f('sql', 'sql', { group: 'Basics' }),
       f('title', 'text', { group: 'Basics' }),
+      f('format', 'format', { group: 'Basics' }),
       f('description', 'text', { group: 'Basics' }),
-      f('public', 'flag', { group: 'Basics' }),
-      f('format', 'format', { group: 'Formatting' }),
+      // Y.7: `public` defaults to true.
+      f('public', 'flag', { group: 'Basics', default: true }),
       f('currency', 'text', { group: 'Formatting', applies: numericMeasure }),
       f('mask', 'yaml', { group: 'Formatting' }),
       f('filters', 'yaml', { group: 'Filters and drill' }),
@@ -461,7 +478,8 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       f('name', 'identifier'),
       f('sql', 'sql'),
       f('description', 'text'),
-      f('public', 'flag'),
+      // Y.8: `public` defaults to true.
+      f('public', 'flag', { default: true }),
       f('title', 'text'),
       f('meta', 'yaml'),
       legacy('shown', 'flag'),
@@ -475,7 +493,8 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       // Dimensions, joined cubes' too, coarse to fine (Y.9).
       f('levels', 'references', { scope: 'dimensions', ordered: true }),
       f('title', 'text'),
-      f('public', 'flag'),
+      // Y.9: `public` defaults to true.
+      f('public', 'flag', { default: true }),
     ],
   },
   'Y.10': {
@@ -517,7 +536,8 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
       // is not names, and is edited as YAML.
       f('includes', 'references', { scope: 'path', star: true }),
       f('excludes', 'references', { scope: 'path' }),
-      f('prefix', 'flag'),
+      // Y.10a: `prefix` defaults to false.
+      f('prefix', 'flag', { default: false }),
       f('alias', 'text'),
       f('split', 'boolean'),
     ],
@@ -577,7 +597,8 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
         options: ['hour', 'day', 'week', 'month', 'quarter', 'year'],
       }),
       f('refresh_key', 'refresh-schedule'),
-      f('scheduled_refresh', 'flag'),
+      // Y.13: `scheduled_refresh` defaults to true (false is needed for rollup_join).
+      f('scheduled_refresh', 'flag', { default: true }),
       f('build_range_start', 'yaml'),
       f('build_range_end', 'yaml'),
       f('refresh_range_start', 'yaml'),
@@ -592,11 +613,13 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
           f('sql', 'sql'),
         ],
       }),
-      f('allow_non_strict_date_range_match', 'boolean'),
+      // Y.13: "Docs default `true`".
+      f('allow_non_strict_date_range_match', 'boolean', { default: true }),
       f('use_original_sql_pre_aggregations', 'flag'),
       f('external', 'flag'),
       f('read_only', 'flag'),
-      f('union_with_source_data', 'flag'),
+      // Y.13: `union_with_source_data` defaults to false.
+      f('union_with_source_data', 'flag', { default: false }),
       f('unique_key_columns', 'yaml'),
       f('stream_offset', 'enum', { options: ['earliest', 'latest'] }),
       // "list of `{member (reference), type (string)}`".
