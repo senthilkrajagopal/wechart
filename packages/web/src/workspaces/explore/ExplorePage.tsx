@@ -7,6 +7,7 @@ import type { Me } from '../../shell/AccountMenu';
 import { StateLine } from '../../shell/StatusIcon';
 import { AccessPanel, folderAccessQuery, refreshFolderAccess } from './access/AccessPanel';
 import { CreateMenu, DEFAULT_TITLES, type CreatableKind } from './CreateMenu';
+import { NewItemDialog, type Target } from './NewItemDialog';
 import { FolderContents, opensFromExplore, type CatalogItem } from './FolderContents';
 import { FolderTree } from './FolderTree';
 import { exploreHref, folderChain, FOLDERS_QUERY } from './folders';
@@ -108,13 +109,35 @@ export function ExplorePage() {
    * type; a dashboard or chart opens at its own route.
    */
   const create = useMutation({
-    mutationFn: async (kind: CreatableKind) => {
+    mutationFn: async ({
+      kind,
+      title = DEFAULT_TITLES[kind],
+      targetFolderId,
+    }: {
+      kind: CreatableKind;
+      title?: string;
+      targetFolderId?: string;
+    }) => {
       const response = await fetch('/api/documents', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ kind, title: DEFAULT_TITLES[kind], folderId }),
+        body: JSON.stringify({
+          kind,
+          title,
+          folderId,
+          ...(targetFolderId === undefined ? {} : { targetFolderId }),
+        }),
       });
-      if (!response.ok) throw new Error(`Could not create: ${String(response.status)}`);
+      if (!response.ok) {
+        // The server's reason, where it gives one (T345's review).
+        const said = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+        };
+        throw new Error(
+          `Could not create it: ${said.error ?? said.message ?? `error ${String(response.status)}`}`,
+        );
+      }
       return (await response.json()) as CreatedObject;
     },
     onSuccess: async (created) => {
@@ -177,6 +200,27 @@ export function ExplorePage() {
    */
   const isRoot = rootTitleOf(folderId) !== undefined;
   const known = isRoot || chain.at(-1)?.id === folderId;
+  /** The open folder is My workspace or in it (T345). */
+  const inMyWorkspace = isMyWorkspace(folderId) || isMyWorkspace(chain[0]?.id ?? '');
+  /**
+   * A dashboard or chart made in the workspace asks where it is to go (T345,
+   * AC-282), from the folders read afresh as New is chosen: a folder made or
+   * granted a moment ago is among them, and the only one is chosen (T345's
+   * review).
+   */
+  const [askingTarget, setAskingTarget] = useState<{
+    kind: 'dashboard' | 'chart';
+    targets: readonly Target[];
+  } | null>(null);
+  const [targetsFailed, setTargetsFailed] = useState<string | null>(null);
+  const askTarget = async (kind: 'dashboard' | 'chart') => {
+    setTargetsFailed(null);
+    try {
+      setAskingTarget({ kind, targets: await getJson<Target[]>('/api/folders/targets') });
+    } catch (error) {
+      setTargetsFailed((error as Error).message);
+    }
+  };
   const folderTitle = known ? (chain.at(-1)?.title ?? SHARED_ROOT.title) : '';
 
   /** The roots' counts, which are no folder's (AC-194). */
@@ -249,7 +293,7 @@ export function ExplorePage() {
           <button
             type="button"
             className="btn-ghost btn-sm"
-            onClick={() => create.mutate('folder')}
+            onClick={() => create.mutate({ kind: 'folder' })}
           >
             + Folder
           </button>
@@ -347,12 +391,41 @@ export function ExplorePage() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          <CreateMenu busy={create.isPending} onCreate={(kind) => create.mutate(kind)} />
+          <CreateMenu
+            // Not until the open folder is known: until then, whether it is
+            // in the workspace isn't (T345's review).
+            busy={create.isPending || !known}
+            onCreate={(kind) => {
+              // In the workspace, which only a signed-in user has, a dashboard
+              // or chart names the shared folder it is to go to first (T345,
+              // AC-282).
+              if (kind !== 'folder' && inMyWorkspace) void askTarget(kind);
+              else create.mutate({ kind });
+            }}
+          />
+          {askingTarget === null ? null : (
+            <NewItemDialog
+              kind={askingTarget.kind}
+              defaultTitle={DEFAULT_TITLES[askingTarget.kind]}
+              targets={askingTarget.targets}
+              busy={create.isPending}
+              onClose={() => {
+                setAskingTarget(null);
+              }}
+              onCreate={(title, targetFolderId) => {
+                create.mutate({ kind: askingTarget.kind, title, targetFolderId });
+                setAskingTarget(null);
+              }}
+            />
+          )}
         </div>
 
         {create.isError ? (
           <StateLine kind="err">{(create.error as Error).message}</StateLine>
         ) : null}
+        {targetsFailed === null ? null : (
+          <StateLine kind="err">Could not list the folders it may go to: {targetsFailed}</StateLine>
+        )}
         {/* A rename or move that failed says so; the heading went back to the
             old name, and without this nothing would explain why. */}
         {relocate.isError ? (

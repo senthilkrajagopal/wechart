@@ -1904,6 +1904,12 @@ fieldset.model-field > legend {
   grid-template-columns: minmax(0, 1fr);
 }
 .dialog.view-query h3 { margin: 8px 0 0; font-size: var(--wc-text-sm-size); font-weight: 600; }
+/* New in My workspace (T345, AC-282): references.md's 520 px dialog, its
+   Name and Target folder full width. */
+.dialog.new-item-dialog { width: min(520px, calc(100vw - 32px)); max-width: none; gap: 12px; }
+.new-item-dialog .field input,
+.new-item-dialog .field select { height: 32px; }
+.dialog .new-item-dialog__note { margin: 0; font-size: var(--wc-text-xs-size); }
 /* Generate cubes (T145, AC-139): wide, bounded to the window and scrolling
    inside, its actions kept in view at the foot — so Publish is reachable
    however many cubes it shows. */

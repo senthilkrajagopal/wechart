@@ -211,6 +211,7 @@ const source = (over: Partial<DataSource> = {}): DataSource => ({
   fields: { host: 'db', port: 5432, ssl: false },
   secrets: ['password'],
   settingsPrint: 'print-1',
+  targetFolderId: null,
   version: 1,
   updatedAt: new Date(0),
   ...over,

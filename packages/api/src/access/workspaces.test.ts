@@ -86,8 +86,13 @@ afterAll(async () => {
 
 const as = (who: string, options: InjectOptions) =>
   app.inject({ ...options, headers: { ...options.headers, cookie: cookies[who]! } });
+/** Made as the web makes it: a dashboard or chart names its target folder, the sales folder (T345). */
 const create = (who: string, kind: DocumentKind, title: string, folderId: string) =>
-  as(who, { method: 'POST', url: '/api/documents', payload: { kind, title, folderId } });
+  as(who, {
+    method: 'POST',
+    url: '/api/documents',
+    payload: { kind, title, folderId, ...(kind === 'folder' ? {} : { targetFolderId: sales }) },
+  });
 const contents = async (who: string, folderId: string) =>
   as(who, { method: 'GET', url: `/api/folders/${encodeURIComponent(folderId)}/contents` });
 const titlesIn = async (who: string, folderId: string) =>
@@ -256,6 +261,274 @@ describe('a workspace’s edges (T343’s review)', () => {
     });
     expect(put.statusCode).toBe(409);
     expect((await docs().get('dashboard', shared))?.body['folderId']).toBe(sales);
+  });
+});
+
+/**
+ * T345 (AC-282): a dashboard, chart or data source made in the workspace
+ * names its target folder, one of the shared folders where its author has
+ * read-write access; it goes there by a proposal (T349). A new data source
+ * never takes a name its target folder holds: only a copy replaces one
+ * (AC-280; the user's answer to question 30).
+ */
+describe('items made in the workspace name their target folder (T345, AC-282)', () => {
+  const sealed = {
+    v: 1 as const,
+    kid: 'kid-1',
+    enc: Buffer.alloc(32, 'e').toString('base64url'),
+    ct: Buffer.alloc(272, 'c').toString('base64url'),
+  };
+  const source = (name: string, extra: Record<string, unknown>) => ({
+    folderId: 'mine',
+    name,
+    driver: 'postgres',
+    authMethod: 'password',
+    fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: false },
+    sealed: { password: sealed },
+    ...extra,
+  });
+  /** `managers`' alone; one writer only reads; writer's own drafts; super's. */
+  const folders = { hidden: '', readOnly: '', own: '', others: '' };
+  const idOf = (answer: { json: () => unknown }) => (answer.json() as { id: string }).id;
+  beforeAll(async () => {
+    for (const [key, access] of [
+      ['hidden', { readOnly: null, readWrite: ['managers'] }],
+      ['readOnly', { readOnly: ['sales-rw'], readWrite: ['managers'] }],
+    ] as const) {
+      const id = randomUUID();
+      made.push({ kind: 'folder', id });
+      await docs().create({
+        kind: 'folder',
+        id,
+        body: { owner: 'admin', title: `${key} ${MARK}`, folderId: 'root', access },
+      });
+      folders[key] = id;
+    }
+    folders.own = idOf(await create('writer', 'folder', `own targets ${MARK}`, 'mine'));
+    folders.others = idOf(await create('super', 'folder', `super’s targets ${MARK}`, 'mine'));
+  });
+
+  it('offers as targets the shared folders its author writes, with their paths, and none of a workspace', async () => {
+    const targets = async (who: string) =>
+      (await as(who, { method: 'GET', url: '/api/folders/targets' })).json() as {
+        id: string;
+        path: string[];
+      }[];
+    const writers = await targets('writer');
+    expect(writers.find((target) => target.id === sales)).toEqual({
+      id: sales,
+      path: [`Sales ${MARK}`],
+    });
+    const ids = writers.map((target) => target.id);
+    // Not one they only read, nor the root, nor a folder in their workspace,
+    // which they write in but which is no shared folder (T345's review).
+    for (const refused of [folders.hidden, folders.readOnly, 'root', folders.own, 'mine'])
+      expect(ids).not.toContain(refused);
+    expect(await targets('reader')).toEqual([]);
+    // A Super-Admin writes the root too, which is the shared one.
+    expect((await targets('super')).find((target) => target.id === 'root')).toEqual({
+      id: 'root',
+      path: [],
+    });
+  });
+
+  it('keeps a dashboard or chart’s target: a folder its author writes, never none', async () => {
+    const made = await as('writer', {
+      method: 'POST',
+      url: '/api/documents',
+      payload: {
+        kind: 'dashboard',
+        title: `targeted ${MARK}`,
+        folderId: 'mine',
+        targetFolderId: sales,
+      },
+    });
+    expect(made.statusCode, made.body).toBe(201);
+    const id = (made.json() as { id: string }).id;
+    expect((await docs().get('dashboard', id))?.body['targetFolderId']).toBe(sales);
+
+    const without = await as('writer', {
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind: 'chart', title: `untargeted ${MARK}`, folderId: 'mine' },
+    });
+    expect(without.statusCode).toBe(400);
+    // Their workspace, or a folder in it: no shared folder. One they only
+    // read: 403. One they can't see, or in another's workspace: not there.
+    for (const [targetFolderId, status] of [
+      ['mine', 400],
+      [folders.own, 400],
+      [folders.readOnly, 403],
+      [folders.hidden, 404],
+      [folders.others, 404],
+    ] as const) {
+      const refused = await as('writer', {
+        method: 'POST',
+        url: '/api/documents',
+        payload: { kind: 'chart', title: `mistargeted ${MARK}`, folderId: 'mine', targetFolderId },
+      });
+      expect(refused.statusCode, targetFolderId).toBe(status);
+    }
+    expect(await titlesIn('writer', 'mine')).not.toContain(`mistargeted ${MARK}`);
+    // A folder in the workspace needs none: it goes nowhere.
+    expect((await create('writer', 'folder', `untargeted folder ${MARK}`, 'mine')).statusCode).toBe(
+      201,
+    );
+  });
+
+  it('keeps the target as stored through every save, and gives a chart made on a workspace dashboard its dashboard’s (T345’s review)', async () => {
+    const board = idOf(await create('writer', 'dashboard', `kept ${MARK}`, 'mine'));
+    const read = async (kind: DocumentKind, id: string) => (await docs().get(kind, id))!;
+    const stored = await read('dashboard', board);
+
+    // A document save that drops it, or points it at a folder they can't write.
+    for (const targetFolderId of [undefined, folders.hidden]) {
+      const { body, version } = await read('dashboard', board);
+      const { targetFolderId: _kept, ...rest } = body;
+      void _kept;
+      const saved = await as('writer', {
+        method: 'PUT',
+        url: `/api/documents/dashboard/${board}`,
+        payload: {
+          body: {
+            ...rest,
+            folderId: 'mine',
+            ...(targetFolderId === undefined ? {} : { targetFolderId }),
+          },
+          version,
+        },
+      });
+      expect(saved.statusCode, saved.body).toBe(200);
+      expect((await read('dashboard', board)).body['targetFolderId']).toBe(sales);
+    }
+
+    // A dashboard save that makes a library chart in the workspace (T133).
+    const chart = randomUUID();
+    const current = await read('dashboard', board);
+    const saved = await as('writer', {
+      method: 'PUT',
+      url: `/api/dashboards/${board}`,
+      payload: {
+        dashboard: {
+          body: { ...current.body, folderId: 'mine', targetFolderId: folders.hidden },
+          version: current.version,
+        },
+        charts: [
+          {
+            id: chart,
+            body: {
+              schemaVersion: 1,
+              title: `library ${MARK}`,
+              folderId: 'mine',
+              targetFolderId: folders.hidden,
+              chart: {
+                source: { cube: 'orders' },
+                wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
+              },
+            },
+            version: 0,
+          },
+        ],
+      },
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+    made.push({ kind: 'chart', id: chart });
+    expect((await read('chart', chart)).body['targetFolderId']).toBe(sales);
+    expect((await read('dashboard', board)).body['targetFolderId']).toBe(sales);
+    expect(stored.body['targetFolderId']).toBe(sales);
+  });
+
+  it('makes a data source in the workspace with its target, and never under a name the target holds', async () => {
+    const store = dataSourceStore(getDb());
+    const held = await store.create({ ...source(`held_${MARK}`, {}), folderId: sales });
+    const kept: string[] = [held.id];
+    const post = (payload: Record<string, unknown>) =>
+      as('writer', { method: 'POST', url: '/api/data-sources', payload });
+    try {
+      const made = await post(source(`draft_${MARK}`, { targetFolderId: sales }));
+      expect(made.statusCode, made.body).toBe(201);
+      kept.push(idOf(made));
+      const stored = await store.get(idOf(made));
+      expect(stored).toMatchObject({ targetFolderId: sales });
+      expect(stored?.folderId).toMatch(/^ws:/);
+
+      for (const [targetFolderId, status] of [
+        [undefined, 400],
+        ['mine', 400],
+        [folders.own, 400],
+        [folders.readOnly, 403],
+        [folders.hidden, 404],
+        [folders.others, 404],
+      ] as const)
+        expect(
+          (await post(source(`y_${MARK}`, targetFolderId === undefined ? {} : { targetFolderId })))
+            .statusCode,
+          String(targetFolderId),
+        ).toBe(status);
+      expect((await store.inFolder(stored!.folderId)).map((each) => each.name)).not.toContain(
+        `y_${MARK}`,
+      );
+
+      const clash = await post(source(`held_${MARK}`, { targetFolderId: sales }));
+      expect(clash.statusCode).toBe(409);
+      expect(clash.json()).toEqual({
+        error: `Its target folder already holds a data source named “held_${MARK}”: only a copy of it replaces it. Give this one another name.`,
+      });
+      // Nor renamed to it (T345's review).
+      const renamed = await as('writer', {
+        method: 'PUT',
+        url: `/api/data-sources/${stored!.id}`,
+        payload: { name: `held_${MARK}` },
+      });
+      expect(renamed.statusCode).toBe(409);
+      expect((await store.get(stored!.id))?.name).toBe(`draft_${MARK}`);
+    } finally {
+      for (const id of kept) await store.remove(id).catch(() => undefined);
+    }
+  });
+
+  it('changes and removes a workspace’s data source in wechart alone, never landing it in xcube (T345’s review)', async () => {
+    const calls: string[] = [];
+    const landing = buildServer({
+      config: secured,
+      sessions: pgSessionStore(getDb()),
+      documents: docs(),
+      catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
+      dataSources: dataSourceStore(getDb()),
+      dataSourceLanding: {
+        prepare: async (folderId) => {
+          calls.push(`prepare ${folderId}`);
+          return { land: async () => undefined, unland: async () => undefined };
+        },
+        unland: async (source) => {
+          calls.push(`unland ${source.name}`);
+        },
+      },
+    });
+    try {
+      const cookie = await signIn(landing, USERS['writer']!);
+      const send = (method: 'POST' | 'PUT' | 'DELETE', url: string, payload?: unknown) =>
+        landing.inject({
+          method,
+          url,
+          headers: { cookie },
+          ...(payload === undefined ? {} : { payload: payload as Record<string, unknown> }),
+        });
+      const made = await send(
+        'POST',
+        '/api/data-sources',
+        source(`landless_${MARK}`, { targetFolderId: sales }),
+      );
+      expect(made.statusCode, made.body).toBe(201);
+      const id = idOf(made);
+      const changed = await send('PUT', `/api/data-sources/${id}`, { name: `landless2_${MARK}` });
+      expect(changed.statusCode, changed.body).toBe(200);
+      expect((await send('DELETE', `/api/data-sources/${id}`)).statusCode).toBe(204);
+      expect(calls).toEqual([]);
+    } finally {
+      await landing.close();
+    }
   });
 });
 

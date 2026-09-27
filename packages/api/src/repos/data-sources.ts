@@ -41,6 +41,8 @@ export interface DataSource {
    * longer its health (T364's review).
    */
   readonly settingsPrint: string;
+  /** Where one made in a workspace is to go (T345, AC-282); null in a shared folder. */
+  readonly targetFolderId: string | null;
   readonly version: number;
   readonly updatedAt: Date;
 }
@@ -66,6 +68,8 @@ export interface NewDataSource {
   readonly authMethod: string;
   readonly fields: Readonly<Record<string, FieldValue>>;
   readonly sealed: Readonly<Record<string, SealedV1>>;
+  /** Where one made in a workspace is to go (T345, AC-282). */
+  readonly targetFolderId?: string;
 }
 
 export interface DataSourceChange {
@@ -175,6 +179,7 @@ type Row = {
   type: string;
   auth_method: string;
   settings: Record<string, unknown>;
+  target_folder_id: string | null;
   version: number;
   updated_at: Date;
 };
@@ -243,6 +248,7 @@ export function dataSourceStore(
       row.settings as Record<string, FieldValue>,
       revisions,
     ),
+    targetFolderId: row.target_folder_id,
     version: row.version,
     updatedAt: row.updated_at,
   });
@@ -256,6 +262,7 @@ export function dataSourceStore(
         'type',
         'auth_method',
         'settings',
+        'target_folder_id',
         'version',
         'updated_at',
       ]);
@@ -325,6 +332,9 @@ export function dataSourceStore(
               type: input.driver,
               auth_method: input.authMethod,
               settings: JSON.stringify(input.fields),
+              ...(input.targetFolderId === undefined
+                ? {}
+                : { target_folder_id: input.targetFolderId }),
             })
             .execute();
           await putSecrets(tx, id, input.sealed);

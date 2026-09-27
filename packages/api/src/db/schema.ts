@@ -74,6 +74,8 @@ export interface DataSourceTable {
   auth_method: Generated<string>;
   /** Its fields without secrets, exactly as the browser sealed with them. */
   settings: JSONColumnType<Record<string, unknown>>;
+  /** Where one made in a workspace is to go (T345, AC-282); none in a shared folder. */
+  target_folder_id: Generated<string | null>;
   version: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;

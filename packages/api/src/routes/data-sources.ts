@@ -68,6 +68,7 @@ export function viewOf(source: DataSource) {
 }
 
 const NOT_THERE = { error: 'There’s no such data source, or it isn’t yours to see.' };
+const NO_SUCH_FOLDER = 'There’s no such folder, or it isn’t yours to see.';
 
 /** The shared root's default data source, which the install Job seeds (T443, AC-310). */
 const DEFAULT_SOURCE = 'default';
@@ -103,7 +104,7 @@ function readBody(body: unknown): { value?: Record<string, unknown>; error?: str
   }
   if (body['sealed'] !== undefined && !isRecord(body['sealed']))
     return { error: 'sealed is an object of envelopes, by field.' };
-  for (const key of ['name', 'driver', 'authMethod', 'folderId'])
+  for (const key of ['name', 'driver', 'authMethod', 'folderId', 'targetFolderId'])
     if (body[key] !== undefined && typeof body[key] !== 'string')
       return { error: `${key} is text.` };
   return { value: body };
@@ -116,6 +117,7 @@ export function registerDataSources(
     access,
     key,
     seedToken,
+    workspaceOf,
     landing,
     tester,
     tests,
@@ -152,6 +154,8 @@ export function registerDataSources(
     readonly key?: XcubePublicKey;
     /** The install Job's token (T443): with it, the root's `default` can be seeded. */
     readonly seedToken?: string;
+    /** The workspace a folder is in, or null for a shared one (T343, T345). */
+    readonly workspaceOf?: (folderId: string) => Promise<string | null>;
   },
 ): void {
   // Public by nature: it seals, and opens nothing (AC-298).
@@ -167,6 +171,19 @@ export function registerDataSources(
   // ready for the folder before the store opens its transaction.
   const landingIn = async (folderId: string): Promise<Landing> =>
     landing === undefined ? {} : landing.prepare(folderId);
+  /**
+   * Why a workspace source may not take this name: its target folder holds
+   * one of that name, which only a copy of it replaces (T345, AC-282; the
+   * user's answer to question 30).
+   */
+  const clashIn = async (targetFolderId: string, name: string) =>
+    (await store.inFolder(targetFolderId)).some((source) => source.name === name)
+      ? {
+          error: `Its target folder already holds a data source named “${name}”: only a copy of it replaces it. Give this one another name.`,
+        }
+      : undefined;
+  /** Whether it sits in a workspace, where xcube holds none of it until previews (T347). */
+  const inAWorkspace = async (source: DataSource) => (await workspaceOf?.(source.folderId)) != null;
   const refused = (reply: FastifyReply, error: unknown) => {
     if (error instanceof DataSourceRefused)
       return reply.status(error.status).send({ error: error.message, problems: error.problems });
@@ -474,17 +491,45 @@ export function registerDataSources(
     if (folderId === '') return reply.status(400).send({ error: 'Name the folder it goes in.' });
     const refusal = await access(request, folderId, 'write');
     if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
+    const name = String(value['name'] ?? '');
+    /**
+     * One made in the workspace names the shared folder it is to go to, where
+     * its author has read-write access, and takes no name that folder holds:
+     * only a copy replaces one (T345, AC-282; the user's answer to question
+     * 30). It isn't landed in xcube, whose tree holds no workspace, until the
+     * workspace's preview (T347).
+     */
+    const workspace = (await workspaceOf?.(folderId)) ?? null;
+    const inWorkspace = workspace !== null;
+    const targetFolderId =
+      typeof value['targetFolderId'] === 'string' ? value['targetFolderId'] : '';
+    if (inWorkspace) {
+      const targetsWorkspace = targetFolderId === '' ? null : await workspaceOf?.(targetFolderId);
+      // Another's workspace is as a folder that isn't there (T345's review).
+      if (targetsWorkspace != null && targetsWorkspace !== workspace)
+        return reply.status(404).send({ error: NO_SUCH_FOLDER });
+      if (targetFolderId === '' || targetsWorkspace != null)
+        return reply.status(400).send({
+          error: 'Name the shared folder it is to go to: one where you have read-write access.',
+        });
+      const targetRefusal = await access(request, targetFolderId, 'write');
+      if (targetRefusal !== undefined)
+        return reply.status(targetRefusal.status).send(targetRefusal.body);
+      const clash = await clashIn(targetFolderId, name);
+      if (clash !== undefined) return reply.status(409).send(clash);
+    }
     try {
       const made = await store.create(
         {
           folderId,
-          name: String(value['name'] ?? ''),
+          name,
           driver: String(value['driver'] ?? ''),
           authMethod: String(value['authMethod'] ?? ''),
           fields: (value['fields'] ?? {}) as Record<string, FieldValue>,
           sealed: (value['sealed'] ?? {}) as Record<string, SealedV1>,
+          ...(inWorkspace ? { targetFolderId } : {}),
         },
-        await landingIn(folderId),
+        inWorkspace ? {} : await landingIn(folderId),
       );
       return reply.status(201).send(viewOf(made));
     } catch (failure) {
@@ -508,8 +553,22 @@ export function registerDataSources(
         ? {}
         : { sealed: value['sealed'] as Record<string, SealedV1> }),
     };
+    // A workspace's is changed in wechart alone, as it was made; renamed, it
+    // still takes no name its target holds (T345's review).
+    const workspaced = await inAWorkspace(source);
+    if (
+      workspaced &&
+      change.name !== undefined &&
+      change.name !== source.name &&
+      source.targetFolderId !== null
+    ) {
+      const clash = await clashIn(source.targetFolderId, change.name);
+      if (clash !== undefined) return reply.status(409).send(clash);
+    }
     try {
-      return viewOf(await store.update(source.id, change, await landingIn(source.folderId)));
+      return viewOf(
+        await store.update(source.id, change, workspaced ? {} : await landingIn(source.folderId)),
+      );
     } catch (failure) {
       return refused(reply, failure);
     }
@@ -519,7 +578,10 @@ export function registerDataSources(
     const source = await reached(request, reply, 'write');
     if (source === undefined) return reply;
     try {
-      await store.remove(source.id, landing === undefined ? {} : { unland: landing.unland });
+      await store.remove(
+        source.id,
+        landing === undefined || (await inAWorkspace(source)) ? {} : { unland: landing.unland },
+      );
     } catch (failure) {
       return refused(reply, failure);
     }

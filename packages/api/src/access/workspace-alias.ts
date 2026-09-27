@@ -6,7 +6,10 @@ import { MY_WORKSPACE_ID } from '../repos/catalog';
  * client names it `mine`, as with one user.
  */
 
-/** Every `folderId` a request carries, at any depth, that names `mine`: the user's own. */
+/** The keys that name a folder: where an item is, and where it is to go (T345). */
+const FOLDER_KEYS = new Set(['folderId', 'targetFolderId']);
+
+/** Every folder a request names, at any depth, as `mine`: the user's own. */
 export function aliasIn(value: unknown, own: string): void {
   if (Array.isArray(value)) {
     for (const each of value) aliasIn(each, own);
@@ -15,7 +18,7 @@ export function aliasIn(value: unknown, own: string): void {
   if (typeof value !== 'object' || value === null) return;
   const record = value as Record<string, unknown>;
   for (const [key, each] of Object.entries(record)) {
-    if (key === 'folderId' && each === MY_WORKSPACE_ID) record[key] = own;
+    if (FOLDER_KEYS.has(key) && each === MY_WORKSPACE_ID) record[key] = own;
     else aliasIn(each, own);
   }
 }

@@ -15,6 +15,8 @@ describe('My workspace, named `mine` both ways (T343)', () => {
   it('takes `mine` for the user’s own in every folderId, at any depth', () => {
     const body = {
       folderId: 'mine',
+      // Where one is to go too (T345), which the route refuses as no shared folder.
+      targetFolderId: 'mine',
       dashboard: { body: { folderId: 'mine', title: 'mine' } },
       charts: [{ body: { folderId: 'mine' } }, { body: { folderId: 'root' } }],
       note: 'mine',
@@ -24,6 +26,7 @@ describe('My workspace, named `mine` both ways (T343)', () => {
 
     expect(body).toEqual({
       folderId: OWN,
+      targetFolderId: OWN,
       dashboard: { body: { folderId: OWN, title: 'mine' } },
       charts: [{ body: { folderId: OWN } }, { body: { folderId: 'root' } }],
       note: 'mine',

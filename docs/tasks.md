@@ -5635,11 +5635,29 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/routes/workspace-copy.ts` (+ test), `packages/api/src/server.ts` (a write to a shared item answers 409 "Edit in my workspace"), `packages/api/src/repos/documents.ts`
   - Failing test: `workspace-copy.test.ts`: copying a dashboard brings its local charts and the library charts it shows, and a model or data source only when chosen; a second copy opens the first; any `PUT`, `PATCH` of content on a shared dashboard, chart, model or data source is refused (AC-278, AC-279).
   - Depends on: T343
-- [ ] T345 (AC-282, AC-192) Create items in the workspace with a target folder
+- [x] T345 (AC-282, AC-192) Create items in the workspace with a target folder
   - Files: `packages/api/src/server.ts` (`POST /api/documents` in a workspace requires `targetFolderId`), `packages/web/src/workspaces/explore/{CreateMenu,NewItemDialog,TargetPicker}.tsx` (+ tests)
   - Failing test: `NewItemDialog.test.tsx` and `targets.test.ts`: the workspace's New menu offers Dashboard, Chart, Model, Data source and Folder; the first four ask for a target among the folders where the user has read-write access, preselected when there is one; creating without a target, or with a folder they can't write, answers 400 or 403 (AC-282, AC-192; rule 74).
     - *(2026-09-26, `[R31]`)* a new data source can't take a name its target folder already holds: 409, naming it (AC-282; only copies replace, T346).
   - Depends on: T343, T325
+  - *As built (2026-09-27):*
+    - `GET /api/folders/targets` lists the shared folders, the root among them, where the user has read-write access, each with its path, and never a workspace's.
+    - `POST /api/documents` for a dashboard or chart in the workspace (security on) needs a `targetFolderId` that is such a folder: 400 without one or with a workspace's, 403 for a folder they only read, 404 for one they can't see. The target is stored in the item's body.
+    - `POST /api/data-sources` in the workspace takes the same target (400, 403, 404), and a name the target already holds answers 409, naming it. The target is stored in `data_sources.target_folder_id` (migration `1758360000000_data-source-targets.cjs`).
+    - `NewItemDialog.tsx` asks for it, as references.md's "New in My workspace" dialog does (520 px, its Name, its Target folder, its note). The picker is preselected when there is one folder. The dialog is wired into Explore's New menu in the workspace, and reads the folders afresh each time. There is no separate `TargetPicker`; the dialog holds the picker. The picker is a list of paths, not references.md's tree: rule 74 asks only that it list the folders the user may write.
+    - From the review:
+      - A save keeps the target as stored, whatever its body says: `PUT /api/documents/…` and `PUT /api/dashboards/…`.
+      - A library chart made in the workspace by a dashboard's save takes its dashboard's target.
+      - `mine` as a target is taken for the user's own workspace (`aliasIn`), and answers 400.
+      - A folder in another's workspace answers 404, as one that isn't there does.
+      - A workspace data source is changed and removed without landing in xcube, and renamed never to a name its target holds.
+      - With security off, data sources have no workspace, as documents don't.
+    - Tests: `access/workspaces.test.ts` (T345 describe), `access/workspace-alias.test.ts`, `NewItemDialog.test.tsx`, and `e2e/security/workspaces.spec.ts`, "names the shared folder a dashboard made there is to go to".
+  - *Left to later tasks:*
+    - The New menu's Data source entry and its wizard go to T363.
+    - The Model entry goes to T347, where a workspace model first has an overlay to be previewed in.
+    - AC-282 stays unticked until both exist.
+    - AC-192's shared-folder half (a shared folder's New menu offers only Folder) is T331's. It lands with proposals (T349), since until then creating in a shared folder is the only way an item gets there. So AC-192 stays unticked here.
 - [ ] T346 (AC-280, AC-298) Copy a data source into the workspace with its credentials, still encrypted *(rewritten 2026-09-26: wechart copies the ciphertext and never opens it, `[AD 7, IP 1]`)*
   - Files: `packages/api/src/routes/workspace-copy.ts`, `packages/api/src/routes/workspace-copy-source.test.ts`
   - Failing test: `workspace-copy-source.test.ts`:
@@ -5667,6 +5685,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - Workspace pickers resolve through `POST …/resolve` with `overlay` (AC-329's workspace path).
   - Also tested: a workspace copy of the root's `default`, pointed at another database with its target unchanged, answers the workspace's previews from that database while the published dashboard still answers from the original (AC-280); the copy's type can't change.
   - ~~Files: `packages/api/src/model/chain.ts` (`ws:<user>` chains), `packages/api/src/model/workspace-chain.test.ts`~~
+  - *(2026-09-27, from T345)* the workspace's New menu offers Model, which asks for its target folder as `NewItemDialog` does and stores it on the model, so a new model's overlay resolves along its target's path (AC-282's model half; with T363's data source, AC-282 can then be ticked).
   - Depends on: T344, T346, T426, T437
 - [ ] T348 (AC-278) Show the workspace band, each item's origin and target, and "Edit in my workspace" / "Open my copy"
   - Files: `packages/web/src/workspaces/explore/{WorkspaceBand,OriginLine,EditInWorkspaceDialog}.tsx` (+ tests), `packages/web/src/dashboard/DashboardView.tsx`, `e2e/security/workspace.spec.ts`
@@ -5833,6 +5852,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - *(2026-09-27, from T443)* the shared root's `default`, seeded at install, opens and changes in this form like any other data source (AC-310's "managed like any other");
     - *(2026-09-27, from T364)* a stored data source's settings show T365's `CubeState`: whether every Cube instance uses its settings, from `GET /api/data-sources/:id/cube-state`, against compose's xcube after a query through the source, with `.cube-state` and its parts styled in `shell/styles.ts` (AC-161's showing half);
     - *(2026-09-26, from T441)* the form seals each typed secret at submit with core's `sealSecretV1`, to the key `GET /api/data-sources/sealing-key` gives, and a canary secret typed into it appears in no request body to wechart (the Test step's included), no stored row and no line of the API's log, in Chrome, Firefox and WebKit (AC-325's form half: T441 built the sealer and the key route, and there was no form to type into).
+    - *(2026-09-27, from T345)* the workspace's New menu offers Data source, and the wizard asks for its target folder as `NewItemDialog` does, from `GET /api/folders/targets`, posting it as `targetFolderId` (AC-282's data-source half: T345 built the API's target check and the 409 on a name the target holds).
   - Depends on: T454, T361, T345
 - [x] T364 (AC-157, AC-233) List every visible data source with its folder, driver and health *(2026-09-27: the cubes using each moved to T459; its AC-001 clause is T331's; its AC-161 showing is T363's)*
   - Files: `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (replacing the deferred page), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`), `e2e/security/data-sources.spec.ts`; *as built (2026-09-27):* also `DataSourcesList.tsx` (+ test), `router/routes.tsx`, `admin/DeferredPage.tsx` (removed), `shell/styles.ts`, `shell/AccountMenu.tsx` (`Me.readWrite`), `packages/api/src/server.ts` (the listing's rule and paths; `/api/me`'s `readWrite`), `repos/connection-tests.ts` (`latestAsStored`, a test's `settings`), `repos/data-sources.ts` (`settingsPrint`), a migration `…_connection-test-settings.cjs`, `access/data-sources.test.ts`, `e2e/admin.spec.ts`
@@ -7603,7 +7623,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
 | AC-272 | ~~T337, T339, T340~~ T429, T457 | AC-273 | ~~T338~~ T435 | AC-274 | T341 |
 | AC-275 | ~~T337, T352~~ T428 | AC-276 | T343 | AC-277 | T343 |
 | AC-278 | T344, T348 | AC-279 | T344 | AC-280 | T346, T347 |
-| AC-281 | T347 | AC-282 | T345 | AC-283 | T347 |
+| AC-281 | T347 | AC-282 | T345, T347, T363 | AC-283 | T347 |
 | AC-284 | T349, T358 | AC-285 | T350 | AC-286 | T351 |
 | AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357 |
 | AC-290 | T353 | AC-291 | T329, ~~T426~~ T451 | AC-292 | T366 |

@@ -575,6 +575,11 @@ export function buildServer({
     registerDataSources(app, {
       store: dataSources,
       ...(config.seedToken === undefined ? {} : { seedToken: config.seedToken }),
+      // Workspaces are signed-in users' (T343): with security off, as the
+      // documents' routes, a data source has none (T345's review).
+      ...(config.security === 'off'
+        ? {}
+        : { workspaceOf: (folderId: string) => workspaceRootOf(folderId) }),
       ...(dataSourceLanding === undefined ? {} : { landing: dataSourceLanding }),
       ...(connectionTest === undefined ? {} : { tester: connectionTest }),
       ...(connectionTests === undefined ? {} : { tests: connectionTests }),
@@ -871,6 +876,21 @@ export function buildServer({
   type Stored = { readonly id: string; readonly body: Record<string, unknown> };
   const folderIdOf = (body: Record<string, unknown>): string | null =>
     typeof body['folderId'] === 'string' ? body['folderId'] : null;
+  /**
+   * A body with the shared folder it is to go to as stored: checked when a
+   * workspace item was made (T345, AC-282), and never changed by a save,
+   * which could otherwise drop it or point it at a folder its author may not
+   * write (T345's review).
+   */
+  const withStoredTarget = (
+    body: Record<string, unknown>,
+    stored: Record<string, unknown> | null | undefined,
+  ): Record<string, unknown> => {
+    const { targetFolderId: _sent, ...rest } = body;
+    void _sent;
+    const target = stored?.['targetFolderId'];
+    return target === undefined ? rest : { ...rest, targetFolderId: target };
+  };
   /**
    * The folder whose rights govern an item (T326): a folder's own; a chart
    * local to a dashboard, its dashboard's (AC-126); any other item, the
@@ -1232,6 +1252,47 @@ export function buildServer({
     );
     return folders.map((folder) => ({ ...folder, itemCount: counts.get(folder.id) ?? 0 }));
   });
+  /**
+   * The folders an item made in the workspace may go to (T345, AC-282; rule
+   * 74): the shared folders, the root among them, where the user has
+   * read-write access, each with its path from the root. Never a workspace's.
+   */
+  app.get('/api/folders/targets', USER, async (request) => {
+    if (!cat) return [];
+    const seen = await visibilityOf(request);
+    const all = (await cat.folders({ counted: false })) as {
+      id: string;
+      title: string;
+      parentId: string | null;
+    }[];
+    const byId = new Map(all.map((folder) => [folder.id, folder]));
+    const pathOf = (id: string) => {
+      const path: string[] = [];
+      for (let at = byId.get(id); at !== undefined && path.length <= all.length;) {
+        path.unshift(at.title);
+        at = at.parentId === null ? undefined : byId.get(at.parentId);
+      }
+      return path;
+    };
+    const writes = (id: string) => seen === undefined || mayWrite(seen, id);
+    /** Whether it sits in a workspace, walked up the folders already read. */
+    const inAWorkspace = (id: string) => {
+      const passed = new Set<string>();
+      for (let at: string | null | undefined = id; at != null && !passed.has(at);) {
+        if (isWorkspaceId(at)) return true;
+        passed.add(at);
+        at = byId.get(at)?.parentId;
+      }
+      return false;
+    };
+    return [
+      ...(writes(ROOT_FOLDER_ID) ? [{ id: ROOT_FOLDER_ID, path: [] as string[] }] : []),
+      ...all
+        .filter((folder) => !inAWorkspace(folder.id) && writes(folder.id))
+        .map((folder) => ({ id: folder.id, path: pathOf(folder.id) }))
+        .sort((a, b) => a.path.join('/').localeCompare(b.path.join('/'))),
+    ];
+  });
   // The two roots' counts, which are no folder's (AC-194).
   app.get('/api/folder-roots', USER, async (request) => {
     const seen = await visibilityOf(request);
@@ -1312,6 +1373,30 @@ export function buildServer({
     }
 
     /**
+     * A dashboard or chart made in the workspace names the shared folder it
+     * is to go to, one its author may write in (T345, AC-282; rule 74). A
+     * folder in the workspace goes nowhere.
+     */
+    let targetFolderId: string | undefined;
+    if (seen !== undefined && kind !== 'folder' && (await workspaceRootOf(folderId)) !== null) {
+      const target = (request.body as { targetFolderId?: unknown }).targetFolderId;
+      const targetsWorkspace =
+        typeof target === 'string' && target !== '' ? await workspaceRootOf(target) : null;
+      // Another's workspace is as a folder that isn't there (T345's review).
+      if (targetsWorkspace !== null && targetsWorkspace !== workspaceIdOf(owner))
+        return reply.code(404).send(NOT_THERE);
+      if (typeof target !== 'string' || target === '' || targetsWorkspace !== null)
+        throw new BadRequest(
+          'Name the shared folder it is to go to: one where you have read-write access.',
+        );
+      if (!mayWrite(seen, target))
+        return seen.rights.has(target)
+          ? reply.code(403).send({ error: READ_ONLY })
+          : reply.code(404).send(NOT_THERE);
+      targetFolderId = target;
+    }
+
+    /**
      * A dashboard is created with its interaction mode and its default
      * marking already in it (AC-072, direction.md rule 57), not left to be
      * defaulted when something reads it. The browser does default a dashboard
@@ -1325,10 +1410,12 @@ export function buildServer({
     const created = await docs.create({
       kind,
       id: randomUUID(),
-      body:
-        kind === 'dashboard'
+      body: {
+        ...(kind === 'dashboard'
           ? { ...newDashboardBody({ title, folderId, owner }) }
-          : { title, folderId, owner },
+          : { title, folderId, owner }),
+        ...(targetFolderId === undefined ? {} : { targetFolderId }),
+      },
     });
 
     return reply.status(201).send({
@@ -1478,6 +1565,10 @@ export function buildServer({
       const stored = found.stored ?? (await docs.get?.('folder', id));
       written =
         stored?.body['access'] === undefined ? rest : { ...rest, access: stored.body['access'] };
+    } else {
+      // A stored chart this build can't read is upgraded by this save, as before.
+      const stored = found.stored ?? (await docs.get?.(kind, id).catch(() => null));
+      written = withStoredTarget(written, stored?.body);
     }
 
     // Published into its folder: each cube it names bound there (T429, AC-272).
@@ -1577,6 +1668,8 @@ export function buildServer({
     }
     /** Library charts' folders, as stored: saving one changes it everywhere it is used. */
     const libraryFolders: (string | null)[] = [];
+    /** Each stored chart's body, as read, for the target it keeps (T345's review). */
+    const storedCharts = new Map<string, Record<string, unknown>>();
 
     const charts = payload.charts as { id?: unknown; body?: unknown; version?: unknown }[];
     for (const chart of charts) {
@@ -1646,6 +1739,7 @@ export function buildServer({
           document: { kind: 'chart', id: chart.id },
         });
       }
+      storedCharts.set(chart.id, stored.body);
       const owner = stored.body['localToDashboardId'];
       /**
        * A library chart edited from a tile is saved everywhere it is used,
@@ -1692,12 +1786,31 @@ export function buildServer({
     // (a local chart's, its dashboard's), and each the dashboard's filters
     // name in the dashboard's (T429, AC-272).
     const dashboardFolder = folderIdOf(dashboard.body as Record<string, unknown>);
+    /**
+     * Each keeps the shared folder it is to go to as stored (T345, AC-282). A
+     * library chart this save makes in the workspace goes where its dashboard
+     * goes: it can only be made from one of the workspace's own (T343's
+     * review), and would otherwise be a workspace item with no target (T345's
+     * review).
+     */
+    const storedDashboard =
+      found.stored?.body ?? (await docs.get('dashboard', dashboardId))?.body ?? null;
+    const madeHere = async (chart: { body: Record<string, unknown> }) =>
+      chart.body['localToDashboardId'] === undefined &&
+      found.seen !== undefined &&
+      (await workspaceRootOf(folderIdOf(chart.body) ?? '')) !== null
+        ? storedDashboard
+        : undefined;
     const boundCharts: Record<string, unknown>[] = [];
     for (const chart of checked) {
+      const body = withStoredTarget(
+        chart.body,
+        chart.version === 0 ? await madeHere(chart) : storedCharts.get(chart.id),
+      );
       const bound = await boundIn(
         'chart',
-        chart.body['localToDashboardId'] === undefined ? folderIdOf(chart.body) : dashboardFolder,
-        chart.body,
+        body['localToDashboardId'] === undefined ? folderIdOf(body) : dashboardFolder,
+        body,
       );
       if (bound.kind !== 'ok') return bindingRefused(reply, 'chart', bound);
       boundCharts.push(bound.body);
@@ -1705,7 +1818,7 @@ export function buildServer({
     const boundDashboard = await boundIn(
       'dashboard',
       dashboardFolder,
-      dashboard.body as Record<string, unknown>,
+      withStoredTarget(dashboard.body as Record<string, unknown>, storedDashboard),
     );
     if (boundDashboard.kind !== 'ok') return bindingRefused(reply, 'dashboard', boundDashboard);
 
