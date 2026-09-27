@@ -784,8 +784,8 @@ Dashboards:
       Fails when: one of those items is missing, or the marked-rows actions appear outside Markings mode.
 - [x] AC-200 THE SYSTEM SHALL show each non-empty marking in the filter bar as a chip bordered in the marking's colour, naming the marking, summarising its values by the members' titles, naming the tile it came from, and offering a menu and a control that unmarks it.
       Fails when: a chip shows a member's internal name, omits the source tile, or cannot unmark from the chip.
-- [ ] AC-201 THE SYSTEM SHALL show the marked-items badge in a chart tile's header row, beside its title, and only on chart tiles whose marking holds something (phase 2, `[R16]`: the 2026-09-25 re-critique measured a marked KPI tile whose title is squeezed to nothing).
-      Fails when: the badge pushes the title down or squeezes it out of view, or appears on a tile that does not mark or whose marking is empty.
+- [x] AC-201 THE SYSTEM SHALL show the marked-items badge whole, ~~in a chart tile's header row, beside its title,~~ in a chart tile's header row beside its title where the head has room, and otherwise under the chart, and only on chart tiles whose marking holds something (phase 2, `[R16]`: the 2026-09-25 re-critique measured a marked KPI tile whose title is squeezed to nothing; amended 2026-09-27, the user's answer (a) to handoff question 29: a narrow tile's head is its title's).
+      Fails when: the badge pushes the title down, squeezes it out of view or is cut short itself, or appears on a tile that does not mark or whose marking is empty.
 - [x] AC-202 THE SYSTEM SHALL draw a section as a band with a header holding a collapse control, its title and its number of items, and SHALL collapse and expand it in view and edit mode.
       Fails when: a section has no collapse control, or cannot be collapsed in view mode.
 - [x] AC-203 WHEN the user selects a tile in edit mode, THE SYSTEM SHALL open Properties, showing for a chart tile its title, chart type and source, an Edit chart action, its ownership, its Marking settings and its layout.

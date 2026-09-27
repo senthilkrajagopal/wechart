@@ -1,12 +1,13 @@
 import { isDrawable } from '@wechart/charts';
 import { CHART_TYPE_NAMES, type ChartType, type RenderSpec } from '@wechart/core';
-import { useState, type ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 import type { ClickedItem } from '../dashboard/crossfilter/clicked';
 import type { AnswerMeta } from '../query/answerMeta';
 import { StateLine, StatusIcon } from '../shell/StatusIcon';
 import { AccelerationBadge, accelerationOf } from './AccelerationBadge';
 import { ChartCanvas, type ChartCanvasProps } from './ChartCanvas';
+import { badgesIn, nextPlace, roomIn, type BadgePlace } from './badgePlace';
 import { DataAsOf, dataAsOfText } from './DataAsOf';
 import { DataTable, type DataTableProps } from './DataTable';
 import { Kpi } from './Kpi';
@@ -197,6 +198,35 @@ export function ChartTile({
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
   const [ownState, setOwnState] = useState(false);
+  /**
+   * The badges in the tile's foot, under the chart, where its head has no
+   * room for them beside a whole title (T402, AC-201; the user's choices,
+   * questions 27 and 29): measured from the head after each render and each
+   * resize, before the tile is painted, so each badge is drawn in one place.
+   */
+  const box = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<BadgePlace>({ inFoot: false, moved: 0 });
+  const inFoot = place.inFoot;
+  const measure = useCallback(() => {
+    const head = box.current?.querySelector<HTMLElement>(':scope > .tile-head');
+    if (head === null || head === undefined) return;
+    setPlace((current) =>
+      nextPlace(current, {
+        room: roomIn(head),
+        badges: current.inFoot ? 0 : badgesIn(head),
+      }),
+    );
+  }, []);
+  useLayoutEffect(measure);
+  useLayoutEffect(() => {
+    const element = box.current;
+    if (element === null || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [measure]);
   const asTable = tableView ?? ownState;
   const setAsTable = (showing: boolean) => {
     if (onTableViewChange === undefined) setOwnState(showing);
@@ -257,31 +287,42 @@ export function ChartTile({
     </>
   );
   const saysOfData = busy === true || served !== undefined || asOf !== undefined;
+  // Empty when its marking holds nothing, and then not drawn (`:empty`).
+  const foot = inFoot ? (
+    <div className="tile-foot">
+      {badge}
+      {saysOfData ? dataAsOf : null}
+    </div>
+  ) : null;
 
   // No rows: said in words, whatever the chart type (AC-043) — not blank
   // axes, and no table switch, since there is no data behind either view.
   if (spec.rows.length === 0) {
     return (
       <div
+        ref={box}
         className={busy === true ? 'chart-tile chart-tile--busy' : 'chart-tile'}
         data-testid="chart-tile"
         aria-busy={busy === true ? true : undefined}
       >
-        {heading === null && !saysOfData && badge == null ? null : (
+        {/* No head at all when all it would hold is under the chart (T402's review). */}
+        {heading === null && (inFoot || (!saysOfData && badge == null)) ? null : (
           <div className="tile-head">
             {heading}
-            {badge}
-            {dataAsOf}
+            {inFoot ? null : badge}
+            {inFoot ? null : dataAsOf}
           </div>
         )}
         {notes}
         <TileEmpty inEffect={inEffect} />
+        {foot}
       </div>
     );
   }
 
   return (
     <div
+      ref={box}
       className={busy === true ? 'chart-tile chart-tile--busy' : 'chart-tile'}
       data-testid="chart-tile"
       aria-busy={busy === true ? true : undefined}
@@ -290,8 +331,8 @@ export function ChartTile({
           controls — here the table view, a small ghost button (AC-187). */}
       <div className="tile-head">
         {heading}
-        {badge}
-        {dataAsOf}
+        {inFoot ? null : badge}
+        {inFoot ? null : dataAsOf}
         {canSwitch ? (
           <button
             type="button"
@@ -341,6 +382,7 @@ export function ChartTile({
       )}
       {/* A map's codes it can't place, named under it (T398, rule 87). */}
       {spec.chartType === 'map' && !showingTable ? <UnplacedCodes spec={spec} /> : null}
+      {foot}
     </div>
   );
 }

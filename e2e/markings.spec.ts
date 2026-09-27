@@ -43,6 +43,10 @@ async function markingDashboard(
     apart = false,
     limited = false,
     second = false,
+    kpi = false,
+    // The first marking's name, and the KPI tile's columns (T402's review).
+    markingName = 'Marking',
+    kpiColumns = 3,
   } = {},
 ) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
@@ -122,6 +126,8 @@ async function markingDashboard(
    * one marked value.
    */
   const detailsChart = limited ? await chartOn('Details by status', ['orders.status']) : undefined;
+  // A KPI in a three-column tile: the re-critique's squeezed title (T402).
+  const kpiChart = kpi ? await chartOn('Order count', [], 'kpi') : undefined;
   // One panel per category, each with its own header to mark from.
   const trellisChart = trellis
     ? await chartOn('Per category', ['orders.status', 'products.category'], 'trellis', {
@@ -140,7 +146,7 @@ async function markingDashboard(
         owner: 'admin',
         settings: { width: 'fixed', interactions: { mode: 'markings' } },
         markings: [
-          { id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true },
+          { id: 'm1', name: markingName, slot: 'mk1', isDefault: true },
           // A second marking, so a tile can be limited by two and the
           // empty-is-skipped rule has something to skip (AC-107).
           ...(second ? [{ id: 'm2', name: 'Comparison', slot: 'mk2', isDefault: false }] : []),
@@ -202,6 +208,13 @@ async function markingDashboard(
               ...(apartChart === undefined
                 ? []
                 : [{ id: 'tile-apart', kind: 'chart', w: 6, h: 40, chartId: apartChart }]),
+              ...(kpiChart === undefined
+                ? []
+                : [
+                    { id: 'tile-kpi', kind: 'chart', w: kpiColumns, h: 20, chartId: kpiChart },
+                    // A text tile, which marks nothing.
+                    { id: 'tile-notes', kind: 'markdown', w: 3, h: 20, text: 'Notes' },
+                  ]),
             ],
           },
           ...(elsewhere === undefined
@@ -331,6 +344,140 @@ test('a click marks what was clicked, and says so in words and a count', async (
   // Announced politely, with the count (AC-101).
   await expect(page.getByTestId('marking-announcer')).toContainText('1');
 });
+
+/**
+ * T402, AC-201 (amended 2026-09-27, the user's answer (a) to question 29):
+ * THE SYSTEM SHALL show the marked-items badge whole, in a chart tile's
+ * header row beside its title where the head has room, and otherwise under
+ * the chart; and only on chart tiles whose marking holds something.
+ * `Fails when: the badge pushes the title down, squeezes it out of view or is
+ * cut short itself, or appears on a tile that does not mark or whose marking
+ * is empty.`
+ *
+ * The re-critique's case (2026-09-25, N1): a KPI in a three-column tile,
+ * marked by a bar elsewhere, drew none of its title. Here at the widths it
+ * measured, 1440 and 1280.
+ */
+for (const width of [1440, 1280])
+  test(`a marked tile keeps its title whole, the badge whole beside it or, in a narrow tile, under the chart, at ${String(width)} px`, async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const { id, title } = await markingDashboard(request, { kpi: true, limited: true });
+    await open(page, id, title);
+    const kpi = tile(page, 'tile-kpi');
+    await expect(kpi.getByTestId('kpi-value')).toBeVisible();
+    // An empty marking: no badge.
+    await expect(kpi.getByTestId('mark-badge')).toHaveCount(0);
+
+    await clickBar(page, tile(page, 'tile-status'), 'shipped');
+
+    /**
+     * A narrow tile (the user's choices, questions 27 (c) and 29 (a)): its
+     * head is its title's, whole, and both badges go to its foot, under the
+     * chart — the marking's whole ("■ Marking: 1 marked"), never cut short,
+     * inside the tile.
+     */
+    const badge = kpi.getByTestId('mark-badge');
+    await expect(badge).toHaveText('Marking: 1 marked');
+    const foot = kpi.locator('.tile-foot');
+    await expect(foot.getByTestId('mark-badge')).toBeVisible();
+    await expect(foot.getByTestId('tile-freshness')).toBeVisible();
+    await expect(kpi.locator('.tile-head').getByTestId('mark-badge')).toHaveCount(0);
+    await expect(kpi.locator('.tile-head').getByTestId('tile-freshness')).toHaveCount(0);
+    const heading = kpi.locator('.tile-head__title');
+    await expect(heading).toHaveText('Order count');
+    expect(await heading.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0);
+    await expectWholeWithin(kpi, badge);
+    const [badgeBox, valueBox] = [
+      await badge.boundingBox(),
+      await kpi.getByTestId('kpi-value').boundingBox(),
+    ];
+    // Under the chart, not over it.
+    expect(valueBox && badgeBox && badgeBox.y >= valueBox.y + valueBox.height).toBe(true);
+
+    // A tile whose head has room keeps it there, beside its title, on its line.
+    const wide = tile(page, 'tile-category');
+    const wideBadge = wide.locator('.tile-head').getByTestId('mark-badge');
+    await expect(wideBadge).toHaveText('Marking: 1 marked');
+    const wideTitle = wide.locator('.tile-head__title');
+    expect(await wideTitle.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0);
+    const [titleBox, sideBox] = [await wideTitle.boundingBox(), await wideBadge.boundingBox()];
+    expect(titleBox && sideBox && titleBox.x + titleBox.width <= sideBox.x).toBe(true);
+    expect(
+      Math.abs(
+        (titleBox?.y ?? 0) +
+          (titleBox?.height ?? 0) / 2 -
+          (sideBox?.y ?? 0) -
+          (sideBox?.height ?? 0) / 2,
+      ),
+    ).toBeLessThan(2);
+
+    // No badge on a tile that marks nothing: the details tile, or text.
+    await expect(tile(page, 'tile-details').getByTestId('mark-badge')).toHaveCount(0);
+    await expect(tile(page, 'tile-notes').getByTestId('mark-badge')).toHaveCount(0);
+  });
+
+/** Every edge of `inner` inside `outer`'s box: nothing of it cut off by the tile. */
+async function expectWholeWithin(outer: Locator, inner: Locator) {
+  const [box, part] = [await outer.boundingBox(), await inner.boundingBox()];
+  expect(box && part).toBeTruthy();
+  if (!box || !part) return;
+  expect(part.x).toBeGreaterThanOrEqual(box.x - 0.5);
+  expect(part.x + part.width).toBeLessThanOrEqual(box.x + box.width + 0.5);
+  expect(part.y + part.height).toBeLessThanOrEqual(box.y + box.height + 0.5);
+}
+
+/**
+ * T402's review: where the head's room runs out is measured, not guessed from
+ * a width. With a long marking name, in a three- and a five-column tile at
+ * 1440 and 1280 px, the title is never cut for the badge, and the badge is
+ * whole, inside the tile: beside the title on its line, or under the chart.
+ */
+for (const width of [1440, 1280])
+  for (const kpiColumns of [3, 5])
+    test(`a long marking name never cuts the title or itself, in a ${String(kpiColumns)}-column tile at ${String(width)} px`, async ({
+      page,
+      request,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const { id, title } = await markingDashboard(request, {
+        kpi: true,
+        limited: true,
+        kpiColumns,
+        markingName: 'Regional comparison',
+      });
+      await open(page, id, title);
+      const kpi = tile(page, 'tile-kpi');
+      await expect(kpi.getByTestId('kpi-value')).toBeVisible();
+      await clickBar(page, tile(page, 'tile-status'), 'shipped');
+
+      const badge = kpi.getByTestId('mark-badge');
+      await expect(badge).toHaveCount(1);
+      await expect(badge).toHaveText('Regional comparison: 1 marked');
+      const heading = kpi.locator('.tile-head__title');
+      await expect(heading).toHaveText('Order count');
+      expect(await heading.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0);
+      await expectWholeWithin(kpi, badge);
+      const [titleBox, badgeBox, valueBox] = [
+        await heading.boundingBox(),
+        await badge.boundingBox(),
+        await kpi.getByTestId('kpi-value').boundingBox(),
+      ];
+      if (!titleBox || !badgeBox || !valueBox) throw new Error('no box');
+      if ((await kpi.locator('.tile-head').getByTestId('mark-badge').count()) === 1) {
+        // In the head: after the title, on its line.
+        expect(titleBox.x + titleBox.width).toBeLessThanOrEqual(badgeBox.x);
+        expect(
+          Math.abs(titleBox.y + titleBox.height / 2 - badgeBox.y - badgeBox.height / 2),
+        ).toBeLessThan(2);
+      } else {
+        // Under the chart.
+        await expect(kpi.locator('.tile-foot').getByTestId('mark-badge')).toBeVisible();
+        expect(badgeBox.y).toBeGreaterThanOrEqual(valueBox.y + valueBox.height);
+      }
+    });
 
 test('a plain click replaces the marking, and Ctrl-click adds to it', async ({ page, request }) => {
   const { id, title } = await markingDashboard(request);
@@ -1487,13 +1634,19 @@ test('outside Markings mode, a chart tile’s menu has no marked-rows actions', 
 });
 
 /**
- * T219 / AC-201: THE SYSTEM SHALL show the marked-items badge in a chart
- * tile's header row, beside its title, and only on chart tiles whose marking
- * holds something.
- * `Fails when: the badge pushes the title down, or appears on a tile that does
- * not mark or whose marking is empty.`
+ * T219 / AC-201 (amended 2026-09-27, T402): THE SYSTEM SHALL show the
+ * marked-items badge whole, in a chart tile's header row beside its title
+ * where the head has room, and otherwise under the chart, and only on chart
+ * tiles whose marking holds something.
+ * `Fails when: the badge pushes the title down, squeezes it out of view or is
+ * cut short itself, or appears on a tile that does not mark or whose marking
+ * is empty.`
+ *
+ * The seeded tile's head, at 1280 px, has no room for "Orders by category and
+ * status" beside the badge, the freshness badge and "Table view": the badge
+ * goes under the chart and the title stays whole (T402).
  */
-test('the marked badge sits beside the title in the tile’s header, and never on a text tile', async ({
+test('the marked badge never pushes or cuts the title, and never sits on a text tile', async ({
   page,
 }) => {
   // The seeded dashboard has a text tile beside a bar chart.
@@ -1511,18 +1664,24 @@ test('the marked badge sits beside the title in the tile’s header, and never o
   await clickBar(page, status, 'Components');
   const badge = status.getByTestId('mark-badge');
   await expect(badge).toContainText('1 marked');
-  // In the header row, beside the title, and the title where it was.
-  await expect(status.locator('.tile-head').getByTestId('mark-badge')).toHaveCount(1);
+  // The title where it was, and whole; the badge whole, inside the tile.
   expect(await titleInTile()).toBeCloseTo(before, 0);
+  expect(await heading.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0);
+  await expect(badge).toHaveCount(1);
+  await expectWholeWithin(status, badge);
   const badgeBox = await badge.boundingBox();
   const headingBox = await heading.boundingBox();
-  expect(
-    Math.abs(
-      (badgeBox?.y ?? 0) +
-        (badgeBox?.height ?? 0) / 2 -
-        ((headingBox?.y ?? 0) + (headingBox?.height ?? 0) / 2),
-    ),
-  ).toBeLessThan(6);
+  if ((await status.locator('.tile-head').getByTestId('mark-badge').count()) === 1)
+    // Beside the title, on its line.
+    expect(
+      Math.abs(
+        (badgeBox?.y ?? 0) +
+          (badgeBox?.height ?? 0) / 2 -
+          ((headingBox?.y ?? 0) + (headingBox?.height ?? 0) / 2),
+      ),
+    ).toBeLessThan(6);
+  // Or under the chart.
+  else await expect(status.locator('.tile-foot').getByTestId('mark-badge')).toBeVisible();
   // Not on the text tile, which marks nothing — and the tile is there.
   await expect(tile(page, 'tile-notes')).toBeVisible();
   await expect(tile(page, 'tile-notes').getByTestId('mark-badge')).toHaveCount(0);

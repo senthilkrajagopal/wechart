@@ -3294,8 +3294,9 @@ button.filter-pill__clear {
 /* A chart whose filtered answer is on its way (AC-078): still drawn, dimmed. */
 /* What is drawn fades while it is asked again; the head — the title, and the
    "Updating…" that says so — keeps its contrast (T183's review, AC-005). */
-.chart-tile--busy > :not(.tile-head, .tile-notes) { opacity: 0.55; transition: opacity 120ms ease-in; }
-/* Said in the head, as well as by the fade (T183, AC-177). */
+.chart-tile--busy > :not(.tile-head, .tile-notes, .tile-foot) { opacity: 0.55; transition: opacity 120ms ease-in; }
+/* Said in the head — or under the chart where the head has no room for it
+   beside the title (T402) — as well as by the fade (T183, AC-177). */
 .tile-busy {
   display: inline-flex;
   flex: none;
@@ -3407,6 +3408,8 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* In the tile's header row beside the title (AC-201): the prototype's .mbadge,
    a 20 px pill, 12/600, bordered border-strong. */
 .mark-badge {
+  /* Whole, never cut short: a tile whose head has no room for it beside the
+     whole title draws it in its foot instead (T402, AC-201). */
   flex: 0 0 auto;
   height: 20px;
   /* .mbadge { padding: 0 6px; color: var(--text-secondary); background: var(--bg-subtle) }
@@ -3638,7 +3641,31 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   flex-direction: column;
   min-height: 0;
 }
-.grid-tile > .chart-tile > :not(.tile-head, .tile-notes) { flex: 1 1 0; min-height: 0; }
+.grid-tile > .chart-tile > :not(.tile-head, .tile-notes, .tile-foot) { flex: 1 1 0; min-height: 0; }
+/* A tile's badges — its marking's and its freshness — under its chart where
+   its head has no room for them beside the whole title (T402, AC-201; the
+   user's choices; tiles/badgePlace.ts). They wrap before either is cut short.
+   None to show, none drawn. */
+.tile-foot {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 8px;
+  margin-top: 4px;
+  min-width: 0;
+}
+.tile-foot:empty { display: none; }
+/* In a foot narrower than it, the marking's badge wraps within the tile, never
+   cut short at either end (T402's review; AC-201, AC-098: its name is how
+   markings of like colour are told apart). */
+.tile-foot > .mark-badge {
+  max-width: 100%;
+  height: auto;
+  min-height: 20px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 /* What a tile says of its answer, under its head (T253's review): as tall as
    its lines, the chart taking the rest. */
 .tile-notes { flex: none; margin-bottom: 4px; }

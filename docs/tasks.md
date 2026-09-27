@@ -6361,10 +6361,19 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.14 The UI fixes (F21–F23, returned)
 
-- [ ] T402 [P] (AC-201) Keep the marked-items badge in the header row beside the title
-  - Files: `packages/web/src/tiles/ChartTile.tsx`, `e2e/markings.spec.ts`
+- [x] T402 [P] (AC-201) Keep the marked-items badge in the header row beside the title
+  - Files: `packages/web/src/tiles/ChartTile.tsx`, `e2e/markings.spec.ts`; *as built:* `packages/web/src/tiles/badgePlace.ts` (+ test), `packages/web/src/shell/styles.ts` (`.tile-foot`)
   - Failing test: `markings.spec.ts`: on a marked KPI tile the badge sits beside the title without pushing it down or squeezing it out of view, and no tile with an empty marking shows one (AC-201).
+    - *(2026-09-27, the user's answers (c) to question 27 and (a) to question 29; AC-201 amended)* ~~a narrow tile (440 px or less)~~ a tile whose head has no room for them beside its whole title *(as built, from the review)* draws both its badges, the marking's whole and the freshness badge, in a foot under the chart, and its head is its title's, whole; a wider tile keeps the marking badge in its head beside its title, on its line; at 1440 and 1280 px (AC-201).
   - Depends on: none
+  - **Done 2026-09-27. AC-201 ticked:** `e2e/markings.spec.ts` in Chrome —
+    - "a marked tile keeps its title whole…" (a three-column KPI at 1440 and 1280: its head the title's, both badges under the chart; the six-column tile's badge beside its title, on its line);
+    - "a long marking name never cuts the title or itself…" (a three- and five-column tile at both widths: the title whole, the badge whole inside the tile, on the title's line or under the chart);
+    - T219's test, amended with AC-201 (the seeded tile's title where it was and whole; at 1280 px its head has no room for the badge, which goes under the chart);
+    - no badge on a tile that marks nothing or whose marking is empty.
+  - **As built:** not a width. The review measured tiles over 440 px whose titles a long marking name, or "Updating…", still cut to nothing. `badgePlace.ts` measures the head after each render and resize, before paint: the badges leave once the title's whole text doesn't fit (the freshness badge gives way first, as T250 made it), keeping the width they took, and come back only once the head has that room again, so they never flip. In a foot narrower than it, the marking's badge wraps inside the tile, never cut at either end. A tile with no title draws no empty head.
+  - **Review (one round), fixed:** the width rule (above); the badge cut from its start in the narrowest foot; an assertion that couldn't fail, replaced by the badge's every edge inside the tile; the jump on first paint (measured in a layout effect); the empty head; the stale comment on "Updating…".
+  - **Tests:** `badgePlace.test.ts` 4; Chrome: `markings.spec.ts` 54, with `crossfilter`, `design-conformance`, `dashboard` and `no-horizontal-scroll` (191 in all); web 1555. `acceleration.spec.ts` "Data as of…" fails as before, and fails the same at HEAD without T402 (a menu item out of view).
 - [x] T403 [P] (AC-220) Name members by their titles in the Acceleration tab and every other place the re-critique found
   - Files: ~~`packages/web/src/editor/acceleration/*`~~ (as built) `packages/api/src/cube/preaggMatch.ts`, `packages/api/src/server.ts`, `packages/web/src/editor/AccelerationPanel.tsx`, `packages/core/src/{render-spec,compile}.ts`, `packages/charts/src/{modelWriter,legend,index}.ts`, `packages/web/src/tiles/Kpi.tsx`, `packages/web/src/editor/{fields,Wells,ChartEditor}.tsx`, `packages/web/src/dashboard/{DashboardPage,DashboardView}.tsx`, `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, their tests, `e2e/titles.spec.ts`, and `e2e/{chart-editor,preaggregations,acceleration}.spec.ts`
   - Failing test: `titles.spec.ts`: no legend, tooltip, table header, pill, marking chip, "Why this chart?" trace or Acceleration tab shows an internal name such as `orders.count`, and a one-source chart's legend and KPI label use the short title (AC-220).
