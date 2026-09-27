@@ -142,6 +142,10 @@
 >     by short name and folder path; another folder's refusals said as that folder's; Schedules
 >     reads a folder rollup's key SQL), T341 (isolation, AC-274 ticked; run in all browsers).
 >     T402 waits on question 27 (its badge change and test are in the tree, uncommitted).
+>     Then, outside slice 3: T401 (a box plot's "Computed from n of N rows", AC-315 ticked), T389
+>     (text-tile tokens, AC-116 ticked; tokens bind at publish and count as uses of their cube,
+>     and follow the dashboard's filters as the prototype's do), T398 (the country map, AC-305,
+>     AC-313).
 >     - **Deployed:** the docker-desktop release (Helm revision 22) runs wechart `714b152-t429`
 >       (through T429) on the 3b image, the model in items mode, sign-in on; `verify.sh --no-install`
 >       passes. Since: T452 (a folder's model files published as its items) and T429 (charts and
@@ -166,6 +170,20 @@
 >       `shell.spec.ts` "the app bar folds navigation and search into a menu" in Safari only: after
 >       widening past 1,024 px and narrowing at once, the menu stays open (its Tab step was fixed
 >       with Option-Tab, 840e9b0; three tries at the rest, then stopped). The rest passed alone.
+>   - **Answered by the user on 2026-09-26 (evening):**
+>     - 18: pin the image built last. That is `xcube:v1.7.45-ed08180c37@sha256:bc041aa208df…`
+>       (overlay data sources, slice 8, the TLS binding), for slices 4–6.
+>     - 19: yes, the workspace refuses a data source's driver change up front. Sent to xcube
+>       (`to-xcube/2026-09-26-1849-driver-change-answer.md`).
+>     - 20: hide health rows older than a limit. Still needed: the limit's value.
+>     - 21: no. Cubes stay bound to the data source they were published with; a nearer one
+>       doesn't republish them.
+>     - 22: no. Dremio Cloud URLs aren't required to be `https:`.
+>     - 25: read as "yes, refuse". A chart or dashboard save in a folder is refused (502) while
+>       xcube is unreachable, as today.
+>     - 26: no. AC-329 stays the picker's; the prefixed names elsewhere stay.
+>     - 27: (c), the freshness badge moves to a narrow tile's foot (T402).
+>     - These go into requirements.md (slices 4–6, and T402's direction) at the next gate pass.
 >   - **Asked on 2026-09-26, not yet answered:**
 >     18. Which xcube image to pin for slices 4–6: the TLS binding you chose exists only from
 >         `1249dda9ca` on. `ed08180c37` has it too, with overlay data sources.
@@ -205,6 +223,9 @@
 >           - (c) The freshness badge leaves a narrow tile's head for its foot.
 >           - (d) The title is cut short once the badges can shrink no further. At 1280 it
 >             disappears, so AC-201 would need rewording.
+>     28. (T398's review) Singapore is filled on the map, but it's sub-pixel in a small tile. Should
+>         tiny states get a marker (a dot at their label point) so they can be seen? That's the
+>         research's open question 2.
 > - **Pushing is the user's** (this session's push was refused by the permission classifier):
 >   `git push origin main feat/xcube --tags`.
 > - **Done since (2026-09-25, later):**
