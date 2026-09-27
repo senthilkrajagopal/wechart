@@ -74,6 +74,17 @@ export const ROOT_FOLDER_ID = 'root';
 export const MY_WORKSPACE_ID = 'mine';
 const ROOT_IDS = [ROOT_FOLDER_ID, MY_WORKSPACE_ID];
 
+/**
+ * A user's private workspace with security on (T343, AC-276): a root of its
+ * own, `ws:<their key>`, which the client calls `mine`. Core's `folderRights`
+ * gives no one any `ws:` folder, Super-Admins included; the owner's right to
+ * theirs is added for them alone.
+ */
+export const workspaceIdOf = (userKey: string): string => `ws:${userKey}`;
+/** My workspace, or any user's: a root no shared grant reaches. */
+export const isWorkspaceId = (folderId: string): boolean =>
+  folderId === MY_WORKSPACE_ID || folderId.startsWith('ws:');
+
 export function catalog(db: Kysely<Database>) {
   const selectItems = () =>
     db

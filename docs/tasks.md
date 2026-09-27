@@ -5604,12 +5604,33 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.5 Workspaces (F29)
 
-- [ ] T343 (AC-276, AC-277) Give each Super-Admin and read-write member a private workspace, and read-only users none
+- [x] T343 (AC-276, AC-277) Give each Super-Admin and read-write member a private workspace, and read-only users none
   - Files: `packages/api/src/repos/workspaces.ts` (+ test), `packages/api/src/repos/catalog.ts`, a migration `…_workspaces.cjs` (phase-1 items in `mine` move to `ws:admin`)
   - Failing test: `workspaces.test.ts`: `writer` and `super` each list, open and search their own `ws:` folder; neither can list, open, search or load the other's, Super-Admins included; `reader` has no workspace and every create route answers 403 (AC-276, AC-277).
   - *2026-09-26, T328's review:* with sign-in on, no user's key is `admin`, because keys come from the provider (`auth/routes.ts`). Items moved to `ws:admin` would be nobody's, contrary to R17 ("everything phase 1 created stays in place … only Super-Admins see it"). Where phase-1 items in `mine` go is asked of the user; this migration waits for the answer (AC-267).
   - *2026-09-27, the user's answer (question 3):* "it is okay if phase 1 items aer not reachable.. this phase overrides phase 1 items". ~~a migration `…_workspaces.cjs` (phase-1 items in `mine` move to `ws:admin`)~~ No migration moves them: phase-1 items in `mine` stay where they are, reachable by no workspace.
   - Depends on: T325, T313
+  - **Done 2026-09-27. AC-276 ticked; AC-277 is not.** AC-277's API half is done: no workspace, and every create answers 403. Its "no create or edit action appears" is T331's switcher and Explore by role (AC-192).
+    - AC-276: `access/workspaces.test.ts`, 9 tests. Each of `writer` and `super` lists, opens and searches their own workspace, and neither sees, opens, finds or creates in the other's, a Super-Admin included. Also tested there: the stored id is never shown, a workspace chart is kept from shared dashboards, and moves across a workspace's edge are refused. `security/workspaces.spec.ts` (Chrome) shows My workspace in each writer's tree with their own items, and none in a reader's.
+  - **As built:**
+    - **The folder id.** A workspace is `ws:<user key>`: no document, like the roots. Core's `folderRights` already gives no one any `ws:` folder, Super-Admins included. `visibilityOf` adds its owner's write right to it and every folder beneath it, for a Super-Admin or a read-write member only.
+    - **Named `mine` both ways.** The client names it `mine`, as with one user, and the API takes it so in a route's folder, a query's `folder` and every `folderId` a body carries, at any depth. It names it `mine` in every JSON answer (`access/workspace-alias.ts`). With security off, `mine` is the single user's, as in phase 1.
+    - **A chart in a workspace** is its owner's alone. It opens through no dashboard, and it goes on no dashboard outside its workspace (409).
+    - **Nothing moves across a workspace's edge** (409), by PATCH, PUT or a dashboard save: work reaches a shared folder through a proposal, and shared work is changed in a copy (F30, AC-278). With security off, phase 1's moves stand.
+    - **A folder holding models or data sources** goes into no workspace, by either route (T428's check, now on PUT and for data sources too).
+    - **The web** calls any `ws:` id My workspace, hangs a folder in one from it, and shows the root only where `/api/folder-roots` counts it.
+  - **Review (one round), fixed:**
+    - workspace charts reachable through shared dashboards;
+    - My workspace's folders missing from the tree, the move menu offering an item's own folder, and raw `ws:` ids in Settings and the chart editor (all by the two-way `mine`);
+    - nested `folderId`s not taken as `mine`;
+    - moves across the edge;
+    - a folder with models or data sources moved in by PUT;
+    - 404 in place of 403 for a reader's data source or model in `mine`;
+    - two e2e assertions that couldn't fail;
+    - an O(N²) scan.
+  - **Tests:**
+    - api 801 (`workspaces.test.ts` 9, `workspace-alias.test.ts` 2), web 1559 (`roots.test.ts` 3);
+    - Chrome: the security suite (59) and Explore, design conformance, dashboard, settings and editor (137).
 - [ ] T344 (AC-278, AC-279) Copy a dashboard into the workspace with its charts, never editing shared items in place
   - Files: `packages/api/src/routes/workspace-copy.ts` (+ test), `packages/api/src/server.ts` (a write to a shared item answers 409 "Edit in my workspace"), `packages/api/src/repos/documents.ts`
   - Failing test: `workspace-copy.test.ts`: copying a dashboard brings its local charts and the library charts it shows, and a model or data source only when chosen; a second copy opens the first; any `PUT`, `PATCH` of content on a shared dashboard, chart, model or data source is refused (AC-278, AC-279).

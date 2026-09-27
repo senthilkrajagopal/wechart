@@ -7,7 +7,9 @@ import {
   imageProblem,
   newDashboardBody,
   objectsOf,
+  type AccessFolder,
   type ChartDefinition,
+  type FolderRight,
 } from '@wechart/core';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 
@@ -48,8 +50,12 @@ import type { PublicationStore } from './xcube/publications';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, usersOfCubes, type ReferenceDocument } from './model/references';
 import { searchable, visibleCounts, type Visibility } from './access/visible';
+import { aliasIn, aliasOut } from './access/workspace-alias';
 import type { BookmarkStore } from './repos/bookmarks';
-import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from './repos/catalog';
+import { isWorkspaceId, MY_WORKSPACE_ID, ROOT_FOLDER_ID, workspaceIdOf } from './repos/catalog';
+
+/** Its owner's right to their own workspace (T343): every item, theirs to change. */
+const OWN_WORKSPACE: FolderRight = Object.freeze({ see: true, write: true, kinds: 'all' });
 import type { ConnectionTestStore } from './repos/connection-tests';
 import type { DataSource, DataSourceStore } from './repos/data-sources';
 import type { DataSourceLanding } from './routes/data-sources';
@@ -306,6 +312,32 @@ export function buildServer({
   if (security === 'oidc') registerSignIn(app, signInOptionsOf(config, sessions));
   registerUser(app, security, config.superAdminGroup);
   registerGuard(app, security, config.publicUrl);
+  /**
+   * My workspace, `mine` to the client, is the signed-in user's own
+   * `ws:<key>` (T343, AC-276), both ways: taken so in a route's folder, a
+   * query's `folder` and every `folderId` a body carries, before any handler
+   * reads them; and named `mine` in every JSON answer, so the client never
+   * sees the stored id (its review). With security off it stays `mine`, the
+   * single user's.
+   */
+  if (security !== 'off') {
+    app.addHook('preHandler', async (request) => {
+      const user = request.wechartUser;
+      if (user === null || user === undefined) return;
+      const own = workspaceIdOf(user.key);
+      const params = request.params as Record<string, unknown> | undefined;
+      if (params?.['folderId'] === MY_WORKSPACE_ID) params['folderId'] = own;
+      const query = request.query as Record<string, unknown> | undefined;
+      if (query?.['folder'] === MY_WORKSPACE_ID) query['folder'] = own;
+      aliasIn(request.body, own);
+    });
+    app.addHook('onSend', async (request, reply, payload) => {
+      const user = request.wechartUser;
+      if (user === null || user === undefined || typeof payload !== 'string') return payload;
+      if (!String(reply.getHeader('content-type') ?? '').includes('json')) return payload;
+      return aliasOut(payload, workspaceIdOf(user.key));
+    });
+  }
 
   /**
    * Whether anyone is signed in, for the web server's `auth_request` (T321,
@@ -495,7 +527,9 @@ export function buildServer({
     refusalIn: async (request, folderId) => {
       const seen = await visibilityOf(request);
       if (seen === undefined || mayWrite(seen, folderId)) return undefined;
-      return folderId !== ROOT_FOLDER_ID && !seen.rights.has(folderId)
+      // The root, and My workspace to one who has none, refuse as read-only (T343).
+      const said = folderId === ROOT_FOLDER_ID || folderId === workspaceIdOf(userOf(request).key);
+      return !said && !seen.rights.has(folderId)
         ? { status: 404, body: { error: 'There’s no such folder, or it isn’t yours to see.' } }
         : { status: 403, body: { error: READ_ONLY } };
     },
@@ -616,6 +650,13 @@ export function buildServer({
           status: 404,
           body: { error: 'There’s no such folder, or it isn’t yours to see.' },
         };
+        // My workspace, to one who has none, refuses as read-only (T343, AC-277).
+        if (
+          right === undefined &&
+          want === 'write' &&
+          folderId === workspaceIdOf(userOf(request).key)
+        )
+          return { status: 403, body: { error: READ_ONLY } };
         if (right === undefined) return notThere;
         // A folder they see but may not change says so, even to a read-only
         // member, who sees none of its data sources (T335's review).
@@ -784,10 +825,47 @@ export function buildServer({
       return user.superAdmin ? undefined : { tree: [], rights: new Map() };
     }
     const tree = await folderAccess.tree();
-    return {
-      tree,
-      rights: folderRights(tree, { groups: user.groups, superAdmin: user.superAdmin }),
-    };
+    const rights = new Map(
+      folderRights(tree, { groups: user.groups, superAdmin: user.superAdmin }),
+    );
+    // A private workspace for a Super-Admin or read-write member, and theirs
+    // alone (T343, AC-276): its root and every folder beneath it. A user with
+    // read-only access everywhere has none (AC-277).
+    if (!user.superAdmin && ![...rights.values()].some((right) => right.write))
+      return { tree, rights };
+    const own = workspaceIdOf(user.key);
+    const inside = await foldersBeneath(own);
+    for (const id of [own, ...inside.map((folder) => folder.id)]) rights.set(id, OWN_WORKSPACE);
+    return { tree: [...tree, { id: own, parentId: null }, ...inside], rights };
+  };
+  /** The folders in a workspace, at any depth, by their parents. */
+  const foldersBeneath = async (rootId: string): Promise<AccessFolder[]> => {
+    if (!cat) return [];
+    const all = (await cat.folders({ counted: false })) as {
+      id: string;
+      parentId: string | null;
+    }[];
+    const children = new Map<string, { id: string; parentId: string }[]>();
+    for (const folder of all) {
+      if (folder.parentId === null) continue;
+      const siblings = children.get(folder.parentId);
+      const child = { id: folder.id, parentId: folder.parentId };
+      if (siblings === undefined) children.set(folder.parentId, [child]);
+      else siblings.push(child);
+    }
+    const found: AccessFolder[] = [];
+    const seen = new Set<string>();
+    const pending = [rootId];
+    while (pending.length > 0) {
+      const at = pending.pop()!;
+      for (const child of children.get(at) ?? [])
+        if (!seen.has(child.id)) {
+          seen.add(child.id);
+          found.push(child);
+          pending.push(child.id);
+        }
+    }
+    return found;
   };
   /** Each visible folder's count of what the user may see in and beneath it (AC-194). */
   type Stored = { readonly id: string; readonly body: Record<string, unknown> };
@@ -820,6 +898,8 @@ export function buildServer({
     const library = kind === 'chart' && typeof item.body['localToDashboardId'] !== 'string';
     if (!library) return right !== undefined;
     if (right?.kinds === 'all') return true;
+    // A chart in a workspace is its owner's alone, whatever shows it (T343's review, AC-276).
+    if (folder !== null && (await workspaceRootOf(folder)) !== null) return false;
     const using = (cat?.dashboardsUsing ? await cat.dashboardsUsing(item.id) : []) as {
       folderId: string | null;
     }[];
@@ -928,7 +1008,9 @@ export function buildServer({
     return beneath;
   };
   /** Whether a folder is My workspace or beneath it (T428). */
-  const inWorkspace = async (folderId: string): Promise<boolean> => {
+  /** The workspace a folder is in, at any depth, or null for a shared one (T343). */
+  const workspaceRootOf = async (folderId: string | null): Promise<string | null> => {
+    if (folderId === null) return null;
     const parents = new Map(
       (
         (cat ? await cat.folders({ counted: false }) : []) as {
@@ -943,10 +1025,46 @@ export function buildServer({
       at != null && !seen.has(at);
       at = parents.get(at)
     ) {
-      if (at === MY_WORKSPACE_ID) return true;
+      if (isWorkspaceId(at)) return at;
       seen.add(at);
     }
-    return false;
+    return null;
+  };
+  const inWorkspace = async (folderId: string): Promise<boolean> =>
+    (await workspaceRootOf(folderId)) !== null;
+  /**
+   * Why a folder can't go into a workspace: the models or data sources in it
+   * or beneath it, which xcube's tree, holding no workspace, would lose
+   * (T428's review, AC-275; T343's review). Nothing where it may.
+   */
+  const intoWorkspaceRefusal = async (
+    folderId: string,
+    target: string,
+  ): Promise<{ error: string } | undefined> => {
+    if (!(await inWorkspace(target))) return undefined;
+    const models = await modelsBeneath(folderId);
+    if (models > 0)
+      return {
+        error: `This folder holds ${String(models)} model${models === 1 ? '' : 's'}, in it or beneath it, and My workspace can’t hold models yet.`,
+      };
+    const sources = await dataSourcesBeneath(folderId);
+    if (sources > 0)
+      return {
+        error: `This folder holds ${String(sources)} data source${sources === 1 ? '' : 's'}, in it or beneath it, and My workspace can’t hold data sources yet.`,
+      };
+    return undefined;
+  };
+  /**
+   * Whether a move crosses between a workspace and the shared tree, or two
+   * workspaces (T343's review): work reaches a shared folder only through a
+   * proposal (F30), and shared work is changed in a copy (AC-278), so with
+   * security on neither moves across. Security off keeps phase 1's moves.
+   */
+  const crossesWorkspace = async (from: string | null, to: string | null) =>
+    security !== 'off' && (await workspaceRootOf(from)) !== (await workspaceRootOf(to));
+  const ACROSS_WORKSPACE = {
+    error:
+      'This moves between your workspace and the shared folders: shared work is changed in a copy in your workspace, and reaches a shared folder through a proposal.',
   };
   /** How many model files a folder holds, in it or beneath it (T428). */
   const modelsBeneath = async (folderId: string): Promise<number> => {
@@ -1025,14 +1143,30 @@ export function buildServer({
    * chart on a dashboard they can see is theirs to open (AC-263), so adding a
    * hidden one would open it (T326's review).
    */
-  const addsOnlyOpenable = async (seen: Visibility, before: unknown, after: unknown) => {
+  const addsOnlyOpenable = async (
+    seen: Visibility,
+    before: unknown,
+    after: unknown,
+    dashboardFolder: string | null,
+  ) => {
     const had = chartIdsOf(before);
     for (const id of chartIdsOf(after)) {
       if (had.has(id)) continue;
       const chart = await docs?.get?.('chart', id);
       if (!chart || !(await mayOpen(seen, 'chart', chart))) return false;
+      if (!(await staysInItsWorkspace(chart, dashboardFolder))) return false;
     }
     return true;
+  };
+  /**
+   * A library chart in a workspace is shown only on a dashboard in that same
+   * workspace (T343's review, AC-276): on any other, whoever sees the
+   * dashboard would open it. A local chart goes with its dashboard.
+   */
+  const staysInItsWorkspace = async (chart: Stored, dashboardFolder: string | null) => {
+    if (typeof chart.body['localToDashboardId'] === 'string') return true;
+    const home = await workspaceRootOf(folderIdOf(chart.body));
+    return home === null || home === (await workspaceRootOf(dashboardFolder));
   };
   const NOT_THERE = { message: 'No such document' };
   const READ_ONLY =
@@ -1102,10 +1236,13 @@ export function buildServer({
   app.get('/api/folder-roots', USER, async (request) => {
     const seen = await visibilityOf(request);
     if (seen === undefined) return cat?.rootCounts ? cat.rootCounts() : {};
-    // My workspace is each user's own, and empty until T343 gives them one.
+    // My workspace is each user's own (T343, AC-276), and none of a user with
+    // read-only access everywhere (AC-277).
+    const own = workspaceIdOf(userOf(request).key);
+    const counts = await countsOf(seen, [ROOT_FOLDER_ID, own]);
     return {
-      [ROOT_FOLDER_ID]: (await countsOf(seen, [ROOT_FOLDER_ID])).get(ROOT_FOLDER_ID) ?? 0,
-      [MY_WORKSPACE_ID]: 0,
+      [ROOT_FOLDER_ID]: counts.get(ROOT_FOLDER_ID) ?? 0,
+      ...(seen.rights.has(own) ? { [MY_WORKSPACE_ID]: counts.get(own) ?? 0 } : {}),
     };
   });
 
@@ -1114,7 +1251,8 @@ export function buildServer({
     if (!cat) return [];
     const seen = await visibilityOf(request);
     if (seen === undefined) return cat.contents(folderId);
-    if (folderId === MY_WORKSPACE_ID) return [];
+    // My workspace is named by its owner's `ws:` id by now (T343): anyone
+    // else's, like a read-only user's none, has no right below and isn't there.
     const right = seen.rights.get(folderId);
     // Explore opens on the shared root: for someone no grant reaches, it holds
     // nothing, rather than being an error (T325's review).
@@ -1160,11 +1298,14 @@ export function buildServer({
     const folderId = body?.folderId ?? 'root';
 
     // With security on, only in a folder they may write in (T326, AC-266): one
-    // they can't see answers as one that isn't there. The two roots always are;
-    // My workspace becomes each user's own with T343.
+    // they can't see answers as one that isn't there. The shared root always
+    // is, and so is My workspace to someone who has none (T343, AC-277).
     const seen = await visibilityOf(request);
     if (seen !== undefined && !mayWrite(seen, folderId)) {
-      const isRoot = folderId === ROOT_FOLDER_ID || folderId === MY_WORKSPACE_ID;
+      const isRoot =
+        folderId === ROOT_FOLDER_ID ||
+        folderId === MY_WORKSPACE_ID ||
+        folderId === workspaceIdOf(userOf(request).key);
       return !isRoot && !seen.rights.has(folderId)
         ? reply.code(404).send(NOT_THERE)
         : reply.code(403).send({ error: READ_ONLY });
@@ -1303,8 +1444,26 @@ export function buildServer({
               (await governingFolder(kind, stored)) &&
             !mayWrite(seen, await governingFolder(kind, { id, body: body.body }));
       if (moved) return reply.code(403).send({ error: READ_ONLY });
+      // Never across a workspace's edge (T343's review).
+      const [from, to] =
+        kind === 'folder'
+          ? [folderIdOf(stored.body), folderIdOf(body.body)]
+          : [
+              await governingFolder(kind, stored),
+              await governingFolder(kind, { id, body: body.body }),
+            ];
+      if (from !== to && (await crossesWorkspace(from, to)))
+        return reply.code(409).send(ACROSS_WORKSPACE);
+      // As a PATCH moves it: no models or data sources into a workspace (T343's review).
+      if (kind === 'folder' && from !== to && to !== null) {
+        const refusal = await intoWorkspaceRefusal(id, to);
+        if (refusal !== undefined) return reply.code(409).send(refusal);
+      }
       // A dashboard shows only charts they may open (T326's review).
-      if (kind === 'dashboard' && !(await addsOnlyOpenable(seen, stored.body, body.body))) {
+      if (
+        kind === 'dashboard' &&
+        !(await addsOnlyOpenable(seen, stored.body, body.body, folderIdOf(body.body)))
+      ) {
         return reply.code(403).send({ error: 'This dashboard can show only charts you may open.' });
       }
     }
@@ -1406,7 +1565,13 @@ export function buildServer({
       if (into !== folderIdOf(stored.body) && !mayWrite(seen, into)) {
         return reply.code(403).send({ error: READ_ONLY });
       }
-      if (!(await addsOnlyOpenable(seen, stored.body, dashboard.body))) {
+      // Never across a workspace's edge (T343's review).
+      if (
+        into !== folderIdOf(stored.body) &&
+        (await crossesWorkspace(folderIdOf(stored.body), into))
+      )
+        return reply.code(409).send(ACROSS_WORKSPACE);
+      if (!(await addsOnlyOpenable(seen, stored.body, dashboard.body, into))) {
         return reply.code(403).send({ error: 'This dashboard can show only charts you may open.' });
       }
     }
@@ -1626,15 +1791,21 @@ export function buildServer({
     ) {
       return reply.code(403).send({ error: READ_ONLY });
     }
+    // Never across a workspace's edge (T343's review).
+    if (body?.folderId !== undefined && found.stored !== null) {
+      const from =
+        kind === 'folder'
+          ? folderIdOf(found.stored.body)
+          : await governingFolder(kind, found.stored);
+      if (from !== body.folderId && (await crossesWorkspace(from, body.folderId)))
+        return reply.code(409).send(ACROSS_WORKSPACE);
+    }
 
-    // A folder holding models moved into My workspace would leave xcube's
-    // tree, and its cubes with it, unchecked (T428's review, AC-275).
-    if (kind === 'folder' && body?.folderId !== undefined && (await inWorkspace(body.folderId))) {
-      const models = await modelsBeneath(id);
-      if (models > 0)
-        return reply.status(409).send({
-          error: `This folder holds ${String(models)} model${models === 1 ? '' : 's'}, in it or beneath it, and My workspace can’t hold models yet.`,
-        });
+    // A folder holding models or data sources moved into My workspace would
+    // leave xcube's tree, and them with it (T428's review, AC-275).
+    if (kind === 'folder' && body?.folderId !== undefined) {
+      const refusal = await intoWorkspaceRefusal(id, body.folderId);
+      if (refusal !== undefined) return reply.status(409).send(refusal);
     }
 
     // Moved into a folder, a chart or a dashboard is published there: each
@@ -1790,9 +1961,20 @@ export function buildServer({
 
     // With security on, a dashboard they may change, and a chart they may open
     // (T326, AC-266).
-    if ((await itemFor(request, reply, 'dashboard', dashboardId, 'write')) === undefined)
-      return reply;
-    if ((await itemFor(request, reply, 'chart', body.chartId, 'open')) === undefined) return reply;
+    const board = await itemFor(request, reply, 'dashboard', dashboardId, 'write');
+    if (board === undefined) return reply;
+    const chart = await itemFor(request, reply, 'chart', body.chartId, 'open');
+    if (chart === undefined) return reply;
+    // A chart in a workspace stays on that workspace's dashboards (T343's review).
+    if (
+      board.stored !== null &&
+      chart.stored !== null &&
+      !(await staysInItsWorkspace(chart.stored, folderIdOf(board.stored.body)))
+    )
+      return reply.code(409).send({
+        error:
+          'This chart is in your workspace: it goes on a shared dashboard through a proposal, not in place.',
+      });
 
     await docs.attachChart(dashboardId, body.chartId);
     return reply.status(204).send();

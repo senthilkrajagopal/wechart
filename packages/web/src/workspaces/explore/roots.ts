@@ -17,7 +17,34 @@ export const SHARED_ROOT: RootFolder = { id: 'root', title: 'Shared' };
 export const MY_WORKSPACE: RootFolder = { id: 'mine', title: 'My workspace' };
 export const ROOT_FOLDERS: readonly RootFolder[] = [SHARED_ROOT, MY_WORKSPACE];
 
+/**
+ * My workspace, however the API names it (T343, AC-276): `mine` to the
+ * client, and with sign-in on the user's own `ws:<key>`, which items in it
+ * carry as their folder.
+ */
+export function isMyWorkspace(id: string): boolean {
+  return id === MY_WORKSPACE.id || id.startsWith('ws:');
+}
+
 /** A root's name, or undefined for an id that is not a root. */
 export function rootTitleOf(id: string): string | undefined {
-  return ROOT_FOLDERS.find((root) => root.id === id)?.title;
+  return isMyWorkspace(id)
+    ? MY_WORKSPACE.title
+    : ROOT_FOLDERS.find((root) => root.id === id)?.title;
+}
+
+/**
+ * The roots the tree shows (T343, AC-277): the shared root, and My workspace
+ * where the API counts one — none for a user with read-only access
+ * everywhere, nor before the counts come. Each with its count, where known.
+ */
+export function visibleRoots(
+  counts: Readonly<Record<string, number>> | undefined,
+): (RootFolder & { readonly itemCount?: number })[] {
+  return ROOT_FOLDERS.filter(
+    (root) => root.id !== MY_WORKSPACE.id || counts?.[MY_WORKSPACE.id] !== undefined,
+  ).map((root) => {
+    const itemCount = counts?.[root.id];
+    return itemCount === undefined ? root : { ...root, itemCount };
+  });
 }

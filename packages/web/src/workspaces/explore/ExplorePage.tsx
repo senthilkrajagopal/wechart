@@ -10,7 +10,7 @@ import { CreateMenu, DEFAULT_TITLES, type CreatableKind } from './CreateMenu';
 import { FolderContents, opensFromExplore, type CatalogItem } from './FolderContents';
 import { FolderTree } from './FolderTree';
 import { exploreHref, folderChain, FOLDERS_QUERY } from './folders';
-import { MY_WORKSPACE, ROOT_FOLDERS, SHARED_ROOT, rootTitleOf } from './roots';
+import { isMyWorkspace, ROOT_FOLDERS, SHARED_ROOT, rootTitleOf, visibleRoots } from './roots';
 
 /**
  * Explore: the folder tree and the open folder (AC-017), laid out as the
@@ -184,10 +184,8 @@ export function ExplorePage() {
     queryKey: ['folder-roots'],
     queryFn: () => getJson<Record<string, number>>('/api/folder-roots'),
   });
-  const roots = ROOT_FOLDERS.map((root) => ({
-    ...root,
-    ...(rootCounts.data?.[root.id] === undefined ? {} : { itemCount: rootCounts.data[root.id] }),
-  }));
+  // My workspace only where the API counts one (T343, AC-277).
+  const roots = visibleRoots(rootCounts.data);
 
   /**
    * The open folder's Access panel (T330, AC-259, AC-260): with sign-in on,
@@ -199,7 +197,7 @@ export function ExplorePage() {
   const signedIn = me.data?.security === 'oidc';
   const access = useQuery({
     ...folderAccessQuery(folderId),
-    enabled: signedIn && !searching && folderId !== MY_WORKSPACE.id,
+    enabled: signedIn && !searching && !isMyWorkspace(folderId),
     retry: false,
   });
   const mayEditAccess = signedIn && !searching && known && access.isSuccess;

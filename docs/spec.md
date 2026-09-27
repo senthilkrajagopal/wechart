@@ -1019,7 +1019,7 @@ Traces to: §P2.6 D, `[P2 input]`, `[R17, R19, R22]`, `[AD 2, AD 3, AD 5, AD 6, 
 Purpose: every author works privately, starting from copies of shared content.
 Traces to: §P2.2, §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
 
-- [ ] AC-276 THE SYSTEM SHALL give every Super-Admin and every member of any read-write group a private workspace, shown as "My workspace" in the folder tree. No other user, Super-Admins included, SHALL be able to list, open, search or reach it through the API (`[P2 input, R12]`).
+- [x] AC-276 THE SYSTEM SHALL give every Super-Admin and every member of any read-write group a private workspace, shown as "My workspace" in the folder tree. No other user, Super-Admins included, SHALL be able to list, open, search or reach it through the API (`[P2 input, R12]`).
       Fails when: anyone but its owner sees or opens anything in a workspace.
 - [ ] AC-277 WHILE a user has only read-only access everywhere, THE SYSTEM SHALL give them no workspace and no action that creates or edits content (`[R12]`).
       Fails when: "My workspace", or any create or edit action, appears to them.

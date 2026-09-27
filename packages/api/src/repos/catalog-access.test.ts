@@ -184,7 +184,8 @@ describe('the tree lists and counts only what the user may see (T325, AC-264, AC
 
   it('gives someone in no group none of them, and a root with nothing to count', async () => {
     expect(await treeOf('nobody')).toEqual({});
-    expect((await ask('/api/folder-roots', 'nobody')).json()).toEqual({ root: 0, mine: 0 });
+    // No My workspace either: in no group, they write nowhere (T343, AC-277).
+    expect((await ask('/api/folder-roots', 'nobody')).json()).toEqual({ root: 0 });
   });
 });
 
@@ -206,7 +207,7 @@ describe('a folder’s contents (T325, AC-264, AC-194)', () => {
     expect(await contentsOf('root', 'reader')).toEqual(['folder A (2)']);
     // Explore opens on the root: nothing there for them, not an error (T325's review).
     expect(await contentsOf('root', 'nobody')).toEqual([]);
-    // My workspace: each user's own, and empty until T343 gives them one.
+    // My workspace: each read-write member's own (T343), and empty here.
     expect(await contentsOf('mine', 'writer')).toEqual([]);
     expect((await ask('/api/folder-roots', 'writer')).json<{ mine: number }>().mine).toBe(0);
   });

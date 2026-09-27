@@ -173,7 +173,8 @@ describe('phase 1’s content with security first on, and no groups set (T328, A
       // Nothing at the root at all: no grant anywhere reaches it.
       expect(atRoot, `${who} sees the root's contents`).toEqual([]);
       const roots = await as(who, { method: 'GET', url: '/api/folder-roots' });
-      expect(roots.json(), `${who}'s root counts`).toEqual({ root: 0, mine: 0 });
+      // And no My workspace: no grant anywhere makes them a writer (T343, AC-277).
+      expect(roots.json(), `${who}'s root counts`).toEqual({ root: 0 });
       for (const [kind, id] of [
         ['folder', ids.finance],
         ['dashboard', ids.dashboard],

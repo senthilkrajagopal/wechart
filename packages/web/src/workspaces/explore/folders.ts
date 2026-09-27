@@ -1,5 +1,5 @@
 import type { FolderNode } from './FolderTree';
-import { ROOT_FOLDERS, SHARED_ROOT } from './roots';
+import { isMyWorkspace, MY_WORKSPACE, ROOT_FOLDERS, SHARED_ROOT } from './roots';
 
 /**
  * Every folder, for the tree and for a breadcrumb (AC-017, AC-195): one query
@@ -35,7 +35,11 @@ export function folderChain(folders: readonly FolderNode[], id: string): Crumb[]
     const parent: string | null = above;
     current = folders.find((folder) => folder.id === parent);
   }
-  const root = ROOT_FOLDERS.find((each) => each.id === above) ?? SHARED_ROOT;
+  // A folder in a user's own `ws:` workspace hangs from My workspace (T343).
+  const root =
+    above !== null && isMyWorkspace(above)
+      ? MY_WORKSPACE
+      : (ROOT_FOLDERS.find((each) => each.id === above) ?? SHARED_ROOT);
   return [{ id: root.id, title: root.title }, ...out];
 }
 
