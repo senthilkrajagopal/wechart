@@ -175,7 +175,8 @@
 >       (overlay data sources, slice 8, the TLS binding), for slices 4–6.
 >     - 19: yes, the workspace refuses a data source's driver change up front. Sent to xcube
 >       (`to-xcube/2026-09-26-1849-driver-change-answer.md`).
->     - 20: hide health rows older than a limit. Still needed: the limit's value.
+>     - 20: hide health rows older than 1 hour.
+>     - 24: the user saved the slice 6 research as `docs/research/xcube-slice-6.md`.
 >     - 21: no. Cubes stay bound to the data source they were published with; a nearer one
 >       doesn't republish them.
 >     - 22: no. Dremio Cloud URLs aren't required to be `https:`.
