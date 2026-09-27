@@ -30,9 +30,19 @@ export function initialValues(driver: DriverType): ConnectionValues {
   };
 }
 
+/** Settings that matter only over TLS: shown, and sent, only with it on. */
+const TLS_ONLY = new Set(['sslRejectUnauthorized', 'sslCa']);
+
+/** The connection's fields as the form shows them for these values. */
+function connectionShown(driver: DriverType, values: ConnectionValues) {
+  const { connection } = DRIVERS[driver];
+  const tlsOff = connection.some((field) => field.key === 'ssl') && values.fields['ssl'] !== true;
+  return connection.filter((field) => !(tlsOff && TLS_ONLY.has(field.key)));
+}
+
 /**
- * The fields sent for these values: the connection's and the method's own,
- * none blank, and never a secret.
+ * The fields sent for these values: those shown, the connection's and the
+ * method's own, none blank, and never a secret.
  */
 export function fieldsToSend(
   driver: DriverType,
@@ -40,7 +50,9 @@ export function fieldsToSend(
 ): Record<string, FieldValue> {
   const spec = DRIVERS[driver];
   const method = spec.auth.find((each) => each.id === values.authMethod);
-  const offered = [...spec.connection, ...(method?.fields ?? [])].filter((field) => !field.secret);
+  const offered = [...connectionShown(driver, values), ...(method?.fields ?? [])].filter(
+    (field) => !field.secret,
+  );
   return Object.fromEntries(
     offered
       .map((field) => [field.key, values.fields[field.key]] as const)
@@ -71,6 +83,7 @@ export function ConnectionForm({
   const spec = DRIVERS[driver];
   const method = spec.auth.find((each) => each.id === values.authMethod) ?? spec.auth[0]!;
   const methodId = useId();
+  const connection = connectionShown(driver, values);
 
   const setField = (key: string, value: FieldValue) => {
     onChange({ ...values, fields: { ...values.fields, [key]: value } });
@@ -83,12 +96,20 @@ export function ConnectionForm({
     <div className="connection-form">
       <fieldset className="connection-form__group">
         <legend>Connection</legend>
-        {spec.connection.map((field) => (
+        {connection.map((field, at) => (
           <Field
             key={field.key}
             field={field}
             value={values.fields[field.key]}
             onField={setField}
+            // A host and its port share a row.
+            className={
+              connection[at + 1]?.kind === 'number' && field.kind === 'text'
+                ? 'is-paired'
+                : field.kind === 'number' && connection[at - 1]?.kind === 'text'
+                  ? 'is-short'
+                  : undefined
+            }
           />
         ))}
       </fieldset>
@@ -152,10 +173,12 @@ function Field({
   field,
   value,
   onField,
+  className,
 }: {
   field: DriverField;
   value: FieldValue | undefined;
   onField: (key: string, value: FieldValue) => void;
+  className?: string | undefined;
 }) {
   const id = useId();
   const note = field.note === undefined ? undefined : `${id}-note`;
@@ -175,7 +198,7 @@ function Field({
       </div>
     );
   return (
-    <div className="field">
+    <div className={className === undefined ? 'field' : `field ${className}`}>
       <label htmlFor={id}>{field.label}</label>
       {field.kind === 'multiline' ? (
         <textarea

@@ -1602,10 +1602,22 @@ fieldset.model-field > legend {
   border-top: 1px solid var(--wc-border-subtle);
   background: var(--wc-bg-surface);
 }
-.new-source-wizard .field input,
+.new-source-wizard .field input:not([type='checkbox']),
 .new-source-wizard .field select { height: 32px; }
-.connection-form { display: grid; gap: 12px; }
-.connection-form__group { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.connection-form { display: grid; gap: 16px; }
+/* Two columns: a host and its port share a row; every other field spans it. */
+.connection-form__group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.connection-form__group > * { grid-column: 1 / -1; }
+.connection-form__group > .is-paired { grid-column: 1; }
+.connection-form__group > .is-short { grid-column: 2; }
+.connection-form__group > .connection-form__check + .connection-form__check { margin-top: -4px; }
 .connection-form__group legend { margin-bottom: 4px; font-size: var(--wc-text-sm-size); font-weight: 600; }
 .connection-form__check label { display: flex; align-items: center; gap: 6px; font-weight: 400; color: var(--wc-text-primary); }
 .connection-form__method { margin: 0; }
@@ -1975,6 +1987,16 @@ fieldset.model-field > legend {
   grid-template-columns: minmax(0, 1fr);
 }
 .dialog.view-query h3 { margin: 8px 0 0; font-size: var(--wc-text-sm-size); font-weight: 600; }
+/* A dialog's primary answer keeps its accent (T363's screenshots): the
+   .dialog button rule above out-ranked .btn-primary, so Create and Next
+   looked like Cancel. */
+.dialog button.btn-primary {
+  background: var(--wc-accent);
+  border-color: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+  font-weight: var(--wc-text-sm-strong-weight);
+}
+.dialog button.btn-primary:hover:not(:disabled) { background: var(--wc-accent); filter: brightness(1.08); }
 /* New in My workspace (T345, AC-282): references.md's 520 px dialog, its
    Name and Target folder full width. */
 .dialog.new-item-dialog { width: min(520px, calc(100vw - 32px)); max-width: none; gap: 12px; }

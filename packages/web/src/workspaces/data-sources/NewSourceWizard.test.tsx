@@ -326,11 +326,20 @@ describe('adding a data source in the workspace (T363)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Next' }));
     const tls = within(dialog).getByRole('checkbox', { name: 'Use TLS' });
     expect(tls).toHaveProperty('checked', false);
+    // Verification and a CA certificate matter only over TLS: not asked for without it.
+    expect(within(dialog).queryByLabelText('CA certificate (PEM)')).toBeNull();
+    expect(
+      within(dialog).queryByRole('checkbox', { name: 'Verify the server’s certificate' }),
+    ).toBeNull();
     await user.selectOptions(
       within(dialog).getByRole('combobox', { name: 'Sign in with' }),
       'client-certificate',
     );
     expect(tls).toHaveProperty('checked', true);
+    expect(within(dialog).getByLabelText('CA certificate (PEM)')).toBeDefined();
+    expect(
+      within(dialog).getByRole('checkbox', { name: 'Verify the server’s certificate' }),
+    ).toHaveProperty('checked', true);
   });
 
   it('keeps focus in its step, says a test’s outcome, and says why a name won’t do', async () => {
