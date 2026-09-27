@@ -518,3 +518,60 @@ describe('models in a folder (T334, AC-269)', () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * T335, AC-269: a folder's data sources are listed beside its other items,
+ * as "Data source", Built on their driver (references.md §4, "Listing rows";
+ * health joins it with T362 and T365). Their settings open with T363.
+ */
+describe('data sources in a folder (T335, AC-269)', () => {
+  const source = (id: string, title: string, driver: string): CatalogItem => ({
+    kind: 'data-source',
+    id,
+    title,
+    owner: null,
+    updatedAt: '2026-09-26T10:00:00.000Z',
+    folderId: 'root',
+    driver,
+  });
+  const sources = [
+    source('ds-1', 'default', 'postgres'),
+    source('ds-2', 'warehouse', 'redshift'),
+    source('ds-3', 'lake', 'dremio'),
+  ];
+
+  it('labels each a data source, built on its driver, under a glyph of its own', () => {
+    render(<FolderContents items={sources} />);
+
+    const cells = (id: string) =>
+      within(screen.getByTestId(`item-${id}`))
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent);
+    expect(cells('ds-1').slice(0, 2)).toEqual(['Data source', 'PostgreSQL']);
+    expect(cells('ds-2').slice(0, 2)).toEqual(['Data source', 'Amazon Redshift']);
+    expect(cells('ds-3').slice(0, 2)).toEqual(['Data source', 'Dremio']);
+    expect(
+      screen.getByTestId('item-ds-1').querySelector('.itemicon')?.getAttribute('data-icon'),
+    ).toBe('data-source');
+  });
+
+  it('offers no rename or move yet, and doesn’t open until its settings page is there', async () => {
+    const onOpen = vi.fn();
+    render(
+      <FolderContents
+        items={sources}
+        onOpen={onOpen}
+        onRename={vi.fn()}
+        onMove={vi.fn()}
+        folders={[]}
+        opens={opensFromExplore}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Actions for default' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'default' })).toBeNull();
+    screen.getByTestId('item-ds-1').focus();
+    await userEvent.keyboard('{Enter}');
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+});

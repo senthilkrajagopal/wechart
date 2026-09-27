@@ -1,3 +1,4 @@
+import { DRIVERS } from '@wechart/core';
 import { useEffect, useRef, useState } from 'react';
 
 import { MenuButton } from '../../shell/MenuButton';
@@ -13,8 +14,11 @@ import { SHARED_ROOT } from './roots';
  * rather than by position alone (AC-176, AC-178).
  */
 export interface CatalogItem {
-  /** A model is one model file, by its path (T334, AC-269). */
-  readonly kind: 'folder' | 'dashboard' | 'chart' | 'model';
+  /**
+   * A model is one model file, by its path (T334, AC-269); a data source is
+   * one by its id (T335).
+   */
+  readonly kind: 'folder' | 'dashboard' | 'chart' | 'model' | 'data-source';
   readonly id: string;
   readonly title: string;
   readonly owner: string | null;
@@ -37,6 +41,8 @@ export interface CatalogItem {
   readonly itemCount?: number | null;
   /** A model's cubes and views (T334, AC-269). */
   readonly declares?: { readonly cubes: number; readonly views: number } | null;
+  /** A data source's driver, by its type id (T335). */
+  readonly driver?: string | null;
 }
 
 export interface FolderMove {
@@ -75,6 +81,7 @@ const TYPE_LABEL: Record<CatalogItem['kind'], string> = {
   dashboard: 'Dashboard',
   chart: 'Chart',
   model: 'Model',
+  'data-source': 'Data source',
 };
 
 /** Each kind's chip, the prototype's .itemicon — the New menu's own (F20). */
@@ -83,6 +90,7 @@ const CHIP: Record<CatalogItem['kind'], string> = {
   dashboard: 'ic-dash',
   chart: 'ic-chart',
   model: 'ic-model',
+  'data-source': 'ic-source',
 };
 
 /**
@@ -95,6 +103,7 @@ const BUILT_ON_CLASS: Record<CatalogItem['kind'], string> = {
   dashboard: 'folder-contents__built-on is-secondary',
   chart: 'folder-contents__built-on is-code',
   model: 'folder-contents__built-on is-secondary',
+  'data-source': 'folder-contents__built-on is-secondary',
 };
 
 const plural = (count: number, one: string) => `${String(count)} ${one}${count === 1 ? '' : 's'}`;
@@ -105,7 +114,10 @@ const plural = (count: number, one: string) => `${String(count)} ${one}${count =
  * open in their folder with T342; until then they are listed by name.
  */
 export const opensFromExplore = (item: CatalogItem): boolean =>
-  item.kind !== 'model' || item.folderId === SHARED_ROOT.id;
+  item.kind === 'data-source'
+    ? // Its settings open with T363's page; until then, its name alone.
+      false
+    : item.kind !== 'model' || item.folderId === SHARED_ROOT.id;
 
 /** The Type column: a chart by its chart type, never only "Chart" (AC-193). */
 function typeText(item: CatalogItem): string {
@@ -121,6 +133,12 @@ function builtOnText(item: CatalogItem, kinds: ReadonlyMap<string, 'cube' | 'vie
     return item.declares == null
       ? '—'
       : `${plural(item.declares.cubes, 'cube')} · ${plural(item.declares.views, 'view')}`;
+  // Its driver, by name (references.md §4); its health joins it (T362, T365).
+  if (item.kind === 'data-source')
+    return item.driver == null
+      ? '—'
+      : ((DRIVERS as Record<string, { label: string } | undefined>)[item.driver]?.label ??
+          item.driver);
   if (item.source == null || item.source === '') return '—';
   // Unknown to the meta (not loaded, or hidden): the name alone, not a guess.
   const kind = kinds.get(item.source);
@@ -412,7 +430,7 @@ export function FolderContents({
               >
                 {/* A model's name is its file's, changed in the model editor
                     (T334): it has no rename or move here. */}
-                {item.kind === 'model' ? null : (
+                {item.kind === 'model' || item.kind === 'data-source' ? null : (
                   <MenuButton
                     label={`Actions for ${item.title}`}
                     className="btn-ghost btn-sm folder-contents__menu"

@@ -10,8 +10,11 @@ import type { Database } from '../db/schema';
  * the object it lists.
  */
 export interface CatalogItem {
-  /** A model is one model file, by its path (T334, AC-269). */
-  readonly kind: 'folder' | 'dashboard' | 'chart' | 'model';
+  /**
+   * A model is one model file, by its path (T334, AC-269); a data source is
+   * one by its id (T335).
+   */
+  readonly kind: 'folder' | 'dashboard' | 'chart' | 'model' | 'data-source';
   readonly id: string;
   readonly title: string;
   readonly owner: string | null;
@@ -47,6 +50,8 @@ export interface CatalogItem {
    * parser. Null for every other kind.
    */
   readonly declares?: { readonly cubes: number; readonly views: number } | null;
+  /** A data source's driver, its type id (T335, T454): what Explore's Built on names. */
+  readonly driver?: string | null;
 }
 
 export interface FolderNode {
@@ -188,7 +193,8 @@ export function catalog(db: Kysely<Database>) {
     },
 
     /**
-     * What a folder contains: sub-folders, dashboards and library charts.
+     * What a folder contains: sub-folders, dashboards and library charts, then
+     * its models (T334) and its data sources (T335).
      *
      * A chart local to a dashboard is excluded even if it carries a folder id,
      * because it is not a catalog object (AC-126) — it belongs to its dashboard
@@ -216,6 +222,14 @@ export function catalog(db: Kysely<Database>) {
         .select(['path', 'content', 'updated_at'])
         .where('folder_id', '=', folderId)
         .orderBy(sql`path collate "C"`)
+        .execute();
+      // Then its data sources, by name (T335, AC-269): what they are, never
+      // what they hold — their secrets are another table's.
+      const sources = await db
+        .selectFrom('data_sources')
+        .select(['id', 'name', 'type', 'updated_at'])
+        .where('folder_id', '=', folderId)
+        .orderBy('name')
         .execute();
       return [
         ...rows.map((row) => ({
@@ -245,6 +259,23 @@ export function catalog(db: Kysely<Database>) {
             },
           };
         }),
+        ...sources.map((source): CatalogItem => ({
+          kind: 'data-source',
+          id: source.id,
+          title: source.name,
+          owner: null,
+          updatedAt: source.updated_at,
+          localToDashboardId: null,
+          description: null,
+          folderId,
+          chartType: null,
+          drawnAs: null,
+          source: null,
+          hasFields: false,
+          tabs: null,
+          itemCount: null,
+          driver: source.type,
+        })),
       ];
     },
 

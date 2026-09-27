@@ -684,7 +684,7 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
       Fails when: the UI claims the change is live while any instance reporting within the hour still uses the previous settings or reports failed; an instance's report older than an hour is shown; the change needs a Cube restart; or a data source's type can be changed, saved or proposed.
 - [ ] AC-163 THE SYSTEM SHALL record the result of each connection test over time and show that history per source.
       Fails when: a test result is missing from the history.
-- [ ] AC-164 THE SYSTEM SHALL never show a stored credential in plain text after it is saved, and SHALL never send it to the browser.
+- [x] AC-164 THE SYSTEM SHALL never show a stored credential in plain text after it is saved, and SHALL never send it to the browser.
       Fails when: a saved secret is readable in the UI or in a response to the browser.
 
 - [x] AC-162 WHEN the user assigns a cube to a data source, THE SYSTEM SHALL write `data_source` into that cube's model file.
@@ -963,7 +963,7 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R17, R18, R19]`.
       Fails when: an unset setting grants groups other than the parent's, or the inherited groups are shown without their source folder.
 - [ ] AC-261 WHEN an AD group has access to a folder, set or inherited, THE SYSTEM SHALL give its members the same access to every descendant folder, whatever groups the descendant sets (`[P2 input, R12]`).
       Fails when: a member of a group granted on /A is refused in /A/B/C, or given less access there, where /A/B sets a different group.
-- [ ] AC-262 WHEN a group has read-write access to a folder, THE SYSTEM SHALL let its members see, view-only, every dashboard, chart, model and data source in each ancestor folder up to the root (`[R12, R19]`).
+- [x] AC-262 WHEN a group has read-write access to a folder, THE SYSTEM SHALL let its members see, view-only, every dashboard, chart, model and data source in each ancestor folder up to the root (`[R12, R19]`).
       Fails when: an item in an ancestor is hidden from them, or they can change it without a proposal.
 - [ ] AC-263 WHILE a user has only read-only access, THE SYSTEM SHALL show them the dashboards, and the charts on those dashboards, in the folders they may see (the folder, its descendants and its ancestors), and no models, data sources or library charts. A chart on a dashboard they may see opens for them even when it is kept in a folder they can't see, without naming or linking that folder. Their dashboards query the cubes their charts were bound to at publish, which ~~Cube's generated policies~~ xcube's folder check (AC-320) admits them to (`[P2 input, R19]`; amended 2026-09-25, `[AD 3, AD 4, R27]`; ~~their dashboards still resolve cubes through the folder's path~~; the folder check, amended 2026-09-26, `[IP 6, X4]`).
       Fails when: a read-only user sees or opens a model, a data source or a library chart that is on none of their dashboards; a dashboard they may see fails because a model is hidden from them; or a chart opened through their dashboard names or links a folder they can't see.

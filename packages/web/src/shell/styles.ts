@@ -506,6 +506,7 @@ main:has(.explore) {
 .itemicon.ic-chart { background: var(--wc-bg-accent-soft); color: var(--wc-accent); }
 .itemicon.ic-folder { background: var(--wc-bg-subtle); color: var(--wc-text-secondary); }
 .itemicon.ic-model { background: var(--wc-bg-subtle); color: var(--wc-text-primary); }
+.itemicon.ic-source { background: var(--wc-bg-subtle); color: var(--wc-text-primary); }
 
 /* The edit sidebar's Outline (AC-053): the prototype's .dir and .file rows. */
 .outline, .outline ul { margin: 0; padding: 0; list-style: none; }
@@ -1312,6 +1313,8 @@ fieldset.model-field > legend {
 .itemicon[data-icon='chart']::before { content: '◢'; }
 /* A model (T334): a new glyph in the same style (references.md §4). */
 .itemicon[data-icon='model']::before { content: '◇'; }
+/* A data source (T335): a glyph of its own, in the same style (references.md §4). */
+.itemicon[data-icon='data-source']::before { content: '◍'; }
 /* The docked Folders pane (AC-194), the prototype's .pane.left: from the app
    bar to the window's foot, on the surface, with a rule on its right; its
    head stays put while a long tree scrolls. */

@@ -5487,8 +5487,8 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **Noted elsewhere:** a folder's counts leave models out (T331, AC-194). Builds and Schedules still read the root's files for anyone signed in (T408's route matrix).
     - **For the user:** AC-193 (checked) says every row has a rename and move menu; model rows have none, a model being renamed in the model editor. Its Fails-when line isn't broken, but its text could say so.
     - No AC is ticked: AC-269 and AC-262 wait for data sources (T335), AC-131 for opening a model in its folder (T342), AC-266 for T340.
-- [ ] T335 (AC-269, AC-164, AC-312, AC-298, AC-262, AC-161) Keep data sources as folder items, never sending a credential to the browser
-  - Files: `packages/api/src/repos/data-sources.ts` (+ test), `packages/api/src/routes/data-sources.ts` (+ test), `packages/api/src/repos/catalog.ts`
+- [x] T335 (AC-269, AC-164, AC-312, AC-298, AC-262, AC-161) Keep data sources as folder items, never sending a credential to the browser
+  - Files: `packages/api/src/repos/data-sources.ts` (+ test), `packages/api/src/routes/data-sources.ts` (+ `access/data-sources.test.ts`), `packages/api/src/repos/catalog.ts`, `packages/api/src/db/migrations/1758330000000_data-source-envelopes.cjs`, `packages/api/src/server.ts`, `packages/core/src/data-sources/validate.ts` (+ test), `packages/web/src/workspaces/explore/FolderContents.tsx` (+ test), `e2e/security/folder-data-sources.spec.ts`
   - Failing test: `data-sources.test.ts`:
     - a folder lists its data sources with kind "Data source" and the driver (AC-269);
     - no response contains a stored secret, only `stored: true` (AC-164);
@@ -5502,6 +5502,48 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - A folder's data sources are listed in Explore with kind "Data source" and the driver's name, and open in their settings (AC-269's data-source half; its model half is T334's).
     - The store keeps each field exactly as sealed (`xcube-overlay-data-sources.md` Gotcha 14).
   - Depends on: T332, T333, T325, T454
+  - **Done 2026-09-26.**
+    - **Ticked:**
+      - AC-164: `access/data-sources.test.ts` "opens one with its settings, saying a secret is stored and never what it is", and `e2e/security/folder-data-sources.spec.ts`, where no `/api/` answer in Explore, nor the data source's own, holds the envelope.
+      - AC-262: its last half, the data sources'. `access/data-sources.test.ts` "lets a read-write member of /A/B see /A’s and the root’s, and change neither": listed, opened, and every PUT, DELETE and POST answers 403. Dashboards and charts are T327's; models are T334's.
+    - **Left open:**
+      - AC-269: its data sources are listed (`folder-data-sources.spec.ts`), but open in their settings only with T363's form, which now cites it. Until then a data source's row opens nothing and has no menu.
+      - AC-312: a save is refused with 422 until every stored secret is sealed again (`data-sources.test.ts`, and the PUT in `access/data-sources.test.ts`). Its test half is T361's, which now cites it.
+      - AC-298: T441 seals for real.
+      - AC-161: the type never changes (409 in both tests), but per-instance health is T365's.
+    - **As built:**
+      - `POST/GET/PUT/DELETE /api/data-sources[/:id]`, with each secret said as `{ stored: true }`.
+      - One HPKE envelope per secret field, in `data_source_secrets` (migration `1758330000000`), each with a revision of its own, and `(folder_id, name)` unique.
+      - Core's `dataSourceProblems` refuses what xcube would refuse to land:
+        - a secret sent as a field;
+        - an unknown field or sign-in method;
+        - a missing required one;
+        - a field over 65536 characters;
+        - an envelope not shaped as xcube's `envelopeProblem` has it;
+        - Oracle without a connect string or a host and database;
+        - Dremio without a URL or host, or a URL with a password.
+      - The store refuses an envelope sealed to any key but `WECHART_XCUBE_PUBLIC_KEY`'s.
+      - Explore lists data sources after models, as "Data source", Built on the driver's name, with a glyph of their own.
+      - T332's AES store (`repos/data-source-secrets.ts`) is removed and its `pg_dump` test rewritten: a canary sent as a field is refused, and the dump holds the envelope and none of the canary's forms.
+      - **A slip:** the store's `git rm` went into the handoff commit 4dc0a07, so 4dc0a07 and 2c08773 carry the old test importing it. This commit brings the rewritten one; history is left as it is.
+    - **Small decisions, reversible:**
+      - A change of sign-in method drops the old method's secrets and takes the new one's.
+      - A move asks for every stored secret again, optional ones included, rather than dropping one silently.
+      - A folder holding data sources, in it or beneath it, isn't deleted (409), as with models.
+      - A read-only member's new data source answers 403 in a folder they see, and 404 in one they don't.
+    - **The cold review (FAIL), fixed:**
+      - the envelope check was weaker than xcube's (now its sizes);
+      - an optional secret was dropped silently on a move;
+      - Oracle's and Dremio's config and the field-length checks were missing;
+      - a folder's delete orphaned its data sources;
+      - a reader's POST answered 404;
+      - `explore.spec.ts` assumed models close a folder's rows;
+      - the repo tests left rows behind (T332's 416 in `wechart_test`'s root, now deleted);
+      - AC-269's open half had no owner (T363);
+      - T441's Files named the removed store.
+    - **Tests:**
+      - Units: ui 47, core 443, recommender 123, charts 473, web 1535, api 713.
+      - Chrome: `security/folder-data-sources.spec.ts` (1) and `explore.spec.ts` (19).
 - [ ] T336 (AC-270, AC-271, AC-249) Keep names unique per folder, and free across folders
   - Files: `packages/api/src/model/names.ts` (+ test), `packages/api/src/model/publish.ts`, `packages/api/src/server.ts`
   - Failing test: `names.test.ts`: in one folder, a second cube of a name (across the folder's models), model file, dashboard or data source is refused with the existing item named; the same names in two folders are accepted; a generated cube clashing with one in the target folder is refused, naming it, and the existing file is unchanged (AC-270, AC-271, AC-249).
@@ -5680,23 +5722,25 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - T361/T363 require Oracle's connect string *or* host, and turn TLS on for a PostgreSQL client certificate;
       - T361 checks values, not only keys, for file paths (JDBC properties, Oracle wallet settings).
     - AC-160 stays open until the form renders them (T363, which now cites it).
-- [ ] T361 (AC-159) Have Cube run a connection test with its own driver, at wechart's request, and show each check *(rewritten 2026-09-26: slice 6; the test is xcube's `POST /v1/semantic/connections/test`, taking the ciphertext, `[IP 1, plan]`)*
+- [ ] T361 (AC-159, AC-312) Have Cube run a connection test with its own driver, at wechart's request, and show each check *(rewritten 2026-09-26: slice 6; the test is xcube's `POST /v1/semantic/connections/test`, taking the ciphertext, `[IP 1, plan]`)*
   - Files: xcube's route comes from the Cube side, in its slice 6. wechart: `packages/api/src/xcube/connections.ts` (+ test), `packages/api/src/routes/data-sources.ts` (`POST /api/data-sources/:id/test`), and the image bump in `docker-compose.yml` and `deploy/helm/values/docker-desktop.yaml`.
   - *2026-09-26, slice 6 as built (`[X6]`):* the route is `POST /v1/semantic/models/{model}/connections/test` with `{ driver, authMethod, fields, sealed }`, under the service credential; its checks are `secrets`, `config`, `connect` and `schemas`, in that order. For a secret the user didn't retype, the stored envelope is sent: it opens only while the target is unchanged (AC-312). The image is T420's.
   - Failing test: `data-source-test.test.ts`, against compose's xcube:
     - a PostgreSQL source with a wrong password reports the checks Cube ran (`secrets`, `config`, `connect`, `schemas`), and the failing one with the driver's error text (SQLSTATE 28P01) and no secret in it;
     - a correct one passes every check;
-    - the request carries only the ciphertext, and never comes from the browser (AC-159).
+    - the request carries only the ciphertext, and never comes from the browser (AC-159);
+    - *(2026-09-26, from T335)* a test whose target differs from the stored one, with a stored secret not sealed again, is refused before xcube is asked, saying which secret to enter again, as a save is (AC-312's test half; T335's store refuses the save).
   - ~~Files: the Cube fork, through the Cube-expert agent only: a `connection-test` scope and `POST /v1/introspection/connection-tests` in the `cube-introspection` package (…); the fork image rebuilt under a new tag.~~
   - Depends on: T333, T335, T454, T420, T441
 - [ ] T362 (AC-163, AC-298) Record each connection test and show a source's test history
   - Files: a migration `…_connection-tests.cjs`, `packages/api/src/repos/connection-tests.ts` (+ test), `packages/web/src/workspaces/data-sources/TestHistory.tsx`
   - Failing test: `connection-tests.test.ts`: every test run is stored with its time, checks and outcome, and the source's history lists them newest first (AC-163).
   - Depends on: T361
-- [ ] T363 (AC-158, AC-160, AC-161) Add a data source in the workspace through Type → Connection → Test → Name, refusing a failing test without an override
+- [ ] T363 (AC-158, AC-160, AC-161, AC-269) Add a data source in the workspace through Type → Connection → Test → Name, refusing a failing test without an override
   - Files: `packages/web/src/workspaces/data-sources/{NewSourceWizard,ConnectionForm}.tsx` (+ tests), `packages/api/src/routes/data-sources.ts`, `e2e/security/data-sources.spec.ts`
   - Failing test: `data-sources.spec.ts`: the wizard takes a name, a driver, that driver's fields and a Test step; Create stays disabled until the test passes or "Create anyway" is chosen; the API refuses a create with no passing test and no override (AC-158).
     - *(2026-09-26, `[XD, X6, R31]`)* the Type step offers the eight drivers of T454, each form with its authentication methods and TLS fields and none other (AC-160); an existing data source's form shows its type fixed, saying to make a new data source for another (AC-161); a secret is sealed at submit, not on typing (`credential-sealing.md` Gotcha 9).
+    - *(2026-09-26, from T335's review)* a data source's row in Explore opens it in this form, its settings shown and each stored secret said as stored (AC-269's open half: T335 lists them, and its rows open nothing until this form exists).
   - Depends on: T454, T361, T345
 - [ ] T364 (AC-157, AC-233, AC-001) List every visible data source with its folder, driver, health and the cubes that use it
   - Files: `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (replacing the deferred page), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`), `e2e/security/data-sources.spec.ts`
@@ -7127,7 +7171,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
     - `databricks-jdbc` is gone; no Databricks data source was ever stored.
     - The cold review (PASS) found the required flags and kinds untested (now pinned in `drivers.test.ts`), and one comment unclear (reworded). `credential-sealing.md`'s `V1_TARGET_KEYS` table predates the TLS binding: T441 takes the target from `targetKeysOf`, checked against xcube's golden vectors.
 - [ ] T441 (AC-325, AC-298) Seal a typed secret in the browser to xcube's public key, and store only the ciphertext *(amended 2026-09-26: the golden vectors and the TLS target, `[X6]`)*
-  - Files: `packages/web/package.json` (`hpke` 1.1.7), `packages/core/src/data-sources/aad.ts` (+ test, `secretAadV1`), `packages/core/src/data-sources/golden-v1.json` (xcube's golden AAD and envelope vectors, which xcube asked for so it can open them in its own test), `packages/web/src/workspaces/data-sources/seal.ts` (+ test), `packages/api/src/routes/data-sources.ts`, `packages/api/src/repos/data-source-secrets.ts` (the `pg_dump` canary test, from T332)
+  - Files: ~~`packages/web/package.json`~~ `packages/core/package.json` (`hpke` 1.1.7), `packages/core/src/data-sources/aad.ts` (+ test, `secretAadV1`), `packages/core/src/data-sources/golden-v1.json` (xcube's golden AAD and envelope vectors, which xcube asked for so it can open them in its own test), ~~`packages/web/src/workspaces/data-sources/seal.ts`~~ `packages/core/src/data-sources/seal.ts` (+ test; in core, so the browser and the tests share one sealer), `packages/api/src/routes/data-sources.ts`, ~~`packages/api/src/repos/data-source-secrets.ts`~~ `packages/api/src/repos/data-source-secrets.test.ts` (the `pg_dump` canary test, from T332; T335 removed T332's AES store)
   - Failing test:
     - `aad.test.ts`: `secretAadV1(driver, field, fields)` equals xcube's golden strings for postgres, mysql, mssql, oracle and dremio (`xcube/test/unit/credentials.test.ts` L33-48); the target's pairs are sorted, each value `String(v)` as sent, `""` when absent;
     - `seal.test.ts`: the browser seals with HPKE (X25519, HKDF-SHA256, AES-128-GCM, `info` `wechart/data-source-secret/v1`, padded to 256 bytes) to the configured public key, as `{ v: 1, kid, enc, ct }`, and a test key pair opens it; fields are sent exactly as sealed, no default filled and no `false` dropped;
@@ -7203,7 +7247,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
 | AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327, T334, T335 |
 | AC-263 | T313, T326, T334, T335, T436 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371 |
 | AC-266 | T326, T340, T334 | AC-267 | T328, T334, T335, T343, T408 | AC-268 | T340, T408 |
-| AC-269 | T334, T335 | AC-270 | T336 | AC-271 | T336, T452 |
+| AC-269 | T334, T335, T363 | AC-270 | T336 | AC-271 | T336, T452 |
 | AC-272 | ~~T337, T339, T340~~ T429, T457 | AC-273 | ~~T338~~ T435 | AC-274 | T341 |
 | AC-275 | ~~T337, T352~~ T428 | AC-276 | T343 | AC-277 | T343 |
 | AC-278 | T344, T348 | AC-279 | T344 | AC-280 | T346, T347 |
@@ -7217,7 +7261,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
 | AC-305 | T398 | AC-306 | T399 | AC-307 | T409, T444 |
 | AC-308 | T410 | ~~AC-309~~ | retired 2026-09-25 (was T337) | AC-310 | ~~T338~~ T435, T443 |
-| ~~AC-311~~ | retired 2026-09-25 (T333 now serves AC-324) | AC-312 | T335, T454 | AC-313 | T397, T398 |
+| ~~AC-311~~ | retired 2026-09-25 (T333 now serves AC-324) | AC-312 | T335, T454, T361 | AC-313 | T397, T398 |
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
 | AC-317 | T412 | AC-318 | T416 | AC-139 | T413, T417 |
 | AC-248 | T414, T415, T417 | AC-250 | T413, T420 | AC-009 | T447, T432 |

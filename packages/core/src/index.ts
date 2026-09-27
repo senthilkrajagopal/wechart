@@ -225,3 +225,11 @@ export {
   type DriverSpec,
   type DriverType,
 } from './data-sources/drivers';
+export {
+  dataSourceProblems,
+  SHORT_NAME,
+  targetChanges,
+  type DataSourceShape,
+  type FieldValue,
+  type SealedV1,
+} from './data-sources/validate';

@@ -66,22 +66,28 @@ export interface ModelFileTable {
 export interface DataSourceTable {
   id: string;
   folder_id: string;
+  /** A short name, unique in its folder (T335, AC-270). */
   name: string;
+  /** Its driver's type id (T454): never changed once stored (AC-161). */
   type: string;
+  /** How it signs in: one of its driver's methods (T335). */
+  auth_method: Generated<string>;
+  /** Its fields without secrets, exactly as the browser sealed with them. */
   settings: JSONColumnType<Record<string, unknown>>;
   version: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
 
-/** One sealed envelope per data source (T332, AC-298). */
+/**
+ * One sealed envelope per secret field (T335, AC-298): `{ v: 1, kid, enc, ct }`
+ * as the browser sealed it to xcube's key, which wechart never opens.
+ */
 export interface DataSourceSecretTable {
   data_source_id: string;
-  scheme: number;
-  key_id: string;
-  iv: Buffer;
-  ciphertext: Buffer;
-  tag: Buffer;
+  field: string;
+  envelope: JSONColumnType<Record<string, unknown>>;
+  revision: string;
   updated_at: Generated<Date>;
 }
 

@@ -49,8 +49,10 @@ import { referencesOf, usersOfCubes, type ReferenceDocument } from './model/refe
 import { searchable, visibleCounts, type Visibility } from './access/visible';
 import type { BookmarkStore } from './repos/bookmarks';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from './repos/catalog';
+import type { DataSourceStore } from './repos/data-sources';
 import type { FolderAccessStore } from './repos/folder-access';
 import { registerFolderAccess } from './routes/access';
+import { registerDataSources } from './routes/data-sources';
 import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
 
 /**
@@ -109,6 +111,8 @@ export interface BuildOptions {
   readonly sessions?: SessionStore;
   /** Each folder's AD groups (T314, AC-259, AC-260). */
   readonly folderAccess?: FolderAccessStore;
+  /** Data sources as folder items, their secrets sealed (T335, AC-269). */
+  readonly dataSources?: DataSourceStore;
   /**
    * How Cube's unauthenticated probes — its health (T162), whether it
    * enforces auth (T175) — are asked; `fetch` unless a test says.
@@ -243,6 +247,7 @@ export function buildServer({
   serviceToken,
   publications,
   folderAccess,
+  dataSources,
   healthFetch,
   logger = false,
   introspectionRetryMs,
@@ -502,6 +507,29 @@ export function buildServer({
   );
   // Each folder's AD groups and its effective access (T314, AC-259, AC-260).
   if (folderAccess !== undefined) registerFolderAccess(app, folderAccess);
+  /**
+   * Data sources (T335): seen by those who see a folder's every kind — never
+   * a read-only user (AC-263) — and changed only by its read-write members
+   * (AC-262, AC-266). One a user may not see answers as one that isn't there.
+   */
+  if (dataSources !== undefined)
+    registerDataSources(app, {
+      store: dataSources,
+      access: async (request, folderId, want) => {
+        const seen = await visibilityOf(request);
+        if (seen === undefined) return undefined;
+        const right = seen.rights.get(folderId);
+        const notThere = {
+          status: 404,
+          body: { error: 'There’s no such folder, or it isn’t yours to see.' },
+        };
+        if (right === undefined) return notThere;
+        // A folder they see but may not change says so, even to a read-only
+        // member, who sees none of its data sources (T335's review).
+        if (want === 'write' && !right.write) return { status: 403, body: { error: READ_ONLY } };
+        return right.kinds === 'all' ? undefined : notThere;
+      },
+    });
 
   /**
    * The charts and dashboards that use the members an edit changes, listed
@@ -833,6 +861,12 @@ export function buildServer({
     const subtree = await subtreeOf(folderId);
     return (await modelFiles.all()).filter((file) => subtree.has(file.folderId ?? ROOT_FOLDER_ID))
       .length;
+  };
+  /** How many data sources a folder holds, in it or beneath it (T335's review). */
+  const dataSourcesBeneath = async (folderId: string): Promise<number> => {
+    if (dataSources === undefined) return 0;
+    const subtree = await subtreeOf(folderId);
+    return (await dataSources.all()).filter((source) => subtree.has(source.folderId)).length;
   };
 
   /** A refused or unasked binding, answered. */
@@ -1637,6 +1671,13 @@ export function buildServer({
       if (models > 0)
         return reply.status(409).send({
           error: `This folder holds ${String(models)} model${models === 1 ? '' : 's'}, in it or beneath it: delete ${models === 1 ? 'it' : 'them'} first.`,
+        });
+      // Nor one holding data sources: they and their sealed secrets would be
+      // left in no folder, seen by no one (T335's review).
+      const sources = await dataSourcesBeneath(id);
+      if (sources > 0)
+        return reply.status(409).send({
+          error: `This folder holds ${String(sources)} data source${sources === 1 ? '' : 's'}, in it or beneath it: delete ${sources === 1 ? 'it' : 'them'} first.`,
         });
     }
 

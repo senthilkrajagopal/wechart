@@ -308,14 +308,20 @@ test('the root lists its model files as models, after its charts, and one opens 
     await expect(page.getByTestId(`item-${file.path}`).getByRole('cell').nth(0)).toHaveText(
       'Model',
     );
-  // After everything else in the folder: no row of another kind follows one.
+  // After its dashboards and charts: only models follow one, then any data
+  // sources the folder holds (T335).
   const kinds = await contentsOf(page)
     .locator('tbody tr')
     .locator('td:nth-of-type(1)')
     .allTextContents();
   const firstModel = kinds.indexOf('Model');
   expect(firstModel).toBeGreaterThan(-1);
-  expect(kinds.slice(firstModel).every((kind) => kind === 'Model')).toBe(true);
+  const after = kinds.slice(firstModel);
+  const models = after.filter((kind) => kind === 'Model').length;
+  expect(after).toEqual([
+    ...Array<string>(models).fill('Model'),
+    ...Array<string>(after.length - models).fill('Data source'),
+  ]);
 
   const row = page.getByTestId('item-cubes/orders.yml');
   await expect(row.getByRole('cell').nth(0)).toHaveText('Model');

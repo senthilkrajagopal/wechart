@@ -7,6 +7,7 @@ import { closeDb, getDb } from './db/client';
 import { migrateToLatest } from './db/migrate';
 import { bookmarkStore } from './repos/bookmarks';
 import { catalog } from './repos/catalog';
+import { dataSourceStore } from './repos/data-sources';
 import { documents } from './repos/documents';
 import { folderXcubeIds } from './repos/folder-xcube-ids';
 import { folderAccessStore } from './repos/folder-access';
@@ -128,6 +129,8 @@ async function main(): Promise<void> {
     publications,
     // Each folder's AD groups (T314).
     folderAccess: folderAccessStore(db),
+    // Data sources as folder items, their secrets sealed (T335).
+    dataSources: dataSourceStore(db, { kid: config.xcubePublicKey.kid }),
     // Signed-in sessions, kept in the metadata database (T316).
     sessions,
     logger: true,
