@@ -27,6 +27,9 @@ export async function seedDevData(db: Kysely<Database>): Promise<void> {
     // And the model, which the tests publish to (T142): seeded again from
     // the directory at start, so each run begins from the same model.
     await db.deleteFrom('model_files').execute();
+    // And the folders' data sources (T335), their secrets and tests with
+    // them: left, each would name a folder no longer there.
+    await db.deleteFrom('data_sources').execute();
   }
 
   const existing = await db
