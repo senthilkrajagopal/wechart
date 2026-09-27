@@ -85,7 +85,7 @@
 >
 >     Compose's Cube and the docker-desktop release now run xcube. Each API pushes its own model:
 >     - `e2e` and `e2e-security`, for the two suites;
->     - `demo`, for the demo API on :4200, which now starts with `WECHART_XCUBE_MODEL=demo WECHART_XCUBE_ADMIN_TOKEN=dev-xcube-admin-token-0123456789abcdef`;
+>     - `demo`, for the demo API on :4200, which now starts with `WECHART_XCUBE_MODEL=demo WECHART_SERVICE_KEY_FILE=<repo>/infra/xcube/dev-service-key.pem` (T420: the service credential replaced `WECHART_XCUBE_ADMIN_TOKEN`, which xcube no longer takes);
 >     - `wechart`, in the release.
 >
 >     Also done: T391 (value-axis labels, **AC-299**), T392 (series order, **AC-300**), T393 (table columns, **AC-301**), T394 (markdown text, **AC-302**).
@@ -153,6 +153,11 @@
 >       (through T398) on the 3b image, the model in items mode, sign-in on, at
 >       http://localhost:8089; every `verify.sh` check passed.
 >     - **Last complete run in every browser:** during T398. The next is due 10 tasks on.
+>   - **Slices 4–6 (2026-09-26, the user's "complete the xcube integration including connections/data sources and showing them in folders"):** R31, the spec and the plan are amended (the order is at the head of `tasks.md`'s slice 4).
+>     - **Done:** T420 (the `ed08180c37` image; the service credential; the static admin token retired; AC-333 ticked again), T454 (the eight drivers and their TLS target).
+>     - **In the tree:** T335 (data sources as folder items, listed in Explore, secrets as sealed envelopes; in review) and T441's core half (`seal.ts`, `aad.ts`, golden vectors that open with the development key).
+>     - **xcube built both asks** of `to-xcube/2026-09-26-2030-meta-revision-and-bindings.md`: `GET …/meta?revision=` and bindings in overlays and dry runs, in image `…-40efaef823@sha256:9bdad274…`. It's being researched; T436 (field list) and T456 (the approval check) build on it once verified.
+>     - The compose stack runs `ed08180c37`; the release on docker-desktop still runs revision 23 (`ca70362-t398`), to be redeployed.
 >     - **Asked with T429:** 25. With xcube unreachable, a chart or dashboard save in a folder xcube
 >       serves is refused (502), as a model publish is. Keep that, or store it unbound and bind it at
 >       the next save?
