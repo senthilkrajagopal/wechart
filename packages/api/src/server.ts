@@ -594,7 +594,15 @@ export function buildServer({
       // documents' routes, a data source has none (T345's review).
       ...(config.security === 'off'
         ? {}
-        : { workspaceOf: (folderId: string) => workspaceRootOf(folderId) }),
+        : {
+            workspaceOf: (folderId: string) => workspaceRootOf(folderId),
+            // The user's own, where they have one (AC-277; T346).
+            ownWorkspace: async (request: FastifyRequest) => {
+              const seen = await visibilityOf(request);
+              const own = workspaceIdOf(userOf(request).key);
+              return seen?.rights.has(own) === true ? own : undefined;
+            },
+          }),
       ...(dataSourceLanding === undefined ? {} : { landing: dataSourceLanding }),
       ...(connectionTest === undefined ? {} : { tester: connectionTest }),
       ...(connectionTests === undefined ? {} : { tests: connectionTests }),

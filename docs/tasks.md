@@ -5686,6 +5686,22 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - *2026-09-26, `[XOV, R31]`:* the copy keeps its original's folder and short name, so the workspace's overlay (T347) brings it under the original's full name and previews query it in place of the original. Its driver can't be changed (AC-161).
   - ~~Failing test: `workspace-copy-source.test.ts`: the copy has the connection settings and a secret re-encrypted under the copy's id, decrypts to the original value, and no response shows it (AC-280).~~
   - Depends on: T344, T335, T441
+  - *As built (2026-09-27):*
+    - `POST /api/data-sources/:id/copy` (`routes/data-sources.ts`, not `workspace-copy.ts`), with `store.copy` and `store.copyIn` (`repos/data-sources.ts`). Its answer is the copy's view plus `created`; T348's dialog calls it for the data sources chosen.
+    - A copy is made in the copier's workspace:
+      - it keeps its original's name, fields and sign-in method, and its envelopes as stored, with new revisions;
+      - it targets the original's folder and records `origin` (`{ id, version, folderId }`);
+      - it is read and written in one transaction;
+      - it is never landed in xcube, whose overlays bring it (T347).
+    - Only a read-write member of its folder, who has a workspace, may copy it. A second copy opens the first, a copy of what is already in a workspace is refused, and a copy made at the same moment as another opens that one.
+    - A copy can't be renamed: its name is what it stands in for.
+    - Migration `…_data-source-copies.cjs` (`origin`; the unique key becomes folder, target, name): copies of one name from two folders live side by side.
+    - **Small decision, overturnable:** a copy is made without a connection test. It holds its original's stored settings unchanged, and any change to it needs a passing test (T461). AC-158 is amended to say so.
+    - The AC-298 dump test now drives the copy too (T332's note).
+    - Tests:
+      - `routes/workspace-copy-source.test.ts` (7);
+      - `repos/data-source-secrets.test.ts`.
+    - AC-280 waits on T347's overlay (previews query the copy). AC-298 waits on T352, T362 and T368.
 - [ ] T347 (AC-281, AC-283, AC-323, AC-280, AC-329) Resolve a workspace item's cubes in the workspace first, then along its origin's or target's path, through an xcube overlay *(rewritten 2026-09-26: slice 5; there are no `ws:<user>` chains, `[AD 8, IP 7, plan]`)*
   - Files: `packages/api/src/xcube/overlays.ts` (+ test; `PUT`/`DELETE /v1/semantic/overlays/{id}`), `packages/api/src/server.ts` (a workspace item's queries name its overlay), `e2e/security/workspace-overlay.spec.ts`
   - Failing test: `overlays.test.ts` and `workspace-overlay.spec.ts`, against xcube's slice 5:
@@ -5715,6 +5731,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: a migration `…_proposals.cjs` (`proposals`, `proposal_items` with the item snapshot), `packages/api/src/repos/proposals.ts` (+ test), `packages/api/src/routes/proposals.ts` (+ test)
   - Failing test: `proposals.test.ts`: a proposal records the item snapshot, the folder, the author, the time and the description; 1,001 characters answer 400; the folder serves its current version until approval (AC-284).
     - *(2026-09-27, moved from T344)* with proposals in place, any `PUT` or `PATCH` of content on a shared dashboard, chart, model or data source is refused with 409, "Edit in my workspace" (AC-278). Until then a change in place is the only way a shared item changes.
+    - *(2026-09-27, from T346's review)* a workspace data source approved into its target is stored there with no target and no origin, since a shared folder's are one of a name (the unique key is folder, target, name).
   - Depends on: T344
 - [ ] T350 (AC-285) Put the workspace-only models a proposed dashboard needs into the same proposal
   - Files: `packages/api/src/routes/proposals.ts`, ~~`packages/api/src/model/chain.ts`~~ `packages/api/src/xcube/overlays.ts` (2026-09-26), `packages/api/src/routes/proposal-bundle.test.ts`

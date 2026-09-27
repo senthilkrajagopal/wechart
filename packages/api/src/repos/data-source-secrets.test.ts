@@ -37,8 +37,11 @@ const DEV_KEY = JSON.parse(
   ),
 ) as XcubeKey;
 afterAll(async () => {
-  // Its secrets go with it.
-  await getDb().deleteFrom('data_sources').where('folder_id', '=', folder).execute();
+  // Its secrets go with it, and its copy's (T346).
+  await getDb()
+    .deleteFrom('data_sources')
+    .where('folder_id', 'in', [folder, `${folder}-workspace`])
+    .execute();
   await closeDb();
 });
 
@@ -84,6 +87,9 @@ describe('data-source credentials at rest (T332, T335, AC-298)', () => {
     expect((await store.inFolder(folder)).map((each) => each.name)).toEqual(['sealed']);
     expect((await store.sealedOf(kept.id)).sealed).toEqual({ password: envelope });
     expect(await store.sealedOf(`ds-${randomUUID()}`)).toEqual({ sealed: {}, revisions: {} });
+    // Copied into a workspace (T346): the envelope as it is, never opened.
+    const copied = await store.copy(kept.id, `${folder}-workspace`);
+    expect((await store.sealedOf(copied.id)).sealed).toEqual({ password: envelope });
 
     const text = await dump();
     const forms = [

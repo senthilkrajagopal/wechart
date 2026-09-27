@@ -212,6 +212,7 @@ const source = (over: Partial<DataSource> = {}): DataSource => ({
   secrets: ['password'],
   settingsPrint: 'print-1',
   targetFolderId: null,
+  origin: null,
   version: 1,
   updatedAt: new Date(0),
   ...over,

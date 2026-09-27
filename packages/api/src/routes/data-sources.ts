@@ -63,6 +63,9 @@ export function viewOf(source: DataSource) {
     authMethod: source.authMethod,
     fields: source.fields,
     secrets: Object.fromEntries(source.secrets.map((field) => [field, { stored: true }])),
+    // Where a workspace's is to go, and what a copy was copied from (T345, T346).
+    targetFolderId: source.targetFolderId,
+    origin: source.origin,
     version: source.version,
     updatedAt: source.updatedAt,
   };
@@ -172,6 +175,7 @@ export function registerDataSources(
     key,
     seedToken,
     workspaceOf,
+    ownWorkspace,
     landing,
     tester,
     tests,
@@ -210,6 +214,11 @@ export function registerDataSources(
     readonly seedToken?: string;
     /** The workspace a folder is in, or null for a shared one (T343, T345). */
     readonly workspaceOf?: (folderId: string) => Promise<string | null>;
+    /**
+     * The request's user's own workspace, or none for one who has none
+     * (AC-277). Unset with sign-in off, where there are no workspaces (T346).
+     */
+    readonly ownWorkspace?: (request: FastifyRequest) => Promise<string | undefined>;
   },
 ): void {
   // Public by nature: it seals, and opens nothing (AC-298).
@@ -670,6 +679,12 @@ export function registerDataSources(
         ? {}
         : { sealed: value['sealed'] as Record<string, SealedV1> }),
     };
+    // A copy keeps its original's name, under which it stands in for the
+    // original in the workspace's previews (AC-280; T346's review).
+    if (source.origin !== null && change.name !== undefined && change.name !== source.name)
+      return reply.status(409).send({
+        error: `A copy keeps its original’s name, “${source.name}”, which it stands in for in your workspace. Make a new data source for another name.`,
+      });
     // A workspace's is changed in wechart alone, as it was made; renamed, it
     // still takes no name its target holds (T345's review).
     const workspaced = await inAWorkspace(source);
@@ -739,6 +754,40 @@ export function registerDataSources(
     } catch (failure) {
       if (taken !== undefined)
         await tests!.releaseChange(source.id, taken.testId, taken.print).catch(() => undefined);
+      return refused(reply, failure);
+    }
+  });
+
+  /**
+   * "Edit in my workspace" for a data source (T346; AC-280, AC-298): copied
+   * into the user's own workspace with its sealed credentials as they are,
+   * or their copy already there opened (200, `created: false`). Only for a
+   * read-write member of its folder, who has a workspace; what is in a
+   * workspace is changed there. With sign-in off there are no workspaces.
+   */
+  app.post('/api/data-sources/:id/copy', USER, async (request, reply) => {
+    if (ownWorkspace === undefined)
+      return reply.status(404).send({ error: 'Workspaces need sign-in.' });
+    const own = await ownWorkspace(request);
+    if (own === undefined)
+      return reply.status(403).send({
+        error: 'You have no workspace: only read-write members and Super-Admins have one.',
+      });
+    const source = await reached(request, reply, 'read');
+    if (source === undefined) return reply;
+    if (await inAWorkspace(source))
+      return reply.status(400).send({ error: 'It is in a workspace already: change it there.' });
+    const refusal = await access(request, source.folderId, 'write');
+    if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
+    const existing = await store.copyIn(source.id, own);
+    if (existing !== undefined) return { ...viewOf(existing), created: false };
+    try {
+      const copied = await store.copy(source.id, own);
+      return reply.status(201).send({ ...viewOf(copied), created: true });
+    } catch (failure) {
+      // Two copies at once: the one made first opens (T346's review).
+      const raced = await store.copyIn(source.id, own);
+      if (raced !== undefined) return { ...viewOf(raced), created: false };
       return refused(reply, failure);
     }
   });

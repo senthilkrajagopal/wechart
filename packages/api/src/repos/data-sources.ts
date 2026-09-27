@@ -10,7 +10,7 @@ import {
   type FieldValue,
   type SealedV1,
 } from '@wechart/core';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 
 import type { Database } from '../db/schema';
 
@@ -43,6 +43,12 @@ export interface DataSource {
   readonly settingsPrint: string;
   /** Where one made in a workspace is to go (T345, AC-282); null in a shared folder. */
   readonly targetFolderId: string | null;
+  /** What a copy was copied from (T346, AC-280); null for any other. */
+  readonly origin: {
+    readonly id: string;
+    readonly version: number;
+    readonly folderId: string;
+  } | null;
   readonly version: number;
   readonly updatedAt: Date;
 }
@@ -135,6 +141,14 @@ export interface Landing {
 }
 
 export interface DataSourceStore {
+  /**
+   * A copy into the workspace folder `into` (T346, AC-280, AC-298): its
+   * settings, its name and its sealed envelopes byte for byte, never opened;
+   * targeting its original's folder, and naming its origin.
+   */
+  copy(id: string, into: string): Promise<DataSource>;
+  /** The copy of `originId` in `into`, if there is one (T346). */
+  copyIn(originId: string, into: string): Promise<DataSource | undefined>;
   inFolder(folderId: string): Promise<DataSource[]>;
   all(): Promise<DataSource[]>;
   get(id: string): Promise<DataSource | undefined>;
@@ -196,6 +210,7 @@ type Row = {
   auth_method: string;
   settings: Record<string, unknown>;
   target_folder_id: string | null;
+  origin: DataSource['origin'];
   version: number;
   updated_at: Date;
 };
@@ -265,6 +280,7 @@ export function dataSourceStore(
       revisions,
     ),
     targetFolderId: row.target_folder_id,
+    origin: row.origin,
     version: row.version,
     updatedAt: row.updated_at,
   });
@@ -279,6 +295,7 @@ export function dataSourceStore(
         'auth_method',
         'settings',
         'target_folder_id',
+        'origin',
         'version',
         'updated_at',
       ]);
@@ -318,6 +335,67 @@ export function dataSourceStore(
       : error;
 
   const store: DataSourceStore = {
+    async copy(id, into) {
+      const copyId = `ds-${randomUUID()}`;
+      let name = '';
+      try {
+        await db.transaction().execute(async (tx) => {
+          // Its settings and its envelopes read together (T346's review): a
+          // change between them would pair one target's fields with another's
+          // envelopes, which would never open.
+          const original = await getOn(id, tx);
+          if (original === undefined)
+            throw new DataSourceRefused(404, 'There’s no such data source.');
+          name = original.name;
+          await tx
+            .insertInto('data_sources')
+            .values({
+              id: copyId,
+              folder_id: into,
+              name: original.name,
+              type: original.driver,
+              auth_method: original.authMethod,
+              settings: JSON.stringify(original.fields),
+              target_folder_id: original.folderId,
+              origin: JSON.stringify({
+                id: original.id,
+                version: original.version,
+                folderId: original.folderId,
+              }),
+            })
+            .execute();
+          // Each envelope as it was sealed: copied, never opened (AC-298).
+          const envelopes = await tx
+            .selectFrom('data_source_secrets')
+            .select(['field', 'envelope'])
+            .where('data_source_id', '=', id)
+            .execute();
+          for (const { field, envelope } of envelopes)
+            await tx
+              .insertInto('data_source_secrets')
+              .values({
+                data_source_id: copyId,
+                field,
+                envelope: JSON.stringify(envelope),
+                revision: randomUUID(),
+                updated_at: new Date(),
+              })
+              .execute();
+        });
+      } catch (error) {
+        throw taken(error, name);
+      }
+      return (await store.get(copyId))!;
+    },
+
+    async copyIn(originId, into) {
+      const row = (await select()
+        .where('folder_id', '=', into)
+        .where(sql<boolean>`origin ->> 'id' = ${originId}`)
+        .executeTakeFirst()) as Row | undefined;
+      return row === undefined ? undefined : (await withSecrets([row]))[0];
+    },
+
     async inFolder(folderId) {
       return withSecrets(
         (await select().where('folder_id', '=', folderId).orderBy('name').execute()) as Row[],
