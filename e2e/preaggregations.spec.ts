@@ -15,7 +15,7 @@ import { wellPicker } from './wells';
 test('a cube’s pre-aggregations list each rollup with what it declares', async ({ page }) => {
   await page.goto('/model/files/cubes%2Fmonthly_orders.yml');
   const form = page.getByRole('region', { name: 'Cube monthly_orders' });
-  await form.getByRole('tab', { name: /^Pre-aggregations/ }).click();
+  await form.getByRole('tab', { name: /^Pre-aggs/ }).click();
 
   const rollups = form.getByRole('list', { name: 'Pre-aggregations' }).locator(':scope > li');
   await expect(rollups).toHaveCount(1);
@@ -89,7 +89,7 @@ const withRollup = (cube: string) => `cubes:
 /** The one rollup's form, opened. */
 async function openRollup(page: Page, cube: string) {
   const form = page.getByRole('region', { name: `Cube ${cube}` });
-  await form.getByRole('tab', { name: /^Pre-aggregations/ }).click();
+  await form.getByRole('tab', { name: /^Pre-aggs/ }).click();
   const rollup = form
     .getByRole('list', { name: 'Pre-aggregations' })
     .locator(':scope > li')
@@ -352,7 +352,7 @@ test('taking away a member another file’s rollup names is refused, and that ro
     .click();
   await expect(page).toHaveURL(new RegExp(encodeURIComponent(userPath)));
   const userForm = page.getByRole('region', { name: `Cube ${user}` });
-  const tab = userForm.getByRole('tab', { name: /^Pre-aggregations/ });
+  const tab = userForm.getByRole('tab', { name: /^Pre-aggs/ });
   await expect(tab.locator('[data-icon="error"]')).toHaveCount(1);
   await tab.click();
   const rollup = userForm

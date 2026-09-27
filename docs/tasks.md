@@ -7839,9 +7839,21 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 - [ ] T469 (AC-149, AC-187) Jobs: a row click selects and never navigates, and the query log names members by title
   - Failing test: `jobs.spec.ts`: a row click selects it and docks its detail pane under the app bar; "Open in Model" deep-links to the file's pre-aggregation (UX-080, UX-081); the query log groups rows by day and names members by title (UX-082).
   - Depends on: none
-- [ ] T470 (AC-187) The Model editor's tab strip fits its pane
+- [x] T470 (AC-187, AC-344) The Model editor's tab strip fits its pane
   - Failing test: `model-editor.spec.ts`: "Pre-aggs" and "Access" short labels and muted zero counts keep every tab in view at 1,440 px (UX-074).
   - Depends on: none
+  - **Done 2026-09-27.** The tests are in `e2e/model-design.spec.ts` (T470's two), in Chrome, Firefox and Safari, and in `CubeForm.test.tsx`.
+    - **Tabs:** "Pre-aggs" and "Access", on a view too, each with its whole name as its `title`. All eight of a cube's tabs fit its 676 px pane, with 29 px to spare for two-digit counts and the refused mark.
+    - **The form flat on its pane** (UX-077):
+      - no card;
+      - the bars above it, the loss warning among them, are bands across the pane;
+      - a file's second cube or view starts under a rule.
+    - **The columns follow design 03's drawing, 676 : 524.**
+      - Its note 8 says "1.15 fr : 1 fr", the prototype's split, which gives 642 : 558 at 1,440.
+      - At that split the tabs don't fit.
+    - **The strip:** 8 px either side and no gap. Design 03 draws 9 px and a 2 px gap, which doesn't fit once the labels are set in the app's face.
+    - **Only the panel scrolls:** for a file of one cube or view, the tabs and any bar above them stay put, as the prototype's pane-body does. So a scrollbar never takes the tabs' width (the review). `model.spec.ts` scrolls the panel.
+    - **direction.md §7b** records the short labels.
 
 ### The Model workspace, to design 03 and designs 11–12, first (R34, AC-344)
 

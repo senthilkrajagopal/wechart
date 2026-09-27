@@ -23,7 +23,7 @@ test('a rollup’s members, a join’s target, drill members and a view’s incl
   // its time dimension a list of the time dimensions.
   await page.goto('/model/files/cubes%2Fmonthly_orders.yml');
   const cube = page.getByRole('region', { name: 'Cube monthly_orders' });
-  await cube.getByRole('tab', { name: /^Pre-aggregations/ }).click();
+  await cube.getByRole('tab', { name: /^Pre-aggs/ }).click();
   await cube.locator('.model-member__name', { hasText: /^by_status_month$/ }).click();
   const rollup = cube.getByRole('listitem').filter({
     has: page.locator('.model-member__name', { hasText: /^by_status_month$/ }),

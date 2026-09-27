@@ -50,7 +50,7 @@ const keyOf = (value: Value | undefined) =>
 async function openRollup(start: Value) {
   let last: Value | undefined;
   render(<Held start={start} onValue={(value) => (last = value)} />);
-  await userEvent.click(screen.getByRole('tab', { name: /^Pre-aggregations/ }));
+  await userEvent.click(screen.getByRole('tab', { name: /^Pre-aggs/ }));
   await userEvent.click(screen.getByText('by_status_month', { selector: '.model-member__name' }));
   return () => last;
 }

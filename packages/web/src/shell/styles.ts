@@ -660,12 +660,13 @@ main:has(.explore) {
 /* A model file's forms (T138, AC-132; direction.md §7b): the tabs as the edit
    sidebar's, fields as the prototype's .field — two short ones to a row, SQL
    and YAML the full width — and members as rows that open in place. */
-/* direction.md §7b: the form as the main working area, the YAML on the right. */
+/* direction.md §7b: the form as the main working area, the YAML on the right,
+   in design 03's columns — 676 : 524 beside the 240 px tree at 1,440 (T470). */
 .model-editor {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 676fr) minmax(320px, 524fr);
 }
 /* The Model workspace as one page (T234, AC-222, AC-223): the prototype's
    three panes — the file tree, the form, the code with Problems docked —
@@ -726,7 +727,26 @@ main:has(.model-page) {
 .model-tree__mark { margin-left: auto; color: var(--wc-status-error); }
 .model-editor__pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .model-editor__pane + .model-editor__pane { border-left: 1px solid var(--wc-border-subtle); }
-.model-editor__form { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+/* Flat on the pane, no card inset (design 03 note 9, UX-077): the tabs run its
+   full width, and a bar above the form is a band across it. */
+.model-editor__form { flex: 1; min-height: 0; overflow: auto; }
+/* A file of one cube or view, as nearly every file is: its tabs and any bar
+   above them stay put and only its panel scrolls, as the prototype's
+   pane-body does — so a scrollbar never takes width from the tabs (T470's
+   review). A file of several scrolls whole, each form under its own tabs. */
+.model-editor__form:has(> .model-form:only-of-type) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.model-editor__form:has(> .model-form:only-of-type) > * { flex: none; }
+.model-editor__form > .model-form:only-of-type {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.model-editor__form > .model-form:only-of-type > .model-form__panel { flex: 1; min-height: 0; overflow: auto; }
 .model-editor__code { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px; overflow: hidden; }
 .model-editor__yaml-view:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 /* A page with no editor — code, a file there is none of, one being read —
@@ -842,7 +862,7 @@ main:has(.model-page) {
 }
 /* Leaving with them asks first: the warning bar under the head, in view
    however far the form is scrolled. */
-.model-editor__warnbar.model-editor__leave { flex: none; align-items: center; margin: 8px 16px 0; }
+.model-editor__warnbar.model-editor__leave { flex: none; align-items: center; }
 .model-editor__outcome--failed { color: var(--wc-status-error); }
 .yaml-editor .cm-editor {
   max-height: calc(100vh - 160px);
@@ -925,9 +945,10 @@ button.model-problems__row { cursor: pointer; }
   flex-wrap: wrap;
   gap: 8px;
   align-items: flex-start;
-  margin: 0 0 12px;
+  margin: 0;
   padding: 8px 12px;
-  border-radius: 6px;
+  /* A band across the flat pane, as design 03's .warnbar (T470). */
+  border-bottom: 1px solid var(--wc-border-subtle);
   background: color-mix(in srgb, var(--wc-status-warning-icon) 16%, var(--wc-bg-surface));
   color: var(--wc-text-primary);
   font-size: 12px;
@@ -961,8 +982,9 @@ button.model-problems__row { cursor: pointer; }
   display: flex;
   gap: 8px;
   align-items: flex-start;
-  margin: 0 0 12px;
+  margin: 0;
   padding: 12px 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
   color: var(--wc-status-error);
   font-size: 13px;
 }
@@ -976,13 +998,16 @@ button.model-problems__row { cursor: pointer; }
   color: var(--wc-text-secondary);
   cursor: not-allowed;
 }
-.model-form {
-  max-width: 960px;
-  margin-bottom: 16px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 6px;
-  background: var(--wc-bg-surface);
-}
+.model-form { background: var(--wc-bg-surface); }
+/* A file's second cube or view starts under a rule, as a new section. */
+.model-form + .model-form { border-top: 1px solid var(--wc-border-subtle); }
+/* All eight of a cube's tabs in its 676 px pane (T470, UX-074). Narrower than
+   design 03's strip — its 9 px either side and 2 px gaps — which doesn't fit
+   once the app's face sets the labels, a count reaches two digits or a tab
+   carries the refused mark: 8 px either side and no gap, the padding keeping
+   the tabs apart. Over the edit sidebar's tabs, which come later. */
+.model-form > .model-form__tabs { flex: none; gap: 0; }
+.model-form > .model-form__tabs button { padding: 0 8px; }
 .model-form__count { color: var(--wc-text-muted); font-weight: 400; }
 .model-form__panel { padding: 12px; }
 .model-form__fields {

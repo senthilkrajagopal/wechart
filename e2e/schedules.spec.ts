@@ -72,7 +72,7 @@ test('Schedules lists each refresh schedule as Cube’s, read-only, and opens it
   await mornings.getByRole('link', { name: `Edit ${cube}.mornings in Model` }).click();
   await expect(page).toHaveURL(new RegExp(`/model/files/${encodeURIComponent(path)}`));
   const form = page.getByRole('region', { name: `Cube ${cube}` });
-  await expect(form.getByRole('tab', { name: /Pre-aggregations/ })).toHaveAttribute(
+  await expect(form.getByRole('tab', { name: /^Pre-aggs/ })).toHaveAttribute(
     'aria-selected',
     'true',
   );

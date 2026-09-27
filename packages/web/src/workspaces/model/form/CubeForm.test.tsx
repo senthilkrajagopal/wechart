@@ -46,6 +46,7 @@ describe('a cube’s form', () => {
     const tabs = within(form)
       .getAllByRole('tab')
       .map((tab) => tab.textContent?.replace(/\s*\d+$/, ''));
+    // Design 03's short labels (T470, UX-074), each keeping its whole name as its tooltip.
     expect(tabs).toEqual([
       'General',
       'Dimensions',
@@ -53,9 +54,11 @@ describe('a cube’s form', () => {
       'Joins',
       'Segments',
       'Hierarchies',
-      'Pre-aggregations',
-      'Access policy',
+      'Pre-aggs',
+      'Access',
     ]);
+    expect(within(form).getByRole('tab', { name: /^Pre-aggs/ }).title).toBe('Pre-aggregations');
+    expect(within(form).getByRole('tab', { name: /^Access/ }).title).toBe('Access policy');
     const lists = [
       'dimensions',
       'measures',
@@ -310,7 +313,7 @@ describe('editing a cube’s members', () => {
 
   it('names each list in the plural', async () => {
     render(<CubeForm kind="cube" value={ORDERS} onChange={vi.fn()} />);
-    await userEvent.click(screen.getByRole('tab', { name: /^Access policy/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /^Access/ }));
 
     expect(screen.getByRole('list', { name: 'Access policies' }).getAttribute('aria-label')).toBe(
       'Access policies',

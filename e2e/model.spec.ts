@@ -629,8 +629,9 @@ test('Model is one workspace: a tree beside full-height form and code panes, Pro
   expect(problemsBox?.y ?? 0).toBeGreaterThanOrEqual(
     Math.floor((codeBox?.y ?? 0) + (codeBox?.height ?? 0)),
   );
-  // Each pane scrolls on its own: the form is longer than its pane.
-  const formBody = form.locator('.model-editor__form');
+  // Each pane scrolls on its own: the form is longer than its pane. A file of
+  // one cube scrolls its panel, under tabs that stay put (T470's review).
+  const formBody = form.locator('.model-form__panel');
   await formBody.evaluate((node) => {
     node.scrollTop = 200;
   });

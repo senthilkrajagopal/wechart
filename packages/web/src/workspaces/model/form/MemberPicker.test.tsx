@@ -92,7 +92,7 @@ describe('member pickers (AC-224)', () => {
   it('picks a rollup’s measures from the model’s, and types none', async () => {
     const onChange = vi.fn();
     render(<Held initial={ORDERS} onChange={onChange} />);
-    await open(/^Pre-aggregations/, 'main');
+    await open(/^Pre-aggs/, 'main');
 
     const measures = screen.getByRole('group', { name: 'Measures' });
     expect(within(measures).queryByRole('textbox')).toBeNull();
@@ -116,7 +116,7 @@ describe('member pickers (AC-224)', () => {
 
   it('picks a rollup’s time dimension from the time dimensions, its segments from the cube’s', async () => {
     render(<Held initial={ORDERS} onChange={vi.fn()} />);
-    await open(/^Pre-aggregations/, 'main');
+    await open(/^Pre-aggs/, 'main');
     const time = screen.getByRole('combobox', { name: 'Time dimension' });
     expect(
       within(time)
@@ -139,7 +139,7 @@ describe('member pickers (AC-224)', () => {
     const onChange = vi.fn();
     const stale = { ...ORDERS, pre_aggregations: [{ name: 'main', measures: ['gone'] }] };
     render(<Held initial={stale} onChange={onChange} />);
-    await open(/^Pre-aggregations/, 'main');
+    await open(/^Pre-aggs/, 'main');
     const measures = screen.getByRole('group', { name: 'Measures' });
     expect(pressed(measures)).toEqual(['gone']);
     await userEvent.click(within(measures).getByRole('button', { name: 'gone' }));
@@ -150,7 +150,7 @@ describe('member pickers (AC-224)', () => {
     const onChange = vi.fn();
     const spelled = { ...ORDERS, pre_aggregations: [{ name: 'main', measures: ['CUBE.count'] }] };
     render(<Held initial={spelled} onChange={onChange} />);
-    await open(/^Pre-aggregations/, 'main');
+    await open(/^Pre-aggs/, 'main');
     const measures = screen.getByRole('group', { name: 'Measures' });
     expect(
       within(measures)

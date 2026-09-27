@@ -12,16 +12,22 @@ import { PickerScopeContext } from './scopes';
  */
 type Value = Record<string, unknown>;
 
-/** direction.md §7b: the tabs, and what they are called. */
-const TABS: Readonly<Record<'cube' | 'view', readonly [key: string, label: string][]>> = {
+/**
+ * direction.md §7b: the tabs, and what they are called — shortened where
+ * design 03 shortens them so the strip fits its pane (T470, UX-074), the
+ * whole name kept as the tab's tooltip.
+ */
+const TABS: Readonly<
+  Record<'cube' | 'view', readonly [key: string, label: string, whole?: string][]>
+> = {
   cube: [
     ['dimensions', 'Dimensions'],
     ['measures', 'Measures'],
     ['joins', 'Joins'],
     ['segments', 'Segments'],
     ['hierarchies', 'Hierarchies'],
-    ['pre_aggregations', 'Pre-aggregations'],
-    ['access_policy', 'Access policy'],
+    ['pre_aggregations', 'Pre-aggs', 'Pre-aggregations'],
+    ['access_policy', 'Access', 'Access policy'],
   ],
   view: [
     ['cubes', 'Cubes'],
@@ -29,7 +35,7 @@ const TABS: Readonly<Record<'cube' | 'view', readonly [key: string, label: strin
     ['measures', 'Measures'],
     ['folders', 'Folders'],
     ['default_filters', 'Default filters'],
-    ['access_policy', 'Access policy'],
+    ['access_policy', 'Access', 'Access policy'],
   ],
 };
 
@@ -64,7 +70,10 @@ export function CubeForm({
     .filter((rollup): rollup is Value => typeof rollup === 'object' && rollup !== null)
     .some((rollup) => stillUnknown(rollup, unknownIn(rollup) ?? []).length > 0);
   const section: SectionId = kind === 'cube' ? 'Y.3' : 'Y.10';
-  const tabs = [['general', 'General'], ...TABS[kind]] as const;
+  const tabs: readonly (readonly [key: string, label: string, whole?: string])[] = [
+    ['general', 'General'],
+    ...TABS[kind],
+  ];
   const listed = new Set(TABS[kind].map(([key]) => key));
   const [open, setOpen] = useState(() =>
     initialTab !== undefined && tabs.some(([key]) => key === initialTab) ? initialTab : 'general',
@@ -91,12 +100,13 @@ export function CubeForm({
         aria-label={`${name} sections`}
         className="edit-sidebar__tabs model-form__tabs"
       >
-        {tabs.map(([key, label], index) => (
+        {tabs.map(([key, label, whole], index) => (
           <button
             key={key}
             type="button"
             role="tab"
             id={`${base}-${key}`}
+            title={whole}
             ref={(node) => {
               refs.current[index] = node;
             }}

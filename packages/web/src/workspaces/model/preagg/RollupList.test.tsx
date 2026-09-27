@@ -44,7 +44,7 @@ const MONTHLY = {
 describe('a cube’s pre-aggregations', () => {
   it('lists every rollup with each attribute, without opening its form', async () => {
     render(<CubeForm kind="cube" value={MONTHLY} onChange={vi.fn()} />);
-    await userEvent.click(screen.getByRole('tab', { name: /^Pre-aggregations/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /^Pre-aggs/ }));
 
     const list = screen.getByRole('list', { name: 'Pre-aggregations' });
     // The rollups themselves: each one's closed form holds lists of its own.
@@ -188,7 +188,7 @@ describe('a rollup refused for what it names', () => {
   it('shows each unknown name on that rollup’s row, and on no other', async () => {
     render(<CubeForm kind="cube" value={broken} onChange={vi.fn()} rollupProblems={[refused]} />);
     // The tab says a rollup there has a problem, before it is opened.
-    const tab = screen.getByRole('tab', { name: /^Pre-aggregations/ });
+    const tab = screen.getByRole('tab', { name: /^Pre-aggs/ });
     expect(tab.querySelector('[data-icon="error"]')).not.toBeNull();
     await userEvent.click(tab);
 
@@ -205,7 +205,7 @@ describe('a rollup refused for what it names', () => {
 
   it('stops naming a name once the rollup no longer writes it', async () => {
     render(<CubeForm kind="cube" value={MONTHLY} onChange={vi.fn()} rollupProblems={[refused]} />);
-    await userEvent.click(screen.getByRole('tab', { name: /^Pre-aggregations/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /^Pre-aggs/ }));
     const unknown = screen.getByTestId('rollup-unknown');
     // `CUBE.no_such_member` was taken out; the index's `status` is still written.
     expect(unknown.textContent).not.toContain('CUBE.no_such_member');
@@ -218,7 +218,7 @@ describe('a rollup refused for what it names', () => {
       pre_aggregations: [{ name: 'by_status_month', measures: ['count'] }],
     };
     render(<CubeForm kind="cube" value={mended} onChange={vi.fn()} rollupProblems={[refused]} />);
-    const tab = screen.getByRole('tab', { name: /^Pre-aggregations/ });
+    const tab = screen.getByRole('tab', { name: /^Pre-aggs/ });
     expect(tab.querySelector('[data-icon="error"]')).toBeNull();
     expect(tab.textContent).not.toContain('refused');
   });

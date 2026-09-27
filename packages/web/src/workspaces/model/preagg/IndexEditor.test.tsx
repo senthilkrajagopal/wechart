@@ -52,7 +52,7 @@ const indexOf = (value: Value | undefined) =>
 async function openIndex() {
   let last: Value | undefined;
   render(<Held onValue={(value) => (last = value)} />);
-  await userEvent.click(screen.getByRole('tab', { name: /^Pre-aggregations/ }));
+  await userEvent.click(screen.getByRole('tab', { name: /^Pre-aggs/ }));
   await userEvent.click(screen.getByText('by_status_month', { selector: '.model-member__name' }));
   await userEvent.click(screen.getByText('by_status', { selector: '.model-member__name' }));
   const columns = screen.getByRole('list', { name: 'Columns' });
