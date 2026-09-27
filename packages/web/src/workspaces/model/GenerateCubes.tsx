@@ -663,10 +663,31 @@ export function GenerateCubes({
             generate again.
           </p>
         ) : null}
+        {/* The dialog pattern (T466, UX-106): Cancel beside one primary —
+            Generate until there is something to publish, then Publish. Once
+            published there is nothing to cancel, and it says Close. */}
         <div className="dialog__actions">
+          <button
+            type="button"
+            className={published.kind === 'done' ? 'btn-primary' : undefined}
+            onClick={onClose}
+          >
+            {published.kind === 'done' ? 'Close' : 'Cancel'}
+          </button>
+          <button
+            type="button"
+            // The primary only until there is something generated: then
+            // Publish is, and once published, Close (T466's review).
+            className={generated.kind === 'ok' ? undefined : 'btn-primary'}
+            disabled={chosen.size === 0 || generated.kind === 'run'}
+            onClick={generate}
+          >
+            Generate {cubes(chosen.size)}
+          </button>
           {generated.kind === 'ok' && published.kind !== 'done' ? (
             <button
               type="button"
+              className="btn-primary"
               disabled={published.kind === 'run'}
               aria-disabled={clashing}
               onClick={clashing ? undefined : publish}
@@ -674,16 +695,6 @@ export function GenerateCubes({
               Publish {cubes(generated.value.length)}
             </button>
           ) : null}
-          <button
-            type="button"
-            disabled={chosen.size === 0 || generated.kind === 'run'}
-            onClick={generate}
-          >
-            Generate {cubes(chosen.size)}
-          </button>
-          <button type="button" onClick={onClose}>
-            Close
-          </button>
         </div>
       </div>
     </div>

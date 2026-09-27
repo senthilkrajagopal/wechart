@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
-import { StatusIcon } from '../../shell/StatusIcon';
+import { InfoBar } from '../../shell/InfoBar';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import { SHARED_ROOT } from './roots';
 
@@ -80,10 +80,9 @@ export function NewItemDialog({
           />
         </div>
         {targets.length === 0 ? (
-          <div className="info-bar" role="note">
-            <StatusIcon kind="idle" />
+          <InfoBar>
             <p>You have read-write access to no shared folder, so there is nowhere for it to go.</p>
-          </div>
+          </InfoBar>
         ) : (
           <div className="field">
             <label htmlFor={`${heading}-target`}>Target folder</label>

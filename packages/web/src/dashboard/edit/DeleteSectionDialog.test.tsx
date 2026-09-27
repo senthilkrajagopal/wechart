@@ -30,6 +30,9 @@ describe('the section delete question', () => {
 
   it('leaves focus where the user moved it when its owner re-renders', async () => {
     const { rerender } = render(ask(() => undefined));
+    // Back from Keep, past Delete, to Cancel: the foot reads Cancel · Delete ·
+    // Keep since T466's dialog pattern.
+    await userEvent.tab({ shift: true });
     await userEvent.tab({ shift: true });
     const cancel = screen.getByTestId('cancel-delete-section');
     expect(document.activeElement).toBe(cancel);

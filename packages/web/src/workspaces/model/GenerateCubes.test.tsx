@@ -129,6 +129,13 @@ describe('generating cubes from a data source (AC-139)', () => {
 
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_visits' }));
+    /** The foot's buttons, and which one is the primary (T466, UX-106). */
+    const foot = () =>
+      [...dialog.querySelectorAll(':scope > .dialog__actions button')].map(
+        (button) =>
+          `${button.textContent ?? ''}${button.classList.contains('btn-primary') ? ' *' : ''}`,
+      );
+    expect(foot()).toEqual(['Cancel', 'Generate 2 cubes *']);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 2 cubes' }));
 
     // A cube per table, its YAML, and every column left out with why.
@@ -147,8 +154,12 @@ describe('generating cubes from a data source (AC-139)', () => {
       '_loaded_at (timestamp with time zone): its name starts with an underscore',
     ]);
 
+    // Generated: Publish is the one primary.
+    expect(foot()).toEqual(['Cancel', 'Generate 2 cubes', 'Publish 2 cubes *']);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Publish 2 cubes' }));
     expect(await within(dialog).findByText('Published 2 cubes.')).toBeTruthy();
+    // Published: nothing to cancel, and nothing to generate over what was.
+    expect(foot()).toEqual(['Close *', 'Generate 2 cubes']);
     expect(onPublished).toHaveBeenCalledWith([
       'cubes/chrome_stores.yml',
       'cubes/chrome_visits.yml',

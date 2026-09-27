@@ -2,7 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import type { Me } from '../../shell/AccountMenu';
-import { StateLine, StatusIcon } from '../../shell/StatusIcon';
+import { InfoBar } from '../../shell/InfoBar';
+import { StateLine } from '../../shell/StatusIcon';
 import type { Target } from '../explore/NewItemDialog';
 import { DataSourcesList, type ListedSource } from './DataSourcesList';
 import { NewSourceWizard } from './NewSourceWizard';
@@ -68,15 +69,12 @@ export function DataSourcesPage() {
           ) : null}
         </div>
         {addFailed === null ? null : <StateLine kind="err">{addFailed}</StateLine>}
-        <div className="info-bar" role="note">
-          <StatusIcon kind="idle" />
-          <div>
-            <p>
-              Every data source you can see, in every folder, with its health from its last
-              connection test.
-            </p>
-          </div>
-        </div>
+        <InfoBar>
+          <p>
+            Every data source you can see, in every folder, with its health from its last connection
+            test.
+          </p>
+        </InfoBar>
         {sources.isPending || me.isPending ? (
           <StateLine kind="run">Reading the data sources…</StateLine>
         ) : sources.isError ? (

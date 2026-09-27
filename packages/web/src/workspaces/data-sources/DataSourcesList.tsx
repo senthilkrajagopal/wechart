@@ -1,6 +1,7 @@
 import { DRIVERS, type DriverType } from '@wechart/core';
 import { useState } from 'react';
 
+import { InfoBar } from '../../shell/InfoBar';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
@@ -109,28 +110,25 @@ export function DataSourcesList({
 
   if (sources.length === 0 && seesEveryFolder)
     return (
-      <div className="info-bar" role="note">
-        <StatusIcon kind="idle" />
+      <InfoBar>
         <p>No data source has been added yet.</p>
-      </div>
+      </InfoBar>
     );
   if (sources.length === 0 && readWrite)
     return (
-      <div className="info-bar" role="note">
-        <StatusIcon kind="idle" />
+      <InfoBar>
         <p>No data source has been added to your folders, or to the folders above them, yet.</p>
-      </div>
+      </InfoBar>
     );
   if (sources.length === 0)
     return (
       <div className="sources-empty">
-        <div className="info-bar" role="note">
-          <StatusIcon kind="idle" />
+        <InfoBar>
           <p>
             Data sources are available to read-write members of a folder. Your dashboards are in
             Explore.
           </p>
-        </div>
+        </InfoBar>
         <a className="btn" href="/explore">
           Open Explore
         </a>

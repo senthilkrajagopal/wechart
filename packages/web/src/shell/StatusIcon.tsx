@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
  * rule 3): every status, validation and job state shows an icon and words,
  * never colour alone.
  */
-export type StateKind = 'ok' | 'run' | 'idle' | 'warn' | 'err';
+export type StateKind = 'ok' | 'run' | 'idle' | 'warn' | 'err' | 'info';
 
 export function StatusIcon({ kind }: { kind: StateKind }) {
   const common = {
@@ -62,6 +62,15 @@ export function StatusIcon({ kind }: { kind: StateKind }) {
         <svg {...common}>
           <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.6" />
           <path d="M8 4.5V8l2.5 1.5" stroke="currentColor" strokeWidth="1.6" fill="none" />
+        </svg>
+      );
+    // A note, not a state: the prototype's "i" (T466, UX-109).
+    case 'info':
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="7" fill="currentColor" />
+          <path d="M8 7v4.5" stroke="var(--wc-bg-surface)" strokeWidth="1.6" />
+          <circle cx="8" cy="4.8" r="1" fill="var(--wc-bg-surface)" />
         </svg>
       );
   }

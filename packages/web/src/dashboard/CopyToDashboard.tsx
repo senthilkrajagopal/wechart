@@ -180,16 +180,19 @@ export function CopyToDashboard({
             <a href={`/explore/dashboards/${encodeURIComponent(state.id)}`}>Open {state.title}</a>
           </p>
         ) : null}
+        {/* The dialog pattern (T466, UX-106): Cancel beside the one primary;
+            once copied, nothing is left to cancel, and it says Close. */}
         <div className="dialog__actions">
+          <button type="button" onClick={onClose}>
+            {state.kind === 'done' ? 'Close' : 'Cancel'}
+          </button>
           <button
             type="button"
+            className="btn-primary"
             disabled={picked === undefined || state.kind === 'run'}
             onClick={copy}
           >
             Copy
-          </button>
-          <button type="button" onClick={onClose}>
-            Close
           </button>
         </div>
       </div>

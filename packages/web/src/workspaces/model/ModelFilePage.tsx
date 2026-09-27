@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBlocker, useRouter, type ShouldBlockFn } from '@tanstack/react-router';
 
 import { META_QUERY } from '../../query/meta';
+import { InfoBar } from '../../shell/InfoBar';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
@@ -1013,9 +1014,9 @@ export function ModelFilePage({
           // No file open: what each defines (AC-131), beside the tree.
           <div className="model-page__overview">
             <h1 className="workspace-title">Model</h1>
-            <p className="model-page__note">
-              Choose a file in the tree to edit it, or make a new cube or view.
-            </p>
+            <InfoBar>
+              <p>Choose a file in the tree to edit it, or make a new cube or view.</p>
+            </InfoBar>
             <FileList />
           </div>
         ) : file === undefined ? (

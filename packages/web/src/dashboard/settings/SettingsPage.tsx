@@ -704,7 +704,8 @@ function DiscardSettingsDialog({
           <button type="button" ref={safe} onClick={onKeep}>
             Keep editing
           </button>
-          <button type="button" className="dialog__destructive" onClick={onDiscard}>
+          {/* The question's one primary, destructive, in status-error (T466, UX-106). */}
+          <button type="button" className="btn-primary dialog__destructive" onClick={onDiscard}>
             Discard changes
           </button>
         </div>

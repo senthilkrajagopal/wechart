@@ -7779,8 +7779,29 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - a category is one colour on every tile of a dashboard;
     - pie and donut labels follow the theme in dark (UX-103, UX-113).
   - Depends on: none
-- [ ] T466 (AC-187) One page frame and one dialog pattern
+- [x] T466 (AC-187) One page frame and one dialog pattern
   - *(2026-09-27: split into T466, T476, T477 and T478, one commit each; the measurements below stay as a whole across the four.)*
+  - **Done 2026-09-27.** AC-187 stays open for the rest of the list.
+    - `e2e/consistency.spec.ts` checks:
+      - 24 px gutters on eight pages;
+      - titles at text-lg, and the dashboard's at text-xl (direction.md §3);
+      - every page note an info bar with the "i";
+      - no page speaking of phases;
+      - no window scroll beside a docked pane;
+      - dialog titles at 16/600;
+      - Generate cubes' foot.
+    - **As built:**
+      - `--wc-surface-padding` is 24 px. A docked pane keeps its 16 px foot, and so does its page.
+      - `shell/InfoBar.tsx` and a StatusIcon `info` kind, in the accent colour, replace every hand-written info bar. Security's and the Model overview's plain notes are now info bars too.
+      - Security's and Schedules' phase copy is reworded. Schedules still says scheduling from wechart isn't available yet, which AC-233 asks for; `admin.spec.ts` is updated to that.
+      - `.dialog h2` is text-md.
+      - Cancel now sits beside one primary in Generate cubes (Publish once generated, Close once published), Bookmarks, Copy to dashboard and Delete section.
+      - The settings discard question's Discard is a status-error primary.
+      - Jobs' tabs sit on the page ground.
+    - **No `PageHead` component:** the title rows already share `.workspace-title` and the page frame.
+    - **Left to their own design tasks:**
+      - the chart type gallery's Close in its head (the editor isn't rebuilt, per R33);
+      - the chart page's inline delete question (phase-1 design 06 item 3, UX-042).
   - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/shell/{PageHead,InfoBar}.tsx` (+ tests), every page and dialog that differs, `e2e/consistency.spec.ts`
   - Failing test: `consistency.spec.ts`, measured on every page and dialog:
     - 24 px gutters;

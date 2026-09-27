@@ -12,7 +12,7 @@ import { expect, test } from '@playwright/test';
  * as broken rather than as deferred — and "/sources" answering Not found with
  * Explore marked as the current workspace.
  */
-test('Schedules shows its title and says what it is for, and that it waits for a later phase', async ({
+test('Schedules shows its title and says what it is for, and that scheduling from wechart waits', async ({
   page,
 }) => {
   await page.goto('/schedules');
@@ -20,9 +20,11 @@ test('Schedules shows its title and says what it is for, and that it waits for a
   await expect(main.getByRole('heading', { level: 1 })).toHaveText('Schedules');
   // A note, with its icon, rather than an empty page.
   const note = main.getByRole('note');
-  await expect(note).toContainText(/not part of this phase/i);
+  await expect(note).toContainText(/isn’t available yet/i);
   // And what the page is for: where its subject is set today.
   await expect(note).toContainText(/refresh key/);
+  // Said without a word of phases (T466, UX-111).
+  await expect(note).not.toContainText(/\bphase\b/i);
   await expect(note.locator('[data-icon]')).toHaveCount(1);
 });
 

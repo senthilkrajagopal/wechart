@@ -233,16 +233,17 @@ function SaveBookmark({
           </p>
           {run.kind === 'run' ? <StateLine kind="run">Saving…</StateLine> : null}
           {run.kind === 'err' ? <StateLine kind="err">{run.text}</StateLine> : null}
+          {/* The dialog pattern (T466, UX-106): Cancel beside the one primary. */}
           <div className="dialog__actions">
+            <button type="button" onClick={onClose}>
+              Cancel
+            </button>
             <button
               type="submit"
               className="btn-primary"
               disabled={named === '' || run.kind === 'run'}
             >
               Save
-            </button>
-            <button type="button" onClick={onClose}>
-              Cancel
             </button>
           </div>
         </form>

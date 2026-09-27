@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { InfoBar } from '../../shell/InfoBar';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { MODEL_FILES_QUERY } from '../model/FileList';
@@ -88,10 +89,13 @@ function PolicyList({
 }) {
   return (
     <>
-      <p className="security-workspace__note">
-        Users and groups come in phase 2. In phase 1, policies are authored in the model, and a
-        security context&rsquo;s groups decide which apply.
-      </p>
+      {/* What the page is for, with no word of phases (T466, UX-111). */}
+      <InfoBar>
+        <p>
+          Access policies are written in the model. The groups a request carries decide which of
+          them apply.
+        </p>
+      </InfoBar>
       {rows.length === 0 ? (
         <p>The model declares no access policies.</p>
       ) : (

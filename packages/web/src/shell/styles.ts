@@ -58,7 +58,9 @@ body {
    would be a silent second scrollbar rather than anything that fails loudly. */
 :root {
   --wc-app-bar-height: 48px;
-  --wc-surface-padding: 16px;
+  /* One page frame (T466, UX-109): 24 px gutters on every page, as the
+     approved prototype's .admin-main and the dashboard's own. */
+  --wc-surface-padding: 24px;
 }
 
 /* Buttons, inputs and selects, as the prototype draws them (AC-187: its .btn,
@@ -390,6 +392,10 @@ textarea { height: auto; padding: 6px 8px; }
 .auth-state__card p { margin: 0; color: var(--wc-text-secondary); }
 
 main { padding: var(--wc-surface-padding); }
+/* A page with a pane docked the window's height (Jobs, Security): its foot
+   as far from the window's as the pane's is, so the page is exactly the
+   window's height and never scrolls it by the difference (T466's review). */
+main:has(.admin-pane) { padding-bottom: 16px; }
 
 .visually-hidden {
   position: absolute;
@@ -683,9 +689,10 @@ main:has(.model-page) {
   .model-tree { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--wc-border-subtle); }
 }
 .model-page__main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.model-page__main > .state-line { margin: 16px; }
+.model-page__main > .state-line { margin: var(--wc-surface-padding); }
+.model-page__overview > .workspace-title { margin-bottom: 12px; }
 .model-page__overview { flex: 1; min-height: 0; overflow: auto; padding: var(--wc-surface-padding); }
-.model-page__note { margin: 0 0 12px; color: var(--wc-text-secondary); }
+.model-page__overview > .info-bar { margin-bottom: 12px; }
 .model-tree { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--wc-border-subtle); background: var(--wc-bg-surface); }
 .model-tree__head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 48px; padding: 8px 12px; border-bottom: 1px solid var(--wc-border-subtle); }
 .model-tree__head h2 { flex: 1 0 100%; margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: var(--wc-text-sm-strong-weight); }
@@ -2115,6 +2122,8 @@ input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset
   color: var(--wc-text-primary);
 }
 .info-bar p { margin: 0; }
+/* The note's "i" in the accent, as the prototype draws it (T466's review). */
+svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 
 .folder-contents__empty,
 .query-log__empty { color: var(--wc-text-secondary); }
@@ -2172,7 +2181,8 @@ input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset
   color: var(--wc-text-muted);
 }
 /* The Jobs workspace's tabs, and its pre-aggregations with their builds (T155). */
-.jobs-workspace__tabs { margin-bottom: 12px; }
+/* Tabs on the page ground, not on a band of their own (T466, UX-109). */
+.jobs-workspace__tabs { margin-bottom: 12px; background: none; }
 /* Its header: the title, then Cube's health and the refresh worker's (T162). */
 .jobs-workspace__head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
 .jobs-health { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -2193,9 +2203,10 @@ input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset
   /* Where it starts on the page (set by the pane), else below the app bar. */
   top: var(--pane-top, calc(var(--wc-app-bar-height) + var(--wc-surface-padding)));
   box-sizing: border-box;
+  /* Down to within 16 px of the window's foot, however wide the page's
+     gutters are (T466): a docked pane runs the window's height. */
   height: calc(
-    100vh - var(--pane-top, calc(var(--wc-app-bar-height) + var(--wc-surface-padding))) -
-      var(--wc-surface-padding)
+    100vh - var(--pane-top, calc(var(--wc-app-bar-height) + var(--wc-surface-padding))) - 16px
   );
   display: grid;
   align-content: start;
@@ -2276,7 +2287,6 @@ input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset
   align-content: start;
   min-width: 0;
 }
-.security-workspace__note { margin: 0; color: var(--wc-text-secondary); }
 .security-workspace__head { margin: 8px 0 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
 /* A screen that needs a Cube API scope wechart lacks (T176, AC-170): said as
    a state, in secondary ink, as an empty tile is — not as a failure. */
@@ -2368,7 +2378,6 @@ input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset
   overflow: hidden;
 }
 .type-gallery__head { grid-column: 1 / -1; display: flex; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--wc-border-subtle); }
-.type-gallery__head h2 { font-size: var(--wc-text-lg-size); }
 /* Its search is the prototype's .input.sm, and Close and Use Auto its
    .btn.sm, over the .dialog button rule (T310). */
 .type-gallery__head input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']) {
@@ -4698,7 +4707,15 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   background: var(--wc-bg-surface);
   color: var(--wc-text-primary);
 }
-.dialog h2 { margin: 0; }
+/* One dialog pattern (T466, UX-106): its title in direction.md §3's text-md,
+   16/600, its body in 14 px, on every dialog — the browser's h2 made them
+   21/700, and the gallery's 20. */
+.dialog h2 {
+  margin: 0;
+  font-size: var(--wc-text-md-size);
+  line-height: var(--wc-text-md-line);
+  font-weight: var(--wc-text-md-weight);
+}
 .dialog p { margin: 0 0 8px; color: var(--wc-text-secondary); }
 .dialog button {
   height: 32px;
@@ -4723,6 +4740,14 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 .dialog button.dialog__destructive {
   color: var(--wc-status-error);
   border-color: var(--wc-status-error);
+}
+/* A destructive answer that is the dialog's one primary: filled in
+   status-error (T466, UX-106), as the approved pattern draws it. */
+.dialog button.btn-primary.dialog__destructive,
+.dialog button.btn-primary.dialog__destructive:hover:not(:disabled) {
+  background: var(--wc-status-error);
+  border-color: var(--wc-status-error);
+  color: var(--wc-text-on-accent);
 }
 
 /* The undo toast (AC-060, direction.md rule 38). Bottom right, above

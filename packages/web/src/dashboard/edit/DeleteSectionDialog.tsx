@@ -74,15 +74,31 @@ export function DeleteSectionDialog({
           where they are.
         </p>
 
-        <button type="button" ref={first} data-testid="keep-contents" onClick={onKeepContents}>
-          Keep the {count === 1 ? 'item' : 'items'}
-        </button>
-        <button type="button" data-testid="delete-contents" onClick={onDeleteContents}>
-          Delete the section and everything in it
-        </button>
-        <button type="button" data-testid="cancel-delete-section" onClick={onCancel}>
-          Cancel
-        </button>
+        {/* The dialog pattern (T466, UX-106): Cancel at the foot beside the
+            answers, the one that loses nothing the primary, the one that
+            loses work marked so. */}
+        <div className="dialog__actions">
+          <button type="button" data-testid="cancel-delete-section" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="dialog__destructive"
+            data-testid="delete-contents"
+            onClick={onDeleteContents}
+          >
+            Delete the section and everything in it
+          </button>
+          <button
+            type="button"
+            ref={first}
+            className="btn-primary"
+            data-testid="keep-contents"
+            onClick={onKeepContents}
+          >
+            Keep the {count === 1 ? 'item' : 'items'}
+          </button>
+        </div>
       </div>
     </div>
   );

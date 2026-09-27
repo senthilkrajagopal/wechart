@@ -11,6 +11,7 @@ import {
   type XcubeKey,
 } from '@wechart/core';
 
+import { InfoBar } from '../../shell/InfoBar';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import type { Target } from '../explore/NewItemDialog';
@@ -770,7 +771,7 @@ export function NewSourceWizard({
             {/* The rule, said once, before a run (state C). */}
             {tested === null && busy !== 'test' ? (
               <p className="source-pane__rule" role="note">
-                <StatusIcon kind="idle" />
+                <StatusIcon kind="info" />
                 {THE_RULE}
               </p>
             ) : null}
@@ -820,12 +821,11 @@ export function NewSourceWizard({
               </span>
             </div>
             {targets === undefined ? null : targets.length === 0 ? (
-              <div className="info-bar" role="note">
-                <StatusIcon kind="idle" />
+              <InfoBar>
                 <p>
                   You have read-write access to no shared folder, so there is nowhere for it to go.
                 </p>
-              </div>
+              </InfoBar>
             ) : (
               <>
                 <TargetTree

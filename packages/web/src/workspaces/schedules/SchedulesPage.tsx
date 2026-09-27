@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { StateLine, StatusIcon } from '../../shell/StatusIcon';
+import { InfoBar } from '../../shell/InfoBar';
+import { StateLine } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 
 /**
@@ -45,16 +46,15 @@ export function SchedulesPage() {
   return (
     <div className="admin-page">
       <h1 className="workspace-title">Schedules</h1>
-      <div className="info-bar" role="note">
-        <StatusIcon kind="idle" />
-        <div>
-          <p>
-            When each pre-aggregation is rebuilt is set by its refresh key in the model, and Cube’s
-            refresh worker runs it: change one in Model. Scheduling builds and cache warm-ups from
-            wechart is not part of this phase.
-          </p>
-        </div>
-      </div>
+      {/* What the page does now, and that scheduling from wechart waits
+          (AC-233), with no word of phases (T466, UX-111). */}
+      <InfoBar>
+        <p>
+          When each pre-aggregation is rebuilt is set by its refresh key in the model, and Cube’s
+          refresh worker runs it: change one in Model. Scheduling builds and cache warm-ups from
+          wechart isn’t available yet.
+        </p>
+      </InfoBar>
       {schedules.isPending ? (
         <StateLine kind="run">Reading the schedules…</StateLine>
       ) : schedules.isError ? (
