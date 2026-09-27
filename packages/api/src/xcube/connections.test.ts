@@ -152,6 +152,37 @@ describe('xcube’s connection routes, called from wechart’s server (AC-327)',
     ).rejects.toThrow('xcube answered a test with no checks');
   });
 
+  it('reads each instance’s report of one, and says when xcube holds none of that name (T365)', async () => {
+    const report = {
+      model: 'dev',
+      name: 'fa__warehouse',
+      version: 7,
+      revisions: { password: 'r2' },
+      instances: [
+        {
+          instance: 'cube-1/1/abc123',
+          version: 7,
+          state: 'live',
+          error: null,
+          reportedAt: '2026-09-26T10:00:00.000Z',
+          current: true,
+        },
+      ],
+    };
+    const { sent, connections } = stub(() => ({ status: 200, body: report }));
+    expect(await connections.health('fa__warehouse')).toEqual({
+      version: 7,
+      instances: report.instances,
+    });
+    expect(sent[0]?.url).toBe(`${BASE}/connections/fa__warehouse/health`);
+
+    const unknown = stub(() => ({
+      status: 404,
+      body: { code: 'unknown_connection', error: 'No such connection' },
+    }));
+    expect(await unknown.connections.health('fa__gone')).toBeUndefined();
+  });
+
   it('lists the ones it holds', async () => {
     const held: HeldConnection = {
       name: 'warehouse',
@@ -313,6 +344,19 @@ describe('a data source landing in xcube before it is stored (T442)', () => {
       status: 503,
       message: 'xcube can’t be reached, so nothing was removed. Try again once it is back.',
     });
+  });
+
+  it('asks xcube for its instances’ reports under its full name (T365)', async () => {
+    const { sent, connections } = stub(() => ({
+      status: 200,
+      body: { version: 3, instances: [] },
+    }));
+    const sync = connectionSync({ connections, folders: async () => tree({ 'folder-a': 'fa' }) });
+
+    expect(await sync.healthOf(source())).toEqual({ version: 3, instances: [] });
+    expect(sent.map(({ url }) => url)).toEqual([`${BASE}/connections/fa__warehouse/health`]);
+    // In a folder xcube's tree doesn't hold: never landed, so none.
+    expect(await sync.healthOf(source({ folderId: 'workspace-folder' }))).toBeUndefined();
   });
 
   it('removes it from xcube first, refusing while published cubes use it', async () => {

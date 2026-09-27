@@ -161,6 +161,8 @@ async function main(): Promise<void> {
             prepare: (folderId) => landing.prepare(folderId),
             unland: (source) => landing.unland(source),
           },
+          // Whether every Cube instance uses its settings (T365, AC-161).
+          connectionHealth: (source) => landing.healthOf(source),
         }),
     // Connection tests, run by xcube with Cube's own drivers (T361, AC-159),
     // and each one of a stored data source kept (T362, AC-163).

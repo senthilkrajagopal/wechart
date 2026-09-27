@@ -54,8 +54,27 @@ export interface TestAnswer {
   }[];
 }
 
+/**
+ * Each Cube instance's report of a connection (research, "`GET
+ * …/connections/{name}/health`"): written when an instance builds its driver,
+ * on first use or a swap; `current` when it built the stored version.
+ */
+export interface ConnectionHealth {
+  readonly version: number;
+  readonly instances: readonly {
+    readonly instance: string;
+    readonly version: number | null;
+    readonly state: 'live' | 'failed';
+    readonly error: string | null;
+    readonly reportedAt: string;
+    readonly current: boolean;
+  }[];
+}
+
 export interface XcubeConnections {
   put(name: string, body: ConnectionBody): Promise<void>;
+  /** Its instances' reports; none where xcube holds no connection of that name. */
+  health(name: string): Promise<ConnectionHealth | undefined>;
   /** Removed, or never there: xcube answers 204 either way. */
   remove(name: string): Promise<void>;
   list(): Promise<HeldConnection[]>;
@@ -159,6 +178,18 @@ export function xcubeConnections({
     async put(name, body) {
       const { status, answer } = await call('PUT', `/${encodeURIComponent(name)}`, body);
       if (status !== 200) throw failed(status, answer);
+    },
+
+    async health(name) {
+      const { status, answer } = await call('GET', `/${encodeURIComponent(name)}/health`);
+      if (status === 404 && answer['code'] === 'unknown_connection') return undefined;
+      if (status !== 200) throw failed(status, answer);
+      return {
+        version: Number(answer['version']),
+        instances: Array.isArray(answer['instances'])
+          ? (answer['instances'] as ConnectionHealth['instances'])
+          : [],
+      };
     },
 
     async remove(name) {
@@ -305,6 +336,14 @@ export function connectionSync({
           });
         },
       };
+    },
+
+    /** Its instances' reports, under its full name; none where it never landed (T365). */
+    async healthOf(source: DataSource): Promise<ConnectionHealth | undefined> {
+      const xcubeId = (await folders()).ids.get(source.folderId);
+      return xcubeId === undefined
+        ? undefined
+        : connections.health(connectionNameOf(xcubeId, source.name));
     },
 
     /** Removes it from xcube, or refuses while published cubes use it. */

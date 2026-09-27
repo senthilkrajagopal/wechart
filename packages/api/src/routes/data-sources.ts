@@ -12,7 +12,13 @@ import {
 import { XCUBE_PUBLIC_KEY, type XcubePublicKey } from '../secrets/xcube-key';
 import type { ConnectionTestStore } from '../repos/connection-tests';
 import { XcubeError } from '../xcube/client';
-import { ConnectionRefused, type TestAnswer, type TestedConnection } from '../xcube/connections';
+import {
+  ConnectionRefused,
+  type ConnectionHealth,
+  type TestAnswer,
+  type TestedConnection,
+} from '../xcube/connections';
+import { cubeStateOf } from '../xcube/cube-state';
 
 /**
  * A data source's own routes (T335; AC-269, AC-164, AC-312, AC-161, AC-262,
@@ -97,7 +103,10 @@ export function registerDataSources(
     landing,
     tester,
     tests,
+    health,
   }: {
+    /** A data source's Cube instances' reports, from xcube (T365, AC-161). */
+    readonly health?: (source: DataSource) => Promise<ConnectionHealth | undefined>;
     /** Each test of a stored data source, kept and listed (T362, AC-163). */
     readonly tests?: ConnectionTestStore;
     readonly store: DataSourceStore;
@@ -194,6 +203,31 @@ export function registerDataSources(
       });
     }
   };
+
+  /**
+   * Whether every running Cube instance uses its stored settings (T365,
+   * AC-161): from each instance's report to xcube within the hour. xcube
+   * swaps the driver as Cube runs, so there is never a restart to ask for.
+   */
+  app.get('/api/data-sources/:id/cube-state', USER, async (request, reply) => {
+    const source = await reached(request, reply, 'read');
+    if (source === undefined) return reply;
+    if (health === undefined)
+      return reply.status(503).send({
+        error: 'Cube’s use of a data source is told by xcube, which this deployment doesn’t run.',
+      });
+    try {
+      return cubeStateOf(await health(source), new Date());
+    } catch (error) {
+      // An answer xcube gave — a service key it won't take, say — is no outage.
+      if (error instanceof XcubeError || error instanceof ConnectionRefused)
+        return reply.status(502).send({ error: `xcube refused to say: ${error.message}` });
+      request.log.warn({ err: error }, 'could not ask xcube whether Cube uses a data source');
+      return reply.status(503).send({
+        error: 'xcube can’t be reached to say whether Cube uses it. Try again once it is back.',
+      });
+    }
+  });
 
   // A stored one's tests, newest first (T362, AC-163): for those who may see it.
   app.get('/api/data-sources/:id/tests', USER, async (request, reply) => {

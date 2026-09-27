@@ -50,9 +50,9 @@ import { searchable, visibleCounts, type Visibility } from './access/visible';
 import type { BookmarkStore } from './repos/bookmarks';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from './repos/catalog';
 import type { ConnectionTestStore } from './repos/connection-tests';
-import type { DataSourceStore } from './repos/data-sources';
+import type { DataSource, DataSourceStore } from './repos/data-sources';
 import type { DataSourceLanding } from './routes/data-sources';
-import type { TestAnswer, TestedConnection } from './xcube/connections';
+import type { ConnectionHealth, TestAnswer, TestedConnection } from './xcube/connections';
 import type { FolderAccessStore } from './repos/folder-access';
 import { registerFolderAccess } from './routes/access';
 import { registerDataSources } from './routes/data-sources';
@@ -125,6 +125,8 @@ export interface BuildOptions {
   readonly connectionTest?: (body: TestedConnection) => Promise<TestAnswer>;
   /** Each connection test of a stored data source, kept (T362, AC-163). */
   readonly connectionTests?: ConnectionTestStore;
+  /** A data source's Cube instances' reports, from xcube (T365, AC-161). */
+  readonly connectionHealth?: (source: DataSource) => Promise<ConnectionHealth | undefined>;
   /**
    * How Cube's unauthenticated probes — its health (T162), whether it
    * enforces auth (T175) — are asked; `fetch` unless a test says.
@@ -263,6 +265,7 @@ export function buildServer({
   dataSourceLanding,
   connectionTest,
   connectionTests,
+  connectionHealth,
   healthFetch,
   logger = false,
   introspectionRetryMs,
@@ -533,6 +536,7 @@ export function buildServer({
       ...(dataSourceLanding === undefined ? {} : { landing: dataSourceLanding }),
       ...(connectionTest === undefined ? {} : { tester: connectionTest }),
       ...(connectionTests === undefined ? {} : { tests: connectionTests }),
+      ...(connectionHealth === undefined ? {} : { health: connectionHealth }),
       ...(config.xcubePublicKey === undefined ? {} : { key: config.xcubePublicKey }),
       access: async (request, folderId, want) => {
         const seen = await visibilityOf(request);

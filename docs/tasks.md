@@ -5810,11 +5810,12 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - *(2026-09-26, from T361)* the Test step shows each check xcube ran (`secrets`, `config`, `connect`, `schemas`) with its result, and a failed one's error text as xcube redacted it (AC-159's showing half: T361 runs the test and answers the checks);
     - *(2026-09-26, from T441)* the form seals each typed secret at submit with core's `sealSecretV1`, to the key `GET /api/data-sources/sealing-key` gives, and a canary secret typed into it appears in no request body to wechart (the Test step's included), no stored row and no line of the API's log, in Chrome, Firefox and WebKit (AC-325's form half: T441 built the sealer and the key route, and there was no form to type into).
   - Depends on: T454, T361, T345
-- [ ] T364 (AC-157, AC-233, AC-001) List every visible data source with its folder, driver, health and the cubes that use it
+- [ ] T364 (AC-157, AC-233, AC-001, AC-161) List every visible data source with its folder, driver, health and the cubes that use it
   - Files: `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (replacing the deferred page), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`), `e2e/security/data-sources.spec.ts`
   - Failing test: `data-sources.spec.ts`: the page shows its title and note, lists every source the user may see with folder path, driver, health from the last test and the cubes using it, and none they may not; `/sources` opens it; `reader` has no Data sources entry (AC-157, AC-233, AC-001).
-  - Depends on: T335, ~~T338~~ T435 (2026-09-26), T362
-- [ ] T365 (AC-161) After an approved change to a source, show whether every running Cube instance uses it, with no restart *(rewritten 2026-09-26: slice 6; xcube swaps the driver and reports each instance's state, `[plan]`)*
+    - *(2026-09-26, from T362 and T365)* "health from the last test" is the newest test of the stored settings (`asStored`), not a trial of changes; beside it, T365's `CubeState` shows whether every Cube instance uses the settings (AC-161's showing half, against compose's xcube after a query through the source): the page fetches `GET /api/data-sources/:id/cube-state` for it, and gives `.cube-state` and its parts their styles in `shell/styles.ts`.
+  - Depends on: T335, ~~T338~~ T435 (2026-09-26), T362, T365
+- [x] T365 (AC-161) After an approved change to a source, show whether every running Cube instance uses it, with no restart *(rewritten 2026-09-26: slice 6; xcube swaps the driver and reports each instance's state, `[plan]`)*
   - Files: `packages/api/src/xcube/connections.ts` (`PUT /v1/semantic/connections/{name}`, `GET …/{name}/health`), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources/:id/cube-state`), `packages/web/src/workspaces/data-sources/CubeState.tsx` (+ test)
   - Failing test: `cube-state.test.ts`:
     - after an approved change, the source shows "Waiting for Cube to pick up the change" until xcube reports every instance on the new settings, then "Cube uses these settings";
@@ -5823,6 +5824,33 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - ~~Failing test: … an environment-level source says a restart is needed (AC-161).~~
   - *2026-09-26:* the change lands through T442 whether approved (T352) or seeded (T443), so this can show a folder data source's state before proposals exist.
   - Depends on: T442
+  - **Done 2026-09-26. AC-161 is not ticked:**
+    - Its showing half is `CubeState` on T364's page, which now cites AC-161.
+    - Its live-against-xcube half is T435's health test.
+    - The type never changing is T335's.
+    - The swap is xcube's.
+  - **As built:**
+    - The connections client reads `GET …/connections/{name}/health`, and says none for `unknown_connection`.
+    - `connectionSync.healthOf` asks it under the source's full name.
+    - `cubeStateOf` keeps each instance's report from within the hour; an older one is from an instance that's gone. It reads:
+      - `live` when every one is current and live;
+      - `waiting` while one is behind;
+      - `failed` when a current one failed, with its error;
+      - `unused` when none built the driver within the hour;
+      - `unlanded` when xcube holds no connection of its name.
+    - `GET /api/data-sources/:id/cube-state` answers it to those who may see the source.
+    - `workspaces/data-sources/CubeState.tsx` draws it as every state is, an icon and words. It says how many instances reported, each failed one's error, and never asks for a restart.
+  - **The cold review (FAIL), fixed:**
+    - The unused state said "No Cube instance has used it in the last hour". xcube hears from an instance only when it builds the driver, so a busy source would read as unused an hour after its last build. It now says "has reported on it".
+    - The route took every failure as "can't be reached". An answer xcube gave is now 502 with that answer, and the rest is logged.
+    - T435's header didn't cite AC-161.
+    - Test gaps.
+  - **For xcube, from the review:** with reports written only at a driver's build, a running instance whose driver is over an hour old drops out of "every instance". A change could then read as live while it still serves the settings before. That is AC-161's letter, not its intent. Asked of xcube: a heartbeat, each instance re-reporting its live drivers within the hour (`to-xcube/2026-09-26-2320-connection-heartbeat.md`).
+  - **Tests:**
+    - `cube-state.test.ts` 7;
+    - `connections.test.ts` 20;
+    - `access/data-sources.test.ts` 20;
+    - `CubeState.test.tsx` 7.
 
 ## P2.8 Bookmarks (F31)
 
@@ -7379,7 +7407,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
     - `access/data-sources.test.ts` 10;
     - Chrome: `security/folder-data-sources.spec.ts` 2 and `explore.spec.ts` 19;
     - the full unit suite (at commit).
-- [ ] T435 (AC-273, AC-310, AC-328) Bind a model's data sources at publish, nearest first from its folder, and give a cube with none the nearest `default` *(moved here from slice 3, 2026-09-26)*
+- [ ] T435 (AC-273, AC-310, AC-328, AC-161) Bind a model's data sources at publish, nearest first from its folder, and give a cube with none the nearest `default` *(moved here from slice 3, 2026-09-26)*
   - **Why here.** xcube answered that binding comes with slice 6: a bound name must be a connection Cube can open, and connections arrive with T442. At publish xcube resolves `data_source` along the item's folder path, as it does cube names. It pushes no data-source items into the tree `[xcube answer to-wechart/2026-09-26-1030-data-source-binding.md]`.
   - **Until slice 6.** xcube passes `data_source` through unchanged. With `CUBEJS_DATASOURCES` unset, Cube maps any name to the default connection, so `data_source: warehouse` reads the default database. With it set, an undeclared name fails the publish's compile. That is xcube's reading of Cube 1.7.45, not run (same answer, §2).
   - Files: `e2e/security/data-source-binding.spec.ts`, `packages/api/src/xcube/connections.ts`
@@ -7420,7 +7448,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
 | AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |
 | AC-154 | T377 | AC-155 | T379 | AC-157 | T364 |
 | AC-158 | T363 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
-| AC-161 | T335, T363, T365, T442 | AC-163 | T362, T363 | AC-164 | T335 |
+| AC-161 | T335, T363, T364, T365, T435, T442 | AC-163 | T362, T363 | AC-164 | T335 |
 | AC-176 | T405 | AC-180 | T407 | AC-187 | T406 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |

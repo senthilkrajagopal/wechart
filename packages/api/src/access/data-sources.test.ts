@@ -576,6 +576,91 @@ describe('a connection test, run by xcube (T361, AC-159, AC-312)', () => {
     }
   });
 
+  it('says whether Cube uses a source’s settings, from xcube’s reports (T365, AC-161)', async () => {
+    const asked: string[] = [];
+    const app = buildServer({
+      config: { ...secured, security: 'off' as const },
+      documents: docs(),
+      catalog: catalog(getDb()),
+      dataSources: sources(),
+      connectionHealth: async (source) => {
+        asked.push(source.id);
+        return {
+          version: 4,
+          instances: [
+            {
+              instance: 'cube-1/1/aaaaaa',
+              version: 3,
+              state: 'live',
+              error: null,
+              reportedAt: new Date().toISOString(),
+              current: false,
+            },
+          ],
+        };
+      },
+    });
+    try {
+      const answer = await app.inject({
+        method: 'GET',
+        url: `/api/data-sources/${held.b}/cube-state`,
+      });
+      expect(answer.statusCode).toBe(200);
+      expect(answer.json()).toMatchObject({ state: 'waiting', version: 4 });
+      expect(asked).toEqual([held.b]);
+    } finally {
+      await app.close();
+    }
+    // Never landed; xcube's own refusal; xcube away; no xcube at all (T365's review).
+    for (const [health, status, body] of [
+      [async () => undefined, 200, { state: 'unlanded' }],
+      [
+        async () => {
+          throw new XcubeError(401, undefined, 'xcube answered 401: Invalid service token');
+        },
+        502,
+        { error: 'xcube refused to say: xcube answered 401: Invalid service token' },
+      ],
+      [
+        async () => {
+          throw new TypeError('fetch failed');
+        },
+        503,
+        { error: 'xcube can’t be reached to say whether Cube uses it. Try again once it is back.' },
+      ],
+      [
+        undefined,
+        503,
+        {
+          error: 'Cube’s use of a data source is told by xcube, which this deployment doesn’t run.',
+        },
+      ],
+    ] as const) {
+      const other = buildServer({
+        config: { ...secured, security: 'off' as const },
+        documents: docs(),
+        catalog: catalog(getDb()),
+        dataSources: sources(),
+        ...(health === undefined ? {} : { connectionHealth: health }),
+      });
+      try {
+        const answered = await other.inject({
+          method: 'GET',
+          url: `/api/data-sources/${held.b}/cube-state`,
+        });
+        expect(answered.statusCode).toBe(status);
+        expect(answered.json()).toEqual(body);
+      } finally {
+        await other.close();
+      }
+    }
+    // A read-only member sees no data source, nor its state.
+    expect(
+      (await as('reader', { method: 'GET', url: `/api/data-sources/${held.b}/cube-state` }))
+        .statusCode,
+    ).toBe(404);
+  });
+
   it('shows a source’s tests only to those who may see it (T362)', async () => {
     expect(
       (await as('reader', { method: 'GET', url: `/api/data-sources/${held.b}/tests` })).statusCode,
