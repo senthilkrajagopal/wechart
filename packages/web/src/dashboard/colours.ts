@@ -1,4 +1,11 @@
-import { assignColours, colouredMembersOf } from '@wechart/charts';
+import {
+  assignColours,
+  colouredMembersOf,
+  coloursMembers,
+  OTHER_COLOUR,
+  seriesSettingsOf,
+  singleSeriesOf,
+} from '@wechart/charts';
 import type { RenderSpec } from '@wechart/core';
 import { useState } from 'react';
 
@@ -39,8 +46,6 @@ export function dashboardColours(
   specs: Readonly<Record<string, RenderSpec>>,
   starting: Readonly<Record<string, string>> = {},
 ): DashboardColours {
-  const assignment = assignColours(undefined, starting);
-
   /** Chart ids in document order: pages, then sections and tab groups within. */
   const chartIds: string[] = [];
   const walk = (items: DashboardDocument['pages'][number]['items']) => {
@@ -58,6 +63,37 @@ export function dashboardColours(
   };
   for (const page of document.pages) walk(page.items);
 
+  /**
+   * A colour a tile's Customize tab chose for a member (AC-219) is that
+   * member's colour on the whole dashboard (T465, UX-103), so the member is
+   * one colour on every tile rather than the chosen one on that tile and a
+   * palette slot on the next. The first tile in document order to choose one
+   * decides; a tile that chose otherwise still draws its own choice.
+   *
+   * Read from each tile's settings, whatever its rows show at the moment, so
+   * a member doesn't change colour as it comes into view (T465's review). And
+   * never carried: a choice is the tile's setting, not a claim, so Discard,
+   * Undo or Auto taking it away gives every tile the member's own colour back.
+   */
+  const chosen: Record<string, string> = {};
+  for (const chartId of chartIds) {
+    const spec = specs[chartId];
+    if (spec === undefined || !coloursMembers(spec)) continue;
+    for (const [member, settings] of Object.entries(seriesSettingsOf(spec))) {
+      if (settings.colour !== undefined && !(member in chosen)) chosen[member] = settings.colour;
+    }
+  }
+  const assignment = assignColours(undefined, starting, Object.values(chosen));
+
+  // Every claim first, in document order, so that a single series below can
+  // take the colour its measure has as one of several series anywhere.
+  for (const chartId of chartIds) {
+    const spec = specs[chartId];
+    if (spec !== undefined)
+      for (const member of colouredMembersOf(spec)) assignment.colourFor(member);
+  }
+  const claimed = assignment.assigned();
+
   const coloured: Record<string, RenderSpec> = {};
   for (const chartId of chartIds) {
     const spec = specs[chartId];
@@ -66,10 +102,17 @@ export function dashboardColours(
     // What the tile colours: a pie's slices by their categories, and nothing
     // for a tile that colours no member (T301).
     const colours: Record<string, string> = {};
-    for (const member of colouredMembersOf(spec)) colours[member] = assignment.colourFor(member);
+    for (const member of colouredMembersOf(spec))
+      colours[member] = chosen[member] ?? assignment.colourFor(member);
+    // A single series claims nothing: its measure's colour where another tile
+    // gives it one, else the palette's first — never the neutral (T465).
+    const alone = singleSeriesOf(spec);
+    const given = alone === undefined ? undefined : (chosen[alone] ?? claimed[alone]);
+    if (alone !== undefined && given !== undefined && given !== OTHER_COLOUR)
+      colours[alone] = given;
     coloured[chartId] = { ...spec, colours };
   }
-  return { specs: coloured, assigned: assignment.assigned() };
+  return { specs: coloured, assigned: claimed };
 }
 
 const sameAssignment = (a: Record<string, string>, b: Record<string, string>) => {

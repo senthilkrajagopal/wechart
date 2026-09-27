@@ -30,6 +30,11 @@ export interface ColourAssignment {
 export function assignColours(
   palette: readonly string[] = DEFAULT_PALETTE,
   starting: Readonly<Record<string, string>> = {},
+  /**
+   * Colours spoken for without a claim — a colour a tile's Customize tab
+   * chose for a member (T465) — which no member is newly given.
+   */
+  reserved: readonly string[] = [],
 ): ColourAssignment {
   const taken = new Map<string, string>(Object.entries(starting));
 
@@ -40,7 +45,7 @@ export function assignColours(
 
       // The next unused slot, so that handing in a starting assignment does
       // not cause a later member to collide with it.
-      const used = new Set(taken.values());
+      const used = new Set([...taken.values(), ...reserved]);
       const free = palette.find((colour) => !used.has(colour));
 
       // Past the last slot, the neutral rather than a repeat. direction.md

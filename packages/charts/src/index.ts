@@ -27,7 +27,7 @@ export {
   type SeriesSettings,
 } from './customize';
 export { assignColours, OTHER_COLOUR, type ColourAssignment } from './colorAssignment';
-export { colouredMembersOf } from './colouredMembers';
+export { colouredMembersOf, coloursMembers, singleSeriesOf } from './colouredMembers';
 export { legendFor, seriesCount } from './legend';
 export { isOneSource, labelOf } from './modelWriter';
 export { echarts } from './echarts';

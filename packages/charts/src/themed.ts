@@ -127,6 +127,24 @@ function themedAxis(axis: unknown, theme: ChartTheme): unknown {
 const eachOf = (value: unknown, apply: (one: unknown) => unknown): unknown =>
   Array.isArray(value) ? value.map(apply) : value === undefined ? undefined : apply(value);
 
+/**
+ * A pie's or donut's data labels outside the ring in the theme's secondary
+ * text, with no outline (T465, UX-113): left to ECharts they are `#333` with
+ * a white outline, which a dark tile shows as outlined white text. A label
+ * inside its slice is drawn on the slice's colour, not the tile's, and is
+ * left as it is.
+ */
+function themedPie(series: unknown, theme: ChartTheme): unknown {
+  const own = asObject(series);
+  if (own['type'] !== 'pie' || own['label'] === undefined) return series;
+  const label = asObject(own['label']);
+  if (label['position'] === 'inside') return series;
+  return {
+    ...own,
+    label: { color: COLORS[theme]['text-secondary'], textBorderWidth: 0, ...label },
+  };
+}
+
 export function themed(option: EChartsOption, theme: ChartTheme): EChartsOption {
   const tokens = COLORS[theme];
   const coloured = recolour(option, swapsFor(theme)) as EChartsOption;
@@ -147,6 +165,9 @@ export function themed(option: EChartsOption, theme: ChartTheme): EChartsOption 
     ...(coloured['yAxis'] === undefined
       ? {}
       : { yAxis: eachOf(coloured['yAxis'], (axis) => themedAxis(axis, theme)) }),
+    ...(coloured['series'] === undefined
+      ? {}
+      : { series: eachOf(coloured['series'], (one) => themedPie(one, theme)) }),
     ...(coloured['legend'] === undefined
       ? {}
       : { legend: eachOf(coloured['legend'], (one) => withText(one, tokens['text-secondary'])) }),

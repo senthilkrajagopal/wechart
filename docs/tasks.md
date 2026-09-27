@@ -7758,8 +7758,22 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - tiles of one width place their badges alike;
     - measured once fonts load, in view and edit mode (UX-104, UX-021; the user's answer "the head is the title's", question 29).
   - Depends on: T402
-- [ ] T465 (AC-039) Colour a single series in the first palette colour and one category alike on every tile
+- [x] T465 (AC-039) Colour a single series in the first palette colour and one category alike on every tile
   - Files: `packages/charts/src/…` (series colours), `packages/web/src/dashboard/…` (the dashboard's assignment) (+ tests), `e2e/colours.spec.ts`
+  - *As built:*
+    - **A single series** (one measure, split by nothing) claims no slot (`singleSeriesOf` in `charts/src/colouredMembers.ts`). It is drawn in the colour another tile gives that measure as one of several series, or else in the palette's first colour. It is never drawn in the neutral.
+    - **A chosen colour feeds the dashboard's assignment.** A series colour chosen in a tile's Customize tab is that member's colour on every tile of the dashboard (`web/src/dashboard/colours.ts`).
+      - The first tile in document order decides.
+      - It is read from each tile's settings, not from its visible rows.
+      - It is never carried: Discard, Undo or Auto give the member's own claim back.
+      - `assignColours` reserves chosen colours from new claims.
+      - This was a small decision, to be reported to the user: the review offered "feed or yield", and feeding keeps the user's Customize choice.
+    - **Pie and donut labels** outside the ring take the theme's secondary text, with no outline (`charts/src/themed.ts`).
+    - **Still open, from UX-113:** checking an imported or chosen colour against the dark tile. Such a colour is drawn as it is in dark; the demo's `#454e7c` is 2.1:1.
+    - **Review fixes:**
+      - a choice no longer outlives Discard, Undo or Auto;
+      - a choice doesn't recolour a member as it comes into view;
+      - a measure alone takes its multi-series colour.
   - Failing test:
     - a single-series bar draws in the palette's first colour, never the "Other" grey `#b3b1ab`;
     - a category is one colour on every tile of a dashboard;

@@ -15,15 +15,47 @@
  *   "Other" and null;
  * - every other chart colours its series.
  */
-import { OTHER_LABEL, seriesOf, type ChartType, type RenderSpec } from '@wechart/core';
+import {
+  memberOn,
+  membersOn,
+  OTHER_LABEL,
+  seriesOf,
+  type ChartType,
+  type RenderSpec,
+} from '@wechart/core';
 
 import { colourKeyOf, isPieType, slicesOf } from './series/pie';
 import { isTreemapType, treemapNodesOf } from './series/treemap';
 
 const NO_MEMBER_COLOURS: readonly ChartType[] = ['kpi', 'table', 'pivot', 'heatmap', 'trellis'];
 
+/**
+ * The measure a chart draws as its one series — one measure, split by
+ * nothing, on a chart that colours its series — or nothing (T465, UX-103).
+ * A single series colours no member: it claims no slot, and is drawn in the
+ * colour another tile gives that measure as one of several series, or else
+ * the palette's first. Claimed, it went without a slot past a donut's eight
+ * categories and fell to the neutral, which reads as "Other" or no data.
+ */
+export function singleSeriesOf(spec: RenderSpec): string | undefined {
+  if (
+    NO_MEMBER_COLOURS.includes(spec.chartType) ||
+    isPieType(spec.chartType) ||
+    isTreemapType(spec.chartType) ||
+    memberOn(spec.encoding, 'color') !== undefined
+  )
+    return undefined;
+  const measures = membersOn(spec.encoding, 'y');
+  return measures.length === 1 ? measures[0] : undefined;
+}
+
+/** Whether a chart colours members at all: not a KPI's kind, not a single series. */
+export function coloursMembers(spec: RenderSpec): boolean {
+  return !NO_MEMBER_COLOURS.includes(spec.chartType) && singleSeriesOf(spec) === undefined;
+}
+
 export function colouredMembersOf(spec: RenderSpec): string[] {
-  if (NO_MEMBER_COLOURS.includes(spec.chartType)) return [];
+  if (!coloursMembers(spec)) return [];
   const names = isPieType(spec.chartType)
     ? slicesOf(spec).map(colourKeyOf)
     : isTreemapType(spec.chartType)

@@ -74,6 +74,42 @@ describe('a chart drawn in the dark theme', () => {
   });
 });
 
+/**
+ * T465 (UX-113): a pie's or donut's data labels, outside the ring, in the
+ * theme's text — not ECharts' own `#333` with a white outline, which a dark
+ * tile shows as outlined white text. A label inside its slice sits on the
+ * slice's colour, not the tile's, and keeps what it has.
+ */
+describe('a pie’s data labels (T465)', () => {
+  const pie = (position?: string) => ({
+    series: [
+      {
+        type: 'pie',
+        radius: ['40%', '70%'],
+        label: { show: true, ...(position === undefined ? {} : { position }) },
+        data: [{ name: 'a', value: 1 }],
+      },
+    ],
+  });
+  type Labelled = { series: { label: Record<string, unknown> }[] };
+
+  it.each(['light', 'dark'] as const)(
+    'are in the %s theme’s secondary text, unoutlined',
+    (theme) => {
+      const drawn = themed(pie(), theme) as unknown as Labelled;
+      expect(drawn.series[0]?.label['color']).toBe(COLORS[theme]['text-secondary']);
+      expect(drawn.series[0]?.label['textBorderWidth']).toBe(0);
+      expect(drawn.series[0]?.label['show']).toBe(true);
+    },
+  );
+
+  it('leaves a label inside its slice as it is', () => {
+    const drawn = themed(pie('inside'), 'dark') as unknown as Labelled;
+    expect(drawn.series[0]?.label['color']).toBeUndefined();
+    expect(drawn.series[0]?.label['position']).toBe('inside');
+  });
+});
+
 describe('what the dark theme recolours, and what it leaves alone (T210 review)', () => {
   it('recolours a gridline a renderer set in the light border colour', () => {
     // axis.ts sets gridlines in the light border-subtle when the user turns

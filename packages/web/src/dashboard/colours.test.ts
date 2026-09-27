@@ -1,3 +1,4 @@
+import { DEFAULT_PALETTE, optionFor, OTHER_COLOUR } from '@wechart/charts';
 import type { RenderSpec } from '@wechart/core';
 import { describe, expect, it } from 'vitest';
 
@@ -282,5 +283,194 @@ describe('what each kind of tile claims (T301)', () => {
     // The bar after it starts at the palette's first slot, as it would alone.
     const alone = dashboardColours(doc(['c1']), { c1: FIRST });
     expect(coloured['c1']?.colours).toEqual(alone.specs['c1']?.colours);
+  });
+});
+
+/**
+ * T465 (AC-039; UX-103): a single series colours by no member, so it claims
+ * no slot and is drawn in the palette's first colour — never the neutral
+ * direction.md §5 keeps for "Other" and null, which it fell to once a donut's
+ * eight categories had taken every slot. And a colour a tile's Customize tab
+ * chose for a member is that member's on every tile: it feeds the dashboard's
+ * assignment, so a category is one colour everywhere.
+ */
+describe('a single series, and a colour chosen in one tile (T465)', () => {
+  const CATEGORY = 'sales.category';
+  const COUNTRY = 'sales.country';
+  const REVENUE = 'sales.revenue';
+  const categories = [
+    'Beverages',
+    'Condiments',
+    'Confections',
+    'Dairy Products',
+    'Grains/Cereals',
+    'Meat/Poultry',
+    'Produce',
+    'Seafood',
+  ];
+  const donut: RenderSpec = {
+    chartType: 'donut',
+    encoding: { x: [CATEGORY], y: [REVENUE] },
+    rows: categories.map((category, index) => ({ [CATEGORY]: category, [REVENUE]: index + 1 })),
+  };
+  const byCountry: RenderSpec = {
+    chartType: 'bar',
+    encoding: { x: [COUNTRY], y: [REVENUE] },
+    rows: [
+      { [COUNTRY]: 'USA', [REVENUE]: 9 },
+      { [COUNTRY]: 'Germany', [REVENUE]: 7 },
+    ],
+  };
+  const page = (charts: readonly string[]): DashboardDocument => ({
+    ...DOC,
+    pages: [
+      {
+        id: 'p1',
+        title: 'Overview',
+        items: charts.map((chartId, index) => ({
+          id: `t${String(index)}`,
+          kind: 'chart' as const,
+          w: 6,
+          h: 40,
+          chartId,
+        })),
+      },
+    ],
+  });
+  /** The colour each series of a drawn bar chart is filled with. */
+  const barColours = (drawn: RenderSpec | undefined): (string | undefined)[] => {
+    if (drawn === undefined) throw new Error('No spec was coloured');
+    const series = optionFor(drawn).series as { itemStyle?: { color?: string } }[];
+    return series.map((one) => one.itemStyle?.color);
+  };
+
+  it('draws a single-series bar in the palette’s first colour after a donut took every slot', () => {
+    const { specs: coloured, assigned } = dashboardColours(page(['donut', 'bars']), {
+      donut,
+      bars: byCountry,
+    });
+
+    expect(barColours(coloured['bars'])).toEqual([DEFAULT_PALETTE[0]]);
+    expect(barColours(coloured['bars'])).not.toContain(OTHER_COLOUR);
+    // It claims nothing: only the donut's categories hold slots.
+    expect(Object.keys(assigned).sort()).toEqual([...categories].sort());
+  });
+
+  it('draws a single-series bar in the palette’s first colour when it comes first, too', () => {
+    const { specs: coloured } = dashboardColours(page(['bars', 'donut']), {
+      bars: byCountry,
+      donut,
+    });
+
+    expect(barColours(coloured['bars'])).toEqual([DEFAULT_PALETTE[0]]);
+    // And the donut's first category still has the first slot, as alone.
+    const alone = dashboardColours(page(['donut']), { donut });
+    expect(coloured['donut']?.colours).toEqual(alone.specs['donut']?.colours);
+  });
+
+  it('gives a member the colour one tile chose for it on every other tile', () => {
+    const chosen: RenderSpec = {
+      chartType: 'area',
+      encoding: { x: [COUNTRY], y: [REVENUE], color: [CATEGORY] },
+      rows: [
+        { [COUNTRY]: 'USA', [CATEGORY]: 'Beverages', [REVENUE]: 3 },
+        { [COUNTRY]: 'USA', [CATEGORY]: 'Dairy Products', [REVENUE]: 2 },
+      ],
+      options: { series: { Beverages: { colour: '#1fa8c9' } } },
+    };
+    for (const order of [
+      ['chosen', 'donut'],
+      ['donut', 'chosen'],
+    ]) {
+      const { specs: coloured } = dashboardColours(page(order), { chosen, donut });
+
+      expect(coloured['donut']?.colours?.['Beverages'], order.join(',')).toBe('#1fa8c9');
+      expect(coloured['chosen']?.colours?.['Beverages'], order.join(',')).toBe('#1fa8c9');
+      // A member no tile chose a colour for is still one colour everywhere.
+      expect(coloured['donut']?.colours?.['Dairy Products'], order.join(',')).toBe(
+        coloured['chosen']?.colours?.['Dairy Products'],
+      );
+    }
+  });
+
+  /**
+   * T465's review: a chosen colour is the tile's setting, not a claim the
+   * dashboard carries. Carried, it outlived its choice — Discard, Undo or
+   * Customize's Auto took the setting away and every tile kept the colour.
+   */
+  const choosing = (colour?: string): RenderSpec => ({
+    chartType: 'area',
+    encoding: { x: [COUNTRY], y: [REVENUE], color: [CATEGORY] },
+    rows: [
+      { [COUNTRY]: 'USA', [CATEGORY]: 'Beverages', [REVENUE]: 3 },
+      { [COUNTRY]: 'USA', [CATEGORY]: 'Dairy Products', [REVENUE]: 2 },
+    ],
+    ...(colour === undefined ? {} : { options: { series: { Beverages: { colour } } } }),
+  });
+
+  it('gives the member its own colour back once the choice is taken away', () => {
+    const before = dashboardColours(page(['chosen', 'donut']), { chosen: choosing(), donut });
+    const own = before.specs['donut']?.colours?.['Beverages'];
+    expect(own).not.toBe('#1fa8c9');
+
+    const chose = dashboardColours(
+      page(['chosen', 'donut']),
+      { chosen: choosing('#1fa8c9'), donut },
+      before.assigned,
+    );
+    expect(chose.specs['donut']?.colours?.['Beverages']).toBe('#1fa8c9');
+    // The carried assignment holds claims only, never a choice.
+    expect(chose.assigned['Beverages']).toBe(own);
+
+    // Discarded: the choice is gone, and so is its colour, on every tile.
+    const discarded = dashboardColours(
+      page(['chosen', 'donut']),
+      { chosen: choosing(), donut },
+      chose.assigned,
+    );
+    expect(discarded.specs['donut']?.colours?.['Beverages']).toBe(own);
+    expect(discarded.specs['chosen']?.colours?.['Beverages']).toBe(own);
+  });
+
+  it('takes the chosen colour from the tile’s settings, not from what it happens to show', () => {
+    // The choosing tile's rows don't hold Beverages yet — a filter hides it,
+    // or its answer is still on its way — and the donut is coloured already.
+    const hiding: RenderSpec = { ...choosing('#1fa8c9'), rows: [] };
+    const first = dashboardColours(page(['chosen', 'donut']), { chosen: hiding, donut });
+    expect(first.specs['donut']?.colours?.['Beverages']).toBe('#1fa8c9');
+
+    const shown = dashboardColours(
+      page(['chosen', 'donut']),
+      { chosen: choosing('#1fa8c9'), donut },
+      first.assigned,
+    );
+    // Nothing on screen changes colour when the member comes into view.
+    expect(shown.specs['donut']?.colours).toEqual(first.specs['donut']?.colours);
+  });
+
+  it('draws a measure alone in the colour another tile gives it as one of several series', () => {
+    const COUNT = 'sales.count';
+    const both: RenderSpec = {
+      chartType: 'line',
+      encoding: { x: [COUNTRY], y: [REVENUE, COUNT] },
+      rows: [{ [COUNTRY]: 'USA', [REVENUE]: 9, [COUNT]: 3 }],
+    };
+    const countAlone: RenderSpec = {
+      chartType: 'bar',
+      encoding: { x: [COUNTRY], y: [COUNT] },
+      rows: [{ [COUNTRY]: 'USA', [COUNT]: 3 }],
+    };
+    for (const order of [
+      ['both', 'alone'],
+      ['alone', 'both'],
+    ]) {
+      const { specs: coloured, assigned } = dashboardColours(page(order), {
+        both,
+        alone: countAlone,
+      });
+      expect(barColours(coloured['alone']), order.join(',')).toEqual([assigned[COUNT]]);
+      // Still claiming nothing of its own.
+      expect(Object.keys(assigned).sort(), order.join(',')).toEqual([COUNT, REVENUE].sort());
+    }
   });
 });
