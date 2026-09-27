@@ -448,6 +448,8 @@ The user asked that the UI "align with the ui styles in" the design prototype (`
 
 Nothing in §2–§7d changes. No new colour and no new type size is added: every new state is an icon plus a label on the existing roles (rule 3). The full surface text, with every string, state and keyboard rule, is in `references.md` › Phase 2 › Surfaces 1–10, and is binding where this section is silent.
 
+**Approved designs (2026-09-27, R33).** Every phase-2 surface is drawn as its design in `docs/design/reviews/2026-09-27/designs/` (01–10), proposals included; the user approved all ten ("Approve all with proposals"). A design's structure, placement, controls, wording and states are binding (AC-343). Where a design and this section differ, the design wins, since it was drawn from this section and measured against the running app (`ui-review.md`). The new data source wizard is a 480 px pane docked beside the Data sources list, not a dialog (design 01).
+
 **Where each surface lives**
 
 | Surface | Placement | Size | ACs |

@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 03 · Data source settings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4; --accent-ring: rgba(31,111,134,.35);
+    --crossfilter: #7a3fb0; --crossfilter-soft: #f1e9f8;
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; font-weight: 600; }
+  .doc-head p { margin: 0 0 6px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .doc-head code { color: #f2f2f0; background: #333; padding: 0 4px; border-radius: 3px; font: 400 12px var(--font-code); }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 40px; }
+  .notes h2, .states h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .notes > p, .states > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1120px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; font-weight: 600; }
+  .notelist .t { color: var(--text-secondary); }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .prop { display: inline-block; margin-top: 4px; padding: 1px 6px; border: 1px dashed var(--note); border-radius: 4px; color: var(--note); font: 600 12px/16px var(--font-ui); }
+  .notes code, .states code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .stategrid { display: grid; grid-template-columns: repeat(2, 676px); gap: 28px 24px; align-items: start; }
+  .stategrid.three { grid-template-columns: repeat(3, 440px); }
+  .state { display: grid; gap: 8px; align-content: start; }
+  .state > h3 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .state > p { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .frame { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg-page); box-shadow: 0 1px 2px rgba(0,0,0,.06); position: relative; }
+
+  svg.i { width: 16px; height: 16px; flex: none; } svg.s { width: 14px; height: 14px; flex: none; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 260px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .search kbd { margin-left: auto; font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 4px; }
+  .reviews { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border-radius: 6px; color: var(--text-secondary); }
+  .count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--text-on-accent); font: 600 12px/18px var(--font-ui); text-align: center; }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--text-secondary); flex: none; }
+  .acct { display: inline-flex; align-items: center; gap: 8px; font: 600 12px/16px var(--font-ui); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; color: var(--text-primary); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.dis { opacity: .45; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .btn.link { border: 0; background: none; padding: 0; height: auto; color: var(--accent); font-size: 12px; font-weight: 600; }
+  .input { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 8px; width: 100%; display: flex; align-items: center; gap: 6px; font-size: 14px; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .input.mono { font: 400 12px var(--font-code); }
+  .input.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+  .input.changed { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 60%, var(--bg-surface)); }
+  .input.ro { background: var(--bg-subtle); border-color: var(--border-subtle); color: var(--text-secondary); }
+  .input.stored { background: var(--bg-subtle); border-color: var(--border-subtle); justify-content: space-between; }
+  .field { display: grid; gap: 4px; min-width: 0; align-content: start; }
+  .field > label, .lbl { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+  .req { color: var(--text-muted); font-weight: 400; }
+  .help { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0; }
+  .row { display: grid; grid-template-columns: 1fr 110px; gap: 12px; }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; }
+  .seg span { height: 28px; padding: 0 10px; font-size: 12px; display: flex; align-items: center; background: var(--bg-surface); border-left: 1px solid var(--border-subtle); white-space: nowrap; }
+  .seg span:first-child { border-left: 0; }
+  .seg span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .switch { position: relative; width: 32px; height: 18px; border-radius: 999px; background: var(--border-strong); flex: none; margin-top: 1px; }
+  .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--bg-surface); }
+  .switch.on { background: var(--accent); } .switch.on::after { left: 16px; }
+  .toggle { display: flex; align-items: flex-start; gap: 10px; }
+  .toggle > div { flex: 1; display: grid; gap: 2px; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; background: var(--bg-subtle); color: var(--text-secondary); white-space: nowrap; }
+  .badge.accent { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .badge.line { background: none; border: 1px solid var(--border-strong); }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); } .status.warn { color: var(--warn); } .status.run { color: var(--accent); } .status.idle { color: var(--text-secondary); }
+  .status .t { font-weight: 400; color: var(--text-secondary); }
+  .xs { font-size: 12px; line-height: 16px; } .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .strong { font-weight: 600; }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .notebar { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 16px; background: var(--accent-soft); color: var(--text-primary); border: 1px solid var(--border-subtle); }
+  .notebar.warn { background: color-mix(in srgb, var(--warn-icon) 14%, var(--bg-surface)); }
+  .notebar.err { background: color-mix(in srgb, var(--err-icon) 9%, var(--bg-surface)); }
+  .notebar.ok { background: color-mix(in srgb, var(--ok-icon) 9%, var(--bg-surface)); }
+  .code { font: 400 12px/18px var(--font-code); background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word; }
+  .card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; }
+  .grid-table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; font-weight: 600; height: 28px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table td { height: 34px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table tr:last-child td { border-bottom: 0; }
+  .grid-table tr.open td { background: var(--bg-subtle); }
+  .grid-table a { color: var(--accent); text-decoration: none; }
+  .sect { padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 10px; }
+  .sect:last-child { border-bottom: 0; }
+  .sect > h3 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 8px; }
+  .tabs { display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); }
+  .tabs span { height: 36px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
+  .tabs span.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .band { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 24px; background: var(--bg-subtle); border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .crumbs { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-secondary); }
+  .crumbs b { font-weight: 400; color: var(--text-primary); }
+  .itemicon { width: 28px; height: 28px; border-radius: 6px; display: inline-grid; place-items: center; font-size: 14px; font-weight: 600; flex: none; background: var(--bg-subtle); color: var(--text-primary); }
+  .pagehead { background: var(--bg-surface); padding: 12px 24px 0; display: grid; gap: 8px; }
+  .titlerow { display: flex; align-items: center; gap: 10px; }
+  .titlerow h1 { margin: 0; font: 600 20px/26px var(--font-code); }
+  .meta { display: flex; gap: 16px; align-items: center; font-size: 12px; line-height: 16px; color: var(--text-secondary); flex-wrap: wrap; }
+  .meta a { color: var(--accent); text-decoration: none; }
+  .chk { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; align-items: center; min-height: 30px; font-size: 14px; border-bottom: 1px solid var(--border-subtle); }
+  .chk:last-child { border-bottom: 0; }
+  .chk .d { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .chk.pending span:nth-child(2) { color: var(--text-secondary); }
+  .formbar { display: flex; align-items: center; gap: 8px; padding: 10px 24px; border-top: 1px solid var(--border-subtle); background: var(--bg-surface); }
+  .kv { display: grid; grid-template-columns: 170px 1fr; gap: 8px 16px; font-size: 14px; line-height: 20px; margin: 0; }
+  .kv dt { color: var(--text-secondary); font-size: 12px; line-height: 20px; }
+  .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .was { font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .was s { color: var(--text-muted); }
+  .minichk { display: inline-flex; gap: 2px; }
+  .dialog { position: absolute; z-index: 60; background: var(--bg-surface); border-radius: 6px; box-shadow: var(--shadow-pop); display: grid; gap: 12px; padding: 20px; border: 1px solid var(--border-subtle); }
+  .dialog h2 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .dialog p { margin: 0; color: var(--text-secondary); }
+  .acts { display: flex; justify-content: flex-end; gap: 8px; }
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.28); z-index: 50; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 16 16"><path d="M2 9.5l1.6-5.2A1 1 0 0 1 4.6 3.6h6.8a1 1 0 0 1 1 .7L14 9.5v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z M2 9.5h3.5l1 1.5h3l1-1.5H14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 16 16"><path d="M6.5 9.5l3-3M5 7.5L3.6 8.9a2.3 2.3 0 0 0 3.3 3.3L8.3 10.8M11 8.5l1.4-1.4a2.3 2.3 0 0 0-3.3-3.3L7.7 5.2" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--accent)"/><path d="M8 7v4.2M8 4.6v.4" style="stroke:var(--bg-surface)" stroke-width="1.7"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-hist" viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.3 2.5v2.8h2.8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.2l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 16 16"><path d="M10.8 2.7l2.5 2.5-7.6 7.6-3.1.6.6-3.1z" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--ok-icon)"/><path d="M4.7 8.2l2.2 2.2 4.4-4.7" stroke="#fff" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="s-err" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--err-icon)"/><path d="M5.4 5.4l5.2 5.2M10.6 5.4l-5.2 5.2" stroke="#fff" stroke-width="1.8"/></symbol>
+  <symbol id="s-warn" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" style="fill:var(--warn-icon)"/><path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" stroke-width="1.6"/></symbol>
+  <symbol id="s-idle" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5V8l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-run" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" style="stroke:var(--border-strong)" stroke-width="2"/><path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" fill="none" style="stroke:var(--accent)" stroke-width="2"/></symbol>
+  <symbol id="s-pend" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" style="stroke:var(--border-strong)" stroke-width="1.5" stroke-dasharray="2.5 2.2"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI review 2026-09-27 · Design 03 of 10 · for approval</div>
+    <h1>A stored data source's settings — opened from Explore or Data sources, saved only after a passing test</h1>
+    <p>Task T461 has no screen yet. Today a data source's row in Explore has a pointer cursor and opens nothing, and in Data sources it doesn't open either (UX-222). This page opens under the item's folder breadcrumb. It has the tabs surface 4 names (General, Connection, Test history, Usage) and a fifth, <b>In Cube</b>, for AC-161's per-instance state. The type is fixed, with the way to use another (AC-161). Secrets read "Stored · encrypted" or "Kept from <i>folder</i> · encrypted" (AC-164, AC-280, rule 83).</p>
+    <p>The edit rule is yours: a change to the connection is saved only once a test of exactly that change passes. There is no override. A rename alone needs no test (AC-158, T461). Changing a field the secret is bound to clears the secret and asks for it again (AC-312). The main screen shows a workspace copy with its host changed.</p>
+    <div class="ids">For T461 · AC-269 (open half), AC-158, AC-161, AC-163, AC-164, AC-280, AC-310, AC-312 · rules 23, 70, 71, 83, 85 · Components as built: CubeState.tsx (T365), connection-tests (T362)</div>
+  </header>
+
+  <div class="screen">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span class="on">Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<kbd>⌘K</kbd></div>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">2</span></span>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div class="band"><svg class="s"><use href="#i-person"/></svg>My workspace · only you can see this</div>
+    <div class="pagehead">
+      <div class="crumbs"><span>Explore</span>/<span>My workspace</span>/<b>emea_replica</b></div>
+      <div class="titlerow">
+        <span class="itemicon">◍</span><h1>emea_replica</h1><span class="badge line">PostgreSQL</span><span class="badge">Draft</span>
+        <span class="spacer"></span>
+        <span class="btn">Discard my copy…</span>
+        <span class="btn primary dis">Propose to Sales / EMEA…</span>
+      </div>
+      <div class="meta"><span>Copied from <a>Sales / EMEA › emea_replica</a> · version 3</span><span>Target: <b style="font-weight:600;color:var(--text-primary)">Sales / EMEA</b></span><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Last test of saved settings passed <span class="t">· 2 h ago</span></span></div>
+      <div class="tabs" style="margin:4px -24px 0;padding:0 16px"><span>General</span><span class="on">Connection<i class="dot"></i></span><span>Test history</span><span>Usage</span><span>In Cube</span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 420px;height:622px">
+      <div style="overflow:hidden;border-right:1px solid var(--border-subtle);background:var(--bg-surface)">
+        <div class="sect">
+          <h3>Type</h3>
+          <div style="display:flex;gap:12px;align-items:center"><div class="input ro" style="width:220px"><svg class="s"><use href="#i-lock"/></svg>PostgreSQL</div><p class="help">The type is fixed. To use another database, make a new data source.</p></div>
+        </div>
+        <div class="sect">
+          <h3>Where it connects</h3>
+          <div class="row" style="max-width:680px">
+            <div class="field"><label>Host <span class="req">· required</span><svg class="s muted" aria-label="The secret is tied to this"><use href="#i-link"/></svg></label><div class="input mono changed focus">pg-replica-2.sales.internal</div><span class="was">Was <s class="mono">pg-replica-1.sales.internal</s></span></div>
+            <div class="field"><label>Port <svg class="s muted"><use href="#i-link"/></svg></label><div class="input mono">5432</div></div>
+          </div>
+          <div class="field" style="max-width:680px"><label>Database <span class="req">· required</span></label><div class="input mono">sales</div></div>
+        </div>
+        <div class="sect">
+          <h3>How it signs in</h3>
+          <div class="seg" style="width:320px;display:flex"><span class="on" style="flex:1;justify-content:center">Password</span><span style="flex:1;justify-content:center">Client certificate</span></div>
+          <div class="field" style="max-width:680px"><label>User <span class="req">· required</span></label><div class="input mono">cube_reader</div></div>
+          <div class="field" style="max-width:680px"><label>Password <span class="req">· required</span></label><div class="input" style="border-color:var(--warn-icon)"><svg class="s muted"><use href="#i-lock"/></svg><span class="muted">Enter the password again</span></div>
+            <p class="help" style="display:flex;gap:6px;color:var(--warn)"><svg class="s"><use href="#s-warn"/></svg>The host changed, so the password kept from Sales / EMEA no longer applies. It's asked for again.</p></div>
+        </div>
+        <div class="sect">
+          <h3>TLS</h3>
+          <div style="display:flex;gap:32px"><div class="toggle"><span class="switch on"></span><div><span>Use TLS</span></div></div><div class="toggle"><span class="switch on"></span><div><span>Verify the server's certificate</span></div></div><span class="btn link">＋ Add a CA certificate (PEM)</span></div>
+        </div>
+      </div>
+      <aside style="background:var(--bg-surface);display:flex;flex-direction:column">
+        <div class="sect">
+          <h3>Test to save</h3>
+          <div class="notebar warn"><svg class="s"><use href="#s-warn"/></svg><span><b>1 change to the connection.</b> It's saved only once a test of exactly these settings passes.</span></div>
+          <dl class="kv" style="grid-template-columns:80px 1fr;font-size:12px;line-height:16px"><dt>Host</dt><dd class="mono">pg-replica-1… → pg-replica-2.sales.internal</dd><dt>Password</dt><dd>Needed again</dd></dl>
+        </div>
+        <div class="sect">
+          <h3>Checks Cube runs</h3>
+          <div>
+            <div class="chk pending"><svg class="i"><use href="#s-pend"/></svg><span>Open the secrets</span><span class="d">Not run</span></div>
+            <div class="chk pending"><svg class="i"><use href="#s-pend"/></svg><span>Build the connection's configuration</span><span class="d">Not run</span></div>
+            <div class="chk pending"><svg class="i"><use href="#s-pend"/></svg><span>Connect</span><span class="d">Not run</span></div>
+            <div class="chk pending"><svg class="i"><use href="#s-pend"/></svg><span>Read the catalog</span><span class="d">Not run</span></div>
+          </div>
+          <span class="btn primary dis" style="justify-self:start">Test connection</span>
+          <p class="help">Enter the password to test.</p>
+        </div>
+      </aside>
+    </div>
+    <div class="formbar" style="position:absolute;left:0;right:0;bottom:0"><span class="xs sec">1 unsaved change · Save needs a passing test of these settings.</span><span class="spacer"></span><span class="btn">Discard changes</span><span class="btn primary dis">Save</span></div>
+
+    <span class="pin" style="left:264px;top:90px">1</span>
+    <span class="pin" style="left:364px;top:124px">2</span>
+    <span class="pin" style="left:1404px;top:106px">3</span>
+    <span class="pin" style="left:756px;top:156px">4</span>
+    <span class="pin" style="left:650px;top:268px">5</span>
+    <span class="pin" style="left:708px;top:376px">6</span>
+    <span class="pin" style="left:708px;top:666px">7</span>
+    <span class="pin" style="left:1006px;top:282px">8</span>
+    <span class="pin" style="left:396px;top:862px">9</span>
+    <span class="pin" style="left:1410px;top:832px">10</span>
+  </div>
+
+  <section class="notes">
+    <h2>What changes, and why</h2>
+    <p>One page for a stored data source wherever it's opened. It reads the same in a shared folder (read-only, state A) and in My workspace (editable). The Test step of the wizard moves beside the form, so the rule "test, then save" is visible while you edit.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Under its folder's breadcrumb</b><span class="t">Opened from Explore's row or the Data sources list, it lands on the same page: "Explore / <i>folder</i> / <i>name</i>". Today neither row opens anything, and the Explore row shows a pointer cursor anyway.</span><span class="fix">AC-269 · rule 70 · UX-222</span></div></li>
+      <li><span class="n">2</span><div><b>Its name in the code face, its type and its state</b><span class="t">The short name as cubes write it, the driver as a badge, and the workspace status (Draft, Waiting for review, Rejected, In folder as v<i>n</i>) as on the workspace listing (Design 04).</span><span class="fix">rule 73 · AC-281</span></div></li>
+      <li><span class="n">3</span><div><b>Propose is the page's primary action, but waits for a save</b><span class="t">Disabled with its reason on hover ("Save or discard your changes first"), so what's proposed is what was tested and saved. <b>Discard my copy…</b> removes the workspace copy after asking.</span><span class="fix">AC-284 · AC-158</span></div></li>
+      <li><span class="n">4</span><div><b>Origin, target and health in one line</b><span class="t">Where it was copied from (a link to the original) and at which version, the folder it's proposed to, and the newest test of its saved settings. The same health as the list shows.</span><span class="fix">AC-281 · AC-157</span></div></li>
+      <li><span class="n">5</span><div><b>The type is shown fixed</b><span class="t">A locked field and the way forward: "To use another database, make a new data source". A type change is never offered, so there's nothing to refuse.</span><span class="fix">AC-161</span></div></li>
+      <li><span class="n">6</span><div><b>Changes are marked where they are</b><span class="t">A changed field is tinted, with its old value under it. The tab carries a dot. A link icon marks the fields the secret is bound to (AC-312's target fields), so it's clear in advance that changing them asks for the secret again.</span><span class="fix">AC-312</span></div></li>
+      <li><span class="n">7</span><div><b>The secret asked for again, and why</b><span class="t">When a target field changes, "Kept from Sales / EMEA · encrypted" becomes an empty field with the reason. Before that it reads as state D shows. A stored secret never renders as text or dots standing for it.</span><span class="fix">AC-312 · AC-164 · AC-280 · rule 83</span></div></li>
+      <li><span class="n">8</span><div><b>Test to save, beside the form</b><span class="t">What changed, listed. The four checks Cube runs, as in the wizard. <b>Test connection</b> is enabled once every required field is filled. A test of saved settings joins the history as a test of stored settings; a test of changes joins it as a trial (as built, T362/T363).</span><span class="fix">AC-158 · AC-159 · AC-163</span></div></li>
+      <li><span class="n">9</span><div><b>No way round the test</b><span class="t">The prototype's "Save without test" is gone, as you decided on 2026-09-27. The page says so in plain words rather than just disabling Save.</span><span class="fix">AC-158 · rule 23</span></div></li>
+      <li><span class="n">10</span><div><b>Save is enabled only by a passing test of exactly these settings</b><span class="t">A change after the pass clears it, as in the wizard (Design 01, state L). A rename or a new description alone saves without a test (state B). Leaving the page with unsaved changes asks first (state I).</span><span class="fix">AC-158 · T461 · rule 85</span></div></li>
+    </ol>
+  </section>
+
+  <section class="states">
+    <h2>Other states</h2>
+    <p>Frames are drawn at 676 px, half the page, and show the part of the page that changes.</p>
+    <div class="stategrid">
+
+      <div class="state">
+        <h3>A · In a shared folder: read-only, with Edit in my workspace</h3>
+        <p>What a read-write member of Sales / EMEA sees (rule 71). There's no in-place editing. The primary action is <b>Edit in my workspace</b>, which copies the source straight away with a toast (surface 5), or <b>Open my copy</b> when one exists. History opens the 10 versions (Design 06). A Super-Admin opening the root's <span class="mono">default</span> sees the same page (AC-310: "managed like any other").</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="pagehead" style="padding-bottom:0">
+            <div class="crumbs"><span>Explore</span>/<span>Shared</span>/<span>Sales</span>/<span>EMEA</span>/<b>emea_replica</b></div>
+            <div class="titlerow"><span class="itemicon">◍</span><h1>emea_replica</h1><span class="badge line">PostgreSQL</span><span class="spacer"></span><span class="btn"><svg class="s"><use href="#i-hist"/></svg>History</span><span class="btn primary"><svg class="s"><use href="#i-pencil"/></svg>Edit in my workspace</span></div>
+            <div class="meta"><span class="badge"><svg class="s"><use href="#i-eye"/></svg>Read-only · in Sales / EMEA</span><span>Version 3 · approved 24 Sep by Ada Admin</span></div>
+            <div class="meta"><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Last test passed <span class="t">· 2 h ago</span></span><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Cube uses these settings <span class="t">· 2 instances</span></span></div>
+            <div class="tabs" style="margin:4px -24px 0"><span>General</span><span class="on">Connection</span><span>Test history</span><span>Usage</span><span>In Cube</span></div>
+          </div>
+          <div class="sect"><dl class="kv"><dt>Type</dt><dd>PostgreSQL</dd><dt>Host and port</dt><dd class="mono">pg-replica-1.sales.internal:5432</dd><dt>Database</dt><dd class="mono">sales</dd><dt>Signs in with</dt><dd>Password, as <span class="mono">cube_reader</span></dd><dt>Password</dt><dd><span class="badge"><svg class="s"><use href="#i-lock"/></svg>Stored · encrypted</span></dd><dt>TLS</dt><dd>On · verifies the server's certificate</dd></dl></div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>B · A rename alone: saved without a test</h3>
+        <p>General: name and description. Neither is part of the connection, so Save needs no test (T461). The name keeps the wizard's rule and preview. Renaming a name that published cubes still use is refused when it's proposed, naming them (AC-275); the page says so up front.</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="tabs"><span class="on">General<i class="dot"></i></span><span>Connection</span><span>Test history</span><span>Usage</span><span>In Cube</span></div>
+          <div class="sect">
+            <div class="field" style="max-width:420px"><label>Name <span class="req">· required</span></label><div class="input mono changed">emea_replica_eu</div><span class="was">Was <s class="mono">emea_replica</s> · cubes name it as <span class="mono">data_source: emea_replica_eu</span></span></div>
+            <div class="notebar"><svg class="i"><use href="#i-info"/></svg><span>2 published cubes in Sales / EMEA name <span class="mono">emea_replica</span>. Proposing this rename is refused until they're changed too; the refusal names them.</span></div>
+            <div class="field"><label>Description</label><div class="input" style="height:56px;align-items:flex-start;padding-top:6px">Read replica for EMEA order cubes.</div></div>
+          </div>
+          <div class="formbar" style="padding:10px 16px"><span class="xs sec">1 unsaved change · no test needed for a name</span><span class="spacer"></span><span class="btn">Discard changes</span><span class="btn primary">Save</span></div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>C · The test passed: Save is enabled</h3>
+        <p>The checks with times, and when it passed. Save names what it saves. If a field changes again, this pass is cleared and the panel returns to main-screen state 8.</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="sect">
+            <h3>Test to save</h3>
+            <span class="status ok"><svg class="i"><use href="#s-ok"/></svg>Every check passed <span class="t">· 14:21:07 · of exactly these settings</span></span>
+            <div>
+              <div class="chk"><svg class="i"><use href="#s-ok"/></svg><span>Open the secrets</span><span class="d">1 ms</span></div>
+              <div class="chk"><svg class="i"><use href="#s-ok"/></svg><span>Build the connection's configuration</span><span class="d">0 ms</span></div>
+              <div class="chk"><svg class="i"><use href="#s-ok"/></svg><span>Connect</span><span class="d">41 ms</span></div>
+              <div class="chk"><svg class="i"><use href="#s-ok"/></svg><span>Read the catalog</span><span class="d">166 ms</span></div>
+            </div>
+          </div>
+          <div class="formbar" style="padding:10px 16px"><span class="xs sec">2 unsaved changes · tested 14:21</span><span class="spacer"></span><span class="btn">Discard changes</span><span class="btn primary">Save 2 changes</span></div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>D · Secret fields, in each case</h3>
+        <p>No stored secret is ever drawn as text or as dots that stand for it (AC-164, rule 83). <b>Replace</b> opens an empty field, which counts as a connection change and so needs a test to save.</p>
+        <div class="frame" style="background:var(--bg-surface)"><div class="sect">
+          <div class="field"><label>Password · in a shared folder</label><div class="input stored"><span style="display:flex;gap:6px;align-items:center"><svg class="s"><use href="#i-lock"/></svg>Stored · encrypted</span></div></div>
+          <div class="field"><label>Password · in a workspace copy</label><div class="input stored"><span style="display:flex;gap:6px;align-items:center"><svg class="s"><use href="#i-lock"/></svg>Kept from Sales / EMEA · encrypted</span><span class="btn link">Replace</span></div></div>
+          <div class="field"><label>Password · after Replace</label><div class="input focus"><svg class="s muted"><use href="#i-lock"/></svg><span style="letter-spacing:2px">•••••••</span></div><p class="help">Encrypted in your browser before it's sent. <span class="btn link">Keep the stored one</span></p></div>
+          <div class="field"><label>Password · after a target field changed</label><div class="input" style="border-color:var(--warn-icon)"><svg class="s muted"><use href="#i-lock"/></svg><span class="muted">Enter the password again</span></div></div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>E · Test history</h3>
+        <p>Newest first. Each test shows its time, who ran it, its outcome as icon and label, whether it tested the stored settings or a trial of changes, and its four checks as icons. A row expands to the checks and a failure's text. Today the history is recorded (T362) but has nowhere to show (AC-163).</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="tabs"><span>General</span><span>Connection</span><span class="on">Test history</span><span>Usage</span><span>In Cube</span></div>
+          <table class="grid-table">
+            <thead><tr><th>When</th><th>Run by</th><th>Outcome</th><th>Of</th><th>Checks</th></tr></thead>
+            <tbody>
+              <tr><td>Today 14:21</td><td>Wren Writer</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Passed</span></td><td>Trial of changes</td><td><span class="minichk"><svg class="s"><use href="#s-ok"/></svg><svg class="s"><use href="#s-ok"/></svg><svg class="s"><use href="#s-ok"/></svg><svg class="s"><use href="#s-ok"/></svg></span></td></tr>
+              <tr class="open"><td>Today 14:17</td><td>Wren Writer</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed</span></td><td>Trial of changes</td><td><span class="minichk"><svg class="s"><use href="#s-ok"/></svg><svg class="s"><use href="#s-ok"/></svg><svg class="s"><use href="#s-err"/></svg><svg class="s" style="color:var(--text-secondary)"><use href="#s-idle"/></svg></span></td></tr>
+              <tr class="open"><td colspan="5" style="height:auto;padding:4px 10px 10px;white-space:normal"><div style="display:grid;gap:6px;padding-left:12px"><span class="xs">Failed at <b>Connect</b> · 4 ms</span><div class="code">Unable to connect to the database (postgres#xcube_connection_test): getaddrinfo ENOTFOUND pg-replica-2.sales.internl</div></div></td></tr>
+              <tr><td>Today 12:02</td><td>Scheduled health check</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Passed</span></td><td>Stored settings</td><td><span class="minichk"><svg class="s"><use href="#s-ok"/></svg><svg class="s"><use href="#s-ok"/></svg><svg class="s"><use href="#s-ok"/></svg><svg class="s"><use href="#s-ok"/></svg></span></td></tr>
+              <tr><td>24 Sep 09:40</td><td>Ada Admin</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Passed</span></td><td>Stored settings</td><td><span class="minichk"><svg class="s"><use href="#s-ok"/></svg><svg class="s"><use href="#s-ok"/></svg><svg class="s"><use href="#s-ok"/></svg><svg class="s"><use href="#s-ok"/></svg></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The "Scheduled health check" row is illustrative. Direction §7c mentions a health history "recorded by wechart's periodic tests", but no acceptance criterion asks for periodic tests. Without them, only people's tests appear, and this row isn't drawn.</p>
+      </div>
+
+      <div class="state">
+        <h3>F · Usage</h3>
+        <p>The published cubes bound to this source, with their folders and models, so a change's reach is visible before it's proposed. Which cubes use a source is known only to xcube, which binds at publish; T459 is waiting on that answer. Until then the tab says so rather than guessing.</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="tabs"><span>General</span><span>Connection</span><span>Test history</span><span class="on">Usage</span><span>In Cube</span></div>
+          <table class="grid-table">
+            <thead><tr><th>Cube</th><th>Model</th><th>Folder</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">orders_emea</td><td class="mono">orders_emea.yml</td><td><a>Sales / EMEA</a></td></tr>
+              <tr><td class="mono">returns_emea</td><td class="mono">returns_emea.yml</td><td><a>Sales / EMEA</a></td></tr>
+            </tbody>
+          </table>
+          <div class="sect"><div class="notebar"><svg class="i"><use href="#i-info"/></svg><span>Cubes bind to a data source when they're published, and keep that binding until they're published again (AC-273).</span></div></div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>G · In Cube: waiting for every instance</h3>
+        <p>AC-161, from <code>CubeState.tsx</code>: live only when every Cube instance reporting within the last hour runs the new version. The label names the state; the table lists each instance. Instances not heard from within the hour aren't shown. Nothing asks for a restart.</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="tabs"><span>General</span><span>Connection</span><span>Test history</span><span>Usage</span><span class="on">In Cube</span></div>
+          <div class="sect">
+            <span class="status run"><svg class="i"><use href="#s-run"/></svg>Waiting for Cube to pick up the change <span class="t">· version 4 · 1 of 2 instances</span></span>
+            <table class="grid-table" style="border:1px solid var(--border-subtle)">
+              <thead><tr><th>Instance</th><th>Settings</th><th>State</th><th>Reported</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">wechart-cube-789c…8ljkl</td><td>Version 4</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Live</span></td><td>2 min ago</td></tr>
+                <tr><td class="mono">wechart-cube-789c…k4948</td><td>Version 3</td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Previous version</span></td><td>6 min ago</td></tr>
+              </tbody>
+            </table>
+            <p class="help">Only instances that reported within the last hour are listed.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>H · In Cube: the other states</h3>
+        <p>The four other labels <code>CubeState.tsx</code> already has, each with its icon. A failed instance lists its error in the code face.</p>
+        <div class="frame" style="background:var(--bg-surface)"><div class="sect">
+          <span class="status ok"><svg class="i"><use href="#s-ok"/></svg>Cube uses these settings <span class="t">· version 4 · 2 instances</span></span>
+          <span class="status err"><svg class="i"><use href="#s-err"/></svg>Cube couldn't take these settings <span class="t">· 1 instance</span></span>
+          <div class="code" style="margin-left:22px">wechart-cube-789c…k4948: password authentication failed for user "cube_reader"</div>
+          <span class="status idle"><svg class="i"><use href="#s-idle"/></svg>No Cube instance has reported on it in the last hour</span>
+          <span class="status warn"><svg class="i"><use href="#s-warn"/></svg>Not yet published to Cube</span>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>I · Leaving with unsaved changes</h3>
+        <p>Back, a breadcrumb, a tab in the switcher, or Esc, with unsaved changes, asks first (rule 85). An untested change says it would be lost unsaved.</p>
+        <div class="frame" style="height:240px">
+          <div class="scrim"></div>
+          <div class="dialog" style="left:138px;width:400px;top:30px">
+            <h2>Leave without saving?</h2>
+            <p>You changed the host of <span class="mono">emea_replica</span>, and it isn't tested or saved. Leaving discards the change.</p>
+            <div class="acts"><span class="btn" style="box-shadow:0 0 0 3px var(--accent-ring)">Stay</span><span class="btn" style="color:var(--err);border-color:var(--err)">Leave and discard</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>J · From the Data sources list</h3>
+        <p>Rows open the same page. The list keeps its filters for Back. A read-write member sees the sources of their read-write folders and the folders above; rows in view-only folders open read-only (state A without Edit in my workspace, since they couldn't propose it back: decision 4).</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <table class="grid-table">
+            <thead><tr><th>Name</th><th>Folder</th><th>Driver</th><th>Health</th><th style="text-align:right">Used by</th></tr></thead>
+            <tbody>
+              <tr><td class="mono strong">default</td><td><a>Shared</a> <span class="badge" style="height:18px">View only</span></td><td>PostgreSQL</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Passed <span class="t">· 2 h ago</span></span></td><td style="text-align:right">9 cubes</td></tr>
+              <tr style="background:var(--bg-hover)"><td class="mono strong">emea_replica</td><td><a>Sales / EMEA</a></td><td>PostgreSQL</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Passed <span class="t">· 2 h ago</span></span></td><td style="text-align:right">2 cubes <svg class="s muted" style="vertical-align:-2px"><use href="#i-chev"/></svg></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</div>
+</body>
+</html>

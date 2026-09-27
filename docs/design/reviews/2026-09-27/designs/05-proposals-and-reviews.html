@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 05 · Proposals and reviews</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4; --accent-ring: rgba(31,111,134,.35);
+    --crossfilter: #7a3fb0; --crossfilter-soft: #f1e9f8;
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; font-weight: 600; }
+  .doc-head p { margin: 0 0 6px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 40px; }
+  .notes h2, .states h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .notes > p, .states > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1120px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; font-weight: 600; }
+  .notelist .t { color: var(--text-secondary); }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .prop { display: inline-block; margin-top: 4px; padding: 1px 6px; border: 1px dashed var(--note); border-radius: 4px; color: var(--note); font: 600 12px/16px var(--font-ui); }
+  .notes code, .states code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .stategrid { display: grid; grid-template-columns: repeat(2, 676px); gap: 28px 24px; align-items: start; }
+  .state { display: grid; gap: 8px; align-content: start; }
+  .state.wide { grid-column: 1 / -1; }
+  .state > h3 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .state > p { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .frame { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg-page); box-shadow: 0 1px 2px rgba(0,0,0,.06); position: relative; }
+
+  svg.i { width: 16px; height: 16px; flex: none; } svg.s { width: 14px; height: 14px; flex: none; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 260px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .search kbd { margin-left: auto; font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 4px; }
+  .reviews { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border-radius: 6px; color: var(--text-secondary); }
+  .reviews.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--text-on-accent); font: 600 12px/18px var(--font-ui); text-align: center; font-variant-numeric: tabular-nums; }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--text-secondary); flex: none; }
+  .acct { display: inline-flex; align-items: center; gap: 8px; font: 600 12px/16px var(--font-ui); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; color: var(--text-primary); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.dis { opacity: .45; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .btn.link { border: 0; background: none; padding: 0; height: auto; color: var(--accent); font-size: 12px; font-weight: 600; }
+  .btn.danger { color: var(--err); border-color: var(--err); }
+  .input { border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 6px 8px; width: 100%; font-size: 14px; line-height: 20px; }
+  .input.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+  .input.bad { border-color: var(--err); }
+  .field { display: grid; gap: 4px; min-width: 0; align-content: start; }
+  .field > label, .lbl { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); display: flex; }
+  .ctr { margin-left: auto; font-weight: 400; font-variant-numeric: tabular-nums; }
+  .ctr.bad { color: var(--err); font-weight: 600; }
+  .help { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0; }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; }
+  .seg span { height: 26px; padding: 0 10px; font-size: 12px; display: flex; align-items: center; background: var(--bg-surface); border-left: 1px solid var(--border-subtle); white-space: nowrap; }
+  .seg span:first-child { border-left: 0; }
+  .seg span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; background: var(--bg-subtle); color: var(--text-secondary); white-space: nowrap; }
+  .badge.accent { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); } .status.warn { color: var(--warn); } .status.run { color: var(--accent); } .status.idle { color: var(--text-secondary); }
+  .status .t { font-weight: 400; color: var(--text-secondary); }
+  .xs { font-size: 12px; line-height: 16px; } .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .strong { font-weight: 600; }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .notebar { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 16px; background: var(--accent-soft); color: var(--text-primary); border: 1px solid var(--border-subtle); }
+  .notebar.warn { background: color-mix(in srgb, var(--warn-icon) 14%, var(--bg-surface)); }
+  .notebar.err { background: color-mix(in srgb, var(--err-icon) 9%, var(--bg-surface)); }
+  .notebar.ok { background: color-mix(in srgb, var(--ok-icon) 9%, var(--bg-surface)); }
+  .card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; }
+  .grid-table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; font-weight: 600; height: 28px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table td { height: 34px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table tr:last-child td { border-bottom: 0; }
+  .grid-table tr.sel td { background: var(--accent-soft); }
+  .tabs { display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); }
+  .tabs span { height: 36px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
+  .tabs span.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .itemicon { width: 22px; height: 22px; border-radius: 5px; display: inline-grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; background: var(--bg-subtle); color: var(--text-primary); }
+  .itemicon.dash { background: var(--crossfilter-soft); color: var(--crossfilter); }
+  .sect { padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 8px; }
+  .sect > h3 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+  .rvhead { height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .rvhead h1 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .pitem { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 8px 12px; border-radius: 6px; }
+  .pitem.on { background: var(--accent-soft); }
+  .pitem b { display: block; font-weight: 600; font-size: 14px; line-height: 20px; }
+  .tile { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 12px 14px; }
+  .tile h4 { margin: 0 0 6px; font-size: 14px; line-height: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .kpi { font: 600 32px/40px var(--font-ui); font-variant-numeric: tabular-nums; }
+  .changed { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chip-ch { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; }
+  .dialog { position: absolute; z-index: 60; background: var(--bg-surface); border-radius: 6px; box-shadow: var(--shadow-pop); display: grid; gap: 14px; padding: 20px; border: 1px solid var(--border-subtle); }
+  .dialog h2 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .dialog p { margin: 0; color: var(--text-secondary); }
+  .acts { display: flex; justify-content: flex-end; gap: 8px; }
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.28); z-index: 50; }
+  .pop { position: absolute; z-index: 70; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 14px; display: grid; gap: 10px; }
+  .diff { font: 400 12px/20px var(--font-code); background: var(--bg-surface); }
+  .diff div { display: grid; grid-template-columns: 40px 40px 18px 1fr; white-space: pre; }
+  .diff .ln { color: var(--text-muted); text-align: right; padding-right: 8px; user-select: none; }
+  .diff .add { background: color-mix(in srgb, var(--ok-icon) 12%, var(--bg-surface)); }
+  .diff .del { background: color-mix(in srgb, var(--err-icon) 10%, var(--bg-surface)); }
+  .diff .hunk { background: var(--bg-subtle); color: var(--text-secondary); }
+  .quote { border-left: 3px solid var(--border-strong); padding: 2px 0 2px 10px; color: var(--text-primary); }
+  .wband { display: flex; gap: 10px; align-items: flex-start; padding: 10px 24px; font-size: 12px; line-height: 16px; border-bottom: 1px solid var(--border-subtle); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 16 16"><path d="M2 9.5l1.6-5.2A1 1 0 0 1 4.6 3.6h6.8a1 1 0 0 1 1 .7L14 9.5v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z M2 9.5h3.5l1 1.5h3l1-1.5H14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--accent)"/><path d="M8 7v4.2M8 4.6v.4" style="stroke:var(--bg-surface)" stroke-width="1.7"/></symbol>
+  <symbol id="i-back" viewBox="0 0 16 16"><path d="M10 3.5L5.5 8 10 12.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-link" viewBox="0 0 16 16"><path d="M6.5 9.5l3-3M5 7.5L3.6 8.9a2.3 2.3 0 0 0 3.3 3.3L8.3 10.8M11 8.5l1.4-1.4a2.3 2.3 0 0 0-3.3-3.3L7.7 5.2" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--ok-icon)"/><path d="M4.7 8.2l2.2 2.2 4.4-4.7" stroke="#fff" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="s-err" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--err-icon)"/><path d="M5.4 5.4l5.2 5.2M10.6 5.4l-5.2 5.2" stroke="#fff" stroke-width="1.8"/></symbol>
+  <symbol id="s-warn" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" style="fill:var(--warn-icon)"/><path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" stroke-width="1.6"/></symbol>
+  <symbol id="s-idle" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5V8l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI review 2026-09-27 · Design 05 of 10 · for approval</div>
+    <h1>Proposals — Propose, the Reviews count, the Reviews page, and a review view that shows the thing</h1>
+    <p>None of this is built. <span class="mono" style="color:#f2f2f0">/reviews</span> answers Not found, the top bar has no Reviews control, and nothing offers Propose (UX-270). This follows references.md surface 6 and rules 75–79. Approve and Reject exist only in the review view, which renders the proposed item: a dashboard drawn read-only, a model's YAML diff, or a data source's settings diff (principle 9). The main screen is an Admin reviewing a dashboard that brings a model with it.</p>
+    <div class="ids">For AC-284 … AC-290, AC-321, AC-322 · rules 75 … 79, 85 · principles 8, 9 · decisions 2, 3, 9 (direction §7e)</div>
+  </header>
+
+  <div class="screen">
+    <div class="rvhead">
+      <span class="btn ghost"><svg class="s"><use href="#i-back"/></svg>Reviews</span>
+      <span style="width:1px;height:24px;background:var(--border-subtle)"></span>
+      <span class="itemicon dash">▦</span>
+      <h1>Review · Revenue overview <span class="sec" style="font-weight:400">→</span> Sales / EMEA</h1>
+      <span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Waiting for review</span>
+      <span class="spacer"></span>
+      <span class="xs sec tnum">2 of 5</span>
+      <span class="btn sm"><svg class="s"><use href="#i-back"/></svg>Previous</span>
+      <span class="btn sm">Next<svg class="s"><use href="#i-chev"/></svg></span>
+    </div>
+    <div style="display:grid;grid-template-columns:240px 1fr 360px;height:848px">
+      <aside style="background:var(--bg-surface);border-right:1px solid var(--border-subtle);padding:12px 8px;display:grid;gap:4px;align-content:start">
+        <div class="xs sec strong" style="padding:4px 12px 6px;text-transform:uppercase;letter-spacing:.04em">In this proposal</div>
+        <div class="pitem on"><span class="itemicon dash">▦</span><div><b>Revenue overview</b><span class="xs sec">Dashboard · replaces version 7</span></div></div>
+        <div class="pitem"><span class="itemicon">◇</span><div><b class="mono" style="font-size:13px">sales.yml</b><span class="xs sec">Model · replaces version 3</span></div></div>
+        <div style="margin:6px 12px 0" class="notebar"><svg class="i"><use href="#i-link"/></svg><span>The model goes with the dashboard: its cubes resolve only through the author's copy of <span class="mono">sales.yml</span>. They're approved or rejected together.</span></div>
+      </aside>
+      <main style="min-width:0;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 20px;border-bottom:1px solid var(--border-subtle);background:var(--bg-surface)">
+          <span class="seg"><span class="on">Proposed</span><span>Current (version 7)</span></span>
+          <span class="xs sec">Drawn read-only, as readers in Sales / EMEA would see it.</span>
+          <span class="spacer"></span>
+          <span class="seg"><span class="on">Fit</span><span>Actual size</span></span>
+        </div>
+        <div style="padding:16px 20px;display:grid;gap:12px;align-content:start">
+          <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 24px/32px var(--font-ui)">Revenue overview</span><span class="xs sec">Revenue, orders and customers since July 1996</span></div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+            <div class="tile"><h4>Revenue</h4><div class="kpi">$1.27M</div><div class="xs sec">All time</div></div>
+            <div class="tile"><h4>Orders</h4><div class="kpi">830</div><div class="xs sec">All time</div></div>
+            <div class="tile changed"><h4>Avg order value <span class="chip-ch">Changed</span></h4><div class="kpi">$1,525</div><div class="xs sec">Was a median</div></div>
+            <div class="tile"><h4>Customers</h4><div class="kpi">89</div><div class="xs sec">All time</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:12px">
+            <div class="tile changed"><h4>Revenue by month, EMEA <span class="chip-ch">New</span></h4>
+              <svg viewBox="0 0 520 230" width="100%" height="230" aria-hidden="true">
+                <g stroke="#ecebe7"><line x1="40" y1="20" x2="510" y2="20"/><line x1="40" y1="70" x2="510" y2="70"/><line x1="40" y1="120" x2="510" y2="120"/><line x1="40" y1="170" x2="510" y2="170"/></g>
+                <line x1="40" y1="200" x2="510" y2="200" stroke="#c9c7c1"/>
+                <g font-family="Inter" font-size="12" fill="#5c5b57"><text x="34" y="24" text-anchor="end">$60K</text><text x="34" y="74" text-anchor="end">$45K</text><text x="34" y="124" text-anchor="end">$30K</text><text x="34" y="174" text-anchor="end">$15K</text><text x="60" y="218">Jul 96</text><text x="200" y="218">Mar 97</text><text x="340" y="218">Nov 97</text><text x="470" y="218">May 98</text></g>
+                <polyline fill="none" stroke="#2a78d6" stroke-width="2" points="50,168 80,160 110,150 140,158 170,140 200,132 230,138 260,120 290,112 320,118 350,96 380,90 410,74 440,64 470,52 500,150"/>
+                <polyline fill="none" stroke="#eb6834" stroke-width="2" points="50,186 80,182 110,178 140,180 170,170 200,166 230,168 260,160 290,150 320,154 350,142 380,136 410,128 440,120 470,112 500,176"/>
+                <g font-family="Inter" font-size="12" font-weight="600"><text x="404" y="44" fill="#2a78d6">Germany</text><text x="404" y="112" fill="#eb6834">France</text></g>
+              </svg>
+            </div>
+            <div class="tile"><h4>Top categories</h4>
+              <svg viewBox="0 0 340 230" width="100%" height="230" aria-hidden="true">
+                <g font-family="Inter" font-size="12" fill="#1f1f1e"><text x="98" y="30" text-anchor="end">Beverages</text><text x="98" y="68" text-anchor="end">Dairy</text><text x="98" y="106" text-anchor="end">Confections</text><text x="98" y="144" text-anchor="end">Meat/Poultry</text><text x="98" y="182" text-anchor="end">Seafood</text></g>
+                <g fill="#2a78d6"><rect x="106" y="18" width="180" height="18" rx="3"/><rect x="106" y="56" width="158" height="18" rx="3"/><rect x="106" y="94" width="112" height="18" rx="3"/><rect x="106" y="132" width="110" height="18" rx="3"/><rect x="106" y="170" width="88" height="18" rx="3"/></g>
+                <g font-family="Inter" font-size="12" fill="#5c5b57"><text x="292" y="32">$268K</text><text x="270" y="70">$235K</text><text x="224" y="108">$167K</text><text x="222" y="146">$163K</text><text x="200" y="184">$131K</text></g>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </main>
+      <aside style="background:var(--bg-surface);border-left:1px solid var(--border-subtle);display:flex;flex-direction:column">
+        <div class="sect"><h3>Proposed by</h3><div style="display:flex;gap:10px;align-items:center"><span class="avatar">WW</span><div><div class="strong">Wren Writer</div><div class="xs sec">27 Sep 2026, 14:05</div></div></div></div>
+        <div class="sect"><h3>What changed</h3><p style="margin:0">Adds a monthly EMEA revenue chart by country. Avg order value now uses the mean, as Finance reports it.<br/>sales.yml gains <span class="mono">country</span> on orders.</p></div>
+        <div class="sect"><h3>In Sales / EMEA</h3>
+          <p class="xs" style="margin:0">Replaces version 7 · approved 22 Sep by Ada Admin</p>
+          <div class="notebar"><svg class="i"><use href="#i-info"/></svg><span>Based on version 7; the folder now has version 8. Approving replaces version 8, which stays in History.</span></div>
+        </div>
+        <div class="sect"><h3>Publish check</h3>
+          <span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Every affected module compiled <span class="t">· 14:05</span></span>
+          <p class="help">Checked again when you approve (AC-321).</p>
+        </div>
+        <span class="spacer"></span>
+        <div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border-subtle)"><span class="btn">Reject…</span><span class="spacer"></span><span class="btn primary">Approve</span></div>
+      </aside>
+    </div>
+    <span class="pin" style="left:1182px;top:14px">1</span>
+    <span class="pin" style="left:212px;top:96px">2</span>
+    <span class="pin" style="left:248px;top:94px">3</span>
+    <span class="pin" style="left:852px;top:146px">4</span>
+    <span class="pin" style="left:1404px;top:92px">5</span>
+    <span class="pin" style="left:1404px;top:284px">6</span>
+    <span class="pin" style="left:1404px;top:428px">7</span>
+    <span class="pin" style="left:1300px;top:858px">8</span>
+  </div>
+
+  <section class="notes">
+    <h2>What changes, and why</h2>
+    <p>A reviewer decides on the thing itself, with the context that changes the decision next to it, and nowhere else. The layout is references.md's: 240 / fluid / 360, full viewport like the chart editor.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Where you are in the queue</b><span class="t">"2 of 5" and Previous / Next as buttons (no single-key shortcut, rule 85). <b>← Reviews</b> returns to the list with the same row selected.</span><span class="fix">surface 6 · rule 85</span></div></li>
+      <li><span class="n">2</span><div><b>Everything in the proposal, with the reason for the bundle</b><span class="t">The dashboard and the workspace model it resolves through, each marked New or "replaces version <i>n</i>". There's no way to remove the model, and the reason is stated (AC-285). Choosing the model shows its YAML diff (state G).</span><span class="fix">AC-285 · rule 75</span></div></li>
+      <li><span class="n">3</span><div><b>Proposed | Current, with Fit or Actual size</b><span class="t">The dashboard is drawn as readers in the target folder would see it (decision 9).</span><span class="fix">rule 77 · principle 9</span></div></li>
+      <li><span class="n">4</span><div><b>Changed tiles are marked</b><span class="t">An accent outline and a "Changed" or "New" chip on tiles that differ from the current version, so the reviewer doesn't have to flip back and forth to find them.</span><span class="prop">Proposal — needs your approval</span><span class="t"> The surface asks only for the Proposed / Current switch.</span></div></li>
+      <li><span class="n">5</span><div><b>Who proposed it, when, and what they said</b><span class="t">The description as plain text with its line breaks, or "No description" (AC-284, AC-287).</span><span class="fix">AC-287</span></div></li>
+      <li><span class="n">6</span><div><b>What it replaces, and what has changed since</b><span class="t">"Replaces version 7" or "New in this folder". If the folder has moved on, the line says so, as information only: it never blocks ("overwriting is OK for now").</span><span class="fix">surface 6 · AC-288</span></div></li>
+      <li><span class="n">7</span><div><b>The publish check, visible before Approve</b><span class="t">The result from when it was proposed. Approve runs it again (AC-321); a refusal names each break the reviewer may see and counts the rest (state L).</span><span class="fix">AC-321 · AC-322</span></div></li>
+      <li><span class="n">8</span><div><b>Approve and Reject only here</b><span class="t">Approve asks first, anchored to the button (state I). Reject reveals a reason with a live counter (state J). When the reviewer is the author, the button reads "Approve my own proposal" (state K).</span><span class="fix">rules 77, 78 · AC-286, AC-290</span></div></li>
+    </ol>
+  </section>
+
+  <section class="states">
+    <h2>Getting there, and the other outcomes</h2>
+    <p>From proposing in the workspace, to the Reviews count and list, to each kind of item and each ending.</p>
+    <div class="stategrid">
+
+      <div class="state">
+        <h3>A · The Propose dialog</h3>
+        <p>520 px. It names the target and the result ("replaces version 7" or "new in this folder") and lists what goes with it, with the reason and no checkboxes (AC-285). The description has a live counter and is optional. ⌘Enter submits.</p>
+        <div class="frame" style="height:520px">
+          <div class="scrim"></div>
+          <div class="dialog" style="left:78px;top:20px;width:520px">
+            <h2>Propose to Sales / EMEA</h2>
+            <p style="color:var(--text-primary)"><span class="itemicon dash" style="vertical-align:-6px">▦</span> Dashboard · <b>Revenue overview</b> — replaces version 7</p>
+            <div class="field"><span class="lbl">Goes with it</span><div class="notebar"><svg class="i"><use href="#i-link"/></svg><span>1 model only your workspace has: <span class="mono">sales.yml</span>. The dashboard's cubes resolve through it, so they're approved or rejected together.</span></div></div>
+            <div class="field"><label>What changed <span class="sec" style="font-weight:400">&nbsp;· optional</span><span class="ctr">212 / 1,000</span></label><div class="input focus" style="height:96px">Adds a monthly EMEA revenue chart by country. Avg order value now uses the mean, as Finance reports it.<br/>sales.yml gains country on orders.</div></div>
+            <p class="xs">It lands when someone approves it. You may approve your own; the step is never skipped.</p>
+            <div class="acts"><span class="btn">Cancel</span><span class="btn primary">Propose</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>B · Over the limit, and replacing an item it wasn't copied from</h3>
+        <p>Above 1,000 the counter turns to error text, Propose is disabled, and the reason sits beside it; nothing is truncated (AC-284). The counter is announced politely at 900 and at 1,000. The warning names what's replaced when it isn't the item's origin (rule 75).</p>
+        <div class="frame" style="height:520px">
+          <div class="scrim"></div>
+          <div class="dialog" style="left:78px;top:20px;width:520px">
+            <h2>Propose to Sales / EMEA</h2>
+            <p style="color:var(--text-primary)"><span class="itemicon dash" style="vertical-align:-6px">▦</span> Dashboard · <b>Pipeline by stage</b> — replaces version 4</p>
+            <div class="notebar warn"><svg class="s"><use href="#s-warn"/></svg><span>Replaces "Pipeline by stage" (version 4), which this item wasn't copied from. It was made new in your workspace.</span></div>
+            <div class="field"><label>What changed <span class="sec" style="font-weight:400">&nbsp;· optional</span><span class="ctr bad">1,043 / 1,000</span></label><div class="input bad" style="height:96px;overflow:hidden">Reworks the pipeline dashboard for the new stage model agreed at the September sales ops review. Stages now follow the CRM's…</div><span class="xs" style="color:var(--err);display:flex;gap:4px"><svg class="s"><use href="#s-err"/></svg>Shorten to 1,000 characters.</span></div>
+            <div class="acts"><span class="btn">Cancel</span><span class="btn primary dis">Propose</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>C · The Reviews control in the top bar</h3>
+        <p>An icon, "Reviews" and a count pill, after search. Shown only to people who may approve something. The count equals the rows in To review; the pill hides at 0; its accessible name is "Reviews, 3 waiting" (rule 76). It isn't in the switcher, so AC-001's list stays exact.</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="topbar" style="border-bottom:0"><div class="brand"><span class="brand-mark">we</span>wechart</div><nav class="wsnav"><span class="on">Explore</span><span>Data sources</span><span>Jobs</span></nav><span class="spacer"></span><span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">3</span></span><span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span><span class="avatar">AA</span></div>
+          <div class="topbar" style="border-top:1px solid var(--border-subtle);border-bottom:0"><span class="xs sec">Nothing waiting:</span><span class="spacer"></span><span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews</span><span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span><span class="avatar">AA</span></div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>F · Can't propose: a name clash</h3>
+        <p>Blocked states name the clash and the existing item (AC-270). Propose is disabled with the reason beside it. The check runs when the dialog opens, so no description is typed in vain.</p>
+        <div class="frame" style="height:260px">
+          <div class="scrim"></div>
+          <div class="dialog" style="left:78px;top:20px;width:520px">
+            <h2>Propose to Sales / EMEA</h2>
+            <div class="notebar err"><svg class="s"><use href="#s-err"/></svg><span>Can't propose: cube <span class="mono">sales</span> is already defined in <span class="mono">orders.yml</span> in Sales / EMEA. Rename the cube in your copy, or change <span class="mono">orders.yml</span> instead.</span></div>
+            <div class="acts"><span class="btn">Close</span><span class="btn primary dis">Propose</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state wide">
+        <h3>D · The Reviews page (/reviews)</h3>
+        <p>A list and an inspector (AC-228's layout). <b>To review (<i>n</i>)</b>: every open proposal you may approve, your own included and tagged "Yours". <b>My proposals</b>: yours in every state. The columns are the surface's. The inspector summarises and offers <b>Open review</b>; Approve and Reject are not offered here (principle 9).</p>
+        <div class="frame" style="background:var(--bg-page)">
+          <div style="display:grid;grid-template-columns:1fr 360px;min-height:340px">
+            <div style="padding:16px 24px;display:grid;gap:12px;align-content:start">
+              <div style="display:flex;align-items:center;gap:12px"><span style="font:600 20px/26px var(--font-ui)">Reviews</span></div>
+              <div class="tabs" style="padding:0;background:none"><span class="on">To review <i class="count" style="display:inline-block;font-style:normal">3</i></span><span>My proposals</span></div>
+              <div class="card"><table class="grid-table">
+                <thead><tr><th>Item</th><th>Kind</th><th>Target folder</th><th>Author</th><th>Proposed</th><th>Includes</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td><div style="display:flex;gap:8px;align-items:center"><span class="itemicon dash">▦</span>Pipeline by stage</div></td><td>Dashboard</td><td>Sales</td><td>Mo Manager</td><td>Today 11:20</td><td></td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Waiting for review</span></td></tr>
+                  <tr class="sel"><td><div style="display:flex;gap:8px;align-items:center"><span class="itemicon dash">▦</span>Revenue overview</div></td><td>Dashboard</td><td>Sales / EMEA</td><td>Wren Writer</td><td>Today 14:05</td><td>+1 model</td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Waiting for review</span></td></tr>
+                  <tr><td><div style="display:flex;gap:8px;align-items:center"><span class="itemicon">◍</span><span class="mono">sales_dw</span><span class="badge" style="height:18px">Yours</span></div></td><td>Data source</td><td>Sales</td><td>Ada Admin</td><td>Yesterday</td><td></td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Waiting for review</span></td></tr>
+                </tbody>
+              </table></div>
+            </div>
+            <aside style="background:var(--bg-surface);border-left:1px solid var(--border-subtle)">
+              <div class="sect"><div style="display:flex;gap:8px;align-items:center"><span class="itemicon dash">▦</span><b>Revenue overview</b></div><span class="xs sec">Dashboard → Sales / EMEA · replaces version 7 · with <span class="mono">sales.yml</span></span></div>
+              <div class="sect"><h3>Proposed by</h3><span>Wren Writer · Today 14:05</span></div>
+              <div class="sect"><h3>What changed</h3><span class="xs">Adds a monthly EMEA revenue chart by country. Avg order value now uses the mean…</span></div>
+              <div style="padding:14px 16px"><span class="btn primary">Open review</span></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>E · My proposals, in every state</h3>
+        <p>Proposal states always pair an icon and a label (rule 79). An empty tab says so: "You haven't proposed anything yet. Proposals start from items in My workspace."</p>
+        <div class="frame" style="background:var(--bg-surface)"><table class="grid-table">
+          <thead><tr><th>Item</th><th>Target</th><th>Proposed</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Revenue overview</td><td>Sales / EMEA</td><td>Today 14:05</td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Waiting for review</span></td></tr>
+            <tr><td>Churn watch</td><td>Finance</td><td>Yesterday</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Rejected</span> <span class="xs sec">by Ada Admin</span></td></tr>
+            <tr><td>Top products</td><td>Sales</td><td>24 Sep</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Approved</span> <span class="xs sec">as version 3</span></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="state">
+        <h3>G · Reviewing a model: the YAML diff</h3>
+        <p>A unified diff against the folder's current file: code face, line numbers, +/− and tint. Colour is never the only marker. Prefixed names show here, as they do only in YAML and SQL (§P2.6 D).</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div style="display:flex;gap:10px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border-subtle)"><span class="mono strong">sales.yml</span><span class="xs sec">version 3 → proposed · +4 −1</span></div>
+          <div class="diff">
+            <div class="hunk"><span class="ln"></span><span class="ln"></span><span></span><span>@@ cubes › orders › dimensions @@</span></div>
+            <div><span class="ln">18</span><span class="ln">18</span><span> </span><span>      - name: order_date</span></div>
+            <div><span class="ln">19</span><span class="ln">19</span><span> </span><span>        sql: order_date</span></div>
+            <div><span class="ln">20</span><span class="ln">20</span><span> </span><span>        type: time</span></div>
+            <div class="add"><span class="ln"></span><span class="ln">21</span><span>+</span><span>      - name: country</span></div>
+            <div class="add"><span class="ln"></span><span class="ln">22</span><span>+</span><span>        title: Country</span></div>
+            <div class="add"><span class="ln"></span><span class="ln">23</span><span>+</span><span>        sql: ship_country</span></div>
+            <div class="add"><span class="ln"></span><span class="ln">24</span><span>+</span><span>        type: string</span></div>
+            <div class="hunk"><span class="ln"></span><span class="ln"></span><span></span><span>@@ cubes › orders › measures @@</span></div>
+            <div class="del"><span class="ln">31</span><span class="ln"></span><span>−</span><span>        type: number_agg</span></div>
+            <div class="add"><span class="ln"></span><span class="ln">35</span><span>+</span><span>        type: avg</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>H · Reviewing a data source: the settings diff</h3>
+        <p>Field, current, proposed. Credentials read "unchanged" or "replaced", never a value (rule 83). <b>Test connection</b> runs the proposed settings in Cube (AC-159). The type can't differ, since it's fixed (AC-161).</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <table class="grid-table">
+            <thead><tr><th>Setting</th><th>Current (version 3)</th><th>Proposed</th></tr></thead>
+            <tbody>
+              <tr><td>Host</td><td class="mono">pg-replica-1.sales.internal</td><td class="mono" style="background:color-mix(in srgb,var(--ok-icon) 12%,var(--bg-surface))">pg-replica-2.sales.internal</td></tr>
+              <tr><td>Port</td><td class="mono sec">5432</td><td class="mono sec">5432 · unchanged</td></tr>
+              <tr><td>User</td><td class="mono sec">cube_reader</td><td class="mono sec">unchanged</td></tr>
+              <tr><td>Password</td><td><span class="badge"><svg class="s"><use href="#i-lock"/></svg>Stored · encrypted</span></td><td><span class="badge accent"><svg class="s"><use href="#i-lock"/></svg>Replaced</span></td></tr>
+              <tr><td>TLS</td><td class="sec">On · verifies</td><td class="sec">unchanged</td></tr>
+            </tbody>
+          </table>
+          <div style="display:flex;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid var(--border-subtle)"><span class="btn sm">Test connection</span><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Passed when proposed <span class="t">· 14:21</span></span></div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>I · Approve asks first</h3>
+        <p>A confirmation anchored to Approve, trapping focus; Esc cancels (rule 85). It says what readers will see and where the old version goes.</p>
+        <div class="frame" style="height:230px;background:var(--bg-surface)">
+          <div class="pop" style="right:16px;top:16px;width:340px">
+            <b>Publish to Sales / EMEA?</b>
+            <span class="xs sec" style="font-size:14px;line-height:20px">Readers see it at once. Version 8 stays in History. <span class="mono">sales.yml</span> is published with it.</span>
+            <div class="acts"><span class="btn">Cancel</span><span class="btn primary">Approve and publish</span></div>
+          </div>
+          <div style="position:absolute;right:16px;bottom:16px;display:flex;gap:8px"><span class="btn">Reject…</span><span class="btn primary" style="box-shadow:0 0 0 3px var(--accent-ring)">Approve</span></div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>J · Reject with an optional reason</h3>
+        <p>Reject reveals the reason field in the inspector, with its counter (AC-290). The toast afterwards: "Rejected. Wren Writer's workspace keeps the work."</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="sect"><div class="field"><label>Reason <span class="sec" style="font-weight:400">&nbsp;· optional</span><span class="ctr">96 / 1,000</span></label><div class="input focus" style="height:80px">Please keep Avg order value as the median; Finance moved to mean only for the board pack.</div></div>
+          <div class="acts"><span class="btn">Cancel</span><span class="btn danger">Reject</span></div></div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>K · Reviewing your own proposal</h3>
+        <p>Self-approval is allowed, recorded and never skipped (R17, R18). The inspector says so and the button names it (rule 78). When the author rejects their own, it's labelled "Withdraw…".</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="sect"><div class="notebar"><svg class="i"><use href="#i-person"/></svg><span>You proposed this. Approving your own proposal is allowed and is recorded in the audit trail.</span></div></div>
+          <div style="display:flex;gap:8px;padding:12px 16px"><span class="btn">Withdraw…</span><span class="spacer"></span><span class="btn primary">Approve my own proposal</span></div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>L · Approval refused by the publish check</h3>
+        <p>Each break in folders you may see, with its item, error, line and column; a count for the rest (AC-322). The folder and the proposal are unchanged (AC-321). A Super-Admin sees every break named.</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="sect">
+            <span class="status err"><svg class="i"><use href="#s-err"/></svg>Can't approve: 2 items would break</span>
+            <div class="notebar err" style="display:grid;gap:6px"><span><b class="mono">sales.yml</b> · Sales / EMEA · line 34, column 9</span><span class="mono">measure orders.avg_value: unknown member orders.amount_net</span></div>
+            <div class="notebar err" style="display:grid;gap:6px"><span><b>Pipeline by stage</b> · Sales · binds cube <span class="mono">sales</span> differently than in the preview</span></div>
+            <p class="help">1 item in a folder you can't see would also break.</p>
+          </div>
+          <div style="display:flex;gap:8px;padding:12px 16px"><span class="btn">Reject…</span><span class="spacer"></span><span class="btn primary dis">Approve</span></div>
+        </div>
+      </div>
+
+      <div class="state wide">
+        <h3>M · The workspace item while waiting, and after a rejection</h3>
+        <p>A waiting item carries a band with a link to its proposal. If it's edited after proposing, the band adds that those changes aren't in the proposal (decision 2). A rejected item's band is <code>status-error</code> text with a cross. It gives the approver, the time and the reason in a quote block (or "No reason given"), with Propose again… and Dismiss (rule 79).</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="wband" style="background:var(--bg-subtle)"><svg class="s" style="color:var(--text-secondary)"><use href="#s-idle"/></svg><span style="flex:1"><b>Waiting for review since 14:05</b> · proposed to Sales / EMEA. You've changed it since proposing; those changes aren't in the proposal.</span><span class="btn sm">View proposal</span></div>
+          <div class="wband" style="color:var(--err);background:color-mix(in srgb,var(--err-icon) 7%,var(--bg-surface))"><svg class="s"><use href="#s-err"/></svg><div style="flex:1;display:grid;gap:6px"><b>Rejected by Ada Admin · 26 Sep, 16:40</b><span class="quote">Please keep Avg order value as the median; Finance moved to mean only for the board pack.</span></div><span class="btn sm">Propose again…</span><span class="btn sm ghost">Dismiss</span></div>
+          <div class="wband"><svg class="s" style="color:var(--text-secondary)"><use href="#i-info"/></svg><span style="flex:1"><b>Approved by Ada Admin 1 min ago.</b> In the review view, someone else's decision disables Approve and Reject and says this.</span></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</div>
+</body>
+</html>

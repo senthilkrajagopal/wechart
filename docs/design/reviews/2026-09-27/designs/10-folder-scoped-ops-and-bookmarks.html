@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 10 · Jobs by folder, bookmarks, cube picker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4; --accent-ring: rgba(31,111,134,.35);
+    --crossfilter: #7a3fb0; --crossfilter-soft: #f1e9f8;
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8; --role-measure: #a85400; --role-measure-soft: #f8ecdf;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; font-weight: 600; }
+  .doc-head p { margin: 0 0 6px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 40px; }
+  .notes h2, .states h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .notes > p, .states > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1120px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; font-weight: 600; }
+  .notelist .t { color: var(--text-secondary); }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .notes code, .states code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .stategrid { display: grid; grid-template-columns: repeat(2, 676px); gap: 28px 24px; align-items: start; }
+  .state { display: grid; gap: 8px; align-content: start; }
+  .state.wide { grid-column: 1 / -1; }
+  .state > h3 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .state > p { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .frame { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg-page); box-shadow: 0 1px 2px rgba(0,0,0,.06); position: relative; }
+
+  svg.i { width: 16px; height: 16px; flex: none; } svg.s { width: 14px; height: 14px; flex: none; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 260px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .search kbd { margin-left: auto; font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 4px; }
+  .reviews { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border-radius: 6px; color: var(--text-secondary); }
+  .count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--text-on-accent); font: 600 12px/18px var(--font-ui); text-align: center; }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--text-secondary); flex: none; }
+  .iconbtn.sm { width: 24px; height: 24px; }
+  .acct { display: inline-flex; align-items: center; gap: 8px; font: 600 12px/16px var(--font-ui); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; color: var(--text-primary); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .btn.link { border: 0; background: none; padding: 0; height: auto; color: var(--accent); font-size: 12px; font-weight: 600; }
+  .input { height: 28px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 8px; display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; background: var(--bg-subtle); color: var(--text-secondary); white-space: nowrap; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); } .status.run { color: var(--accent); } .status.idle { color: var(--text-secondary); } .status.warn { color: var(--warn); }
+  .status .t { font-weight: 400; color: var(--text-secondary); }
+  .xs { font-size: 12px; line-height: 16px; } .sec { color: var(--text-secondary); } .muted { color: var(--text-muted); } .strong { font-weight: 600; }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .notebar { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 16px; background: var(--accent-soft); color: var(--text-primary); border: 1px solid var(--border-subtle); }
+  .card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; }
+  .grid-table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; font-weight: 600; height: 28px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table td { height: 34px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table tr:last-child td { border-bottom: 0; }
+  .grid-table tr.sel td { background: var(--accent-soft); }
+  .grid-table a { color: var(--accent); text-decoration: none; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border-subtle); }
+  .tabs span { height: 36px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
+  .tabs span.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .fbtn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-surface); font-size: 12px; white-space: nowrap; }
+  .fbtn b { font-weight: 600; }
+  .durbar { width: 80px; height: 6px; border-radius: 3px; background: var(--bg-subtle); position: relative; display: inline-block; vertical-align: middle; margin-right: 6px; }
+  .durbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--text-muted); }
+  .durbar b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text-primary); }
+  .pane { background: var(--bg-surface); border-left: 1px solid var(--border-subtle); display: flex; flex-direction: column; min-height: 0; }
+  .pane-head { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 8px 8px 16px; border-bottom: 1px solid var(--border-subtle); }
+  .pane-head h2 { margin: 0; font: 600 14px/20px var(--font-code); }
+  .sect { padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 8px; }
+  .sect > h3 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+  .kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 12px; font-size: 12px; line-height: 16px; margin: 0; }
+  .kv dt { color: var(--text-secondary); }
+  .kv dd { margin: 0; }
+  .kv a { color: var(--accent); text-decoration: none; }
+  .pop { position: absolute; z-index: 70; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); }
+  .bmhead { padding: 8px 12px 4px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+  .bm { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 8px 6px 12px; align-items: center; }
+  .bm.hl { background: var(--bg-hover); }
+  .bm b { font-weight: 600; font-size: 14px; line-height: 20px; }
+  .bm .vis { display: flex; gap: 6px; align-items: center; font-size: 12px; line-height: 16px; color: var(--text-secondary); grid-column: 1; }
+  .bm .iconbtn { grid-row: 1 / span 2; grid-column: 2; }
+  .menu { position: absolute; z-index: 80; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 4px; }
+  .mi { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 4px; font-size: 14px; white-space: nowrap; }
+  .mi.hl { background: var(--bg-hover); }
+  .msep { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+  .dialog { position: absolute; z-index: 60; background: var(--bg-surface); border-radius: 6px; box-shadow: var(--shadow-pop); display: grid; gap: 12px; padding: 20px; border: 1px solid var(--border-subtle); }
+  .dialog h2 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .dialog p { margin: 0; color: var(--text-secondary); }
+  .acts { display: flex; justify-content: flex-end; gap: 8px; }
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.28); z-index: 50; }
+  .pick { display: grid; gap: 0; }
+  .pick .row { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; font-size: 14px; }
+  .pick .row.hl { background: var(--bg-hover); }
+  .pick .row .path { margin-left: auto; font-size: 12px; color: var(--text-secondary); }
+  .pick .grp { padding: 8px 10px 2px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); }
+  .srcicon { width: 18px; height: 18px; border-radius: 4px; display: inline-grid; place-items: center; font-size: 11px; font-weight: 600; background: var(--role-dim-soft); color: var(--role-dim); flex: none; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 16 16"><path d="M2 9.5l1.6-5.2A1 1 0 0 1 4.6 3.6h6.8a1 1 0 0 1 1 .7L14 9.5v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z M2 9.5h3.5l1 1.5h3l1-1.5H14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-people" viewBox="0 0 16 16"><circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="11" cy="6.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M1.8 13c.5-2.2 2.1-3.4 4.2-3.4s3.7 1.2 4.2 3.4M10.2 9.8c1.9 0 3.3 1 3.8 3" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--accent)"/><path d="M8 7v4.2M8 4.6v.4" style="stroke:var(--bg-surface)" stroke-width="1.7"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="12.5" cy="8" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-bm" viewBox="0 0 16 16"><path d="M4 2.5h8v11l-4-3-4 3z" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--ok-icon)"/><path d="M4.7 8.2l2.2 2.2 4.4-4.7" stroke="#fff" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="s-err" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--err-icon)"/><path d="M5.4 5.4l5.2 5.2M10.6 5.4l-5.2 5.2" stroke="#fff" stroke-width="1.8"/></symbol>
+  <symbol id="s-run" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" style="stroke:var(--border-strong)" stroke-width="2"/><path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" fill="none" style="stroke:var(--accent)" stroke-width="2"/></symbol>
+  <symbol id="s-idle" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5V8l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI review 2026-09-27 · Design 10 of 10 · for approval</div>
+    <h1>The rest of F25–F36 with no screen: Jobs and Schedules by folder, personal bookmarks, and the cube picker</h1>
+    <p>Three phase-2 surfaces the prototype never drew. <b>Jobs and Schedules by folder</b> (AC-297, rule 84): a Folder column and filter, and a scope note for read-write members who aren't Super-Admins. Today neither page has a Folder column, and there are no pre-aggregations to show. <b>Bookmarks, Mine and Shared</b> (AC-292, AC-293, rule 81). <b>The cube picker</b>, offering only cubes on the item's folder path, by title with the path beside it and never a prefixed name (AC-329). The main screen is Jobs as a read-write member of Sales.</p>
+    <div class="ids">For AC-297, AC-157 (Folder column), AC-292, AC-293, AC-329 · rules 3, 22, 34, 81, 84 · §P2.6 D ("the prefixed name shows only in YAML and SQL") · Pre-aggregations, builds and bookmarks are illustrative.</div>
+  </header>
+
+  <div class="screen">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span>Explore</span><span>Data sources</span><span class="on">Jobs</span><span>Schedules</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<kbd>⌘K</kbd></div>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">2</span></span>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 400px;height:852px">
+      <main style="min-width:0;padding:14px 24px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:12px"><span style="font:600 20px/26px var(--font-ui)">Jobs</span><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Cube healthy</span><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Refresh worker running</span></div>
+        <div class="tabs"><span class="on">Pre-aggregations</span><span>Queries</span></div>
+        <div class="notebar" style="max-width:760px"><svg class="i"><use href="#i-info"/></svg><span>Showing pre-aggregations of models in the folders where you have read-write access.</span></div>
+        <div style="display:flex;gap:8px;align-items:center"><span class="fbtn">Folder <b>All of mine</b><svg class="s"><use href="#i-chevd"/></svg></span><span class="fbtn">Status <b>Any</b><svg class="s"><use href="#i-chevd"/></svg></span><span class="input" style="width:220px;color:var(--text-muted)"><svg class="s"><use href="#i-search"/></svg>Search pre-aggregations</span></div>
+        <div class="card">
+          <table class="grid-table">
+            <thead><tr><th>Pre-aggregation</th><th>Folder</th><th>Status</th><th>Last success</th><th>Duration vs average</th><th>Trigger</th><th>Model</th></tr></thead>
+            <tbody>
+              <tr class="sel"><td class="mono strong">orders_emea.by_month</td><td>Sales / EMEA</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>12 min ago</td><td><span class="durbar"><i style="width:52%"></i><b style="left:48%"></b></span>4.2 s</td><td>Schedule</td><td><a class="mono">sales.yml</a></td></tr>
+              <tr><td class="mono strong">returns_emea.daily</td><td>Sales / EMEA</td><td><span class="status run"><svg class="s"><use href="#s-run"/></svg>Running</span></td><td>Yesterday</td><td><span class="durbar"><i style="width:30%"></i><b style="left:60%"></b></span>1.1 s so far</td><td>Wren Writer</td><td><a class="mono">returns.yml</a></td></tr>
+              <tr><td class="mono strong">pipeline.by_stage</td><td>Sales</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed</span></td><td>2 h ago</td><td><span class="durbar"><i style="width:12%"></i><b style="left:40%"></b></span>0.4 s</td><td>Schedule</td><td><a class="mono">pipeline.yml</a></td></tr>
+              <tr><td class="mono strong">orders.monthly</td><td>Sales</td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Not built yet</span></td><td>—</td><td class="sec">—</td><td>—</td><td><a class="mono">orders.yml</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="xs sec" style="margin:0">Names are the model's short names; each row's folder says which folder's cube it belongs to.</p>
+      </main>
+      <aside class="pane">
+        <div class="pane-head"><h2>orders_emea.by_month</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+        <div class="sect"><dl class="kv"><dt>Folder</dt><dd>Shared / Sales / EMEA</dd><dt>Status</dt><dd><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built <span class="t">· 12 min ago</span></span></dd><dt>Schedule</dt><dd>Every hour · Cube's refresh worker</dd><dt>Model</dt><dd><a class="mono">sales.yml</a> · opens read-only in Sales / EMEA</dd></dl>
+          <div style="display:flex;gap:8px"><span class="btn primary">Build now</span><span class="btn">Open in Model</span></div>
+          <p class="xs sec" style="margin:0">Building needs no proposal (AC-297).</p>
+        </div>
+        <div class="sect"><h3>Recent builds</h3>
+          <table class="grid-table"><tbody>
+            <tr><td>Today 14:48</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>4.2 s</td></tr>
+            <tr><td>Today 13:48</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>3.8 s</td></tr>
+            <tr><td>Today 12:48</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>3.9 s</td></tr>
+          </tbody></table>
+        </div>
+      </aside>
+    </div>
+    <span class="pin" style="left:776px;top:132px">1</span>
+    <span class="pin" style="left:300px;top:229px">2</span>
+    <span class="pin" style="left:2px;top:190px">3</span>
+    <span class="pin" style="left:190px;top:260px">4</span>
+    <span class="pin" style="left:1404px;top:160px">5</span>
+    <span class="pin" style="left:1290px;top:224px">6</span>
+  </div>
+
+  <section class="notes">
+    <h2>What changes, and why</h2>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>A scope note for read-write members</b><span class="t">Surface 10's words. It names no other folder. Super-Admins see every folder and no note (state A).</span><span class="fix">AC-297 · rule 84</span></div></li>
+      <li><span class="n">2</span><div><b>Folder after the name</b><span class="t">The folder's path, since two folders may hold same-named cubes (AC-274).</span><span class="fix">rule 84 · AC-274</span></div></li>
+      <li><span class="n">3</span><div><b>A Folder filter</b><span class="t">"All of mine" by default for a read-write member; a tree of their read-write folders.</span><span class="fix">rule 84</span></div></li>
+      <li><span class="n">4</span><div><b>Short names, never prefixed</b><span class="t">A folder's cubes publish as <code>f…__orders_emea</code> (AC-328). People see the short name and the folder; the prefixed name appears only in YAML and SQL (§P2.6 D).</span><span class="fix">§P2.6 D · AC-328</span></div></li>
+      <li><span class="n">5</span><div><b>The detail pane is docked</b><span class="t">400 px with a pane head, as the prototype has it (UX-081). The model link opens the model under its folder's breadcrumb, read-only there (rule 70). Today it opens the file's General tab (UX-080).</span><span class="fix">UX-080 · UX-081 · rule 70</span></div></li>
+      <li><span class="n">6</span><div><b>Build now, with no proposal</b><span class="t">Building and scheduling are direct for the folder's read-write members (AC-297).</span><span class="fix">AC-297</span></div></li>
+    </ol>
+  </section>
+
+  <section class="states">
+    <h2>Schedules, bookmarks and the cube picker</h2>
+    <div class="stategrid">
+
+      <div class="state wide">
+        <h3>A · Schedules, as a Super-Admin</h3>
+        <p>The phase-1 Schedules layout (review 2026-09-24, Design 07) with a Folder column and filter. A Super-Admin sees every folder and no scope note. Owners are labelled (rule 34).</p>
+        <div class="frame" style="background:var(--bg-page)"><div style="padding:14px 24px;display:grid;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px"><span style="font:600 20px/26px var(--font-ui)">Schedules</span><span class="spacer"></span><span class="fbtn">Folder <b>All folders</b><svg class="s"><use href="#i-chevd"/></svg></span></div>
+          <div class="card"><table class="grid-table">
+            <thead><tr><th>Pre-aggregation</th><th>Folder</th><th>Schedule</th><th>Next run</th><th>Owner</th></tr></thead>
+            <tbody>
+              <tr><td class="mono strong">orders_emea.by_month</td><td>Sales / EMEA</td><td>Every hour <span class="mono sec">every: 1 hour</span></td><td>in 12 min</td><td class="sec">Cube's refresh worker</td></tr>
+              <tr><td class="mono strong">gl_entries.daily</td><td>Finance</td><td>Daily at 06:00, Berlin <span class="mono sec">every: 0 6 * * *</span></td><td>Tomorrow 06:00</td><td class="sec">Cube's refresh worker</td></tr>
+              <tr><td class="mono strong">orders.monthly</td><td>Shared</td><td class="sec">Not scheduled</td><td>—</td><td class="sec">Cube's refresh worker</td></tr>
+            </tbody>
+          </table></div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>B · Bookmarks: Mine, then Shared</h3>
+        <p>A 320 px popover from the dashboard header. Mine first, then Shared, each newest first. Visibility as icon and label: a person with "Only me", people with "Shared". Shared rows name who shared them (rule 81). Read-only users can save and share too (AC-266).</p>
+        <div class="frame" style="height:420px;background:var(--bg-page)">
+          <div style="position:absolute;right:16px;top:14px"><span class="btn"><svg class="s"><use href="#i-bm"/></svg>Bookmarks<svg class="s"><use href="#i-chevd"/></svg></span></div>
+          <div class="pop" style="right:16px;top:54px;width:320px;padding:4px 0">
+            <div class="bmhead">Mine</div>
+            <div class="bm hl"><b>EMEA, last quarter</b><span class="iconbtn sm"><svg class="s"><use href="#i-dots"/></svg></span><span class="vis"><svg class="s"><use href="#i-person"/></svg>Only me · today</span></div>
+            <div class="bm"><b>Top 5 categories</b><span class="iconbtn sm"><svg class="s"><use href="#i-dots"/></svg></span><span class="vis"><svg class="s"><use href="#i-people"/></svg>Shared · 22 Sep</span></div>
+            <div class="bmhead" style="border-top:1px solid var(--border-subtle);margin-top:4px;padding-top:10px">Shared</div>
+            <div class="bm"><b>Board pack view</b><span class="iconbtn sm"><svg class="s"><use href="#i-dots"/></svg></span><span class="vis"><svg class="s"><use href="#i-people"/></svg>Shared by Ada Admin · 20 Sep</span></div>
+            <div style="border-top:1px solid var(--border-subtle);margin-top:4px;padding:8px 12px"><span class="btn link"><svg class="s"><use href="#i-plus"/></svg>Bookmark this view</span></div>
+          </div>
+          <div class="menu" style="left:10px;top:70px;width:318px">
+            <div class="mi">Apply</div><div class="mi">Update</div><div class="mi">Rename</div>
+            <div class="mi hl">Share with everyone who can see this dashboard</div>
+            <div class="msep"></div><div class="mi" style="color:var(--err)">Delete</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>C · Sharing asks first; others save a copy</h3>
+        <p>The owner's Share confirms who will see it. On someone else's shared bookmark the menu has only Apply and Save a copy to mine (rule 81).</p>
+        <div class="frame" style="height:420px">
+          <div class="scrim"></div>
+          <div class="dialog" style="left:118px;top:24px;width:440px">
+            <h2>Share "EMEA, last quarter"?</h2>
+            <p>Everyone who can see this dashboard will see it under Shared, labelled with your name. You can stop sharing at any time.</p>
+            <div class="acts"><span class="btn">Cancel</span><span class="btn primary">Share</span></div>
+          </div>
+          <div class="menu" style="left:118px;top:230px;width:250px;z-index:55">
+            <div class="mi">Apply</div><div class="mi hl">Save a copy to mine</div>
+          </div>
+          <span class="xs" style="position:absolute;left:380px;top:236px;z-index:55;color:#fff;max-width:200px">Someone else's shared bookmark</span>
+        </div>
+      </div>
+
+      <div class="state wide">
+        <h3>D · The cube picker, by folder path (AC-329)</h3>
+        <p>In the chart editor's source picker, only cubes found on the item's folder path: its own folder, then each folder above to the root. For a workspace item, the workspace comes first, then its origin's or target's path. Each is listed by its title, with its folder path beside it and never a prefixed name. A cube in a sibling or descendant folder isn't offered. When two folders on the path define the same name, only the nearest can be chosen, because that's the one it binds to at publish (AC-272, AC-281). The farther one is listed dimmed, "hidden by" the nearer, so its absence isn't a mystery. Drawn for a workspace chart copied from Sales / EMEA.</p>
+        <div class="frame" style="background:var(--bg-surface);width:520px">
+          <div style="padding:10px;border-bottom:1px solid var(--border-subtle)"><span class="input" style="height:32px;font-size:14px"><svg class="s muted"><use href="#i-search"/></svg><span class="muted">Search cubes and views</span></span></div>
+          <div class="pick">
+            <div class="grp">My workspace</div>
+            <div class="row hl"><span class="srcicon">C</span>Orders<span class="path">My workspace · your copy of orders.yml</span></div>
+            <div class="grp">Sales / EMEA</div>
+            <div class="row" style="color:var(--text-muted)"><span class="srcicon" style="opacity:.6">C</span>Orders<span class="path">Sales / EMEA · hidden by your copy</span></div>
+            <div class="row"><span class="srcicon">C</span>Returns<span class="path">Sales / EMEA</span></div>
+            <div class="grp">Sales</div>
+            <div class="row"><span class="srcicon">V</span>Pipeline<span class="path">Sales</span></div>
+            <div class="grp">Shared</div>
+            <div class="row"><span class="srcicon">C</span>Customers<span class="path">Shared</span></div>
+            <div class="row" style="color:var(--text-muted)"><span class="srcicon" style="opacity:.6">C</span>Orders<span class="path">Shared · hidden by a nearer Orders</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</div>
+</body>
+</html>

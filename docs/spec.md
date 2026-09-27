@@ -686,6 +686,12 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
       Fails when: a test result is missing from the history.
 - [x] AC-164 THE SYSTEM SHALL never show a stored credential in plain text after it is saved, and SHALL never send it to the browser.
       Fails when: a saved secret is readable in the UI or in a response to the browser.
+- [ ] AC-338 THE SYSTEM SHALL mark each driver type in the new data source wizard with its vendor's logo, where the vendor's licence terms allow wechart to show it, and otherwise with a monogram of its name (`[R33]`, proposal 1 of the 2026-09-27 designs, approved 2026-09-27).
+      Fails when: a driver's type tile shows neither a logo nor a monogram, or shows a logo whose licence terms, as recorded in `docs/research/`, don't allow it.
+- [ ] AC-339 WHEN a Dremio Cloud project URL starting with `http://` is entered, THE SYSTEM SHALL warn beside it that the token would be sent unencrypted (`[R33]`, proposal 2).
+      Fails when: an `http://` Cloud URL shows no warning, or an `https://` one shows one.
+- [ ] AC-340 WHEN a BigQuery service-account key is pasted, THE SYSTEM SHALL read its `client_email` in the browser, before the key is sealed, and show it beside the field, sending it nowhere unsealed (`[R33]`, proposal 3; AC-325 still holds).
+      Fails when: a valid key's `client_email` isn't shown, or a request body to wechart holds the pasted key or its `client_email` outside the sealed envelope.
 
 - [x] AC-162 WHEN the user assigns a cube to a data source, THE SYSTEM SHALL write `data_source` into that cube's model file.
       Fails when: the assignment is stored only in wechart and not in the model.
@@ -1012,6 +1018,8 @@ Traces to: §P2.6 D, `[P2 input]`, `[R17, R19, R22]`, `[AD 2, AD 3, AD 5, AD 6, 
       Fails when: two folders' same-named cubes publish under one name; a root item publishes under anything but its short name, or another folder's item under anything but `<folderId>__<shortName>`; two folders share an xcube id, or a removed folder's id is given to another; a table or column name Cube builds for it exceeds the database's identifier limit (63 bytes on Postgres); or renaming or moving a folder changes a published name, breaks a stored reference, or rebuilds a pre-aggregation.
 - [ ] AC-329 WHEN the user picks a cube for a chart or dashboard, THE SYSTEM SHALL offer only the cubes found on the item's own folder path, each by its title with its folder path beside it, never by its prefixed name. For a workspace item, that path is the workspace, then its origin's or target's path, as AC-281 has it (`[R27]`; the folder path, `[plan]`, 2026-09-26).
       Fails when: the picker lists a cube from a descendant or sibling folder, shows a prefixed name, or shows a cube without its folder path.
+- [ ] AC-342 WHEN a cube on the item's folder path is hidden by a nearer cube of the same name, THE SYSTEM SHALL list it in the cube picker dimmed and unselectable, saying which folder's cube hides it (`[R33]`, proposal 5 of the 2026-09-27 designs).
+      Fails when: a hidden farther cube is missing from the list, can be picked, or doesn't say what hides it.
 - **AC-331 (retired 2026-09-26, superseded by the user's decision recorded in `[X3]` and R30; the ID stays and is never reused):** ~~WHEN the prefixed names are introduced (slice 3), THE SYSTEM SHALL rewrite every stored reference to a member (in charts, dashboards, markings, bookmarks and links) to its prefixed name, and every existing dashboard SHALL render the same data as before (`[IP 3, plan, R28]`). Fails when: after the migration a stored reference still names a short cube name; or an existing dashboard shows different data, or an error, compared with before it.~~ The root keeps its bare names, so nothing stored is rewritten. That existing dashboards render as before is AC-336.
 
 ## F29. Workspaces
@@ -1053,6 +1061,8 @@ Traces to: §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
       Fails when: the folder shows the old version after an approval that passed the check; the replaced version is missing from history; or an approval that fails the check changes the folder.
 - [ ] AC-289 THE SYSTEM SHALL keep an item's last 10 versions, each with its author, approver, time and description, show them to the folder's read-write members and to Super-Admins only, and SHALL let a read-write member restore one through a proposal (`[R17, R23]`).
       Fails when: an item that has had more than 10 versions keeps other than its last 10, a read-only user can open its history, or a restore lands without an approval.
+- [ ] AC-341 WHEN a proposed dashboard is drawn in its review, THE SYSTEM SHALL outline and label each tile the proposal changes ("Changed") or adds ("New") against the folder's current version (`[R33]`, proposal 4 of the 2026-09-27 designs).
+      Fails when: a tile the proposal changes or adds carries no label, or an unchanged tile carries one.
 - [ ] AC-290 WHEN a proposal is rejected, THE SYSTEM SHALL return it unchanged to the author's workspace, with the approver's reason of at most 1,000 characters, and leave the folder as it was (`[R18]`).
       Fails when: the folder changes, the author's workspace loses the work, or the author isn't shown the reason.
 - [ ] AC-291 WHEN a read-write member creates a subfolder, sets permissions, or renames, moves or deletes an item in a folder they may write, THE SYSTEM SHALL apply it at once, without a proposal. A move SHALL need read-write access to both folders. A rename, move or delete touching a model, a data source or a folder holding them SHALL apply only if ~~the whole model still compiles~~ every module it affects still compiles (AC-321) (`[R17]`; amended 2026-09-25, `[AD 6, R27]`; amended 2026-09-26, `[IP 5]`).
@@ -1146,6 +1156,8 @@ Traces to: §P2.3, `[R13, R19]`.
       Fails when: the p95 exceeds 3 seconds.
 - [ ] AC-308 WHILE security is disabled, THE SYSTEM SHALL pass the phase-1 end-to-end suite, its editing steps going through the workspace and a self-approved proposal. Checked once, at the end of phase 2 (S3).
       Fails when: a phase-1 end-to-end test fails.
+- [ ] AC-343 THE SYSTEM SHALL draw each phase-2 surface as its approved design in `docs/design/reviews/2026-09-27/designs/` (01–10), with the structure, placement, controls, wording and states the design and its notes give, in the tokens of direction.md §3–5 (`[R33]`: the user, 2026-09-27, "Approve all with proposals").
+      Fails when: a surface a design covers differs from it in its layout or placement, its controls or their order, its wording, or a state the design draws. Each surface's task names the design it checks against.
 
 ## F37. The semantic service: Cube and xcube
 
@@ -1321,3 +1333,4 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | §P2.6 H UI fixes: style conformance, AC-201/220/246, Edge `[R16]` | AC-187, AC-201, AC-220, AC-246, AC-180 |
 | §P2.3 S2 Speed holds with security on `[R13]` | AC-307 |
 | §P2.3 S3 Phase 1 intact with security off, at phase end `[R13, R19]` | AC-308 |
+| The 2026-09-27 UI reviews: phase 2's ten designs approved, with their proposals `[R33]` | AC-338 … AC-343 |

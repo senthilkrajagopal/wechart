@@ -842,6 +842,14 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R33 — the UI reviews of 2026-09-27** (`docs/design/reviews/2026-09-27/`: `ui-review.md` with designs 01–10 for phase 2, and `phase-1-recheck.md`; asked after the user's "The ui for the wizard looks bad.. go back to the ui design review that was run in phase 1.. and clean up the entire ui when we get a chance.. and also for phase 2 requirements run it through a ui expert, get the designs and apply the designs to our screens")
+- Q: How should I treat the ten phase-2 designs? A: "Approve all with proposals"
+  - *All ten designs are approved as drawn, with their five proposals: vendor logos on the driver tiles (AC-338), the `http://` Dremio Cloud warning (AC-339), BigQuery's `client_email` read in the browser (AC-340), changed and new tiles marked in a review (AC-341), and a hidden same-named cube listed dimmed (AC-342). AC-343 holds every phase-2 surface to its design.*
+- Q: The phase-1 designs 01–07 were never approved, and 25 findings are still open. What should the cleanup cover? A: "Bugs and consistency only"
+  - *The re-check's broken flows and cross-screen inconsistencies are fixed. The editor's inspector and drawer are not rebuilt to phase-1 designs 01–02.*
+- Q: What order should the UI work take relative to the remaining xcube integration? A: "UI first (Recommended)"
+  - *The critical bugs first, then the data-source wizard and settings, then the rest of the UI, then T437 (RS256 keys, paused in a stash) and T347 (overlays).*
+
 **R32 — asked after T363's review** (2026-09-27; its cold review found rule 35 and the approved prototype at odds with AC-158's override)
 - Q: Test first, or allow "without a test"? Design rule 35 and the approved prototype say a new data source can't be made until its test passes. AC-158 and the task allow an explicit "without a test". Keep the override, or remove it?
   A: "test first, and dont save if test fails.. both in create new as well as edit.."

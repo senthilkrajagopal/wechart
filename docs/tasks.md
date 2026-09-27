@@ -7703,6 +7703,131 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
   - Failing test: `ha-load.spec.ts`: 20 opens of the 10-chart dashboard of T409, across two Cube instances with one deleted mid-run, render every tile with p95 ≤ 3,000 ms (AC-307, AC-319).
   - Depends on: T409, T423
 
+## P2.18 Applying the UI reviews of 2026-09-27 (`[R33]`)
+
+The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `ui-review.md`, with designs 01–10.
+- **The user's answers (R33):**
+  - all ten phase-2 designs are approved, proposals included (AC-338 … AC-343);
+  - phase 1 gets bugs and consistency only, and the editor and drawer are not rebuilt to phase-1 designs 01–02;
+  - UI first.
+- **The order:**
+  1. the critical and major bugs (T463–T465);
+  2. the data-source path (T471, T472, T462);
+  3. roles and the workspace (T331, T348);
+  4. the cross-screen patterns (T466–T470);
+  5. the other phase-2 surfaces as their tasks come (T473–T475, and T357, T358, T367, T369, T371 with their designs);
+  6. then T437 (RS256 keys, paused: `git stash list`, "T437 wip") and T347 (overlays).
+- **Every UI task:**
+  - is checked against its design with screenshots in Chrome, before its review;
+  - names the design and state it matches;
+  - for a phase-1 fix, names the finding id it closes (UX-0xx or UX-1xx), and for a phase-2 surface its design number and the UX-2xx findings.
+- **T437's migration** is set aside with the stash. When it resumes, it takes a timestamp later than any migration made meanwhile (node-pg-migrate refuses one out of order).
+
+### Bugs and consistency, phase 1 (R33: "Bugs and consistency only")
+
+- [ ] T463 (AC-126, AC-127) Never lead a dashboard-local chart's page to an editor that can't save
+  - Files: `packages/web/src/workspaces/explore/LibraryChartPage.tsx` (the chart page), `packages/web/src/editor/…` (the local chart's editor head), `e2e/chart-page.spec.ts`
+  - Failing test: `chart-page.spec.ts`:
+    - a dashboard-local chart's page says "Lives on ‹dashboard› · only there";
+    - its primary action is "Edit on ‹dashboard›", which opens that dashboard in edit mode with this tile's editor open, where Save saves it;
+    - beside it is "Save to folders…" (AC-127);
+    - the editor reached any other way shows the same two actions in place of "edit and save it there" (UX-040, critical; phase-1 design 06 item 1, as the bug's fix).
+  - Depends on: none
+- [ ] T464 (AC-201, AC-013) Keep a tile's title whole, moving its badges to the foot whenever the head can't hold both
+  - Files: `packages/web/src/tiles/badgePlace.ts`, `packages/web/src/tiles/Tile.tsx` (+ tests), `e2e/tile-head.spec.ts`
+  - Failing test: `tile-head.spec.ts`:
+    - on the KPI row, no tile title is cut while a badge sits in its head;
+    - tiles of one width place their badges alike;
+    - measured once fonts load, in view and edit mode (UX-104, UX-021; the user's answer "the head is the title's", question 29).
+  - Depends on: T402
+- [ ] T465 (AC-039) Colour a single series in the first palette colour and one category alike on every tile
+  - Files: `packages/charts/src/…` (series colours), `packages/web/src/dashboard/…` (the dashboard's assignment) (+ tests), `e2e/colours.spec.ts`
+  - Failing test:
+    - a single-series bar draws in the palette's first colour, never the "Other" grey `#b3b1ab`;
+    - a category is one colour on every tile of a dashboard;
+    - pie and donut labels follow the theme in dark (UX-103, UX-113).
+  - Depends on: none
+- [ ] T466 (AC-187) One page frame, one dialog pattern, control sizes by context, one date formatter, and the theme's own controls
+  - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/shell/{PageHead,Dialog,formatTime}.tsx|ts` (+ tests), every page and dialog that differs
+  - Failing test: `design-conformance.spec.ts`, measured on every page and dialog:
+    - 24 px gutters; a 20/600 title row with its note and primary action; one `.info-bar`;
+    - dialogs at 16/600 and 14 px, with Cancel beside one primary at the foot;
+    - controls 32/14 in forms and dialogs, 28/12 in panes and filter bars;
+    - `accent-color` and `color-scheme: dark` under the dark theme, with `.switch` for booleans;
+    - one date and time format, with the exact time in a tooltip;
+    - members by title in the palette and the query log (UX-106 … UX-111, UX-118, UX-090, UX-108, UX-102's parts that AC-220 covers, UX-013).
+  - Depends on: none
+- [ ] T467 (AC-036, AC-039, AC-042, AC-187) Fix the chart bugs the re-check found
+  - Files: `packages/charts/src/…`, `packages/web/src/editor/…` (+ tests)
+  - Failing test:
+    - a second metric on another scale is never drawn invisibly: its pill says "not drawn", with the reason, the value axis keeps its format, and Auto never picks a form that hides a metric (UX-057's bug);
+    - Table view and the drawer drop the ungranular time column when the granular one is shown (UX-023);
+    - year-like series are ordered by value (UX-116);
+    - category labels rotate or wrap before they are hidden (UX-117);
+    - the wells are disabled, saying "Choose a cube or view first", until one is chosen (UX-063).
+  - Depends on: none
+- [ ] T468 (AC-187) Edit mode: a new filter is selected with focus in its field picker, and edit heads show the element's kind
+  - Failing test: `dashboard-edit.spec.ts`: adding a filter selects it, shows Properties and focuses the field picker (UX-031); an edit-mode head reads "Chart · Area", never the freshness badge or Table view (UX-032).
+  - Depends on: none
+- [ ] T469 (AC-149, AC-187) Jobs: a row click selects and never navigates, and the query log names members by title
+  - Failing test: `jobs.spec.ts`: a row click selects it and docks its detail pane under the app bar; "Open in Model" deep-links to the file's pre-aggregation (UX-080, UX-081); the query log groups rows by day and names members by title (UX-082).
+  - Depends on: none
+- [ ] T470 (AC-187) The Model editor's tab strip fits its pane
+  - Failing test: `model-editor.spec.ts`: "Pre-aggs" and "Access" short labels and muted zero counts keep every tab in view at 1,440 px (UX-074).
+  - Depends on: none
+
+### Phase 2's surfaces, to their approved designs (AC-343)
+
+- [ ] T471 (AC-158, AC-159, AC-160, AC-282, AC-325, AC-339, AC-340, AC-343) Rebuild the new data source wizard as design 01's docked pane, with design 02's driver forms
+  - Files: `packages/web/src/workspaces/data-sources/{NewSourceWizard,ConnectionForm}.tsx` (+ tests), `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx`, `packages/web/src/workspaces/explore/ExplorePage.tsx`, `packages/web/src/shell/styles.ts`, `e2e/security/new-data-source.spec.ts`
+  - Failing test: the wizard in each of design 01's states and each of design 02's driver forms:
+    - a 480 px pane docked beside the list, fixed in height, with a step rail and Back · Cancel · primary pinned at the foot;
+    - type tiles with a mark, the name and the ways to sign in;
+    - the Connection step grouped where it connects → how it signs in → TLS, with switches and the CA box on request;
+    - Dremio Cloud or Software, and Oracle's connect string or host and service, asked first;
+    - TLS locked on for a client certificate, saying why;
+    - Next checks required fields;
+    - the Test step lists its four checks before running and opens a failure in place;
+    - the target folder as a tree;
+    - Esc asks before discarding typed work;
+    - the `http://` Dremio Cloud warning (AC-339);
+    - BigQuery's `client_email` shown from the pasted key, read in the browser (AC-340).
+    - The e2e's canary and test-first checks still pass (AC-325, AC-158).
+  - Depends on: T363, T461
+- [ ] T472 (AC-338) Mark each driver with its vendor's logo where its licence allows, else a monogram
+  - Files: `docs/research/driver-logos.md` (each vendor's trademark terms, with sources), `packages/web/src/workspaces/data-sources/driverMarks.tsx` (+ test)
+  - Failing test: `driverMarks.test.tsx`: each of the eight drivers shows the logo its research allows, or its monogram; none shows a logo the research doesn't clear (AC-338).
+  - Depends on: T471
+- [ ] T473 (AC-259, AC-260, AC-265, AC-267, AC-343) Redraw the Access panel as design 07
+  - Files: `packages/web/src/workspaces/explore/access/AccessPanel.tsx` (+ test), `e2e/security/access.spec.ts`
+  - Failing test: design 07's states:
+    - titled by the folder's path, with each list's help line;
+    - Add group inside each list, and pending changes marked Adding / Removing with Keep;
+    - Cancel and "Save n changes";
+    - the group suggestions, "Not set here. Inherits from …", the self-lockout question and the Undo toast.
+  - Depends on: T330
+- [ ] T474 (AC-165, AC-166, AC-295, AC-343) Security as design 08's three tabs, for Super-Admins only
+  - Files: `packages/web/src/workspaces/security/…` (+ tests), `e2e/security/security-page.spec.ts`
+  - Failing test: `security-page.spec.ts`:
+    - Policies, Preview as groups and Audit trail as tabs, Not found for anyone but Super-Admins;
+    - Preview as groups with its chips and persistent banner, replacing the JSON editor;
+    - Policies reworded for phase 2.
+    - The Audit trail tab is T369's, drawn to design 08.
+  - Depends on: T438, T369
+- [ ] T475 (AC-329, AC-342, AC-343) The cube picker as design 10: cubes on the item's path grouped by folder, and a hidden same-named cube dimmed
+  - Failing test: `picker.spec.ts`: the picker groups cubes by folder along the item's path, by title; a farther same-named cube is listed dimmed and unselectable, saying which folder's cube hides it (AC-342).
+  - Depends on: T429, T342
+- *The designs of the phase-2 tasks already planned:*
+  - T462: design 03 (a data source's settings);
+  - T331: design 09, and design 04's shared-folder and read-only states (UX-230, UX-231, UX-237);
+  - T348: design 04;
+  - T358, T351, T356: design 05, with AC-341's changed and new tiles in the review view;
+  - T357: design 06;
+  - T367: design 10's bookmarks;
+  - T369: design 08's Audit trail;
+  - T371: design 10's Jobs and Schedules.
+  Each adds AC-343 to its criteria and checks its surface against its design's states.
+
 ## Phase 2 coverage: acceptance criterion → task
 
 | AC | Tasks | AC | Tasks | AC | Tasks |
@@ -7754,5 +7879,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
 | ~~AC-331~~ (retired, `[R30]`) | ~~T430~~ | AC-332 | T433 | AC-333 | T419, T447, T449, T425, T420 |
 | AC-334 | T421, T447 | AC-335 | T446, T447 | AC-336 | T430, T449 |
 | AC-337 | T448 | AC-009 (again) | T426 | AC-189, AC-249 (again, folder items) | T450 |
+| AC-338 | T472 | AC-339 | T471 | AC-340 | T471 |
+| AC-341 | T356 | AC-342 | T475 | AC-343 | T471, T473, T474, T475, T462, T331, T348, T356, T357, T358, T367, T369, T371 |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.
