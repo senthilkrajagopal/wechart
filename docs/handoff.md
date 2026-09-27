@@ -141,26 +141,29 @@
 >     publish into another folder answers 409 until T341). Since: T452, T429, T428, T450 (search
 >     by short name and folder path; another folder's refusals said as that folder's; Schedules
 >     reads a folder rollup's key SQL), T341 (isolation, AC-274 ticked; run in all browsers).
->     T402 waits on question 27 (its badge change and test are in the tree, uncommitted).
+>     T402 waits on question 29 (its badge change and test are in the tree, uncommitted: MarkBadge.tsx,
+>     shell/styles.ts, ChartTile.tsx, e2e/markings.spec.ts).
 >     Then, outside slice 3: T401 (a box plot's "Computed from n of N rows", AC-315 ticked), T389
 >     (text-tile tokens, AC-116 ticked; tokens bind at publish and count as uses of their cube,
 >     and follow the dashboard's filters as the prototype's do), T398 (the country map, AC-305,
->     AC-313).
->     - **Deployed:** the docker-desktop release (Helm revision 22) runs wechart `714b152-t429`
->       (through T429) on the 3b image, the model in items mode, sign-in on; `verify.sh --no-install`
->       passes. Since: T452 (a folder's model files published as its items) and T429 (charts and
->       dashboards bound at publish; the picker by folder path).
+>     AC-313), T388 (the marked share: one more query per tile, the base answer kept, AC-104),
+>     T387 (the marked share drawn: an additive measure's marked part at the bar's foot, the rest
+>     faded; a non-additive one whole and hatched; "· Marked: X" in the tooltip; AC-097).
+>     - **Deployed:** the docker-desktop release (Helm revision 23) runs wechart `ca70362-t398`
+>       (through T398) on the 3b image, the model in items mode, sign-in on, at
+>       http://localhost:8089; every `verify.sh` check passed.
+>     - **Last complete run in every browser:** during T398. The next is due 10 tasks on.
 >     - **Asked with T429:** 25. With xcube unreachable, a chart or dashboard save in a folder xcube
 >       serves is refused (502), as a model publish is. Keep that, or store it unbound and bind it at
 >       the next save?
 >     - **Researched, not yet planned:** slice 4 (`xcube-slice-4.md`), slice 5
->       (`xcube-slice-5.md`, overlays). Slice 6 (connections) was researched, but its doc
->       couldn't be written here; the report is in the session's tool results (see the session's
->       last message to the user). cube-b4 says two points of `xcube-slice-5.md` are out of date
->       from `ed08180c37`: the overlay connections (L92-96) are committed there, and
->       `PUT …/overlays` takes `connections` (≤ 20; also `400 invalid_connection`,
->       `422 invalid_secret`, `409 older_instances`). Verify that in the overlay-data-sources
->       research before building on it.
+>       (`xcube-slice-5.md`, overlays), slice 6 (`xcube-slice-6.md`, connections), and the
+>       overlay's own data sources with the TLS binding at `ed08180c37`
+>       (`xcube-overlay-data-sources.md`). The last corrects slices 5 and 6 (its Corrections
+>       table): overlays take `connections` (≤ 20; `400 invalid_connection`, `422 invalid_secret`,
+>       `409 older_instances`), each overlay version with data sources gets its own orchestrator,
+>       and the v1 target keys include the TLS fields. Next: round R31 in requirements.md with
+>       the answers below, then spec, then tasks, pinning `ed08180c37`.
 >     - **Images published by xcube:** slice 4 `…-6d1e2e3ba1@sha256:8df2c818…`, slice 5
 >       `…-d26ff4238e@sha256:e1377e6d…`, slice 6 `…-fddc376f25@sha256:1c676ae2…` (without the TLS
 >       binding), `…-1249dda9ca@sha256:460c1ab1…` (with it, and slice 8), and
@@ -185,48 +188,27 @@
 >     - 26: no. AC-329 stays the picker's; the prefixed names elsewhere stay.
 >     - 27: (c), the freshness badge moves to a narrow tile's foot (T402).
 >     - These go into requirements.md (slices 4–6, and T402's direction) at the next gate pass.
->   - **Asked on 2026-09-26, not yet answered:**
->     18. Which xcube image to pin for slices 4–6: the TLS binding you chose exists only from
->         `1249dda9ca` on. `ed08180c37` has it too, with overlay data sources.
->     19. (cube-b4's question) A workspace copy of a data source can change its driver in a
->         preview, but landing it answers `409 driver_change`. Refuse it in the workspace, or
->         explain it at approval? The answer goes to `~/Work/xcube-exchange/to-xcube/`.
->     20. AC-161: xcube never removes the health rows of Cube instances that are gone. Until it
->         does, what should the UI show when stale rows are present?
->     21. AC-273, AC-310: xcube binds a data source only at publish. When a nearer `default` or
->         source appears on a cube's path, should wechart republish the cubes it would now bind
->         differently?
->     22. Dremio Cloud: require `https:` URLs (the token would travel in clear otherwise)?
+>   - **Asked on 2026-09-26, not yet answered** (18–22 and 24–27 are answered above):
 >     23. AC-193 (checked) says every Explore row has a rename and move menu; T334's model rows have
 >         none, a model being renamed in the model editor. Reword AC-193?
->     24. The slice 6 research doc: save it from the session's tool results (a one-line `cp`
->         offered to the user), since it couldn't be written here.
->     26. (T450's review) A folder's cube still shows by its prefixed name (`f<32 hex>__sales`)
->         in Jobs, Schedules, the tile's "Data as of", the Acceleration tab, Explore's "Built on"
->         column, the library chart page and dashboard properties. Its rollups' "Edit in Model"
->         links go to a file Model can't open. AC-329 covers only the picker. Widen it (or add a
->         criterion) to "every place that names a cube or rollup shows its title and folder
->         path", with a task for these places?
->     27. (T402, AC-201) A three-column KPI tile's head is too narrow for everything it holds.
->         - At 1440 px it has 212 px. The title needs 81; the marking badge can't go below
->           "■ 1 marked", 85 (rule 50); the freshness badge can't go below "● Live…", 64 (T250);
->           Table view takes 24 and the gaps 24.
->         - At 1280 px it has 172 px: the title and the badge alone need 174. The head keeps 90 px
->           clear for ↻ ✎ ⋯, where the prototype keeps 54.
->         - The badge's name now gives way first, down to nothing; the whole sentence stays its
->           tooltip and its text for a screen reader.
->         - Which gives way next?
->           - (a) As the prototype: ↻ moves into the ⋯ menu, a KPI has no Table view, and a
->             narrow head shows the freshness badge's icon alone (its words in the tooltip). The
->             title is then whole at both widths.
->           - (b) The marking badge reads "■ 1" in a narrow head, bending rule 50. The title is
->             whole at 1440 and "Order…" at 1280.
->           - (c) The freshness badge leaves a narrow tile's head for its foot.
->           - (d) The title is cut short once the badges can shrink no further. At 1280 it
->             disappears, so AC-201 would need rewording.
 >     28. (T398's review) Singapore is filled on the map, but it's sub-pixel in a small tile. Should
 >         tiny states get a marker (a dot at their label point) so they can be seen? That's the
 >         research's open question 2.
+>     29. (T402, after 27's answer (c)) The review found narrower heads than the two measured: a
+>         2-column tile at 1440 px has about 95 px, so "■ 1 marked" (85) and Table view leave the
+>         title nothing; 3-column tiles below about 1,250 px are the same. Letting the marking's
+>         name shrink away breaks AC-098 and the colour rules (dark-mode markings 1 and 4 are
+>         told apart for colour-blind readers only by the name).
+>         - (a) On narrow tiles the marking badge moves to the foot too, beside the freshness
+>           badge, whole ("■ Marking: 1 marked"); the head is the title's. AC-201 becomes "beside
+>           its title where the head has room, otherwise under the chart". **Recommended.**
+>         - (b) The badge stays in the head without its name ("■ 1 marked", as the prototype);
+>           AC-098 and the colour rule accept the name in the tooltip and screen-reader text only.
+>         - (c) As now: on the narrowest tiles the title can disappear; AC-201 reworded to allow it.
+>     30. (`xcube-overlay-data-sources.md`, open question 1, for T345) A data source created in a
+>         workspace under a published one's full name (same folder, same short name) replaces the
+>         published one in previews for published cubes too. Allow that, or keep replacing for
+>         copies only?
 > - **Pushing is the user's** (this session's push was refused by the permission classifier):
 >   `git push origin main feat/xcube --tags`.
 > - **Done since (2026-09-25, later):**
