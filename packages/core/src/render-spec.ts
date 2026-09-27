@@ -219,6 +219,13 @@ export interface ChartMarking {
    * marked, whatever its rows carry — its own filters are what chose them.
    */
   readonly whole?: boolean;
+  /**
+   * The marked share, where this tile's items are partly marked (T388,
+   * AC-104): its own query answered with the marking in its filters, since it
+   * doesn't group by a member the marking names. Its own rows, not a portion
+   * of these — a measure over a subset isn't a fraction of it over everything.
+   */
+  readonly share?: readonly Record<string, unknown>[];
 }
 
 export interface ChartHighlight {

@@ -387,7 +387,7 @@ Traces to: `[docs/inputs §10–13]`, `[R7]`, direction.md §7a, rules 43–55; 
       Fails when: a marking exceeds 1,000 stored items, or "Mark all" is refused.
 - [x] AC-103 WHEN a tile's cube or view cannot resolve every member of a marking's predicate, THE SYSTEM SHALL leave that tile unmarked and label it as not linked to that marking (direction.md rule 18 of §7a).
       Fails when: the tile shows a query error, or is silently left unbrushed with no label.
-- [ ] AC-104 WHEN a tile needs the marked share and the marking's members are not among its own groupings, THE SYSTEM SHALL obtain it with one additional query per tile and keep the unmarked result cached across marking changes (phase 2, `[R16]`).
+- [x] AC-104 WHEN a tile needs the marked share and the marking's members are not among its own groupings, THE SYSTEM SHALL obtain it with one additional query per tile and keep the unmarked result cached across marking changes (phase 2, `[R16]`).
       Fails when: more than one extra query per tile is issued for a marking change, or the base result is re-fetched when only the marking changed.
 - [x] AC-105 WHEN the same set of items is marked again, THE SYSTEM SHALL produce an identical Cube query to the previous time, so the result can be served from cache.
       Fails when: two identical markings produce different query JSON.

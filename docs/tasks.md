@@ -5838,9 +5838,32 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/charts/src/marks/partial.ts` (+ test)
   - Failing test: `partial.test.ts`: a partly marked sum draws the marked share from the baseline at full strength and fades the rest; an average or distinct count draws the whole item patterned, with marked and total values in the tooltip (AC-097).
   - Depends on: none
-- [ ] T388 [P] (AC-104) Obtain the marked share with one extra query per tile, keeping the base result cached
+- [x] T388 [P] (AC-104) Obtain the marked share with one extra query per tile, keeping the base result cached
   - Files and failing test: as T110 (above) (AC-104).
   - Depends on: none
+  - **Done 2026-09-26.** As built, not T110's files alone:
+    - `packages/web/src/query/markedShare.ts` (+ test) holds which tiles need a share and its filter;
+    - `packages/web/src/dashboard/DashboardView.tsx` asks each share through a second `FilteredCharts`, as the cross-highlight's share is asked;
+    - `packages/core/src/render-spec.ts` carries it as `ChartMarking.share`, for T387 to draw;
+    - `e2e/marked-share.spec.ts` counts the queries, where T110 planned a unit test.
+  - **What is asked:** a tile whose marking names a member it doesn't group by has its items partly marked, so its own query is asked once more with the marking's filter. Members are read as the tile's cube or view names them, and a box plot's "Each point is" counts as a grouping.
+    - Its own answer is never asked again, so it stays cached.
+    - The same marking again is the same query, and cached.
+  - **From the review:**
+    - The share is asked under the tile's own limit.
+    - It's drawn as the tile's type, and without Top N or a result limit, which would rank and cut it by its own values.
+    - It's carried only for the current marking once answered, never the last one's.
+    - It isn't carried where Cube would not join the marking's filter and left it off.
+    - A limited tile waiting on its marking isn't asked one.
+  - **Tests:**
+    - `markedShare.test.ts`;
+    - e2e `marked-share.spec.ts` against the real Cube, in Chrome, Firefox and Safari, three times each: the category tile asked once, then once per marking change, and not at all for a marking repeated; the status tile, grouped by the marked member, is asked no share.
+    - `perf/marking-update.spec.ts` (AC-175) passes again with the share's query, as T181's note asked.
+  - **AC-104 ticked** on those.
+  - **Left:**
+    - "Refresh now" refreshes a tile's own answer, not its share, as for the cross-highlight's.
+    - A time grouping coarser than the marked range (a year's bar, March marked) reads as wholly grouped and asks no share.
+    - A drilled tile is asked its undrilled chart's share.
 - [x] T389 [P] (AC-116) Render marking and measure tokens in text tiles
   - Files and failing test: as T122 (above) (AC-116).
   - Depends on: none

@@ -57,7 +57,8 @@ export function markFilterFrom(
  * for Cube to answer.
  */
 export function markFilterOn(
-  made: MarkFilter,
+  // Its filter and members alone: a marking's share asks the same (T388).
+  made: Pick<MarkFilter, 'filter' | 'members'>,
   reach: (member: string) => string | false | undefined,
 ): { readonly filter: CubeFilter } | { readonly unreached: string } {
   const names = new Map<string, string>();

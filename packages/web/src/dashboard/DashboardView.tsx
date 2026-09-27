@@ -55,6 +55,7 @@ import type { TileSize } from '../editor/PreviewFrame';
 import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
 import { DrillCrumb, type DrilledView } from './drill/DrillCrumb';
 import { loadTile } from '../query/loadTile';
+import { markedShareFilter, needsMarkedShare } from '../query/markedShare';
 import { SecurityPreview } from '../query/securityPreview';
 import { ChartTile, type ChartTileProps } from '../tiles/ChartTile';
 import { TileError } from '../tiles/TileError';
@@ -3187,6 +3188,81 @@ export function DashboardView({
   }, [markedSpecs, marks, reachOf, memberTitle]);
 
   /**
+   * Each marked tile's marked share, where its items are partly marked (T388,
+   * AC-104): a tile that doesn't group by a member its marking names is asked
+   * its own question once more, with the marking in its filters — one more
+   * query a marking change, and its own answer never asked again, so it stays
+   * cached. A tile the marking can't reach says so instead (AC-103).
+   */
+  const markedShareReached = useMemo(() => {
+    const asked: Record<string, ActiveFilter[]> = {};
+    for (const [chartId, shown] of Object.entries(markedSpecs ?? {})) {
+      if (notLinked[chartId] !== undefined) continue;
+      // A limited tile waiting on its marking draws no chart to share (T388's review).
+      if (limitedTiles.waiting[chartId] === true) continue;
+      const chart = drawn.documents?.[chartId]?.chart;
+      if (chart === undefined) continue;
+      const predicate = markingOf(marks, shown.markingId);
+      const reach = (member: string) => reachOf(member, chartId);
+      // Grouped as its query groups: a box plot's "Each point is" too.
+      const groupings = [
+        ...chart.wells.dimensions,
+        ...chart.wells.timeDimensions,
+        ...(chart.wells.eachPointIs === undefined ? [] : [chart.wells.eachPointIs]),
+      ];
+      if (!needsMarkedShare(groupings, predicate, reach)) continue;
+      const share = markedShareFilter(predicate, reach);
+      if (share === undefined || 'unreached' in share) continue;
+      asked[chartId] = [
+        ...(reached[chartId] ?? []),
+        {
+          filter: {
+            id: `marked-share:${shown.markingId}`,
+            widget: 'checkbox' as const,
+            member: markingMembers(predicate)[0] ?? '',
+          },
+          value: { kind: 'cube' as const, filter: share.filter, words: '' },
+        },
+      ];
+    }
+    return asked;
+  }, [markedSpecs, notLinked, limitedTiles.waiting, drawn.documents, marks, reached, reachOf]);
+  /**
+   * Each share asked as its tile's own answer was, less what would make its
+   * rows another chart's (T388's review): under the tile's own limit, drawn
+   * as the tile's type rather than one recommended from the share's rows,
+   * and with every item in it — Top N and a result limit rank and cut by the
+   * share's own values, which would leave its items not the tile's.
+   */
+  const markedShareLimits = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(limitedTiles.asked).filter(([chartId]) => chartId in markedShareReached),
+      ),
+    [limitedTiles.asked, markedShareReached],
+  );
+  const markedShareDocuments = useMemo(() => {
+    const documents: Record<string, ChartDocument> = {};
+    for (const chartId of Object.keys(markedShareReached)) {
+      const document = drawn.documents?.[chartId];
+      if (document === undefined) continue;
+      const options = { ...document.chart.options };
+      delete options['topN'];
+      delete options['rowLimit'];
+      const chartType = drawn.specs[chartId]?.chartType ?? document.chart.chartType;
+      documents[chartId] = {
+        ...document,
+        chart: { ...document.chart, options, ...(chartType === undefined ? {} : { chartType }) },
+      };
+    }
+    return documents;
+  }, [markedShareReached, drawn.documents, drawn.specs]);
+  const [markedShares, setMarkedShares] = useState<FilteredResults>({});
+  const onMarkedShares = useCallback((results: FilteredResults) => {
+    setMarkedShares((before) => keepLastAnswers(before, results));
+  }, []);
+
+  /**
    * What a limited tile shows instead of its chart (AC-109, AC-111), by
    * chart. A tile with marked data to show is not here: it draws the limited
    * answer like any other chart.
@@ -3296,13 +3372,32 @@ export function DashboardView({
       // A tile that cannot reach the marking's members draws none of it
       // (AC-103); its label says why.
       if (spec === undefined || notLinked[chartId] !== undefined) continue;
+      // Its marked share, where its items are partly marked (T388, AC-104),
+      // once asked for this marking and answered.
+      // Only this marking's own answer (T388's review): not the last one's
+      // while this one is asked, and not the tile's whole where Cube would not
+      // join the marking's filter to it and the filter was left off.
+      const answer = markedShareReached[chartId] === undefined ? undefined : markedShares[chartId];
+      const share =
+        answer === undefined ||
+        answer.asking ||
+        answer.unfiltered ||
+        answer.uncovered.some((id) => id.startsWith('marked-share:')) ||
+        answer.chart === undefined ||
+        !('spec' in answer.chart)
+          ? undefined
+          : answer.chart.spec.rows;
       specs[chartId] = {
         ...spec,
-        marking: { predicate: markingOf(marks, shown.markingId), colour: shown.colour },
+        marking: {
+          predicate: markingOf(marks, shown.markingId),
+          colour: shown.colour,
+          ...(share === undefined ? {} : { share }),
+        },
       };
     }
     return specs;
-  }, [withHighlights, markedSpecs, marks, notLinked]);
+  }, [withHighlights, markedSpecs, marks, notLinked, markedShareReached, markedShares]);
 
   // The assignment is held across renders, so a filter that hides a member
   // does not hand its colour to whoever is now first (AC-039).
@@ -4636,6 +4731,17 @@ export function DashboardView({
           reached={highlightReached}
           documents={drawn.documents}
           onResults={onHighlighted}
+          context={preview}
+        />
+      )}
+      {/* The marked share of each tile whose items are partly marked (T388,
+          AC-104): its own question, asked with the marking. */}
+      {Object.keys(markedShareReached).length === 0 ? null : (
+        <FilteredCharts
+          reached={markedShareReached}
+          limits={markedShareLimits}
+          documents={markedShareDocuments}
+          onResults={onMarkedShares}
           context={preview}
         />
       )}
