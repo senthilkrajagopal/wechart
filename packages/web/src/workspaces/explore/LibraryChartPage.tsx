@@ -369,6 +369,7 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
                 height={360}
                 asOf={drawn.data?.answered?.lastRefreshTime}
                 served={drawn.data?.answered}
+                rowsTotal={drawn.data?.answered?.total}
               />
             </div>
           )}

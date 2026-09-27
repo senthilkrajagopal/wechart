@@ -85,6 +85,13 @@ export interface ChartTileProps {
    */
   readonly served?: AnswerMeta | undefined;
   /**
+   * How many rows the chart's query has in all — Cube's `total`, which a box
+   * plot's query asks for (T401, AC-315) — for the tile to say when its rows
+   * were cut short. Apart from `served`: the editor's preview knows it, and
+   * shows no freshness badge (T401's review).
+   */
+  readonly rowsTotal?: number | undefined;
+  /**
    * The marked-items badge, in the header row beside the title (AC-201): the
    * prototype's `.mbadge`, rather than a line above that pushed the title down.
    */
@@ -176,6 +183,7 @@ export function ChartTile({
   title,
   asOf,
   served,
+  rowsTotal,
   onItemClick,
   onShapeMark,
   onAxisRange,
@@ -304,6 +312,15 @@ export function ChartTile({
         ) : null}
       </div>
       {notes}
+      {/* A box plot's rows cut at Cube's limit, said on the tile: its boxes
+          are drawn from what came, of the total Cube counted (T401, AC-315;
+          rule 89). */}
+      {spec.chartType === 'boxplot' && rowsTotal !== undefined && rowsTotal > spec.rows.length ? (
+        <StateLine kind="warn" className="tile-notes" testId="row-limit-warning">
+          Computed from {spec.rows.length.toLocaleString('en-US')} of{' '}
+          {rowsTotal.toLocaleString('en-US')} rows
+        </StateLine>
+      ) : null}
 
       {showingTable ? (
         // The same rows the chart drew, not a second query — the drawer at

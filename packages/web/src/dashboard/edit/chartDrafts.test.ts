@@ -113,6 +113,24 @@ describe('what the tiles draw', () => {
     expect(drawnWithDrafts(saved, dashboard)).toBe(saved);
   });
 
+  /**
+   * T401's review, AC-315: a drafted box plot's rows in all, as its draft's
+   * query was told them, so its tile can say its boxes were drawn from fewer —
+   * though nothing else of that answer is known here.
+   */
+  it('keeps each drafted chart’s rows in all, where its query asked', () => {
+    const drawn = drawnWithDrafts(
+      saved,
+      withDraft(
+        withDraft(dashboard, 'c1', { ...drawing('boxplot'), total: 50_100 }),
+        'c2',
+        drawing('line'),
+      ),
+    );
+
+    expect(drawn.totals).toEqual({ c1: 50_100 });
+  });
+
   it('keeps when every other chart’s data is from, and drops the drafted one’s', () => {
     /**
      * T154 / AC-148: a save with drafts writes this into the page's charts

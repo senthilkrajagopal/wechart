@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
 
 import { chooseChartType, expectChartType } from './chartType';
+import { ownCubeFile, PUBLISHED } from './model-files';
 import { wellPicker } from './wells';
 
 const API = 'http://localhost:4100';
@@ -51,6 +52,8 @@ test('a box plot of order amounts by status draws a box per status from the rows
     ungrouped: true,
     order: [],
     limit: 50_000,
+    // And all the rows' count, to tell when the limit cut them (T401).
+    total: true,
   });
 
   // A box per status on the category axis.
@@ -192,6 +195,7 @@ test('"Each point is" computes the measure once per its value within each catego
     filters: [{ member: 'orders.status', operator: 'equals', values: ['completed'] }],
     order: [],
     limit: 50_000,
+    total: true,
   });
   await expect(well.getByTestId('in-eachPointIs-orders.id')).toBeVisible();
   await box.hover();
@@ -231,4 +235,135 @@ test('"Each point is" computes the measure once per its value within each catego
   await expect(well).toContainText('Each row');
   await box.hover();
   await expect(result).toContainText(/n: 80\s*Minimum: \$72\.50?/);
+});
+
+/**
+ * T401 / AC-315: IF a box plot's data has more rows than Cube returns in one
+ * query, THEN THE SYSTEM SHALL draw the boxes from the rows returned and show
+ * "computed from _n_ of _N_ rows" on the tile.
+ * `Fails when: a box plot drawn from fewer rows than the data holds shows no
+ * such warning, or its counts differ from the rows used and the query's total.`
+ *
+ * Against the real Cube, which returns at most 50,000 rows to a query: a cube
+ * of this browser's own over 50,100 generated rows, on a dashboard tile and
+ * on its chart's page.
+ */
+test('a box plot past Cube’s row limit says it was computed from 50,000 of 50,100 rows', async ({
+  page,
+  request,
+}, testInfo) => {
+  const cube = `box_rows_${testInfo.project.name}`;
+  await ownCubeFile(
+    request,
+    cube,
+    [
+      'cubes:',
+      `  - name: ${cube}`,
+      "    sql: SELECT g AS id, 'g' || (g % 3) AS grp, g AS v FROM generate_series(1, 50100) AS g",
+      '    dimensions:',
+      '      - name: id',
+      '        sql: id',
+      '        type: number',
+      '        primary_key: true',
+      '      - name: grp',
+      '        sql: grp',
+      '        type: string',
+      '    measures:',
+      '      - name: v',
+      '        sql: v',
+      '        type: sum',
+      '',
+    ].join('\n'),
+  );
+  const title = `Box rows ${String(Date.now())}`;
+  const chart = (await (
+    await request.post(`${API}/api/documents`, {
+      data: { kind: 'chart', title, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  const saved = await request.put(`${API}/api/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        owner: 'admin',
+        chart: {
+          source: { cube },
+          wells: { measures: [`${cube}.v`], dimensions: [`${cube}.grp`], timeDimensions: [] },
+          chartType: 'boxplot',
+        },
+      },
+    },
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  const dashboard = (await (
+    await request.post(`${API}/api/documents`, {
+      data: { kind: 'dashboard', title, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  const placed = await request.put(`${API}/api/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        folderId: 'root',
+        owner: 'admin',
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [{ id: 'tile-box', kind: 'chart', w: 12, h: 40, chartId: chart.id }],
+          },
+        ],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+
+  // A box per group, drawn, and the warning with its icon.
+  await page.goto(`/explore/dashboards/${dashboard.id}`);
+  const tile = page.locator('[data-tile="tile-box"]');
+  const warning = tile.getByTestId('row-limit-warning');
+  await expect(warning).toHaveText('Computed from 50,000 of 50,100 rows', PUBLISHED);
+  await expect(warning.locator('svg[data-icon="warn"]')).toHaveCount(1);
+  for (const group of ['g0', 'g1', 'g2'])
+    await expect(
+      tile.locator('svg text').filter({ hasText: new RegExp(`^${group}$`) }),
+    ).toHaveCount(1);
+
+  // Edited over the dashboard (T401's review): said in the editor's preview,
+  // where box plots are built, and on the tile redrawn from the draft.
+  await page.getByTestId('edit-chart-tile-box').click();
+  const overlay = page.getByTestId('chart-editor-overlay');
+  await expect(overlay.getByTestId('row-limit-warning')).toHaveText(
+    'Computed from 50,000 of 50,100 rows',
+    PUBLISHED,
+  );
+  await overlay.getByRole('tab', { name: 'Customize' }).click();
+  await overlay
+    .getByRole('radiogroup', { name: 'Whiskers' })
+    .getByRole('radio', { name: 'Minimum and maximum' })
+    .click();
+  await page.getByTestId('editor-back').click();
+  await expect(overlay).toBeHidden();
+  await expect(tile.getByTestId('row-limit-warning')).toHaveText(
+    'Computed from 50,000 of 50,100 rows',
+    PUBLISHED,
+  );
+  await page
+    .getByRole('toolbar', { name: 'Dashboard editing' })
+    .getByRole('button', { name: /Discard/ })
+    .click();
+
+  // On its chart's page too, where the boxes are drawn from the rows used:
+  // a third of 50,000 each, the tooltip's n.
+  await page.goto(`/explore/charts/${chart.id}`);
+  const onPage = page.locator('.chart-page__tile');
+  await expect(onPage.getByTestId('row-limit-warning')).toHaveText(
+    'Computed from 50,000 of 50,100 rows',
+  );
+  await onPage.locator('svg path[fill="#fff"]').first().hover();
+  await expect(onPage).toContainText(/n: 16,66[67]/);
 });

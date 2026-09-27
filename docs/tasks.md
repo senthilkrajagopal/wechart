@@ -6051,10 +6051,26 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - an e2e check that the well is absent before the chart is a box plot;
       - no hidden "Each point is" written on other types;
       - a wrong comment.
-- [ ] T401 (AC-315) Say "computed from _n_ of _N_ rows" when a box plot's data passes Cube's row limit
-  - Files: `packages/web/src/tiles/ChartTile.tsx`, `packages/web/src/query/*` (`total: true` for box plots), `packages/web/src/tiles/RowLimitWarning.test.tsx`
+- [x] T401 (AC-315) Say "computed from _n_ of _N_ rows" when a box plot's data passes Cube's row limit
+  - Files: `packages/web/src/tiles/ChartTile.tsx`, ~~`packages/web/src/query/*`~~ (as built) `packages/core/src/chart-spec.ts` (`total: true` for box plots) and `packages/web/src/query/answerMeta.ts`, `packages/web/src/tiles/RowLimitWarning.test.tsx`; from the review, `packages/web/src/editor/ChartEditor.tsx`, `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, `packages/web/src/dashboard/{DashboardView.tsx,edit/chartDrafts.ts,edit/ChartEditorOverlay.tsx,model/document.ts}`, and `e2e/boxplot.spec.ts`
   - Failing test: `RowLimitWarning.test.tsx`: a box plot whose query's total exceeds the rows returned shows "Computed from _n_ of _N_ rows" with the warning icon, and none when they're equal (AC-315; rule 89).
   - Depends on: T399
+  - **Done 2026-09-26.**
+    - A box plot's query asks Cube for `total: true`, the row count as if there were no limit (research `box-plot.md`, "Very large facts").
+    - The tile takes that count as `rowsTotal`, a prop of its own, apart from `served`. The review found the editor's preview withholds `served` (it shows no freshness badge), so the warning never showed where box plots are built. It shows there now.
+    - A tile redrawn from an unsaved draft keeps its draft's total (`ChartDraft.total`, `Drawn.totals`), which the dashboard otherwise deleted with the draft's answer.
+    - Where it shows: a dashboard tile, filtered or not; the library chart page; the chart editor, alone or over a dashboard; a drafted tile. _n_ is the rows the boxes are drawn from (the spec's), _N_ Cube's `total`.
+    - **Tests:**
+      - `chart-spec.test.ts` (`total: true`);
+      - `RowLimitWarning.test.tsx` (the text and icon; _n_ as the rows drawn; none when equal, for other types or with no total);
+      - `chartDrafts.test.ts` (a draft's total kept);
+      - e2e `boxplot.spec.ts`, against the real Cube, which returns at most 50,000 rows: a 50,100-row cube reads "Computed from 50,000 of 50,100 rows" on a dashboard tile, in the editor over it, on the tile redrawn from the draft, and on the chart's page, where each of the three boxes has n 16,666 or 16,667.
+    - **AC-315 ticked** on those.
+    - **Left, from the review:**
+      - A Result limit below the rows returned also says "Computed from 100 of 1,000 rows": true, and rule 89's "fewer rows than its data holds", though outside AC-315's trigger.
+      - A row whose value is empty counts in _n_ but draws in no box; the tooltips' n add up to less.
+      - Cube #11973 (`total: true` failing when the count query returns no row) is open (`upgrade-1.7.43.md`). Postgres always returns a count row; the other R4 warehouses are unverified.
+      - "Make a local copy" from the editor doesn't carry the draft's total.
 
 ## P2.14 The UI fixes (F21–F23, returned)
 

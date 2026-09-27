@@ -680,6 +680,9 @@ export function ChartEditor({
                         })
                       }
                       {...(chartHeight === undefined ? {} : { height: chartHeight })}
+                      // A box plot's rows cut at Cube's limit, said here too,
+                      // where box plots are built (T401's review, AC-315).
+                      rowsTotal={served.total}
                       // Held here, not in the tile: the tile unmounts whenever
                       // the query re-runs, so a field change would flip the
                       // reader back from the table to the chart (AC-178).

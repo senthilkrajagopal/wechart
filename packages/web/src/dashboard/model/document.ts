@@ -232,6 +232,11 @@ export interface ChartDraft {
   readonly document: ChartDocument;
   readonly drawn: { readonly spec: RenderSpec } | { readonly error: unknown };
   /**
+   * Its rows in all, where its query asked Cube for them — a box plot's does
+   * — so its tile can say its boxes were drawn from fewer (T401's review).
+   */
+  readonly total?: number;
+  /**
    * The version the chart was read at from the server — kept through every
    * reopening of the draft, because it is what the write is checked against
    * (T192): a chart changed by someone else meanwhile is refused, not

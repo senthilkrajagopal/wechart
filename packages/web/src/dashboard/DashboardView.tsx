@@ -525,8 +525,11 @@ function TileBody({
   onTableViewChange,
   memberTitle,
   notes,
+  rowsTotal,
 }: {
   tile: Tile;
+  /** A drafted box plot's rows in all, from its draft (T401's review, AC-315). */
+  rowsTotal?: number | undefined;
   /** What the tile says of its answer, drawn under its head (T253's review). */
   notes?: readonly ReactNode[] | undefined;
   /** A member's title from the model, for what the tile says of one (AC-220). */
@@ -713,6 +716,8 @@ function TileBody({
           title={title}
           asOf={answered?.lastRefreshTime}
           served={answered}
+          // A drafted chart's from its draft, whose answer is not otherwise known (T401's review).
+          rowsTotal={answered?.total ?? rowsTotal}
           badge={badge}
           {...(tableView === undefined ? {} : { tableView })}
           {...(onTableViewChange === undefined ? {} : { onTableViewChange })}
@@ -868,6 +873,8 @@ interface TileCharts {
    * here — it draws its limited answer like any other chart.
    */
   readonly limitedStates?: Readonly<Record<string, LimitedState>> | undefined;
+  /** Each drafted chart's rows in all, where its query asked (T401's review, AC-315). */
+  readonly draftTotals?: Readonly<Record<string, number>> | undefined;
   /** The marking a tile shows, its colour and how many items it holds (AC-098). */
   readonly markingOn?:
     | ((tileId: string) =>
@@ -1485,6 +1492,7 @@ function Elements({
               carried={charts.carried}
               title={charts.titleOf?.(chartId)}
               memberTitle={charts.memberTitle}
+              rowsTotal={drill === undefined ? charts.draftTotals?.[chartId] : undefined}
               // A drilled view's own answer, so its own freshness (AC-238).
               answered={drill === undefined ? charts.answered?.[chartId] : drill.answered}
               limited={drill === undefined ? charts.limitedStates?.[chartId] : undefined}
@@ -3895,6 +3903,7 @@ export function DashboardView({
     typeOf: (chartId: string) => drawn.documents?.[chartId]?.chart.chartType,
     documented: (chartId: string) => drawn.documents?.[chartId] !== undefined,
     answered: withFiltered.answered,
+    draftTotals: drawn.totals,
     ...(onRefresh === undefined ? {} : { onRefresh: refreshTile }),
     refreshedFromRollup,
     onDismissRollupNote: (chartId: string) => {

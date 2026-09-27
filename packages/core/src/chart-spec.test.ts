@@ -128,8 +128,23 @@ describe('a box plot’s query', () => {
       ungrouped: true,
       order: [],
       limit: BOX_PLOT_ROW_LIMIT,
+      total: true,
     });
     expect(BOX_PLOT_ROW_LIMIT).toBe(50_000);
+  });
+
+  /**
+   * T401 (AC-315): IF a box plot's data has more rows than Cube returns in one
+   * query, THEN THE SYSTEM SHALL … show "computed from _n_ of _N_ rows". Cube
+   * truncates without a word; `total: true` has it count the rows as if there
+   * were no limit (research/box-plot.md, "Very large facts").
+   */
+  it('asks Cube for its whole row count, to tell when the limit cut the rows', () => {
+    let spec = addToWell(emptySpec('orders'), 'measures', 'orders.amount');
+    spec = addToWell(spec, 'dimensions', 'orders.status');
+
+    expect(toCubeQuery({ ...spec, chartType: 'boxplot' })['total']).toBe(true);
+    expect(toCubeQuery({ ...spec, chartType: 'bar' })).not.toHaveProperty('total');
   });
 
   /**
@@ -148,6 +163,7 @@ describe('a box plot’s query', () => {
       dimensions: ['customers.name', 'orders.status'],
       order: [],
       limit: BOX_PLOT_ROW_LIMIT,
+      total: true,
     });
   });
 
@@ -166,6 +182,7 @@ describe('a box plot’s query', () => {
       dimensions: ['customers.name', 'orders.status'],
       order: [],
       limit: BOX_PLOT_ROW_LIMIT,
+      total: true,
     });
   });
 

@@ -10,15 +10,22 @@
 export interface AnswerMeta {
   readonly lastRefreshTime?: string;
   readonly usedPreAggregations?: Readonly<Record<string, unknown>>;
+  /**
+   * How many rows the query has, as if it had no limit — `total`, where the
+   * query asked for it, as a box plot's does (T401, AC-315).
+   */
+  readonly total?: number;
 }
 
 export function answerMetaOf(result: unknown): AnswerMeta {
   if (typeof result !== 'object' || result === null) return {};
-  const { lastRefreshTime, usedPreAggregations } = result as {
+  const { lastRefreshTime, usedPreAggregations, total } = result as {
     lastRefreshTime?: unknown;
     usedPreAggregations?: unknown;
+    total?: unknown;
   };
   return {
+    ...(typeof total === 'number' && Number.isFinite(total) ? { total } : {}),
     ...(typeof lastRefreshTime === 'string' ? { lastRefreshTime } : {}),
     ...(typeof usedPreAggregations === 'object' && usedPreAggregations !== null
       ? { usedPreAggregations: usedPreAggregations as Record<string, unknown> }

@@ -1,3 +1,4 @@
+import type { ChartDocument } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
@@ -64,10 +65,24 @@ export interface ChartEditorOverlayProps {
   readonly urlTile?: string | undefined;
 }
 
-/** Runs a chart's query for its draft — exactly as a dashboard tile runs it. */
-async function loadRows(query: Record<string, unknown>) {
-  const result = (await loadTile({ query })) as { data?: Record<string, unknown>[] };
-  return result.data ?? [];
+/**
+ * A chart drawn for its draft — its query run exactly as a dashboard tile
+ * runs it — with its rows' total where the query asked for one (T401's
+ * review): a box plot's tile says when its boxes were drawn from fewer.
+ */
+async function drawnForDraft(
+  edited: ChartDocument,
+): Promise<{ drawn: ChartDraft['drawn']; total?: number }> {
+  let total: number | undefined;
+  const drawn = await tileChartOf(edited, async (query) => {
+    const result = (await loadTile({ query })) as {
+      data?: Record<string, unknown>[];
+      total?: unknown;
+    };
+    total = typeof result.total === 'number' ? result.total : undefined;
+    return result.data ?? [];
+  });
+  return { drawn, ...(total === undefined ? {} : { total }) };
 }
 
 /**
@@ -189,9 +204,14 @@ export function ChartEditorOverlay({
       const edited = chartDocumentWith(opened.document, state);
       // Drawn by the very function every tile uses, so an emptied chart reads
       // "no fields yet" rather than the tile keeping its old chart.
-      const drawn = await tileChartOf(edited, loadRows);
+      const { drawn, total } = await drawnForDraft(edited);
       // And what it was drawn as recorded, for Explore to name it by (AC-193).
-      then({ document: withDrawnAs(edited, drawn), drawn, version: opened.version });
+      then({
+        document: withDrawnAs(edited, drawn),
+        drawn,
+        version: opened.version,
+        ...(total === undefined ? {} : { total }),
+      });
     },
     [opened],
   );
@@ -216,7 +236,7 @@ export function ChartEditorOverlay({
     setApplying(true);
     try {
       const edited = chartDocumentWith(opened.document, latest.current ?? opened.state);
-      const drawn = await tileChartOf(edited, loadRows);
+      const { drawn } = await drawnForDraft(edited);
       setCopied(true);
       onMakeLocalCopy({ document: withDrawnAs(edited, drawn), drawn });
     } finally {

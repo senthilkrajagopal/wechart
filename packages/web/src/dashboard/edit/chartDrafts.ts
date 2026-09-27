@@ -47,6 +47,11 @@ export interface Drawn {
   readonly documents?: Readonly<Record<string, ChartDocument>> | undefined;
   /** What Cube said of each chart's answer: when from, and from what (T154, T014). */
   readonly answered?: Readonly<Record<string, AnswerMeta>> | undefined;
+  /**
+   * Each drafted chart's rows in all, where its draft's query asked Cube for
+   * them (T401's review, AC-315): of its answer, only that is known here.
+   */
+  readonly totals?: Readonly<Record<string, number>> | undefined;
 }
 
 /**
@@ -73,9 +78,11 @@ export function drawnWithDrafts(saved: Drawn, dashboard: DashboardDocument): Dra
   // A drafted chart's answer came from the editor: what Cube said of it is
   // not known here.
   const answered: Record<string, AnswerMeta> = { ...saved.answered };
+  const totals: Record<string, number> = {};
   for (const [chartId, draft] of Object.entries(drafts)) {
     documents[chartId] = draft.document;
     delete answered[chartId];
+    if (draft.total !== undefined) totals[chartId] = draft.total;
     if ('spec' in draft.drawn) {
       specs[chartId] = draft.drawn.spec;
       delete errors[chartId];
@@ -84,7 +91,7 @@ export function drawnWithDrafts(saved: Drawn, dashboard: DashboardDocument): Dra
       delete specs[chartId];
     }
   }
-  return { specs, errors, documents, answered };
+  return { specs, errors, documents, answered, totals };
 }
 
 /**

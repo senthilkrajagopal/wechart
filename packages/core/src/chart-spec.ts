@@ -139,6 +139,9 @@ export function toCubeQuery(spec: ChartSpec): Record<string, unknown> {
       ...(grain === undefined ? { ungrouped: true } : {}),
       order: [],
       limit: BOX_PLOT_ROW_LIMIT,
+      // Cube cuts rows at the limit without a word: its count of them all,
+      // as if there were none, says when it has (T401, AC-315).
+      total: true,
     };
   }
 
