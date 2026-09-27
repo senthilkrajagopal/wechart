@@ -5895,8 +5895,29 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - AC-282's model half is T347's.
       - AC-325 has no test that reads the API's log.
     - Files, beyond those listed: `packages/api/src/repos/connection-tests.ts`, the migration `1758370000000_connection-test-trials.cjs`, `packages/web/src/workspaces/explore/{ExplorePage,CreateMenu}.tsx`, `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/security/new-data-source.spec.ts` and `e2e/security/fixtures.ts`.
-- [ ] T461 (AC-269, AC-161, AC-163, AC-310, AC-158) Open a stored data source in its settings, from Explore and from Data sources, and save a change only after a passing test *(added 2026-09-27, split from T363; no override, R32)*
-  - Files: `packages/web/src/workspaces/data-sources/{SourceSettings,TestHistory}.tsx` (+ tests), `packages/web/src/router/routes.tsx`, `packages/api/src/routes/data-sources.ts`, `e2e/security/data-sources.spec.ts`
+- [x] T461 (AC-158, AC-163) Save a change to a data source's connection only once a test of that change passed *(added 2026-09-27, split from T363; no override, R32; re-split 2026-09-27: the settings page is T462, built to the phase-2 design review)*
+  - Files: `packages/api/src/routes/data-sources.ts`, `packages/api/src/repos/connection-tests.ts`, `packages/api/src/repos/data-sources.ts`, `packages/api/src/access/data-sources.test.ts`
+  - Failing test: `access/data-sources.test.ts`:
+    - `POST /api/data-sources/:id/test` answers the test's id;
+    - `PUT /api/data-sources/:id` that changes the sign-in method, a field or a secret is saved only when it names a test of this source, of exactly that change and the stored version, that passed and was run by the same user. Otherwise it answers 422 and changes nothing. There is no override (AC-158; rule 23; R32);
+    - a rename alone needs no test;
+    - one test saves one change;
+    - the test becomes the source's health for its new settings (AC-163, AC-157).
+  - Depends on: T363
+  - *As built (2026-09-27):*
+    - A stored one's test of a change is kept under the change's print: the driver, sign-in method, fields, new envelopes and the stored version. It answers its id.
+    - A save that changes the sign-in method, a field or a secret takes that test in one statement (`claimChange`): of this source, passed, by the same user, not taken before. It saves only over the version the test was of (`update`'s `expectedVersion`, 409 otherwise), so two saves never mix into settings nobody tested. A refused save gives the test back.
+    - The saved change's test becomes a test of the stored settings. The listing prefers the newest test of the settings as they are now.
+    - From the review:
+      - two overlapping saves could store untested settings: now each saves over its version or is refused;
+      - the health could point at an older test: fixed;
+      - missing tests for another user's test, another source's test, a sign-in method change, the one-time claim, a retry after a refused save, and `current: false`: added.
+    - Tests: `access/data-sources.test.ts`, "a change to its connection saved only from its passing test" (7).
+    - AC-158 ticked:
+      - its create half by T363's "a new one made only from its passing test" and `e2e/security/new-data-source.spec.ts`;
+      - its edit half by this task's tests.
+- [ ] T462 (AC-269, AC-161, AC-163, AC-310) Open a stored data source in its settings, from Explore and from Data sources *(added 2026-09-27, split from T461; built to `docs/design/reviews/2026-09-27/designs/` once the user approves them)*
+  - Files: `packages/web/src/workspaces/data-sources/{SourceSettings,TestHistory}.tsx` (+ tests), `packages/web/src/router/routes.tsx`, `e2e/security/data-sources.spec.ts`
   - Failing test: `data-sources.spec.ts`:
     - a data source's row in Explore and in Data sources opens its settings under its folder's breadcrumb, read-only where the user may not change it (rule 70);
     - its type is shown fixed, saying to make a new data source for another type (AC-161);
@@ -5904,8 +5925,8 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - its test history is listed newest first, each test with its time, who ran it, its outcome and each check (AC-163);
     - T365's `CubeState` is shown (AC-161's showing half);
     - the root's `default` opens and changes like any other (AC-310);
-    - a change to its connection is saved only once a test of that change passed, as a create is, with no override (AC-158; rule 23; R32). A rename alone needs no test.
-  - Depends on: T363, T365
+    - Save is offered only once the Test of the change has passed (T461's rule).
+  - Depends on: T461, T365
 - [x] T364 (AC-157, AC-233) List every visible data source with its folder, driver and health *(2026-09-27: the cubes using each moved to T459; its AC-001 clause is T331's; its AC-161 showing is T363's)*
   - Files: `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (replacing the deferred page), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`), `e2e/security/data-sources.spec.ts`; *as built (2026-09-27):* also `DataSourcesList.tsx` (+ test), `router/routes.tsx`, `admin/DeferredPage.tsx` (removed), `shell/styles.ts`, `shell/AccountMenu.tsx` (`Me.readWrite`), `packages/api/src/server.ts` (the listing's rule and paths; `/api/me`'s `readWrite`), `repos/connection-tests.ts` (`latestAsStored`, a test's `settings`), `repos/data-sources.ts` (`settingsPrint`), a migration `â€¦_connection-test-settings.cjs`, `access/data-sources.test.ts`, `e2e/admin.spec.ts`
   - Failing test: `data-sources.spec.ts`: the page shows its title and note, lists every source the user may see with folder path, driver, health from the last test ~~and the cubes using it~~, and none they may not; `/sources` opens it~~; `reader` has no Data sources entry~~ (AC-157, AC-233~~, AC-001~~).
@@ -7660,7 +7681,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362â€
 | AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |
 | AC-154 | T377 | AC-155 | T379 | AC-157 | T364, T459 |
 | AC-158 | T363, T461 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
-| AC-161 | T335, T363, T365, T435, T442, T461 | AC-163 | T362, T363, T461 | AC-164 | T335 |
+| AC-161 | T335, T363, T365, T435, T442, T462 | AC-163 | T362, T363, T461, T462 | AC-164 | T335 |
 | AC-176 | T405 | AC-180 | T407 | AC-187 | T406 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
@@ -7671,7 +7692,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362â€
 | AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327, T334, T335 |
 | AC-263 | T313, T326, T334, T335, T436 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371 |
 | AC-266 | T326, T340, T334 | AC-267 | T328, T334, T335, T343, T408 | AC-268 | T340, T408 |
-| AC-269 | T334, T335, T461 | AC-270 | T336 | AC-271 | T336, T452 |
+| AC-269 | T334, T335, T462 | AC-270 | T336 | AC-271 | T336, T452 |
 | AC-272 | ~~T337, T339, T340~~ T429, T457 | AC-273 | ~~T338~~ T435 | AC-274 | T341 |
 | AC-275 | ~~T337, T352~~ T428 | AC-276 | T343 | AC-277 | T343 |
 | AC-278 | T344, T348 | AC-279 | T344 | AC-280 | T346, T347 |
@@ -7684,7 +7705,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362â€
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
 | AC-305 | T398 | AC-306 | T399 | AC-307 | T409, T444 |
-| AC-308 | T410 | ~~AC-309~~ | retired 2026-09-25 (was T337) | AC-310 | ~~T338~~ T435, T443, T461 |
+| AC-308 | T410 | ~~AC-309~~ | retired 2026-09-25 (was T337) | AC-310 | ~~T338~~ T435, T443, T462 |
 | ~~AC-311~~ | retired 2026-09-25 (T333 now serves AC-324) | AC-312 | T335, T454, T361 | AC-313 | T397, T398 |
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
 | AC-317 | T412 | AC-318 | T416 | AC-139 | T413, T417 |

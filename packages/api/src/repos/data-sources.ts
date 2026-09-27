@@ -106,6 +106,13 @@ export class DataSourceRefused extends Error {
   }
 }
 
+/** A save made over a version since changed (T461's review): read it again. */
+const changedSince = () =>
+  new DataSourceRefused(
+    409,
+    'This data source changed since you opened it: open it again, and test your change on what it is now.',
+  );
+
 /** A data source's envelopes and their revisions, as stored: for xcube alone, never the browser. */
 export interface Landed {
   readonly sealed: Readonly<Record<string, SealedV1>>;
@@ -140,7 +147,16 @@ export interface DataSourceStore {
   plan(id: string, change: DataSourceChange): Promise<PlannedChange>;
   /** A new one's driver, sign-in, fields and envelopes, checked as its save would (T361). */
   checkShape(shape: Omit<NewDataSource, 'folderId' | 'name'>): void;
-  update(id: string, change: DataSourceChange, landing?: Landing): Promise<DataSource>;
+  /**
+   * Saves a change, over `expectedVersion` when given (its current one if
+   * not), or refuses with 409 when the source has moved on (T461's review).
+   */
+  update(
+    id: string,
+    change: DataSourceChange,
+    landing?: Landing,
+    expectedVersion?: number,
+  ): Promise<DataSource>;
   /** Removed from xcube first, where `unland` is given: its refusal keeps it. */
   remove(
     id: string,
@@ -393,8 +409,12 @@ export function dataSourceStore(
       return { current, name, authMethod, fields, sealed, kept };
     },
 
-    async update(id, change, landing) {
+    async update(id, change, landing, expectedVersion) {
       const { current, name, authMethod, fields, sealed, kept } = await store.plan(id, change);
+      // Saved over the version it was checked against, or not at all (T461's
+      // review): a change tested at one version must not land on another.
+      const at = expectedVersion ?? current.version;
+      if (current.version !== at) throw changedSince();
       // Renamed: the old name's connection goes first, refused while cubes
       // use it, and is put back should the save then fail (T442's review).
       const renamed = name !== current.name && landing?.unland !== undefined;
@@ -402,7 +422,7 @@ export function dataSourceStore(
       if (renamed) await landing.unland!(current);
       try {
         await db.transaction().execute(async (tx) => {
-          await tx
+          const written = await tx
             .updateTable('data_sources')
             .set((eb) => ({
               name,
@@ -412,7 +432,9 @@ export function dataSourceStore(
               updated_at: new Date(),
             }))
             .where('id', '=', id)
-            .execute();
+            .where('version', '=', at)
+            .executeTakeFirst();
+          if (written.numUpdatedRows !== 1n) throw changedSince();
           const stale = current.secrets.filter((field) => !kept.includes(field));
           if (stale.length > 0)
             await tx

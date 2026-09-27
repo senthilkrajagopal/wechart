@@ -144,6 +144,26 @@ const UNTESTED = {
     'Test its connection first: a data source is made only from a test of exactly its settings that passed.',
 };
 
+/**
+ * A change to a stored one, as a print (T461, AC-158): what its test tried,
+ * the new envelopes included, and the stored version it changes, so a test
+ * made before another save no longer saves.
+ */
+const changePrintOf = (
+  source: DataSource,
+  plan: {
+    authMethod: string;
+    fields: Readonly<Record<string, FieldValue>>;
+    sealed: Readonly<Record<string, SealedV1>>;
+  },
+) =>
+  `${trialPrintOf({ driver: source.driver, authMethod: plan.authMethod, fields: plan.fields, sealed: plan.sealed })}:v${String(source.version)}`;
+
+const UNTESTED_CHANGE = {
+  error:
+    'Test the change first: a data source’s connection changes only when a test of exactly that change passed.',
+};
+
 export function registerDataSources(
   app: FastifyInstance,
   {
@@ -273,7 +293,10 @@ export function registerDataSources(
     const latest =
       tests === undefined
         ? new Map<string, ConnectionTest>()
-        : await tests.latestAsStored(visible.map((source) => source.id));
+        : await tests.latestAsStored(
+            visible.map((source) => source.id),
+            new Map(visible.map((source) => [source.id, source.settingsPrint])),
+          );
     return visible.map((source) => {
       const test = latest.get(source.id);
       return {
@@ -463,18 +486,26 @@ export function registerDataSources(
           plan.authMethod === source.authMethod &&
           Object.keys(plan.sealed).length === 0 &&
           sameFields(plan.fields, source.fields);
-        await tests
-          .record(source.id, {
-            ok: answer.ok,
-            checks: answer.checks,
-            fields: plan.fields,
-            asStored,
-            settings: asStored ? source.settingsPrint : null,
-            by: user === null ? null : { key: user.key, name: user.name },
-          })
+        // A test of a change is kept under its print, which the save of that
+        // change names (T461, AC-158).
+        const keptTest = await tests
+          .record(
+            source.id,
+            {
+              ok: answer.ok,
+              checks: answer.checks,
+              fields: plan.fields,
+              asStored,
+              settings: asStored ? source.settingsPrint : null,
+              by: user === null ? null : { key: user.key, name: user.name },
+            },
+            asStored ? undefined : changePrintOf(source, plan),
+          )
           .catch((error: unknown) => {
             request.log.warn({ err: error }, 'could not keep a connection test in its history');
+            return undefined;
           });
+        if (keptTest !== undefined) return { ...answer, testId: keptTest.id };
       }
       return answer;
     } catch (failure) {
@@ -651,11 +682,63 @@ export function registerDataSources(
       const clash = await clashIn(source.targetFolderId, change.name);
       if (clash !== undefined) return reply.status(409).send(clash);
     }
+    /**
+     * A change to where or how it connects is saved only from a test of
+     * exactly that change, of this version, that passed and was run by the
+     * one saving it: never without (T461, AC-158; rule 23; R32). A rename
+     * needs none. A change of type is refused by the store, whatever else.
+     */
+    const retyped = change.driver !== undefined && change.driver !== source.driver;
+    const connects =
+      !retyped &&
+      ((change.authMethod !== undefined && change.authMethod !== source.authMethod) ||
+        (change.fields !== undefined && !sameFields(change.fields, source.fields)) ||
+        (change.sealed !== undefined && Object.keys(change.sealed).length > 0));
+    let taken: { testId: string; print: string } | undefined;
+    if (connects) {
+      let print: string;
+      try {
+        print = changePrintOf(
+          source,
+          await store.plan(source.id, {
+            ...(change.authMethod === undefined ? {} : { authMethod: change.authMethod }),
+            ...(change.fields === undefined ? {} : { fields: change.fields }),
+            ...(change.sealed === undefined ? {} : { sealed: change.sealed }),
+          }),
+        );
+      } catch (failure) {
+        return refused(reply, failure);
+      }
+      const testId = typeof value['testId'] === 'string' ? value['testId'] : undefined;
+      const byKey = request.wechartUser?.key ?? null;
+      if (
+        testId === undefined ||
+        tests === undefined ||
+        !(await tests.claimChange(source.id, testId, print, byKey))
+      )
+        return reply.status(422).send(UNTESTED_CHANGE);
+      taken = { testId, print };
+    }
     try {
-      return viewOf(
-        await store.update(source.id, change, workspaced ? {} : await landingIn(source.folderId)),
+      // Over the version its test was of, or refused (T461's review): two
+      // saves never mix into settings nobody tested.
+      const updated = await store.update(
+        source.id,
+        change,
+        workspaced ? {} : await landingIn(source.folderId),
+        source.version,
       );
+      // The test it was saved from is its health now (AC-163, AC-157).
+      if (taken !== undefined)
+        await tests!
+          .adoptChange(source.id, taken.testId, updated.settingsPrint)
+          .catch((error: unknown) => {
+            request.log.warn({ err: error }, 'could not keep its test as its health');
+          });
+      return viewOf(updated);
     } catch (failure) {
+      if (taken !== undefined)
+        await tests!.releaseChange(source.id, taken.testId, taken.print).catch(() => undefined);
       return refused(reply, failure);
     }
   });

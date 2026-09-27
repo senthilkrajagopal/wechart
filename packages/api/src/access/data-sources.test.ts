@@ -457,14 +457,21 @@ describe('a save landing in xcube first (T442, AC-327)', () => {
       });
 
       const id = taken.json<{ id: string }>().id;
+      // A change to its connection, saved from its passing test (T461).
+      const change = {
+        fields: { host: 'db', port: 5432, database: 'other', user: 'cube', ssl: true },
+      };
+      const changeTest = await open.inject({
+        method: 'POST',
+        url: `/api/data-sources/${id}/test`,
+        payload: change,
+      });
       expect(
         (
           await open.inject({
             method: 'PUT',
             url: `/api/data-sources/${id}`,
-            payload: {
-              fields: { host: 'db', port: 5432, database: 'other', user: 'cube', ssl: true },
-            },
+            payload: { ...change, testId: changeTest.json<{ testId: string }>().testId },
           })
         ).statusCode,
       ).toBe(200);
@@ -758,14 +765,27 @@ describe('a connection test, run by xcube (T361, AC-159, AC-312)', () => {
       const inC = await sources().create(postgres(ids.c, `${MARK}_in_c`));
       expect(await listed(inC.id)).toBeDefined();
 
-      // A rename changes no connection setting, so it keeps that health; a
-      // new password does: nobody has tested it (T364's review).
+      // A rename changes no connection setting, so it keeps that health. A
+      // new password is saved only from its passing test (T461), which is
+      // then its health; untested, it is never saved (T364's review; R32).
       const save = (payload: Record<string, unknown>) =>
         app.inject({ method: 'PUT', url: `/api/data-sources/${made.id}`, payload });
       expect((await save({ name: `${MARK}_renamed` })).statusCode).toBe(200);
       expect((await listed(made.id))?.lastTest).toMatchObject({ ok: true, current: true });
-      expect((await save({ sealed: { password: sealed('changed') } })).statusCode).toBe(200);
-      expect((await listed(made.id))?.lastTest).toMatchObject({ ok: true, current: false });
+      const changed = { sealed: { password: sealed('changed') } };
+      expect((await save(changed)).statusCode).toBe(422);
+      answer = { ok: true, checks: passed };
+      const tried = await app.inject({
+        method: 'POST',
+        url: `/api/data-sources/${made.id}/test`,
+        payload: changed,
+      });
+      const testId = tried.json<{ testId: string }>().testId;
+      expect((await save({ ...changed, testId })).statusCode).toBe(200);
+      const health = (await listed(made.id))?.lastTest;
+      expect(health?.ok).toBe(true);
+      expect(health?.current).toBe(true);
+      expect((await recorded.history(made.id))[0]?.id).toBe(testId);
     } finally {
       await app.close();
     }
@@ -1163,5 +1183,231 @@ describe('a new one made only from its passing test (T363, AC-158)', () => {
       expect(refused.json()).toEqual(REFUSED);
     }
     expect(await namesIn()).not.toContain(`${MARK}_overridden`);
+  });
+});
+
+/**
+ * T461 (AC-158; rule 23; the user's answer, R32: "test first, and dont save
+ * if test fails.. both in create new as well as edit"): a change to a data
+ * source's connection is saved only from a test of exactly that change, of
+ * its stored version, that passed and was run by the one saving it. A rename
+ * changes no connection, and needs none.
+ */
+describe('a change to its connection saved only from its passing test (T461, AC-158)', () => {
+  const UNTESTED_CHANGE = {
+    error:
+      'Test the change first: a data source’s connection changes only when a test of exactly that change passed.',
+  };
+  const passing = { ok: true, checks: [{ id: 'connect', status: 'passed', durationMs: 3 }] };
+  const failing = {
+    ok: false,
+    checks: [{ id: 'connect', status: 'failed', durationMs: 9, error: 'no route to host' }],
+  };
+  let answer: unknown = passing;
+  const recorded = connectionTestStore(getDb());
+  let gated: FastifyInstance;
+  const cookieOf: Record<string, string> = {};
+  let id = '';
+  /** A second source with the very same settings: another's test is never this one's. */
+  let twin = '';
+
+  beforeAll(async () => {
+    gated = buildServer({
+      config: secured,
+      sessions: pgSessionStore(getDb()),
+      documents: docs(),
+      catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
+      dataSources: sources(),
+      connectionTests: recorded,
+      connectionTest: async () => answer as never,
+    });
+    for (const who of ['writer', 'super']) cookieOf[who] = await signIn(gated, USERS[who]!);
+    id = (await sources().create(postgres(ids.b, `${MARK}_edited`))).id;
+    twin = (await sources().create(postgres(ids.b, `${MARK}_twin`))).id;
+  });
+  afterAll(async () => {
+    await gated.close();
+    for (const each of [id, twin]) if (each !== '') await sources().remove(each);
+  });
+
+  const other = (database: string) => ({ ...postgres(ids.b, 'x').fields, database });
+  const testOf = async (
+    change: Record<string, unknown>,
+    with_ = passing,
+    { who = 'writer', on = id }: { who?: string; on?: string } = {},
+  ) => {
+    answer = with_;
+    const run = await gated.inject({
+      method: 'POST',
+      url: `/api/data-sources/${on}/test`,
+      payload: change,
+      headers: { cookie: cookieOf[who]! },
+    });
+    expect(run.statusCode, run.body).toBe(200);
+    const { testId } = run.json<{ testId: string }>();
+    expect(testId).toMatch(/^[0-9a-f-]{36}$/);
+    return testId;
+  };
+  const save = (payload: Record<string, unknown>, who = 'writer') =>
+    gated.inject({
+      method: 'PUT',
+      url: `/api/data-sources/${id}`,
+      payload,
+      headers: { cookie: cookieOf[who]! },
+    });
+  const stored = async () => (await sources().get(id))!;
+  /** What a refused save must leave: its settings, secrets and version. */
+  const unchanged = async (before: { settingsPrint: string; version: number }) => {
+    const after = await stored();
+    expect([after.settingsPrint, after.version]).toEqual([before.settingsPrint, before.version]);
+  };
+
+  it('refuses a changed connection with no test, a failed one, one of another change, another’s, or another source’s, and changes nothing', async () => {
+    const before = await stored();
+    const change = { fields: other('hr') };
+    const failed = await testOf(change, failing);
+    const ofAnother = await testOf({ fields: other('finance') });
+    const supers = await testOf(change, passing, { who: 'super' });
+    const twins = await testOf(change, passing, { on: twin });
+    const method = {
+      authMethod: 'client-certificate',
+      fields: { ...other('sales'), sslCert: 'client certificate PEM' },
+      sealed: { sslKey: sealed('key') },
+    };
+    for (const [why, sent] of [
+      ['no test', change],
+      ['a failed test', { ...change, testId: failed }],
+      ['a test of another change', { ...change, testId: ofAnother }],
+      ['a test that isn’t there', { ...change, testId: randomUUID() }],
+      ['an override', { ...change, override: true }],
+      ['another user’s test', { ...change, testId: supers }],
+      ['another source’s test of the same change', { ...change, testId: twins }],
+      ['a new secret, untested', { sealed: { password: sealed('untested') } }],
+      ['a new way to sign in, untested', method],
+    ] as const) {
+      const refused = await save(sent);
+      expect(refused.statusCode, why).toBe(422);
+      expect(refused.json(), why).toEqual(UNTESTED_CHANGE);
+    }
+    await unchanged(before);
+  });
+
+  it('saves a new way to sign in from its passing test (AC-158)', async () => {
+    const method = {
+      authMethod: 'client-certificate',
+      fields: { ...(await stored()).fields, sslCert: 'client certificate PEM' },
+      sealed: { sslKey: sealed('key') },
+    };
+    const testId = await testOf(method);
+    const saved = await save({ ...method, testId });
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect((await stored()).authMethod).toBe('client-certificate');
+    // Back to a password, tested too.
+    const back = {
+      authMethod: 'password',
+      fields: { ...(await stored()).fields },
+      sealed: { password: sealed('back') },
+    };
+    delete (back.fields as Record<string, unknown>)['sslCert'];
+    const again = await testOf(back);
+    expect((await save({ ...back, testId: again })).statusCode).toBe(200);
+  });
+
+  it('makes one save of one test, taken once in one statement, and gives it back when a save is refused', async () => {
+    const change = { fields: other('racing') };
+    const testId = await testOf(change);
+    // Taken once, then never again, whoever asks at the same moment.
+    const { shape } = await getDb()
+      .selectFrom('connection_tests')
+      .select('shape')
+      .where('id', '=', testId)
+      .executeTakeFirstOrThrow();
+    const takes = await Promise.all(
+      [1, 2, 3].map(() => recorded.claimChange(id, testId, shape!, 'writer-key-unused')),
+    );
+    expect(takes).toEqual([false, false, false]);
+    const writerKey = (await recorded.history(id)).find((test) => test.id === testId)!.by!.key;
+    const taken = await Promise.all(
+      [1, 2, 3].map(() => recorded.claimChange(id, testId, shape!, writerKey)),
+    );
+    expect(taken.filter(Boolean)).toHaveLength(1);
+    // Given back, it is there for the save it was made for.
+    await recorded.releaseChange(id, testId, shape!);
+    expect((await save({ ...change, testId })).statusCode).toBe(200);
+    expect((await save({ ...change, name: `${MARK}_edited`, testId })).statusCode).toBe(200);
+
+    // A save refused after taking its test (a name the store won't take)
+    // gives the test back, for the save that follows.
+    const next = { fields: other('retried') };
+    const retried = await testOf(next);
+    expect((await save({ ...next, name: 'Not A Name', testId: retried })).statusCode).toBe(400);
+    expect((await save({ ...next, testId: retried })).statusCode).toBe(200);
+    expect((await stored()).fields['database']).toBe('retried');
+  });
+
+  it('never saves over a version it wasn’t checked against (T461’s review)', async () => {
+    const at = (await stored()).version;
+    const refused = (await sources()
+      .update(id, { fields: other('late') }, {}, at - 1)
+      .catch((error: unknown) => error)) as DataSourceRefused;
+    expect(refused).toBeInstanceOf(DataSourceRefused);
+    expect(refused.status).toBe(409);
+    expect((await stored()).fields['database']).not.toBe('late');
+  });
+
+  it('says the health of settings as they are now, before a newer test of settings since changed', async () => {
+    type Listed = { id: string; lastTest: { ok: boolean; current: boolean } | null };
+    const health = async () =>
+      (
+        await gated.inject({
+          method: 'GET',
+          url: '/api/data-sources',
+          headers: { cookie: cookieOf['writer']! },
+        })
+      )
+        .json<Listed[]>()
+        .find((row) => row.id === id)?.lastTest;
+    const change = { fields: other('health') };
+    const testId = await testOf(change);
+    // The stored settings tested after the change's test, and failing.
+    await testOf({}, failing);
+    expect((await save({ ...change, testId })).statusCode).toBe(200);
+    const now = await health();
+    expect(now?.ok).toBe(true);
+    expect(now?.current).toBe(true);
+
+    // Settings nobody tested: its last test is no longer current (AC-157).
+    await sources().update(id, { fields: other('untested') });
+    expect((await health())?.current).toBe(false);
+  });
+
+  it('saves the change its passing test was of, once, and that test is its health (AC-163, AC-157)', async () => {
+    const change = { fields: other('hr') };
+    const testId = await testOf(change);
+    const saved = await save({ ...change, testId });
+    expect(saved.statusCode, saved.body).toBe(200);
+    const after = await stored();
+    expect(after.fields['database']).toBe('hr');
+    const [newest] = await recorded.history(id);
+    expect([newest?.id, newest?.ok, newest?.asStored, newest?.settings]).toEqual([
+      testId,
+      true,
+      true,
+      after.settingsPrint,
+    ]);
+    // One test saves one change.
+    const again = await save({ fields: other('hr2'), testId });
+    expect(again.statusCode).toBe(422);
+  });
+
+  it('needs no test for a rename, and no longer takes a test once the source has changed since', async () => {
+    const change = { fields: other('sales2') };
+    const testId = await testOf(change);
+    expect((await save({ name: `${MARK}_edited_renamed` })).statusCode).toBe(200);
+    // Tested against the version before the rename: test it again.
+    const stale = await save({ ...change, testId });
+    expect(stale.statusCode).toBe(422);
+    expect((await stored()).fields['database']).not.toBe('sales2');
   });
 });

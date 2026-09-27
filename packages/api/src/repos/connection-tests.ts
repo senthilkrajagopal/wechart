@@ -33,11 +33,23 @@ export interface ConnectionTest {
 }
 
 export interface ConnectionTestStore {
-  record(dataSourceId: string, test: Omit<ConnectionTest, 'id' | 'ranAt'>): Promise<ConnectionTest>;
+  /**
+   * A stored one's test, with `shape` the print of the change it tried, if
+   * any, which a save of that change names (T461, AC-158).
+   */
+  record(
+    dataSourceId: string,
+    test: Omit<ConnectionTest, 'id' | 'ranAt'>,
+    shape?: string,
+  ): Promise<ConnectionTest>;
   /** Every one, newest first (AC-163: none may be missing). */
   history(dataSourceId: string): Promise<ConnectionTest[]>;
   /** Each source's newest test of its stored settings: its health (T364, AC-157). */
-  latestAsStored(dataSourceIds: readonly string[]): Promise<Map<string, ConnectionTest>>;
+  latestAsStored(
+    dataSourceIds: readonly string[],
+    /** Each source's settings print now: a test of those comes first (T461's review). */
+    current?: ReadonlyMap<string, string>,
+  ): Promise<Map<string, ConnectionTest>>;
   /**
    * The wizard's test of one not yet made (T363, AC-158): kept under `shape`,
    * the print of what it tested, with no data source until one is made from it.
@@ -55,6 +67,21 @@ export interface ConnectionTestStore {
   claimTrial(testId: string, shape: string, byKey: string | null): Promise<boolean>;
   /** Gives it back, for a create that was refused after taking it. */
   releaseTrial(testId: string, shape: string): Promise<void>;
+  /**
+   * Takes a stored one's test for one save of the change it tried: of that
+   * data source, passed, of exactly `shape`, run by `byKey`, not taken
+   * before (T461, AC-158). False if not.
+   */
+  claimChange(
+    dataSourceId: string,
+    testId: string,
+    shape: string,
+    byKey: string | null,
+  ): Promise<boolean>;
+  /** Gives it back, for a save that was refused after taking it. */
+  releaseChange(dataSourceId: string, testId: string, shape: string): Promise<void>;
+  /** The saved change's test is a test of its stored settings now: its health (AC-163). */
+  adoptChange(dataSourceId: string, testId: string, settings: string): Promise<void>;
   /**
    * The data source made from it takes it as the first test of its stored
    * settings (AC-163). False if it wasn't taken.
@@ -118,8 +145,12 @@ export function connectionTestStore(db: Kysely<Database>): ConnectionTestStore {
     by: row.ran_by,
   });
 
+  /** Who ran it, as a condition: the user's key, or nobody signed in. */
+  const ranBy = (byKey: string | null) =>
+    byKey === null ? sql<boolean>`ran_by is null` : sql<boolean>`ran_by ->> 'key' = ${byKey}`;
+
   return {
-    async record(dataSourceId, test) {
+    async record(dataSourceId, test, shape) {
       const row = await db
         .insertInto('connection_tests')
         .values({
@@ -127,6 +158,7 @@ export function connectionTestStore(db: Kysely<Database>): ConnectionTestStore {
           ok: test.ok,
           as_stored: test.asStored,
           settings: test.settings,
+          ...(shape === undefined ? {} : { shape }),
           checks: JSON.stringify(trimmed(test.checks)),
           fields: JSON.stringify(test.fields),
           ran_by: test.by === null ? null : JSON.stringify(test.by),
@@ -147,18 +179,37 @@ export function connectionTestStore(db: Kysely<Database>): ConnectionTestStore {
       return rows.map(toTest);
     },
 
-    async latestAsStored(dataSourceIds) {
+    async latestAsStored(dataSourceIds, current) {
       if (dataSourceIds.length === 0) return new Map();
-      const rows = await db
-        .selectFrom('connection_tests')
-        .distinctOn('data_source_id')
-        .select(['data_source_id', ...columns])
-        .where('data_source_id', 'in', [...dataSourceIds])
-        .where('as_stored', '=', true)
-        .orderBy('data_source_id')
-        .orderBy('seq', 'desc')
-        .execute();
-      return new Map(rows.map((row) => [row.data_source_id!, toTest(row)]));
+      const newest = (only?: readonly (readonly [string, string])[]) =>
+        db
+          .selectFrom('connection_tests')
+          .distinctOn('data_source_id')
+          .select(['data_source_id', ...columns])
+          .where('data_source_id', 'in', [...dataSourceIds])
+          .where('as_stored', '=', true)
+          .$if(only !== undefined, (query) =>
+            query.where((eb) =>
+              eb.or(
+                only!.map(([id, settings]) =>
+                  eb.and([eb('data_source_id', '=', id), eb('settings', '=', settings)]),
+                ),
+              ),
+            ),
+          )
+          .orderBy('data_source_id')
+          .orderBy('seq', 'desc')
+          .execute();
+      const found = new Map((await newest()).map((row) => [row.data_source_id!, toTest(row)]));
+      // A test of the settings as they are now is the health, before a newer
+      // test of settings since changed (T461's review): a change's test is
+      // older than a test of what was stored when it was saved.
+      const pairs = [...(current ?? new Map<string, string>())].filter(
+        ([id, settings]) => found.get(id)?.settings !== settings,
+      );
+      if (pairs.length > 0)
+        for (const row of await newest(pairs)) found.set(row.data_source_id!, toTest(row));
+      return found;
     },
 
     async recordTrial(test, shape) {
@@ -229,6 +280,42 @@ export function connectionTestStore(db: Kysely<Database>): ConnectionTestStore {
         .where(
           byKey === null ? sql<boolean>`ran_by is null` : sql<boolean>`ran_by ->> 'key' = ${byKey}`,
         )
+        .execute();
+    },
+
+    async claimChange(dataSourceId, testId, shape, byKey) {
+      if (!UUID.test(testId)) return false;
+      const taken = await db
+        .updateTable('connection_tests')
+        .set({ shape: claimed(shape) })
+        .where('id', '=', testId)
+        .where('data_source_id', '=', dataSourceId)
+        .where('ok', '=', true)
+        .where('shape', '=', shape)
+        .where(ranBy(byKey))
+        .executeTakeFirst();
+      return taken.numUpdatedRows === 1n;
+    },
+
+    async releaseChange(dataSourceId, testId, shape) {
+      if (!UUID.test(testId)) return;
+      await db
+        .updateTable('connection_tests')
+        .set({ shape })
+        .where('id', '=', testId)
+        .where('data_source_id', '=', dataSourceId)
+        .where('shape', '=', claimed(shape))
+        .execute();
+    },
+
+    async adoptChange(dataSourceId, testId, settings) {
+      if (!UUID.test(testId)) return;
+      await db
+        .updateTable('connection_tests')
+        .set({ as_stored: true, settings })
+        .where('id', '=', testId)
+        .where('data_source_id', '=', dataSourceId)
+        .where('shape', 'like', 'claimed:%')
         .execute();
     },
   };
