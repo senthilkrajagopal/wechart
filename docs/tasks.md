@@ -7120,6 +7120,12 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362â€
     - each one's fields and authentication methods are those `2026-09-26-connections-drivers.md` and `xcube-slice-6.md` give (Redshift a password; MySQL a password or a client certificate; BigQuery a service-account key; Dremio a Cloud URL with a token, or a Software host and port with a token or a user and password) (AC-160);
     - each one's `target` is xcube's v1 target: host, port, `ssl`, `sslRejectUnauthorized`, `sslCa` for postgres, redshift and mysql; host, port, `encrypt`, `trustServerCertificate` for mssql; host, port, `url`, `ssl` for dremio; account, region, warehouse for snowflake; `projectId` for bigquery; `connectString`, database, host, port for oracle (AC-312; `xcube-overlay-data-sources.md`, "The TLS binding").
   - Depends on: none
+  - **Done 2026-09-26. No AC is ticked:** AC-160 needs the form (T363), AC-312 the clearing (T335).
+    - The eight drivers, in xcube's order, with its field keys, sign-in methods, required and secret flags, and target lists. It was checked field by field against xcube's `drivers.ts` at `ed08180c37`.
+    - Defaults are xcube's config fallbacks: ports 5432, 5439, 3306, 1433, 1521, 9047; TLS on for PostgreSQL and Redshift, off for MySQL and Dremio.
+    - MySQL's client certificate says it is sent only over TLS, since xcube sends neither it nor a password with TLS off.
+    - `databricks-jdbc` is gone; no Databricks data source was ever stored.
+    - The cold review (PASS) found the required flags and kinds untested (now pinned in `drivers.test.ts`), and one comment unclear (reworded). `credential-sealing.md`'s `V1_TARGET_KEYS` table predates the TLS binding: T441 takes the target from `targetKeysOf`, checked against xcube's golden vectors.
 - [ ] T441 (AC-325, AC-298) Seal a typed secret in the browser to xcube's public key, and store only the ciphertext *(amended 2026-09-26: the golden vectors and the TLS target, `[X6]`)*
   - Files: `packages/web/package.json` (`hpke` 1.1.7), `packages/core/src/data-sources/aad.ts` (+ test, `secretAadV1`), `packages/core/src/data-sources/golden-v1.json` (xcube's golden AAD and envelope vectors, which xcube asked for so it can open them in its own test), `packages/web/src/workspaces/data-sources/seal.ts` (+ test), `packages/api/src/routes/data-sources.ts`, `packages/api/src/repos/data-source-secrets.ts` (the `pg_dump` canary test, from T332)
   - Failing test:
