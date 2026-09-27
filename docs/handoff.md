@@ -138,7 +138,10 @@
 >     `xcube:v1.7.45-c0610bb768@sha256:d787e67c…`, in compose and Helm), T430 (every dashboard
 >     answers as before), T426 (publishes through changesets; T451 carries proposals' check),
 >     **T334** (model files in folders, listed in Explore; only the root's are sent to xcube, and a
->     publish into another folder answers 409 until T341). Next: T429, T428, T450, T341.
+>     publish into another folder answers 409 until T341). Since: T452, T429, T428, T450 (search
+>     by short name and folder path; another folder's refusals said as that folder's; Schedules
+>     reads a folder rollup's key SQL), T341 (isolation, AC-274 ticked; run in all browsers).
+>     T402 waits on question 27 (its badge change and test are in the tree, uncommitted).
 >     - **Deployed:** the docker-desktop release (Helm revision 22) runs wechart `714b152-t429`
 >       (through T429) on the 3b image, the model in items mode, sign-in on; `verify.sh --no-install`
 >       passes. Since: T452 (a folder's model files published as its items) and T429 (charts and
@@ -179,6 +182,29 @@
 >         none, a model being renamed in the model editor. Reword AC-193?
 >     24. The slice 6 research doc: save it from the session's tool results (a one-line `cp`
 >         offered to the user), since it couldn't be written here.
+>     26. (T450's review) A folder's cube still shows by its prefixed name (`f<32 hex>__sales`)
+>         in Jobs, Schedules, the tile's "Data as of", the Acceleration tab, Explore's "Built on"
+>         column, the library chart page and dashboard properties. Its rollups' "Edit in Model"
+>         links go to a file Model can't open. AC-329 covers only the picker. Widen it (or add a
+>         criterion) to "every place that names a cube or rollup shows its title and folder
+>         path", with a task for these places?
+>     27. (T402, AC-201) A three-column KPI tile's head is too narrow for everything it holds.
+>         - At 1440 px it has 212 px. The title needs 81; the marking badge can't go below
+>           "■ 1 marked", 85 (rule 50); the freshness badge can't go below "● Live…", 64 (T250);
+>           Table view takes 24 and the gaps 24.
+>         - At 1280 px it has 172 px: the title and the badge alone need 174. The head keeps 90 px
+>           clear for ↻ ✎ ⋯, where the prototype keeps 54.
+>         - The badge's name now gives way first, down to nothing; the whole sentence stays its
+>           tooltip and its text for a screen reader.
+>         - Which gives way next?
+>           - (a) As the prototype: ↻ moves into the ⋯ menu, a KPI has no Table view, and a
+>             narrow head shows the freshness badge's icon alone (its words in the tooltip). The
+>             title is then whole at both widths.
+>           - (b) The marking badge reads "■ 1" in a narrow head, bending rule 50. The title is
+>             whole at 1440 and "Order…" at 1280.
+>           - (c) The freshness badge leaves a narrow tile's head for its foot.
+>           - (d) The title is cut short once the badges can shrink no further. At 1280 it
+>             disappears, so AC-201 would need rewording.
 > - **Pushing is the user's** (this session's push was refused by the permission classifier):
 >   `git push origin main feat/xcube --tags`.
 > - **Done since (2026-09-25, later):**
