@@ -77,6 +77,19 @@ spec:
 {{- include "wechart.component" (list . "secrets") }}
 {{- end }}
 
+{{/*
+xcube's credential key, which its Job makes once (T455; templates/
+xcube-credential-key.yaml): the private key and its sample credential, for
+Cube's pods alone, and the public JWK and its kid, for the API. Neither is
+Helm's, so neither may ever be templated here.
+*/}}
+{{- define "wechart.xcubeKeySecret" -}}
+{{- include "wechart.component" (list . "xcube-credential-keys") }}
+{{- end }}
+{{- define "wechart.xcubePublicKeyConfigMap" -}}
+{{- include "wechart.component" (list . "xcube-public-key") }}
+{{- end }}
+
 {{/* A wechart image: include "wechart.image" (list . .Values.images.api) */}}
 {{- define "wechart.image" -}}
 {{- $root := index . 0 }}

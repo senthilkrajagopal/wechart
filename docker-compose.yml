@@ -31,6 +31,10 @@ x-cube-environment: &cube-environment
   # API is running. A token naming no model reads the mounted directory
   # (research xcube-slice-2.md, "Token claims").
   XCUBE_DATABASE_URL: postgres://xcube:${XCUBE_DB_PASSWORD:-dev-xcube-password}@wechart-meta:5432/wechart_meta
+  # The credential key xcube opens data sources' secrets with (T455, AC-324;
+  # research xcube-slice-6.md, "Credential keys"): the development key, by its
+  # kid, from the files mounted below. Unset, xcube would start holding none.
+  XCUBE_CREDENTIAL_KEY_IDS: uYWeMx6i173fsiolFp1xi-qiav50k52AGinM56Y8JEw
 
 x-cube-volumes: &cube-volumes
   - ./infra/cube/cube.js:/cube/conf/cube.js:ro
@@ -45,6 +49,11 @@ x-cube-secrets: &cube-secrets
   - &xcube-credential-key
     source: xcube_credential_key
     target: /run/secrets/xcube-credential-keys/uYWeMx6i173fsiolFp1xi-qiav50k52AGinM56Y8JEw.pem
+  # Its sample credential, which xcube opens at start to prove the key file is
+  # the key (T455; xcube's keygen made it, research xcube-slice-6.md, "Init").
+  - &xcube-credential-check
+    source: xcube_credential_check
+    target: /run/secrets/xcube-credential-keys/uYWeMx6i173fsiolFp1xi-qiav50k52AGinM56Y8JEw.check
 
 services:
   wechart-meta:
@@ -178,6 +187,7 @@ services:
     volumes: *cube-volumes
     secrets:
       - *xcube-credential-key
+      - *xcube-credential-check
       - xcube-service-keys
 
   # Cube's refresh worker: the same image and configuration, told only to
@@ -236,6 +246,8 @@ secrets:
   # Development only: the fixed key pair's private half (infra/xcube/README.md).
   xcube_credential_key:
     file: ./infra/xcube/dev-credential-key.pem
+  xcube_credential_check:
+    file: ./infra/xcube/dev-credential-key.check
   # Development only: the public half of wechart's service key (T420;
   # infra/xcube/README.md). Its private half is the API's alone.
   xcube-service-keys:

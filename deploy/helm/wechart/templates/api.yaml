@@ -105,10 +105,14 @@ spec:
                 secretKeyRef:
                   name: {{ include "wechart.secretName" . }}
                   key: service-key.pem
-            # xcube's public key, which credentials are encrypted to; the API
-            # won't start without it (T333, AC-324). Public: no Secret needed.
+            # xcube's public key, which credentials are sealed to; the API
+            # won't start without it (T333, AC-324). Its Job publishes it
+            # (T455): until then this pod waits, and never runs without it.
             - name: WECHART_XCUBE_PUBLIC_KEY
-              value: {{ required "api.xcubePublicKey is required: xcube's public key, as a JWK (docs/deploy.md)" .Values.api.xcubePublicKey | quote }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "wechart.xcubePublicKeyConfigMap" . }}
+                  key: jwk
             {{- if .Values.api.seed }}
             # wechart's sample dashboards, which name the sample database's cubes.
             - name: WECHART_SEED
@@ -156,6 +160,15 @@ spec:
               value: {{ required "security.superAdminGroup is required when security.enabled: the AD group whose members are Super-Admins" .superAdminGroup | quote }}
             {{- end }}
             {{- end }}
+          # It listens only once xcube says it holds the credential key (T455,
+          # AC-324), waiting while Cube starts: as long as Cube may take, and
+          # a minute more, before the liveness probe may restart it.
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: {{ div (add (int .Values.cube.startupSeconds) 60) 5 }}
           readinessProbe:
             httpGet:
               path: /api/health

@@ -16,7 +16,7 @@ import { startModel } from './model/split';
 import { imageStore } from './repos/images';
 import { modelFileStore } from './repos/model-files';
 import { queryLog } from './repos/query-log';
-import { xcubePublicKeyOf } from './secrets/xcube-key';
+import { checkXcubeHoldsKey, xcubePublicKeyOf } from './secrets/xcube-key';
 import { xcubeAdmin } from './xcube/client';
 import { connectionSync, xcubeConnections } from './xcube/connections';
 import { publicationStore } from './xcube/publications';
@@ -169,6 +169,16 @@ async function main(): Promise<void> {
       sessions.sweep().catch((error: unknown) => {
         app.log.warn({ err: error }, 'could not sweep expired sessions');
       });
+  // xcube holds the key credentials are sealed to, or the API doesn't start
+  // (T455, AC-324): waited for while xcube can't be reached.
+  if (service !== undefined)
+    await checkXcubeHoldsKey({
+      cubeApiUrl: config.cubeApiUrl,
+      key: config.xcubePublicKey,
+      token: () => service.anyModelToken(),
+      onWait: (why) => app.log.warn(`${why}: waiting to check xcube’s credential keys`),
+    });
+
     },
     15 * 60 * 1000,
   );

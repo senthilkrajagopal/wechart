@@ -167,9 +167,21 @@ The first API to start against the `c0610bb768` image moves the model from slice
 
 ## xcube's public key
 
-Data-source credentials are encrypted to xcube's public key, and only xcube can decrypt them. `api.xcubePublicKey` gives the API that key as a JWK: `{"kty":"OKP","crv":"X25519","x":…,"kid":…}`, where `kid` is the key's RFC 7638 thumbprint. It is required. The chart won't render without it, and the API won't start with one that isn't an X25519 public key under its own thumbprint, naming `WECHART_XCUBE_PUBLIC_KEY` and the problem. It is only the public key, so it is a plain value rather than a Secret. The API refuses a JWK that holds a private key.
+Data-source credentials are sealed in the browser to xcube's public key, and only xcube can open them. The API is given that key as a JWK, `{"kty":"OKP","crv":"X25519","x":…,"kid":…}`, in `WECHART_XCUBE_PUBLIC_KEY`, where `kid` is the key's RFC 7638 thumbprint. It won't start without one, or with one that isn't an X25519 public key under its own thumbprint or that holds a private key, naming the setting and the problem. It also won't start until xcube says it holds a credential key with that `kid` (`GET /v1/semantic/credential-keys`), waiting while xcube can't be reached (T455).
 
-`deploy/helm/values/docker-desktop.yaml` gives the development key, from `infra/xcube/dev-credential-key.pub.jwk` (`infra/xcube/README.md`). Where xcube's private key is kept in production is still to be decided. Until then, the Cube pods in this chart are not given one.
+**In the chart the key is made once, by a Job** (`templates/xcube-credential-key.yaml`; T455; research `kubernetes-job-generated-secret.md`). It runs xcube's own keygen in xcube's image and writes:
+- **`<release>-xcube-credential-keys`**, a Secret holding `<kid>.pem` and its sample credential `<kid>.check`. It is mounted read-only into Cube's API instances and refresh worker, and into nothing of wechart's.
+- **`<release>-xcube-public-key`**, a ConfigMap holding `jwk` and `kid`. The API reads `jwk`, and Cube's pods name the key by `kid` in `XCUBE_CREDENTIAL_KEY_IDS`.
+
+Until the Job has run, the Cube pods wait for the Secret and the API pod waits for the ConfigMap. Neither object belongs to the release:
+- `helm uninstall` leaves both, so a reinstall keeps the key the stored credentials were sealed to.
+- **Back up the Secret**, apart from the metadata database. A lost key means every data source's secrets must be entered again: wechart can't recover them, by design.
+- If the Secret is gone while the ConfigMap remains, the Job refuses to make a new key and says to restore the Secret.
+- **To bring your own key,** create the Secret before installing, with one `<kid>.pem` and its `<kid>.check` from `xcube-keygen <dir> <key.pem>`. The Job then publishes its public half.
+
+**Upgrading a release installed before this Job** moves it from the development key its values gave the API to its own. Any data source saved under the development key would need its secrets entered again. Upgrades made before data sources existed hold none.
+
+Compose runs the development key pair in `infra/xcube/` instead (`infra/xcube/README.md`), and the Playwright configs give the API its public half.
 
 ## Pointing Cube at another data source
 

@@ -92,3 +92,71 @@ export function xcubePublicKeyOf(env: NodeJS.ProcessEnv): XcubePublicKey {
 
   return { kid: thumbprint, x };
 }
+
+/**
+ * Whether xcube holds the credential key wechart seals to (T455, AC-324):
+ * asked at start, before the API serves anything, of
+ * `GET /v1/semantic/credential-keys`, with a service token naming no model
+ * (research `xcube-slice-6.md`, "wechart's API: the order of calls"). A
+ * secret sealed to a key xcube doesn't hold would be stored and never open.
+ *
+ * It waits while xcube can't be reached, or answers 5xx while it starts, as
+ * the first push does. Any other answer without wechart's key is a refusal to
+ * start, naming the key id.
+ */
+export async function checkXcubeHoldsKey({
+  cubeApiUrl,
+  key,
+  token,
+  fetch: send = fetch,
+  waitMs = 2_000,
+  onWait,
+}: {
+  readonly cubeApiUrl: string;
+  readonly key: XcubePublicKey;
+  /** A service token naming no model: this route no model owns. */
+  readonly token: () => Promise<string>;
+  readonly fetch?: typeof fetch;
+  readonly waitMs?: number;
+  readonly onWait?: (why: string) => void;
+}): Promise<void> {
+  const url = `${cubeApiUrl.replace(/\/$/, '')}/v1/semantic/credential-keys`;
+  for (;;) {
+    let response: Response;
+    try {
+      response = await send(url, { headers: { authorization: `Bearer ${await token()}` } });
+    } catch (failure) {
+      onWait?.(`xcube can’t be reached: ${String((failure as Error).message ?? failure)}`);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      continue;
+    }
+    if (response.status >= 500) {
+      onWait?.(`xcube answered ${String(response.status)} while starting`);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      continue;
+    }
+    if (response.status !== 200)
+      throw new ConfigError(
+        `xcube answered ${String(response.status)} when asked for its credential keys: its admin routes must take wechart's service credential (XCUBE_SERVICE_KEYS).`,
+      );
+    const body = (await response.json().catch(() => ({}))) as {
+      keys?: { kid?: unknown; active?: unknown }[];
+    };
+    const held = (body.keys ?? []).map((each) => each.kid);
+    const ours = (body.keys ?? []).find((each) => each.kid === key.kid);
+    // Held and active: the key xcube re-wraps to (research, "the order of calls").
+    if (ours?.active === true) return;
+    if (ours !== undefined) {
+      const active = (body.keys ?? []).find((each) => each.active === true)?.kid;
+      throw new ConfigError(
+        `xcube holds the credential key ${key.kid}, which ${XCUBE_PUBLIC_KEY} names, but seals new credentials to ${String(active)}: give wechart ${String(active)}’s public key.`,
+      );
+    }
+    throw new ConfigError(
+      `xcube holds no credential key with the id ${key.kid}, which ${XCUBE_PUBLIC_KEY} names: secrets sealed to it would never open. ` +
+        (held.length === 0
+          ? 'xcube holds no key at all: set XCUBE_CREDENTIAL_KEY_IDS on its processes (docs/deploy.md).'
+          : `It holds ${held.map(String).join(', ')}.`),
+    );
+  }
+}

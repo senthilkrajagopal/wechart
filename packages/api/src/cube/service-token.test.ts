@@ -102,6 +102,18 @@ describe('the service credential', () => {
     );
   });
 
+  it('signs a token naming no model, for xcube’s routes that no model owns (T455)', async () => {
+    // `GET /v1/semantic/credential-keys` refuses a service token that names a
+    // model (research xcube-slice-6.md, "credential-keys (not per model)").
+    const service = await serviceCredential({ privateKeyPem: pair().privateKey, model: 'e2e' });
+
+    const claims = decodeJwt(await service.anyModelToken());
+    expect(Object.keys(claims).sort()).toEqual(['aud', 'exp', 'iat', 'role']);
+    expect(claims).toMatchObject({ aud: 'xcube-admin', role: 'service' });
+    // Its model's token still names it.
+    expect(decodeJwt(await service.token())['wechartModel']).toBe('e2e');
+  });
+
   it('keeps a token while it has time left, and signs a new one before it expires', async () => {
     let now = 1_790_000_000_000;
     const service = await serviceCredential({

@@ -59,6 +59,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+        fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
       # xcube's role and schema come from the bootstrap Job; a Cube process
@@ -94,6 +95,15 @@ spec:
               containerPort: 4000
           env:
             {{- include "wechart.cubeEnv" $ | nindent 12 }}
+            # The credential key xcube opens data sources' secrets with, by
+            # the kid its Job published (T455, AC-324): in the API instance
+            # and the worker alike, which builds through connections too
+            # (research xcube-slice-6.md, "xcube's credential key").
+            - name: XCUBE_CREDENTIAL_KEY_IDS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "wechart.xcubePublicKeyConfigMap" $ }}
+                  key: kid
             {{- if eq $component "cube-refresh-worker" }}
             - name: CUBEJS_REFRESH_WORKER
               value: "true"
@@ -166,6 +176,9 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            - name: credential-keys
+              mountPath: /run/secrets/xcube-credential-keys
+              readOnly: true
           {{- with $values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -176,6 +189,14 @@ spec:
             name: {{ include "wechart.component" (list $ "cube-config") }}
         - name: tmp
           emptyDir: {}
+        # The Job's Secret (T455), not optional: the pod waits for it rather
+        # than start xcube with no key (research
+        # kubernetes-job-generated-secret.md, "Pod behavior"). Readable by
+        # Cube's group alone, which fsGroup makes the files' (Gotcha 5).
+        - name: credential-keys
+          secret:
+            secretName: {{ include "wechart.xcubeKeySecret" $ }}
+            defaultMode: 0440
 {{- if and (eq $component "cube") (ge (int $.Values.cube.replicas) 2) }}
 ---
 {{ include "wechart.disruptionBudget" (list $ $component) }}

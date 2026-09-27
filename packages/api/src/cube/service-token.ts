@@ -18,6 +18,12 @@ import { calculateJwkThumbprint, exportJWK, SignJWT, type JWK } from 'jose';
 export interface ServiceCredential {
   /** A token to send now: kept while it has a minute left, then signed afresh. */
   token(): Promise<string>;
+  /**
+   * A token naming no model, for the few xcube routes no model owns — its
+   * credential keys (T455) — which refuse one that names a model. Signed for
+   * each call, and used for nothing else: it would serve every model.
+   */
+  anyModelToken(): Promise<string>;
   /** Its key's id: the public key's RFC 7638 thumbprint, as xcube computes one for a PEM. */
   readonly kid: string;
   /** The public half, for `XCUBE_SERVICE_KEYS`: never a private member. */
@@ -60,6 +66,13 @@ export async function serviceCredential({
   const kid = await calculateJwkThumbprint({ kty: 'RSA', n, e });
   const publicJwk: JWK = { kty: 'RSA', n, e, kid, alg: 'RS256', use: 'sig' };
 
+  const sign = (claims: Record<string, unknown>, at: number, exp: number) =>
+    new SignJWT({ role: 'service', ...claims })
+      .setProtectedHeader({ alg: 'RS256', kid })
+      .setAudience('xcube-admin')
+      .setIssuedAt(at)
+      .setExpirationTime(exp)
+      .sign(privateKey);
   let held: { readonly token: string; readonly exp: number } | undefined;
   return {
     kid,
@@ -68,14 +81,13 @@ export async function serviceCredential({
       const at = Math.floor(now() / 1000);
       if (held !== undefined && held.exp - at > MARGIN_SECONDS) return held.token;
       const exp = at + ttlSeconds;
-      const token = await new SignJWT({ role: 'service', wechartModel: model })
-        .setProtectedHeader({ alg: 'RS256', kid })
-        .setAudience('xcube-admin')
-        .setIssuedAt(at)
-        .setExpirationTime(exp)
-        .sign(privateKey);
+      const token = await sign({ wechartModel: model }, at, exp);
       held = { token, exp };
       return token;
+    },
+    async anyModelToken() {
+      const at = Math.floor(now() / 1000);
+      return sign({}, at, at + ttlSeconds);
     },
   };
 }

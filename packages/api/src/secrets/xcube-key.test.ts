@@ -1,14 +1,16 @@
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { createConnection, createServer } from 'node:net';
+import { createServer as createHttpServer } from 'node:http';
+import { createConnection, createServer, type AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parse } from 'yaml';
 
 import { ConfigError } from '../config';
-import { XCUBE_PUBLIC_KEY, xcubePublicKeyOf } from './xcube-key';
+import { closeDb } from '../db/client';
+import { checkXcubeHoldsKey, XCUBE_PUBLIC_KEY, xcubePublicKeyOf } from './xcube-key';
 
 /**
  * T333, AC-324: IF wechart's API starts without xcube's public key, or xcube
@@ -135,6 +137,148 @@ describe('the API’s start-up (T333, AC-324)', () => {
     );
     expect(await listening(port)).toBe(false);
   });
+
+  /**
+   * T455's review: the check is made by the API as it starts, not only by the
+   * function. xcube here lists another key; the API never listens.
+   */
+  it('never listens when xcube holds no key with its public key’s id (T455)', async () => {
+    const asked: string[] = [];
+    const xcube = createHttpServer((request, response) => {
+      asked.push(`${request.method ?? ''} ${request.url ?? ''}`);
+      response.writeHead(request.url?.endsWith('/credential-keys') ? 200 : 404, {
+        'content-type': 'application/json',
+      });
+      response.end(JSON.stringify({ keys: [{ kid: 'another', x: 'x', active: true }] }));
+    });
+    await new Promise<void>((resolve) => xcube.listen(0, '127.0.0.1', resolve));
+    const cubePort = (xcube.address() as AddressInfo).port;
+    const port = await freePort();
+    try {
+      process.env = {
+        ...saved,
+        CUBE_API_SECRET: 'x',
+        CUBE_API_URL: `http://127.0.0.1:${String(cubePort)}/cubejs-api`,
+        PORT: String(port),
+        [XCUBE_PUBLIC_KEY]: DEV_JWK,
+        WECHART_XCUBE_MODEL: 't455',
+        WECHART_SERVICE_KEY_FILE: fileURLToPath(new URL('infra/xcube/dev-service-key.pem', REPO)),
+      };
+      vi.resetModules();
+
+      await expect(import('../main')).rejects.toThrow(
+        `xcube holds no credential key with the id ${DEV.kid}`,
+      );
+      expect(asked).toContain('GET /cubejs-api/v1/semantic/credential-keys');
+      expect(await listening(port)).toBe(false);
+    } finally {
+      await new Promise((resolve) => xcube.close(resolve));
+      await closeDb();
+    }
+  });
+});
+
+/**
+ * T455, AC-324 (amended 2026-09-26, `[X6]`): IF xcube answers that it holds no
+ * credential key with the id of wechart's public key, THEN wechart's API
+ * SHALL refuse to start, naming that key id. `Fails when: … wechart's API
+ * serves requests while xcube lists no key with its public key's id.`
+ * xcube lists its keys at `GET /v1/semantic/credential-keys`, which takes a
+ * service token naming no model (research xcube-slice-6.md).
+ */
+describe('xcube’s credential keys, checked at start (T455, AC-324)', () => {
+  const answering = (...answers: (Response | Error)[]) => {
+    const asked: { url: string; authorization: string | null }[] = [];
+    const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      asked.push({
+        url: String(url),
+        authorization: new Headers(init?.headers).get('authorization'),
+      });
+      const next = answers.shift() ?? new Error('no more answers');
+      if (next instanceof Error) throw next;
+      return next;
+    });
+    return { fetch, asked };
+  };
+  const keys = (...kids: string[]) =>
+    new Response(JSON.stringify({ keys: kids.map((kid) => ({ kid, x: 'x', active: true })) }), {
+      status: 200,
+    });
+  const check = (fetch: typeof globalThis.fetch) =>
+    checkXcubeHoldsKey({
+      cubeApiUrl: 'http://cube.invalid/cubejs-api',
+      key: DEV,
+      token: async () => 'any-model-service-token',
+      fetch,
+      waitMs: 1,
+    });
+
+  it('passes when xcube holds wechart’s key, asked with a service token naming no model', async () => {
+    const { fetch, asked } = answering(keys('another', DEV.kid));
+
+    await expect(check(fetch)).resolves.toBeUndefined();
+    expect(asked).toEqual([
+      {
+        url: 'http://cube.invalid/cubejs-api/v1/semantic/credential-keys',
+        authorization: 'Bearer any-model-service-token',
+      },
+    ]);
+  });
+
+  it('refuses to start when xcube holds wechart’s key but seals new credentials to another (T455’s review)', async () => {
+    const { fetch } = answering(
+      new Response(
+        JSON.stringify({
+          keys: [
+            { kid: DEV.kid, x: 'x', active: false },
+            { kid: 'newer', x: 'y', active: true },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    await expect(check(fetch)).rejects.toThrow(
+      `xcube holds the credential key ${DEV.kid}, which ${XCUBE_PUBLIC_KEY} names, but seals new credentials to newer: give wechart newer’s public key.`,
+    );
+  });
+
+  it('refuses to start, naming the key id, when xcube holds another or none', async () => {
+    for (const answer of [keys('another'), keys()]) {
+      const { fetch } = answering(answer);
+      let message = '';
+      try {
+        await check(fetch);
+      } catch (error) {
+        expect(error).toBeInstanceOf(ConfigError);
+        message = (error as Error).message;
+      }
+      expect(message).toContain(DEV.kid);
+      expect(message).toMatch(/^xcube holds no credential key/);
+    }
+  });
+
+  it('waits while xcube can’t be reached, or is starting, and then checks', async () => {
+    const { fetch, asked } = answering(
+      new Error('ECONNREFUSED'),
+      new Response('starting', { status: 503 }),
+      keys(DEV.kid),
+    );
+
+    await expect(check(fetch)).resolves.toBeUndefined();
+    expect(asked).toHaveLength(3);
+  });
+
+  it('refuses to start when xcube refuses the service credential, saying so', async () => {
+    const { fetch } = answering(
+      new Response(JSON.stringify({ error: 'Invalid token', code: 'unauthorized' }), {
+        status: 401,
+      }),
+    );
+
+    await expect(check(fetch)).rejects.toThrow(
+      /xcube answered 401 when asked for its credential keys/,
+    );
+  });
 });
 
 describe('where the development key pair lives (T333, AC-324, AC-298)', () => {
@@ -237,14 +381,48 @@ describe('where the development key pair lives (T333, AC-324, AC-298)', () => {
     for (const path of ['playwright.config.ts', 'playwright.security.config.ts']) {
       expect(read(path), path).toMatch(/WECHART_XCUBE_PUBLIC_KEY: DEV_XCUBE_PUBLIC_KEY/);
     }
-    // The chart requires it, and Docker Desktop's values give the development one.
-    expect(read('deploy/helm/wechart/templates/api.yaml')).toMatch(
-      /name: WECHART_XCUBE_PUBLIC_KEY\s+value: \{\{ required /,
-    );
+    // T455: in the chart, the key the release's Job made (below), not a value.
     const desktop = parse(read('deploy/helm/values/docker-desktop.yaml')) as {
       api?: { xcubePublicKey?: string };
     };
-    expect(JSON.parse(desktop.api?.xcubePublicKey ?? 'null')).toEqual(JSON.parse(DEV_JWK));
+    expect(desktop.api?.xcubePublicKey).toBeUndefined();
+  });
+
+  /**
+   * T455 (AC-324, AC-298): the chart's key is made by its Job, once
+   * (`templates/xcube-credential-key.yaml`): the API reads the public JWK from
+   * the ConfigMap, a missing one keeping it from starting; Cube's pods, API
+   * instance and refresh worker alike, mount the Secret and name its key by
+   * the ConfigMap's kid; no other pod of the chart mounts or names it.
+   */
+  it('gives the chart’s API the key its Job made, and that key’s Secret to Cube’s pods alone', () => {
+    const api = read('deploy/helm/wechart/templates/api.yaml');
+    expect(api).toMatch(
+      /- name: WECHART_XCUBE_PUBLIC_KEY\n\s+valueFrom:\n\s+configMapKeyRef:\n\s+name: \{\{ include "wechart\.xcubePublicKeyConfigMap" \. \}\}\n\s+key: jwk\n/,
+    );
+    // A missing one keeps the API from starting (research, "API pod").
+    expect(api).not.toMatch(/optional: true/);
+    expect(read('deploy/helm/wechart/values.yaml')).not.toContain('xcubePublicKey');
+    // It waits for xcube before it listens: as long as Cube may take to start,
+    // before its liveness probe may restart it (T455's review).
+    expect(api).toMatch(
+      /startupProbe:\n\s+httpGet:\n\s+path: \/api\/health\n\s+port: http\n\s+periodSeconds: 5\n\s+failureThreshold: \{\{ div \(add \(int \.Values\.cube\.startupSeconds\) 60\) 5 \}\}/,
+    );
+
+    const cube = read('deploy/helm/wechart/templates/cube.yaml');
+    // One template for both Deployments: outside either one's branch.
+    expect(cube).toMatch(
+      /- name: XCUBE_CREDENTIAL_KEY_IDS\n\s+valueFrom:\n\s+configMapKeyRef:\n\s+name: \{\{ include "wechart\.xcubePublicKeyConfigMap" \$ \}\}\n\s+key: kid\n/,
+    );
+    expect(cube).toMatch(
+      /- name: credential-keys\n\s+mountPath: \/run\/secrets\/xcube-credential-keys\n\s+readOnly: true/,
+    );
+    expect(cube).toMatch(
+      /- name: credential-keys\n\s+secret:\n\s+secretName: \{\{ include "wechart\.xcubeKeySecret" \$ \}\}\n\s+defaultMode: 0440/,
+    );
+    expect(cube).toMatch(/fsGroup: 1000/);
+    for (const other of ['api.yaml', 'web.yaml', 'meta.yaml', 'dex.yaml', 'cubestore.yaml'])
+      expect(read(`deploy/helm/wechart/templates/${other}`), other).not.toContain('xcubeKeySecret');
   });
 });
 

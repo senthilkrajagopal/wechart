@@ -14,11 +14,17 @@ half (requirements.md §P2.4, "Credentials"; R27).
   use it for real credentials.
 - `dev-credential-key.pub.jwk`: the public half, as a JWK whose `kid` is its
   RFC 7638 thumbprint. wechart's API reads it from `WECHART_XCUBE_PUBLIC_KEY`,
-  and refuses to start without a usable one. The Playwright configs and the
-  Docker Desktop chart values carry it.
+  and refuses to start without a usable one, or while xcube doesn't list the
+  key as held and active (T455). The Playwright configs carry it.
+- `dev-credential-key.check`: the sample credential xcube opens at start to
+  prove the key file is the key, made by xcube's keygen from the `.pem`
+  (`node /cube/node_modules/xcube/dist/src/bin/keygen.js <dir> <key.pem>` in
+  xcube's image; research `xcube-slice-6.md`). compose mounts it beside the
+  `.pem`, and `XCUBE_CREDENTIAL_KEY_IDS` names the kid.
 
-xcube's own start-up check needs a sample credential sealed to this key, which
-xcube's side makes (`<kid>.check` in the research).
+The Helm chart doesn't use this pair: a Job makes the release's own key once,
+with the same keygen, and keeps it in a Secret only Cube's pods mount (T455;
+`docs/deploy.md`, "xcube's public key").
 
 # wechart's development service key pair
 

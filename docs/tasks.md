@@ -7205,8 +7205,8 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362â€
     - core's data-source tests 35;
     - API: the key route in `access/data-sources.test.ts`, and the `pg_dump` test;
     - the full unit suite (below, at commit).
-- [ ] T455 (AC-324) Refuse to start when xcube holds no credential key with wechart's public key's id *(added 2026-09-26, `[X6]`)*
-  - Files: `packages/api/src/secrets/xcube-key.ts` (+ test), `packages/api/src/main.ts`
+- [x] T455 (AC-324) Refuse to start when xcube holds no credential key with wechart's public key's id *(added 2026-09-26, `[X6]`)*
+  - Files: `packages/api/src/secrets/xcube-key.ts` (+ test), `packages/api/src/main.ts`, `packages/api/src/cube/service-token.ts` (+ test, `anyModelToken`); *(2026-09-26, the key on each side)* `docker-compose.yml` and `infra/xcube/dev-credential-key.check` (+ `packages/api/src/deploy/cube-image.test.ts`), and in the chart `templates/xcube-credential-key.yaml`, `files/xcube-credential-key.mjs` (+ `packages/api/src/deploy/credential-key-job.test.ts`), `templates/{_helpers.tpl,api.yaml,cube.yaml}`, `values.yaml`, `values/docker-desktop.yaml`; `docs/deploy.md`, `infra/xcube/README.md`; research `kubernetes-job-generated-secret.md`
   - Failing test: `xcube-key.test.ts`, against the stub xcube:
     - at start the API reads `GET /v1/semantic/credential-keys` with the service credential; when no key there has its public key's `kid`, it exits naming that `kid`;
     - when one does, it starts;
@@ -7258,6 +7258,40 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362â€
       - a workspace's data sources are refused while xcube is configured. T346/T347 must lift that with slice 5's overlays.
   - **Tests:**
     - `connections.test.ts` 15;
+  - **Done 2026-09-26. AC-324 is not ticked yet:** its chart half is checked by installing on docker-desktop, which follows this commit. Its xcube half, refusing to start without its key or with one that can't open its sample credential, is xcube's own start-up check, which compose now exercises with the `.check`.
+  - **As built:**
+    - **The check.** Before it listens, the API asks `GET /v1/semantic/credential-keys` with a service token naming no model (`anyModelToken`).
+      - It starts only when the kid of `WECHART_XCUBE_PUBLIC_KEY` is listed and `active`.
+      - Listed but inactive, it refuses, naming the key xcube seals new credentials to.
+      - Absent, it refuses, naming the kid and those xcube holds.
+      - While xcube can't be reached or answers 5xx, it waits and says so.
+      - `xcube-key.test.ts` imports `main` against a stub xcube listing another key: the start is refused, and the port is never opened.
+    - **Compose** mounts `<kid>.check` beside `<kid>.pem` into both Cube processes, and names the kid in `XCUBE_CREDENTIAL_KEY_IDS`. `cube-image.test.ts` pins it.
+    - **The chart makes xcube's key once, in a Job** (research `kubernetes-job-generated-secret.md`):
+      - The Job runs xcube's own keygen in xcube's image, as uid 1000 under the restricted profile. Its ServiceAccount may `get` only the two objects and `create` them, with a ten-minute projected token.
+      - It writes a Secret, `<release>-xcube-credential-keys` (`<kid>.pem`, `<kid>.check`), mounted `0440` with `fsGroup` into both Cube Deployments alone.
+      - It writes a ConfigMap, `<release>-xcube-public-key` (`jwk`, `kid`). The API reads `jwk`, and Cube's pods name the kid.
+      - It reconciles: a raced or half-done run is completed. It never makes a new key where the ConfigMap names one: it stops, saying to restore the Secret.
+      - Neither object is Helm's, so an uninstall keeps the key. `api.xcubePublicKey` is gone.
+    - **The API** gets a startup probe as long as Cube's startup budget plus a minute, since it waits for xcube before it listens.
+  - **The cold review (FAIL), fixed:**
+    - The Job's "run as main" guard compared the ConfigMap volume's symlinked path with node's resolved one, so in the pod the Job would have ended at once having done nothing, and nothing would ever start. It now compares real paths, and a test runs it through a symlink.
+    - The API's liveness probe would have restarted it after a minute of waiting for Cube (now a startup probe).
+    - A release name of 34 or more characters made the Job's name too long (now truncated to leave room for the hash).
+    - The check ignored `active`, which the research requires.
+    - A ConfigMap with no `data` threw.
+    - Nothing tested that `main.ts` makes the check (now tested).
+    - `infra/xcube/README.md` was stale.
+    - **Left as they are:**
+      - a log line each 2 s while waiting;
+      - a failing token read as "can't be reached";
+      - no periodic re-check, the research's "and on a timer".
+  - **Tests:**
+    - `xcube-key.test.ts` 17;
+    - `credential-key-job.test.ts` 6;
+    - `cube-image.test.ts`;
+    - the unit suite (ui 47, core 444, recommender 123, charts 473, web 1535, api 740);
+    - `helm lint`, and `helm template` for a short and a long release name.
     - `repos/data-sources.test.ts` 16;
     - `access/data-sources.test.ts` 10;
     - Chrome: `security/folder-data-sources.spec.ts` 2 and `explore.spec.ts` 19;

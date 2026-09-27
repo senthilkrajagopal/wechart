@@ -9,11 +9,6 @@ web:
     # in this cluster too.
     port: 8089
 
-api:
-  # xcube's development public key (infra/xcube/dev-credential-key.pub.jwk):
-  # this cluster runs development keys, like compose (T333, AC-324).
-  xcubePublicKey: '{"kty":"OKP","crv":"X25519","x":"OKDigdpTk6aEk-tzx6VQP-gIWx08RyrSF-GDtz_z3Gc","kid":"uYWeMx6i173fsiolFp1xi-qiav50k52AGinM56Y8JEw"}'
-
 cube:
   # Cube v1.7.45 with the user's fork's package xcube, formerly
   # cube-introspection (T275, T414, T417, R10), which from 83cb9f0888 serves

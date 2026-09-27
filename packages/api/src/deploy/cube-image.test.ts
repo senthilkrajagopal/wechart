@@ -187,6 +187,32 @@ describe('compose serves the model from xcube’s schema (T447, AC-333)', () => 
     expect(serviceBlock(compose, 'cube-refresh-worker')).toContain('depends_on: *cube-depends-on');
   });
 
+  /**
+   * T455, AC-324: xcube opens data sources' secrets with the development key,
+   * loaded by the kid `XCUBE_CREDENTIAL_KEY_IDS` names, from `<kid>.pem` and
+   * the `<kid>.check` sample credential that proves it (research
+   * xcube-slice-6.md, "xcube's credential key, for compose and Helm"): in both
+   * Cube processes, since the worker builds through connections too, and in
+   * no container of wechart's (AC-298).
+   */
+  it('gives both Cube processes the credential key and its sample credential, by its kid, and wechart neither', () => {
+    const kid = (JSON.parse(fromRoot('infra/xcube/dev-credential-key.pub.jwk')) as { kid: string })
+      .kid;
+    expect(shared).toMatch(new RegExp(`^ {2}XCUBE_CREDENTIAL_KEY_IDS: ${kid}$`, 'm'));
+    const mounts = /^x-cube-secrets: &cube-secrets\n((?: {2}.*\n)+)/m.exec(compose)?.[1] ?? '';
+    for (const file of [`${kid}.pem`, `${kid}.check`])
+      expect(mounts).toContain(`target: /run/secrets/xcube-credential-keys/${file}`);
+    expect(compose).toMatch(
+      /^ {2}xcube_credential_check:\n {4}file: \.\/infra\/xcube\/dev-credential-key\.check$/m,
+    );
+    expect(serviceBlock(compose, 'cube')).toMatch(
+      /secrets:\n {6}- \*xcube-credential-key\n {6}- \*xcube-credential-check\n/,
+    );
+    expect(serviceBlock(compose, 'cube-refresh-worker')).toContain('secrets: *cube-secrets');
+    for (const name of ['wechart-meta', 'sample-db', 'cubestore', 'dex'])
+      expect(serviceBlock(compose, name), name).not.toContain('xcube-credential');
+  });
+
   it('runs the fork’s own bootstrap, as it was at the image’s commit', () => {
     const bootstrap = fromRoot('infra/xcube/bootstrap.sql');
     expect(bootstrap).toContain('83cb9f0888');
