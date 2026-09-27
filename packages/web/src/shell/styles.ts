@@ -1658,6 +1658,10 @@ fieldset.model-field > legend {
 .query-log-view { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .query-log__filters { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 .query-log__filters label { color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
+/* Data sources (T364): a health's time, quieter than its words, and the
+   page with none to list, its note and the way to Explore under it. */
+.status__when { font-weight: 400; color: var(--wc-text-secondary); }
+.sources-empty { display: grid; gap: 8px; justify-items: start; }
 .query-log--sticky thead th {
   position: sticky;
   top: var(--wc-app-bar-height);

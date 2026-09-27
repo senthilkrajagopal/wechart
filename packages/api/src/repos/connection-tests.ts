@@ -22,6 +22,12 @@ export interface ConnectionTest {
    * (T362's review; T364).
    */
   readonly asStored: boolean;
+  /**
+   * The stored settings' print it tested (`DataSource.settingsPrint`), for a
+   * test of them; null for a trial of changes. Once a save changes them, the
+   * test is no longer the source's health (T364's review).
+   */
+  readonly settings: string | null;
   /** Who ran it, as wechart knew them then. */
   readonly by: { readonly key: string; readonly name: string } | null;
 }
@@ -30,6 +36,8 @@ export interface ConnectionTestStore {
   record(dataSourceId: string, test: Omit<ConnectionTest, 'id' | 'ranAt'>): Promise<ConnectionTest>;
   /** Every one, newest first (AC-163: none may be missing). */
   history(dataSourceId: string): Promise<ConnectionTest[]>;
+  /** Each source's newest test of its stored settings: its health (T364, AC-157). */
+  latestAsStored(dataSourceIds: readonly string[]): Promise<Map<string, ConnectionTest>>;
 }
 
 /** Of each check, only what xcube says of it. */
@@ -42,12 +50,22 @@ const trimmed = (checks: TestAnswer['checks']): TestAnswer['checks'] =>
   }));
 
 export function connectionTestStore(db: Kysely<Database>): ConnectionTestStore {
-  const columns = ['id', 'ran_at', 'ok', 'as_stored', 'checks', 'fields', 'ran_by'] as const;
+  const columns = [
+    'id',
+    'ran_at',
+    'ok',
+    'as_stored',
+    'settings',
+    'checks',
+    'fields',
+    'ran_by',
+  ] as const;
   const toTest = (row: {
     id: string;
     ran_at: Date;
     ok: boolean;
     as_stored: boolean;
+    settings: string | null;
     checks: unknown[];
     fields: Record<string, unknown>;
     ran_by: { key: string; name: string } | null;
@@ -58,6 +76,7 @@ export function connectionTestStore(db: Kysely<Database>): ConnectionTestStore {
     checks: row.checks as TestAnswer['checks'],
     fields: row.fields as Record<string, FieldValue>,
     asStored: row.as_stored,
+    settings: row.settings,
     by: row.ran_by,
   });
 
@@ -69,6 +88,7 @@ export function connectionTestStore(db: Kysely<Database>): ConnectionTestStore {
           data_source_id: dataSourceId,
           ok: test.ok,
           as_stored: test.asStored,
+          settings: test.settings,
           checks: JSON.stringify(trimmed(test.checks)),
           fields: JSON.stringify(test.fields),
           ran_by: test.by === null ? null : JSON.stringify(test.by),
@@ -87,6 +107,20 @@ export function connectionTestStore(db: Kysely<Database>): ConnectionTestStore {
         .orderBy('seq', 'desc')
         .execute();
       return rows.map(toTest);
+    },
+
+    async latestAsStored(dataSourceIds) {
+      if (dataSourceIds.length === 0) return new Map();
+      const rows = await db
+        .selectFrom('connection_tests')
+        .distinctOn('data_source_id')
+        .select(['data_source_id', ...columns])
+        .where('data_source_id', 'in', [...dataSourceIds])
+        .where('as_stored', '=', true)
+        .orderBy('data_source_id')
+        .orderBy('seq', 'desc')
+        .execute();
+      return new Map(rows.map((row) => [row.data_source_id, toTest(row)]));
     },
   };
 }

@@ -99,6 +99,8 @@ export interface ConnectionTestTable {
   ran_at: Generated<Date>;
   ok: boolean;
   as_stored: boolean;
+  /** The stored settings' print it tested; none for a trial of changes (T364's review). */
+  settings: string | null;
   checks: JSONColumnType<unknown[]>;
   fields: JSONColumnType<Record<string, unknown>>;
   ran_by: JSONColumnType<{ key: string; name: string } | null, string | null, string | null>;

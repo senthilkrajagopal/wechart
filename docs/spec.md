@@ -857,7 +857,7 @@ Jobs, Security, Schedules and Data sources:
       Fails when: a workspace page title is not 20 px at weight 600, or a workspace table's numbers are not tabular.
 - [x] AC-232 WHEN the user opens Security, THE SYSTEM SHALL offer a preset context for each group the policies name, list every cube and view with the access the current context gives it and why, start a dashboard preview from a bounded list of dashboards that says when nothing matches, link each policy to its file in Model, and keep the edited context for the session.
       Fails when: effective access is missing, a search with no match shows nothing, a policy's source does not open Model, or the context is reset after a preview.
-- [ ] AC-233 WHEN the user opens Schedules or Data sources, THE SYSTEM SHALL show the page's title and a note saying what the page is for, and SHALL treat "/sources" as Data sources (phase 2: data sources are managed in folders, `[R16, R19]`).
+- [x] AC-233 WHEN the user opens Schedules or Data sources, THE SYSTEM SHALL show the page's title and a note saying what the page is for, and SHALL treat "/sources" as Data sources (phase 2: data sources are managed in folders, `[R16, R19]`).
       Fails when: either page renders nothing, "/sources" shows Not found, or Data sources says managing connections is not part of this phase.
 
 ## F23. The chart tile's menu (DSH-08)

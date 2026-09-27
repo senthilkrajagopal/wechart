@@ -69,6 +69,8 @@ describe('signing in through the configured OIDC provider (T316, AC-252)', () =>
       identity: 'writer@wechart.test',
       groups: ['sales-rw'],
       superAdmin: false,
+      // No store of folders' groups here, so no folder it writes (T364's review).
+      readWrite: false,
       security: 'oidc',
     });
   });

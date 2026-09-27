@@ -5608,6 +5608,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/repos/workspaces.ts` (+ test), `packages/api/src/repos/catalog.ts`, a migration `…_workspaces.cjs` (phase-1 items in `mine` move to `ws:admin`)
   - Failing test: `workspaces.test.ts`: `writer` and `super` each list, open and search their own `ws:` folder; neither can list, open, search or load the other's, Super-Admins included; `reader` has no workspace and every create route answers 403 (AC-276, AC-277).
   - *2026-09-26, T328's review:* with sign-in on, no user's key is `admin`, because keys come from the provider (`auth/routes.ts`). Items moved to `ws:admin` would be nobody's, contrary to R17 ("everything phase 1 created stays in place … only Super-Admins see it"). Where phase-1 items in `mine` go is asked of the user; this migration waits for the answer (AC-267).
+  - *2026-09-27, the user's answer (question 3):* "it is okay if phase 1 items aer not reachable.. this phase overrides phase 1 items". ~~a migration `…_workspaces.cjs` (phase-1 items in `mine` move to `ws:admin`)~~ No migration moves them: phase-1 items in `mine` stay where they are, reachable by no workspace.
   - Depends on: T325, T313
 - [ ] T344 (AC-278, AC-279) Copy a dashboard into the workspace with its charts, never editing shared items in place
   - Files: `packages/api/src/routes/workspace-copy.ts` (+ test), `packages/api/src/server.ts` (a write to a shared item answers 409 "Edit in my workspace"), `packages/api/src/repos/documents.ts`
@@ -5808,13 +5809,25 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - *(2026-09-26, from T335's review)* a data source's row in Explore opens it in this form, its settings shown and each stored secret said as stored (AC-269's open half: T335 lists them, and its rows open nothing until this form exists).
     - *(2026-09-26, from T362)* a stored data source's settings show its test history from `GET /api/data-sources/:id/tests`, newest first, each test with its time, who ran it, its outcome and each check (`TestHistory.tsx`; AC-163's showing half: T362 records and lists them);
     - *(2026-09-26, from T361)* the Test step shows each check xcube ran (`secrets`, `config`, `connect`, `schemas`) with its result, and a failed one's error text as xcube redacted it (AC-159's showing half: T361 runs the test and answers the checks);
+    - *(2026-09-27, from T364)* a stored data source's settings show T365's `CubeState`: whether every Cube instance uses its settings, from `GET /api/data-sources/:id/cube-state`, against compose's xcube after a query through the source, with `.cube-state` and its parts styled in `shell/styles.ts` (AC-161's showing half);
     - *(2026-09-26, from T441)* the form seals each typed secret at submit with core's `sealSecretV1`, to the key `GET /api/data-sources/sealing-key` gives, and a canary secret typed into it appears in no request body to wechart (the Test step's included), no stored row and no line of the API's log, in Chrome, Firefox and WebKit (AC-325's form half: T441 built the sealer and the key route, and there was no form to type into).
   - Depends on: T454, T361, T345
-- [ ] T364 (AC-157, AC-233, AC-001, AC-161) List every visible data source with its folder, driver, health and the cubes that use it
-  - Files: `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (replacing the deferred page), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`), `e2e/security/data-sources.spec.ts`
-  - Failing test: `data-sources.spec.ts`: the page shows its title and note, lists every source the user may see with folder path, driver, health from the last test and the cubes using it, and none they may not; `/sources` opens it; `reader` has no Data sources entry (AC-157, AC-233, AC-001).
-    - *(2026-09-26, from T362 and T365)* "health from the last test" is the newest test of the stored settings (`asStored`), not a trial of changes; beside it, T365's `CubeState` shows whether every Cube instance uses the settings (AC-161's showing half, against compose's xcube after a query through the source): the page fetches `GET /api/data-sources/:id/cube-state` for it, and gives `.cube-state` and its parts their styles in `shell/styles.ts`.
+- [x] T364 (AC-157, AC-233) List every visible data source with its folder, driver and health *(2026-09-27: the cubes using each moved to T459; its AC-001 clause is T331's; its AC-161 showing is T363's)*
+  - Files: `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (replacing the deferred page), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`), `e2e/security/data-sources.spec.ts`; *as built (2026-09-27):* also `DataSourcesList.tsx` (+ test), `router/routes.tsx`, `admin/DeferredPage.tsx` (removed), `shell/styles.ts`, `shell/AccountMenu.tsx` (`Me.readWrite`), `packages/api/src/server.ts` (the listing's rule and paths; `/api/me`'s `readWrite`), `repos/connection-tests.ts` (`latestAsStored`, a test's `settings`), `repos/data-sources.ts` (`settingsPrint`), a migration `…_connection-test-settings.cjs`, `access/data-sources.test.ts`, `e2e/admin.spec.ts`
+  - Failing test: `data-sources.spec.ts`: the page shows its title and note, lists every source the user may see with folder path, driver, health from the last test ~~and the cubes using it~~, and none they may not; `/sources` opens it~~; `reader` has no Data sources entry~~ (AC-157, AC-233~~, AC-001~~).
+    - *(2026-09-26, from T362 and T365)* "health from the last test" is the newest test of the stored settings (`asStored`), not a trial of changes; ~~beside it, T365's `CubeState` shows whether every Cube instance uses the settings (AC-161's showing half, against compose's xcube after a query through the source): the page fetches `GET /api/data-sources/:id/cube-state` for it, and gives `.cube-state` and its parts their styles in `shell/styles.ts`.~~ *moved to T363 (2026-09-27): a list would ask xcube once per row; one data source's settings ask it once.*
+    - *(2026-09-27)* ~~and the cubes using it~~ *moved to T459:* xcube binds a cube at publish and never rebinds it, so only xcube knows which cubes use a data source, and `GET …/items` doesn't say at 22132c309c (asked: `to-xcube/2026-09-27-2330-items-data-source.md`).
+    - *(2026-09-27)* ~~`reader` has no Data sources entry~~ *left to T331, whose switcher shapes the entries by role (AC-001).* Here the page gives a reader, who sees none, a note saying who has data sources and a link to Explore.
   - Depends on: T335, ~~T338~~ T435 (2026-09-26), T362, T365
+  - **Done 2026-09-27. AC-233 ticked; AC-157 is not (its "cubes whose models use it" is T459's).**
+    - AC-233: `e2e/admin.spec.ts` (Schedules' title and note; Data sources' title and note, never "not part of this phase", its list or none-added note; `/sources` opens it), and `security/data-sources.spec.ts` for a signed-in writer.
+    - **As built:**
+      - `GET /api/data-sources` lists every source in the folders whose every item the user sees (T335's read rule: never a read-only member's), each with its folder's path, its driver and its health. `listing` is required, so no caller lists every source by default.
+      - Health is the newest test of the stored settings (`latestAsStored`), and `current` only while those settings are unchanged. Each data source carries a `settingsPrint` (its sign-in method, fields and each secret's revision), and a test of its stored settings keeps it (`connection_tests.settings`, a migration). So a save that changes them reads "Not tested since it changed", and a rename doesn't (the review's finding).
+      - `/api/me` says `readWrite`: a read-write member of some folder, the one user with security off, or a Super-Admin. With none listed, the page tells a read-write member none is in their folders yet, a Super-Admin none has been added, and anyone else that data sources are for read-write members, with a way to Explore.
+      - A root folder's source reads as Explore names it (Shared, My workspace).
+    - **Review (one round):** stale health after a save (fixed as above); "newest" pinned by T362's history test; the read-write member's empty state; a workspace's source called Shared; the fail-open default; the task's text. All fixed.
+    - **Tests:** API `access/data-sources.test.ts` 24, `connection-tests.test.ts` 4; web data-sources 15; Chrome `security/data-sources.spec.ts` 3, `folder-data-sources.spec.ts` 3, `admin.spec.ts` 17; units: ui 47, core 444, recommender 123, charts 473, web 1550, api 766.
 - [x] T365 (AC-161) After an approved change to a source, show whether every running Cube instance uses it, with no restart *(rewritten 2026-09-26: slice 6; xcube swaps the driver and reports each instance's state, `[plan]`)*
   - Files: `packages/api/src/xcube/connections.ts` (`PUT /v1/semantic/connections/{name}`, `GET …/{name}/health`), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources/:id/cube-state`), `packages/web/src/workspaces/data-sources/CubeState.tsx` (+ test)
   - Failing test: `cube-state.test.ts`:
@@ -5825,7 +5838,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - *2026-09-26:* the change lands through T442 whether approved (T352) or seeded (T443), so this can show a folder data source's state before proposals exist.
   - Depends on: T442
   - **Done 2026-09-26. AC-161 is not ticked:**
-    - Its showing half is `CubeState` on T364's page, which now cites AC-161.
+    - Its showing half is `CubeState` ~~on T364's page, which now cites AC-161~~ in T363's settings view of one data source (moved 2026-09-27; T363 cites AC-161).
     - Its live-against-xcube half is T435's health test.
     - The type never changing is T335's.
     - The swap is xcube's.
@@ -7181,7 +7194,7 @@ xcube's slices 4, 5 and 6 are built, and one image carries all three: `ghcr.io/s
 
 The user asked (2026-09-26) that connections and data sources, shown in folders, come first. So the order is:
 1. **T420**: the image pin and the service credential. Every own-behalf call moves off the static admin token; user tokens stay as they are until T437.
-2. **The data-source path:** T454 (the eight drivers and their target) → T335 (data sources as folder items, listed in Explore) → T441 (sealed in the browser) → T455 (the key-id check) → T442 (landed in xcube as connections) → T443 (the root's `default`, seeded by a Job) → T361, T362 (tests and their history) → T435 (binding at publish) → T365 (health) → T364 (the Data sources page).
+2. **The data-source path:** T454 (the eight drivers and their target) → T335 (data sources as folder items, listed in Explore) → T441 (sealed in the browser) → T455 (the key-id check) → T442 (landed in xcube as connections) → T443 (the root's `default`, seeded by a Job) → T361, T362 (tests and their history) → T435 (binding at publish) → T365 (health) → T364 (the Data sources page) → T459 (the cubes using each, once xcube reports them).
 3. **The rest of slice 4:** T437 (RS256 and the key push) → T436 (the folder gate) → T438 (Preview as) → T457 (AC-272 against xcube) → T458 (AC-327: no callbacks, shown).
 4. **Workspaces and proposals** (F29, F30), with slice 5's overlays: T343 → T344 → T345 → T363 → T346 → T347 → T348 → T349 → T350 → T351 → T352 → T451 → T440 → T456, then T353–T359.
 
@@ -7237,6 +7250,10 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
     - wechart serves no route for Cube to read a model or a connection from (T431's and T442's route checks, cited);
     - the web app asks nothing of Cube's or xcube's address (AC-327).
   - Depends on: T442, T361
+- [ ] T459 (AC-157) Show beside each data source the cubes bound to it, from xcube's items *(added 2026-09-27, from T364: xcube binds a cube at publish and never rebinds it, so only xcube knows which cubes use a data source)*
+  - Files: `packages/api/src/xcube/client.ts` (`GET …/items`' `dataSource`), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`' `usedBy`), `packages/web/src/workspaces/data-sources/DataSourcesList.tsx`, `e2e/security/data-sources.spec.ts`
+  - Failing test: `data-sources.spec.ts`, against compose's xcube: a cube published in a folder under a data source's folder lists, beside that source, with its folder's path; published again after a nearer source of that name is added, it stays beside the first source until it is republished; a cube in a folder the viewer can't reach isn't listed (AC-157).
+  - Depends on: T364, and xcube reporting each cube's bound data source in `GET …/items` in a published, researched image (asked: `to-xcube/2026-09-27-2330-items-data-source.md`)
 
 ### Slice 5: previews
 
@@ -7474,16 +7491,16 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
 
 | AC | Tasks | AC | Tasks | AC | Tasks |
 |---|---|---|---|---|---|
-| AC-001 | T331, T364 | AC-008 | T322, ~~T339~~ T437 | AC-041 | T390 |
+| AC-001 | T331 | AC-008 | T322, ~~T339~~ T437 | AC-041 | T390 |
 | AC-047 | T380 | AC-048 | T382 | AC-049 | T381 |
 | AC-050 | T383 | AC-051 | T384 | AC-052 | T385 |
 | AC-093 | T386 | AC-097 | T387, T453 | AC-104 | T388 |
 | AC-116 | T389 | AC-131 | T334, T342 | AC-141 | T342 |
 | AC-145 | T375 | | | | |
 | AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |
-| AC-154 | T377 | AC-155 | T379 | AC-157 | T364 |
+| AC-154 | T377 | AC-155 | T379 | AC-157 | T364, T459 |
 | AC-158 | T363 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
-| AC-161 | T335, T363, T364, T365, T435, T442 | AC-163 | T362, T363 | AC-164 | T335 |
+| AC-161 | T335, T363, T365, T435, T442 | AC-163 | T362, T363 | AC-164 | T335 |
 | AC-176 | T405 | AC-180 | T407 | AC-187 | T406 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |

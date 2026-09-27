@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   dataSourceProblems,
@@ -34,9 +34,30 @@ export interface DataSource {
   readonly fields: Readonly<Record<string, FieldValue>>;
   /** The secrets it holds, by field, in its sign-in method's order. */
   readonly secrets: readonly string[];
+  /**
+   * Its connection settings as stored, as one print: its sign-in method, its
+   * fields and each secret's revision. A test of the stored settings keeps
+   * it, so a save that changes them — a rename doesn't — leaves that test no
+   * longer its health (T364's review).
+   */
+  readonly settingsPrint: string;
   readonly version: number;
   readonly updatedAt: Date;
 }
+
+/** Sorted by key, so the order they came in changes no print. */
+const byKey = <T>(record: Readonly<Record<string, T>>) =>
+  Object.entries(record).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+
+export const settingsPrintOf = (
+  driver: string,
+  authMethod: string,
+  fields: Readonly<Record<string, FieldValue>>,
+  revisions: Readonly<Record<string, string>>,
+): string =>
+  createHash('sha256')
+    .update(JSON.stringify([driver, authMethod, byKey(fields), byKey(revisions)]))
+    .digest('base64url');
 
 export interface NewDataSource {
   readonly folderId: string;
@@ -184,16 +205,20 @@ export function dataSourceStore(
   };
   /** In the transaction a save runs in, or out of one. */
   type Reader = Kysely<Database>;
+  /** Each one's secrets, by field, with their revisions: never their envelopes. */
   const secretsOf = async (ids: readonly string[], on: Reader = db) => {
-    if (ids.length === 0) return new Map<string, string[]>();
+    if (ids.length === 0) return new Map<string, Record<string, string>>();
     const rows = await on
       .selectFrom('data_source_secrets')
-      .select(['data_source_id', 'field'])
+      .select(['data_source_id', 'field', 'revision'])
       .where('data_source_id', 'in', [...ids])
       .execute();
-    const byId = new Map<string, string[]>();
+    const byId = new Map<string, Record<string, string>>();
     for (const row of rows)
-      byId.set(row.data_source_id, [...(byId.get(row.data_source_id) ?? []), row.field]);
+      byId.set(row.data_source_id, {
+        ...byId.get(row.data_source_id),
+        [row.field]: row.revision,
+      });
     return byId;
   };
   /** In its sign-in method's order, so a listing reads as its form does. */
@@ -204,14 +229,20 @@ export function dataSourceStore(
     const order = method?.fields.map((field) => field.key) ?? [];
     return [...fields].sort((a, b) => order.indexOf(a) - order.indexOf(b));
   };
-  const toSource = (row: Row, secrets: readonly string[]): DataSource => ({
+  const toSource = (row: Row, revisions: Readonly<Record<string, string>>): DataSource => ({
     id: row.id,
     folderId: row.folder_id,
     name: row.name,
     driver: row.type as DriverType,
     authMethod: row.auth_method,
     fields: row.settings as Record<string, FieldValue>,
-    secrets: ordered(row, secrets),
+    secrets: ordered(row, Object.keys(revisions)),
+    settingsPrint: settingsPrintOf(
+      row.type,
+      row.auth_method,
+      row.settings as Record<string, FieldValue>,
+      revisions,
+    ),
     version: row.version,
     updatedAt: row.updated_at,
   });
@@ -233,7 +264,7 @@ export function dataSourceStore(
       rows.map((row) => row.id),
       on,
     );
-    return rows.map((row) => toSource(row, secrets.get(row.id) ?? []));
+    return rows.map((row) => toSource(row, secrets.get(row.id) ?? {}));
   };
   const getOn = async (id: string, on: Reader) => {
     const row = (await select(on).where('id', '=', id).executeTakeFirst()) as Row | undefined;

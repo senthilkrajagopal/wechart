@@ -210,6 +210,7 @@ const source = (over: Partial<DataSource> = {}): DataSource => ({
   authMethod: 'password',
   fields: { host: 'db', port: 5432, ssl: false },
   secrets: ['password'],
+  settingsPrint: 'print-1',
   version: 1,
   updatedAt: new Date(0),
   ...over,

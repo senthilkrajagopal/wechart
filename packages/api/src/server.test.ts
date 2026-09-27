@@ -297,11 +297,13 @@ describe('who is signed in (AC-190)', () => {
     const response = await app.inject({ method: 'GET', url: '/api/me' });
     expect(response.statusCode).toBe(200);
     // Phase 2 adds whether they are a Super-Admin and the security mode
-    // (AC-252, AC-254); with security off it is still phase 1's one user.
+    // (AC-252, AC-254); with security off it is still phase 1's one user,
+    // who writes every folder (T364's review).
     expect(response.json()).toEqual({
       name: 'admin',
       groups: [],
       superAdmin: true,
+      readWrite: true,
       security: 'off',
     });
   });

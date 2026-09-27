@@ -10,7 +10,7 @@ import {
   type Landing,
 } from '../repos/data-sources';
 import { XCUBE_PUBLIC_KEY, type XcubePublicKey } from '../secrets/xcube-key';
-import type { ConnectionTestStore } from '../repos/connection-tests';
+import type { ConnectionTest, ConnectionTestStore } from '../repos/connection-tests';
 import { XcubeError } from '../xcube/client';
 import {
   ConnectionRefused,
@@ -104,7 +104,19 @@ export function registerDataSources(
     tester,
     tests,
     health,
+    listing,
   }: {
+    /**
+     * For the Data sources page (T364, AC-157): which folders the request's
+     * user sees every item of, and each folder's path from the root. Always
+     * given, so no listing can fall back to showing every one (T364's review).
+     */
+    readonly listing: {
+      readonly sees: (request: FastifyRequest) => Promise<(folderId: string) => boolean>;
+      readonly pathOf: () => Promise<
+        (folderId: string) => readonly { readonly id: string; readonly title: string }[]
+      >;
+    };
     /** A data source's Cube instances' reports, from xcube (T365, AC-161). */
     readonly health?: (source: DataSource) => Promise<ConnectionHealth | undefined>;
     /** Each test of a stored data source, kept and listed (T362, AC-163). */
@@ -161,6 +173,43 @@ export function registerDataSources(
     }
     return source;
   };
+
+  /**
+   * Every data source the user may see, in every folder (T364, AC-157): each
+   * with its folder's path, its driver, and its health from the last test of
+   * its stored settings (T362), `current` while its settings are still the
+   * ones tested. None to one who sees no folder's every item.
+   */
+  app.get('/api/data-sources', USER, async (request) => {
+    const sees = await listing.sees(request);
+    const pathOf = await listing.pathOf();
+    const visible = (await store.all()).filter((source) => sees(source.folderId));
+    const latest =
+      tests === undefined
+        ? new Map<string, ConnectionTest>()
+        : await tests.latestAsStored(visible.map((source) => source.id));
+    return visible.map((source) => {
+      const test = latest.get(source.id);
+      return {
+        id: source.id,
+        name: source.name,
+        folderId: source.folderId,
+        folderPath: pathOf(source.folderId),
+        driver: source.driver,
+        authMethod: source.authMethod,
+        updatedAt: source.updatedAt,
+        lastTest:
+          test === undefined
+            ? null
+            : {
+                ok: test.ok,
+                ranAt: test.ranAt,
+                checks: test.checks,
+                current: test.settings === source.settingsPrint,
+              },
+      };
+    });
+  });
 
   app.get('/api/data-sources/:id', USER, async (request, reply) => {
     const source = await reached(request, reply, 'read');
@@ -301,6 +350,7 @@ export function registerDataSources(
             checks: answer.checks,
             fields: plan.fields,
             asStored,
+            settings: asStored ? source.settingsPrint : null,
             by: user === null ? null : { key: user.key, name: user.name },
           })
           .catch((error: unknown) => {

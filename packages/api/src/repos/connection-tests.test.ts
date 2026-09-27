@@ -56,6 +56,7 @@ describe('a data source’s connection tests (T362, AC-163)', () => {
       checks: failedChecks,
       fields: made.fields,
       asStored: true,
+      settings: made.settingsPrint,
       by: { key: 'u1', name: 'Writer' },
     });
     const second = await tests().record(made.id, {
@@ -67,6 +68,7 @@ describe('a data source’s connection tests (T362, AC-163)', () => {
       })),
       fields: { ...made.fields, database: 'other' },
       asStored: false,
+      settings: null,
       by: { key: 'u2', name: 'Other writer' },
     });
 
@@ -79,6 +81,7 @@ describe('a data source’s connection tests (T362, AC-163)', () => {
       checks: failedChecks,
       fields: made.fields,
       asStored: true,
+      settings: made.settingsPrint,
       by: { key: 'u1', name: 'Writer' },
     });
     expect(history[0]?.asStored).toBe(false);
@@ -92,6 +95,7 @@ describe('a data source’s connection tests (T362, AC-163)', () => {
       checks: [],
       fields: one.fields,
       asStored: true,
+      settings: one.settingsPrint,
       by: null,
     });
 
@@ -118,6 +122,7 @@ describe('a data source’s connection tests (T362, AC-163)', () => {
             checks: [],
             fields: made.fields,
             asStored: true,
+            settings: made.settingsPrint,
             by: null,
           })
         ).id,
@@ -133,6 +138,7 @@ describe('a data source’s connection tests (T362, AC-163)', () => {
       checks: [{ id: 'secrets', status: 'passed', durationMs: 1, extra: 'not kept' } as never],
       fields: made.fields,
       asStored: true,
+      settings: made.settingsPrint,
       by: null,
     });
 

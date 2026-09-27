@@ -208,6 +208,50 @@ describe('who may change them (AC-262, AC-263, AC-264)', () => {
   });
 });
 
+describe('every data source the user may see, in every folder (T364, AC-157)', () => {
+  type Listed = {
+    id: string;
+    name: string;
+    folderPath: { id: string; title: string }[];
+    driver: string;
+    lastTest: { ok: boolean; ranAt: string } | null;
+  };
+  const listing = async (who: string) =>
+    (await as(who, { method: 'GET', url: '/api/data-sources' })).json<Listed[]>();
+
+  it('lists a read-write member’s own and their ancestors’, with each folder’s path, and none of /C’s', async () => {
+    const mine = (await listing('writer')).filter((row) => Object.values(held).includes(row.id));
+    expect(mine.map((row) => row.id).sort()).toEqual([held.root, held.a, held.b].sort());
+    const b = mine.find((row) => row.id === held.b)!;
+    expect(b).toMatchObject({ name: 'warehouse', driver: 'postgres' });
+    expect(b.folderPath.map((folder) => folder.title)).toEqual([`A ${MARK}`, `B ${MARK}`]);
+    expect(mine.find((row) => row.id === held.root)!.folderPath).toEqual([]);
+  });
+
+  it('lists none to a read-only member', async () => {
+    expect(await listing('reader')).toEqual([]);
+  });
+
+  it('says each one’s health from the last test of its stored settings, a trial of changes aside', async () => {
+    const tests = connectionTestStore(getDb());
+    const stored = (await sources().get(held.b))!.settingsPrint;
+    const base = { checks: [], fields: {}, by: null };
+    await tests.record(held.b, { ...base, ok: true, asStored: true, settings: stored });
+    await tests.record(held.b, { ...base, ok: false, asStored: false, settings: null });
+
+    const b = (await listing('writer')).find((row) => row.id === held.b)!;
+    expect(b.lastTest?.ok).toBe(true);
+    expect((await listing('writer')).find((row) => row.id === held.a)?.lastTest).toBeNull();
+  });
+
+  it('tells a read-write member from a read-only one, for the page with none to list (T364’s review)', async () => {
+    const me = async (who: string) =>
+      (await as(who, { method: 'GET', url: '/api/me' })).json<{ readWrite: boolean }>();
+    expect((await me('writer')).readWrite).toBe(true);
+    expect((await me('reader')).readWrite).toBe(false);
+  });
+});
+
 describe('a folder holding data sources (T335’s review)', () => {
   it('isn’t deleted while it or a folder beneath it holds one: none is left without a folder', async () => {
     const open = buildServer({
@@ -301,7 +345,7 @@ describe('a save landing in xcube first (T442, AC-327)', () => {
       // Cube takes its connections from xcube: wechart serves none (AC-327).
       await open.ready();
       const routes = open.printRoutes({ commonPrefix: false });
-      expect(routes).toContain('/api/data-sources (POST)');
+      expect(routes).toMatch(/\/api\/data-sources \([^)]*POST[^)]*\)/);
       expect(routes).not.toMatch(/connection/i);
       expect((await sources().inFolder(ids.b)).map((each) => each.name)).not.toContain(
         `${MARK}_refused`,
@@ -571,6 +615,27 @@ describe('a connection test, run by xcube (T361, AC-159, AC-312)', () => {
       // Its envelopes are the source's, never its history's.
       expect(history.body).not.toContain(sealed(`${MARK}_tested`).ct);
       expect(history.body).not.toContain(sealed('tried').ct);
+
+      // Its health is the newest test of its stored settings: the pass, not
+      // the earlier failure, nor the trials (T364, AC-157). With security off,
+      // the one user sees every folder's, /C's included.
+      type Listed = { id: string; lastTest: { ok: boolean; current: boolean } | null };
+      const listed = async (id: string) =>
+        (await app.inject({ method: 'GET', url: '/api/data-sources' }))
+          .json<Listed[]>()
+          .find((row) => row.id === id);
+      expect((await listed(made.id))?.lastTest).toMatchObject({ ok: true, current: true });
+      const inC = await sources().create(postgres(ids.c, `${MARK}_in_c`));
+      expect(await listed(inC.id)).toBeDefined();
+
+      // A rename changes no connection setting, so it keeps that health; a
+      // new password does: nobody has tested it (T364's review).
+      const save = (payload: Record<string, unknown>) =>
+        app.inject({ method: 'PUT', url: `/api/data-sources/${made.id}`, payload });
+      expect((await save({ name: `${MARK}_renamed` })).statusCode).toBe(200);
+      expect((await listed(made.id))?.lastTest).toMatchObject({ ok: true, current: true });
+      expect((await save({ sealed: { password: sealed('changed') } })).statusCode).toBe(200);
+      expect((await listed(made.id))?.lastTest).toMatchObject({ ok: true, current: false });
     } finally {
       await app.close();
     }

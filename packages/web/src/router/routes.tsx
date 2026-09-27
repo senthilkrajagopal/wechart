@@ -26,7 +26,7 @@ import { StateLine } from '../shell/StatusIcon';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { JobsPage } from '../workspaces/jobs/JobsPage';
 import { SecurityPage } from '../workspaces/security/SecurityPage';
-import { DataSourcesPage } from '../workspaces/admin/DeferredPage';
+import { DataSourcesPage } from '../workspaces/data-sources/DataSourcesPage';
 import { SchedulesPage } from '../workspaces/schedules/SchedulesPage';
 import { ModelFilePage } from '../workspaces/model/ModelFilePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';

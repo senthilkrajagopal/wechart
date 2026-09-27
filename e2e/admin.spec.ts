@@ -2,32 +2,53 @@ import { expect, test } from '@playwright/test';
 
 /**
  * T238 / AC-233: WHEN the user opens Schedules or Data sources, THE SYSTEM
- * SHALL show the page's title and a note saying what the page is for and that
- * managing it is not part of this phase, and SHALL treat "/sources" as Data
- * sources.
+ * SHALL show the page's title and a note saying what the page is for, and,
+ * where managing its subject waits for a later phase (Schedules), that it
+ * does; Data sources SHALL NOT say so (T364). It SHALL treat "/sources" as
+ * Data sources.
  * `Fails when: either page renders nothing, or "/sources" shows Not found.`
  *
  * The admin critique found both pages rendering an empty <main> — which reads
  * as broken rather than as deferred — and "/sources" answering Not found with
  * Explore marked as the current workspace.
  */
-for (const [path, title, purpose] of [
-  ['/schedules', 'Schedules', /refresh key/],
-  ['/data-sources', 'Data sources', /connections/],
-] as const)
-  test(`${title} shows its title and says what it is for, and that it waits for a later phase`, async ({
-    page,
-  }) => {
-    await page.goto(path);
-    const main = page.getByRole('main');
-    await expect(main.getByRole('heading', { level: 1 })).toHaveText(title);
-    // A note, with its icon, rather than an empty page.
-    const note = main.getByRole('note');
-    await expect(note).toContainText(/not part of this phase/i);
-    // And what the page is for: where its subject is set today.
-    await expect(note).toContainText(purpose);
-    await expect(note.locator('[data-icon]')).toHaveCount(1);
-  });
+test('Schedules shows its title and says what it is for, and that it waits for a later phase', async ({
+  page,
+}) => {
+  await page.goto('/schedules');
+  const main = page.getByRole('main');
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Schedules');
+  // A note, with its icon, rather than an empty page.
+  const note = main.getByRole('note');
+  await expect(note).toContainText(/not part of this phase/i);
+  // And what the page is for: where its subject is set today.
+  await expect(note).toContainText(/refresh key/);
+  await expect(note.locator('[data-icon]')).toHaveCount(1);
+});
+
+/**
+ * T364: data sources are folders' items now (T335), so Data sources says what
+ * it is for and lists them; AC-233 fails when it says managing them is not
+ * part of this phase. This suite's single user sees every folder: the page
+ * lists what its database holds or, holding none, says none has been added.
+ */
+test('Data sources shows its title and says what it is for, never that it waits', async ({
+  page,
+}) => {
+  await page.goto('/data-sources');
+  const main = page.getByRole('main');
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Data sources');
+  const notes = main.getByRole('note');
+  await expect(notes.first()).toContainText('Every data source you can see, in every folder');
+  await expect(notes.first().locator('[data-icon]')).toHaveCount(1);
+  await expect(main).not.toContainText(/not part of this phase/i);
+  // It read them: a list, or the note that there are none — never an error.
+  await expect(
+    main
+      .getByRole('table', { name: 'Data sources' })
+      .or(main.getByText('No data source has been added yet.')),
+  ).toBeVisible();
+});
 
 test('"/sources" opens Data sources', async ({ page }) => {
   await page.goto('/sources');

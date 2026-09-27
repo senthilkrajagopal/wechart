@@ -424,11 +424,17 @@ export function buildServer({
    */
   app.get('/api/me', USER, async (request) => {
     const user = userOf(request);
+    // A read-write member of some folder, who has data sources to see even
+    // when none is there yet (T364's review); the one user with security off,
+    // and a Super-Admin, are.
+    const seen = await visibilityOf(request);
+    const readWrite = seen === undefined || [...seen.rights.values()].some((right) => right.write);
     return {
       name: user.name,
       ...(user.identity === undefined ? {} : { identity: user.identity }),
       groups: user.groups,
       superAdmin: user.superAdmin,
+      readWrite,
       security,
     };
   });
@@ -537,6 +543,33 @@ export function buildServer({
       ...(connectionTest === undefined ? {} : { tester: connectionTest }),
       ...(connectionTests === undefined ? {} : { tests: connectionTests }),
       ...(connectionHealth === undefined ? {} : { health: connectionHealth }),
+      // The Data sources page (T364, AC-157): the folders a user sees every
+      // item of — never a read-only user's (AC-263) — and each one's path.
+      listing: {
+        sees: async (request) => {
+          const seen = await visibilityOf(request);
+          if (seen === undefined) return () => true;
+          return (folderId) => seen.rights.get(folderId)?.kinds === 'all';
+        },
+        pathOf: async () => {
+          const all = (cat ? await cat.folders({ counted: false }) : []) as {
+            id: string;
+            title: string;
+            parentId: string | null;
+          }[];
+          const byId = new Map(all.map((folder) => [folder.id, folder]));
+          return (folderId) => {
+            const path: { id: string; title: string }[] = [];
+            for (
+              let at = byId.get(folderId);
+              at !== undefined && path.length <= all.length;
+              at = at.parentId === null ? undefined : byId.get(at.parentId)
+            )
+              path.unshift({ id: at.id, title: at.title });
+            return path;
+          };
+        },
+      },
       ...(config.xcubePublicKey === undefined ? {} : { key: config.xcubePublicKey }),
       access: async (request, folderId, want) => {
         const seen = await visibilityOf(request);

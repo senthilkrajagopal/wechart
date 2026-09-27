@@ -129,6 +129,7 @@ describe('with security off, every request is the single Super-Admin (AC-254)', 
       name: 'admin',
       groups: [],
       superAdmin: true,
+      readWrite: true,
       security: 'off',
     });
     await app.close();

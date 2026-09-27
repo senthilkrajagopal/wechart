@@ -24,6 +24,8 @@ export interface Me {
   readonly identity?: string;
   readonly groups: readonly string[];
   readonly superAdmin: boolean;
+  /** A read-write member of some folder; with security off, the one user is (T364's review). */
+  readonly readWrite?: boolean;
   readonly security: 'off' | 'oidc';
 }
 
