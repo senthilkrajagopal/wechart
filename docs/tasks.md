@@ -7259,6 +7259,15 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362â€
     - while xcube can't be reached it waits, as for its first push (AC-324).
   - Depends on: T420, T333
   - **Done 2026-09-26. AC-324 is not ticked yet:** its chart half is checked by installing on docker-desktop, which follows this commit. Its xcube half, refusing to start without its key or with one that can't open its sample credential, is xcube's own start-up check, which compose now exercises with the `.check`.
+    - **Ticked after the install (2026-09-26):**
+      - `IMAGE_TAG=ba13ad2 deploy/helm/verify.sh` on docker-desktop passed every check (Helm revision 24).
+        - The Job made the release's own key: kid `TpBrEq20â€¦`, its Secret holding exactly `<kid>.pem` and `<kid>.check`.
+        - Both Cube Deployments started with it on `ed08180c37`.
+        - The API started only after xcube listed the key: its start-up check refuses otherwise.
+        - A publish, a query, a query with no API replica, and a stop mid-query passed.
+      - AC-324's evidence:
+        - wechart's halves are `xcube-key.test.ts`: T333's "throws naming the setting, and never listens", and T455's "never listens when xcube holds no key with its public key's id".
+        - xcube's half is its start-up refusal, verified in xcube's own tests (research `xcube-slice-6.md`, row 16: a missing file, a non-X25519 key, a thumbprint mismatch, or a `.check` that doesn't open). It holds only with `XCUBE_CREDENTIAL_KEY_IDS` set (Gotcha 7), which compose (`cube-image.test.ts`) and the chart (`xcube-key.test.ts`) now set on every Cube process.
   - **As built:**
     - **The check.** Before it listens, the API asks `GET /v1/semantic/credential-keys` with a service token naming no model (`anyModelToken`).
       - It starts only when the kid of `WECHART_XCUBE_PUBLIC_KEY` is listed and `active`.
