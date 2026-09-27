@@ -850,6 +850,8 @@ Model workspace:
       Fails when: an edit shows no unpublished marker, or leaving the file loses it without asking.
 - [x] AC-227 WHEN the model's code parses, THE SYSTEM SHALL list in Problems, with the line, every value outside the set Cube's validator allows and every required key that is missing, before the user publishes (direction.md rule 26).
       Fails when: a measure of type "summ" leaves Problems empty.
+- [ ] AC-344 THE SYSTEM SHALL draw the Model workspace as its designs draw it — a model file's editor, its tree, and New cube and New view as phase-1 design 03 (`docs/design/reviews/2026-09-24/designs/03-model-workspace.html`); Generate cubes as design 11 and the Model overview as design 12 (`docs/design/reviews/2026-09-27/designs/11-generate-cubes.html`, `12-model-overview.html`) — with their structure, placement, controls, wording and states, in the tokens of direction.md §3–5 (`[R34]`: the user, 2026-09-27, "Cleanup the models page.. add models page and generate cube page").
+      Fails when: a Model surface differs from its design in its layout or placement, its controls or their order, its wording, or a state the design draws. Each surface's task names the design, and the findings of `docs/design/critiques/2026-09-27-model-workspace.md`, it checks against.
 
 Jobs, Security, Schedules and Data sources:
 
@@ -1334,3 +1336,4 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | §P2.3 S2 Speed holds with security on `[R13]` | AC-307 |
 | §P2.3 S3 Phase 1 intact with security off, at phase end `[R13, R19]` | AC-308 |
 | The 2026-09-27 UI reviews: phase 2's ten designs approved, with their proposals `[R33]` | AC-338 … AC-343 |
+| The Model workspace and Generate cubes to design 03, 11 and 12, as a priority `[R34]` | AC-344 |

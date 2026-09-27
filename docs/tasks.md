@@ -7843,6 +7843,123 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - Failing test: `model-editor.spec.ts`: "Pre-aggs" and "Access" short labels and muted zero counts keep every tab in view at 1,440 px (UX-074).
   - Depends on: none
 
+### The Model workspace, to design 03 and designs 11–12, first (R34, AC-344)
+
+*Added 2026-09-27 after the user asked for this, as a priority: "Cleanup the models page.. add models page and generate cube page".*
+
+- **The references:**
+  - phase-1 design 03 (`docs/design/reviews/2026-09-24/designs/03-model-workspace.html`), approved for the Model workspace by R34;
+  - designs 11 (Generate cubes) and 12 (the overview), in `docs/design/reviews/2026-09-27/designs/`;
+  - the critique of the running app, `docs/design/critiques/2026-09-27-model-workspace.md`, whose MW-ids each task names.
+- **The critique's D-items**, decided here as small decisions within the approved design:
+  - **D1:** the file path in the editor head is 13/600 mono, as design 03 draws it. It is the editor's head, not a workspace page title, so AC-231's 20/600 holds for the overview's "Model".
+  - **D2:** Discard and Save are shown disabled at rest, as design 03 draws them.
+  - **D3:** the Jinja note says nothing of xcube.
+  - **D5:** badges and tags are 12 px, direction's floor, not the design's 11 px.
+  - **D4, left as built:** Generate cubes still publishes. Adding the cubes as drafts instead is a proposal for the user.
+- **Proposals, left for the user:**
+  - MW-19: New view opening on Cubes with nothing filled in;
+  - MW-13's line saying what an empty list is for.
+- Each task's e2e grows `e2e/model-design.spec.ts`, measured at 1,440 × 900.
+
+- [ ] T479 (AC-222, AC-226, AC-344) The tree and the editor head as design 03 notes 1 and 2
+  - Files: `packages/web/src/workspaces/model/{FileTree,ModelFilePage}.tsx` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
+  - Failing test: `FileTree.test.tsx` and `model-design.spec.ts`:
+    - **The tree** (MW-02, MW-03, MW-04):
+      - a 44 px head: "Model", with "✓ All published" or "◷ n unpublished";
+      - "▾ model/cubes/" folder rows, 28 px, that fold (`aria-expanded`);
+      - file rows full width, indented 28 px;
+      - a "Jinja" tag on a file the form can't open;
+      - "+ New cube", "+ New view" and "+ Generate cubes" under the tree;
+      - the focus ring inside the current row.
+    - **The head** (MW-05): 44 px; the path 13/600 mono; "✓ Published · no changes" at rest; Discard and Save disabled until there is a change; "◷ New file · not published" for a draft.
+  - Depends on: T470
+- [ ] T480 (AC-225, AC-344) Member rows that read like the YAML, opening into a short grouped form
+  - Files: `packages/web/src/workspaces/model/form/{ObjectForm,schema}.ts(x)` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
+  - Failing test: `memberRows.test.tsx` and `model-design.spec.ts`:
+    - **Rows** (design 03 notes 5 and 7; MW-10, MW-11):
+      - rules, not boxes, as their only divider;
+      - the name in mono 600 with 12 px badges of radius 3;
+      - the type on the right, and a join's relationship there too ("many to one");
+      - the SQL on its own muted line;
+      - no Remove on a row;
+      - "+ dimension · n total" at the list's end.
+      - A new member opens expanded, with Name focused.
+    - **The expanded body** (note 6, MW-12): on `bg-subtle`, inset 40 px; Basics first; the rarer groups under "▸ Advanced", listing their keys; "Remove dimension" at its foot.
+    - Booleans are switches that show Cube's default ("Public · default on").
+    - Every control is 28/12 (MW-09).
+    - Every key the file writes stays shown (AC-225).
+  - Depends on: T470
+- [ ] T481 (AC-132, AC-344) General as design 03's state B: Basics, Refresh and Advanced
+  - Files: `packages/web/src/workspaces/model/form/{CubeForm,ObjectForm,schema}.ts(x)` (+ tests), `e2e/model-design.spec.ts`
+  - Failing test: `CubeForm.test.tsx` and `model-design.spec.ts` (MW-08):
+    - A cube's General reads:
+      - **Basics:**
+        - Name;
+        - Data source, picked from the data sources;
+        - "Reads from", as "SQL table | SQL query" and one mono input;
+        - Title;
+        - Public, as a switch with its default;
+        - Description.
+      - **▾ Refresh.**
+      - **▸ Advanced** (collapsed): extends, sql_alias, calendar and meta, plus the legacy keys.
+    - Each field has its one-line help from `docs/research/cube/data-modeling.md`.
+    - A view's General is grouped the same way.
+    - Every key stays reachable (AC-132, rule 26).
+  - Depends on: T480
+- [ ] T482 (AC-134, AC-344) Say upfront what the form would drop, and show it in the YAML
+  - Files: `packages/web/src/workspaces/model/{ModelFilePage,YamlEditor,lossCheck}.ts(x)` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
+  - Failing test: `model-design.spec.ts` (design 03 notes 4, 8 and 9; MW-07, MW-12's tint, MW-14, MW-15):
+    - **The warn bar:** a file with comments, anchors or aliases opens under a bar naming each one by its first line and YAML lines, with "Show in YAML" and "Edit in form anyway". "Show in YAML" scrolls to them and tints them. The just-in-time guard still asks.
+    - **The YAML pane:**
+      - commented lines flagged in the gutter;
+      - the open member's lines tinted `accent-soft`;
+      - "↵ Wrap" on by default;
+      - Problems flush at 150 px, with "Checked with Cube's validator on every change".
+  - Depends on: T480
+- [ ] T483 (AC-140, AC-344) A Jinja file in the editor's frame, read-only and saying so
+  - Files: `packages/web/src/workspaces/model/{ReadOnlyFile,ModelFilePage}.tsx` (+ tests), `e2e/model-design.spec.ts`
+  - Failing test: `model-design.spec.ts` (MW-16):
+    - the head reads "Read-only · Jinja template", with its icon;
+    - the note is an InfoBar that doesn't name xcube;
+    - the code fills the pane, with line numbers and wrap.
+  - Depends on: T479, T482
+- [ ] T484 (AC-222, AC-344) New cube and New view as design 03's state C
+  - Files: `packages/web/src/workspaces/model/{ModelFilePage,validate}.ts(x)` (+ tests), `e2e/model-design.spec.ts`
+  - Failing test: `model-design.spec.ts` (MW-17, MW-18):
+    - a new cube writes no made-up table: "Reads from" shows `schema.table` as its placeholder, and Problems names what is missing until one is given;
+    - the General tab opens with Name focused and selected;
+    - the head says "New file · not published".
+  - Depends on: T479, T481
+- [ ] T485 (AC-139, AC-249, AC-344) Generate cubes as design 11's docked pane
+  - Files: `packages/web/src/workspaces/model/{GenerateCubes,ModelFilePage}.tsx` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/generate-cubes.spec.ts`, `e2e/model-design.spec.ts`
+  - Failing test: `GenerateCubes.test.tsx` and `model-design.spec.ts` (MW-20 … MW-25). Design 11's states, over the same function set as today:
+    - a 480 px pane docked beside the tree, with a ✕;
+    - the steps Source, Tables and Review;
+    - the foot pinned: Back · Cancel · one primary, with the blocked reason beside it;
+    - a Type pill;
+    - columns that open in place under their table's row;
+    - a status per generated file, with its icon;
+    - clashes as error bars naming the existing file;
+    - the YAML in the code face, at full length;
+    - "Discard this generation?" when leaving with anything chosen.
+  - Depends on: T479
+- [ ] T486 (AC-131, AC-344) The Model overview as design 12's table
+  - Files: `packages/web/src/workspaces/model/{FileList,ModelFilePage}.tsx` (+ tests), `e2e/model-design.spec.ts`
+  - Failing test: `FileList.test.tsx` and `model-design.spec.ts` (MW-01):
+    - one card, holding a table with one row per cube or view: file, kind, name, counts, and its members in a tooltip;
+    - a "+ New" menu in the title row;
+    - the note and the card the same width;
+    - every object of every file still listed (AC-131).
+  - Depends on: T479, T485
+- [ ] T487 (AC-187, AC-344) The editor below 1,280 px: Form | YAML
+  - Files: `packages/web/src/workspaces/model/ModelFilePage.tsx`, `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
+  - Failing test: `model-design.spec.ts` at 1,024 × 768 (MW-26):
+    - a "Form | YAML" switch in the head shows one pane at a time;
+    - every tab stays in view;
+    - no segment label wraps.
+  - Depends on: T482
+
 ### Phase 2's surfaces, to their approved designs (AC-343)
 
 - [x] T471 (AC-158, AC-159, AC-160, AC-282, AC-325, AC-339, AC-340, AC-343) Rebuild the new data source wizard as design 01's docked pane, with design 02's driver forms
@@ -7978,5 +8095,6 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-337 | T448 | AC-009 (again) | T426 | AC-189, AC-249 (again, folder items) | T450 |
 | AC-338 | T472 | AC-339 | T471 | AC-340 | T471 |
 | AC-341 | T356 | AC-342 | T475 | AC-343 | T471, T473, T474, T475, T462, T331, T348, T356, T357, T358, T367, T369, T371 |
+| AC-344 | T470, T479–T487 | | | | |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.

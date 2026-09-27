@@ -842,6 +842,17 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R34 — the Model workspace and Generate cubes, as a priority** (2026-09-27, the user, after T472)
+- The user: "Cleanup the models page.. add models page and generate cube page.. all of them are not in sync with the rest of the app and the ui design.. if required use an ui expert agent. take this as a priority. since the app is already running the ui expert can use that to check the experience."
+  - *Read as the approval, for the Model workspace, of phase-1 design 03 (`docs/design/reviews/2026-09-24/designs/03-model-workspace.html`), which R33's "bugs and consistency only" had left unapplied. It covers:*
+    - *the Model overview;*
+    - *a model file's editor;*
+    - *"New cube" and "New view", the "add models page";*
+    - *Generate cubes, the "generate cube page".*
+  - *These are to be brought in line with that design and with the rest of the app as rebuilt since.*
+  - *A UI expert's critique of the running app is at `docs/design/critiques/2026-09-27-model-workspace.md`.*
+  - *It goes ahead of the other UI work.*
+
 **R33 — the UI reviews of 2026-09-27** (`docs/design/reviews/2026-09-27/`: `ui-review.md` with designs 01–10 for phase 2, and `phase-1-recheck.md`; asked after the user's "The ui for the wizard looks bad.. go back to the ui design review that was run in phase 1.. and clean up the entire ui when we get a chance.. and also for phase 2 requirements run it through a ui expert, get the designs and apply the designs to our screens")
 - Q: How should I treat the ten phase-2 designs? A: "Approve all with proposals"
   - *All ten designs are approved as drawn, with their five proposals: vendor logos on the driver tiles (AC-338), the `http://` Dremio Cloud warning (AC-339), BigQuery's `client_email` read in the browser (AC-340), changed and new tiles marked in a review (AC-341), and a hidden same-named cube listed dimmed (AC-342). AC-343 holds every phase-2 surface to its design.*
