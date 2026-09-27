@@ -7,7 +7,7 @@ import type { AnswerMeta } from '../query/answerMeta';
 import { StateLine, StatusIcon } from '../shell/StatusIcon';
 import { AccelerationBadge, accelerationOf } from './AccelerationBadge';
 import { ChartCanvas, type ChartCanvasProps } from './ChartCanvas';
-import { badgesIn, nextPlace, roomIn, type BadgePlace } from './badgePlace';
+import { badgesIn, badgesNeeded, nextPlace, roomIn, type BadgePlace } from './badgePlace';
 import { DataAsOf, dataAsOfText } from './DataAsOf';
 import { DataTable, type DataTableProps } from './DataTable';
 import { Kpi } from './Kpi';
@@ -210,12 +210,22 @@ export function ChartTile({
   const measure = useCallback(() => {
     const head = box.current?.querySelector<HTMLElement>(':scope > .tile-head');
     if (head === null || head === undefined) return;
-    setPlace((current) =>
-      nextPlace(current, {
+    const foot = box.current?.querySelector<HTMLElement>(':scope > .tile-foot') ?? null;
+    const gap = Number.parseFloat(getComputedStyle(head).columnGap) || 0;
+    setPlace((current) => {
+      // Under the chart, they come back once the head has room for what the
+      // foot holds now, not for all that left with them (T464's review).
+      const asNow =
+        current.inFoot && foot !== null
+          ? { inFoot: true, moved: badgesNeeded(foot, gap) }
+          : current;
+      const next = nextPlace(asNow, {
         room: roomIn(head),
         badges: current.inFoot ? 0 : badgesIn(head),
-      }),
-    );
+      });
+      // The same place is the same state: a new object would render again.
+      return next.inFoot === current.inFoot && next.moved === current.moved ? current : next;
+    });
   }, []);
   useLayoutEffect(measure);
   useLayoutEffect(() => {

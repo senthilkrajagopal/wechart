@@ -3393,6 +3393,16 @@ button.filter-pill__clear {
   font-weight: var(--wc-text-sm-strong-weight);
   color: var(--wc-text-primary);
 }
+/* The head is the title's (T464, UX-104; the user's answer to question 29):
+   while a badge shares it, the title keeps its whole width and the badge
+   alone gives way; where even the badge's least width leaves too little, the
+   badges go to the foot (badgePlace.ts). Flex shrinking shares a loss between
+   everything that can shrink, so a title that could shrink at all lost a
+   fraction of a pixel — its ellipsis drawn, "Custome…" — while the badge,
+   which had room to spare, kept the head. */
+.tile-head:has(> .tile-freshness, > .mark-badge, > .tile-busy) > .tile-head__title {
+  flex-shrink: 0;
+}
 /* The small button's 24 px — a pointer target's minimum — overhanging the
    row by a pixel each way, so the head stays the prototype's 22 (T252,
    mismatch 9) with the badges beside it. */

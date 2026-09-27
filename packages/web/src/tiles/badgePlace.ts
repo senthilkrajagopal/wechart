@@ -65,6 +65,24 @@ export function roomIn(head: HTMLElement): number {
   return Math.abs(room) < SLACK ? 0 : room;
 }
 
+/**
+ * What the badges now under the chart need back in the head (T464's review):
+ * each whole, but the freshness badge only at its least width, which it gives
+ * way down to in the head — and a gap each. Read from what the foot holds now
+ * rather than kept from when they left: an "Updating…" or a marking that left
+ * with them and has since gone kept the rest out of the head for good, and
+ * the tile shorter than its twin.
+ */
+export function badgesNeeded(foot: Element, gap: number): number {
+  return [...foot.querySelectorAll(BADGES)].reduce((sum, item) => {
+    const least = item.classList.contains('tile-freshness')
+      ? Number.parseFloat(getComputedStyle(item).minWidth)
+      : Number.NaN;
+    const width = Number.isFinite(least) && least > 0 ? least : item.getBoundingClientRect().width;
+    return sum + width + gap;
+  }, 0);
+}
+
 /** What the badges in the head take there, each with its gap. */
 export function badgesIn(head: HTMLElement): number {
   const gap = Number.parseFloat(getComputedStyle(head).columnGap) || 0;

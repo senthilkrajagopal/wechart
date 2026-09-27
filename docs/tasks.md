@@ -7743,8 +7743,16 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - beside it is "Save to folders…" (AC-127);
     - the editor reached any other way shows the same two actions in place of "edit and save it there" (UX-040, critical; phase-1 design 06 item 1, as the bug's fix).
   - Depends on: none
-- [ ] T464 (AC-201, AC-013) Keep a tile's title whole, moving its badges to the foot whenever the head can't hold both
+- [x] T464 (AC-201, AC-013) Keep a tile's title whole, moving its badges to the foot whenever the head can't hold both
   - Files: `packages/web/src/tiles/badgePlace.ts`, `packages/web/src/tiles/Tile.tsx` (+ tests), `e2e/tile-head.spec.ts`
+  - *As built:*
+    - **The cause.** Flex shrinking shares a loss between everything that can shrink. So whenever the freshness badge shrank, the title lost a fraction of a pixel too: it needed 73.64 px and was drawn at 73.31 px, so its ellipsis showed ("Custome…"). `roomIn`'s 0.5 px slack then read the −0.33 px as fitting, and the badge kept the head.
+    - **The fix, in `shell/styles.ts`:** while a badge shares the head, the title doesn't shrink (`flex-shrink: 0`). The badge alone gives way. Once even its least width doesn't fit, `roomIn` goes below 0 and the badges move.
+    - **Review fix:** in `badgePlace.ts` and `tiles/ChartTile.tsx`, badges in the foot come back once the head has room for what the foot holds now (`badgesNeeded`: the freshness badge at its least width). Before, they waited for room for all that left with them, so an "Updating…" or a marking that had gone kept the rest in the foot.
+    - **The e2e** also checks that a badge in the head fits and a badge in the foot had no room.
+    - **Fonts:** there is no `@font-face`, so no font loads late. The test measures after `document.fonts.ready`.
+    - **Side effect:** `editor-preview.spec.ts` "a tile resized in this session…" passes again, because that tile's badge now stays in its head. The preview's chart has no foot, so a tile whose badges are in its foot would still preview 26 px taller.
+    - **Found failing at HEAD, not T464's:** `markings.spec.ts` "Invert marking and Mark all…" (3 of 6 alone).
   - Failing test: `tile-head.spec.ts`:
     - on the KPI row, no tile title is cut while a badge sits in its head;
     - tiles of one width place their badges alike;
