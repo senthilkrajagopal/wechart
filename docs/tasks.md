@@ -7113,7 +7113,7 @@ T347 (above) pushes workspace overlays, with the workspace's data sources.
 
 T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362–T364 follow it. The order is at the head of slice 4.
 
-- [ ] T454 [P] (AC-160, AC-312) Define the eight drivers xcube takes, and each one's connection target, TLS included *(added 2026-09-26, `[XD, X6, R31]`; T360 defined six)*
+- [x] T454 [P] (AC-160, AC-312) Define the eight drivers xcube takes, and each one's connection target, TLS included *(added 2026-09-26, `[XD, X6, R31]`; T360 defined six)*
   - Files: `packages/core/src/data-sources/drivers.ts` (+ test)
   - Failing test: `drivers.test.ts`:
     - the drivers are PostgreSQL, Amazon Redshift, MySQL, Snowflake, BigQuery, SQL Server, Oracle and Dremio, with their type ids `postgres`, `redshift`, `mysql`, `snowflake`, `bigquery`, `mssql`, `oracle`, `dremio`; Databricks is gone;

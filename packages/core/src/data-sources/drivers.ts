@@ -1,11 +1,16 @@
 /**
- * The six data-source driver types and their fields (T360, AC-160): the
- * connection fields and, per authentication method, the credential fields the
- * data-source form asks for. They cover what Cube 1.7.45's own drivers can use
- * (research/connection-testing.md §2), and nothing they can't: Cube is what
- * connects. The keys are the form's; mapping them onto each driver's own
- * config (`connectionString`, `server`, the `ssl` object) is the connection
- * test's and Cube's config's (T361, T339).
+ * The eight data-source driver types and their fields (T360, T454, AC-160):
+ * the connection fields and, per authentication method, the credential fields
+ * the data-source form asks for. They are exactly what xcube's drivers take
+ * (xcube's `drivers.ts` at `ed08180c37`; research `xcube-slice-6.md`), which
+ * connect with Cube 1.7.45's own (research/connection-testing.md §2): xcube is
+ * what connects. The keys are the form's, and xcube's; mapping them onto each
+ * driver's own config (`connectionString`, `server`, the `ssl` object) is
+ * xcube's.
+ *
+ * The user's list (`docs/inputs/2026-09-26-connections-drivers.md`): Amazon
+ * Redshift, MySQL and Dremio added, Databricks dropped. No Databricks data
+ * source was ever stored, so none is migrated.
  *
  * No field names a file on the server: a path would let whoever edits a data
  * source make the connection test read a file and send it to a host of their
@@ -15,11 +20,13 @@
 
 export const DRIVER_TYPES = [
   'postgres',
+  'redshift',
+  'mysql',
   'snowflake',
-  'databricks-jdbc',
   'bigquery',
   'mssql',
   'oracle',
+  'dremio',
 ] as const;
 
 export type DriverType = (typeof DRIVER_TYPES)[number];
@@ -31,7 +38,11 @@ export interface DriverField {
   readonly required: boolean;
   /** Sealed at rest and never shown again (AC-164, AC-298). */
   readonly secret?: true;
-  /** Says where the source connects: changing it clears the stored secret (AC-312). */
+  /**
+   * Part of the connection's target, which a sealed secret is bound to (xcube's
+   * v1 `target`, TLS settings included): changing it clears the stored secret
+   * (AC-312).
+   */
   readonly target?: true;
   readonly placeholder?: string;
   readonly defaultValue?: string | number | boolean;
@@ -64,40 +75,66 @@ const text = (key: string, label: string, extra: Partial<DriverField> = {}): Dri
 const secret = (key: string, label: string, extra: Partial<DriverField> = {}): DriverField =>
   text(key, label, { required: true, secret: true, ...extra });
 
+/**
+ * The PostgreSQL family's connection: where it connects, and how it checks the
+ * server, all of it the target a secret is sealed to (xcube's `TLS_TARGET`):
+ * turning verification off needs the secret entered again, as a new host does.
+ */
+const hostAndTls = (port: number, tlsByDefault: boolean): DriverField[] => [
+  text('host', 'Host', { required: true, target: true }),
+  text('port', 'Port', { kind: 'number', target: true, defaultValue: port }),
+  text('database', 'Database', { required: true }),
+  text('ssl', 'Use TLS', { kind: 'boolean', target: true, defaultValue: tlsByDefault }),
+  text('sslRejectUnauthorized', 'Verify the server’s certificate', {
+    kind: 'boolean',
+    target: true,
+    defaultValue: true,
+  }),
+  text('sslCa', 'CA certificate (PEM)', { kind: 'multiline', target: true }),
+];
+
+const password: AuthMethod = {
+  id: 'password',
+  label: 'Password',
+  fields: [text('user', 'User', { required: true }), secret('password', 'Password')],
+};
+const clientCertificate: AuthMethod = {
+  id: 'client-certificate',
+  label: 'Client certificate',
+  fields: [
+    text('user', 'User', { required: true }),
+    text('sslCert', 'Client certificate (PEM)', { kind: 'multiline', required: true }),
+    secret('sslKey', 'Client key (PEM)', { kind: 'multiline' }),
+    secret('sslPassphrase', 'Key passphrase', { required: false }),
+  ],
+};
+
 export const DRIVERS: Readonly<Record<DriverType, DriverSpec>> = {
   postgres: {
     type: 'postgres',
     label: 'PostgreSQL',
-    connection: [
-      text('host', 'Host', { required: true, target: true }),
-      text('port', 'Port', { kind: 'number', target: true, defaultValue: 5432 }),
-      text('database', 'Database', { required: true }),
-      // On by default, as the approved prototype's "Use SSL/TLS and verify
-      // certificate" switch is (docs/design/prototype/admin-sources.js).
-      text('ssl', 'Use TLS', { kind: 'boolean', defaultValue: true }),
-      text('sslRejectUnauthorized', 'Verify the server’s certificate', {
-        kind: 'boolean',
-        defaultValue: true,
-      }),
-      text('sslCa', 'CA certificate (PEM)', { kind: 'multiline' }),
-    ],
-    auth: [
-      {
-        id: 'password',
-        label: 'Password',
-        fields: [text('user', 'User', { required: true }), secret('password', 'Password')],
-      },
-      {
-        id: 'client-certificate',
-        label: 'Client certificate',
-        fields: [
-          text('user', 'User', { required: true }),
-          text('sslCert', 'Client certificate (PEM)', { kind: 'multiline', required: true }),
-          secret('sslKey', 'Client key (PEM)', { kind: 'multiline' }),
-          secret('sslPassphrase', 'Key passphrase', { required: false }),
-        ],
-      },
-    ],
+    // TLS on by default, as the approved prototype's "Use SSL/TLS and verify
+    // certificate" switch is (docs/design/prototype/admin-sources.js), and as
+    // xcube's config is.
+    connection: hostAndTls(5432, true),
+    auth: [password, clientCertificate],
+  },
+  redshift: {
+    type: 'redshift',
+    label: 'Amazon Redshift',
+    connection: hostAndTls(5439, true),
+    // Cube 1.7.45's Redshift driver reads IAM authentication from its own
+    // environment only, so it can't differ per connection (`[XD]`).
+    auth: [password],
+  },
+  mysql: {
+    type: 'mysql',
+    label: 'MySQL',
+    // TLS off by default, as xcube's config and MySQL's own are.
+    connection: hostAndTls(3306, false),
+    // xcube sends a client certificate only over TLS, and no password with it
+    // (xcube's `drivers.ts`): with TLS off it would sign in with neither.
+    auth: [password, { ...clientCertificate, note: 'Sent only over TLS: turn on Use TLS.' }],
   },
   snowflake: {
     type: 'snowflake',
@@ -128,35 +165,6 @@ export const DRIVERS: Readonly<Record<DriverType, DriverSpec>> = {
       },
     ],
   },
-  'databricks-jdbc': {
-    type: 'databricks-jdbc',
-    label: 'Databricks',
-    connection: [
-      text('url', 'JDBC URL', {
-        required: true,
-        target: true,
-        placeholder: 'jdbc:databricks://<host>:443/default;httpPath=/sql/1.0/warehouses/<id>',
-        // Cube reads a token from UID/PWD in the URL (T360's review); the URL
-        // isn't sealed, so the token must go in its own field (T335 refuses
-        // UID and PWD in it).
-        note: 'A SQL warehouse’s URL. Put the token below, never as UID or PWD in the URL.',
-      }),
-      // No schema: Cube's driver takes it only from its own CUBEJS_DB_NAME
-      // (research §2).
-      text('catalog', 'Catalog'),
-    ],
-    auth: [
-      { id: 'token', label: 'Personal access token', fields: [secret('token', 'Token')] },
-      {
-        id: 'oauth-m2m',
-        label: 'OAuth service principal',
-        fields: [
-          text('oauthClientId', 'Client ID', { required: true }),
-          secret('oauthClientSecret', 'Client secret'),
-        ],
-      },
-    ],
-  },
   bigquery: {
     type: 'bigquery',
     label: 'BigQuery',
@@ -180,10 +188,16 @@ export const DRIVERS: Readonly<Record<DriverType, DriverSpec>> = {
       text('port', 'Port', { kind: 'number', target: true, defaultValue: 1433 }),
       text('database', 'Database', { required: true }),
       // Cube's defaults: encryption follows CUBEJS_DB_SSL, off unless set
-      // (research §2). Nothing in the spec or design chooses otherwise.
-      text('encrypt', 'Encrypt the connection', { kind: 'boolean', defaultValue: false }),
+      // (research §2). Nothing in the spec or design chooses otherwise. Both
+      // are the target a secret is sealed to, as the host is (xcube's v1).
+      text('encrypt', 'Encrypt the connection', {
+        kind: 'boolean',
+        target: true,
+        defaultValue: false,
+      }),
       text('trustServerCertificate', 'Trust the server’s certificate', {
         kind: 'boolean',
+        target: true,
         defaultValue: false,
       }),
     ],
@@ -225,12 +239,34 @@ export const DRIVERS: Readonly<Record<DriverType, DriverSpec>> = {
       text('port', 'Port', { kind: 'number', target: true, defaultValue: 1521 }),
       text('database', 'Service name', { target: true }),
     ],
+    auth: [password],
+  },
+  dremio: {
+    type: 'dremio',
+    label: 'Dremio',
+    // Dremio Cloud is a project's API URL with a token; Dremio Software a host
+    // and port, with a token or a user and password. Neither field is required
+    // alone, but xcube refuses a connection with neither, and a URL with a
+    // password (`[XD]`; xcube's `drivers.ts`).
+    connection: [
+      text('url', 'Dremio Cloud project URL', {
+        target: true,
+        placeholder: 'https://api.dremio.cloud/v0/projects/<id>',
+      }),
+      text('host', 'Host (Dremio Software)', { target: true }),
+      text('port', 'Port', { kind: 'number', target: true, defaultValue: 9047 }),
+      // Plain HTTP by default, as Cube's Dremio driver is; it has no
+      // certificate setting, and Cloud's TLS is its URL's scheme.
+      text('ssl', 'Use HTTPS (Dremio Software)', {
+        kind: 'boolean',
+        target: true,
+        defaultValue: false,
+      }),
+      text('database', 'Database'),
+    ],
     auth: [
-      {
-        id: 'password',
-        label: 'Password',
-        fields: [text('user', 'User', { required: true }), secret('password', 'Password')],
-      },
+      { id: 'token', label: 'Personal access token', fields: [secret('token', 'Token')] },
+      { ...password, note: 'Dremio Software only: Dremio Cloud takes a token.' },
     ],
   },
 };
