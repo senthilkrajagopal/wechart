@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
-import type { FastifyInstance, InjectOptions } from 'fastify';
+import type { FastifyInstance, InjectOptions, LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { pgSessionStore } from '../auth/session-store';
 import { PUBLIC_URL, signIn, USERS } from '../auth/sign-in.fixture';
 import { closeDb, getDb } from '../db/client';
 import { catalog } from '../repos/catalog';
+import { connectionTestStore } from '../repos/connection-tests';
 import { dataSourceStore } from '../repos/data-sources';
 import { documents, type DocumentKind } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
@@ -42,6 +43,8 @@ const secured = {
   },
 };
 const MARK = `ws${randomUUID().slice(0, 8)}`;
+/** xcube's answer to a test that passes, as the stub runner gives it (T363). */
+const PASSING = { ok: true, checks: [{ id: 'connect', status: 'passed', durationMs: 1 }] };
 const docs = () => documents(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
 const cookies: Record<string, string> = {};
@@ -68,6 +71,9 @@ beforeAll(async () => {
     catalog: catalog(getDb()),
     folderAccess: folderAccessStore(getDb()),
     dataSources: dataSourceStore(getDb()),
+    // A data source is made only from its passing test (T363).
+    connectionTests: connectionTestStore(getDb()),
+    connectionTest: async () => PASSING as never,
   });
   for (const who of ['super', 'writer', 'reader']) cookies[who] = await signIn(app, USERS[who]!);
 });
@@ -287,6 +293,22 @@ describe('items made in the workspace name their target folder (T345, AC-282)', 
     sealed: { password: sealed },
     ...extra,
   });
+  /** A create's body with its passing test, which a data source is made only from (T363). */
+  const tested = async (
+    send: (url: string, payload: Record<string, unknown>) => Promise<LightMyRequestResponse>,
+    payload: ReturnType<typeof source>,
+  ) => {
+    const {
+      name: _name,
+      targetFolderId: _target,
+      ...settings
+    } = payload as Record<string, unknown>;
+    void _name;
+    void _target;
+    const run = await send('/api/data-sources/test', settings);
+    expect(run.statusCode, run.body).toBe(200);
+    return { ...payload, testId: (run.json() as { testId: string }).testId };
+  };
   /** `managers`' alone; one writer only reads; writer's own drafts; super's. */
   const folders = { hidden: '', readOnly: '', own: '', others: '' };
   const idOf = (answer: { json: () => unknown }) => (answer.json() as { id: string }).id;
@@ -445,7 +467,15 @@ describe('items made in the workspace name their target folder (T345, AC-282)', 
     const post = (payload: Record<string, unknown>) =>
       as('writer', { method: 'POST', url: '/api/data-sources', payload });
     try {
-      const made = await post(source(`draft_${MARK}`, { targetFolderId: sales }));
+      // Never without a passing test, in the workspace too (T363, AC-158).
+      const untested = await post(source(`draft_${MARK}`, { targetFolderId: sales }));
+      expect(untested.statusCode).toBe(422);
+      const made = await post(
+        await tested(
+          (url, payload) => as('writer', { method: 'POST', url, payload }),
+          source(`draft_${MARK}`, { targetFolderId: sales }),
+        ),
+      );
       expect(made.statusCode, made.body).toBe(201);
       kept.push(idOf(made));
       const stored = await store.get(idOf(made));
@@ -496,6 +526,8 @@ describe('items made in the workspace name their target folder (T345, AC-282)', 
       catalog: catalog(getDb()),
       folderAccess: folderAccessStore(getDb()),
       dataSources: dataSourceStore(getDb()),
+      connectionTests: connectionTestStore(getDb()),
+      connectionTest: async () => PASSING as never,
       dataSourceLanding: {
         prepare: async (folderId) => {
           calls.push(`prepare ${folderId}`);
@@ -518,7 +550,10 @@ describe('items made in the workspace name their target folder (T345, AC-282)', 
       const made = await send(
         'POST',
         '/api/data-sources',
-        source(`landless_${MARK}`, { targetFolderId: sales }),
+        await tested(
+          (url, payload) => send('POST', url, payload),
+          source(`landless_${MARK}`, { targetFolderId: sales }),
+        ),
       );
       expect(made.statusCode, made.body).toBe(201);
       const id = idOf(made);

@@ -1549,6 +1549,77 @@ fieldset.model-field > legend {
 /* A workspace page that waits on a later phase (AC-233), and the prototype's
    info bar that says so: an icon, the sentence, on the accent tint. */
 .admin-page { display: grid; gap: 12px; }
+/* The page's title and its one action, as the prototype's Data sources head. */
+.admin-page__head { display: flex; align-items: center; gap: 8px; }
+.admin-page__head > h1 { flex: 1; }
+
+/* New data source (T363, AC-158): the prototype's wizard (admin-sources.js)
+   as a dialog, bounded to the window, its steps as a row of badges, the
+   current one on the accent tint, and its actions kept in view at the foot. */
+.dialog.new-source-wizard {
+  width: min(560px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  gap: 12px;
+}
+.new-source-wizard h3 { margin: 0; font-size: var(--wc-text-sm-size); font-weight: 600; }
+.new-source-wizard__steps { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.new-source-wizard__steps li {
+  padding: 2px 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 999px;
+  font-size: var(--wc-text-xs-size);
+  color: var(--wc-text-secondary);
+}
+.new-source-wizard__steps li[aria-current='step'] {
+  border-color: var(--wc-accent);
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-text-primary);
+}
+.new-source-wizard__types {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.new-source-wizard__types legend { margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--wc-text-secondary); }
+.dialog .new-source-wizard__types button { justify-content: flex-start; text-align: left; }
+.dialog .new-source-wizard__types button[aria-pressed='true'] {
+  border-color: var(--wc-accent);
+  background: var(--wc-bg-accent-soft);
+}
+.new-source-wizard__test,
+.new-source-wizard__name { display: grid; gap: 8px; }
+.new-source-wizard__row { display: flex; align-items: center; gap: 8px; }
+.new-source-wizard .dialog__actions {
+  position: sticky;
+  bottom: -16px;
+  margin: 0 -16px -16px;
+  padding: 8px 16px 16px;
+  border-top: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
+}
+.new-source-wizard .field input,
+.new-source-wizard .field select { height: 32px; }
+.connection-form { display: grid; gap: 12px; }
+.connection-form__group { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.connection-form__group legend { margin-bottom: 4px; font-size: var(--wc-text-sm-size); font-weight: 600; }
+.connection-form__check label { display: flex; align-items: center; gap: 6px; font-weight: 400; color: var(--wc-text-primary); }
+.connection-form__method { margin: 0; }
+.connection-form__note,
+.dialog p.connection-form__note { margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.connection-form textarea,
+.new-source-wizard__name input { font-family: var(--wc-font-code); font-size: 12px; }
+/* Each check xcube ran (AC-159): its icon, outcome and step, its time, and a
+   failed one's error as xcube redacted it. */
+.connection-checks { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.connection-checks__check { display: flex; align-items: flex-start; gap: 6px; font-size: var(--wc-text-sm-size); }
+.connection-checks__check > svg { flex: none; margin-top: 2px; }
+.connection-checks__check.is-passed > svg { color: var(--wc-status-success); }
+.connection-checks__check.is-skipped { color: var(--wc-text-secondary); }
 .info-bar {
   display: flex;
   align-items: flex-start;

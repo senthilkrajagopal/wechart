@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
-import { test as base, expect, type BrowserContext, type Page } from '@playwright/test';
+import {
+  test as base,
+  expect,
+  type APIRequestContext,
+  type BrowserContext,
+  type Page,
+} from '@playwright/test';
 
 /**
  * Signing the security suite's test users in (T320). Each role is signed in
@@ -69,5 +75,24 @@ export const test = base.extend<{ role: Role | undefined }>({
     await use(state);
   },
 });
+
+/**
+ * A data source's body with the id of its passing test, which xcube runs on
+ * exactly these settings: one is made only from that (T363, AC-158; the
+ * user's answer, 2026-09-27: "test first, and dont save if test fails").
+ */
+export async function testedSource<Body extends Record<string, unknown>>(
+  request: APIRequestContext,
+  body: Body,
+): Promise<Body & { testId: string }> {
+  const { name: _name, targetFolderId: _target, ...settings } = body;
+  void _name;
+  void _target;
+  const run = await request.post('/api/data-sources/test', { data: settings, timeout: 90_000 });
+  expect(run.status(), await run.text()).toBe(200);
+  const answer = (await run.json()) as { ok: boolean; testId: string };
+  expect(answer.ok, JSON.stringify(answer)).toBe(true);
+  return { ...body, testId: answer.testId };
+}
 
 export { expect };

@@ -7,6 +7,7 @@ import { INSTALL, USER } from '../auth/guard';
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 import {
   DataSourceRefused,
+  settingsPrintOf,
   type DataSource,
   type DataSourceChange,
   type DataSourceStore,
@@ -104,11 +105,44 @@ function readBody(body: unknown): { value?: Record<string, unknown>; error?: str
   }
   if (body['sealed'] !== undefined && !isRecord(body['sealed']))
     return { error: 'sealed is an object of envelopes, by field.' };
-  for (const key of ['name', 'driver', 'authMethod', 'folderId', 'targetFolderId'])
+  for (const key of ['name', 'driver', 'authMethod', 'folderId', 'targetFolderId', 'testId'])
     if (body[key] !== undefined && typeof body[key] !== 'string')
       return { error: `${key} is text.` };
+  if (
+    body['trials'] !== undefined &&
+    (!Array.isArray(body['trials']) || !body['trials'].every((id) => typeof id === 'string'))
+  )
+    return { error: 'trials are a list of test ids.' };
   return { value: body };
 }
+
+/**
+ * What a test of one not yet made tested, as a print (T363, AC-158): its
+ * driver, sign-in method, fields and envelopes. A create names that test,
+ * and is made only from exactly what it tested.
+ */
+const trialPrintOf = (shape: {
+  driver: string;
+  authMethod: string;
+  fields: Readonly<Record<string, FieldValue>>;
+  sealed: Readonly<Record<string, SealedV1>>;
+}) =>
+  settingsPrintOf(
+    shape.driver,
+    shape.authMethod,
+    shape.fields,
+    Object.fromEntries(
+      Object.entries(shape.sealed).map(([field, envelope]) => [
+        field,
+        JSON.stringify([envelope.v, envelope.kid, envelope.enc, envelope.ct]),
+      ]),
+    ),
+  );
+
+const UNTESTED = {
+  error:
+    'Test its connection first: a data source is made only from a test of exactly its settings that passed.',
+};
 
 export function registerDataSources(
   app: FastifyInstance,
@@ -368,7 +402,28 @@ export function registerDataSources(
     } catch (failure) {
       return refused(reply, failure);
     }
-    return (await run(reply, shape)) ?? reply;
+    const answer = await run(reply, shape);
+    if (answer === undefined) return reply;
+    if (tests === undefined) return answer;
+    // Kept under what it tested, so a create can be made from it (T363,
+    // AC-158); with no data source until one is. Its answer is given even
+    // should keeping it fail, and then it makes nothing.
+    const user = request.wechartUser;
+    const kept = await tests
+      .recordTrial(
+        {
+          ok: answer.ok,
+          checks: answer.checks,
+          fields: shape.fields,
+          by: user === null ? null : { key: user.key, name: user.name },
+        },
+        trialPrintOf(shape),
+      )
+      .catch((error: unknown) => {
+        request.log.warn({ err: error }, 'could not keep a connection test');
+        return undefined;
+      });
+    return kept === undefined ? answer : { ...answer, testId: kept.id };
   });
 
   // A stored one, with the form's changes: tested as their save would store
@@ -518,21 +573,52 @@ export function registerDataSources(
       const clash = await clashIn(targetFolderId, name);
       if (clash !== undefined) return reply.status(409).send(clash);
     }
+    const shape = {
+      driver: String(value['driver'] ?? ''),
+      authMethod: String(value['authMethod'] ?? ''),
+      fields: (value['fields'] ?? {}) as Record<string, FieldValue>,
+      sealed: (value['sealed'] ?? {}) as Record<string, SealedV1>,
+    };
+    try {
+      store.checkShape(shape);
+    } catch (failure) {
+      return refused(reply, failure);
+    }
+    /**
+     * Made only from a test that passed, of exactly these settings, by the
+     * one making it (T363, AC-158; direction.md rules 23 and 35; the user's
+     * answer, 2026-09-27: "test first, and dont save if test fails"). There
+     * is no making one without. The test is a row, so any replica knows it.
+     */
+    const testId = typeof value['testId'] === 'string' ? value['testId'] : undefined;
+    const byKey = request.wechartUser?.key ?? null;
+    const print = trialPrintOf(shape);
+    // Taken for this create alone, in one statement, so no two creates are
+    // made from one test (T363's review).
+    if (
+      testId === undefined ||
+      tests === undefined ||
+      !(await tests.claimTrial(testId, print, byKey))
+    )
+      return reply.status(422).send(UNTESTED);
     try {
       const made = await store.create(
-        {
-          folderId,
-          name,
-          driver: String(value['driver'] ?? ''),
-          authMethod: String(value['authMethod'] ?? ''),
-          fields: (value['fields'] ?? {}) as Record<string, FieldValue>,
-          sealed: (value['sealed'] ?? {}) as Record<string, SealedV1>,
-          ...(inWorkspace ? { targetFolderId } : {}),
-        },
+        { folderId, name, ...shape, ...(inWorkspace ? { targetFolderId } : {}) },
         inWorkspace ? {} : await landingIn(folderId),
       );
+      // Its test heads its history, and is its health; the wizard's earlier
+      // tests join it as trials (AC-163, AC-157; T363's review).
+      const trials = Array.isArray(value['trials']) ? (value['trials'] as string[]) : [];
+      await tests
+        .adoptTrials(trials, made.id, byKey)
+        .then(() => tests.adoptTrial(testId, made.id, made.settingsPrint))
+        .catch((error: unknown) => {
+          request.log.warn({ err: error }, 'could not keep its connection tests in its history');
+        });
       return reply.status(201).send(viewOf(made));
     } catch (failure) {
+      // Refused: its test is its maker's again, for the create that follows.
+      await tests.releaseTrial(testId, print).catch(() => undefined);
       return refused(reply, failure);
     }
   });

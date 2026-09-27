@@ -7,6 +7,7 @@ import type { Me } from '../../shell/AccountMenu';
 import { StateLine } from '../../shell/StatusIcon';
 import { AccessPanel, folderAccessQuery, refreshFolderAccess } from './access/AccessPanel';
 import { CreateMenu, DEFAULT_TITLES, type CreatableKind } from './CreateMenu';
+import { NewSourceWizard } from '../data-sources/NewSourceWizard';
 import { NewItemDialog, type Target } from './NewItemDialog';
 import { FolderContents, opensFromExplore, type CatalogItem } from './FolderContents';
 import { FolderTree } from './FolderTree';
@@ -209,11 +210,11 @@ export function ExplorePage() {
    * review).
    */
   const [askingTarget, setAskingTarget] = useState<{
-    kind: 'dashboard' | 'chart';
+    kind: 'dashboard' | 'chart' | 'data-source';
     targets: readonly Target[];
   } | null>(null);
   const [targetsFailed, setTargetsFailed] = useState<string | null>(null);
-  const askTarget = async (kind: 'dashboard' | 'chart') => {
+  const askTarget = async (kind: 'dashboard' | 'chart' | 'data-source') => {
     setTargetsFailed(null);
     try {
       setAskingTarget({ kind, targets: await getJson<Target[]>('/api/folders/targets') });
@@ -221,6 +222,11 @@ export function ExplorePage() {
       setTargetsFailed((error as Error).message);
     }
   };
+  /** A dashboard or chart being asked for: made at once, once its target is chosen. */
+  const askingItem =
+    askingTarget === null || askingTarget.kind === 'data-source'
+      ? null
+      : { kind: askingTarget.kind, targets: askingTarget.targets };
   const folderTitle = known ? (chain.at(-1)?.title ?? SHARED_ROOT.title) : '';
 
   /** The roots' counts, which are no folder's (AC-194). */
@@ -394,26 +400,44 @@ export function ExplorePage() {
           <CreateMenu
             // Not until the open folder is known: until then, whether it is
             // in the workspace isn't (T345's review).
-            busy={create.isPending || !known}
+            busy={create.isPending || !known || me.isPending}
             onCreate={(kind) => {
-              // In the workspace, which only a signed-in user has, a dashboard
-              // or chart names the shared folder it is to go to first (T345,
-              // AC-282).
-              if (kind !== 'folder' && inMyWorkspace) void askTarget(kind);
+              // In a signed-in user's workspace, a dashboard or chart names the
+              // shared folder it is to go to first (T345, AC-282). With sign-in
+              // off, phase 1's one user's is theirs alone: nothing goes anywhere.
+              if (kind !== 'folder' && signedIn && inMyWorkspace) void askTarget(kind);
               else create.mutate({ kind });
             }}
+            {...(signedIn && inMyWorkspace
+              ? { onNewSource: () => void askTarget('data-source') }
+              : {})}
           />
-          {askingTarget === null ? null : (
-            <NewItemDialog
-              kind={askingTarget.kind}
-              defaultTitle={DEFAULT_TITLES[askingTarget.kind]}
+          {askingTarget === null ? null : askingTarget.kind === 'data-source' ? (
+            // Made through its wizard, tested before it is made (T363, AC-158).
+            <NewSourceWizard
+              folderId={folderId}
               targets={askingTarget.targets}
+              onClose={() => {
+                setAskingTarget(null);
+              }}
+              onCreated={() => {
+                setAskingTarget(null);
+                void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+                void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+                void queryClient.invalidateQueries({ queryKey: ['data-sources'] });
+              }}
+            />
+          ) : askingItem === null ? null : (
+            <NewItemDialog
+              kind={askingItem.kind}
+              defaultTitle={DEFAULT_TITLES[askingItem.kind]}
+              targets={askingItem.targets}
               busy={create.isPending}
               onClose={() => {
                 setAskingTarget(null);
               }}
               onCreate={(title, targetFolderId) => {
-                create.mutate({ kind: askingTarget.kind, title, targetFolderId });
+                create.mutate({ kind: askingItem.kind, title, targetFolderId });
                 setAskingTarget(null);
               }}
             />

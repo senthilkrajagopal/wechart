@@ -4,7 +4,7 @@ import type { APIRequestContext, APIResponse } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
 import { CUBE, serviceToken } from '../api-process';
-import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
+import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 
 /**
  * T435 (AC-273, AC-310, AC-328; AC-161's first half): a model's data sources
@@ -54,14 +54,14 @@ async function dataSource(
 ) {
   const fields = { host: 'sample-db', port: 5432, database, user: 'sample', ssl: false };
   const made = await request.post('/api/data-sources', {
-    data: {
+    data: await testedSource(request, {
       folderId,
       name,
       driver: 'postgres',
       authMethod: 'password',
       fields,
       sealed: { password: await sealSecretV1(KEY, 'postgres', 'password', fields, 'sample') },
-    },
+    }),
   });
   expect(made.status(), await made.text()).toBe(201);
   sources.push(((await made.json()) as { id: string }).id);

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import type { APIRequestContext } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
-import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
+import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 
 /**
  * T364 (AC-157, AC-233): Data sources lists every data source the user may
@@ -67,14 +67,14 @@ async function folder(request: APIRequestContext, title: string, parent: string)
 
 async function dataSource(request: APIRequestContext, folderId: string, name: string) {
   const answer = await request.post('/api/data-sources', {
-    data: {
+    data: await testedSource(request, {
       folderId,
       name,
       driver: 'postgres',
       authMethod: 'password',
       fields: FIELDS,
       sealed: { password: await sealSecretV1(KEY, 'postgres', 'password', FIELDS, 'sample') },
-    },
+    }),
   });
   expect(answer.status(), await answer.text()).toBe(201);
   const id = ((await answer.json()) as { id: string }).id;
@@ -163,8 +163,10 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
       // Its parent's, view-only, and never managers'.
       await expect(table.getByRole('row').filter({ hasText: `parent_${RUN}` })).toHaveCount(1);
       await expect(table.getByRole('row').filter({ hasText: `hidden_${RUN}` })).toHaveCount(0);
-      const untested = table.getByRole('row').filter({ hasText: `parent_${RUN}` });
-      await expect(untested.getByTestId('source-health')).toHaveText('Not tested yet');
+      // Made from its passing test, which is its health from the start (T363, AC-163).
+      const parent = table.getByRole('row').filter({ hasText: `parent_${RUN}` });
+      await expect(parent.getByTestId('source-health')).toHaveAttribute('data-state', 'ok');
+      await expect(parent.getByTestId('source-health')).toHaveText(/^Passed · /);
 
       // A folder's filter narrows it to that folder's.
       await main

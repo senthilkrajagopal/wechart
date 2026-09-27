@@ -4,7 +4,7 @@ import type { APIRequestContext } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
 import { CUBE, serviceToken } from '../api-process';
-import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
+import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 
 /**
  * T335:
@@ -24,13 +24,16 @@ const RUN = Math.random().toString(36).slice(2, 8);
 const KEY = JSON.parse(
   readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
 ) as XcubeKey;
-const FIELDS = { host: 'sample-db', port: 5432, database: 'sample', user: 'cube', ssl: false };
+const FIELDS = { host: 'sample-db', port: 5432, database: 'sample', user: 'sample', ssl: false };
+/** A password no response may hold, sealed only where nothing can be made from it. */
+const CANARY = `e2e-${RUN}-password`;
 /**
  * Sealed as the browser seals one (T441), for exactly these fields: xcube
- * opens every envelope a data source lands with (T442).
+ * opens every envelope a data source lands with (T442). The sample server's
+ * own password, so its test passes and it can be made (T363).
  */
-const sealedFor = (fields: Record<string, unknown>) =>
-  sealSecretV1(KEY, 'postgres', 'password', fields, `e2e-${RUN}-password`);
+const sealedFor = (fields: Record<string, unknown>, secret = 'sample') =>
+  sealSecretV1(KEY, 'postgres', 'password', fields, secret);
 const MODEL = 'e2e-security';
 const connectionsOf = async (request: APIRequestContext) =>
   (
@@ -56,14 +59,14 @@ async function setUp(request: APIRequestContext) {
   ).toBe(200);
   const envelope = await sealedFor(FIELDS);
   const source = await request.post('/api/data-sources', {
-    data: {
+    data: await testedSource(request, {
       folderId,
       name: 'warehouse',
       driver: 'postgres',
       authMethod: 'password',
       fields: FIELDS,
       sealed: { password: envelope },
-    },
+    }),
   });
   expect(source.status(), await source.text()).toBe(201);
   return { folderId, sourceId: ((await source.json()) as { id: string }).id, envelope };
@@ -139,23 +142,36 @@ test('a data source lands in xcube as a connection, refused when its secret won�
   try {
     const held = (await connectionsOf(page.request)).find((each) => each.name === name);
     expect(held?.secrets).toEqual(['password']);
-    expect(JSON.stringify(await connectionsOf(page.request))).not.toContain(`e2e-${RUN}-password`);
 
-    // Sealed for another host, sent with this one: xcube can't open it.
-    const moved = await page.request.post('/api/data-sources', {
-      data: {
-        folderId,
-        name: 'elsewhere',
-        driver: 'postgres',
-        authMethod: 'password',
-        fields: FIELDS,
-        sealed: { password: await sealedFor({ ...FIELDS, host: 'other-db' }) },
-      },
+    // Sealed for another host, sent with this one: xcube can't open it, so
+    // its test fails there, and nothing is made from it (T363).
+    const moved = {
+      folderId,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: FIELDS,
+      sealed: { password: await sealedFor({ ...FIELDS, host: 'other-db' }, CANARY) },
+    };
+    const tried = await page.request.post('/api/data-sources/test', {
+      data: moved,
+      timeout: 90_000,
     });
-    expect(moved.status(), await moved.text()).toBe(422);
-    expect(((await moved.json()) as { error: string }).error).toMatch(
-      /^xcube can’t open a secret: .*Enter it again\.$/,
+    const answer = (await tried.json()) as {
+      ok: boolean;
+      testId: string;
+      checks: { id: string; status: string }[];
+    };
+    expect(answer.ok).toBe(false);
+    expect(answer.checks[0]?.id).toBe('secrets');
+    expect(answer.checks[0]?.status).toBe('failed');
+    const refused = await page.request.post('/api/data-sources', {
+      data: { ...moved, name: 'elsewhere', testId: answer.testId },
+    });
+    expect(refused.status(), await refused.text()).toBe(422);
+    expect(((await refused.json()) as { error: string }).error).toMatch(
+      /^Test its connection first/,
     );
+    expect(JSON.stringify(await connectionsOf(page.request))).not.toContain(CANARY);
     const listed = (await (await page.request.get(`/api/folders/${folderId}/contents`)).json()) as {
       title: string;
     }[];
@@ -208,7 +224,10 @@ test('a connection test runs in xcube with Cube’s driver, each check said, and
   expect(failed.text).not.toContain(wrong);
 
   const passed = await testWith('sample');
-  expect(passed.body).toEqual({
+  // Kept, as the wizard's test is, so a data source can be made from it (T363).
+  const { testId, ...answered } = passed.body as TestAnswer & { testId: string };
+  expect(testId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  expect(answered).toEqual({
     ok: true,
     checks: [
       expect.objectContaining({ id: 'secrets', status: 'passed' }),
@@ -220,14 +239,14 @@ test('a connection test runs in xcube with Cube’s driver, each check said, and
 
   // A stored one's tests are kept, newest first (T362, AC-163).
   const stored = await page.request.post('/api/data-sources', {
-    data: {
+    data: await testedSource(page.request, {
       folderId: 'root',
       name: `e2e_${RUN}_tested`,
       driver: 'postgres',
       authMethod: 'password',
       fields,
       sealed: { password: await sealSecretV1(KEY, 'postgres', 'password', fields, 'sample') },
-    },
+    }),
   });
   expect(stored.status(), await stored.text()).toBe(201);
   const id = ((await stored.json()) as { id: string }).id;
@@ -259,6 +278,8 @@ test('a connection test runs in xcube with Cube’s driver, each check said, and
       ]),
     ).toEqual([
       [false, false, ['passed', 'passed', 'failed', 'skipped']],
+      [true, true, ['passed', 'passed', 'passed', 'passed']],
+      // The test it was made from, first in its history (T363).
       [true, true, ['passed', 'passed', 'passed', 'passed']],
     ]);
     expect(history[0]?.checks[2]?.error).toMatch(/password authentication failed/);

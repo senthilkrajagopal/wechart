@@ -97,10 +97,13 @@ export interface DataSourceSecretTable {
 export interface ConnectionTestTable {
   id: Generated<string>;
   seq: Generated<string>;
-  data_source_id: string;
+  /** None for the wizard's test of one not yet made, until one is made from it (T363). */
+  data_source_id: string | null;
   ran_at: Generated<Date>;
   ok: boolean;
   as_stored: boolean;
+  /** The print of what a test of one not yet made tested, envelopes included (T363). */
+  shape: Generated<string | null>;
   /** The stored settings' print it tested; none for a trial of changes (T364's review). */
   settings: string | null;
   checks: JSONColumnType<unknown[]>;

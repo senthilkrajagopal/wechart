@@ -1,8 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 
 import type { Me } from '../../shell/AccountMenu';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
+import type { Target } from '../explore/NewItemDialog';
 import { DataSourcesList, type ListedSource } from './DataSourcesList';
+import { NewSourceWizard } from './NewSourceWizard';
 
 /**
  * Data sources (T364; AC-157, AC-233): its title, a note saying what the
@@ -25,10 +28,51 @@ export function DataSourcesPage() {
     queryKey: ['me'],
     queryFn: async () => (await (await fetch('/api/me')).json()) as Me,
   });
+  const queryClient = useQueryClient();
+  /**
+   * "+ Data source", as the approved prototype's page has it (T363): made in
+   * My workspace, which a signed-in Super-Admin or read-write member has
+   * (AC-276, AC-277), asking where it is to go (AC-282).
+   */
+  const hasWorkspace =
+    me.data?.security === 'oidc' && (me.data.superAdmin || me.data.readWrite === true);
+  const [adding, setAdding] = useState<readonly Target[] | null>(null);
+  const [addFailed, setAddFailed] = useState<string | null>(null);
+  const add = async () => {
+    setAddFailed(null);
+    try {
+      const response = await fetch('/api/folders/targets');
+      if (!response.ok) throw new Error(`error ${String(response.status)}`);
+      setAdding((await response.json()) as Target[]);
+    } catch (error) {
+      setAddFailed(`Could not list the folders it may go to: ${(error as Error).message}`);
+    }
+  };
 
   return (
     <div className="admin-page">
-      <h1 className="workspace-title">Data sources</h1>
+      <div className="admin-page__head">
+        <h1 className="workspace-title">Data sources</h1>
+        {hasWorkspace ? (
+          <button type="button" className="btn btn-primary" onClick={() => void add()}>
+            + Data source
+          </button>
+        ) : null}
+      </div>
+      {addFailed === null ? null : <StateLine kind="err">{addFailed}</StateLine>}
+      {adding === null ? null : (
+        <NewSourceWizard
+          folderId="mine"
+          targets={adding}
+          onClose={() => {
+            setAdding(null);
+          }}
+          onCreated={() => {
+            setAdding(null);
+            void queryClient.invalidateQueries({ queryKey: ['data-sources'] });
+          }}
+        />
+      )}
       <div className="info-bar" role="note">
         <StatusIcon kind="idle" />
         <div>

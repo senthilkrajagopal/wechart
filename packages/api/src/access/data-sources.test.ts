@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { SealedV1 } from '@wechart/core';
-import type { FastifyInstance, InjectOptions } from 'fastify';
+import type { FastifyInstance, InjectOptions, LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { pgSessionStore } from '../auth/session-store';
@@ -66,6 +66,22 @@ const postgres = (folderId: string, name: string) => ({
   sealed: { password: sealed(name) },
 });
 
+/** xcube's answer to a test that passes, as the stub runners give it. */
+const PASSING = { ok: true, checks: [{ id: 'connect', status: 'passed', durationMs: 1 }] };
+type Sent = (options: InjectOptions) => Promise<LightMyRequestResponse>;
+/**
+ * A create's body with the id of the passing test of its settings, which a
+ * data source is made from and only from (T363, AC-158; the user's answer,
+ * 2026-09-27: "test first").
+ */
+async function testedBy(send: Sent, payload: ReturnType<typeof postgres>) {
+  const { name: _name, ...settings } = payload;
+  void _name;
+  const run = await send({ method: 'POST', url: '/api/data-sources/test', payload: settings });
+  expect(run.statusCode, run.body).toBe(200);
+  return { ...payload, testId: run.json<{ testId: string }>().testId };
+}
+
 const docs = () => documents(getDb());
 const sources = () => dataSourceStore(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
@@ -109,6 +125,7 @@ beforeAll(async () => {
     folderAccess: folderAccessStore(getDb()),
     dataSources: sources(),
     connectionTests: connectionTestStore(getDb()),
+    connectionTest: async () => PASSING as never,
   });
   for (const who of ['writer', 'reader', 'nobody']) cookies[who] = await signIn(app, USERS[who]!);
 });
@@ -397,6 +414,9 @@ describe('a save landing in xcube first (T442, AC-327)', () => {
       documents: docs(),
       catalog: catalog(getDb()),
       dataSources: sources(),
+      // Each made from its passing test (T363).
+      connectionTests: connectionTestStore(getDb()),
+      connectionTest: async () => PASSING as never,
       dataSourceLanding: {
         prepare: async () => ({
           land: async (source) => {
@@ -417,17 +437,18 @@ describe('a save landing in xcube first (T442, AC-327)', () => {
       },
     });
     try {
+      const sent: Sent = (options) => open.inject(options);
       const taken = await open.inject({
         method: 'POST',
         url: '/api/data-sources',
-        payload: postgres(ids.b, `${MARK}_landed`),
+        payload: await testedBy(sent, postgres(ids.b, `${MARK}_landed`)),
       });
       expect(taken.statusCode).toBe(201);
 
       const refused = await open.inject({
         method: 'POST',
         url: '/api/data-sources',
-        payload: postgres(ids.b, `${MARK}_refused`),
+        payload: await testedBy(sent, postgres(ids.b, `${MARK}_refused`)),
       });
       expect(refused.statusCode).toBe(422);
       expect(refused.json()).toEqual({
@@ -904,7 +925,7 @@ describe('a read-write member’s changes (AC-312, AC-161)', () => {
     const created = await as('writer', {
       method: 'POST',
       url: '/api/data-sources',
-      payload: postgres(ids.b, `${MARK}_made`),
+      payload: await testedBy((options) => as('writer', options), postgres(ids.b, `${MARK}_made`)),
     });
     expect(created.statusCode).toBe(201);
     expect(created.json()).toMatchObject({ secrets: { password: { stored: true } } });
@@ -945,5 +966,202 @@ describe('a read-write member’s changes (AC-312, AC-161)', () => {
       error: 'A data source’s type never changes: make a new data source for MySQL.',
       problems: ['A data source’s type never changes: make a new data source for MySQL.'],
     });
+  });
+});
+
+/**
+ * T363 (AC-158, AC-163): a data source is made only from a test that passed,
+ * of exactly its settings, by the one making it: never without one (the
+ * user's answer, 2026-09-27). The test is kept as a row, so any replica can
+ * check it, and it heads the new source's history.
+ */
+describe('a new one made only from its passing test (T363, AC-158)', () => {
+  const REFUSED = {
+    error:
+      'Test its connection first: a data source is made only from a test of exactly its settings that passed.',
+  };
+  const passing = {
+    ok: true,
+    checks: [
+      { id: 'secrets', status: 'passed', durationMs: 1 },
+      { id: 'connect', status: 'passed', durationMs: 4 },
+    ],
+  };
+  const failing = {
+    ok: false,
+    checks: [{ id: 'connect', status: 'failed', durationMs: 9, error: 'no route to host' }],
+  };
+  let answer: unknown = passing;
+  const recorded = connectionTestStore(getDb());
+  let gated: FastifyInstance;
+  const cookieOf: Record<string, string> = {};
+
+  beforeAll(async () => {
+    gated = buildServer({
+      config: secured,
+      sessions: pgSessionStore(getDb()),
+      documents: docs(),
+      catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
+      dataSources: sources(),
+      connectionTests: recorded,
+      connectionTest: async () => answer as never,
+    });
+    for (const who of ['writer', 'super']) cookieOf[who] = await signIn(gated, USERS[who]!);
+  });
+  afterAll(async () => {
+    await gated.close();
+  });
+
+  const send = (who: string, url: string, payload: Record<string, unknown>) =>
+    gated.inject({ method: 'POST', url, payload, headers: { cookie: cookieOf[who]! } });
+  /** What the wizard tests: the settings, without a name. */
+  const settingsOf = (name: string) => {
+    const { name: _name, ...rest } = postgres(ids.b, name);
+    void _name;
+    return rest;
+  };
+  const tested = async (who: string, settings: Record<string, unknown>, with_ = passing) => {
+    answer = with_;
+    const run = await send(who, '/api/data-sources/test', settings);
+    expect(run.statusCode, run.body).toBe(200);
+    const { testId } = run.json<{ testId: string }>();
+    expect(testId).toMatch(/^[0-9a-f-]{36}$/);
+    return testId;
+  };
+  const namesIn = async () => (await sources().inFolder(ids.b)).map((source) => source.name);
+
+  it('makes one naming its passing test, which heads its history and is its health (AC-163, AC-157)', async () => {
+    const settings = settingsOf('x');
+    const testId = await tested('writer', settings);
+    const made = await send('writer', '/api/data-sources', {
+      ...settings,
+      name: `${MARK}_gated`,
+      testId,
+    });
+    expect(made.statusCode, made.body).toBe(201);
+    const id = made.json<{ id: string }>().id;
+
+    const history = await recorded.history(id);
+    expect(history.map((test) => [test.id, test.ok, test.asStored])).toEqual([
+      [testId, true, true],
+    ]);
+    expect(history[0]!.by).toMatchObject({ name: expect.any(String) as string });
+    const listed = (
+      await gated.inject({
+        method: 'GET',
+        url: '/api/data-sources',
+        headers: { cookie: cookieOf['writer']! },
+      })
+    )
+      .json<{ id: string; lastTest: { ok: boolean; current: boolean } | null }[]>()
+      .find((row) => row.id === id);
+    expect(listed?.lastTest).toMatchObject({ ok: true, current: true });
+
+    // Its test is its own now: it makes no other.
+    const again = await send('writer', '/api/data-sources', {
+      ...settings,
+      name: `${MARK}_gated_again`,
+      testId,
+    });
+    expect(again.statusCode).toBe(422);
+    expect(await namesIn()).not.toContain(`${MARK}_gated_again`);
+  });
+
+  it('refuses one with no test, a failed test, a test of other settings or another’s test, and makes nothing', async () => {
+    const settings = settingsOf('y');
+    const failed = await tested('writer', settings, failing);
+    const passed = await tested('writer', settings);
+    const supers = await tested('super', settings);
+    const cases: [string, Record<string, unknown>][] = [
+      ['no test', {}],
+      ['a failed test', { testId: failed }],
+      ['a test that isn’t there', { testId: randomUUID() }],
+      ['another host', { testId: passed, fields: { ...settings.fields, host: 'elsewhere' } }],
+      ['another envelope', { testId: passed, sealed: { password: sealed('other') } }],
+      ['another database', { testId: passed, fields: { ...settings.fields, database: 'hr' } }],
+      ['another’s test', { testId: supers }],
+    ];
+    for (const [why, change] of cases) {
+      const refused = await send('writer', '/api/data-sources', {
+        ...settings,
+        name: `${MARK}_refused`,
+        ...change,
+      });
+      expect(refused.statusCode, why).toBe(422);
+      expect(refused.json(), why).toEqual(REFUSED);
+    }
+    expect(await namesIn()).not.toContain(`${MARK}_refused`);
+  });
+
+  it('takes the wizard’s earlier tests into its history too, never another’s (T363’s review, AC-163)', async () => {
+    const settings = settingsOf('w');
+    const failed = await tested(
+      'writer',
+      { ...settings, fields: { ...settings.fields, port: 5433 } },
+      failing,
+    );
+    const supers = await tested('super', settings, failing);
+    const passed = await tested('writer', settings);
+    const made = await send('writer', '/api/data-sources', {
+      ...settings,
+      name: `${MARK}_with_trials`,
+      testId: passed,
+      trials: [failed, supers],
+    });
+    expect(made.statusCode, made.body).toBe(201);
+    const history = await recorded.history(made.json<{ id: string }>().id);
+    expect(history.map((test) => [test.id, test.ok, test.asStored])).toEqual([
+      [passed, true, true],
+      [failed, false, false],
+    ]);
+  });
+
+  it('makes one source only from one test, however close together the creates come (T363’s review)', async () => {
+    const settings = settingsOf('v');
+    const testId = await tested('writer', settings);
+    const answers = await Promise.all(
+      ['one', 'two', 'three'].map((suffix) =>
+        send('writer', '/api/data-sources', {
+          ...settings,
+          name: `${MARK}_race_${suffix}`,
+          testId,
+        }),
+      ),
+    );
+    expect(answers.map((answer) => answer.statusCode).sort()).toEqual([201, 422, 422]);
+    expect((await namesIn()).filter((name) => name.startsWith(`${MARK}_race_`))).toHaveLength(1);
+  });
+
+  it('keeps its test for another create when this one is refused (T363’s review)', async () => {
+    const settings = settingsOf('u');
+    const testId = await tested('writer', settings);
+    const clash = await send('writer', '/api/data-sources', {
+      ...settings,
+      name: 'warehouse',
+      testId,
+    });
+    expect(clash.statusCode).toBe(409);
+    const made = await send('writer', '/api/data-sources', {
+      ...settings,
+      name: `${MARK}_after_clash`,
+      testId,
+    });
+    expect(made.statusCode, made.body).toBe(201);
+  });
+
+  it('never makes one without a passing test, even when asked to (the user’s answer, 2026-09-27)', async () => {
+    const settings = settingsOf('z');
+    const failed = await tested('writer', settings, failing);
+    for (const change of [{ override: true }, { override: true, testId: failed }]) {
+      const refused = await send('writer', '/api/data-sources', {
+        ...settings,
+        name: `${MARK}_overridden`,
+        ...change,
+      });
+      expect(refused.statusCode).toBe(422);
+      expect(refused.json()).toEqual(REFUSED);
+    }
+    expect(await namesIn()).not.toContain(`${MARK}_overridden`);
   });
 });

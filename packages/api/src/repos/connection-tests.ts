@@ -1,5 +1,5 @@
 import type { FieldValue } from '@wechart/core';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 
 import type { Database } from '../db/schema';
 import type { TestAnswer } from '../xcube/connections';
@@ -38,7 +38,45 @@ export interface ConnectionTestStore {
   history(dataSourceId: string): Promise<ConnectionTest[]>;
   /** Each source's newest test of its stored settings: its health (T364, AC-157). */
   latestAsStored(dataSourceIds: readonly string[]): Promise<Map<string, ConnectionTest>>;
+  /**
+   * The wizard's test of one not yet made (T363, AC-158): kept under `shape`,
+   * the print of what it tested, with no data source until one is made from it.
+   */
+  recordTrial(
+    test: Pick<ConnectionTest, 'ok' | 'checks' | 'fields' | 'by'>,
+    shape: string,
+  ): Promise<ConnectionTest>;
+  /**
+   * Takes such a test for one create, if it is one not yet made into a data
+   * source, that passed, of exactly `shape`, run by `byKey` (null: nobody
+   * signed in); false if not. In one statement, so no two creates take it
+   * (T363's review).
+   */
+  claimTrial(testId: string, shape: string, byKey: string | null): Promise<boolean>;
+  /** Gives it back, for a create that was refused after taking it. */
+  releaseTrial(testId: string, shape: string): Promise<void>;
+  /**
+   * The data source made from it takes it as the first test of its stored
+   * settings (AC-163). False if it wasn't taken.
+   */
+  adoptTrial(testId: string, dataSourceId: string, settings: string): Promise<boolean>;
+  /**
+   * The wizard's other tests, of its earlier settings, join that history as
+   * trials not stored (AC-163; T363's review): only the maker's, not yet any
+   * data source's.
+   */
+  adoptTrials(
+    testIds: readonly string[],
+    dataSourceId: string,
+    byKey: string | null,
+  ): Promise<void>;
 }
+
+/** A taken test's print, until its data source is made or the create refused. */
+const claimed = (shape: string) => `claimed:${shape}`;
+
+/** A test's id as the table holds it: anything else is no test's. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Of each check, only what xcube says of it. */
 const trimmed = (checks: TestAnswer['checks']): TestAnswer['checks'] =>
@@ -120,7 +158,78 @@ export function connectionTestStore(db: Kysely<Database>): ConnectionTestStore {
         .orderBy('data_source_id')
         .orderBy('seq', 'desc')
         .execute();
-      return new Map(rows.map((row) => [row.data_source_id, toTest(row)]));
+      return new Map(rows.map((row) => [row.data_source_id!, toTest(row)]));
+    },
+
+    async recordTrial(test, shape) {
+      const row = await db
+        .insertInto('connection_tests')
+        .values({
+          data_source_id: null,
+          ok: test.ok,
+          as_stored: false,
+          settings: null,
+          shape,
+          checks: JSON.stringify(trimmed(test.checks)),
+          fields: JSON.stringify(test.fields),
+          ran_by: test.by === null ? null : JSON.stringify(test.by),
+        })
+        .returning(columns)
+        .executeTakeFirstOrThrow();
+      return toTest(row);
+    },
+
+    async claimTrial(testId, shape, byKey) {
+      if (!UUID.test(testId)) return false;
+      const taken = await db
+        .updateTable('connection_tests')
+        .set({ shape: claimed(shape) })
+        .where('id', '=', testId)
+        .where('data_source_id', 'is', null)
+        .where('ok', '=', true)
+        .where('shape', '=', shape)
+        .where(
+          byKey === null ? sql<boolean>`ran_by is null` : sql<boolean>`ran_by ->> 'key' = ${byKey}`,
+        )
+        .executeTakeFirst();
+      return taken.numUpdatedRows === 1n;
+    },
+
+    async releaseTrial(testId, shape) {
+      if (!UUID.test(testId)) return;
+      await db
+        .updateTable('connection_tests')
+        .set({ shape })
+        .where('id', '=', testId)
+        .where('data_source_id', 'is', null)
+        .where('shape', '=', claimed(shape))
+        .execute();
+    },
+
+    async adoptTrial(testId, dataSourceId, settings) {
+      if (!UUID.test(testId)) return false;
+      const adopted = await db
+        .updateTable('connection_tests')
+        .set({ data_source_id: dataSourceId, as_stored: true, settings })
+        .where('id', '=', testId)
+        .where('data_source_id', 'is', null)
+        .where('shape', 'like', 'claimed:%')
+        .executeTakeFirst();
+      return adopted.numUpdatedRows === 1n;
+    },
+
+    async adoptTrials(testIds, dataSourceId, byKey) {
+      const ids = testIds.filter((id) => UUID.test(id));
+      if (ids.length === 0) return;
+      await db
+        .updateTable('connection_tests')
+        .set({ data_source_id: dataSourceId, as_stored: false, settings: null })
+        .where('id', 'in', ids)
+        .where('data_source_id', 'is', null)
+        .where(
+          byKey === null ? sql<boolean>`ran_by is null` : sql<boolean>`ran_by ->> 'key' = ${byKey}`,
+        )
+        .execute();
     },
   };
 }

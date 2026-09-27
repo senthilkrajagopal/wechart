@@ -5842,11 +5842,11 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `access/data-sources.test.ts` 19;
     - Chrome: `security/folder-data-sources.spec.ts` 3;
     - units: ui 47, core 444, recommender 123, charts 473, web 1535, api 751.
-- [ ] T363 (AC-158, AC-159, AC-160, AC-161, AC-163, AC-269, AC-325) Add a data source in the workspace through Type → Connection → Test → Name, refusing a failing test without an override
+- [x] T363 (AC-158, AC-159, AC-160, AC-161, AC-163, AC-325, AC-282) Add a data source in the workspace through Type → Connection → Test → Name, refusing a failing test without an override
   - Files: `packages/web/src/workspaces/data-sources/{NewSourceWizard,ConnectionForm}.tsx` (+ tests), `packages/api/src/routes/data-sources.ts`, `e2e/security/data-sources.spec.ts`
   - Failing test: `data-sources.spec.ts`: the wizard takes a name, a driver, that driver's fields and a Test step; Create stays disabled until the test passes or "Create anyway" is chosen; the API refuses a create with no passing test and no override (AC-158).
     - *(2026-09-26, `[XD, X6, R31]`)* the Type step offers the eight drivers of T454, each form with its authentication methods and TLS fields and none other (AC-160); an existing data source's form shows its type fixed, saying to make a new data source for another (AC-161); a secret is sealed at submit, not on typing (`credential-sealing.md` Gotcha 9).
-    - *(2026-09-26, from T335's review)* a data source's row in Explore opens it in this form, its settings shown and each stored secret said as stored (AC-269's open half: T335 lists them, and its rows open nothing until this form exists).
+    - *(2026-09-26, from T335's review; moved to T461 2026-09-27)* a data source's row in Explore opens it in this form, its settings shown and each stored secret said as stored (AC-269's open half: T335 lists them, and its rows open nothing until this form exists).
     - *(2026-09-26, from T362)* a stored data source's settings show its test history from `GET /api/data-sources/:id/tests`, newest first, each test with its time, who ran it, its outcome and each check (`TestHistory.tsx`; AC-163's showing half: T362 records and lists them);
     - *(2026-09-26, from T361)* the Test step shows each check xcube ran (`secrets`, `config`, `connect`, `schemas`) with its result, and a failed one's error text as xcube redacted it (AC-159's showing half: T361 runs the test and answers the checks);
     - *(2026-09-27, from T443)* the shared root's `default`, seeded at install, opens and changes in this form like any other data source (AC-310's "managed like any other");
@@ -5854,6 +5854,58 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - *(2026-09-26, from T441)* the form seals each typed secret at submit with core's `sealSecretV1`, to the key `GET /api/data-sources/sealing-key` gives, and a canary secret typed into it appears in no request body to wechart (the Test step's included), no stored row and no line of the API's log, in Chrome, Firefox and WebKit (AC-325's form half: T441 built the sealer and the key route, and there was no form to type into).
     - *(2026-09-27, from T345)* the workspace's New menu offers Data source, and the wizard asks for its target folder as `NewItemDialog` does, from `GET /api/folders/targets`, posting it as `targetFolderId` (AC-282's data-source half: T345 built the API's target check and the 409 on a name the target holds).
   - Depends on: T454, T361, T345
+  - *Split 2026-09-27:* T363 is the wizard: making one, its Test step, its sealing and its target, as AC-158 asks. A stored data source's settings form is T461: AC-269's open half, AC-161's fixed type and `CubeState`, AC-163's history, and AC-310's `default` changed like any other. T363 keeps AC-161 and AC-163 in its heading, since the wizard's passing test heads the new source's history and its type is chosen once.
+  - *The create gate, as T363 builds it (AC-158):*
+    - `POST /api/data-sources/test` for one not yet made keeps the test, with no data source, under a print of what it tested: the driver, the sign-in method, the fields and the sealed envelopes (migration `…_connection-test-trials.cjs`). It answers with the test's id.
+    - `POST /api/data-sources` makes one only when it names a test that passed, run by the same user, of exactly its settings. Otherwise it answers 422 and makes nothing. There is no override (R32, the user's answer: "test first, and dont save if test fails").
+    - The test is taken in one statement, so no two creates are made from one test, and it is given back when the create is refused. It becomes the first in the new source's history, as a test of its stored settings, so its health is known at once (AC-163, AC-157). The wizard's earlier tests, named in `trials`, join that history as trials.
+    - The API checks this across replicas, since the tests are rows, not memory.
+  - *Also:* the Data sources page offers "+ Data source", as the approved prototype does (`admin-sources.js`), to those with a workspace. It makes the source in My workspace.
+  - *As built (2026-09-27):*
+    - `NewSourceWizard.tsx` is a dialog with the steps Type → Connection → Test → Name.
+    - `ConnectionForm.tsx` renders each driver's fields and ways to sign in from core's `DRIVERS`.
+    - A typed secret stays in the form. It is sealed when the test is run, and the create sends exactly what was tested. A change after a test forgets that test.
+    - There is no step past Test until a test passes and is kept (R32). The test's outcome is said in a live status line.
+    - Focus starts on each step's first control. Escape doesn't close the wizard while it is making the source.
+    - A name Cube won't take is marked invalid, saying why. Choosing a client certificate turns TLS on (the hand-on from T454's review).
+    - Explore's New menu offers Data source in a signed-in user's My workspace. The Data sources page offers "+ Data source" to signed-in Super-Admins and read-write members. With sign-in off, neither offers it, and a workspace dashboard or chart asks for no target.
+    - Tests:
+      - `NewSourceWizard.test.tsx` (17);
+      - `DataSourcesPage.test.tsx` (3);
+      - `access/data-sources.test.ts`, "a new one made only from its passing test" (7);
+      - `access/workspaces.test.ts`, a workspace create without a test refused;
+      - `e2e/security/new-data-source.spec.ts` in Chrome, Firefox and WebKit.
+      - The e2e test types a wrong password as a canary. It checks that xcube's connect check fails and says why, and that Next stays disabled. It then makes the source from the right password's passing test, which heads its history, with the failed one after it. The canary is in no request body, no answer, and nothing in a dump of the whole metadata database.
+      - The other security specs make their data sources through `testedSource` (e2e/security/fixtures.ts), testing each against the sample server first.
+    - From the review:
+      - an earlier override kept after a passing test (moot with R32);
+      - focus and announcements;
+      - the client-certificate hand-on;
+      - one test making two sources in a race;
+      - a passed-but-unkept test's dead end, now explained;
+      - sign-in-off behaviour;
+      - weak tests.
+      All fixed.
+    - Ticked:
+      - AC-159, by `new-data-source.spec.ts`: xcube's checks, the connect check's error, and the canary in no answer.
+      - AC-160, by `NewSourceWizard.test.tsx` "offers %s its own ways to sign in" for all eight, and by the e2e's driver list.
+    - Unticked:
+      - AC-158 now covers a change too (R32), which is T461's.
+      - AC-163's showing is T461's.
+      - AC-282's model half is T347's.
+      - AC-325 has no test that reads the API's log.
+    - Files, beyond those listed: `packages/api/src/repos/connection-tests.ts`, the migration `1758370000000_connection-test-trials.cjs`, `packages/web/src/workspaces/explore/{ExplorePage,CreateMenu}.tsx`, `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/security/new-data-source.spec.ts` and `e2e/security/fixtures.ts`.
+- [ ] T461 (AC-269, AC-161, AC-163, AC-310, AC-158) Open a stored data source in its settings, from Explore and from Data sources, and save a change only after a passing test *(added 2026-09-27, split from T363; no override, R32)*
+  - Files: `packages/web/src/workspaces/data-sources/{SourceSettings,TestHistory}.tsx` (+ tests), `packages/web/src/router/routes.tsx`, `packages/api/src/routes/data-sources.ts`, `e2e/security/data-sources.spec.ts`
+  - Failing test: `data-sources.spec.ts`:
+    - a data source's row in Explore and in Data sources opens its settings under its folder's breadcrumb, read-only where the user may not change it (rule 70);
+    - its type is shown fixed, saying to make a new data source for another type (AC-161);
+    - each stored secret reads "Stored · encrypted", and is typed only to replace it (AC-164);
+    - its test history is listed newest first, each test with its time, who ran it, its outcome and each check (AC-163);
+    - T365's `CubeState` is shown (AC-161's showing half);
+    - the root's `default` opens and changes like any other (AC-310);
+    - a change to its connection is saved only once a test of that change passed, as a create is, with no override (AC-158; rule 23; R32). A rename alone needs no test.
+  - Depends on: T363, T365
 - [x] T364 (AC-157, AC-233) List every visible data source with its folder, driver and health *(2026-09-27: the cubes using each moved to T459; its AC-001 clause is T331's; its AC-161 showing is T363's)*
   - Files: `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (replacing the deferred page), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`), `e2e/security/data-sources.spec.ts`; *as built (2026-09-27):* also `DataSourcesList.tsx` (+ test), `router/routes.tsx`, `admin/DeferredPage.tsx` (removed), `shell/styles.ts`, `shell/AccountMenu.tsx` (`Me.readWrite`), `packages/api/src/server.ts` (the listing's rule and paths; `/api/me`'s `readWrite`), `repos/connection-tests.ts` (`latestAsStored`, a test's `settings`), `repos/data-sources.ts` (`settingsPrint`), a migration `…_connection-test-settings.cjs`, `access/data-sources.test.ts`, `e2e/admin.spec.ts`
   - Failing test: `data-sources.spec.ts`: the page shows its title and note, lists every source the user may see with folder path, driver, health from the last test ~~and the cubes using it~~, and none they may not; `/sources` opens it~~; `reader` has no Data sources entry~~ (AC-157, AC-233~~, AC-001~~).
@@ -7607,8 +7659,8 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
 | AC-145 | T375 | | | | |
 | AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |
 | AC-154 | T377 | AC-155 | T379 | AC-157 | T364, T459 |
-| AC-158 | T363 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
-| AC-161 | T335, T363, T365, T435, T442 | AC-163 | T362, T363 | AC-164 | T335 |
+| AC-158 | T363, T461 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
+| AC-161 | T335, T363, T365, T435, T442, T461 | AC-163 | T362, T363, T461 | AC-164 | T335 |
 | AC-176 | T405 | AC-180 | T407 | AC-187 | T406 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
@@ -7619,7 +7671,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
 | AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327, T334, T335 |
 | AC-263 | T313, T326, T334, T335, T436 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371 |
 | AC-266 | T326, T340, T334 | AC-267 | T328, T334, T335, T343, T408 | AC-268 | T340, T408 |
-| AC-269 | T334, T335, T363 | AC-270 | T336 | AC-271 | T336, T452 |
+| AC-269 | T334, T335, T461 | AC-270 | T336 | AC-271 | T336, T452 |
 | AC-272 | ~~T337, T339, T340~~ T429, T457 | AC-273 | ~~T338~~ T435 | AC-274 | T341 |
 | AC-275 | ~~T337, T352~~ T428 | AC-276 | T343 | AC-277 | T343 |
 | AC-278 | T344, T348 | AC-279 | T344 | AC-280 | T346, T347 |
@@ -7632,7 +7684,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
 | AC-305 | T398 | AC-306 | T399 | AC-307 | T409, T444 |
-| AC-308 | T410 | ~~AC-309~~ | retired 2026-09-25 (was T337) | AC-310 | ~~T338~~ T435, T443 |
+| AC-308 | T410 | ~~AC-309~~ | retired 2026-09-25 (was T337) | AC-310 | ~~T338~~ T435, T443, T461 |
 | ~~AC-311~~ | retired 2026-09-25 (T333 now serves AC-324) | AC-312 | T335, T454, T361 | AC-313 | T397, T398 |
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
 | AC-317 | T412 | AC-318 | T416 | AC-139 | T413, T417 |

@@ -20,6 +20,11 @@ export const DEFAULT_TITLES: Record<CreatableKind, string> = {
 
 export interface CreateMenuProps {
   readonly onCreate: (kind: CreatableKind) => void;
+  /**
+   * A data source, offered in My workspace (AC-192, AC-158; T363): through
+   * its wizard, since it can't exist before its connection does.
+   */
+  readonly onNewSource?: () => void;
   readonly busy?: boolean;
 }
 
@@ -30,26 +35,39 @@ const OPTIONS: readonly { kind: CreatableKind; label: string; icon: string; chip
   { kind: 'folder', label: 'Folder', icon: '▣', chip: 'itemicon ic-folder' },
 ];
 
-export function CreateMenu({ onCreate, busy = false }: CreateMenuProps) {
+export function CreateMenu({ onCreate, onNewSource, busy = false }: CreateMenuProps) {
+  const items = OPTIONS.map((option) => ({
+    key: option.kind as string,
+    label: (
+      <>
+        <span className={option.chip} aria-hidden="true">
+          {option.icon}
+        </span>
+        {option.label}
+      </>
+    ),
+    disabled: busy,
+    onSelect: () => {
+      onCreate(option.kind);
+    },
+  }));
+  if (onNewSource !== undefined)
+    // AC-192's order in the workspace: Dashboard, Chart, (Model,) Data source, Folder.
+    items.splice(items.length - 1, 0, {
+      key: 'data-source',
+      label: (
+        <>
+          <span className="itemicon ic-source" aria-hidden="true">
+            ◍
+          </span>
+          Data source
+        </>
+      ),
+      disabled: busy,
+      onSelect: onNewSource,
+    });
   return (
-    <MenuButton
-      label="New"
-      items={OPTIONS.map((option) => ({
-        key: option.kind,
-        label: (
-          <>
-            <span className={option.chip} aria-hidden="true">
-              {option.icon}
-            </span>
-            {option.label}
-          </>
-        ),
-        disabled: busy,
-        onSelect: () => {
-          onCreate(option.kind);
-        },
-      }))}
-    >
+    <MenuButton label="New" items={items}>
       ＋ New ▾
     </MenuButton>
   );

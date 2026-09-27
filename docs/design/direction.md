@@ -552,7 +552,7 @@ Nothing in §2–§7d changes. No new colour and no new type size is added: ever
 20. Model objects offer Form and Code views that stay synchronized. Switching warns if information would be lost.
 21. Any dashboard can be previewed "as" a group or user (the security "view as" mode), and a persistent banner shows it is active. *Amended 2026-09-25 (`docs/inputs/2026-09-25-architecture-decisions.md`, decision 12; requirements R27): tokens carry groups only, so the preview is "as" one or more groups, and "as a user" means as that user's groups (AC-166).*
 22. The jobs list shows name, status (icon + label), last success, duration against average, trigger, and model link.
-23. A data-source connection can't be saved until a Test step passes, or the user overrides it explicitly. The Test step shows each check's result.
+23. A data-source connection can't be saved until a Test step passes, ~~or the user overrides it explicitly~~ with no override (the user's answer, 2026-09-27). The Test step shows each check's result.
 24. Light and dark themes are both complete. Neither is produced by automatically inverting the other.
 25. Markdown tiles never render raw HTML. Live values use typed tokens.
 26. Every key the Cube YAML schema accepts for a cube or view can be edited in the Form view, and every enum offers exactly the validator's allowed values.

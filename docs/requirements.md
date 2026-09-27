@@ -842,6 +842,14 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R32 — asked after T363's review** (2026-09-27; its cold review found rule 35 and the approved prototype at odds with AC-158's override)
+- Q: Test first, or allow "without a test"? Design rule 35 and the approved prototype say a new data source can't be made until its test passes. AC-158 and the task allow an explicit "without a test". Keep the override, or remove it?
+  A: "test first, and dont save if test fails.. both in create new as well as edit.."
+  - *AC-158 and rule 23 are amended: no override, for a create and for a change to a data source's connection (T461).*
+- Q: Wizard tests never used: tests run in a wizard that was then cancelled stay stored, attached to no data source. Should they be cleaned up after some time, or kept?
+  A: *(answered with the question above; not separately)*
+  - *They are kept for now. A cancelled wizard's tests belong to no data source; those of a wizard that makes one join its history.*
+
 **R31 — what xcube's slices 4–6, as built, left open** (`docs/inputs/2026-09-26-xcube-slice-{4,5,6}-contract.md`, `…-connections-drivers.md` and `…-xcube-overlay-data-sources.md`, checked in `docs/research/xcube-slice-{4,5,6}.md` and `xcube-overlay-data-sources.md`; asked in the conversation, 2026-09-26, numbered as the handoff numbers them)
 - Q18: Which xcube image to pin for slices 4–6? The TLS binding exists only from `1249dda9ca` on; `ed08180c37` has it too, with overlay data sources. A: "use the latest one.. whichever was built last"
 - Q19 (xcube's question): a workspace copy of a data source can change its driver in a preview, but landing it answers `409 driver_change`. Should the workspace refuse the change up front? A: "Yes"
