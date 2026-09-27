@@ -5675,7 +5675,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The Model entry goes to T347, where a workspace model first has an overlay to be previewed in.
     - AC-282 stays unticked until both exist.
     - AC-192's shared-folder half (a shared folder's New menu offers only Folder) is T331's. It lands with proposals (T349), since until then creating in a shared folder is the only way an item gets there. So AC-192 stays unticked here.
-- [ ] T346 (AC-280, AC-298) Copy a data source into the workspace with its credentials, still encrypted *(rewritten 2026-09-26: wechart copies the ciphertext and never opens it, `[AD 7, IP 1]`)*
+- [x] T346 (AC-280, AC-298) Copy a data source into the workspace with its credentials, still encrypted *(rewritten 2026-09-26: wechart copies the ciphertext and never opens it, `[AD 7, IP 1]`)*
   - Files: `packages/api/src/routes/workspace-copy.ts`, `packages/api/src/routes/workspace-copy-source.test.ts`
   - Failing test: `workspace-copy-source.test.ts`:
     - the copy has the connection settings and the original's ciphertext, byte for byte, with no call that could decrypt it;
