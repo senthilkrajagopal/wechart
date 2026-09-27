@@ -185,7 +185,9 @@
           - pie labels are themed.
           - Still open from UX-113: checking chosen colours against the dark tile.
       - **Deployed:** Helm revision 31 runs wechart `b279b13` (T463–T465); `verify.sh` passed every check.
-      - **T471**, the wizard rebuilt to designs 01 and 02 as a docked pane, is built and in review. T472's logo licences are being researched.
+      - **Done since:** T471 (e72924d), the wizard rebuilt to designs 01 and 02 as a docked pane; AC-339 and AC-340 ticked.
+      - **Deployed:** Helm revision 32 runs wechart `e72924d`; `verify.sh` passed every check.
+      - **T472:** research found that no vendor's published terms allow its logo on the picker, so all eight drivers keep their monograms (`docs/research/driver-logos.md`).
       - **Failing at HEAD, not ours:**
         - `markings.spec.ts` "Invert marking and Mark all…" fails 3 of 6 runs alone. The likely cause: the test predates AC-097's marked share. Once the status tile marks "shipped", the category tile's Components bar is partly marked, and its marked share draws a third path ("1 of 3", expected "1 of 2") whenever the share's query answers before the first poll. The test needs its expectation corrected. That's for the user, since it changes an assertion;
         - `acceleration.spec.ts` "Data as of…" is known;

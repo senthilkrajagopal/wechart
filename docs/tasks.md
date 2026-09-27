@@ -7852,10 +7852,14 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       - design 01 state D's checks ticking one by one: xcube answers once, not per check;
       - the narrow sheet keeps Cancel.
     - AC-343 stays open until every phase-2 surface is drawn.
-- [ ] T472 (AC-338) Mark each driver with its vendor's logo where its licence allows, else a monogram
+- [x] T472 (AC-338) Mark each driver with its vendor's logo where its licence allows, else a monogram
   - Files: `docs/research/driver-logos.md` (each vendor's trademark terms, with sources), `packages/web/src/workspaces/data-sources/driverMarks.tsx` (+ test)
   - Failing test: `driverMarks.test.tsx`: each of the eight drivers shows the logo its research allows, or its monogram; none shows a logo the research doesn't clear (AC-338).
   - Depends on: T471
+  - **Done 2026-09-27. AC-338 ticked**, by `driverMarks.test.tsx` and `security/new-data-source.spec.ts` (the running wizard's eight tiles show Pg, Rs, My, Sf, BQ, SS, Or, Dr and no image).
+    - The research found no vendor's published terms allow its logo in the picker. PostgreSQL, Snowflake, BigQuery and Dremio are "not clearly allowed"; Redshift, MySQL, SQL Server and Oracle are "not allowed". So `CLEARED_LOGOS` is empty.
+    - A logo goes in only with a sibling research doc recording the vendor's permission.
+    - Whether to ask any vendor for permission is the user's to decide (the research's open question).
 - [ ] T473 (AC-259, AC-260, AC-265, AC-267, AC-343) Redraw the Access panel as design 07
   - Files: `packages/web/src/workspaces/explore/access/AccessPanel.tsx` (+ test), `e2e/security/access.spec.ts`
   - Failing test: design 07's states:

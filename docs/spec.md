@@ -686,7 +686,7 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
       Fails when: a test result is missing from the history.
 - [x] AC-164 THE SYSTEM SHALL never show a stored credential in plain text after it is saved, and SHALL never send it to the browser.
       Fails when: a saved secret is readable in the UI or in a response to the browser.
-- [ ] AC-338 THE SYSTEM SHALL mark each driver type in the new data source wizard with its vendor's logo, where the vendor's licence terms allow wechart to show it, and otherwise with a monogram of its name (`[R33]`, proposal 1 of the 2026-09-27 designs, approved 2026-09-27).
+- [x] AC-338 THE SYSTEM SHALL mark each driver type in the new data source wizard with its vendor's logo, where the vendor's licence terms allow wechart to show it, and otherwise with a monogram of its name (`[R33]`, proposal 1 of the 2026-09-27 designs, approved 2026-09-27).
       Fails when: a driver's type tile shows neither a logo nor a monogram, or shows a logo whose licence terms, as recorded in `docs/research/`, don't allow it.
 - [x] AC-339 WHEN a Dremio Cloud project URL starting with `http://` is entered, THE SYSTEM SHALL warn beside it that the token would be sent unencrypted (`[R33]`, proposal 2).
       Fails when: an `http://` Cloud URL shows no warning, or an `https://` one shows one.

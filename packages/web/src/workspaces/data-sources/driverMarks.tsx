@@ -2,9 +2,23 @@ import type { DriverType } from '@wechart/core';
 
 /**
  * Each driver's mark and its ways to sign in, as the new data source
- * wizard's type tiles show them (T471; design 01, state A). The marks are
- * monograms: vendors' logos wait on their licence terms (T472, AC-338).
+ * wizard's type tiles show them (T471; design 01, state A).
+ *
+ * A vendor's logo only where its licence terms, recorded in `docs/research/`,
+ * allow it, and otherwise a monogram of the name (T472, AC-338). As of
+ * `driver-logos.md` (2026-09-27) no vendor's published terms allow it, so
+ * every driver has its monogram, drawn in wechart's own neutral palette,
+ * never a vendor's colours or shapes (the research's trade-dress gotcha).
  */
+
+/**
+ * The logos cleared for the picker, each by the research doc that records
+ * the vendor's permission. None: a logo goes here only with its sibling doc
+ * in `docs/research/`.
+ */
+export const CLEARED_LOGOS: Partial<
+  Readonly<Record<DriverType, { readonly src: string; readonly research: string }>>
+> = {};
 const MONOGRAMS: Readonly<Record<DriverType, string>> = {
   postgres: 'Pg',
   redshift: 'Rs',
@@ -35,7 +49,11 @@ export const TLS_DEFAULT: Partial<Readonly<Record<DriverType, string>>> = {
   mysql: 'TLS off by default',
 };
 
-/** A driver's mark: decorative, its name said beside it. */
+/**
+ * A driver's mark: decorative, its name said beside it. Its monogram while
+ * no logo is cleared; drawing a cleared one comes with the first clearance,
+ * and its test (T472's review).
+ */
 export function DriverMark({ type }: { readonly type: DriverType }) {
   return (
     <span className="driver-mark" aria-hidden="true">

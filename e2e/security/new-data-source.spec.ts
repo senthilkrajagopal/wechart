@@ -110,6 +110,13 @@ test.describe('a data source added in the workspace (T363)', () => {
         'Oracle',
         'Dremio',
       ]);
+      // Each marked with its monogram: no vendor's terms allow its logo there
+      // (T472, AC-338; docs/research/driver-logos.md).
+      const marks = wizard
+        .getByRole('radiogroup', { name: 'Which database?' })
+        .locator('.driver-mark');
+      await expect(marks).toHaveText(['Pg', 'Rs', 'My', 'Sf', 'BQ', 'SS', 'Or', 'Dr']);
+      await expect(marks.locator('img, svg')).toHaveCount(0);
       await wizard.getByRole('radio', { name: 'PostgreSQL' }).click();
       await wizard.getByRole('button', { name: 'Next: Connection' }).click();
 
