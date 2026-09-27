@@ -7407,7 +7407,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362â€
     - `access/data-sources.test.ts` 10;
     - Chrome: `security/folder-data-sources.spec.ts` 2 and `explore.spec.ts` 19;
     - the full unit suite (at commit).
-- [ ] T435 (AC-273, AC-310, AC-328, AC-161) Bind a model's data sources at publish, nearest first from its folder, and give a cube with none the nearest `default` *(moved here from slice 3, 2026-09-26)*
+- [x] T435 (AC-273, AC-310, AC-328, AC-161) Bind a model's data sources at publish, nearest first from its folder, and give a cube with none the nearest `default` *(moved here from slice 3, 2026-09-26)*
   - **Why here.** xcube answered that binding comes with slice 6: a bound name must be a connection Cube can open, and connections arrive with T442. At publish xcube resolves `data_source` along the item's folder path, as it does cube names. It pushes no data-source items into the tree `[xcube answer to-wechart/2026-09-26-1030-data-source-binding.md]`.
   - **Until slice 6.** xcube passes `data_source` through unchanged. With `CUBEJS_DATASOURCES` unset, Cube maps any name to the default connection, so `data_source: warehouse` reads the default database. With it set, an undeclared name fails the publish's compile. That is xcube's reading of Cube 1.7.45, not run (same answer, Â§2).
   - Files: `e2e/security/data-source-binding.spec.ts`, `packages/api/src/xcube/connections.ts`
@@ -7419,6 +7419,41 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362â€
     - *(moved from T442, 2026-09-26)* a query on a cube bound to a data source added to the root answers, and then `GET â€¦/connections/{name}/health` reports it live on every instance that built its driver (AC-161's first half; T365 shows it);
     - *(added 2026-09-26, from T341's review)* the data source it binds is published as `<folderId>__<name>` for /A's and under its short name for the root's, and renaming or moving /A changes neither (AC-328, its data-source clause).
   - Depends on: T426, T442
+  - **Done 2026-09-26.**
+    - **Ticked:**
+      - AC-273: `e2e/security/data-source-binding.spec.ts` against compose's xcube, each clause of its Fails-when shown:
+        - /A/B binds /A's `warehouse`, never /A/B/C's or /S's;
+        - once /A/B has one, a republish binds it;
+        - a name found nowhere is refused, naming it;
+        - a cube extending another reads its parent's data source, as its parent now is;
+        - a nearer one added changes nothing published until it is published again.
+      - AC-328: its last clause, the data sources'. /A's is published as `<folderId>__warehouse`, a root one under its short name, and renaming and moving /A changes neither, nor what was published. Its other clauses are T341's, T425's, T449's and T452's.
+    - **Not ticked:**
+      - AC-310: its binding of the nearest `default` is shown here. Seeing the root's `default` in Data sources, and its seeding at install, are T363's, T364's and T443's.
+      - AC-161: the connection a cube queried reports itself live and current on every instance that built it (the `health` step); its showing is T364's.
+  - **How it tells:**
+    - Each cube is `SELECT current_database()`, and each data source signs in to the sample server as its superuser, into `postgres` or `template1`. What a cube answers names the connection it was bound to.
+    - Cube's own environment reads `sample`, and no data source here does, so a binding lost can't pass for one made.
+    - Each read filters out a value of its own, so Cube's result cache can't answer it. The same SQL bound anew was answered from the cache of the connection before.
+      - For the user, and asked of xcube (`to-xcube/2026-09-27-0100-cache-per-connection.md`): after a cube is published again onto another data source, Cube may serve the earlier connection's cached answer until its refresh key moves. That is 10 s on Postgres, 2 min on Snowflake or BigQuery.
+      - AC-273's Fails-when is about a published cube changing when a nearer one is only added, which is shown, so it is ticked.
+  - **The cold review (FAIL), fixed:**
+    - /A's `warehouse` read `sample` as Cube's environment does; now `postgres`.
+    - The move's check ran before xcube had the moved tree. It now waits until /A resolves a cube only /S holds, then publishes from the moved path, and finds the same names and no more.
+    - The root's data source is now used by a cube in /N.
+    - A publish between adding a nearer data source and reading what was published.
+    - The refusal is matched to xcube's binding message exactly.
+    - The health step waits for the report written as the driver is built.
+    - A publish that answers 200 unexpectedly is still removed.
+  - **Found on the way, and fixed:**
+    - The browser tests' reset (`WECHART_RESET_DATA`) left every data source behind when it cleared the folders (`fb13cf3`, a T335 follow-up).
+    - The spec's own cleanup inherited the suite's signed-in state (now signs in afresh), and says each removal that fails.
+  - **Reported to xcube (`to-xcube/2026-09-27-0010-connection-delete-race.md`):** three copies of the spec at once, in one model, tripped each other. A changeset deleting one folder's cube was refused over another folder's connection removed a moment before, which only a stale revision's cube still used.
+    - The same could befall two users: one removing a data source while another publishes elsewhere.
+    - xcube fixed it in `22132c309c`: a check on a stale base answers 409, which wechart's publish already rebases on, and a removal and a commit share the model's lock. It is being researched to pin.
+    - The spec is API-only and browser-independent, so `playwright.security.config.ts` runs it in Chrome alone.
+    - Until the pin, a Chrome run of the whole suite may see the race with the other specs publishing to the model (`binding`, `isolation`, `picker`).
+  - **Tests:** Chrome, the spec 6, in two clean runs after the review; with `folder-data-sources.spec.ts` on all three browsers, 15 before it.
 - [ ] T443 (AC-310) Seed the shared root's `default` data source at install with a post-install Job, and manage it like any other *(rewritten 2026-09-26, `[R31]`: ~~from the Helm values~~ a Job seals the password, so wechart never receives it)*
   - Files: `deploy/helm/wechart/templates/seed-default-job.yaml` (a post-install Job: xcube's image seals the chart Secret's database password with xcube's public key, `sealSecretV1`; a second step posts the envelope), `packages/api/src/routes/data-sources.ts` (the seeding route, taking only an envelope, allowed only to the Job's credential and only while the root has no `default`), `docker-compose.yml` (the same one-shot for development), `deploy/helm/verify.sh`, `e2e/security/root-default.spec.ts`
   - Failing test: `root-default.spec.ts`, and `verify.sh` on docker-desktop:

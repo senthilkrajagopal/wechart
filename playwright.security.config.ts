@@ -46,8 +46,19 @@ export default defineConfig({
   },
   projects: [
     { name: 'chrome', use: { ...devices['Desktop Chrome'], channel: 'chrome' } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'safari', use: { ...devices['Desktop Safari'] } },
+    // xcube's binding is shown through the API, in no browser, so once: its
+    // copies in three browsers would publish and remove data sources in one
+    // model at once, and trip each other (T435).
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+      testIgnore: /data-source-binding\.spec\.ts/,
+    },
+    {
+      name: 'safari',
+      use: { ...devices['Desktop Safari'] },
+      testIgnore: /data-source-binding\.spec\.ts/,
+    },
   ],
   webServer: [
     {
