@@ -36,8 +36,12 @@ export function isAdditive(aggType: string | undefined): boolean {
 }
 
 export interface PartlyMarked {
-  /** The marked part of the measure's value. */
-  readonly marked: number;
+  /**
+   * The measure's value over the item's marked rows: a part of the total for
+   * an additive measure, a value of its own for any other. `undefined` when
+   * none of its rows is marked, which a non-additive value of 0 doesn't say.
+   */
+  readonly marked: number | undefined;
   /** The value of the whole item. */
   readonly total: number;
   /** Cube's declared `aggType` for the measure, when the meta has one. */
@@ -69,12 +73,15 @@ export type PartialMark =
 /** How to draw one item, given how much of it is marked. */
 export function partialMark(item: PartlyMarked, colours: MarkColours): PartialMark {
   const { marked, total, aggType } = item;
+  if (marked === undefined) return { kind: 'none' };
 
-  // Zero total first, so nothing divides by it. A measure can legitimately sum
-  // to zero, and "0 of 0" is not partly marked.
-  if (total === 0 || marked <= 0) return { kind: 'none' };
-  if (marked >= total) return { kind: 'whole' };
-
+  /**
+   * A non-additive value over the marked rows says nothing about how many of
+   * the item's rows they are: an average of the marked orders can equal, or
+   * pass, the average of all of them while most are unmarked, and a minimum
+   * over a subset is never below the whole's. So it is never "whole" from its
+   * values — it is hatched, and the tooltip says both (T387's review).
+   */
   if (!isAdditive(aggType)) {
     return {
       kind: 'pattern',
@@ -90,6 +97,16 @@ export function partialMark(item: PartlyMarked, colours: MarkColours): PartialMa
       tooltip: `Marked: ${String(marked)} of ${String(total)}`,
     };
   }
+
+  /**
+   * A sum's parts: none marked, all of it, or a share — of either sign. A
+   * negative share (refunds, losses) is drawn below the baseline as ECharts
+   * stacks it, and a marked +3 of a -10 total is +3 marked over -13 unmarked:
+   * both are what the rows hold. Summed apart, the marked rows can differ from
+   * the total by rounding only.
+   */
+  if (marked === 0) return { kind: 'none' };
+  if (Math.abs(marked - total) <= 1e-9 * Math.max(1, Math.abs(total))) return { kind: 'whole' };
 
   return {
     kind: 'share',

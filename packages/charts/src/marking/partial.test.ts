@@ -108,19 +108,45 @@ describe('an item that is partly marked', () => {
       // than drawn approximately.
       expect(drawn.kind === 'pattern' && drawn.tooltip).toBe('Marked: 12 of 40');
     });
+
+    it('is hatched even where its marked value reaches or passes the total', () => {
+      // T387's review: the marked orders' average can equal or pass the whole's
+      // while most orders are unmarked, and a subset's minimum is never below
+      // the whole's. Its values can't say it is marked in full.
+      expect(partialMark({ marked: 40, total: 40, aggType: 'avg' }, colours).kind).toBe('pattern');
+      expect(partialMark({ marked: 60, total: 50, aggType: 'avg' }, colours).kind).toBe('pattern');
+      expect(partialMark({ marked: 9, total: 3, aggType: 'min' }, colours).kind).toBe('pattern');
+      expect(partialMark({ marked: 0, total: 50, aggType: 'avg' }, colours).kind).toBe('pattern');
+    });
+  });
+
+  describe('with a negative sum', () => {
+    it('draws its marked share below the baseline, not nothing', () => {
+      const drawn = partialMark({ marked: -4, total: -10, aggType: 'sum' }, colours);
+      expect(drawn.kind === 'share' && [drawn.marked, drawn.remainder]).toEqual([-4, -6]);
+      // Mixed signs: the marked rows' +3 over the rest's -13.
+      const mixed = partialMark({ marked: 3, total: -10, aggType: 'sum' }, colours);
+      expect(mixed.kind === 'share' && [mixed.marked, mixed.remainder]).toEqual([3, -13]);
+    });
   });
 });
 
 describe('an item that is not partly marked', () => {
-  it('is whole when all of it is marked, whatever the measure', () => {
+  it('is whole when a sum is marked in full', () => {
     // Fully marked is not partial: there is nothing to split and no pattern to
-    // draw, and an average marked in full is simply marked.
-    expect(partialMark({ marked: 40, total: 40, aggType: 'avg' }, colours).kind).toBe('whole');
+    // draw. Only an additive measure's values can say so (above).
     expect(partialMark({ marked: 40, total: 40, aggType: 'sum' }, colours).kind).toBe('whole');
+    expect(partialMark({ marked: 0.1 + 0.2, total: 0.3, aggType: 'sum' }, colours).kind).toBe(
+      'whole',
+    );
   });
 
   it('is nothing when none of it is marked', () => {
     expect(partialMark({ marked: 0, total: 40, aggType: 'sum' }, colours).kind).toBe('none');
+    // No marked rows at all, whatever the measure.
+    expect(partialMark({ marked: undefined, total: 40, aggType: 'avg' }, colours).kind).toBe(
+      'none',
+    );
   });
 
   it('treats a zero total as nothing marked rather than dividing by it', () => {

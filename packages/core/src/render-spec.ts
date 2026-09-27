@@ -226,6 +226,12 @@ export interface ChartMarking {
    * of these — a measure over a subset isn't a fraction of it over everything.
    */
   readonly share?: readonly Record<string, unknown>[];
+  /**
+   * Each measure's aggregation, as Cube's metadata gives it (T387): whether
+   * its marked share can be drawn as a part of it (a sum, a count) or only
+   * hatched with its value said (AC-097).
+   */
+  readonly aggTypes?: Readonly<Record<string, string>>;
 }
 
 export interface ChartHighlight {

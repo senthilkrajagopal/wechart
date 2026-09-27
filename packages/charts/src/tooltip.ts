@@ -21,6 +21,7 @@ import {
 } from '@wechart/core';
 
 import type { EChartsOption } from './theme';
+import type { ItemShare } from './marking/partialOption';
 import { nameWriter, seriesWriter, titleOf } from './modelWriter';
 import { boxesOf, whiskerRuleOf } from './series/boxplot';
 import { isPieType } from './series/pie';
@@ -47,7 +48,13 @@ type Params = {
   seriesIndex?: number;
   seriesType?: string;
   dataIndex?: number;
+  /** The item as the option has it: a partly marked one carries its `share` (T387). */
+  data?: unknown;
 };
+
+/** A partly marked item's total and marked part, where it has them (T387). */
+const shareOf = (row: Params): ItemShare | undefined =>
+  (row.data as { share?: ItemShare } | null | undefined)?.share;
 
 /**
  * A scatter point is `[x, y]`, and both are measures, each with its own
@@ -196,15 +203,30 @@ export function tooltipFor(spec: RenderSpec): EChartsOption {
     const rows = Array.isArray(params) ? params : [params];
     const heading = rows[0]?.name ?? '';
 
-    const lines = rows.map((row) => {
+    /**
+     * A partly marked item's parts — a bar's two, a line and its marked line —
+     * are one item: said once, as its whole (T387, direction.md: "Marked: X"
+     * beside the total). By its remainder where there is one, else as the
+     * first of them, so a gap in both lines is one gap. Only rows of a series
+     * that carries a share are merged: the cross-filter's overlay may share a
+     * series' name and is said on its own.
+     */
+    const said = rows.filter((row) => {
+      const same = rows.filter((other) => other.seriesName === row.seriesName);
+      if (same.length < 2 || !same.some((other) => shareOf(other) !== undefined)) return true;
+      return (same.find((other) => shareOf(other)?.part === 'rest') ?? same[0]) === row;
+    });
+    const lines = said.map((row) => {
       // By the series' measure, found by its name: its place moves with the
       // order set in Customize, or a series hidden before it (T392's review).
       const named = measures.indexOf(String(row.seriesName ?? ''));
       const format = split
         ? fallback
         : (formatters[named === -1 ? (row.seriesIndex ?? 0) : named] ?? fallback);
-      const raw = Array.isArray(row.value) ? row.value[1] : row.value;
-      return `${escapeHtml(seriesName(row.seriesName))}: ${escapeHtml(format(raw))}`;
+      const share = shareOf(row);
+      const raw = share?.total ?? (Array.isArray(row.value) ? row.value[1] : row.value);
+      const marked = share?.marked === undefined ? '' : ` · Marked: ${format(share.marked)}`;
+      return `${escapeHtml(seriesName(row.seriesName))}: ${escapeHtml(format(raw) + marked)}`;
     });
 
     return [escapeHtml(heading === '' ? '' : category(heading)), ...lines]

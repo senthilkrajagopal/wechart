@@ -1,6 +1,7 @@
 import { memberOn, seriesOf, type RenderSpec } from '@wechart/core';
 
 import type { EChartsOption } from '../theme';
+import { drawsPartialMarks, withPartialMarks } from './partialOption';
 import { markedItemStyle } from './render';
 
 /**
@@ -26,6 +27,8 @@ const asObject = (item: unknown) =>
 export function withMarks(option: EChartsOption, spec: RenderSpec): EChartsOption {
   const marking = spec.marking;
   if (marking === undefined) return option;
+  // Its items partly marked, where the marked share was answered apart (T387).
+  if (drawsPartialMarks(spec)) return withPartialMarks(option, spec);
 
   const series = (option['series'] as Series[] | undefined) ?? [];
   if (series.length === 0) return option;

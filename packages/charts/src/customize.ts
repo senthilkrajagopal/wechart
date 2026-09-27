@@ -15,6 +15,7 @@
 import { formatterFor, membersOn, type RenderSpec } from '@wechart/core';
 
 import { PROTOTYPE_GRID } from './layout/grid';
+import type { ItemShare } from './marking/partialOption';
 import type { EChartsOption } from './theme';
 
 export type LegendPosition = 'top' | 'right' | 'bottom' | 'left';
@@ -145,7 +146,7 @@ export function applyCustomize(option: EChartsOption, spec: RenderSpec): ECharts
     : undefined;
   const lonely =
     drawnSeries !== undefined &&
-    drawnSeries.length < 2 &&
+    seriesCount(drawnSeries) < 2 &&
     drawnSeries.every((one) => SERIES_COLOURED.includes(String(one.type)));
 
   // The legend: off, or placed. Only where the chart has one (AC-038). The
@@ -191,7 +192,7 @@ export function applyCustomize(option: EChartsOption, spec: RenderSpec): ECharts
     const placed = drawnSeries.map((one) => (isOverlay(one) ? one : ordered[slot++]!));
     // Stacked only where the tab offers it, and where there is more than one
     // series to stack (T231's review).
-    const stacking = stacked && STACKABLE_TYPES.includes(spec.chartType) && own.length > 1;
+    const stacking = stacked && STACKABLE_TYPES.includes(spec.chartType) && seriesCount(own) > 1;
     const inside = stacking || spec.chartType === 'stackedBar' || spec.chartType === 'stackedArea';
     next = {
       ...next,
@@ -213,6 +214,16 @@ export function applyCustomize(option: EChartsOption, spec: RenderSpec): ECharts
   }
 
   return next as EChartsOption;
+}
+
+/**
+ * How many series a chart draws: a partly marked bar is drawn as two, its
+ * marked part and the rest, and is still one series (T387's review) — for
+ * whether it has a legend (AC-038) and whether there is anything to stack.
+ */
+function seriesCount(series: readonly Series[]): number {
+  return new Set(series.map((one, index) => (typeof one.name === 'string' ? one.name : index)))
+    .size;
 }
 
 /**
@@ -256,7 +267,15 @@ function labelFor(spec: RenderSpec, one: Series, inside: boolean): Record<string
   return {
     show: true,
     ...position,
-    formatter: (params: { value?: unknown }) => write(valueOf(params.value)),
+    /**
+     * A partly marked bar is written once, as its whole: on its remainder,
+     * or on its marked part where that is all of it (T387's review).
+     */
+    formatter: (params: { value?: unknown; data?: unknown }) => {
+      const share = (params.data as { share?: ItemShare } | null | undefined)?.share;
+      if (share?.part === 'marked' && valueOf(params.value) !== share.total) return '';
+      return write(share?.total ?? valueOf(params.value));
+    },
   };
 }
 

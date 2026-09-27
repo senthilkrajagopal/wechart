@@ -16,6 +16,7 @@ import { barOption, DEFAULT_CANVAS, isBarType, type Canvas } from './series/bar'
 import { withHighlight } from './crossfilter/highlight';
 import { withKeyboardFocus } from './marking/focus';
 import { withMarks } from './marking/option';
+import { withMarkedShareLines } from './marking/partialOption';
 import { applyAxes, thinValueLabels } from './axis';
 import { applyCustomize } from './customize';
 import { isTrellisType, trellisOption } from './layout/trellis';
@@ -90,13 +91,17 @@ export function optionFor(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
   const base = legendFor(spec);
   const drawn = (option: EChartsOption): EChartsOption => ({
     // The Customize tab's legend, series, stacking and labels (AC-219) last:
-    // they place and trim what the rest has drawn.
-    ...applyCustomize(
-      thinValueLabels(
-        applyAxes(
-          withLegend(withKeyboardFocus(withMarks(withHighlight(option, spec), spec), spec)),
-          spec,
+    // they place and trim what the rest has drawn. A line's marked share goes
+    // over the lines as they are then stacked (T387).
+    ...withMarkedShareLines(
+      applyCustomize(
+        thinValueLabels(
+          applyAxes(
+            withLegend(withKeyboardFocus(withMarks(withHighlight(option, spec), spec), spec)),
+            spec,
+          ),
         ),
+        spec,
       ),
       spec,
     ),

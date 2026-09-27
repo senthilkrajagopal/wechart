@@ -141,7 +141,7 @@ import {
 import { chartTypeText } from '../workspaces/explore/chartTypeLabels';
 import { ImageTile } from './tiles/ImageTile';
 import { LinkTile } from './tiles/LinkTile';
-import { FilterBar } from '../filters/FilterBar';
+import { allMembers, FilterBar } from '../filters/FilterBar';
 import {
   FilteredCharts,
   keepLastAnswers,
@@ -3257,6 +3257,18 @@ export function DashboardView({
     }
     return documents;
   }, [markedShareReached, drawn.documents, drawn.specs]);
+  /** Each measure's aggregation, from the model: whether its marked share is a part of it (T387). */
+  const aggTypes = useMemo(
+    () =>
+      Object.fromEntries(
+        allMembers(model).flatMap((member) =>
+          member.kind === 'measure' && member.aggType !== undefined
+            ? [[member.name, member.aggType] as const]
+            : [],
+        ),
+      ),
+    [model],
+  );
   const [markedShares, setMarkedShares] = useState<FilteredResults>({});
   const onMarkedShares = useCallback((results: FilteredResults) => {
     setMarkedShares((before) => keepLastAnswers(before, results));
@@ -3392,12 +3404,12 @@ export function DashboardView({
         marking: {
           predicate: markingOf(marks, shown.markingId),
           colour: shown.colour,
-          ...(share === undefined ? {} : { share }),
+          ...(share === undefined ? {} : { share, aggTypes }),
         },
       };
     }
     return specs;
-  }, [withHighlights, markedSpecs, marks, notLinked, markedShareReached, markedShares]);
+  }, [withHighlights, markedSpecs, marks, notLinked, markedShareReached, markedShares, aggTypes]);
 
   // The assignment is held across renders, so a filter that hides a member
   // does not hand its colour to whoever is now first (AC-039).

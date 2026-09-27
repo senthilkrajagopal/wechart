@@ -16,14 +16,14 @@ import { expect, test, type APIRequestContext, type Page, type Request } from '@
  */
 const API = 'http://localhost:4100/api';
 
-async function shareDashboard(request: APIRequestContext) {
+async function shareDashboard(request: APIRequestContext, { average = false } = {}) {
   const title = `Marked share ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
       data: { kind: 'dashboard', title, folderId: 'root' },
     })
   ).json()) as { id: string };
-  const chartOn = async (chartTitle: string, dimension: string) => {
+  const chartOn = async (chartTitle: string, dimension: string, measure = 'orders.count') => {
     const chart = (await (
       await request.post(`${API}/documents`, {
         data: { kind: 'chart', title: chartTitle, folderId: 'root' },
@@ -39,7 +39,7 @@ async function shareDashboard(request: APIRequestContext) {
           localToDashboardId: dashboard.id,
           chart: {
             source: { cube: 'orders' },
-            wells: { measures: ['orders.count'], dimensions: [dimension], timeDimensions: [] },
+            wells: { measures: [measure], dimensions: [dimension], timeDimensions: [] },
             chartType: 'bar',
           },
         },
@@ -49,6 +49,10 @@ async function shareDashboard(request: APIRequestContext) {
   };
   const status = await chartOn('By status', 'orders.status');
   const category = await chartOn('By category', 'products.category');
+  // An average per category: not additive, so partly marked is hatched (T387).
+  const averaged = average
+    ? await chartOn('Average by category', 'products.category', 'orders.average_amount')
+    : undefined;
   const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
     data: {
       version: 1,
@@ -66,6 +70,9 @@ async function shareDashboard(request: APIRequestContext) {
             items: [
               { id: 'tile-status', kind: 'chart', w: 6, h: 40, chartId: status },
               { id: 'tile-category', kind: 'chart', w: 6, h: 40, chartId: category },
+              ...(averaged === undefined
+                ? []
+                : [{ id: 'tile-average', kind: 'chart', w: 12, h: 40, chartId: averaged }]),
             ],
           },
         ],
@@ -173,4 +180,91 @@ test('a marking change asks a tile that doesn’t group by the marked member onc
   expect(asked.filter((each) => each.tile === 'status')).toEqual([
     { tile: 'status', marked: undefined },
   ]);
+});
+
+/**
+ * T387 / AC-097: WHEN an item is partly marked and its measure is additive,
+ * THE SYSTEM SHALL draw the marked share from the baseline at full strength
+ * and fade the remainder; WHEN the measure is not additive, THE SYSTEM SHALL
+ * draw the whole item with a pattern and show the marked and total values in
+ * its tooltip.
+ * `Fails when: a partial average or distinct count is drawn as a sub-length,
+ * or a partly marked sum shows no marked share.`
+ *
+ * The seeded model's orders by category: a count (additive) and an average
+ * amount (not), each partly marked by the shipped orders.
+ */
+test('a partly marked count shows its marked share, and a partly marked average is hatched, never shorter', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await shareDashboard(request, { average: true });
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const count = page.locator('[data-tile="tile-category"] svg').first();
+  const average = page.locator('[data-tile="tile-average"] svg').first();
+  await expect(count).toBeVisible();
+  await expect(average).toBeVisible();
+  const bars = (svg: typeof count) =>
+    svg.locator('path[fill]').evaluateAll((paths) =>
+      paths
+        .map((path) => {
+          const box = (path as SVGGraphicsElement).getBBox();
+          return {
+            // By its centre: an outlined part is inset by half its outline.
+            left: Math.round(box.x + box.width / 2),
+            top: box.y,
+            bottom: box.y + box.height,
+            width: box.width,
+            height: box.height,
+            opacity: Number(path.getAttribute('fill-opacity') ?? 1),
+            stroke: path.getAttribute('stroke'),
+            patterned: (path.getAttribute('fill') ?? '').startsWith('url('),
+          };
+        })
+        .filter((bar) => bar.width > 2 && bar.height > 2 && bar.width < 400),
+    );
+
+  await clickBar(page, 'shipped');
+
+  // The count: each category's bar a full-strength marked part, outlined in
+  // the marking's colour, under its faded remainder.
+  await expect
+    .poll(async () =>
+      (await bars(count)).some((bar) => bar.opacity === 1 && bar.stroke === '#151107'),
+    )
+    .toBe(true);
+  const drawn = await bars(count);
+  expect(
+    drawn.filter((bar) => bar.opacity === 1 && bar.stroke === '#151107').length,
+  ).toBeGreaterThan(0);
+  expect(drawn.filter((bar) => bar.opacity < 0.5).length).toBeGreaterThan(0);
+  // One bar in two parts: the marked one on the baseline, the faded rest on it.
+  const split = drawn
+    .filter((bar) => bar.opacity === 1 && bar.stroke === '#151107')
+    .map((foot) => ({
+      foot,
+      rest: drawn.find((bar) => bar.left === foot.left && bar.opacity < 0.5),
+    }))
+    .find((pair) => pair.rest !== undefined);
+  expect(split?.rest).toBeDefined();
+  expect(Math.abs(split!.foot.top - split!.rest!.bottom)).toBeLessThan(2);
+  expect(split!.foot.bottom).toBeGreaterThan(split!.rest!.bottom);
+
+  // The average: no shorter bar — each partly marked one is whole and hatched.
+  // A hatched bar is drawn as its colour and its hatch over it, so a column
+  // may hold two paths, but they span one height: never a part beside a
+  // remainder.
+  await expect.poll(async () => (await bars(average)).some((bar) => bar.patterned)).toBe(true);
+  const averaged = await bars(average);
+  const spans = new Map<number, Set<string>>();
+  for (const bar of averaged) {
+    const span = `${String(Math.round(bar.top))}-${String(Math.round(bar.bottom))}`;
+    spans.set(bar.left, (spans.get(bar.left) ?? new Set()).add(span));
+  }
+  expect([...spans.values()].map((each) => each.size)).toEqual([...spans.keys()].map(() => 1));
+  // And its tooltip says both values.
+  const hatched = average.locator('path[fill^="url("]').first();
+  await hatched.hover();
+  await expect(page.locator('[data-tile="tile-average"]')).toContainText(/· Marked: \$/);
 });

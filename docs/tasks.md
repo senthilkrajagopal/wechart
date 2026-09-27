@@ -5834,10 +5834,44 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - A tile's badge counts a range as one item.
       - The stripe sits on the grid's bottom edge, which misses an axis drawn at zero among negative values.
     - AC-093 is ticked.
-- [ ] T387 [P] (AC-097) Draw a partly marked item: the marked share for additive measures, a pattern for the others
-  - Files: `packages/charts/src/marks/partial.ts` (+ test)
+- [x] T387 [P] (AC-097) Draw a partly marked item: the marked share for additive measures, a pattern for the others
+  - Files: ~~`packages/charts/src/marks/partial.ts` (+ test)~~ `packages/charts/src/marking/{partial,partialOption,option,focus}.ts` (+ `partial.test.ts`, `partialOption.test.ts`), `packages/charts/src/{tooltip,customize,optionFor}.ts`, `packages/core/src/render-spec.ts` (`ChartMarking.aggTypes`), `packages/web/src/dashboard/DashboardView.tsx`, `e2e/marked-share.spec.ts`
   - Failing test: `partial.test.ts`: a partly marked sum draws the marked share from the baseline at full strength and fades the rest; an average or distinct count draws the whole item patterned, with marked and total values in the tooltip (AC-097).
   - Depends on: none
+  - **Done 2026-09-26, for bars, lines, pies and treemaps; AC-097 stays open for T453.**
+    - Each item's marked part comes from T388's share rows, matched by category and split. Top N's "Other (n)" takes the rows of the categories it folds.
+    - **A sum or count:**
+      - a bar is two parts in one stack, the marked one square at the foot, outlined, the rest faded; in a stacked bar each segment splits in its place;
+      - negative and mixed-sign shares are drawn as ECharts stacks them.
+    - **Any other measure:** hatched whole, "· Marked: X" beside the total in the tooltip. It is never "whole" from its values, since a subset's average or minimum can reach the whole's while most rows are unmarked.
+    - **A line** fades, and its marked line is drawn after the Customize tab, so a stacked line's share sits in its own band.
+    - **A pie slice or treemap leaf** is hatched and outlined.
+    - The measures' aggregations reach the chart as `ChartMarking.aggTypes`, from the model.
+    - **The cold review (FAIL) found, and this fixes:**
+      - an average whose marked value reached its total was drawn solid, with a clamped tooltip value;
+      - "Other" showed no share, and negative sums showed none;
+      - a line ignored its measure and was capped at the total;
+      - Customize's stacking redrew lines' totals, its data labels wrote each part, and its one-series legend rule counted the parts;
+      - a stacked area's marked line ran from zero;
+      - the keyboard's focus tooltip landed on an empty part;
+      - the crosshair tooltip said an empty line for the marked line's gaps.
+    - **Two assertions changed, and they were wrong:**
+      - T103's `partial.test.ts` said an average marked "40 of 40" is whole;
+      - T387's own `partialOption.test.ts` said the same of Toys.
+      - Both now expect the hatch. Nothing about the values says an average is marked in full (the user is told).
+    - Tests: `partialOption.test.ts` (15), `partial.test.ts`; e2e `marked-share.spec.ts` "a partly marked count shows its marked share…" checks the marked part sits at the foot of its faded remainder in one column, and that every column of the average tile spans one height.
+    - Left for T453: the other chart types, and a pie grouped by a third member summing its share across it.
+- [ ] T453 [P] (AC-097) Draw partly marked items on the remaining chart types *(added 2026-09-26 from T387's review: they fade every item, "no marked share")*
+  - Files: `packages/charts/src/marking/partialOption.ts`, `packages/charts/src/series/{heatmap,combo,scatter,boxplot,map}.ts`, `packages/charts/src/layout/trellis.ts`, `packages/web/src/tiles/{KpiTile,TableTile}.tsx` (+ tests), `e2e/marked-share.spec.ts`
+  - Failing test: `partialOption.test.ts` and `marked-share.spec.ts`, per direction.md §7a:
+    - a heatmap's partly marked cell is outlined dashed, the rest faded;
+    - a combo's bars and line split as T387's do;
+    - a trellis panel's line gets its marked line;
+    - a KPI shows "Marked $X · p%", with no % for a non-additive measure;
+    - a table's partly marked row shows its marked value;
+    - a pie grouped by a third member matches its share rows on every grouping.
+    - Scatter, box plot and map items are one row each and are marked as rows are: they must not fade a partly marked one.
+  - Depends on: T387
 - [x] T388 [P] (AC-104) Obtain the marked share with one extra query per tile, keeping the base result cached
   - Files and failing test: as T110 (above) (AC-104).
   - Depends on: none
@@ -7036,7 +7070,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-001 | T331, T364 | AC-008 | T322, ~~T339~~ T437 | AC-041 | T390 |
 | AC-047 | T380 | AC-048 | T382 | AC-049 | T381 |
 | AC-050 | T383 | AC-051 | T384 | AC-052 | T385 |
-| AC-093 | T386 | AC-097 | T387 | AC-104 | T388 |
+| AC-093 | T386 | AC-097 | T387, T453 | AC-104 | T388 |
 | AC-116 | T389 | AC-131 | T334, T342 | AC-141 | T342 |
 | AC-145 | T375 | | | | |
 | AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |

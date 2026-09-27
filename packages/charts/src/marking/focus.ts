@@ -34,6 +34,12 @@ const asObject = (item: unknown): Record<string, unknown> =>
     ? (item as Record<string, unknown>)
     : { value: item };
 
+/** An item with no value, which ECharts draws nothing for. */
+const isEmpty = (item: unknown) => {
+  const value = asObject(item)['value'];
+  return value === null || value === undefined;
+};
+
 /** The category a drawn item stands for. */
 function categoryReader(spec: RenderSpec) {
   const { categories } = seriesOf(spec);
@@ -93,8 +99,11 @@ export function focusedItemOf(
   const categoryOf = categoryReader(spec);
   const series = seriesIn(option);
   for (const [seriesIndex, one] of series.entries()) {
+    // A drawn one: a partly marked bar's part that holds nothing (its marked
+    // part when none is marked) is no element, and a tooltip shown on it is
+    // hidden at once (T387's review).
     const dataIndex = (one.data ?? []).findIndex(
-      (item, index) => categoryOf(one, item, index) === focus,
+      (item, index) => categoryOf(one, item, index) === focus && !isEmpty(item),
     );
     if (dataIndex >= 0) return { seriesIndex, dataIndex };
   }
