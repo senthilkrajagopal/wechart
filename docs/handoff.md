@@ -154,10 +154,36 @@
 >       http://localhost:8089; every `verify.sh` check passed.
 >     - **Last complete run in every browser:** during T398. The next is due 10 tasks on.
 >   - **Slices 4–6 (2026-09-26, the user's "complete the xcube integration including connections/data sources and showing them in folders"):** R31, the spec and the plan are amended (the order is at the head of `tasks.md`'s slice 4).
->     - **Done:** T420 (the `ed08180c37` image; the service credential; the static admin token retired; AC-333 ticked again), T454 (the eight drivers and their TLS target).
->     - **In the tree:** T335 (data sources as folder items, listed in Explore, secrets as sealed envelopes; in review) and T441's core half (`seal.ts`, `aad.ts`, golden vectors that open with the development key).
+>     - **Done:** T420 (the `ed08180c37` image; the service credential; the static admin token retired; AC-333 ticked again), T454 (the eight drivers and their TLS target), T335 (data sources as folder items, listed in Explore), T441 (sealed in the browser), T442 (landed in xcube as connections), T455 (the credential-key Job and the API's key check at start), T361 (connection tests through xcube), T362 (test history), T365 (Cube state per instance), T435 (binding at publish, nearest first), T364 (the Data sources page: every source the user may see, with folder path, driver and health).
+>     - **Waiting on xcube** (2026-09-27): T459, the cubes bound to each data source, needs `dataSource` on `GET …/items` (`to-xcube/2026-09-27-2330-items-data-source.md`); Cube's result cache keyed per connection (`to-xcube/2026-09-27-0100-cache-per-connection.md`, open). Images `1e4c4aae02@sha256:189cc211…` (the connection heartbeat) and `22132c309c@sha256:0c2f8209…` (the delete race fixed) are published, being researched, not pinned.
+>     - **Answered 2026-09-27, question 3:** "it is okay if phase 1 items aer not reachable.. this phase overrides phase 1 items". T343 goes ahead with no migration of `mine`; then T344, T345 and T363 (the data-source wizard).
+>     - **Answered 2026-09-27, the rest of the list** (the user's words after each):
+>       - 1, post the contract points as comments on the plan doc: "Yes".
+>       - 2, AC-267: "not sure what the question is.. if you have a recommendation go with it". Decided on correctness and user value when its task comes (T325's follow-up), and reported.
+>       - 4, retry reads through an outage as tile queries are: "Yes".
+>       - 5, deleting a non-empty folder: "Yes block from deleting" (refuse it).
+>       - 6, renaming a folder needs write on its parent: "Yes".
+>       - 7, phase-1 bookmarks shown to Super-Admins with sign-in on: "Yes".
+>       - 8, the pie's slice warning (one early) and the limit cutting "Other (n)": "Yes", fix both.
+>       - 9, the key-id check at start: "Sure close" (T455 covers it).
+>       - 10, no Access button with sign-in off: "Yes".
+>       - 11, commit `docs/inputs/2026-09-26-xcube-slice-2-contract.md`: "No".
+>       - 12, a run of typing in a markdown tile as one undo step: "Yes if possible".
+>       - 13, the delete toast cleared on the next change: "Yes".
+>       - 14, a header tile's text: "Why is it not editable? Can we edit it" — answered with the reason, and a criterion proposed.
+>       - 15, "Other (n)" keeping its place in the series order: "Yes".
+>       - 16, the test-integrity hook's false flags: "Okay".
+>       - 17, pie and donut labels: "Go with the easier option for now. Or leave as is" — left as is.
+>       - These need spec criteria or tasks where none covers them (4, 5, 6, 7, 8, 12, 13, 15, 28); they go through write-spec and plan-tasks at the next gate pass.
+>     - **Answered 2026-09-27, question 28:** "okay": a state too small to see on the map (Singapore in a small tile) gets a dot marker at its label point. A task follows under the country map's criteria (T398's).
+>     - **Answered 2026-09-27, question 23:** "sure you can reword": AC-193 is reworded so a model's row, renamed in the model editor, has no rename in Explore's menu.
+>     - **Answered 2026-09-27, question 29:** (a). On narrow tiles the marking badge moves to the foot too, beside the freshness badge, whole ("■ Marking: 1 marked"); the head is the title's. AC-201 becomes "beside its title where the head has room, otherwise under the chart". T402 goes ahead on it.
+>     - **Answered 2026-09-27, question 30:** "let copies replace". Only a copy of a published data source replaces it in previews; a new one under a name its target folder holds is refused (T345's 409, AC-282; copies are T346's).
+>     - **Answered 2026-09-27, AC-251:** yes, the seeding route for the root's `default` joins AC-251's exemptions (it answers only the install Job's token, returns nothing, and works only while the root has no `default`). AC-251 is amended with T443.
+>     - **Was blocked on the user, now answered:** T443 (the root's `default`, seeded by a Job) waits on whether AC-251's exempt list takes its seeding route.
 >     - **xcube built both asks** of `to-xcube/2026-09-26-2030-meta-revision-and-bindings.md`: `GET …/meta?revision=` and bindings in overlays and dry runs, in image `…-40efaef823@sha256:9bdad274…`. It's being researched; T436 (field list) and T456 (the approval check) build on it once verified.
->     - The compose stack runs `ed08180c37`; the release on docker-desktop still runs revision 23 (`ca70362-t398`), to be redeployed.
+>     - The compose stack runs `ed08180c37`. **Deployed 2026-09-27:** Helm revision 25 runs wechart `654fb80` (through T364; images built from the commit with `git archive`, so T402's work in the tree is not in them) on `ed08180c37`, sign-in on through Dex (`values/docker-desktop-security.yaml`; revision 24 had gone out without it), at http://localhost:8089; `verify.sh` passed 39 of 39.
+>     - **xcube `e53cf2a8b8`** (`@sha256:58e53294…`) answers both open asks: a cube rebound to another data source gets another SQL alias (so Cube's cache and rollups follow the rebind), and `GET …/items` gives each cube's `dataSource`. Being researched; then pinned, and T459 (the cubes using each data source) built on it. The `22132c309c` research is saved (`docs/research/xcube-22132c309c.md`).
 >     - **Asked with T429:** 25. With xcube unreachable, a chart or dashboard save in a folder xcube
 >       serves is refused (502), as a model publish is. Keep that, or store it unbound and bind it at
 >       the next save?
