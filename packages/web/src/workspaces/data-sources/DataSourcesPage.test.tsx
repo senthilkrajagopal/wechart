@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -53,7 +53,12 @@ describe('adding a data source from Data sources (T363)', () => {
     await user.click(await screen.findByRole('button', { name: '+ Data source' }));
     const wizard = await screen.findByRole('dialog', { name: 'New data source' });
     expect(asked).toContain('/api/folders/targets');
-    expect(wizard.textContent).toContain('1. Type');
+    // Its steps, the first current (T471, design 01).
+    const steps = within(wizard).getByRole('list', { name: 'Steps' });
+    expect(within(steps).getAllByRole('listitem')[0]?.textContent).toBe('1Type');
+    expect(
+      within(steps).getByText('Type').closest('[aria-current]')?.getAttribute('aria-current'),
+    ).toBe('step');
   });
 
   it.each([

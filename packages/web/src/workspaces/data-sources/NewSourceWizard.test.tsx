@@ -7,11 +7,14 @@ import type { SealedV1 } from '@wechart/core';
 import { NewSourceWizard } from './NewSourceWizard';
 
 /**
- * T363 (AC-158, AC-159, AC-160, AC-325, AC-282): a data source is added in
- * the workspace through Type → Connection → Test → Name. Its test is xcube's,
- * each check shown; Create needs a passing test or an explicit "without one";
- * a secret is sealed when the test (or the create) is submitted, and no body
- * sent to wechart holds it as typed.
+ * T363, T471 (AC-158, AC-159, AC-160, AC-282, AC-325; design 01, "New data
+ * source"): a data source is added in a pane docked beside the list, through
+ * Type → Connection → Test → Name and target, at a fixed size with its steps
+ * at the top and its actions at the foot. Its test is Cube's, each check
+ * listed before it runs; a data source is made only from a test of exactly
+ * its settings that passed (the user's answer, 2026-09-27: no override); a
+ * secret is sealed when the test is submitted, and no body sent to wechart
+ * holds it as typed.
  */
 const TYPED = 'canary-hunter2-secret';
 const envelope: SealedV1 = { v: 1, kid: 'kid-1', enc: 'enc', ct: 'sealed-ct' };
@@ -43,7 +46,7 @@ const failed = {
 };
 
 /** Answers wechart's routes, keeping each request's body as sent; tests answered in turn. */
-function serve(...testAnswers: unknown[]) {
+function serve(testAnswers: unknown[], create?: { status: number; body: unknown }) {
   const sent: { url: string; body: string }[] = [];
   let run = 0;
   vi.stubGlobal(
@@ -54,7 +57,9 @@ function serve(...testAnswers: unknown[]) {
       if (url === '/api/data-sources/test')
         return Response.json(testAnswers[Math.min(run++, testAnswers.length - 1)]);
       if (url === '/api/data-sources')
-        return Response.json({ id: 'ds-1', ...(JSON.parse(body) as object) }, { status: 201 });
+        return create === undefined
+          ? Response.json({ id: 'ds-1', ...(JSON.parse(body) as object) }, { status: 201 })
+          : Response.json(create.body, { status: create.status });
       return new Response(null, { status: 404 });
     }),
   );
@@ -67,43 +72,85 @@ afterEach(() => {
 
 const targets = [{ id: 'f-sales', path: ['Finance', 'Sales'] }];
 
-function open() {
+function open(given: { targets?: typeof targets; folderId?: string } = {}) {
   const seal = vi.fn(async () => envelope);
   const onCreated = vi.fn();
+  const onClose = vi.fn();
   render(
     <NewSourceWizard
-      folderId="mine"
-      targets={targets}
+      folderId={given.folderId ?? 'mine'}
+      targets={given.targets ?? targets}
       seal={seal}
       onCreated={onCreated}
-      onClose={vi.fn()}
+      onClose={onClose}
     />,
   );
-  return { seal, onCreated, dialog: screen.getByRole('dialog', { name: 'New data source' }) };
+  return {
+    seal,
+    onCreated,
+    onClose,
+    pane: screen.getByRole('dialog', { name: 'New data source' }),
+  };
 }
 
-/** Chooses PostgreSQL and fills its connection, the password included. */
-async function connect(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement) {
-  await user.click(within(dialog).getByRole('button', { name: 'PostgreSQL' }));
-  await user.click(within(dialog).getByRole('button', { name: 'Next' }));
-  await user.type(within(dialog).getByLabelText('Host'), 'db.internal');
-  await user.type(within(dialog).getByLabelText('Database'), 'sales');
-  await user.type(within(dialog).getByLabelText('User'), 'cube');
-  await user.type(within(dialog).getByLabelText('Password'), TYPED);
-  await user.click(within(dialog).getByRole('button', { name: 'Next' }));
+type User = ReturnType<typeof userEvent.setup>;
+const button = (pane: HTMLElement, name: string | RegExp) =>
+  within(pane).getByRole('button', { name });
+
+/** Chooses a type and goes on to its connection. */
+async function choose(user: User, pane: HTMLElement, label: string) {
+  await user.click(within(pane).getByRole('radio', { name: label }));
+  await user.click(button(pane, 'Next: Connection'));
 }
 
-describe('adding a data source in the workspace (T363)', () => {
-  it('offers the eight drivers, and each one’s own fields and ways to sign in (AC-160)', async () => {
+/** Chooses PostgreSQL and fills its connection, the password included, then goes on to Test. */
+async function connect(user: User, pane: HTMLElement) {
+  await choose(user, pane, 'PostgreSQL');
+  await user.type(within(pane).getByLabelText(/^Host/), 'db.internal');
+  await user.type(within(pane).getByLabelText(/^Database/), 'sales');
+  await user.type(within(pane).getByLabelText(/^User/), 'cube');
+  await user.type(within(pane).getByLabelText(/^Password/), TYPED);
+  await user.click(button(pane, 'Next: Test'));
+}
+
+describe('the pane and its steps (design 01)', () => {
+  it('says where it is made, and shows its four steps with the current one marked', async () => {
     const user = userEvent.setup();
-    serve(passed);
-    const { dialog } = open();
-    const types = within(dialog).getByRole('group', { name: 'Type' });
+    serve([passed]);
+    const { pane } = open();
+    expect(within(pane).getByText('in My workspace').isConnected).toBe(true);
+    const steps = within(pane).getByRole('list', { name: 'Steps' });
     expect(
-      within(types)
-        .getAllByRole('button')
-        .map((button) => button.textContent),
-    ).toEqual([
+      within(steps)
+        .getAllByRole('listitem')
+        .map((step) => step.textContent),
+    ).toEqual(['1Type', '2Connection', '3Test', '4Name and target']);
+    expect(
+      within(steps).getByText('Type').closest('[aria-current]')?.getAttribute('aria-current'),
+    ).toBe('step');
+
+    await choose(user, pane, 'PostgreSQL');
+    // A done step goes back to it; a later one can't be reached from the rail.
+    expect(within(steps).getByRole('button', { name: 'Type, done' }).isConnected).toBe(true);
+    expect(within(steps).queryByRole('button', { name: /Test/ })).toBeNull();
+    // The chosen type stays in view, with the way to change it.
+    expect(
+      within(pane).getByText('Password or client certificate · TLS on by default').isConnected,
+    ).toBe(true);
+    await user.click(button(pane, 'Change type'));
+    expect(within(pane).getByRole('radiogroup', { name: 'Which database?' }).isConnected).toBe(
+      true,
+    );
+  });
+
+  it('offers the eight drivers as tiles saying how each signs in, and goes on once one is chosen (AC-160)', async () => {
+    const user = userEvent.setup();
+    serve([passed]);
+    const { pane } = open();
+    const types = within(pane).getByRole('radiogroup', { name: 'Which database?' });
+    // Each tile named by its driver alone, its ways to sign in its description.
+    const tiles = within(types).getAllByRole('radio');
+    expect(tiles.map((tile) => tile.querySelector('.type-tile__name')?.textContent)).toEqual([
       'PostgreSQL',
       'Amazon Redshift',
       'MySQL',
@@ -113,78 +160,106 @@ describe('adding a data source in the workspace (T363)', () => {
       'Oracle',
       'Dremio',
     ]);
-    expect(within(dialog).getByRole('button', { name: 'Next' })).toHaveProperty('disabled', true);
+    const snowflake = within(types).getByRole('radio', { name: 'Snowflake' });
+    expect(
+      document.getElementById(snowflake.getAttribute('aria-describedby') ?? '')?.textContent,
+    ).toBe('Key pair, OAuth token or password');
+    expect(button(pane, 'Next: Connection')).toHaveProperty('disabled', true);
 
-    await user.click(within(types).getByRole('button', { name: 'MySQL' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
-    const method = within(dialog).getByRole('combobox', { name: 'Sign in with' });
-    expect([...method.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
-      'Password',
-      'Client certificate',
-    ]);
-    expect(within(dialog).getByLabelText('Port')).toHaveProperty('value', '3306');
-    expect(within(dialog).getByRole('checkbox', { name: 'Use TLS' })).toHaveProperty(
-      'checked',
-      false,
-    );
-    await user.selectOptions(method, 'client-certificate');
-    expect(within(dialog).getByText('Sent only over TLS: turn on Use TLS.')).toBeDefined();
-    expect(within(dialog).getByLabelText('Client key (PEM)')).toBeDefined();
-    expect(within(dialog).queryByLabelText('Password')).toBeNull();
+    // The arrows move the choice; Enter goes on.
+    await user.click(within(types).getByRole('radio', { name: 'MySQL' }));
+    await user.keyboard('{ArrowDown}');
+    expect(
+      within(types).getByRole('radio', { name: 'Snowflake' }).getAttribute('aria-checked'),
+    ).toBe('true');
+    await user.keyboard('{Enter}');
+    expect(within(pane).getByRole('radiogroup', { name: 'Sign in with' }).isConnected).toBe(true);
   });
 
   it.each([
     // AC-160's ways to sign in, each driver's and none other.
     ['PostgreSQL', ['Password', 'Client certificate']],
-    ['Amazon Redshift', ['Password']],
+    ['Amazon Redshift', ['User and password']],
     ['MySQL', ['Password', 'Client certificate']],
     ['Snowflake', ['Key pair', 'OAuth token', 'Password']],
     ['BigQuery', ['Service account key']],
     ['SQL Server', ['SQL login', 'Windows (NTLM)', 'Microsoft Entra ID service principal']],
-    ['Oracle', ['Password']],
-    ['Dremio', ['Personal access token', 'Password']],
+    ['Oracle', ['User and password']],
+    ['Dremio', ['Personal access token', 'User and password']],
   ])('offers %s its own ways to sign in (AC-160)', async (label, methods) => {
     const user = userEvent.setup();
-    serve(passed);
-    const { dialog } = open();
-    await user.click(within(dialog).getByRole('button', { name: label }));
-    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
+    serve([passed]);
+    const { pane } = open();
+    await choose(user, pane, label);
+    // Dremio Software has both; Cloud, a token alone.
+    if (label === 'Dremio')
+      await user.click(within(pane).getByRole('radio', { name: /^Dremio Software/ }));
+    const signIn = within(pane).getByRole('group', { name: 'How it signs in' });
     const shown =
       methods.length === 1
-        ? [within(dialog).getByText(methods[0]!, { selector: '.connection-form__method' })]
-        : [
-            ...within(dialog)
-              .getByRole('combobox', { name: 'Sign in with' })
-              .querySelectorAll('option'),
-          ];
+        ? [within(signIn).getByText(methods[0]!)]
+        : within(within(signIn).getByRole('radiogroup', { name: 'Sign in with' })).getAllByRole(
+            'radio',
+          );
     expect(shown.map((each) => each.textContent)).toEqual(methods);
   });
+});
 
-  it('asks Dremio for a Cloud URL or a Software host, and BigQuery for its project (AC-160)', async () => {
+describe('Next checks the required fields (design 01, state B)', () => {
+  it('names what is missing, marks each field, focuses the first, and sends nothing', async () => {
     const user = userEvent.setup();
-    serve(passed);
-    const { dialog } = open();
-    await user.click(within(dialog).getByRole('button', { name: 'Dremio' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
-    for (const field of ['Dremio Cloud project URL', 'Host (Dremio Software)', 'Port', 'Token'])
-      expect(within(dialog).getByLabelText(field)).toBeDefined();
-    expect(within(dialog).getByLabelText('Port')).toHaveProperty('value', '9047');
+    const sent = serve([passed]);
+    const { pane } = open();
+    await choose(user, pane, 'PostgreSQL');
+    await user.type(within(pane).getByLabelText(/^User/), 'postgres');
+    await user.click(button(pane, 'Next: Test'));
 
-    await user.click(within(dialog).getByRole('button', { name: 'Back' }));
-    await user.click(within(dialog).getByRole('button', { name: 'BigQuery' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
-    for (const field of ['Project ID', 'Location', 'Service-account key (JSON)'])
-      expect(within(dialog).getByLabelText(field)).toBeDefined();
-    expect(within(dialog).queryByLabelText('Host')).toBeNull();
+    expect(within(pane).getByRole('alert').textContent).toBe(
+      'Fill in Host, Database and Password to go on.',
+    );
+    const host = within(pane).getByLabelText(/^Host/);
+    expect(host.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(host);
+    expect(within(pane).getByText('Enter the host.').isConnected).toBe(true);
+    expect(within(pane).getByText('Enter the password.').isConnected).toBe(true);
+    // Still on the Connection step, nothing tested.
+    expect(within(pane).queryByRole('list', { name: 'Checks' })).toBeNull();
+    expect(sent).toEqual([]);
+
+    // A field filled is no longer marked.
+    await user.type(host, 'db.internal');
+    expect(host.getAttribute('aria-invalid')).toBeNull();
   });
+});
 
-  it('runs xcube’s test with the secret sealed, shows each check, and creates from what passed (AC-158, AC-159, AC-325, AC-282)', async () => {
+describe('the Test step (design 01, states C to F)', () => {
+  it('says what will be tested and lists the checks before running, then runs Cube’s test with the secret sealed, and creates from what passed (AC-158, AC-159, AC-325, AC-282)', async () => {
     const user = userEvent.setup();
-    const sent = serve(passed);
-    const { dialog, seal, onCreated } = open();
-    await connect(user, dialog);
+    const sent = serve([passed]);
+    const { pane, seal, onCreated } = open();
+    await connect(user, pane);
 
-    await user.click(within(dialog).getByRole('button', { name: 'Run test' }));
+    const what = within(pane).getByRole('group', { name: 'What will be tested' });
+    expect(within(what).getByText('db.internal:5432 / sales').isConnected).toBe(true);
+    expect(within(what).getByText('Password, as cube').isConnected).toBe(true);
+    const checks = within(pane).getByRole('list', { name: 'Checks' });
+    expect(
+      within(checks)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual([
+      'Open the secretsNot run',
+      'Build the connection’s configurationNot run',
+      'ConnectNot run',
+      'Read the catalogNot run',
+    ]);
+    expect(
+      within(pane).getByText(
+        'A data source is made only from a test of exactly these settings that passed. Changing any setting afterwards means testing again.',
+      ).isConnected,
+    ).toBe(true);
+
+    await user.click(button(pane, 'Test connection'));
     const fields = {
       host: 'db.internal',
       port: 5432,
@@ -194,25 +269,28 @@ describe('adding a data source in the workspace (T363)', () => {
       user: 'cube',
     };
     expect(seal).toHaveBeenCalledExactlyOnceWith('postgres', 'password', fields, TYPED);
-    const checks = within(dialog).getByRole('list', { name: 'Checks' });
     expect(
       within(checks)
         .getAllByRole('listitem')
         .map((item) => item.textContent),
     ).toEqual([
-      'Passed: Open the secrets · 2 ms',
-      'Passed: Build the connection’s configuration · 1 ms',
-      'Passed: Connect · 30 ms',
-      'Passed: Read the catalog · 12 ms',
+      'Open the secrets2 ms',
+      'Build the connection’s configuration1 ms',
+      'Connect30 ms',
+      'Read the catalog12 ms',
     ]);
-
-    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
-    await user.type(within(dialog).getByRole('textbox', { name: 'Name' }), 'sales_replica');
-    expect(within(dialog).getByRole('combobox', { name: 'Target folder' })).toHaveProperty(
-      'value',
-      'f-sales',
+    expect(within(pane).getByRole('status').textContent).toMatch(
+      /^Every check passed · \d\d:\d\d:\d\d · 45 ms in all$/,
     );
-    await user.click(within(dialog).getByRole('button', { name: 'Create data source' }));
+
+    await user.click(button(pane, 'Next: Name and target'));
+    await user.type(within(pane).getByRole('textbox', { name: /^Name/ }), 'sales_replica');
+    // The one folder it may go to, chosen already.
+    const tree = within(pane).getByRole('tree', { name: 'Target folder' });
+    expect(
+      within(tree).getByRole('treeitem', { name: 'Sales' }).getAttribute('aria-selected'),
+    ).toBe('true');
+    await user.click(button(pane, 'Create in My workspace'));
 
     const tested = {
       driver: 'postgres',
@@ -239,58 +317,66 @@ describe('adding a data source in the workspace (T363)', () => {
     expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'ds-1' }));
   });
 
-  it('shows a failed check’s error, and goes no further until a test passes (AC-158, AC-159; the user’s answer, 2026-09-27)', async () => {
+  it('opens a failed check in place with Cube’s own words, and goes no further until a test passes (AC-158, AC-159)', async () => {
     const user = userEvent.setup();
-    const sent = serve(failed);
-    const { dialog } = open();
-    await connect(user, dialog);
-    await user.click(within(dialog).getByRole('button', { name: 'Run test' }));
+    const sent = serve([failed]);
+    const { pane } = open();
+    await connect(user, pane);
+    await user.click(button(pane, 'Test connection'));
 
-    const checks = within(dialog).getByRole('list', { name: 'Checks' });
+    expect(within(pane).getByRole('status').textContent).toMatch(
+      /^Failed at Connect · \d\d:\d\d:\d\d · 12 ms in all$/,
+    );
+    const checks = within(pane).getByRole('list', { name: 'Checks' });
+    const connecting = within(checks).getAllByRole('listitem')[2]!;
     expect(
-      within(checks)
-        .getAllByRole('listitem')
-        .map((item) => item.textContent),
-    ).toEqual([
-      'Passed: Open the secrets · 2 ms',
-      'Passed: Build the connection’s configuration · 1 ms',
-      'Failed: Connect · 9 ms — password authentication failed for user "cube"',
-      'Skipped: Read the catalog',
-    ]);
-    expect(within(dialog).getByRole('button', { name: 'Next' })).toHaveProperty('disabled', true);
-    // Test first: there is no making one without a passing test.
-    expect(within(dialog).queryByRole('button', { name: /without/i })).toBeNull();
-    expect(within(dialog).queryByRole('textbox', { name: 'Name' })).toBeNull();
+      within(connecting).getByText('password authentication failed for user "cube"').tagName,
+    ).toBe('PRE');
+    expect(within(checks).getAllByRole('listitem')[3]?.textContent).toBe('Read the catalogSkipped');
+    expect(within(pane).getByText('Name comes after a passing test.').isConnected).toBe(true);
+    // Test first: there is no going on, and no making one, without a pass.
+    expect(within(pane).queryByRole('button', { name: /^Next/ })).toBeNull();
+    expect(within(pane).queryByRole('button', { name: /without/i })).toBeNull();
     expect(sent.map(({ url }) => url)).not.toContain('/api/data-sources');
+
+    // Straight to what to change, focus on the password (design 01, state E).
+    await user.click(within(connecting).getByRole('button', { name: 'Change sign-in' }));
+    expect(document.activeElement).toBe(within(pane).getByLabelText(/^Password/));
   });
 
-  it('forgets a test once the connection it tested changes', async () => {
+  it('says which settings changed since a passing test, and asks for it again (state L)', async () => {
     const user = userEvent.setup();
-    serve(passed);
-    const { dialog } = open();
-    await connect(user, dialog);
-    await user.click(within(dialog).getByRole('button', { name: 'Run test' }));
-    expect(within(dialog).getByRole('button', { name: 'Next' })).toHaveProperty('disabled', false);
+    serve([passed]);
+    const { pane } = open();
+    await connect(user, pane);
+    await user.click(button(pane, 'Test connection'));
+    expect(button(pane, 'Next: Name and target').isConnected).toBe(true);
 
-    await user.click(within(dialog).getByRole('button', { name: 'Back' }));
-    await user.clear(within(dialog).getByLabelText('Host'));
-    await user.type(within(dialog).getByLabelText('Host'), 'elsewhere');
-    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
-    expect(within(dialog).queryByRole('list', { name: 'Checks' })).toBeNull();
-    expect(within(dialog).getByRole('button', { name: 'Next' })).toHaveProperty('disabled', true);
+    await user.click(button(pane, 'Back'));
+    const port = within(pane).getByLabelText(/^Port/);
+    await user.clear(port);
+    await user.type(port, '6432');
+    await user.click(button(pane, 'Next: Test'));
+    expect(
+      within(pane).getByText(
+        'Settings changed since the test. You changed Port (5432 → 6432). Test again to go on.',
+      ).isConnected,
+    ).toBe(true);
+    expect(within(pane).getByText(/no longer applies/).isConnected).toBe(true);
+    expect(within(pane).queryByRole('button', { name: 'Next: Name and target' })).toBeNull();
+    expect(button(pane, 'Test connection').isConnected).toBe(true);
   });
 
-  it('makes it from a later test that passed, with every test it ran in its history (T363’s review; AC-163)', async () => {
+  it('makes it from a later test that passed, with every test it ran in its history (AC-163)', async () => {
     const user = userEvent.setup();
-    const sent = serve(failed, passed);
-    const { dialog } = open();
-    await connect(user, dialog);
-    await user.click(within(dialog).getByRole('button', { name: 'Run test' }));
-    expect(within(dialog).getByRole('button', { name: 'Next' })).toHaveProperty('disabled', true);
-    await user.click(within(dialog).getByRole('button', { name: 'Run again' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
-    await user.type(within(dialog).getByRole('textbox', { name: 'Name' }), 'sales_replica');
-    await user.click(within(dialog).getByRole('button', { name: 'Create data source' }));
+    const sent = serve([failed, passed]);
+    const { pane } = open();
+    await connect(user, pane);
+    await user.click(button(pane, 'Test connection'));
+    await user.click(button(pane, 'Test again'));
+    await user.click(button(pane, 'Next: Name and target'));
+    await user.type(within(pane).getByRole('textbox', { name: /^Name/ }), 'sales_replica');
+    await user.click(button(pane, 'Create in My workspace'));
 
     const created = JSON.parse(sent.at(-1)!.body) as Record<string, unknown>;
     expect(created['testId']).toBe('test-1');
@@ -302,68 +388,230 @@ describe('adding a data source in the workspace (T363)', () => {
     const user = userEvent.setup();
     const { testId: _kept, ...unkept } = passed;
     void _kept;
-    serve(unkept);
-    const { dialog } = open();
-    await connect(user, dialog);
-    await user.click(within(dialog).getByRole('button', { name: 'Run test' }));
-    expect(within(dialog).getByRole('button', { name: 'Next' })).toHaveProperty('disabled', true);
+    serve([unkept]);
+    const { pane } = open();
+    await connect(user, pane);
+    await user.click(button(pane, 'Test connection'));
+    expect(within(pane).queryByRole('button', { name: /^Next/ })).toBeNull();
     expect(
-      within(dialog).getByText(
+      within(pane).getByText(
         'The test passed, but wechart couldn’t keep it, and a data source is made only from a test it keeps: run it again.',
-      ),
-    ).toBeDefined();
-    expect(within(dialog).getByRole('button', { name: 'Run again' })).toHaveProperty(
-      'disabled',
-      false,
-    );
+      ).isConnected,
+    ).toBe(true);
+    expect(button(pane, 'Test again')).toHaveProperty('disabled', false);
+  });
+});
+
+describe('the Name and target step (design 01, states G and H)', () => {
+  it('offers the target folders as a tree, and needs one to create (AC-282)', async () => {
+    const user = userEvent.setup();
+    serve([passed]);
+    const { pane } = open({
+      targets: [
+        { id: 'f-sales', path: ['Sales'] },
+        { id: 'f-emea', path: ['Sales', 'EMEA'] },
+      ],
+    });
+    await connect(user, pane);
+    await user.click(button(pane, 'Test connection'));
+    await user.click(button(pane, 'Next: Name and target'));
+    await user.type(within(pane).getByRole('textbox', { name: /^Name/ }), 'emea_replica');
+
+    const tree = within(pane).getByRole('tree', { name: 'Target folder' });
+    const items = within(tree).getAllByRole('treeitem');
+    expect(items.map((item) => [item.textContent, item.getAttribute('aria-level')])).toEqual([
+      ['Sales', '1'],
+      ['EMEA', '2'],
+    ]);
+    expect(button(pane, 'Create in My workspace')).toHaveProperty('disabled', true);
+    await user.click(items[1]!);
+    expect(items[1]?.getAttribute('aria-selected')).toBe('true');
+    expect(button(pane, 'Create in My workspace')).toHaveProperty('disabled', false);
   });
 
-  it('turns TLS on for a client certificate, which is sent only over TLS (T363’s hand-on)', async () => {
+  it('shows a name the folder already has on the name field, keeping the passed test', async () => {
     const user = userEvent.setup();
-    serve(passed);
-    const { dialog } = open();
-    await user.click(within(dialog).getByRole('button', { name: 'MySQL' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
-    const tls = within(dialog).getByRole('checkbox', { name: 'Use TLS' });
-    expect(tls).toHaveProperty('checked', false);
-    // Verification and a CA certificate matter only over TLS: not asked for without it.
-    expect(within(dialog).queryByLabelText('CA certificate (PEM)')).toBeNull();
+    serve([passed], {
+      status: 409,
+      // As the API words it (routes/data-sources.ts `clashIn`).
+      body: {
+        error:
+          'Its target folder already holds a data source named “sales_replica”: only a copy of it replaces it. Give this one another name.',
+      },
+    });
+    const { pane, onCreated } = open();
+    await connect(user, pane);
+    await user.click(button(pane, 'Test connection'));
+    await user.click(button(pane, 'Next: Name and target'));
+    const name = within(pane).getByRole('textbox', { name: /^Name/ });
+    await user.type(name, 'sales_replica');
+    await user.click(button(pane, 'Create in My workspace'));
+
+    expect(name.getAttribute('aria-invalid')).toBe('true');
     expect(
-      within(dialog).queryByRole('checkbox', { name: 'Verify the server’s certificate' }),
-    ).toBeNull();
-    await user.selectOptions(
-      within(dialog).getByRole('combobox', { name: 'Sign in with' }),
-      'client-certificate',
-    );
-    expect(tls).toHaveProperty('checked', true);
-    expect(within(dialog).getByLabelText('CA certificate (PEM)')).toBeDefined();
-    expect(
-      within(dialog).getByRole('checkbox', { name: 'Verify the server’s certificate' }),
-    ).toHaveProperty('checked', true);
+      within(pane).getByText(
+        'Its target folder already holds a data source named “sales_replica”: only a copy of it replaces it. Give this one another name.',
+      ).isConnected,
+    ).toBe(true);
+    expect(onCreated).not.toHaveBeenCalled();
+    // Only the name needs changing.
+    await user.type(name, '_2');
+    expect(name.getAttribute('aria-invalid')).toBeNull();
+    expect(button(pane, 'Create in My workspace')).toHaveProperty('disabled', false);
   });
 
-  it('keeps focus in its step, says a test’s outcome, and says why a name won’t do', async () => {
+  it('says why a name won’t do, and starts each step on its first control', async () => {
     const user = userEvent.setup();
-    serve(failed, passed);
-    const { dialog } = open();
-    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'PostgreSQL' }));
-    await user.click(within(dialog).getByRole('button', { name: 'PostgreSQL' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
-    expect(document.activeElement).toBe(within(dialog).getByLabelText('Host'));
-    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Run test' }));
-    expect(within(dialog).getByRole('status').textContent).toBe('The test failed at Connect.');
-    await user.click(within(dialog).getByRole('button', { name: 'Run again' }));
-    expect(within(dialog).getByRole('status').textContent).toBe('Every check passed.');
-    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
-    const name = within(dialog).getByRole('textbox', { name: 'Name' });
+    serve([passed]);
+    const { pane } = open();
+    expect(document.activeElement).toBe(within(pane).getByRole('radio', { name: 'PostgreSQL' }));
+    await choose(user, pane, 'PostgreSQL');
+    expect(document.activeElement).toBe(within(pane).getByLabelText(/^Host/));
+    await user.click(button(pane, 'Back'));
+    await user.click(button(pane, 'Next: Connection'));
+    await user.type(within(pane).getByLabelText(/^Host/), 'db.internal');
+    await user.type(within(pane).getByLabelText(/^Database/), 'sales');
+    await user.type(within(pane).getByLabelText(/^User/), 'cube');
+    await user.type(within(pane).getByLabelText(/^Password/), TYPED);
+    await user.click(button(pane, 'Next: Test'));
+    expect(document.activeElement).toBe(button(pane, 'Test connection'));
+    await user.click(button(pane, 'Test connection'));
+    await user.click(button(pane, 'Next: Name and target'));
+    const name = within(pane).getByRole('textbox', { name: /^Name/ });
     expect(document.activeElement).toBe(name);
     await user.type(name, 'Sales DB');
     expect(name.getAttribute('aria-invalid')).toBe('true');
     expect(
-      within(dialog).getByText(
+      within(pane).getByText(
         'Not a name Cube takes: use lower-case letters and digits, words joined by single underscores, at most 64 characters.',
-      ),
-    ).toBeDefined();
+      ).textContent,
+    ).toBe(
+      'Not a name Cube takes: use lower-case letters and digits, words joined by single underscores, at most 64 characters.',
+    );
+    expect(button(pane, 'Create in My workspace')).toHaveProperty('disabled', true);
+  });
+});
+
+describe('leaving with work typed (design 01, state I; rule 85)', () => {
+  it('asks before discarding on Esc, Cancel or ×, on the safe answer, and closes at once with nothing typed', async () => {
+    const user = userEvent.setup();
+    serve([passed]);
+    const { pane, onClose } = open();
+    // Nothing typed: it just closes.
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await choose(user, pane, 'PostgreSQL');
+    await user.type(within(pane).getByLabelText(/^Host/), 'db.internal');
+    for (const leave of [
+      () => user.keyboard('{Escape}'),
+      () => user.click(button(pane, 'Cancel')),
+      () => user.click(button(pane, 'Close')),
+    ]) {
+      await leave();
+      const ask = within(pane).getByRole('alertdialog', { name: 'Discard this data source?' });
+      expect(document.activeElement).toBe(
+        within(ask).getByRole('button', { name: 'Keep editing' }),
+      );
+      await user.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+      expect(within(pane).queryByRole('alertdialog')).toBeNull();
+      expect(within(pane).getByLabelText(/^Host/)).toHaveProperty('value', 'db.internal');
+    }
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await user.keyboard('{Escape}');
+    await user.click(within(pane).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('puts focus back where it was on Keep editing', async () => {
+    const user = userEvent.setup();
+    serve([passed]);
+    const { pane } = open();
+    await choose(user, pane, 'PostgreSQL');
+    const host = within(pane).getByLabelText(/^Host/);
+    await user.type(host, 'db.internal');
+    await user.keyboard('{Escape}');
+    await user.click(within(pane).getByRole('button', { name: 'Keep editing' }));
+    expect(document.activeElement).toBe(host);
+  });
+
+  /**
+   * T471's review: an Escape that a control outside the pane has taken — a
+   * rename field's, a menu's — is theirs, and neither asks nor closes.
+   */
+  it('leaves alone an Escape taken by a control outside the pane', async () => {
+    const user = userEvent.setup();
+    serve([passed]);
+    const onClose = vi.fn();
+    render(
+      <>
+        <input
+          aria-label="Rename"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') event.preventDefault();
+          }}
+        />
+        <input aria-label="Search" />
+        <NewSourceWizard
+          folderId="mine"
+          targets={targets}
+          seal={vi.fn(async () => envelope)}
+          onCreated={vi.fn()}
+          onClose={onClose}
+        />
+      </>,
+    );
+    const pane = screen.getByRole('dialog', { name: 'New data source' });
+    await choose(user, pane, 'PostgreSQL');
+    await user.type(within(pane).getByLabelText(/^Host/), 'db.internal');
+
+    await user.click(screen.getByRole('textbox', { name: 'Rename' }));
+    await user.keyboard('{Escape}');
+    // Nor one pressed in another field of the page.
+    await user.click(screen.getByRole('textbox', { name: 'Search' }));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('a BigQuery key (AC-340)', () => {
+  it('names its account from the key in the browser, and sends the key and the account only sealed', async () => {
+    const user = userEvent.setup();
+    const sent = serve([failed]);
+    const { pane, seal } = open();
+    await choose(user, pane, 'BigQuery');
+    await user.type(within(pane).getByLabelText(/^Project ID/), 'acme-analytics');
+    const key = JSON.stringify({
+      type: 'service_account',
+      client_email: 'cube-reader@acme-analytics.iam.gserviceaccount.com',
+      private_key: '-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n',
+    });
+    await user.click(within(pane).getByLabelText(/^Key \(JSON\)/));
+    await user.paste(key);
+    expect(
+      within(pane).getByText('Key for cube-reader@acme-analytics.iam.gserviceaccount.com')
+        .isConnected,
+    ).toBe(true);
+    // Pasted, it is said by its length, not left on screen.
+    expect(
+      within(pane).getByText(`Pasted · ${key.length.toLocaleString('en-US')} characters`)
+        .isConnected,
+    ).toBe(true);
+
+    await user.click(button(pane, 'Next: Test'));
+    await user.click(button(pane, 'Test connection'));
+    expect(seal).toHaveBeenCalledExactlyOnceWith(
+      'bigquery',
+      'credentials',
+      { projectId: 'acme-analytics' },
+      key,
+    );
+    expect(sent.map(({ url }) => url)).toEqual(['/api/data-sources/test']);
+    for (const { body } of sent) {
+      expect(body).not.toContain('cube-reader@acme-analytics');
+      expect(body).not.toContain('PRIVATE KEY');
+    }
   });
 });

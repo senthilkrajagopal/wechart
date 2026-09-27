@@ -1585,85 +1585,524 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
 .admin-page__head { display: flex; align-items: center; gap: 8px; }
 .admin-page__head > h1 { flex: 1; }
 
-/* New data source (T363, AC-158): the prototype's wizard (admin-sources.js)
-   as a dialog, bounded to the window, its steps as a row of badges, the
-   current one on the accent tint, and its actions kept in view at the foot. */
-.dialog.new-source-wizard {
-  width: min(560px, calc(100vw - 32px));
-  max-width: none;
-  max-height: calc(100vh - 64px);
-  overflow: auto;
-  gap: 12px;
+/* A page with a pane docked at its right (T471, design 01): the page's own
+   content scrolls beside it, and the pane keeps the window's height. */
+.admin-page__main { display: grid; gap: 12px; align-content: start; min-width: 0; }
+main:has(.admin-page--docked) {
+  height: calc(100vh - var(--wc-app-bar-height));
+  display: flex;
+  padding: 0;
 }
-.new-source-wizard h3 { margin: 0; font-size: var(--wc-text-sm-size); font-weight: 600; }
-.new-source-wizard__steps { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.new-source-wizard__steps li {
-  padding: 2px 8px;
-  border: 1px solid var(--wc-border-subtle);
+.admin-page--docked {
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) 480px;
+  gap: 0;
+}
+.admin-page--docked > .admin-page__main { overflow: auto; padding: var(--wc-surface-padding); }
+/* Explore's workspace listing, with the pane where the Access panel docks. */
+.explore--source { grid-template-columns: 260px minmax(0, 1fr) 480px; }
+
+/* New data source (T363, T471; AC-158; design 01): the approved prototype's
+   docked pane (admin-sources.js), 480 px, the window's height, its steps at
+   the top and its actions at the foot, only its body scrolling, so nothing
+   moves between steps or drivers. */
+.source-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  border-left: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
+}
+.source-pane__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.source-pane__head h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
+.source-pane__where {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
   border-radius: 999px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+}
+.source-pane__person::before { content: '◉'; font-size: 10px; }
+.source-pane__close {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wc-text-secondary);
+  font-size: 20px;
+  line-height: 1;
+}
+/* The steps: numbered, a line between each, done ones ticked and a way
+   back, the current one filled in the accent (UX-209). */
+.source-pane__rail { padding: 10px 16px; border-bottom: 1px solid var(--wc-border-subtle); }
+.source-pane__rail ol { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.source-pane__rail li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: var(--wc-text-xs-size);
   color: var(--wc-text-secondary);
 }
-.new-source-wizard__steps li[aria-current='step'] {
-  border-color: var(--wc-accent);
-  background: var(--wc-bg-accent-soft);
-  color: var(--wc-text-primary);
+.source-pane__rail li + li { flex: 1; }
+.source-pane__rail li + li::before {
+  content: '';
+  flex: 1;
+  min-width: 12px;
+  height: 1px;
+  background: var(--wc-border-strong);
 }
-.new-source-wizard__types {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.source-pane__rail li > span,
+.source-pane__rail li > button {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
-  margin: 0;
+  white-space: nowrap;
+}
+.source-pane__rail li > button {
+  min-height: 0;
   padding: 0;
   border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
 }
-.new-source-wizard__types legend { margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--wc-text-secondary); }
-.dialog .new-source-wizard__types button { justify-content: flex-start; text-align: left; }
-.dialog .new-source-wizard__types button[aria-pressed='true'] {
+.source-pane__rail li > button:hover:not(:disabled) { background: none; color: var(--wc-text-primary); }
+.source-pane__rail li.is-current { color: var(--wc-text-primary); font-weight: 600; }
+.source-pane__step {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.source-pane__rail li.is-current .source-pane__step {
   border-color: var(--wc-accent);
-  background: var(--wc-bg-accent-soft);
+  background: var(--wc-accent);
+  color: var(--wc-text-on-accent);
 }
-.new-source-wizard__test,
-.new-source-wizard__name { display: grid; gap: 8px; }
-.new-source-wizard__row { display: flex; align-items: center; gap: 8px; }
-.new-source-wizard .dialog__actions {
-  position: sticky;
-  bottom: -16px;
-  margin: 0 -16px -16px;
-  padding: 8px 16px 16px;
+.source-pane__rail li.is-done .source-pane__step {
+  border-color: var(--wc-bg-accent-soft);
+  background: var(--wc-bg-accent-soft);
+  color: transparent;
+  font-size: 0;
+}
+.source-pane__rail li.is-done .source-pane__step::before { content: '✓'; font-size: 11px; color: var(--wc-accent); }
+.source-pane__rail-short { display: none; margin: 0; align-items: center; gap: 8px; font-size: var(--wc-text-xs-size); font-weight: 600; }
+.source-pane__rail-short .source-pane__step { border-color: var(--wc-accent); background: var(--wc-accent); color: var(--wc-text-on-accent); }
+/* The chosen type, kept in view with the way to change it (UX-203). */
+.source-pane__chosen {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-subtle);
+}
+.source-pane__chosen-text { display: grid; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.source-pane__chosen-text b { font-size: var(--wc-text-sm-size); font-weight: 600; color: var(--wc-text-primary); }
+.source-pane__chosen .link-button { margin-left: auto; color: var(--wc-accent); font-weight: 600; }
+.source-pane__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  padding: 16px;
+}
+.source-pane__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
   border-top: 1px solid var(--wc-border-subtle);
   background: var(--wc-bg-surface);
 }
-.new-source-wizard .field input:not([type='checkbox']),
-.new-source-wizard .field select { height: 32px; }
-.connection-form { display: grid; gap: 16px; }
-/* Two columns: a host and its port share a row; every other field spans it. */
-.connection-form__group {
+.source-pane__foot > .btn,
+.source-pane__foot > .btn-primary { min-height: 32px; }
+.source-pane__spacer { flex: 1; }
+.source-pane__foot-note { font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.source-pane__outcome { font-size: var(--wc-text-sm-size); font-weight: 600; }
+/* Nothing to say yet: mounted, so what it says next is announced, but unseen. */
+.source-pane__outcome.is-empty { min-height: 0; margin: -16px 0 0; }
+.source-pane__outcome.is-empty > * { display: none; }
+.source-pane__summary { position: relative; }
+.source-pane__edit {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0;
+  color: var(--wc-accent);
+  font-size: var(--wc-text-xs-size);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.source-pane__result { display: flex; align-items: center; gap: 4px; color: var(--wc-status-success); font-weight: 600; }
+/* Said in words with an icon, never by colour alone (rule 3). */
+.source-pane__alert,
+.source-pane__changed,
+.source-pane__rule,
+.connection-form__caution,
+.connection-form__info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: var(--wc-text-xs-size);
+  line-height: 18px;
+  color: var(--wc-text-primary);
+}
+.source-pane__alert { background: color-mix(in srgb, var(--wc-status-error) 10%, var(--wc-bg-surface)); }
+.source-pane__changed,
+.connection-form__caution { background: color-mix(in srgb, var(--wc-status-warning-icon) 16%, var(--wc-bg-surface)); }
+.source-pane__rule,
+.connection-form__info { background: var(--wc-bg-accent-soft); }
+.source-pane__summary { display: grid; gap: 0; margin: 0; padding: 0; border: 0; min-width: 0; }
+.source-pane__summary dl {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 120px;
-  gap: 8px 12px;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  font-size: var(--wc-text-xs-size);
+}
+.source-pane__summary dt { color: var(--wc-text-secondary); }
+.source-pane__summary dd { margin: 0; overflow-wrap: anywhere; }
+.source-pane__test,
+.source-pane__name { display: grid; gap: 16px; }
+.source-pane__last { display: grid; gap: 4px; }
+/* The discard question, inside the pane, over it (state I, rule 85). */
+.source-pane__veil {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--wc-text-primary) 28%, transparent);
+}
+.source-pane__ask {
+  display: grid;
+  gap: 8px;
+  max-width: 400px;
+  padding: 20px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 8px;
+  background: var(--wc-bg-raised);
+  box-shadow: var(--wc-shadow-pop);
+}
+.source-pane__ask h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.source-pane__ask p { margin: 0; font-size: var(--wc-text-sm-size); color: var(--wc-text-secondary); }
+.source-pane__ask-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.btn-danger { border-color: var(--wc-status-error); color: var(--wc-status-error); }
+/* The type tiles: a mark, the name and the ways to sign in (state A). */
+.type-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.type-tile {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  text-align: left;
+}
+.type-tile[aria-checked='true'] {
+  border-color: var(--wc-accent);
+  box-shadow: 0 0 0 1px var(--wc-accent);
+  background: var(--wc-bg-accent-soft);
+}
+.type-tile__text { display: grid; gap: 2px; }
+.type-tile__name { font-size: var(--wc-text-sm-size); font-weight: 600; color: var(--wc-text-primary); }
+.type-tile__ways { font-size: var(--wc-text-xs-size); line-height: 16px; color: var(--wc-text-secondary); }
+.source-pane__types { display: grid; gap: 8px; }
+.driver-mark {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-primary);
+  font-size: var(--wc-text-xs-size);
+  font-weight: 600;
+}
+
+/* A connection's three groups (design 02): where it connects, how it signs
+   in, TLS — each under a small capitalised heading, a rule between them. */
+.connection-form { display: grid; gap: 16px; min-width: 0; }
+.connection-form__group { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.connection-form__group + .connection-form__group,
+.connection-form > .connection-form__group + fieldset {
+  padding-top: 16px;
+  border-top: 1px solid var(--wc-border-subtle);
+}
+.connection-form__legend {
+  float: none;
   margin: 0;
   padding: 0;
-  border: 0;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--wc-text-secondary);
 }
-.connection-form__group > * { grid-column: 1 / -1; }
-.connection-form__group > .is-paired { grid-column: 1; }
-.connection-form__group > .is-short { grid-column: 2; }
-.connection-form__group > .connection-form__check + .connection-form__check { margin-top: -4px; }
-.connection-form__group legend { margin-bottom: 4px; font-size: var(--wc-text-sm-size); font-weight: 600; }
-.connection-form__check label { display: flex; align-items: center; gap: 6px; font-weight: 400; color: var(--wc-text-primary); }
-.connection-form__method { margin: 0; }
+/* Floated, a legend is laid out as the group's first row rather than drawn
+   on its top border, which a rule between groups would run through. */
+fieldset > .connection-form__legend { float: left; width: 100%; }
+.connection-form__pair { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 12px; }
+.connection-form .field,
+.source-pane .field { display: grid; gap: 4px; min-width: 0; }
+.connection-form .field > label,
+.source-pane .field > label,
+.source-pane .field__label {
+  font-size: var(--wc-text-xs-size);
+  font-weight: 600;
+  color: var(--wc-text-primary);
+}
+.field__req { font-weight: 400; color: var(--wc-text-secondary); }
+.connection-form input:not([type='checkbox']),
+.source-pane .field input:not([type='checkbox']) { width: 100%; height: 32px; }
+.connection-form textarea { width: 100%; }
+.is-code,
+.connection-form .is-code { font-family: var(--wc-font-code); font-size: 12px; }
+.connection-form [aria-invalid='true'],
+.source-pane [aria-invalid='true'] { border-color: var(--wc-status-error); }
+.field__error,
+.field__warning { display: flex; align-items: flex-start; gap: 4px; font-size: var(--wc-text-xs-size); line-height: 16px; }
+.field__error { color: var(--wc-status-error); }
+.field__warning { color: var(--wc-status-warning); }
+.connection-form__method { margin: 0; font-size: var(--wc-text-sm-size); }
+.connection-form__aside { font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
 .connection-form__note,
-.dialog p.connection-form__note { margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
-.connection-form textarea,
-.new-source-wizard__name input { font-family: var(--wc-font-code); font-size: 12px; }
-/* Each check xcube ran (AC-159): its icon, outcome and step, its time, and a
-   failed one's error as xcube redacted it. */
-.connection-checks { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.connection-checks__check { display: flex; align-items: flex-start; gap: 6px; font-size: var(--wc-text-sm-size); }
-.connection-checks__check > svg { flex: none; margin-top: 2px; }
-.connection-checks__check.is-passed > svg { color: var(--wc-status-success); }
-.connection-checks__check.is-skipped { color: var(--wc-text-secondary); }
+.dialog p.connection-form__note { margin: 0; font-size: var(--wc-text-xs-size); line-height: 16px; color: var(--wc-text-secondary); }
+/* Secrets: a lock in the field, one line for the group (UX-212). */
+.secret-input { position: relative; display: block; }
+/* As specific as the base input rule it has to outrank for its padding. */
+.connection-form .secret-input > input:not([type='checkbox']):not([type='radio']):not([type='file']) {
+  padding-left: 28px;
+}
+.secret-pasted__lock {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: var(--wc-text-secondary);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 7V5a4 4 0 0 1 8 0v2h1v8H3V7zm2 0h4V5a2 2 0 0 0-4 0z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 7V5a4 4 0 0 1 8 0v2h1v8H3V7zm2 0h4V5a2 2 0 0 0-4 0z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.secret-input > .secret-pasted__lock { position: absolute; left: 10px; top: 10px; }
+.secret-pasted {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  font-family: var(--wc-font-code);
+  font-size: 12px;
+}
+.secret-pasted > .link-button { margin-left: auto; color: var(--wc-accent); font-family: inherit; }
+.connection-form__sealed { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.connection-form__sealed::before {
+  content: '';
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 7V5a4 4 0 0 1 8 0v2h1v8H3V7zm2 0h4V5a2 2 0 0 0-4 0z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 7V5a4 4 0 0 1 8 0v2h1v8H3V7zm2 0h4V5a2 2 0 0 0-4 0z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.connection-form__add { justify-self: start; color: var(--wc-accent); font-weight: 600; }
+/* Choices seen at once: segmented for two, rows for three, cards where each
+   needs saying (design 02, pins 1 and 3). */
+.choice--segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.choice--segmented > .choice__option {
+  min-height: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-left: 1px solid var(--wc-border-subtle);
+  border-radius: 0;
+  background: var(--wc-bg-surface);
+  font-size: var(--wc-text-xs-size);
+}
+.choice--segmented > .choice__option:first-child { border-left: 0; }
+.choice--segmented > .choice__option[aria-checked='true'] {
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-weight: 600;
+}
+.choice--rows { display: grid; border: 1px solid var(--wc-border-strong); border-radius: 6px; overflow: hidden; }
+.choice--rows > .choice__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 0;
+  border-top: 1px solid var(--wc-border-subtle);
+  border-radius: 0;
+  background: var(--wc-bg-surface);
+  text-align: left;
+  font-size: var(--wc-text-sm-size);
+}
+.choice--rows > .choice__option:first-child { border-top: 0; }
+.choice--rows > .choice__option[aria-checked='true'] { background: var(--wc-bg-accent-soft); font-weight: 600; }
+.choice--cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.choice--cards > .choice__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  text-align: left;
+}
+.choice--cards > .choice__option[aria-checked='true'] {
+  border-color: var(--wc-accent);
+  box-shadow: 0 0 0 1px var(--wc-accent);
+  background: var(--wc-bg-accent-soft);
+}
+.choice__mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  border: 1.5px solid var(--wc-border-strong);
+  border-radius: 999px;
+  background: var(--wc-bg-surface);
+}
+.choice__option[aria-checked='true'] > .choice__mark { border: 4px solid var(--wc-accent); }
+.choice--rows .choice__mark { margin-top: 0; }
+.choice__text { display: grid; gap: 2px; }
+.choice__label { font-size: var(--wc-text-sm-size); font-weight: 600; }
+.choice__description { font-size: var(--wc-text-xs-size); line-height: 16px; color: var(--wc-text-secondary); }
+/* A boolean as the prototype's .switch, its words beside it, its default under. */
+.switch-row { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; row-gap: 2px; align-items: center; }
+.switch-row > label { font-size: var(--wc-text-sm-size); color: var(--wc-text-primary); }
+.switch-row__help { grid-column: 2; font-size: var(--wc-text-xs-size); line-height: 16px; color: var(--wc-text-secondary); }
+input.switch {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 32px;
+  height: 18px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: radial-gradient(circle at 9px 50%, var(--wc-bg-surface) 7px, transparent 7.5px),
+    var(--wc-border-strong);
+  cursor: pointer;
+}
+input.switch:checked {
+  background: radial-gradient(circle at 23px 50%, var(--wc-bg-surface) 7px, transparent 7.5px),
+    var(--wc-accent);
+}
+input.switch:disabled { opacity: 0.55; cursor: not-allowed; }
+input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
+/* Each check Cube runs (AC-159): listed before it runs, its outcome and time
+   after, a failed one opened in place with Cube's own words (states C–F). */
+.connection-checks { display: grid; margin: 0; padding: 0; list-style: none; }
+.connection-checks__check { padding: 8px 0; border-top: 1px solid var(--wc-border-subtle); }
+.connection-checks__check:first-child { border-top: 0; }
+.connection-checks__row { display: flex; align-items: center; gap: 8px; font-size: var(--wc-text-sm-size); }
+.connection-checks__row > svg { flex: none; }
+.connection-checks__time { margin-left: auto; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.connection-checks__check.is-passed .connection-checks__row > svg { color: var(--wc-status-success); }
+.connection-checks__check.is-failed .connection-checks__label { font-weight: 600; }
+.connection-checks__check.is-skipped,
+.connection-checks__check.is-not-run,
+.connection-checks__check.is-waiting { color: var(--wc-text-secondary); }
+.connection-checks__failure { display: grid; gap: 6px; margin: 6px 0 0 24px; font-size: var(--wc-text-xs-size); line-height: 16px; color: var(--wc-text-secondary); }
+.connection-checks__failure p { margin: 0; }
+.connection-checks__failure pre {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-primary);
+  font-family: var(--wc-font-code);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.connection-checks__fixes { display: flex; gap: 12px; }
+.connection-checks__fixes .link-button { padding: 0; color: var(--wc-accent); font-weight: 600; }
+/* The target folder as a tree (state G). */
+.target-tree {
+  display: grid;
+  gap: 2px;
+  max-height: 240px;
+  margin: 0;
+  padding: 4px;
+  overflow: auto;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  list-style: none;
+}
+.target-tree__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding-right: 8px;
+  border-radius: 4px;
+  font-size: var(--wc-text-sm-size);
+  cursor: pointer;
+}
+.target-tree__item[aria-selected='true'] { background: var(--wc-bg-accent-soft); color: var(--wc-accent); font-weight: 600; }
+.target-tree__item[aria-disabled='true'] { color: var(--wc-text-secondary); cursor: default; }
+.target-tree__item:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
+.target-tree__icon { flex: none; width: 14px; height: 11px; border: 1.5px solid currentColor; border-radius: 2px; }
+/* Narrower than 1,024 px, a sheet over the page (state K): the rail in a line. */
+@media (max-width: 1023.98px) {
+  .source-pane {
+    position: fixed;
+    inset: var(--wc-app-bar-height) 0 0 0;
+    z-index: 40;
+    border-left: 0;
+  }
+  .source-pane__rail ol { display: none; }
+  .source-pane__rail-short { display: flex; }
+  .admin-page--docked { grid-template-columns: minmax(0, 1fr); }
+  .explore--source { grid-template-columns: minmax(0, 1fr); }
+}
 .info-bar {
   display: flex;
   align-items: flex-start;

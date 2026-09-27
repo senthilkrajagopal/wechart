@@ -212,12 +212,18 @@ export function ExplorePage() {
   const [askingTarget, setAskingTarget] = useState<{
     kind: 'dashboard' | 'chart' | 'data-source';
     targets: readonly Target[];
+    /** The folder it is made in: the one open when it was asked for. */
+    folderId: string;
   } | null>(null);
   const [targetsFailed, setTargetsFailed] = useState<string | null>(null);
   const askTarget = async (kind: 'dashboard' | 'chart' | 'data-source') => {
     setTargetsFailed(null);
+    const asked = folderId;
     try {
-      setAskingTarget({ kind, targets: await getJson<Target[]>('/api/folders/targets') });
+      const targets = await getJson<Target[]>('/api/folders/targets');
+      // The two docked panes replace each other (T471): Access closes first.
+      if (kind === 'data-source') setAccessOf(null);
+      setAskingTarget({ kind, targets, folderId: asked });
     } catch (error) {
       setTargetsFailed((error as Error).message);
     }
@@ -227,6 +233,9 @@ export function ExplorePage() {
     askingTarget === null || askingTarget.kind === 'data-source'
       ? null
       : { kind: askingTarget.kind, targets: askingTarget.targets };
+  /** A data source being added: the folders it may go to, and where it is made. */
+  const addingSource = askingTarget?.kind === 'data-source' ? askingTarget.targets : null;
+  const addingIn = askingTarget?.folderId ?? folderId;
   const folderTitle = known ? (chain.at(-1)?.title ?? SHARED_ROOT.title) : '';
 
   /** The roots' counts, which are no folder's (AC-194). */
@@ -253,7 +262,8 @@ export function ExplorePage() {
   const mayEditAccess = signedIn && !searching && known && access.isSuccess;
   const [accessOf, setAccessOf] = useState<string | null>(null);
   const accessButton = useRef<HTMLButtonElement>(null);
-  const accessOpen = mayEditAccess && accessOf === folderId;
+  // The two docked panes replace each other: not both at once (T471).
+  const accessOpen = mayEditAccess && accessOf === folderId && addingSource === null;
   const titleOf = (id: string) =>
     rootTitleOf(id) ?? (folders.data ?? []).find((folder) => folder.id === id)?.title ?? id;
 
@@ -290,7 +300,15 @@ export function ExplorePage() {
   );
 
   return (
-    <div className={accessOpen ? 'explore explore--access' : 'explore'}>
+    <div
+      className={
+        addingSource !== null
+          ? 'explore explore--source'
+          : accessOpen
+            ? 'explore explore--access'
+            : 'explore'
+      }
+    >
       {/* The prototype's docked Folders pane (AC-194), kept in view as the
           contents scroll. */}
       <aside className="explore__tree" aria-labelledby="explore-folders-heading">
@@ -383,6 +401,8 @@ export function ExplorePage() {
               ref={accessButton}
               aria-expanded={accessOpen}
               aria-controls={accessOpen ? ACCESS_PANEL_ID : undefined}
+              // Where the new data source's pane is docked, until it closes.
+              disabled={addingSource !== null}
               onClick={() => setAccessOf(accessOpen ? null : folderId)}
             >
               Access
@@ -400,7 +420,9 @@ export function ExplorePage() {
           <CreateMenu
             // Not until the open folder is known: until then, whether it is
             // in the workspace isn't (T345's review).
-            busy={create.isPending || !known || me.isPending}
+            // Nor while a data source is being added in its pane: something
+            // new would replace it, and what was typed there with it (T471).
+            busy={create.isPending || !known || me.isPending || addingSource !== null}
             onCreate={(kind) => {
               // In a signed-in user's workspace, a dashboard or chart names the
               // shared folder it is to go to first (T345, AC-282). With sign-in
@@ -412,22 +434,7 @@ export function ExplorePage() {
               ? { onNewSource: () => void askTarget('data-source') }
               : {})}
           />
-          {askingTarget === null ? null : askingTarget.kind === 'data-source' ? (
-            // Made through its wizard, tested before it is made (T363, AC-158).
-            <NewSourceWizard
-              folderId={folderId}
-              targets={askingTarget.targets}
-              onClose={() => {
-                setAskingTarget(null);
-              }}
-              onCreated={() => {
-                setAskingTarget(null);
-                void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
-                void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
-                void queryClient.invalidateQueries({ queryKey: ['data-sources'] });
-              }}
-            />
-          ) : askingItem === null ? null : (
+          {askingItem === null ? null : (
             <NewItemDialog
               kind={askingItem.kind}
               defaultTitle={DEFAULT_TITLES[askingItem.kind]}
@@ -516,6 +523,25 @@ export function ExplorePage() {
           </div>
         ) : null}
       </section>
+      {addingSource === null ? null : (
+        // Made through its wizard, docked where the Access panel docks, beside
+        // the workspace's listing, tested before it is made (T363, T471,
+        // AC-158; design 02, pin 6). In the workspace folder it was asked for
+        // in, wherever the tree goes while it is open.
+        <NewSourceWizard
+          folderId={addingIn}
+          targets={addingSource}
+          onClose={() => {
+            setAskingTarget(null);
+          }}
+          onCreated={() => {
+            setAskingTarget(null);
+            void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+            void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+            void queryClient.invalidateQueries({ queryKey: ['data-sources'] });
+          }}
+        />
+      )}
       {accessOpen ? (
         <AccessPanel
           folderId={folderId}

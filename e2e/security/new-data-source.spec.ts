@@ -94,9 +94,13 @@ test.describe('a data source added in the workspace (T363)', () => {
         .getByRole('menuitem', { name: 'Data source' })
         .click();
 
+      // Docked beside the workspace's listing, which stays in view (T471, design 01).
       const wizard = page.getByRole('dialog', { name: 'New data source' });
-      // The eight drivers xcube takes (AC-160).
-      await expect(wizard.getByRole('group', { name: 'Type' }).getByRole('button')).toHaveText([
+      await expect(page.getByTestId('explore-contents')).toBeVisible();
+      // The eight drivers xcube takes (AC-160), as tiles.
+      await expect(
+        wizard.getByRole('radiogroup', { name: 'Which database?' }).locator('.type-tile__name'),
+      ).toHaveText([
         'PostgreSQL',
         'Amazon Redshift',
         'MySQL',
@@ -106,49 +110,69 @@ test.describe('a data source added in the workspace (T363)', () => {
         'Oracle',
         'Dremio',
       ]);
-      await wizard.getByRole('button', { name: 'PostgreSQL' }).click();
-      await wizard.getByRole('button', { name: 'Next' }).click();
+      await wizard.getByRole('radio', { name: 'PostgreSQL' }).click();
+      await wizard.getByRole('button', { name: 'Next: Connection' }).click();
 
-      await wizard.getByLabel('Host').fill('sample-db');
-      await expect(wizard.getByLabel('Port')).toHaveValue('5432');
-      await wizard.getByLabel('Database').fill('sample');
-      await wizard.getByRole('checkbox', { name: 'Use TLS' }).uncheck();
-      await wizard.getByLabel('User', { exact: true }).fill('sample');
-      await wizard.getByLabel('Password').fill(CANARY);
-      await wizard.getByRole('button', { name: 'Next' }).click();
+      // Next checks what is required before anything is tested.
+      await wizard.getByRole('button', { name: 'Next: Test' }).click();
+      await expect(wizard.getByRole('alert')).toHaveText(
+        'Fill in Host, Database, User and Password to go on.',
+      );
+      await expect(wizard.getByLabel(/^Host/)).toBeFocused();
 
-      // A wrong password: xcube's connect check fails, saying why (AC-159).
-      await wizard.getByRole('button', { name: 'Run test' }).click();
+      await wizard.getByLabel(/^Host/).fill('sample-db');
+      await expect(wizard.getByLabel(/^Port/)).toHaveValue('5432');
+      await wizard.getByLabel(/^Database/).fill('sample');
+      await wizard.getByRole('switch', { name: 'Use TLS' }).uncheck();
+      await wizard.getByLabel(/^User/).fill('sample');
+      await wizard.getByLabel(/^Password/).fill(CANARY);
+      await wizard.getByRole('button', { name: 'Next: Test' }).click();
+
+      // The four checks, listed before they run (AC-159).
       const checks = wizard.getByRole('list', { name: 'Checks' });
       await expect(checks.getByRole('listitem')).toHaveText([
-        /^Passed: Open the secrets · \d+ ms$/,
-        /^Passed: Build the connection’s configuration · \d+ ms$/,
-        /^Failed: Connect · \d+ ms — .*password authentication failed/,
-        'Skipped: Read the catalog',
+        'Open the secretsNot run',
+        'Build the connection’s configurationNot run',
+        'ConnectNot run',
+        'Read the catalogNot run',
       ]);
-      await expect(wizard.getByRole('button', { name: 'Next' })).toBeDisabled();
-
-      // The right one: every check passes.
-      await wizard.getByRole('button', { name: 'Back' }).click();
-      await wizard.getByLabel('Password').fill('sample');
-      await wizard.getByRole('button', { name: 'Next' }).click();
-      await wizard.getByRole('button', { name: 'Run test' }).click();
+      // A wrong password: Cube's connect check fails, its words opened in place.
+      await wizard.getByRole('button', { name: 'Test connection' }).click();
       await expect(checks.getByRole('listitem')).toHaveText([
-        /^Passed: Open the secrets/,
-        /^Passed: Build the connection’s configuration/,
-        /^Passed: Connect/,
-        /^Passed: Read the catalog/,
+        /^Open the secrets\d+ ms$/,
+        /^Build the connection’s configuration\d+ ms$/,
+        /^Connect\d+ ms.*password authentication failed/s,
+        'Read the catalogSkipped',
       ]);
-      await wizard.getByRole('button', { name: 'Next' }).click();
+      await expect(wizard.getByRole('button', { name: /^Next/ })).toHaveCount(0);
 
-      await wizard.getByRole('textbox', { name: 'Name' }).fill(NAME);
-      await wizard.getByRole('combobox', { name: 'Target folder' }).selectOption(made.folder);
+      // Straight to the sign-in; the right password; the change said.
+      await checks.getByRole('button', { name: 'Change sign-in' }).click();
+      await wizard.getByLabel(/^Password/).fill('sample');
+      await wizard.getByRole('button', { name: 'Next: Test' }).click();
+      await expect(wizard.getByRole('note').filter({ hasText: 'Settings changed' })).toHaveText(
+        /You changed Password\. Test again to go on\./,
+      );
+      await wizard.getByRole('button', { name: 'Test connection' }).click();
+      await expect(checks.getByRole('listitem')).toHaveText([
+        /^Open the secrets\d+ ms$/,
+        /^Build the connection’s configuration\d+ ms$/,
+        /^Connect\d+ ms$/,
+        /^Read the catalog\d+ ms$/,
+      ]);
+      await wizard.getByRole('button', { name: 'Next: Name and target' }).click();
+
+      await wizard.getByRole('textbox', { name: /^Name/ }).fill(NAME);
+      await wizard
+        .getByRole('tree', { name: 'Target folder' })
+        .getByRole('treeitem', { name: `New source target ${RUN}` })
+        .click();
       const created = page.waitForResponse(
         (response) =>
           response.url() === `${BASE_URL}/api/data-sources` &&
           response.request().method() === 'POST',
       );
-      await wizard.getByRole('button', { name: 'Create data source' }).click();
+      await wizard.getByRole('button', { name: 'Create in My workspace' }).click();
       const answer = await created;
       expect(answer.status(), await answer.text()).toBe(201);
       made.source = ((await answer.json()) as { id: string }).id;
@@ -176,6 +200,96 @@ test.describe('a data source added in the workspace (T363)', () => {
       const rows = everyRow();
       expect(rows).toContain(NAME);
       expect(rows).not.toContain(CANARY);
+    });
+
+    /**
+     * T471 (design 01's frame; design 02; AC-339, AC-340): from Data sources,
+     * a 480 px pane docked at the right beside the list, the window's height,
+     * its actions at the foot; Dremio Cloud's `http://` URL warned about;
+     * BigQuery's key read for its account in the browser; and typed work
+     * kept until the user says to discard it.
+     */
+    test('docks beside the list, warns of an unencrypted Dremio URL, reads a BigQuery key’s account, and asks before discarding', async ({
+      page,
+    }) => {
+      const bodies: string[] = [];
+      page.on('request', (request) => {
+        if (request.url().startsWith(`${BASE_URL}/api/`)) bodies.push(request.postData() ?? '');
+      });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/data-sources');
+      await page.getByRole('button', { name: '+ Data source' }).click();
+      const wizard = page.getByRole('dialog', { name: 'New data source' });
+      await expect(wizard.getByText('in My workspace')).toBeVisible();
+
+      // The frame: 480 px at the window's right edge, its foot at the bottom.
+      const pane = await wizard.boundingBox();
+      expect(Math.round(pane?.width ?? 0)).toBe(480);
+      expect(Math.round((pane?.x ?? 0) + (pane?.width ?? 0))).toBe(1440);
+      const foot = await wizard.locator('.source-pane__foot').boundingBox();
+      expect(Math.round((foot?.y ?? 0) + (foot?.height ?? 0))).toBe(900);
+      // The list stays in view beside it.
+      await expect(page.getByRole('heading', { name: 'Data sources', level: 1 })).toBeInViewport();
+
+      // Dremio Cloud first; an http:// URL is warned about (AC-339).
+      await wizard.getByRole('radio', { name: 'Dremio' }).click();
+      await wizard.getByRole('button', { name: 'Next: Connection' }).click();
+      await expect(
+        wizard.getByRole('radiogroup', { name: 'Which Dremio?' }).getByRole('radio', {
+          name: /^Dremio Cloud/,
+        }),
+      ).toHaveAttribute('aria-checked', 'true');
+      await wizard.getByLabel(/^Project URL/).fill('http://api.dremio.cloud/v0/projects/7f3c');
+      await expect(wizard.getByText(/so the token would travel unencrypted/)).toBeVisible();
+      await wizard.getByLabel(/^Project URL/).fill('https://api.dremio.cloud/v0/projects/7f3c');
+      await expect(wizard.getByText(/so the token would travel unencrypted/)).toHaveCount(0);
+
+      // BigQuery's key: its account read in the browser, nothing sent (AC-340).
+      await wizard.getByRole('button', { name: 'Change type' }).click();
+      await wizard.getByRole('radio', { name: 'BigQuery' }).click();
+      await wizard.getByRole('button', { name: 'Next: Connection' }).click();
+      await wizard.getByLabel(/^Key \(JSON\)/).fill(
+        JSON.stringify({
+          type: 'service_account',
+          client_email: `cube-reader-${RUN}@acme-analytics.iam.gserviceaccount.com`,
+          private_key: `-----BEGIN PRIVATE KEY-----\n${CANARY}\n-----END PRIVATE KEY-----\n`,
+        }),
+      );
+      await expect(
+        wizard.getByText(`Key for cube-reader-${RUN}@acme-analytics.iam.gserviceaccount.com`),
+      ).toBeVisible();
+      // Tested: the key, and the account read from it, go only sealed (AC-340).
+      await wizard.getByLabel(/^Project ID/).fill(`acme-analytics-${RUN}`);
+      await wizard.getByRole('button', { name: 'Next: Test' }).click();
+      const tested = page.waitForRequest(
+        (request) =>
+          request.url() === `${BASE_URL}/api/data-sources/test` && request.method() === 'POST',
+      );
+      await wizard.getByRole('button', { name: 'Test connection' }).click();
+      const body = (await tested).postData() ?? '';
+      expect(body).toContain(`acme-analytics-${RUN}`);
+      expect(body).not.toContain(`cube-reader-${RUN}`);
+      expect(body).not.toContain('PRIVATE KEY');
+      expect(body).not.toContain(CANARY);
+
+      // Typed work is asked about before it goes, the safe answer focused.
+      await page.keyboard.press('Escape');
+      const ask = wizard.getByRole('alertdialog', { name: 'Discard this data source?' });
+      await expect(ask.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+      await ask.getByRole('button', { name: 'Keep editing' }).click();
+      await expect(ask).toHaveCount(0);
+      await expect(wizard.getByRole('list', { name: 'Checks' })).toBeVisible();
+      await wizard.getByRole('button', { name: 'Close' }).click();
+      await wizard
+        .getByRole('alertdialog', { name: 'Discard this data source?' })
+        .getByRole('button', { name: 'Discard' })
+        .click();
+      await expect(wizard).toHaveCount(0);
+      // Focus back on what opened it.
+      await expect(page.getByRole('button', { name: '+ Data source' })).toBeFocused();
+
+      // Nothing of the key left the browser.
+      for (const body of bodies) expect(body).not.toContain(CANARY);
     });
   });
 });

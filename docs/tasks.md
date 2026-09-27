@@ -7810,7 +7810,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 
 ### Phase 2's surfaces, to their approved designs (AC-343)
 
-- [ ] T471 (AC-158, AC-159, AC-160, AC-282, AC-325, AC-339, AC-340, AC-343) Rebuild the new data source wizard as design 01's docked pane, with design 02's driver forms
+- [x] T471 (AC-158, AC-159, AC-160, AC-282, AC-325, AC-339, AC-340, AC-343) Rebuild the new data source wizard as design 01's docked pane, with design 02's driver forms
   - Files: `packages/web/src/workspaces/data-sources/{NewSourceWizard,ConnectionForm}.tsx` (+ tests), `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx`, `packages/web/src/workspaces/explore/ExplorePage.tsx`, `packages/web/src/shell/styles.ts`, `e2e/security/new-data-source.spec.ts`
   - Failing test: the wizard in each of design 01's states and each of design 02's driver forms:
     - a 480 px pane docked beside the list, fixed in height, with a step rail and Back · Cancel · primary pinned at the foot;
@@ -7826,6 +7826,32 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - BigQuery's `client_email` shown from the pasted key, read in the browser (AC-340).
     - The e2e's canary and test-first checks still pass (AC-325, AC-158).
   - Depends on: T363, T461
+  - **Done 2026-09-27. AC-339 and AC-340 ticked.**
+    - AC-339: `ConnectionForm.test.tsx` and `security/new-data-source.spec.ts` (the warning for `http://`, none for `https://`).
+    - AC-340: `NewSourceWizard.test.tsx` "a BigQuery key…" and the e2e. The account is shown, and the test's request body holds the project but neither the key nor the account outside the sealed envelope.
+    - **As built:**
+      - The pane is `NewSourceWizard.tsx`, with `TargetTree.tsx`, `connectionSummary.ts` (the Test step's summary and what changed since a test) and `driverMarks.tsx` (monograms; T472 decides logos).
+      - `ConnectionForm.tsx` holds the shapes, method choices, switches and pasted-secret display, and `missingOf`.
+      - The pane docks beside the list on Data sources, and in Explore's Access column, where it replaces Access. The New menu and Access are closed while it is open.
+      - Leaving the page with typed work asks, through the browser's own question.
+      - BigQuery's key is labelled "Key (JSON)".
+      - While a test runs, each check says "Testing": Cube answers them at once.
+    - **Review fixes:**
+      - New › Dashboard/Chart no longer replaces the pane silently;
+      - Escapes that other controls take are left alone;
+      - the tree nests by path, keeps same-named folders apart, and puts the shared root over the rest;
+      - the 409 shows the API's own words;
+      - the source is made in the workspace folder it was asked for in;
+      - AC-340's body check was added;
+      - "Change sign-in" focuses the password;
+      - re-choosing the same option keeps a test;
+      - focus returns to the opener, to the field after Keep editing, and to the box after Replace;
+      - the question traps Tab;
+      - a pasted key is summarised at once.
+    - **Left for later:**
+      - design 01 state D's checks ticking one by one: xcube answers once, not per check;
+      - the narrow sheet keeps Cancel.
+    - AC-343 stays open until every phase-2 surface is drawn.
 - [ ] T472 (AC-338) Mark each driver with its vendor's logo where its licence allows, else a monogram
   - Files: `docs/research/driver-logos.md` (each vendor's trademark terms, with sources), `packages/web/src/workspaces/data-sources/driverMarks.tsx` (+ test)
   - Failing test: `driverMarks.test.tsx`: each of the eight drivers shows the logo its research allows, or its monogram; none shows a logo the research doesn't clear (AC-338).

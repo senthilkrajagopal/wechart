@@ -172,6 +172,28 @@
 >       - `ui-review.md` with `designs/`: phase 2's screens designed, for the user to approve.
 >       Then: show the user the designs, plan the cleanup and design tasks, and apply them. Build T461's UI to the approved design.
 >     - **Next:** the design reviews' results; T461's API (edits only after a passing test); T344, T346, T347.
+    - **Later on 2026-09-27:**
+      - **Done:** T461's API (c0d3868), T344 (7982d70), T346 (fcc5a90), and the plan for the UI reviews (8d874e1).
+      - **The user's answers (R33):** all ten phase-2 designs are approved, proposals included (AC-338 … AC-343). Phase 1 gets "bugs and consistency only". UI first, in `docs/tasks.md` › P2.18's order.
+      - **T437 is paused in a stash**, "T437 wip" (`git stash list`). Resume it after the UI work, giving its migration a later timestamp than any made meanwhile.
+      - **Done since, P2.18's bugs:**
+        - T463 (adce6ce): a local chart's page leads to "Edit on ‹dashboard›" and "Save to folders…" (a new `publish` dashboard parameter).
+        - T464 (442c5a2): a tile's title stays whole and its badges go to the foot. The cause was flex shrinking taking a sub-pixel from the title. This also fixed `editor-preview.spec.ts` "a tile resized…".
+        - T465 (b279b13):
+          - a single series claims no slot;
+          - a chosen series colour is the member's on every tile, never carried;
+          - pie labels are themed.
+          - Still open from UX-113: checking chosen colours against the dark tile.
+      - **Deployed:** Helm revision 31 runs wechart `b279b13` (T463–T465); `verify.sh` passed every check.
+      - **T471**, the wizard rebuilt to designs 01 and 02 as a docked pane, is built and in review. T472's logo licences are being researched.
+      - **Failing at HEAD, not ours:**
+        - `markings.spec.ts` "Invert marking and Mark all…" fails 3 of 6 runs alone. The likely cause: the test predates AC-097's marked share. Once the status tile marks "shipped", the category tile's Components bar is partly marked, and its marked share draws a third path ("1 of 3", expected "1 of 2") whenever the share's query answers before the first poll. The test needs its expectation corrected. That's for the user, since it changes an assertion;
+        - `acceleration.spec.ts` "Data as of…" is known;
+        - `security/isolation.spec.ts`'s rollup build times out under full load and passes alone.
+      - **Small decisions to report:**
+        - chosen colours feed the dashboard's assignment rather than yield to it;
+        - Explore's Access button is disabled while the wizard's pane is open;
+        - the wizard in Explore always makes the source in `mine`.
 >     - **xcube images:** pinned `e53cf2a8b8@sha256:58e53294…` (research `xcube-22132c309c.md`, `xcube-e53cf2a8b8.md`). `0406293add` (extends children aliased by what they inherit) is researched but **not pinned**: its folder views lose their generated `sql_alias`, which can refuse wechart's folder views (`xcube-0406293add.md` Gotcha 1; asked in `to-xcube/2026-09-27-0430-folder-view-aliases.md`). Also asked: a connection changed in place must not answer from its old target's cache (`to-xcube/2026-09-27-0400-changed-in-place.md`, the user's "No").
 >     - **Answered 2026-09-27, question 3:** "it is okay if phase 1 items aer not reachable.. this phase overrides phase 1 items". T343 goes ahead with no migration of `mine`; then T344, T345 and T363 (the data-source wizard).
 >     - **Answered 2026-09-27, the rest of the list** (the user's words after each):

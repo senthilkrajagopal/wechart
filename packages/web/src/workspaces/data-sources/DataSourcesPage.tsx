@@ -50,16 +50,45 @@ export function DataSourcesPage() {
   };
 
   return (
-    <div className="admin-page">
-      <div className="admin-page__head">
-        <h1 className="workspace-title">Data sources</h1>
-        {hasWorkspace ? (
-          <button type="button" className="btn btn-primary" onClick={() => void add()}>
-            + Data source
-          </button>
-        ) : null}
+    // The wizard docks beside the list, which stays in view (T471, design 01).
+    <div className={adding === null ? 'admin-page' : 'admin-page admin-page--docked'}>
+      <div className="admin-page__main">
+        <div className="admin-page__head">
+          <h1 className="workspace-title">Data sources</h1>
+          {hasWorkspace ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              // One at a time: open, it is where the new one is made.
+              disabled={adding !== null}
+              onClick={() => void add()}
+            >
+              + Data source
+            </button>
+          ) : null}
+        </div>
+        {addFailed === null ? null : <StateLine kind="err">{addFailed}</StateLine>}
+        <div className="info-bar" role="note">
+          <StatusIcon kind="idle" />
+          <div>
+            <p>
+              Every data source you can see, in every folder, with its health from its last
+              connection test.
+            </p>
+          </div>
+        </div>
+        {sources.isPending || me.isPending ? (
+          <StateLine kind="run">Reading the data sources…</StateLine>
+        ) : sources.isError ? (
+          <StateLine kind="err">{sources.error.message}</StateLine>
+        ) : (
+          <DataSourcesList
+            sources={sources.data}
+            seesEveryFolder={me.data?.superAdmin === true}
+            readWrite={me.data?.readWrite === true}
+          />
+        )}
       </div>
-      {addFailed === null ? null : <StateLine kind="err">{addFailed}</StateLine>}
       {adding === null ? null : (
         <NewSourceWizard
           folderId="mine"
@@ -71,26 +100,6 @@ export function DataSourcesPage() {
             setAdding(null);
             void queryClient.invalidateQueries({ queryKey: ['data-sources'] });
           }}
-        />
-      )}
-      <div className="info-bar" role="note">
-        <StatusIcon kind="idle" />
-        <div>
-          <p>
-            Every data source you can see, in every folder, with its health from its last connection
-            test.
-          </p>
-        </div>
-      </div>
-      {sources.isPending || me.isPending ? (
-        <StateLine kind="run">Reading the data sources…</StateLine>
-      ) : sources.isError ? (
-        <StateLine kind="err">{sources.error.message}</StateLine>
-      ) : (
-        <DataSourcesList
-          sources={sources.data}
-          seesEveryFolder={me.data?.superAdmin === true}
-          readWrite={me.data?.readWrite === true}
         />
       )}
     </div>
