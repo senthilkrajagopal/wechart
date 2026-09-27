@@ -36,11 +36,31 @@ export interface ConnectionBody {
   readonly revisions: Readonly<Record<string, string>>;
 }
 
+/** A connection as tested: what xcube opens and connects with, stored or not (T361). */
+export type TestedConnection = Omit<ConnectionBody, 'folderId' | 'revisions'>;
+
+/**
+ * A connection test's checks, as xcube ran them (research, "`POST
+ * …/connections/test`"): `secrets`, `config`, `connect`, `schemas`, a failed
+ * one skipping the rest, each secret redacted from its error.
+ */
+export interface TestAnswer {
+  readonly ok: boolean;
+  readonly checks: readonly {
+    readonly id: string;
+    readonly status: 'passed' | 'failed' | 'skipped';
+    readonly durationMs: number;
+    readonly error?: string;
+  }[];
+}
+
 export interface XcubeConnections {
   put(name: string, body: ConnectionBody): Promise<void>;
   /** Removed, or never there: xcube answers 204 either way. */
   remove(name: string): Promise<void>;
   list(): Promise<HeldConnection[]>;
+  /** Connects as Cube would, with Cube's own driver (T361, AC-159). */
+  test(body: TestedConnection): Promise<TestAnswer>;
 }
 
 /**
@@ -79,6 +99,8 @@ export const connectionNameOf = (xcubeFolderId: string, name: string): string =>
  * save's database transaction waits on it, so it is short (T442's review).
  */
 const CALL_TIMEOUT_MS = 15_000;
+/** A test connects, and lists schemas: two steps of up to 30 s each (research, T361's row). */
+const TEST_TIMEOUT_MS = 70_000;
 
 export function xcubeConnections({
   cubeApiUrl,
@@ -97,14 +119,19 @@ export function xcubeConnections({
   const base = `${cubeApiUrl.replace(/\/$/, '')}/v1/semantic/models/${encodeURIComponent(model)}/connections`;
   const credential = typeof token === 'string' ? async () => token : token;
 
-  const call = async (method: 'GET' | 'PUT' | 'DELETE', path: string, body?: unknown) => {
+  const call = async (
+    method: 'GET' | 'PUT' | 'POST' | 'DELETE',
+    path: string,
+    body?: unknown,
+    waitMs = timeoutMs,
+  ) => {
     const response = await send(`${base}${path}`, {
       method,
       headers: {
         authorization: `Bearer ${await credential()}`,
         'content-type': 'application/json',
       },
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(waitMs),
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     const answer = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -154,6 +181,15 @@ export function xcubeConnections({
         secrets: Array.isArray(row['secrets']) ? (row['secrets'] as unknown[]).map(String) : [],
         revisions: (row['revisions'] ?? {}) as Record<string, string>,
       }));
+    },
+
+    async test(body) {
+      const { status, answer } = await call('POST', '/test', body, TEST_TIMEOUT_MS);
+      if (status !== 200) throw failed(status, answer);
+      // No checks is no test: never shown as one that passed nothing (AC-159).
+      if (!Array.isArray(answer['checks']) || answer['checks'].length === 0)
+        throw new XcubeError(status, undefined, 'xcube answered a test with no checks');
+      return { ok: answer['ok'] === true, checks: answer['checks'] as TestAnswer['checks'] };
     },
   };
 }

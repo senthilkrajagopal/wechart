@@ -12,6 +12,7 @@ import { DataSourceRefused, dataSourceStore } from '../repos/data-sources';
 import { documents, type DocumentKind, type StoredDocument } from '../repos/documents';
 import { folderAccessStore, ROOT_ACCESS_ID } from '../repos/folder-access';
 import { buildServer } from '../server';
+import { XcubeError } from '../xcube/client';
 
 /**
  * T335: data sources are folder items, and no credential reaches the browser.
@@ -305,6 +306,220 @@ describe('a save landing in xcube first (T442, AC-327)', () => {
       );
     } finally {
       await open.close();
+    }
+  });
+});
+
+describe('a connection test, run by xcube (T361, AC-159, AC-312)', () => {
+  const checks = [
+    { id: 'secrets', status: 'passed', durationMs: 2 },
+    { id: 'connect', status: 'failed', durationMs: 9, error: 'password authentication failed' },
+  ];
+  const testing = (answer: () => Promise<unknown> = async () => ({ ok: false, checks })) => {
+    const asked: unknown[] = [];
+    const app = buildServer({
+      config: { ...secured, security: 'off' as const },
+      documents: docs(),
+      catalog: catalog(getDb()),
+      dataSources: sources(),
+      connectionTest: async (body) => {
+        asked.push(body);
+        return (await answer()) as never;
+      },
+    });
+    return { app, asked };
+  };
+
+  it('tests a stored one as it is, with its stored envelopes, answering xcube’s checks', async () => {
+    const { app, asked } = testing();
+    try {
+      const answer = await app.inject({
+        method: 'POST',
+        url: `/api/data-sources/${held.b}/test`,
+        payload: {},
+      });
+      expect(answer.statusCode).toBe(200);
+      expect(answer.json()).toEqual({ ok: false, checks });
+      expect(asked).toEqual([
+        {
+          driver: 'postgres',
+          authMethod: 'password',
+          fields: postgres(ids.b, 'x').fields,
+          sealed: { password: sealed('warehouse') },
+        },
+      ]);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('refuses a test where it would connect elsewhere with a secret not sealed again, asking xcube nothing', async () => {
+    const { app, asked } = testing();
+    const elsewhere = { ...postgres(ids.b, 'x').fields, host: 'elsewhere' };
+    try {
+      const refused = await app.inject({
+        method: 'POST',
+        url: `/api/data-sources/${held.b}/test`,
+        payload: { fields: elsewhere },
+      });
+      expect(refused.statusCode).toBe(422);
+      expect(refused.json<{ error: string }>().error).toBe(
+        'Enter password again: host changed where it connects.',
+      );
+      expect(asked).toEqual([]);
+
+      // Sealed again for the new target: tested with the new envelope, nothing stored.
+      const tested = await app.inject({
+        method: 'POST',
+        url: `/api/data-sources/${held.b}/test`,
+        payload: { fields: elsewhere, sealed: { password: sealed('elsewhere') } },
+      });
+      expect(tested.statusCode).toBe(200);
+      expect(asked).toEqual([
+        {
+          driver: 'postgres',
+          authMethod: 'password',
+          fields: elsewhere,
+          sealed: { password: sealed('elsewhere') },
+        },
+      ]);
+      expect((await sources().get(held.b))?.fields['host']).toBe('db');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('tests one not yet saved, refusing a secret sent as a field', async () => {
+    const { app, asked } = testing();
+    try {
+      const whole = postgres(ids.b, `${MARK}_unsaved`);
+      const folderId = whole.folderId;
+      const shape = {
+        driver: whole.driver,
+        authMethod: whole.authMethod,
+        fields: whole.fields,
+        sealed: whole.sealed,
+      };
+      const tested = await app.inject({
+        method: 'POST',
+        url: '/api/data-sources/test',
+        payload: { folderId, ...shape },
+      });
+      expect(tested.statusCode).toBe(200);
+      expect(asked).toEqual([shape]);
+
+      const plain = await app.inject({
+        method: 'POST',
+        url: '/api/data-sources/test',
+        payload: { folderId, ...shape, fields: { ...shape.fields, password: 'hunter2' } },
+      });
+      expect(plain.statusCode).toBe(400);
+      expect(plain.body).not.toContain('hunter2');
+      expect(asked).toHaveLength(1);
+      expect(await sources().inFolder(ids.b)).not.toContainEqual(
+        expect.objectContaining({ name: `${MARK}_unsaved` }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('runs one only for those who may change it (T361’s review)', async () => {
+    // The secured app: a reader sees none of /A/B's, and a writer's /A is view-only.
+    const tests = (who: string, url: string, payload: Record<string, unknown> = {}) =>
+      as(who, { method: 'POST', url, payload });
+    expect((await tests('reader', `/api/data-sources/${held.b}/test`)).statusCode).toBe(404);
+    expect((await tests('writer', `/api/data-sources/${held.a}/test`)).statusCode).toBe(403);
+    expect((await tests('nobody', `/api/data-sources/${held.c}/test`)).statusCode).toBe(404);
+    const unsaved = postgres(ids.a, `${MARK}_viewonly`);
+    expect(
+      (
+        await tests('writer', '/api/data-sources/test', {
+          folderId: unsaved.folderId,
+          driver: unsaved.driver,
+          authMethod: unsaved.authMethod,
+          fields: unsaved.fields,
+          sealed: unsaved.sealed,
+        })
+      ).statusCode,
+    ).toBe(403);
+  });
+
+  it('keeps a stored secret for a change outside where it connects, and changes nothing stored', async () => {
+    const { app, asked } = testing();
+    try {
+      const before = {
+        source: await sources().get(held.b),
+        sealed: await sources().sealedOf(held.b),
+      };
+      const other = { ...postgres(ids.b, 'x').fields, database: 'other' };
+      const tested = await app.inject({
+        method: 'POST',
+        url: `/api/data-sources/${held.b}/test`,
+        payload: { fields: other },
+      });
+      expect(tested.statusCode).toBe(200);
+      expect(asked).toEqual([
+        {
+          driver: 'postgres',
+          authMethod: 'password',
+          fields: other,
+          sealed: { password: sealed('warehouse') },
+        },
+      ]);
+      expect({
+        source: await sources().get(held.b),
+        sealed: await sources().sealedOf(held.b),
+      }).toEqual(before);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('says xcube’s answer when it isn’t checks, and a timeout as one', async () => {
+    const answers = [
+      async () => {
+        throw new XcubeError(401, undefined, 'xcube answered 401: Invalid service token');
+      },
+      async () => {
+        throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+      },
+    ];
+    for (const [answer, status, error] of [
+      [answers[0], 502, 'xcube refused the test: xcube answered 401: Invalid service token'],
+      [answers[1], 504, 'xcube took too long to answer the test. Try again.'],
+    ] as const) {
+      const { app } = testing(answer);
+      try {
+        const answered = await app.inject({
+          method: 'POST',
+          url: `/api/data-sources/${held.b}/test`,
+          payload: {},
+        });
+        expect(answered.statusCode).toBe(status);
+        expect(answered.json()).toEqual({ error });
+      } finally {
+        await app.close();
+      }
+    }
+  });
+
+  it('says when xcube can’t be reached to run it', async () => {
+    const { app } = testing(async () => {
+      throw new TypeError('fetch failed');
+    });
+    try {
+      const away = await app.inject({
+        method: 'POST',
+        url: `/api/data-sources/${held.b}/test`,
+        payload: {},
+      });
+      expect(away.statusCode).toBe(503);
+      expect(away.json<{ error: string }>().error).toBe(
+        'xcube can’t be reached to run the test. Try again once it is back.',
+      );
+    } finally {
+      await app.close();
     }
   });
 });

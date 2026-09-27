@@ -10,6 +10,8 @@ import {
   type Landing,
 } from '../repos/data-sources';
 import { XCUBE_PUBLIC_KEY, type XcubePublicKey } from '../secrets/xcube-key';
+import { XcubeError } from '../xcube/client';
+import { ConnectionRefused, type TestAnswer, type TestedConnection } from '../xcube/connections';
 
 /**
  * A data source's own routes (T335; AC-269, AC-164, AC-312, AC-161, AC-262,
@@ -84,10 +86,13 @@ export function registerDataSources(
     access,
     key,
     landing,
+    tester,
   }: {
     readonly store: DataSourceStore;
     readonly access: DataSourceAccess;
     readonly landing?: DataSourceLanding;
+    /** xcube's connection test (T361, AC-159): Cube's own driver, at wechart's request. */
+    readonly tester?: (body: TestedConnection) => Promise<TestAnswer>;
     /** xcube's public key, which the browser seals a typed secret to (T441, AC-325). */
     readonly key?: XcubePublicKey;
   },
@@ -139,6 +144,89 @@ export function registerDataSources(
   app.get('/api/data-sources/:id', USER, async (request, reply) => {
     const source = await reached(request, reply, 'read');
     return source === undefined ? reply : viewOf(source);
+  });
+
+  /**
+   * A connection test (T361, AC-159): xcube opens the envelopes and connects
+   * with Cube's own driver, and its checks — `secrets`, `config`, `connect`,
+   * `schemas` — come back as they are, each secret redacted from its error by
+   * xcube. Nothing is stored. The request is wechart's server's (AC-327).
+   */
+  const run = async (reply: FastifyReply, body: TestedConnection) => {
+    if (tester === undefined)
+      return reply
+        .status(503)
+        .send({ error: 'Connection tests need xcube, which this deployment doesn’t run.' });
+    try {
+      return await tester(body);
+    } catch (error) {
+      if (error instanceof ConnectionRefused)
+        return reply.status(400).send({ error: error.message, problems: error.problems });
+      if (error instanceof XcubeError)
+        return reply.status(502).send({ error: `xcube refused the test: ${error.message}` });
+      // Reached, and slower than a test's two 30 s steps allow.
+      if ((error as { name?: unknown } | null)?.name === 'TimeoutError')
+        return reply
+          .status(504)
+          .send({ error: 'xcube took too long to answer the test. Try again.' });
+      return reply
+        .status(503)
+        .send({ error: 'xcube can’t be reached to run the test. Try again once it is back.' });
+    }
+  };
+
+  // One not yet saved: the wizard's Test step (T363).
+  app.post('/api/data-sources/test', USER, async (request, reply) => {
+    const { value, error } = readBody(request.body);
+    if (value === undefined) return reply.status(400).send({ error });
+    const folderId = typeof value['folderId'] === 'string' ? value['folderId'] : '';
+    if (folderId === '') return reply.status(400).send({ error: 'Name the folder it goes in.' });
+    const refusal = await access(request, folderId, 'write');
+    if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
+    const shape = {
+      driver: String(value['driver'] ?? ''),
+      authMethod: String(value['authMethod'] ?? ''),
+      fields: (value['fields'] ?? {}) as Record<string, FieldValue>,
+      sealed: (value['sealed'] ?? {}) as Record<string, SealedV1>,
+    };
+    try {
+      store.checkShape(shape);
+    } catch (failure) {
+      return refused(reply, failure);
+    }
+    return run(reply, shape);
+  });
+
+  // A stored one, with the form's changes: tested as their save would store
+  // them, so a changed target needs its secrets sealed again (AC-312).
+  app.post('/api/data-sources/:id/test', USER, async (request, reply) => {
+    const { value, error } = readBody(request.body);
+    if (value === undefined) return reply.status(400).send({ error });
+    const source = await reached(request, reply, 'write');
+    if (source === undefined) return reply;
+    try {
+      const plan = await store.plan(source.id, {
+        ...(typeof value['authMethod'] === 'string' ? { authMethod: value['authMethod'] } : {}),
+        ...(value['fields'] === undefined
+          ? {}
+          : { fields: value['fields'] as Record<string, FieldValue> }),
+        ...(value['sealed'] === undefined
+          ? {}
+          : { sealed: value['sealed'] as Record<string, SealedV1> }),
+      });
+      const stored = await store.sealedOf(source.id);
+      const kept = Object.fromEntries(
+        Object.entries(stored.sealed).filter(([field]) => plan.kept.includes(field)),
+      );
+      return await run(reply, {
+        driver: source.driver,
+        authMethod: plan.authMethod,
+        fields: plan.fields,
+        sealed: { ...kept, ...plan.sealed },
+      });
+    } catch (failure) {
+      return refused(reply, failure);
+    }
   });
 
   app.post('/api/data-sources', USER, async (request, reply) => {

@@ -58,6 +58,17 @@ export interface DataSourceChange {
   readonly sealed?: Readonly<Record<string, SealedV1>>;
 }
 
+export interface PlannedChange {
+  readonly current: DataSource;
+  readonly name: string;
+  readonly authMethod: string;
+  readonly fields: Readonly<Record<string, FieldValue>>;
+  /** Secrets sealed anew. */
+  readonly sealed: Readonly<Record<string, SealedV1>>;
+  /** Stored secrets that still open where it would connect. */
+  readonly kept: readonly string[];
+}
+
 /** Why a data source wasn't stored: a status for the API to answer with, and each problem. */
 export class DataSourceRefused extends Error {
   constructor(
@@ -96,6 +107,14 @@ export interface DataSourceStore {
   all(): Promise<DataSource[]>;
   get(id: string): Promise<DataSource | undefined>;
   create(input: NewDataSource, landing?: Landing): Promise<DataSource>;
+  /**
+   * A change checked as a save checks it, and what it would store: the
+   * secrets it keeps and those sealed anew. For a test of the change (T361)
+   * as for its save, so neither tries what the other refuses (AC-312).
+   */
+  plan(id: string, change: DataSourceChange): Promise<PlannedChange>;
+  /** A new one's driver, sign-in, fields and envelopes, checked as its save would (T361). */
+  checkShape(shape: Omit<NewDataSource, 'folderId' | 'name'>): void;
   update(id: string, change: DataSourceChange, landing?: Landing): Promise<DataSource>;
   /** Removed from xcube first, where `unland` is given: its refusal keeps it. */
   remove(
@@ -286,7 +305,12 @@ export function dataSourceStore(
       return (await store.get(id))!;
     },
 
-    async update(id, change, landing) {
+    checkShape(shape) {
+      checkShape(shape);
+      checkKeys(shape.sealed);
+    },
+
+    async plan(id, change) {
       const current = await store.get(id);
       if (current === undefined) throw new DataSourceRefused(404, 'There’s no such data source.');
       if (change.driver !== undefined && change.driver !== current.driver) {
@@ -325,6 +349,11 @@ export function dataSourceStore(
         kept,
       );
       if (problems.length > 0) throw new DataSourceRefused(400, problems.join(' '), problems);
+      return { current, name, authMethod, fields, sealed, kept };
+    },
+
+    async update(id, change, landing) {
+      const { current, name, authMethod, fields, sealed, kept } = await store.plan(id, change);
       // Renamed: the old name's connection goes first, refused while cubes
       // use it, and is put back should the save then fail (T442's review).
       const renamed = name !== current.name && landing?.unland !== undefined;

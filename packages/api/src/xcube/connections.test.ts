@@ -119,6 +119,39 @@ describe('xcube’s connection routes, called from wechart’s server (AC-327)',
     });
   });
 
+  it('asks xcube to test one, reading its checks (T361, AC-159)', async () => {
+    const checks = [
+      { id: 'secrets', status: 'passed', durationMs: 3 },
+      { id: 'config', status: 'passed', durationMs: 1 },
+      { id: 'connect', status: 'failed', durationMs: 40, error: 'password authentication failed' },
+      { id: 'schemas', status: 'skipped', durationMs: 0 },
+    ];
+    const { sent, connections } = stub(() => ({ status: 200, body: { ok: false, checks } }));
+    const tested = {
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'db' },
+      sealed: { password: ENVELOPE },
+    };
+
+    expect(await connections.test(tested)).toEqual({ ok: false, checks });
+    expect(sent).toEqual([
+      {
+        method: 'POST',
+        url: `${BASE}/connections/test`,
+        body: tested,
+        authorization: 'Bearer service-token',
+      },
+    ]);
+  });
+
+  it('takes an answer without checks as no test at all (T361’s review)', async () => {
+    const { connections } = stub(() => ({ status: 200, body: { ok: true } }));
+    await expect(
+      connections.test({ driver: 'postgres', authMethod: 'password', fields: {}, sealed: {} }),
+    ).rejects.toThrow('xcube answered a test with no checks');
+  });
+
   it('lists the ones it holds', async () => {
     const held: HeldConnection = {
       name: 'warehouse',

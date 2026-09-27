@@ -168,3 +168,53 @@ test('a data source lands in xcube as a connection, refused when its secret wonâ
     await page.request.delete(`/api/documents/folder/${folderId}`);
   }
 });
+
+/**
+ * T361 (AC-159): a connection test runs in xcube, with Cube's own PostgreSQL
+ * driver, against compose's sample database (its development login,
+ * docker-compose.yml): each check said, a wrong password failing at connect
+ * with the driver's own words and never the password itself.
+ */
+test('a connection test runs in xcube with Cubeâ€™s driver, each check said, and never gives a secret back', async ({
+  page,
+}) => {
+  const fields = { host: 'sample-db', port: 5432, database: 'sample', user: 'sample', ssl: false };
+  const testWith = async (password: string) => {
+    const answer = await page.request.post('/api/data-sources/test', {
+      data: {
+        folderId: 'root',
+        driver: 'postgres',
+        authMethod: 'password',
+        fields,
+        sealed: { password: await sealSecretV1(KEY, 'postgres', 'password', fields, password) },
+      },
+      timeout: 90_000,
+    });
+    expect(answer.status(), await answer.text()).toBe(200);
+    return { text: await answer.text(), body: (await answer.json()) as TestAnswer };
+  };
+  type TestAnswer = { ok: boolean; checks: { id: string; status: string; error?: string }[] };
+
+  const wrong = `e2e-${RUN}-not-the-password`;
+  const failed = await testWith(wrong);
+  expect(failed.body.ok).toBe(false);
+  expect(failed.body.checks.map(({ id, status }) => [id, status])).toEqual([
+    ['secrets', 'passed'],
+    ['config', 'passed'],
+    ['connect', 'failed'],
+    ['schemas', 'skipped'],
+  ]);
+  expect(failed.body.checks[2]?.error).toMatch(/password authentication failed/);
+  expect(failed.text).not.toContain(wrong);
+
+  const passed = await testWith('sample');
+  expect(passed.body).toEqual({
+    ok: true,
+    checks: [
+      expect.objectContaining({ id: 'secrets', status: 'passed' }),
+      expect.objectContaining({ id: 'config', status: 'passed' }),
+      expect.objectContaining({ id: 'connect', status: 'passed' }),
+      expect.objectContaining({ id: 'schemas', status: 'passed' }),
+    ],
+  });
+});

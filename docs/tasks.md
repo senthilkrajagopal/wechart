@@ -5721,26 +5721,65 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - T335 refuses `UID`/`PWD` in a Databricks URL, because Cube reads a token from there and the URL isn't sealed;
       - T361/T363 require Oracle's connect string *or* host, and turn TLS on for a PostgreSQL client certificate;
       - T361 checks values, not only keys, for file paths (JDBC properties, Oracle wallet settings).
+      - *Settled 2026-09-26 (T361's review):*
+        - Databricks is dropped (T454).
+        - Oracle's connect string or host and database is core's `configProblems` (T335).
+        - Turning TLS on for a PostgreSQL client certificate is the form's, T363.
+        - File paths are moot: T454's drivers have no JDBC-properties or wallet field, and a field a driver doesn't have is refused (T335).
     - AC-160 stays open until the form renders them (T363, which now cites it).
-- [ ] T361 (AC-159, AC-312) Have Cube run a connection test with its own driver, at wechart's request, and show each check *(rewritten 2026-09-26: slice 6; the test is xcube's `POST /v1/semantic/connections/test`, taking the ciphertext, `[IP 1, plan]`)*
-  - Files: xcube's route comes from the Cube side, in its slice 6. wechart: `packages/api/src/xcube/connections.ts` (+ test), `packages/api/src/routes/data-sources.ts` (`POST /api/data-sources/:id/test`), and the image bump in `docker-compose.yml` and `deploy/helm/values/docker-desktop.yaml`.
+- [x] T361 (AC-159, AC-312) Have Cube run a connection test with its own driver, at wechart's request, and show each check *(rewritten 2026-09-26: slice 6; the test is xcube's `POST /v1/semantic/connections/test`, taking the ciphertext, `[IP 1, plan]`)*
+  - Files: xcube's route comes from the Cube side, in its slice 6. wechart: `packages/api/src/xcube/connections.ts` (+ test), `packages/api/src/routes/data-sources.ts` (`POST /api/data-sources/:id/test`, and `POST /api/data-sources/test` for one not yet saved, the wizard's Test step), `packages/api/src/repos/data-sources.ts` (`plan`, `checkShape`), `packages/api/src/server.ts`, `packages/api/src/main.ts`, `packages/api/src/access/data-sources.test.ts`, `e2e/security/folder-data-sources.spec.ts`; ~~and the image bump in `docker-compose.yml` and `deploy/helm/values/docker-desktop.yaml`~~ (T420's).
   - *2026-09-26, slice 6 as built (`[X6]`):* the route is `POST /v1/semantic/models/{model}/connections/test` with `{ driver, authMethod, fields, sealed }`, under the service credential; its checks are `secrets`, `config`, `connect` and `schemas`, in that order. For a secret the user didn't retype, the stored envelope is sent: it opens only while the target is unchanged (AC-312). The image is T420's.
-  - Failing test: `data-source-test.test.ts`, against compose's xcube:
-    - a PostgreSQL source with a wrong password reports the checks Cube ran (`secrets`, `config`, `connect`, `schemas`), and the failing one with the driver's error text (SQLSTATE 28P01) and no secret in it;
+  - Failing test: ~~`data-source-test.test.ts`~~ `e2e/security/folder-data-sources.spec.ts` and `access/data-sources.test.ts` (2026-09-26), against compose's xcube:
+    - a PostgreSQL source with a wrong password reports the checks Cube ran (`secrets`, `config`, `connect`, `schemas`), and the failing one with the driver's error text (~~SQLSTATE 28P01~~ "password authentication failed": the research marks the SQLSTATE unverified) and no secret in it;
     - a correct one passes every check;
     - the request carries only the ciphertext, and never comes from the browser (AC-159);
     - *(2026-09-26, from T335)* a test whose target differs from the stored one, with a stored secret not sealed again, is refused before xcube is asked, saying which secret to enter again, as a save is (AC-312's test half; T335's store refuses the save).
   - ~~Files: the Cube fork, through the Cube-expert agent only: a `connection-test` scope and `POST /v1/introspection/connection-tests` in the `cube-introspection` package (…); the fork image rebuilt under a new tag.~~
   - Depends on: T333, T335, T454, T420, T441
+  - **Done 2026-09-26.**
+    - **Ticked, AC-312:** a test or a save never uses a stored secret after its target changes, and a change outside the target keeps it.
+      - The save half is from T335: `repos/data-sources.test.ts` "asks for its secrets again when where it connects changes, TLS included" and "keeps its secrets when nothing of where it connects changes", and the PUT in `access/data-sources.test.ts`.
+      - The test half: `access/data-sources.test.ts` "refuses a test where it would connect elsewhere with a secret not sealed again, asking xcube nothing" and "keeps a stored secret for a change outside where it connects".
+      - `drivers.test.ts` pins each driver's target to the AC's list.
+    - **Not ticked, AC-159:** its running half is shown against compose's xcube and sample database (`security/folder-data-sources.spec.ts`). Its showing half, each check in the form, is T363's, which now cites it.
+    - The title's "show each check" is that form's.
+  - **As built:**
+    - **The routes.** `POST /api/data-sources/:id/test` tests a stored data source with the form's changes, as their save would store them. `POST /api/data-sources/test` tests one not yet saved: the wizard's Test step.
+      - Both need write access to the folder, as a save does.
+      - Both check the shape and the key as a save does (`store.plan`, `store.checkShape`).
+      - Both send xcube only envelopes, and store nothing.
+    - **The answers.** xcube's checks come back as they are, each secret redacted by xcube.
+      - xcube away: 503.
+      - Slower than 70 s: 504.
+      - Another answer, or one without checks: 502.
+      - xcube not configured: 503.
+    - **Helm.** The web app's nginx waits 130 s on the API, not 60, for a test's two 30 s steps and a publish's 120 s compile wait (research `nginx.md`).
+  - **The cold review (PASS)** found:
+    - access untested on the new routes;
+    - nginx's 60 s;
+    - a timeout said as "can't be reached";
+    - an answer without checks taken as none;
+    - AC-327 without an owner (T458, added);
+    - T360's hand-ons open (settled there);
+    - this entry's stale test names.
+    - All are fixed.
+  - **Tests:**
+    - `access/data-sources.test.ts` 17;
+    - `connections.test.ts` 18;
+    - `cube-image.test.ts` 13;
+    - Chrome: `security/folder-data-sources.spec.ts` 3;
+    - the unit suite (at commit).
 - [ ] T362 (AC-163, AC-298) Record each connection test and show a source's test history
   - Files: a migration `…_connection-tests.cjs`, `packages/api/src/repos/connection-tests.ts` (+ test), `packages/web/src/workspaces/data-sources/TestHistory.tsx`
   - Failing test: `connection-tests.test.ts`: every test run is stored with its time, checks and outcome, and the source's history lists them newest first (AC-163).
   - Depends on: T361
-- [ ] T363 (AC-158, AC-160, AC-161, AC-269, AC-325) Add a data source in the workspace through Type → Connection → Test → Name, refusing a failing test without an override
+- [ ] T363 (AC-158, AC-159, AC-160, AC-161, AC-269, AC-325) Add a data source in the workspace through Type → Connection → Test → Name, refusing a failing test without an override
   - Files: `packages/web/src/workspaces/data-sources/{NewSourceWizard,ConnectionForm}.tsx` (+ tests), `packages/api/src/routes/data-sources.ts`, `e2e/security/data-sources.spec.ts`
   - Failing test: `data-sources.spec.ts`: the wizard takes a name, a driver, that driver's fields and a Test step; Create stays disabled until the test passes or "Create anyway" is chosen; the API refuses a create with no passing test and no override (AC-158).
     - *(2026-09-26, `[XD, X6, R31]`)* the Type step offers the eight drivers of T454, each form with its authentication methods and TLS fields and none other (AC-160); an existing data source's form shows its type fixed, saying to make a new data source for another (AC-161); a secret is sealed at submit, not on typing (`credential-sealing.md` Gotcha 9).
     - *(2026-09-26, from T335's review)* a data source's row in Explore opens it in this form, its settings shown and each stored secret said as stored (AC-269's open half: T335 lists them, and its rows open nothing until this form exists).
+    - *(2026-09-26, from T361)* the Test step shows each check xcube ran (`secrets`, `config`, `connect`, `schemas`) with its result, and a failed one's error text as xcube redacted it (AC-159's showing half: T361 runs the test and answers the checks);
     - *(2026-09-26, from T441)* the form seals each typed secret at submit with core's `sealSecretV1`, to the key `GET /api/data-sources/sealing-key` gives, and a canary secret typed into it appears in no request body to wechart (the Test step's included), no stored row and no line of the API's log, in Chrome, Firefox and WebKit (AC-325's form half: T441 built the sealer and the key route, and there was no form to type into).
   - Depends on: T454, T361, T345
 - [ ] T364 (AC-157, AC-233, AC-001) List every visible data source with its folder, driver, health and the cubes that use it
@@ -7087,7 +7126,7 @@ xcube's slices 4, 5 and 6 are built, and one image carries all three: `ghcr.io/s
 The user asked (2026-09-26) that connections and data sources, shown in folders, come first. So the order is:
 1. **T420**: the image pin and the service credential. Every own-behalf call moves off the static admin token; user tokens stay as they are until T437.
 2. **The data-source path:** T454 (the eight drivers and their target) → T335 (data sources as folder items, listed in Explore) → T441 (sealed in the browser) → T455 (the key-id check) → T442 (landed in xcube as connections) → T443 (the root's `default`, seeded by a Job) → T361, T362 (tests and their history) → T435 (binding at publish) → T365 (health) → T364 (the Data sources page).
-3. **The rest of slice 4:** T437 (RS256 and the key push) → T436 (the folder gate) → T438 (Preview as) → T457 (AC-272 against xcube).
+3. **The rest of slice 4:** T437 (RS256 and the key push) → T436 (the folder gate) → T438 (Preview as) → T457 (AC-272 against xcube) → T458 (AC-327: no callbacks, shown).
 4. **Workspaces and proposals** (F29, F30), with slice 5's overlays: T343 → T344 → T345 → T363 → T346 → T347 → T348 → T349 → T350 → T351 → T352 → T451 → T440 → T456, then T353–T359.
 
 Every step leaves both suites working. The slice-4 image takes HS256 tokens until a model's first key push, and security stays off until T436 turns it on. The static admin token keeps working while it is set.
@@ -7135,6 +7174,13 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
     - a chart in /A/B whose source cube joins a second cube is stored bound to the second cube its source cube was published bound to, even after a nearer one is published;
     - with xcube stopped, a chart save in a folder is refused, saying xcube can't be reached, and nothing is stored (AC-272).
   - Depends on: T420
+- [ ] T458 (AC-327) Show that no request from Cube or xcube reaches wechart during a publish, a query, a refresh or a connection test *(added 2026-09-26, from T361's review: T431 and T442 are done, and AC-327's request-side Fails-when had no test)*
+  - Files: `e2e/security/no-callbacks.spec.ts`, `packages/api/src/server.ts` (a request's source, logged as it is today)
+  - Failing test: `no-callbacks.spec.ts`, against compose's Cube and xcube:
+    - through a publish, a query, a pre-aggregation build (refresh) and a connection test, the API logs no request whose source is a Cube or xcube container;
+    - wechart serves no route for Cube to read a model or a connection from (T431's and T442's route checks, cited);
+    - the web app asks nothing of Cube's or xcube's address (AC-327).
+  - Depends on: T442, T361
 
 ### Slice 5: previews
 
@@ -7212,52 +7258,6 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
     - when one does, it starts;
     - while xcube can't be reached it waits, as for its first push (AC-324).
   - Depends on: T420, T333
-- [x] T442 (AC-161, AC-327, AC-330) Land each folder data source in xcube as a connection: driver, fields and ciphertext, never plaintext *(rewritten 2026-09-26 to slice 6 as built, `[X6]`)*
-  - Files: `packages/api/src/xcube/connections.ts` (+ test), ~~`packages/api/src/xcube/admin.ts` (`DELETE`)~~ (the connections client has its own `DELETE`), `packages/api/src/repos/data-sources.ts` (+ test), `packages/api/src/routes/data-sources.ts`, `packages/api/src/server.ts`, `packages/api/src/main.ts`, `packages/api/src/access/data-sources.test.ts`, `e2e/security/folder-data-sources.spec.ts`
-  - Failing test: `connections.test.ts`, against the stub xcube:
-    - whenever a folder's data source is stored or changed, and at start for any xcube lacks, `PUT …/connections/{fullName}` carries `{ folderId, driver, authMethod, fields, sealed, revisions }`, the full name being the short name in the root and `<folderId>__<name>` elsewhere, with no plaintext anywhere in the call;
-    - `422 invalid_secret` ~~clears the stored secret and~~ refuses the save and says to enter it again *(2026-09-26, from T442's review: at start it is reported and the secret kept; xcube answers 422 for a key it lacks too, and wechart holds the only copy)*; `409 driver_change` is never sent, since the type can't change (T335);
-    - a deleted source is removed with `DELETE`, and `409 in_use` refuses the delete, naming the cubes;
-    - the API serves no route that hands a connection to Cube (AC-327, AC-161, AC-330).
-    - ~~`e2e`: against compose's xcube, a data source added to the root answers `GET …/connections/{name}/health` live on every instance.~~ *Moved to T435 (2026-09-26): xcube writes a health row only when an instance builds a driver, on a connection's first query, and a query through one needs a cube bound to it.*
-    - *(2026-09-26)* `e2e`: against compose's xcube, a data source sealed as the browser seals it lands as `<folderId>__<name>`, its secret named and never given back; one sealed for another host is refused (422) and not stored; deleted, it leaves xcube.
-  - Depends on: T420, T335, T441
-  - **Done 2026-09-26. No AC is ticked:**
-    - AC-161's health and swap are T435's and T365's.
-    - AC-327's connection test is T361's.
-    - AC-330's folders and items on restart are other tasks'.
-  - **As built:**
-    - **Saving.** A data source's save lands in xcube inside the store's transaction, after its rows are written and before they commit.
-      - The PUT carries the whole connection: every stored envelope and its revision. xcube stores it whole.
-      - xcube's refusal answers the save with xcube's reason, and nothing is stored:
-        - 400 with its problems;
-        - 422 as "xcube can’t open a secret: … Enter it again.";
-        - 409 when cubes use it.
-      - Another answer from xcube is 502, "xcube refused it: xcube answered N: …". xcube away is 503, "xcube can’t be reached, so nothing was saved".
-    - **Preparing.** The folder's xcube id is read, and xcube's tree put, before the transaction opens, so a folder made a moment ago is in xcube's tree. Inside, only xcube is called, with a 15 s timeout.
-      - A folder wechart publishes no tree for (a workspace's, until slice 5) is refused, 409.
-    - **Renaming.** The old name's connection is removed first, refused while cubes use it, and put back if the save then fails.
-    - **Deleting.** The connection is removed from xcube first, refused while cubes use it.
-    - **At start,** between the tree push and the items sync (`main.ts`):
-      - each connection xcube lacks, or holds with another folder, driver, sign-in, fields or revisions, is put;
-      - each one wechart doesn't have is removed;
-      - a stored secret xcube can't open is reported, and kept.
-    - No route of wechart's serves a connection: `access/data-sources.test.ts` checks the route table.
-    - The security e2e's envelopes are now really sealed: xcube opens every one.
-    - xcube's test of wechart's golden vectors (T441) passes on its side: all 8 AAD strings and 7 envelopes, now in xcube's CI (`to-wechart/2026-09-26-2230-golden-vectors-match.md`).
-  - **The cold review (FAIL), fixed:**
-    - A rename left the old connection in xcube.
-    - The start cleared stored secrets on any 422, though xcube answers 422 for a key it lacks too, and wechart holds the only copy. It now reports them and keeps them.
-    - xcube was called with the save's transaction open while asking the pool for a second connection, so ten saves at once could deadlock it. Now prepared outside, with a short timeout.
-    - Every other answer read as "can't be reached" (now 502 with xcube's answer).
-    - The reconcile's comparisons and failures were untested.
-    - The health e2e is moved to T435.
-    - **Left as they are:**
-      - the reconcile runs at start only, reading once (the user's standing call on concurrency);
-      - a save PUTs even when nothing changed;
-      - a workspace's data sources are refused while xcube is configured. T346/T347 must lift that with slice 5's overlays.
-  - **Tests:**
-    - `connections.test.ts` 15;
   - **Done 2026-09-26. AC-324 is not ticked yet:** its chart half is checked by installing on docker-desktop, which follows this commit. Its xcube half, refusing to start without its key or with one that can't open its sample credential, is xcube's own start-up check, which compose now exercises with the `.check`.
   - **As built:**
     - **The check.** Before it listens, the API asks `GET /v1/semantic/credential-keys` with a service token naming no model (`anyModelToken`).
@@ -7292,6 +7292,52 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
     - `cube-image.test.ts`;
     - the unit suite (ui 47, core 444, recommender 123, charts 473, web 1535, api 740);
     - `helm lint`, and `helm template` for a short and a long release name.
+- [x] T442 (AC-161, AC-327, AC-330) Land each folder data source in xcube as a connection: driver, fields and ciphertext, never plaintext *(rewritten 2026-09-26 to slice 6 as built, `[X6]`)*
+  - Files: `packages/api/src/xcube/connections.ts` (+ test), ~~`packages/api/src/xcube/admin.ts` (`DELETE`)~~ (the connections client has its own `DELETE`), `packages/api/src/repos/data-sources.ts` (+ test), `packages/api/src/routes/data-sources.ts`, `packages/api/src/server.ts`, `packages/api/src/main.ts`, `packages/api/src/access/data-sources.test.ts`, `e2e/security/folder-data-sources.spec.ts`
+  - Failing test: `connections.test.ts`, against the stub xcube:
+    - whenever a folder's data source is stored or changed, and at start for any xcube lacks, `PUT …/connections/{fullName}` carries `{ folderId, driver, authMethod, fields, sealed, revisions }`, the full name being the short name in the root and `<folderId>__<name>` elsewhere, with no plaintext anywhere in the call;
+    - `422 invalid_secret` ~~clears the stored secret and~~ refuses the save and says to enter it again *(2026-09-26, from T442's review: at start it is reported and the secret kept; xcube answers 422 for a key it lacks too, and wechart holds the only copy)*; `409 driver_change` is never sent, since the type can't change (T335);
+    - a deleted source is removed with `DELETE`, and `409 in_use` refuses the delete, naming the cubes;
+    - the API serves no route that hands a connection to Cube (AC-327, AC-161, AC-330).
+    - ~~`e2e`: against compose's xcube, a data source added to the root answers `GET …/connections/{name}/health` live on every instance.~~ *Moved to T435 (2026-09-26): xcube writes a health row only when an instance builds a driver, on a connection's first query, and a query through one needs a cube bound to it.*
+    - *(2026-09-26)* `e2e`: against compose's xcube, a data source sealed as the browser seals it lands as `<folderId>__<name>`, its secret named and never given back; one sealed for another host is refused (422) and not stored; deleted, it leaves xcube.
+  - Depends on: T420, T335, T441
+  - **Done 2026-09-26. No AC is ticked:**
+    - AC-161's health and swap are T435's and T365's.
+    - AC-327 needs the whole check that no request from Cube or xcube reaches wechart during a publish, a query, a refresh or a connection test (T458, added for it). T361's test is xcube's, asked by wechart's server.
+    - AC-330's folders and items on restart are other tasks'.
+  - **As built:**
+    - **Saving.** A data source's save lands in xcube inside the store's transaction, after its rows are written and before they commit.
+      - The PUT carries the whole connection: every stored envelope and its revision. xcube stores it whole.
+      - xcube's refusal answers the save with xcube's reason, and nothing is stored:
+        - 400 with its problems;
+        - 422 as "xcube can’t open a secret: … Enter it again.";
+        - 409 when cubes use it.
+      - Another answer from xcube is 502, "xcube refused it: xcube answered N: …". xcube away is 503, "xcube can’t be reached, so nothing was saved".
+    - **Preparing.** The folder's xcube id is read, and xcube's tree put, before the transaction opens, so a folder made a moment ago is in xcube's tree. Inside, only xcube is called, with a 15 s timeout.
+      - A folder wechart publishes no tree for (a workspace's, until slice 5) is refused, 409.
+    - **Renaming.** The old name's connection is removed first, refused while cubes use it, and put back if the save then fails.
+    - **Deleting.** The connection is removed from xcube first, refused while cubes use it.
+    - **At start,** between the tree push and the items sync (`main.ts`):
+      - each connection xcube lacks, or holds with another folder, driver, sign-in, fields or revisions, is put;
+      - each one wechart doesn't have is removed;
+      - a stored secret xcube can't open is reported, and kept.
+    - No route of wechart's serves a connection: `access/data-sources.test.ts` checks the route table.
+    - The security e2e's envelopes are now really sealed: xcube opens every one.
+    - xcube's test of wechart's golden vectors (T441) passes on its side: all 8 AAD strings and 7 envelopes, now in xcube's CI (`to-wechart/2026-09-26-2230-golden-vectors-match.md`).
+  - **The cold review (FAIL), fixed:**
+    - A rename left the old connection in xcube.
+    - The start cleared stored secrets on any 422, though xcube answers 422 for a key it lacks too, and wechart holds the only copy. It now reports them and keeps them.
+    - xcube was called with the save's transaction open while asking the pool for a second connection, so ten saves at once could deadlock it. Now prepared outside, with a short timeout.
+    - Every other answer read as "can't be reached" (now 502 with xcube's answer).
+    - The reconcile's comparisons and failures were untested.
+    - The health e2e is moved to T435.
+    - **Left as they are:**
+      - the reconcile runs at start only, reading once (the user's standing call on concurrency);
+      - a save PUTs even when nothing changed;
+      - a workspace's data sources are refused while xcube is configured. T346/T347 must lift that with slice 5's overlays.
+  - **Tests:**
+    - `connections.test.ts` 15;
     - `repos/data-sources.test.ts` 16;
     - `access/data-sources.test.ts` 10;
     - Chrome: `security/folder-data-sources.spec.ts` 2 and `explore.spec.ts` 19;
@@ -7336,7 +7382,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
 | AC-145 | T375 | | | | |
 | AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |
 | AC-154 | T377 | AC-155 | T379 | AC-157 | T364 |
-| AC-158 | T363 | AC-159 | T361 | AC-160 | T360, T454, T363 |
+| AC-158 | T363 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
 | AC-161 | T335, T363, T365, T442 | AC-163 | T362 | AC-164 | T335 |
 | AC-176 | T405 | AC-180 | T407 | AC-187 | T406 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
@@ -7370,7 +7416,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
 | AC-332 (again) | T426 | AC-235 (again) | T445, T447 | AC-140 (again) | T446 |
 | AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | ~~T426~~ T451, T436, T456 |
 | AC-322 | T427 | AC-323 | T347, T440 | AC-324 | T333, T455 |
-| AC-325 | T441, T363 | AC-326 | T420, T437 | AC-327 | T431, T442 |
+| AC-325 | T441, T363 | AC-326 | T420, T437 | AC-327 | T431, T442, T458 |
 | AC-328 | T341, T425, T449, T452, T435 | AC-329 | T429, T450, T342, T347 | AC-330 | T419, T447, T425, T449, T436, T442 |
 | ~~AC-331~~ (retired, `[R30]`) | ~~T430~~ | AC-332 | T433 | AC-333 | T419, T447, T449, T425, T420 |
 | AC-334 | T421, T447 | AC-335 | T446, T447 | AC-336 | T430, T449 |

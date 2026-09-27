@@ -51,6 +51,7 @@ import type { BookmarkStore } from './repos/bookmarks';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from './repos/catalog';
 import type { DataSourceStore } from './repos/data-sources';
 import type { DataSourceLanding } from './routes/data-sources';
+import type { TestAnswer, TestedConnection } from './xcube/connections';
 import type { FolderAccessStore } from './repos/folder-access';
 import { registerFolderAccess } from './routes/access';
 import { registerDataSources } from './routes/data-sources';
@@ -119,6 +120,8 @@ export interface BuildOptions {
    * removed (T442): xcube's connections. Unset without xcube.
    */
   readonly dataSourceLanding?: DataSourceLanding;
+  /** xcube's connection test (T361, AC-159). Unset without xcube: a test says it needs it. */
+  readonly connectionTest?: (body: TestedConnection) => Promise<TestAnswer>;
   /**
    * How Cube's unauthenticated probes — its health (T162), whether it
    * enforces auth (T175) — are asked; `fetch` unless a test says.
@@ -255,6 +258,7 @@ export function buildServer({
   folderAccess,
   dataSources,
   dataSourceLanding,
+  connectionTest,
   healthFetch,
   logger = false,
   introspectionRetryMs,
@@ -523,6 +527,7 @@ export function buildServer({
     registerDataSources(app, {
       store: dataSources,
       ...(dataSourceLanding === undefined ? {} : { landing: dataSourceLanding }),
+      ...(connectionTest === undefined ? {} : { tester: connectionTest }),
       ...(config.xcubePublicKey === undefined ? {} : { key: config.xcubePublicKey }),
       access: async (request, folderId, want) => {
         const seen = await visibilityOf(request);

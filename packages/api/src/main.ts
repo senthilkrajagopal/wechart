@@ -106,15 +106,19 @@ async function main(): Promise<void> {
    * Each folder's data source landed in xcube as a connection, before wechart
    * commits it (T442, AC-327): a new folder's tree put first.
    */
+  const connections =
+    config.xcube === undefined || service === undefined
+      ? undefined
+      : xcubeConnections({
+          cubeApiUrl: config.cubeApiUrl,
+          model: config.xcube.model,
+          token: () => service.token(),
+        });
   const landing =
-    config.xcube === undefined || service === undefined || sync === undefined
+    connections === undefined || sync === undefined
       ? undefined
       : connectionSync({
-          connections: xcubeConnections({
-            cubeApiUrl: config.cubeApiUrl,
-            model: config.xcube.model,
-            token: () => service.token(),
-          }),
+          connections,
           folders: () => folderIds.published(),
           pushTree: () => sync.pushTree('folder'),
         });
@@ -157,18 +161,14 @@ async function main(): Promise<void> {
             unland: (source) => landing.unland(source),
           },
         }),
+    // Connection tests, run by xcube with Cube's own drivers (T361, AC-159).
+    ...(connections === undefined ? {} : { connectionTest: (body) => connections.test(body) }),
     // Signed-in sessions, kept in the metadata database (T316).
     sessions,
     logger: true,
   });
   for (const message of splits) app.log.info(message);
 
-  // Expired sessions are swept out: Postgres has no TTL (T316's review).
-  const sweeping = setInterval(
-    () => {
-      sessions.sweep().catch((error: unknown) => {
-        app.log.warn({ err: error }, 'could not sweep expired sessions');
-      });
   // xcube holds the key credentials are sealed to, or the API doesn't start
   // (T455, AC-324): waited for while xcube can't be reached.
   if (service !== undefined)
@@ -179,6 +179,12 @@ async function main(): Promise<void> {
       onWait: (why) => app.log.warn(`${why}: waiting to check xcube’s credential keys`),
     });
 
+  // Expired sessions are swept out: Postgres has no TTL (T316's review).
+  const sweeping = setInterval(
+    () => {
+      sessions.sweep().catch((error: unknown) => {
+        app.log.warn({ err: error }, 'could not sweep expired sessions');
+      });
     },
     15 * 60 * 1000,
   );

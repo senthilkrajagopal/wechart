@@ -109,6 +109,19 @@ describe('the docker-desktop Helm release runs it (T414, T417, AC-248)', () => {
     expect(cube).not.toContain('service-key.pem');
   });
 
+  /**
+   * T361's review: nginx gives up on a request silent for 60 s by default
+   * (research nginx.md, "Longest single API request"). A connection test
+   * waits on two 30 s steps, and a publish on xcube's 120 s compile wait.
+   */
+  it('lets the web app wait on the API as long as a connection test or a publish takes', () => {
+    const web = fromRoot('deploy/helm/wechart/templates/web-config.yaml');
+    // The block, to its own closing brace: its proxy_pass holds a template's braces.
+    const api = /location \/api\/ \{\n([\s\S]*?)\n {8}\}/.exec(web)?.[1] ?? '';
+    expect(api).toContain('proxy_pass http://');
+    expect(api).toMatch(/^\s+proxy_read_timeout 130s;$/m);
+  });
+
   it('gives Cube’s containers the image’s own command', () => {
     const template = fromRoot('deploy/helm/wechart/templates/cube.yaml');
     // One template serves both Deployments (research, "Where it runs today").
@@ -174,19 +187,6 @@ describe('compose serves the model from xcube’s schema (T447, AC-333)', () => 
     expect(compose).not.toContain('XCUBE_ADMIN_TOKENS');
   });
 
-  it('runs xcube’s bootstrap on the metadata database before either starts', () => {
-    const init = serviceBlock(compose, 'xcube-db-init');
-    expect(init).toContain('./infra/xcube/bootstrap.sql:/bootstrap.sql:ro');
-    expect(init).toContain('- ON_ERROR_STOP=1');
-    expect(init).toContain('- xcube_password=${XCUBE_DB_PASSWORD:-');
-    expect(init).toContain('- wechart_meta');
-    expect(serviceBlock(compose, 'cube')).toMatch(
-      /xcube-db-init:\n {8}condition: service_completed_successfully/,
-    );
-    // The worker shares the API instance's dependencies.
-    expect(serviceBlock(compose, 'cube-refresh-worker')).toContain('depends_on: *cube-depends-on');
-  });
-
   /**
    * T455, AC-324: xcube opens data sources' secrets with the development key,
    * loaded by the kid `XCUBE_CREDENTIAL_KEY_IDS` names, from `<kid>.pem` and
@@ -211,6 +211,19 @@ describe('compose serves the model from xcube’s schema (T447, AC-333)', () => 
     expect(serviceBlock(compose, 'cube-refresh-worker')).toContain('secrets: *cube-secrets');
     for (const name of ['wechart-meta', 'sample-db', 'cubestore', 'dex'])
       expect(serviceBlock(compose, name), name).not.toContain('xcube-credential');
+  });
+
+  it('runs xcube’s bootstrap on the metadata database before either starts', () => {
+    const init = serviceBlock(compose, 'xcube-db-init');
+    expect(init).toContain('./infra/xcube/bootstrap.sql:/bootstrap.sql:ro');
+    expect(init).toContain('- ON_ERROR_STOP=1');
+    expect(init).toContain('- xcube_password=${XCUBE_DB_PASSWORD:-');
+    expect(init).toContain('- wechart_meta');
+    expect(serviceBlock(compose, 'cube')).toMatch(
+      /xcube-db-init:\n {8}condition: service_completed_successfully/,
+    );
+    // The worker shares the API instance's dependencies.
+    expect(serviceBlock(compose, 'cube-refresh-worker')).toContain('depends_on: *cube-depends-on');
   });
 
   it('runs the fork’s own bootstrap, as it was at the image’s commit', () => {
