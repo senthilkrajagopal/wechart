@@ -159,7 +159,19 @@
 >     - **Deployed 2026-09-27, later:** Helm revision 26 runs wechart `0465766` on xcube `e53cf2a8b8`, sign-in on; the seed Job made the root's `default` (northwind), which connects; `verify.sh` 42 of 42.
 >     - **Done since:** T343 (447ae0d; private workspaces, `ws:<key>` named `mine` both ways, nothing across a workspace's edge; AC-276 ticked, AC-277's UI half is T331's), T460 (c339afd; a model's publishes one at a time, fixing cubes rebound by whole-model sends in concurrent publishes; xcube asked to keep bindings on snapshots, `to-xcube/2026-09-27-0530-snapshot-rebinds.md`).
 >     - **Deployed:** Helm revision 27 runs wechart `c339afd`; `verify.sh` 42 of 42.
->     - **Next:** T345 (create items in the workspace with a target folder; Explore's New menu per AC-192), then T363 (the data-source wizard), T344/T346/T347.
+>     - **Done since:**
+>       - T345 (0051bd1): items made in the workspace name their target folder; a save keeps it; `mine` as a target is the user's own; a workspace data source isn't landed. Neither AC ticked: the Model entry is T347's, AC-192's shared half T331's.
+>       - T363 (a1b7d3b, 50c12b1): the data-source wizard, Type → Connection → Test → Name, from Explore's New menu in My workspace and "+ Data source" on Data sources. AC-159 and AC-160 ticked.
+>         - **The user's rule (R32):** "test first, and dont save if test fails.. both in create new as well as edit". There is no override. A create names its passing test, taken atomically, and that test heads the source's history.
+>         - AC-158 now covers edits (T461); AC-158 and rule 23 are amended.
+>         - Tests from a cancelled wizard stay stored, belonging to no source.
+>       - T363 was split: the stored source's settings form is **T461** (opens from Explore and Data sources, type fixed, history, Cube state, edits only after a passing test).
+>     - **Deployed:** Helm revision 30 runs wechart `50c12b1`; `verify.sh` 42 of 42.
+>     - **The user, 2026-09-27, on the UI:** "The ui for the wizard looks bad.. go back to the ui design review that was run in phase 1.. and clean up the entire ui when we get a chance.. and also for phase 2 requirements run it through a ui expert, get the designs and apply the designs to our screens." Two reviews were dispatched against revision 30, both writing to `docs/design/reviews/2026-09-27/`:
+>       - `phase-1-recheck.md`: the status of every UX-0xx finding and design 01–08, plus a cleanup list;
+>       - `ui-review.md` with `designs/`: phase 2's screens designed, for the user to approve.
+>       Then: show the user the designs, plan the cleanup and design tasks, and apply them. Build T461's UI to the approved design.
+>     - **Next:** the design reviews' results; T461's API (edits only after a passing test); T344, T346, T347.
 >     - **xcube images:** pinned `e53cf2a8b8@sha256:58e53294…` (research `xcube-22132c309c.md`, `xcube-e53cf2a8b8.md`). `0406293add` (extends children aliased by what they inherit) is researched but **not pinned**: its folder views lose their generated `sql_alias`, which can refuse wechart's folder views (`xcube-0406293add.md` Gotcha 1; asked in `to-xcube/2026-09-27-0430-folder-view-aliases.md`). Also asked: a connection changed in place must not answer from its old target's cache (`to-xcube/2026-09-27-0400-changed-in-place.md`, the user's "No").
 >     - **Answered 2026-09-27, question 3:** "it is okay if phase 1 items aer not reachable.. this phase overrides phase 1 items". T343 goes ahead with no migration of `mine`; then T344, T345 and T363 (the data-source wizard).
 >     - **Answered 2026-09-27, the rest of the list** (the user's words after each):
