@@ -175,6 +175,7 @@
 >       - 16, the test-integrity hook's false flags: "Okay".
 >       - 17, pie and donut labels: "Go with the easier option for now. Or leave as is" — left as is.
 >       - These need spec criteria or tasks where none covers them (4, 5, 6, 7, 8, 12, 13, 15, 28); they go through write-spec and plan-tasks at the next gate pass.
+>     - **Answered 2026-09-27, the cache questions of `xcube-e53cf2a8b8.md`** ("No and No"): a data source changed in place may not answer from its old target's cache or rollups (AC-161), nor may a cube extending a rebound parent (AC-273). The second is fixed in xcube `0406293add` (being researched); the first is asked of xcube (`to-xcube/2026-09-27-0400-changed-in-place.md`).
 >     - **Answered 2026-09-27, question 28:** "okay": a state too small to see on the map (Singapore in a small tile) gets a dot marker at its label point. A task follows under the country map's criteria (T398's).
 >     - **Answered 2026-09-27, question 23:** "sure you can reword": AC-193 is reworded so a model's row, renamed in the model editor, has no rename in Explore's menu.
 >     - **Answered 2026-09-27, question 29:** (a). On narrow tiles the marking badge moves to the foot too, beside the freshness badge, whole ("■ Marking: 1 marked"); the head is the title's. AC-201 becomes "beside its title where the head has room, otherwise under the chart". T402 goes ahead on it.
