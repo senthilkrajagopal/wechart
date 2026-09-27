@@ -389,6 +389,9 @@ As in Part 1, every statement traces to a round or an input. Anything undecided 
 - The shared root keeps its bare names; only items in other folders are prefixed. Nothing stored is migrated.
 - wechart publishes **items** (one cube or view each) and its folder tree through xcube's changesets. xcube resolves names and compiles the model in modules. The details are in §P2.4, "Architecture", under "Slice 3 as built".
 
+**Amended again 2026-09-26 by xcube's slices 4–6 as built**, each written from the Cube fork session: the folder gate and RS256 tokens (`docs/inputs/2026-09-26-xcube-slice-4-contract.md`, cited as `[X4]`), overlays (`…-xcube-slice-5-contract.md`, `[X5]`), connections (`…-xcube-slice-6-contract.md`, `[X6]`), the user's driver list (`…-connections-drivers.md`, `[XD]`) and an overlay's own data sources (`…-xcube-overlay-data-sources.md`, `[XOV]`). Their claims were checked against the fork in `docs/research/xcube-slice-4.md`, `xcube-slice-5.md`, `xcube-slice-6.md` and `xcube-overlay-data-sources.md` (at `ed08180c37`, which corrects the other three where they differ); only verified ones are stated here. Decisions the inputs record as the user's are cited as `[X5, user]` and the like, and those recorded in the plan doc as `[X4, plan]`. Round R31 settled what they left open.
+- Cube refuses a folder's items to tokens without the folder's groups; tokens are RS256 and admin calls use a service credential; previews run on overlays; data sources are connections in xcube, sealed to its key. The details are in §P2.4, "Architecture", under "Slices 4–6 as built".
+
 ## P2.1 Problem
 
 Phase 2 builds on phase 1 from the user's inputs `[R11]`. Phase 1 has no sign-in and one trusted user. It has one Cube model and one data source for everything, and a change to shared content is live at once `[Part 1 §4]`. Phase 2 adds:
@@ -468,7 +471,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - ~~An API pod that starts without the key, or with a key that can't decrypt the stored credentials, refuses to start and says why `[R21]`.~~ **Superseded** `[AD 7, R27]`: wechart's API refuses to start without xcube's public key. xcube refuses to start without its private key, or with one that can't decrypt a sample credential. Each says which key is missing.
 - **A newly typed secret is encrypted in the browser**, before it is sent, so wechart never sees the plaintext, not even for a connection test `[R27]`.
 - wechart keeps a credential's lifecycle without decrypting it: copied into a workspace, cleared when the target changes `[AD 7]`.
-- Changing where a data source connects (host, account, warehouse and the like) clears its stored secret, so it must be entered again `[R21]`.
+- Changing where a data source connects (host, account, warehouse and the like) clears its stored secret, so it must be entered again `[R21]`. **Amended** `[X6]`: its TLS settings count too; the keys per driver are under "Slices 4–6 as built".
 
 **Audit.** wechart records sign-ins, permission changes, copies proposed, approved and rejected, and data-source changes. Super-Admins can browse the record `[R14]`. How long records are kept is a deployment setting, one year by default `[R18]`.
 
@@ -523,10 +526,10 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - **Callers:** only wechart's server calls Cube or xcube, for now `[AD 10]`.
 - **High availability of the query path:** 2 or more Cube instances with the Cube Store queue, and a stateless wechart API on 2 or more replicas. Cube Store stays single-node for now `[AD 11]`. It is tested: stopping one Cube instance and one API replica during use loses no signed-in session and fails no query the web app retries `[R27]`.
   - Every Cube process runs the plan's runtime settings. These include the Cube Store queue, and a queue heartbeat of 5–10 s, so a crashed instance releases its queries in about 30 s `[IP 9, plan]`.
-- **Tokens** carry groups only, for now `[AD 12]`.
+- **Tokens** carry groups only, for now `[AD 12]`. **Amended** `[X5, user]`: and, on a preview, the id of the overlay it may query.
   - wechart signs them RS256 and pushes its public keys (JWKS) to xcube when it starts and when keys rotate, so Cube verifies them without calling wechart `[AD 12, R27]`. The push goes to an xcube admin route. xcube never fetches keys from wechart `[R28]`.
   - Admin calls use the separate service credential `[AD 12]`. **Until slice 4** they use xcube's static admin token instead (below) `[X2, R29]`.
-  - Where xcube's private key and wechart's signing key are kept in production is decided before slice 6 `[plan]`. Until then, development keeps the fixed key pair (above).
+  - Where xcube's private key and wechart's signing key are kept in production is decided before slice 6 `[plan]`. Until then, development keeps the fixed key pair (above). **Decided** `[X4, plan]`: in Kubernetes Secrets, generated once by the chart.
 - **Slice 2 as built** `[X2, R29]`. xcube's side is done in the fork. wechart's side is one cut-over, with no switch between old and new: the previous image and release are the way back `[X2]`.
   - **A model** is one wechart instance's whole data model, named by an id of 1–63 lower-case letters, digits, `_` and `-`, starting with a letter or digit: for example `dev`, `demo`, or the Helm release's name `[X2]`. Folders are paths inside it, never separate models `[X2; research]`.
   - **wechart pushes the whole published file set** to xcube: when the API starts, after each publish, and from a reconcile every 60 s. It reads xcube's current revision first and pushes only when the content differs. It records what xcube acknowledged (its generation, revision and content hash), and commits to its own store before pushing, so xcube is never ahead of wechart `[X2]`.
@@ -557,6 +560,52 @@ With security on, a deployment that names no Super-Admin group refuses to start 
     - Today's model is one module, so none of this applies until a root cube is shared by a root item and a folder item, or by two top-level folders.
   - **The image** is xcube's published one, `ghcr.io/senthilkrajagopal/xcube:v1.7.45-<commit>` for amd64 and arm64, pulled by digest (the user, 2026-09-26: "Build against the published image, ghcr.io/senthilkrajagopal/xcube (amd64 and arm64), pulled by digest"). Its titles match Cube's own, and its compile errors name the item with no line `[X3A]`.
   - **Questions to xcube** go as files in `~/Work/xcube-exchange/to-xcube/`, and its answers come back in `to-wechart/`. Anything that changes these requirements also arrives in `docs/inputs/` (the user, 2026-09-26).
+- **Slices 4–6 as built** `[X4, X5, X6, XD, XOV, R31]`. xcube's side of each is done in the fork. wechart builds its side of all three against one image.
+  - **The image** for slices 4–6 is the one built last: `ghcr.io/senthilkrajagopal/xcube:v1.7.45-ed08180c37`, pulled by digest `sha256:bc041aa208df0cd748b59fbfdbeca8684538f08c67f6020b0316d1efd1eb6fd8`. It carries slices 4, 5 and 6, the TLS binding and overlay data sources `[R31; research xcube-overlay-data-sources.md]`.
+  - **The folder gate (slice 4)** `[X4]`:
+    - Each folder push carries every folder's allowed groups, worked out by wechart as R28 has them, and whether security is on. xcube takes each set as given.
+    - A folder no group reaches still carries the Super-Admin group, since an empty set admits nobody. A folder sent without its groups keeps them, unless it moved `[X4; research xcube-slice-4.md]`.
+    - Cube refuses a folder's cubes and views to a token holding none of its allowed groups, and the model's own policies still apply within. A denied `/v1/load` answers 500 "hidden member", not 403.
+    - A permission change reaches every Cube process with no compile: at once on the instance that answers, and on the others by notification or their next poll.
+    - **No Super-Admin bypass of authored policies.** Super-Admins get in through the allowed sets wechart sends `[X4, plan]`.
+    - **No way back past slice 4 once security is on.** An older image refuses the schema, since it would serve without the gate. The way back is to drop xcube's schema and re-import, as for slice 3 `[X4]`.
+    - **A token's groups** are those some access policy names, **and those in any folder's allowed set**. The gate matches the token against the folder sets, so a group only a folder names must still reach Cube `[research xcube-slice-4.md, Gotcha 8; small decision, reported]`.
+    - **A publish's dry-run probes, with security on,** carry the Super-Admin group, which every folder admits. Probes a folder refuses would pass without checking anything `[research xcube-slice-4.md, Gotcha 10; small decision, reported]`.
+  - **Tokens and keys (slice 4)** `[X4]`:
+    - User tokens are RS256, with `aud`, `role: user`, `iat`, `exp` (at most an hour after `iat`), `groups`, `wechartModel`, and `wechartRevision` where read-your-writes needs it. Cube receives only the model, the groups, the revision and the role.
+    - wechart pushes its public signing keys to xcube as a whole set with a rising version: at start and on rotation. A rotation pushes the current and next keys, signs with the next only after the push answers, and drops the current once its tokens have expired.
+    - **The service credential** is an RS256 token of its own key. It authenticates every xcube admin call, the key push included, the jobs API and introspection. Its public half is given to xcube by configuration, never pushed.
+    - A model takes HS256 tokens only until its first key push. The static admin token is retired by unsetting it.
+    - **Where keys are kept** (decided before slice 6, above): **Kubernetes Secrets, generated once by the chart** `[X4, plan]`. Development keeps its fixed key pairs in the repository.
+    - Jobs and Schedules read the whole field list from xcube's own `…/meta`, with the service credential. Cube's `/cubejs-system/*` is no longer served, so a rollup's partitions come from xcube's partitions route `[X4, X6]`.
+  - **Overlays (slice 5)** `[X5, user]`:
+    - A query names its overlay in the signed token, as `wechartOverlay`. wechart signs it only into the tokens of those AC-323 allows, so Cube enforces AC-323 once a model has keys. Tokens carry groups **and this one claim**, which is an overlay's id, not an attribute of the user.
+    - An overlay is **live**: a changeset applied to whatever is published when it is queried. If a publish leaves it not applying, its queries answer 409 until wechart pushes one that applies.
+    - **Rollups are stripped in previews.** The items an overlay adds or changes, everything bound to them and the items those extend compile without their pre-aggregations, so previews read the source. Other items keep their built rollups.
+    - **A push that doesn't compile is refused** with each error and its item, and the previous version keeps answering. This is also the proposal's check when it is made.
+    - An overlay lives 24 hours from its last push by default, at most 7 days. Autosaves push over the version they last saw, so two saves can't land out of order.
+    - Workspace pickers resolve through xcube's resolver with the overlay: its items first, then along the folder's path.
+    - **The field list differs per overlay,** so a cached one is keyed by overlay as well as by groups `[research xcube-slice-5.md, Gotcha 18]`.
+    - **What lands is what was previewed** `[R31]`. In an overlay, names resolve among its items first, whatever their folder; landed, they resolve nearest-first along each item's path `[research xcube-slice-5.md, Gotcha 5]`. So approval is refused, naming the items, when any item would bind differently than in its preview, as well as when landing fails. Where xcube doesn't report an overlay's bindings, that is asked of it through the Cube-expert agent.
+    - **A change published to an item after a workspace copied it** is hidden in that workspace's preview, and approving the copy replaces it. That is accepted for now, as saves already overwrite concurrent changes (the user, earlier: "overwriting concurrent changes is OK for now") `[research xcube-slice-5.md, Gotcha 6]`.
+  - **Connections (slice 6)** `[X6, XD]`:
+    - **The drivers are eight** (the user, `[XD]`): PostgreSQL, Amazon Redshift, MySQL, Snowflake, BigQuery, SQL Server, Oracle and Dremio. Databricks is dropped. No data source was ever stored, so nothing is migrated `[small decision, reported]`.
+    - Redshift takes a user and password (IAM authentication can't differ per connection in Cube 1.7.45). MySQL takes a password or a client certificate. Dremio takes a Cloud URL with a token, or a Software host and port with a token or a user and password `[XD]`. **Dremio Cloud URLs aren't required to be `https:`** `[R31]`.
+    - **A secret is bound to its target**, which now includes each driver's TLS settings: `ssl`, `sslRejectUnauthorized` and `sslCa` for PostgreSQL, Redshift and MySQL; `encrypt` and `trustServerCertificate` for SQL Server; `ssl` for Dremio. Changing any of them clears the stored secret, as a host change does (the user's answer on TLS, `[X6]`; research `xcube-overlay-data-sources.md`).
+    - xcube opens secrets with keys mounted from a Secret into every Cube process, API instances and the refresh worker alike. wechart checks its key id against xcube's list of credential keys.
+    - **wechart lands a data source** in xcube as a connection: its driver, fields and sealed secrets. Every Cube process builds and tests the new driver, then swaps it in, with no restart; a failure keeps the old one. Queries on a dropped connection are refused at once, and one that published cubes use can't be dropped.
+    - **A data source's driver never changes.** Cube fixes the SQL dialect at compile, and xcube refuses the change at landing. **wechart refuses it up front**, in the workspace, and a new data source is made under another name instead `[R31]`.
+    - **Health** is read per Cube instance. "Every instance uses the new settings" means every instance reports the current version, live. xcube never removes the rows of instances that are gone, so **rows older than 1 hour are hidden** `[R31]`.
+    - **A connection test** runs in xcube with Cube's own driver: opening the secrets, building the config, connecting, and reading the catalog where the driver can. Errors come back redacted of the secrets.
+    - **Binding at publish:** a cube's data source binds nearest-first from its folder toward the root; a cube naming none gets the nearest `default`; one that extends another inherits its parent's. **No rebinding:** when a nearer data source appears, cubes already published stay bound to theirs until they are published again, and wechart republishes nothing `[X6, R31]`.
+    - Each model's rollups live in a schema of the model's own, so they build once more after the upgrade `[X6]`.
+    - **The shared root's `default` is seeded at install** `[R31]` by a post-install Job, run from xcube's image. It seals the database password from the chart's Secret with xcube's public key and creates the data source through wechart's API, so wechart never sees the plaintext. From then on it is managed like any other data source.
+  - **A workspace's own data sources (slice 6, overlays)** `[XOV]`:
+    - Every workspace save pushes the workspace's whole set of data sources with its items (at most 20). Each is pushed as it would land: its folder, short name, driver, authentication method, fields exactly as sealed, and sealed secrets.
+    - **A copy keeps its original's full name** (the same folder and short name), so it replaces the original in the workspace's previews for every cube bound to it. Its envelopes are copied byte for byte and open only while its target is unchanged.
+    - **Only copies replace** `[R31]`. A data source created new in a workspace can't take a name its target folder already holds, since names are unique per folder.
+    - A preview with data sources of its own runs on an orchestrator of its own, with its own drivers and result cache, and builds no rollups.
+  - **Saves while xcube is unreachable.** A chart or dashboard save in a folder xcube serves is refused (502), as a model publish is; nothing is stored unbound `[R31]`.
 
 ## P2.5 Stack
 
@@ -685,7 +734,7 @@ The rest still apply: AI and chat authoring, scheduled delivery and alerts, embe
 
 ## P2.8 Open questions
 
-**None.** All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections. The ten the 2026-09-26 plan left open were settled in round R28, in the same way. The four xcube's slice 2 left open were settled in round R29, and are in §P2.4, "Slice 2 as built". The six xcube's slice 3 left open were settled in round R30, after xcube answered the questions they raised, and are in §P2.4, "Relaxed from phase 1" and "Slice 3 as built".
+**None.** All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections. The ten the 2026-09-26 plan left open were settled in round R28, in the same way. The four xcube's slice 2 left open were settled in round R29, and are in §P2.4, "Slice 2 as built". The six xcube's slice 3 left open were settled in round R30, after xcube answered the questions they raised, and are in §P2.4, "Relaxed from phase 1" and "Slice 3 as built". The nine that slices 4–6 left open were settled in round R31, and are in §P2.4, "Slices 4–6 as built".
 
 | # | Question | Decision |
 |---|---|---|
@@ -792,6 +841,18 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
+
+**R31 — what xcube's slices 4–6, as built, left open** (`docs/inputs/2026-09-26-xcube-slice-{4,5,6}-contract.md`, `…-connections-drivers.md` and `…-xcube-overlay-data-sources.md`, checked in `docs/research/xcube-slice-{4,5,6}.md` and `xcube-overlay-data-sources.md`; asked in the conversation, 2026-09-26, numbered as the handoff numbers them)
+- Q18: Which xcube image to pin for slices 4–6? The TLS binding exists only from `1249dda9ca` on; `ed08180c37` has it too, with overlay data sources. A: "use the latest one.. whichever was built last"
+- Q19 (xcube's question): a workspace copy of a data source can change its driver in a preview, but landing it answers `409 driver_change`. Should the workspace refuse the change up front? A: "Yes"
+- Q20: AC-161: xcube never removes the health rows of Cube instances that are gone. Until it does, what should the UI show when stale rows are present? For example, hide rows older than a limit. A: "For example, hide rows older than a limit", then, asked for the limit: "lets do it 1 hr..."
+- Q21: AC-273, AC-310: xcube binds a data source only at publish. When a nearer `default` or source appears on a cube's path, should wechart republish the cubes it would now bind differently? A: "No"
+- Q22: Dremio Cloud: require `https:` URLs (the token would travel in clear otherwise)? A: "No"
+- Q25: Should a chart or dashboard save in a folder be refused while xcube is unreachable (it is now, with a 502), or stored unbound and bound at the next save? A: "Yres" (read as yes, refuse)
+- Then asked together (AskUserQuestion, 2026-09-26):
+  - Q: How should the shared root's `default` data source get its sealed secret? wechart may never see a plaintext password, but today the chart feeds the database password to Cube's environment. A: "Post-install Job (Recommended)"
+  - Q: A data source created new in a workspace, under a published one's full name (same folder, same short name), would replace the published one in the workspace's previews, for published cubes too. Allow that? A: "Copies only (Recommended)"
+  - Q: In a proposal's preview, names resolve among the overlay's items first, whatever their folder; once landed they resolve nearest-first along each item's path. So a proposal whose preview worked can land bound to other cubes. What should approval do? A: "Refuse on a difference (Recommended)"
 
 **R30 — what xcube's slice 3, as built, left open** (`docs/inputs/2026-09-26-xcube-slice-3a-contract.md`, checked in `docs/research/xcube-slice-3a.md`; xcube's answers `docs/inputs/2026-09-26-xcube-answers-slice-3.md`, checked in `docs/research/xcube-slice-3b.md`; 2026-09-26)
 - The user's brief, before the round, recorded as `[X3, user]`:
