@@ -76,6 +76,10 @@ export interface DashboardPageProps {
   readonly startEditing?: boolean | undefined;
   /** Edit mode was entered as asked: take the request out of the URL (T245). */
   readonly onStartedEditing?: (() => void) | undefined;
+  /** A tile whose Properties to open asking for a folder, once (T463, AC-127). */
+  readonly publishTile?: string | undefined;
+  /** That ask was taken, or can't be: take it out of the URL (T463). */
+  readonly onPublishTaken?: (() => void) | undefined;
   /** The filter values the URL holds now (AC-081). */
   readonly urlFilterValues?: FilterValues | undefined;
   /** Put these filter values in the URL (AC-081). */
@@ -99,6 +103,8 @@ export function DashboardPage({
   onEditTile,
   startEditing,
   onStartedEditing,
+  publishTile,
+  onPublishTaken,
   urlFilterValues,
   onFilterValues,
   urlView,
@@ -129,7 +135,8 @@ export function DashboardPage({
   const failed = saved.isError && document === undefined;
   useEffect(() => {
     if (failed && startEditing === true) onStartedEditing?.();
-  }, [failed, startEditing, onStartedEditing]);
+    if (failed && publishTile !== undefined) onPublishTaken?.();
+  }, [failed, startEditing, onStartedEditing, publishTile, onPublishTaken]);
 
   // Its frame, not a lone "Loading…" (T251, F15).
   if (saved.isPending) return <DashboardLoading />;
@@ -165,6 +172,8 @@ export function DashboardPage({
       onEditTile={onEditTile}
       startEditing={startEditing}
       onStartedEditing={onStartedEditing}
+      publishTile={publishTile}
+      onPublishTaken={onPublishTaken}
       urlFilterValues={urlFilterValues}
       onFilterValues={onFilterValues}
       urlView={urlView}
@@ -188,6 +197,8 @@ function LoadedDashboard({
   onEditTile,
   startEditing,
   onStartedEditing,
+  publishTile,
+  onPublishTaken,
   urlFilterValues,
   onFilterValues,
   urlView,
@@ -202,6 +213,8 @@ function LoadedDashboard({
   onEditTile: ((tileId: string | undefined) => void) | undefined;
   startEditing: boolean | undefined;
   onStartedEditing: (() => void) | undefined;
+  publishTile: string | undefined;
+  onPublishTaken: (() => void) | undefined;
   urlFilterValues: FilterValues | undefined;
   onFilterValues: ((values: FilterValues) => void) | undefined;
   urlView: ViewState | undefined;
@@ -560,6 +573,8 @@ function LoadedDashboard({
         onEditTile={onEditTile}
         startEditing={startEditing}
         onStartedEditing={onStartedEditing}
+        publishTile={publishTile}
+        onPublishTaken={onPublishTaken}
         urlFilterValues={urlFilterValues}
         onFilterValues={onFilterValues}
         urlView={urlView}

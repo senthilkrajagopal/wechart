@@ -627,6 +627,27 @@ export function chartIdOf(document: DashboardDocument, tileId: string): string |
   return found !== null && isTile(found) ? found.chartId : undefined;
 }
 
+/**
+ * The first tile, in document order, that shows this chart (T463): where a
+ * local chart's page sends "Edit on ‹dashboard›", on any page, section or tab.
+ */
+export function tileShowing(document: DashboardDocument, chartId: string): string | undefined {
+  const walk = (items: readonly Element_[]): string | undefined => {
+    for (const element of items) {
+      const found = isSection(element)
+        ? walk(element.items)
+        : isTabGroup(element)
+          ? element.tabs.map((tab) => walk(tab.items)).find((id) => id !== undefined)
+          : isTile(element) && element.chartId === chartId
+            ? element.id
+            : undefined;
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  };
+  return document.pages.map((page) => walk(page.items)).find((id) => id !== undefined);
+}
+
 /** Whether this id belongs to a tile rather than to a section or tab group. */
 export function isTileId(document: DashboardDocument, id: string): boolean {
   const found = tileAt(document, id);

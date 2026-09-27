@@ -30,6 +30,7 @@ import { DataSourcesPage } from '../workspaces/data-sources/DataSourcesPage';
 import { SchedulesPage } from '../workspaces/schedules/SchedulesPage';
 import { ModelFilePage } from '../workspaces/model/ModelFilePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
+import { LocalChartActions, useChartHome } from '../workspaces/explore/LocalChartHome';
 import { exploreHref } from '../workspaces/explore/folders';
 import { SHARED_ROOT } from '../workspaces/explore/roots';
 import { WORKSPACES, type WorkspaceId } from '../shell/WorkspaceSwitcher';
@@ -109,7 +110,7 @@ const workspaceRoutes = WORKSPACES.map((workspace) =>
 function DashboardSurface() {
   const params = useParams({ strict: false }) as { objectId?: string };
   const dashboardId = decodeURIComponent(params.objectId ?? '');
-  const { edit, editing, filters, preview, view } = dashboardRoute.useSearch();
+  const { edit, editing, filters, preview, publish, view } = dashboardRoute.useSearch();
   const navigate = dashboardRoute.useNavigate();
   const router = useRouter();
   /**
@@ -135,6 +136,14 @@ function DashboardSurface() {
   const onStartedEditing = useCallback(() => {
     void navigate({
       search: (prev) => ({ ...prev, editing: undefined }),
+      replace: true,
+      resetScroll: false,
+    });
+  }, [navigate]);
+  /** The ask for a folder, taken (T463): out of the address, as `editing` is. */
+  const onPublishTaken = useCallback(() => {
+    void navigate({
+      search: (prev) => ({ ...prev, publish: undefined }),
       replace: true,
       resetScroll: false,
     });
@@ -207,6 +216,8 @@ function DashboardSurface() {
         onEditTile={onEditTile}
         startEditing={editing === true}
         onStartedEditing={onStartedEditing}
+        publishTile={publish}
+        onPublishTaken={onPublishTaken}
         urlFilterValues={valuesFromSearch(filters)}
         onFilterValues={onFilterValues}
         urlView={view === undefined ? undefined : viewFromLink({ filters, view })}
@@ -233,12 +244,19 @@ const dashboardRoute = createRoute({
     editing?: true | undefined;
     filters?: SearchFilter[] | undefined;
     preview?: Record<string, unknown> | undefined;
+    publish?: string | undefined;
     view?: Record<string, unknown> | undefined;
   } => ({
     edit: typeof search['edit'] === 'string' && search['edit'] !== '' ? search['edit'] : undefined,
     // Open in edit mode (T245): a new dashboard from Explore's New, as the
     // prototype opens one. Only `true`; anything else is no request.
     editing: search['editing'] === true ? true : undefined,
+    // A tile to open asking for a folder (T463): a local chart page's "Save
+    // to folders…". A tile id; anything else is no request.
+    publish:
+      typeof search['publish'] === 'string' && search['publish'] !== ''
+        ? search['publish']
+        : undefined,
     // The filters in effect (AC-081), each checked; none is no parameter.
     filters: valuesToSearch(valuesFromSearch(search['filters'])),
     // A security context previewed from the Security workspace (T172,
@@ -342,18 +360,13 @@ function ChartEditorSurface() {
 
   const owner = chart.data?.document.localToDashboardId;
   const local = owner !== undefined;
-  // A dashboard's own chart is kept in its dashboard's folder: the picker
-  // offers the cubes on that folder's path (T429's review, AC-329).
-  const ownerFolder = useQuery({
-    queryKey: ['documents', 'dashboard', owner, 'folder'],
-    queryFn: async () => {
-      const response = await fetch(`/api/documents/dashboard/${encodeURIComponent(owner ?? '')}`);
-      if (!response.ok) throw new Error(`Request failed: ${String(response.status)}`);
-      const { body } = (await response.json()) as { body?: { folderId?: unknown } };
-      return typeof body?.folderId === 'string' ? body.folderId : null;
-    },
-    enabled: local,
-  });
+  /**
+   * The dashboard it lives on (T463): its title and the tile showing it, for
+   * the way there, and its folder — a dashboard's own chart is kept in its
+   * dashboard's folder, so the picker offers the cubes on that folder's path
+   * (T429's review, AC-329).
+   */
+  const home = useChartHome(owner, chartId);
   // New only as New › Chart opens it (T256's review): a saved chart with no
   // fields yet is not new, and may already be on dashboards.
   const fresh = chartEditorRoute.useSearch().new === true && !local;
@@ -408,7 +421,7 @@ function ChartEditorSurface() {
           onChange={setEdited}
           // Its folder's path, for the picker (T429, AC-329): a local chart's
           // is its dashboard's.
-          folderId={local ? (ownerFolder.data ?? undefined) : folderId}
+          folderId={local ? home.data?.folderId : folderId}
           // An edit made while it is written would be lost as the page goes.
           busy={leaving}
           head={{
@@ -443,9 +456,9 @@ function ChartEditorSurface() {
                 {local ? (
                   // A chart of one dashboard's is saved with that dashboard, in
                   // its edit session — never on its own here (T227's review).
-                  <span className="chart-page__none">
-                    This chart belongs to a dashboard; edit and save it there.
-                  </span>
+                  // So the way there, or to folders, in place of a Save (T463,
+                  // UX-040).
+                  <LocalChartActions dashboardId={owner} home={home} small />
                 ) : (
                   <button
                     type="button"

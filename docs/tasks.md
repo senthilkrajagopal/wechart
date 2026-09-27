@@ -7725,8 +7725,18 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 
 ### Bugs and consistency, phase 1 (R33: "Bugs and consistency only")
 
-- [ ] T463 (AC-126, AC-127) Never lead a dashboard-local chart's page to an editor that can't save
+- [x] T463 (AC-126, AC-127) Never lead a dashboard-local chart's page to an editor that can't save
   - Files: `packages/web/src/workspaces/explore/LibraryChartPage.tsx` (the chart page), `packages/web/src/editor/…` (the local chart's editor head), `e2e/chart-page.spec.ts`
+  - *As built:*
+    - `workspaces/explore/LocalChartHome.tsx` holds the ownership line and both actions, for the page and for the editor's head, which is in `router/routes.tsx`.
+    - "Edit on" opens `?edit=<tile>`. "Save to folders…" opens `?editing=true&publish=<tile>`, a new dashboard parameter that selects the tile and opens its Properties on the folder chooser, as its ⋯ "Save to folders…" does; it is taken once and dropped from the address. `tileShowing` in `dashboard/model/document.ts` finds the tile.
+    - From design 06 item 4, the pane's "Lives on" replaces "Used in" and the Add-to-dashboard picker for a local chart, since the picker could put a local chart on a second dashboard.
+    - `a.btn` and `a.btn-primary` are styled as buttons app-wide, which also turns Data sources' "Open Explore" link into a button.
+    - Review fixes:
+      - a local chart on none of its dashboard's tiles says so and offers only "Open ‹dashboard›";
+      - a dashboard that can't be read says so on the page and in the editor;
+      - tests for the pane and for the address.
+    - `e2e/editor-preview.spec.ts` "a tile resized in this session…" fails at HEAD without this change. T464 fixes it.
   - Failing test: `chart-page.spec.ts`:
     - a dashboard-local chart's page says "Lives on ‹dashboard› · only there";
     - its primary action is "Edit on ‹dashboard›", which opens that dashboard in edit mode with this tile's editor open, where Save saves it;

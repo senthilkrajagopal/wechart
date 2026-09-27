@@ -353,6 +353,14 @@ export interface DashboardViewProps {
   /** Told once edit mode has been entered as asked, to forget the request. */
   readonly onStartedEditing?: (() => void) | undefined;
   /**
+   * A tile to open asking for a folder, once (T463): a local chart page's
+   * "Save to folders…", which lands here in edit mode as the tile's ⋯ "Save
+   * to folders…" would leave it (AC-127, AC-205).
+   */
+  readonly publishTile?: string | undefined;
+  /** Told once that ask is taken, or can't be, to forget it. */
+  readonly onPublishTaken?: (() => void) | undefined;
+  /**
    * The filter values the URL holds now (AC-081). The dashboard opens with
    * them; after that it holds its own, and puts them back in the URL whenever
    * the URL comes to say otherwise — a change made here, or a Back or Forward
@@ -2021,6 +2029,8 @@ export function DashboardView({
   onEditTile,
   startEditing,
   onStartedEditing,
+  publishTile,
+  onPublishTaken,
   urlFilterValues,
   onFilterValues,
   urlView,
@@ -4539,6 +4549,36 @@ export function DashboardView({
   if (publishing.tileId !== null && (!sessionEditing || selected !== publishing.tileId)) {
     setPublishing({ tileId: null, asked: publishing.asked });
   }
+
+  /**
+   * A local chart page's "Save to folders…" (T463): once edit mode is
+   * entered — its link asks for that too — the tile is selected and its
+   * Properties open on the folder to choose, as its ⋯ "Save to folders…"
+   * leaves it; then the ask is forgotten, so a reload opens the dashboard to
+   * be read. Where nothing can be edited — a preview, a narrow window — or no
+   * chart tile here has that id, it is only forgotten. Taken once per ask.
+   */
+  const [publishTaken, setPublishTaken] = useState<{ tileId: string; opened: boolean } | null>(
+    null,
+  );
+  if (publishTile !== undefined && publishTile !== publishTaken?.tileId) {
+    const element = elementAt(document, publishTile);
+    const chartTile = element !== null && isTile(element) && element.chartId !== undefined;
+    if (preview !== undefined || narrow || !chartTile) {
+      setPublishTaken({ tileId: publishTile, opened: false });
+    } else if (sessionEditing) {
+      setPublishTaken({ tileId: publishTile, opened: true });
+      setSelected(publishTile);
+      setAddTarget(null);
+      setPublishing({ tileId: publishTile, asked: publishing.asked + 1 });
+    }
+  }
+  // Outside render: the sidebar shows Properties, and the address forgets.
+  useEffect(() => {
+    if (publishTaken === null) return;
+    if (publishTaken.opened) openSidebarPanel('Properties');
+    onPublishTaken?.();
+  }, [publishTaken, onPublishTaken]);
 
   /**
    * Which page tab is open, here rather than in `DashboardPages`, because the

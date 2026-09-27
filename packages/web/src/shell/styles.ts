@@ -1209,6 +1209,38 @@ fieldset.model-field > legend {
   border-radius: 6px;
   text-decoration: none;
 }
+/* A link drawn as a button (T463): an action that goes somewhere, such as a
+   local chart's "Save to folders…" and "Edit on ‹dashboard›", in the look
+   every button has — border, radius, surface, ink. */
+a.btn,
+a.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+a.btn { background: var(--wc-bg-surface); color: var(--wc-text-primary); }
+a.btn:hover { background: var(--wc-bg-hover); }
+a.btn-primary { border-color: var(--wc-accent); }
+a.btn.btn-sm,
+a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
+/* Whose a local chart is (T463, design 06): "Lives on ‹dashboard› · only
+   there", with the dashboard's chip. */
+.chart-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+}
+.chart-home b { color: var(--wc-text-primary); font-weight: var(--wc-text-xs-strong-weight); }
+.chart-home > .itemicon { width: 18px; height: 18px; }
+.chart-home > .itemicon::before { content: '▦'; }
 .badge {
   display: inline-flex;
   align-items: center;

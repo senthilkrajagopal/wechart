@@ -10,6 +10,7 @@ import {
   resizeTile,
   sectionKey,
   tabKey,
+  tileShowing,
   type DashboardDocument,
   type Element_,
 } from './document';
@@ -280,6 +281,51 @@ describe('moving a tile to another container', () => {
 
     expect(idsIn(after, pageKey('p1'))).toEqual(['a', 's1']);
     expect(idsIn(after, tabKey('tg', 't'))).toEqual(['c']);
+  });
+
+  it('finds the tile showing a chart, inside sections, tabs and later pages (T463)', () => {
+    const showing: DashboardDocument = {
+      ...DOC,
+      pages: [
+        {
+          id: 'p1',
+          title: 'Overview',
+          items: [
+            { id: 'a', kind: 'chart', w: 6, h: 40, chartId: 'ch-a' },
+            {
+              id: 'tg',
+              kind: 'tabs',
+              w: 12,
+              tabs: [
+                {
+                  id: 't',
+                  title: 'T',
+                  items: [{ id: 'in-tab', kind: 'chart', w: 3, h: 16, chartId: 'ch-tab' }],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'p2',
+          title: 'More',
+          items: [
+            {
+              id: 's2',
+              kind: 'section',
+              title: 'Later',
+              items: [{ id: 'later', kind: 'chart', w: 4, h: 24, chartId: 'ch-later' }],
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(tileShowing(showing, 'ch-a')).toBe('a');
+    expect(tileShowing(showing, 'ch-tab')).toBe('in-tab');
+    expect(tileShowing(showing, 'ch-later')).toBe('later');
+    // No tile shows it: nothing to open.
+    expect(tileShowing(showing, 'ch-gone')).toBeUndefined();
   });
 
   it('lists every container a tile could be moved to, named for a menu', () => {

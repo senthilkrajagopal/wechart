@@ -13,6 +13,7 @@ import { TileError } from '../../tiles/TileError';
 import { TileSkeleton } from '../../tiles/TileSkeleton';
 import { CHART_TYPE_LABEL, chartTypeText } from './chartTypeLabels';
 import { FolderCrumbs } from './FolderCrumbs';
+import { ChartHomeLine, LocalChartActions, useChartHome } from './LocalChartHome';
 
 /**
  * A library chart's page, as the prototype's `chartPage()` (AC-212): its
@@ -99,6 +100,9 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
     }
   }, [stored.data]);
   const definition = saved?.chart;
+  /** The dashboard a local chart lives on (AC-126), and the tile showing it there. */
+  const localTo = saved?.localToDashboardId;
+  const home = useChartHome(localTo, chartId);
   const spec =
     drawn.data !== undefined && 'spec' in drawn.data.chart ? drawn.data.chart.spec : undefined;
   const failure =
@@ -337,10 +341,21 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
         <span hidden data-testid="selected-object">
           {chartId}
         </span>
+        {/* Whose it is (T463, AC-126): a local chart lives on one dashboard. */}
+        {home.data === undefined ? null : <ChartHomeLine home={home.data} />}
         <span className="chart-page__spacer" />
-        <a className="btn-primary" href={`/explore/charts/${encodeURIComponent(chartId)}/edit`}>
-          <span aria-hidden="true">✎ </span>Edit chart
-        </a>
+        {/* A local chart is edited where it is saved — on its dashboard — or
+            saved to folders first (AC-127); never in an editor that can't
+            save it (T463, UX-040). A library chart is edited here. */}
+        {localTo === undefined ? (
+          stored.isPending ? null : (
+            <a className="btn-primary" href={`/explore/charts/${encodeURIComponent(chartId)}/edit`}>
+              <span aria-hidden="true">✎ </span>Edit chart
+            </a>
+          )
+        ) : (
+          <LocalChartActions dashboardId={localTo} home={home} />
+        )}
       </header>
 
       <div className="chart-page__body">
@@ -355,7 +370,9 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
           {failure === undefined ? null : failure === NOTHING_CHOSEN ? (
             // Not a failure: a chart not built yet — what to do next.
             <StateLine kind="idle" testId="chart-page-empty">
-              This chart has no fields yet. Use Edit chart to finish it.
+              {localTo === undefined
+                ? 'This chart has no fields yet. Use Edit chart to finish it.'
+                : `This chart has no fields yet. Use Edit on ${home.data?.title ?? 'its dashboard'} to finish it.`}
             </StateLine>
           ) : failure === CHART_MISSING ? (
             <StateLine kind="idle">{CHART_MISSING}</StateLine>
@@ -387,27 +404,48 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
           </Detail>
           <Detail title="Metrics">{pills(measures, 'measure')}</Detail>
           <Detail title="Dimensions">{pills(dimensions, 'dimension')}</Detail>
-          <Detail title="Used in">
-            {using.isPending ? <StateLine kind="run">Loading…</StateLine> : null}
-            {using.isSuccess ? (
-              using.data.length === 0 ? (
-                <p data-testid="used-by-none" className="chart-page__none">
-                  Not on any dashboard yet
-                </p>
-              ) : (
-                <ul aria-label="Dashboards using this chart" className="chart-page__used">
-                  {using.data.map((dashboard) => (
-                    <li key={dashboard.id} data-testid={`using-${dashboard.id}`}>
-                      <a href={`/explore/dashboards/${encodeURIComponent(dashboard.id)}`}>
-                        {dashboard.title}
-                      </a>
-                    </li>
-                  ))}
+          {localTo !== undefined ? (
+            // One dashboard's own (AC-126): the dashboard, and what local
+            // means — never a picker that would put it on a second one.
+            <Detail title="Lives on">
+              {home.data === undefined ? null : (
+                <ul aria-label="The dashboard this chart lives on" className="chart-page__used">
+                  <li>
+                    <a href={`/explore/dashboards/${encodeURIComponent(localTo)}`}>
+                      {home.data.title}
+                    </a>
+                  </li>
                 </ul>
-              )
-            ) : null}
-            {addTo}
-          </Detail>
+              )}
+              <p className="chart-page__none">
+                {home.data !== undefined && home.data.tileId === undefined
+                  ? 'No tile on it shows this chart any more, so it cannot be edited there.'
+                  : 'A local chart belongs to one dashboard and is edited there. Save it to folders to reuse it elsewhere.'}
+              </p>
+            </Detail>
+          ) : (
+            <Detail title="Used in">
+              {using.isPending ? <StateLine kind="run">Loading…</StateLine> : null}
+              {using.isSuccess ? (
+                using.data.length === 0 ? (
+                  <p data-testid="used-by-none" className="chart-page__none">
+                    Not on any dashboard yet
+                  </p>
+                ) : (
+                  <ul aria-label="Dashboards using this chart" className="chart-page__used">
+                    {using.data.map((dashboard) => (
+                      <li key={dashboard.id} data-testid={`using-${dashboard.id}`}>
+                        <a href={`/explore/dashboards/${encodeURIComponent(dashboard.id)}`}>
+                          {dashboard.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : null}
+              {addTo}
+            </Detail>
+          )}
           <Detail title="Delete">{deleteControls}</Detail>
         </aside>
       </div>
